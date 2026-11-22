@@ -258,6 +258,20 @@ describe("RoutineRequestService", () => {
     expect(autoApply).toHaveBeenLastCalledWith("bot-a", "full-thread", "bot-a");
   });
 
+  it("keeps a moved automation paused when an agent asks to resume it or run it now, and tells it where to choose", async () => {
+    const { service, routines } = harness();
+    const submit = (proposal: RoutineProposalInput) => service.submit({ botId: "bot-a", threadId: "full-thread", proposal });
+    const routineId = (await submit(createProposal())).result!.resultId;
+    await submit({ action: "pause", routineId });
+    (routines as unknown as { routines: Array<{ id: string; placeLost?: true }> }).routines.find((routine) => routine.id === routineId)!.placeLost = true;
+    const refusal = expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
+    await expect(submit({ action: "resume", routineId })).rejects.toEqual(refusal);
+    await expect(submit({ action: "run_now", routineId })).rejects.toEqual(refusal);
+    await expect(submit({ action: "update", routineId, changes: { name: "Renamed" } })).resolves.toMatchObject({ state: "applied" });
+    expect(routines.listRoutines().find((routine) => routine.id === routineId)).toMatchObject({ enabled: false, placeLost: true });
+    expect(routines.listRuns()).toEqual([]);
+  });
+
   it("reads the grant after cloud readiness for the log, applies either way, and preserves scope validation", async () => {
     let full = true;
     const { service, routines, store } = harness(undefined, async () => {

@@ -25,7 +25,7 @@ import { writeFileAtomic } from "./atomic.ts";
 import { instructionsUpdateRefusal } from "./automation-instructions.ts";
 import { DATA_DIR } from "./config.ts";
 import type { RoutineRunOn } from "./routines.ts";
-import { PLACE_LOST_MESSAGE, placeChosen } from "./place-lost.ts";
+import { PLACE_LOST_MESSAGE, placeConfirmed, placeLostAs } from "./place-lost.ts";
 
 export const DEFAULT_MAX_PENDING_RUNS = 3;
 const MAX_ATTEMPTS = 2_000;
@@ -162,6 +162,8 @@ export interface AppTriggerPatch {
   sameConversation?: boolean;
   /** Undo: the config exactly as it was saved, filter already folded in. */
   restoreConfig?: Record<string, unknown>;
+  /** The person confirmed where a moved automation runs (see place-lost.ts). */
+  confirmPlace?: true;
 }
 
 const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
@@ -323,6 +325,7 @@ export class AppTriggerManager {
     this.assertWritable();
     const trigger = this.triggers.find((candidate) => candidate.id === id);
     if (!trigger) return null;
+    const placeCleared = placeLostAs(AppTriggerError, () => placeConfirmed(trigger.placeLost, patch));
     const name = patch.name === undefined ? trigger.name : patch.name.trim().slice(0, NAME_MAX);
     if (!name) throw new AppTriggerError("An automation needs a name.");
     if (patch.prompt !== undefined && patch.prompt.trim().length > PROMPT_MAX) throw new AppTriggerError(`Instructions can be at most ${PROMPT_MAX} characters.`);
@@ -353,7 +356,7 @@ export class AppTriggerManager {
       });
       if (filter) trigger.filter = filter;
       else delete trigger.filter;
-      if (placeChosen(patch)) delete trigger.placeLost;
+      if (placeCleared) delete trigger.placeLost;
       if (patch.sameConversation === true) trigger.sameConversation = true;
       else if (patch.sameConversation === false) delete trigger.sameConversation;
       if (patch.enabled === false) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");

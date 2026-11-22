@@ -47,6 +47,7 @@ export function routineScheduleState(routine: Routine): string {
 
 /** Why Seira keeps this routine paused, while it does (its owner left: shared/routines.ts RoutineHoldCause). */
 export function routineHeldNote(routine: Routine): string | null {
+  if (routine.placeLost) return t("routines.placeLost");
   return routine.heldFor ? t(`routines.heldFor.${routine.heldFor}`) : null;
 }
 

@@ -62,6 +62,7 @@ export function routineEditorInput(fields: RoutineEditorFields): RoutineInput & 
     botId: fields.botId,
     groupId: routineTarget === "room-goal" && fields.groupId ? fields.groupId : null,
     runOn: routineTarget === "room-goal" ? "seira" : fields.runOn,
+    ...(existingRoutine?.placeLost ? { confirmPlace: true as const } : {}),
     enabled: existingRoutine && (existingRoutine.enabled || !isDone(existingRoutine, savedAt)) ? undefined : true,
     schedule: fields.schedule,
     durationMinutes: fields.durationMinutes,

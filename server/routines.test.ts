@@ -201,8 +201,11 @@ describe("bounded scheduled overlap and run health", () => {
     expect(() => reloaded.runNow(moved.id)).toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) }));
     expect(reloaded.listRuns()).toEqual([]);
     expect(reloaded.runNow(plain.id)).toMatchObject({ manual: true });
-    // Saving it with a place clears the mark, and so does switching it on by hand.
-    expect(reloaded.update(moved.id, { runOn: "seira" })?.placeLost).toBeUndefined();
+    // Resending the place or switching it on without confirming changes nothing; only confirming the place clears the mark.
+    expect(reloaded.update(moved.id, { runOn: "seira" })?.placeLost).toBe(true);
+    expect(() => reloaded.update(moved.id, { enabled: true })).toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) }));
+    expect(reloaded.listRoutines().find((row) => row.id === moved.id)).toMatchObject({ enabled: false, placeLost: true });
+    expect(reloaded.update(moved.id, { runOn: "seira", confirmPlace: true })?.placeLost).toBeUndefined();
     expect(reloaded.runNow(moved.id)).toMatchObject({ manual: true });
     const second = h.manager.create({ ...input(), name: "Second" });
     const again = JSON.parse(readFileSync(h.options.file!, "utf8"));
@@ -211,7 +214,9 @@ describe("bounded scheduled overlap and run health", () => {
     const third = new RoutineManager(h.options);
     expect(third.update(second.id, { name: "Renamed" })?.placeLost).toBe(true);
     expect(() => third.runNow(second.id)).toThrow(/gone/);
-    expect(third.update(second.id, { enabled: true })?.placeLost).toBeUndefined();
+    expect(() => third.update(second.id, { enabled: true })).toThrow(/Choose where it runs/);
+    expect(third.update(second.id, { enabled: true, confirmPlace: true })).toMatchObject({ enabled: true });
+    expect(third.listRoutines().find((row) => row.id === second.id)?.placeLost).toBeUndefined();
     expect(third.runNow(second.id)).toMatchObject({ manual: true });
   });
 

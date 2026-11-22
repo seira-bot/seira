@@ -63,7 +63,7 @@ export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }
     setError("");
     try {
       const saved = trigger
-        ? await appTriggerApi.update(trigger.id, { name: name.trim() || trigger.name, prompt: prompt.trim(), filter: Object.keys(cleanFilter).length ? cleanFilter : null })
+        ? await appTriggerApi.update(trigger.id, { name: name.trim() || trigger.name, prompt: prompt.trim(), ...(trigger.placeLost ? { confirmPlace: true } : {}), filter: Object.keys(cleanFilter).length ? cleanFilter : null })
         : await appTriggerApi.create({
           botId, app, event: chosen?.event ?? event, prompt: prompt.trim(), name: name.trim() || suggestedName(prompt, bot),
           ...(account ? { account } : {}), ...(Object.keys(cleanFilter).length ? { filter: cleanFilter } : {}),

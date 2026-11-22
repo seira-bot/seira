@@ -6,6 +6,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import { problemBody, validateWorkflowInput } from "../workflows/validate.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { PlaceLostError } from "../place-lost.ts";
 
 export interface WorkflowRoutesDeps {
   visible(auth: RequestAuth): VisibleSet;
@@ -145,6 +146,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       const started = host.runAgain(old.runId, stepId!, routine, workflow);
       return started ? json(res, 201, { run: started }) : json(res, 409, { error: "The routine can't run now." });
     } catch (error) {
+      if (error instanceof PlaceLostError) return json(res, 409, { error: error.message });
       return json(res, 500, { error: error instanceof Error ? error.message : "The run could not start." });
     }
   };

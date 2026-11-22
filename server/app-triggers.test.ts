@@ -541,7 +541,10 @@ describe("an automation moved off a gone cloud computer", () => {
     await expect(reloaded.runNow(trigger.id)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
     expect(runsOf(trigger.id)).toEqual([]);
     expect(placeLost(await reloaded.update(trigger.id, { name: "Renamed" }))).toBe(true);
-    expect(placeLost(await reloaded.update(trigger.id, { runOn: "seira" }))).toBeUndefined();
+    expect(placeLost(await reloaded.update(trigger.id, { runOn: "seira" }))).toBe(true);
+    await expect(reloaded.update(trigger.id, { enabled: true })).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
+    expect(reloaded.list()[0]).toMatchObject({ enabled: false });
+    expect(placeLost(await reloaded.update(trigger.id, { confirmPlace: true }))).toBeUndefined();
     await expect(reloaded.runNow(trigger.id)).resolves.toMatchObject({ via: expect.any(String) });
     // Paused the ordinary way, it is not marked and still tests.
     const plain = await gmailTrigger(reloaded, { from: "other.com", subject: "invoice" });

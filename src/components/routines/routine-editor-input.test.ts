@@ -65,6 +65,13 @@ describe("routineEditorInput", () => {
     expect(routineEditorInput(fields({ existingRoutine: existing })).enabled).toBeUndefined();
   });
 
+  it("confirms the place only when it saves an automation that was moved off a gone cloud computer", () => {
+    const moved = { enabled: false, placeLost: true, schedule: { type: "daily", time: "09:00" } } as unknown as Routine;
+    expect(routineEditorInput(fields({ existingRoutine: moved }))).toMatchObject({ confirmPlace: true });
+    expect(routineEditorInput(fields())).not.toHaveProperty("confirmPlace");
+    expect(routineEditorInput(fields({ existingRoutine: { ...moved, placeLost: undefined } }))).not.toHaveProperty("confirmPlace");
+  });
+
   it("sends workflowId and clears delivery, model choice, checks, access and the same chat when a workflow is chosen", () => {
     expect(routineEditorInput(fields({ workflowId: "wf1" }))).toMatchObject({
       workflowId: "wf1", deliver: null, modelSelection: null, checks: null, access: null, sameConversation: false,

@@ -8,7 +8,7 @@ import { defuse } from "./records-block.ts";
 
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
-import { PLACE_LOST_MESSAGE, placeChosen } from "./place-lost.ts";
+import { PLACE_LOST_MESSAGE, placeConfirmed } from "./place-lost.ts";
 import type { RoutineRunOn } from "./routines.ts";
 import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
@@ -128,7 +128,7 @@ const triggerInputSchema = z.object({
   maxPendingRuns: maxPendingRunsSchema.nullable().optional(),
   sameConversation: z.boolean().optional(),
 });
-const triggerPatchSchema = triggerInputSchema.partial();
+const triggerPatchSchema = triggerInputSchema.partial().extend({ confirmPlace: z.literal(true).optional() });
 const verificationSampleSchema = z.object({
   receivedAt: z.number().finite().nonnegative(),
   eventName: z.string().optional(),
@@ -301,7 +301,7 @@ function parseTriggerInput(value: JsonValue): WebhookTriggerInput {
   return parsed.data;
 }
 
-function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> {
+function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> & { confirmPlace?: true } {
   const parsed = triggerPatchSchema.safeParse(value);
   if (!parsed.success) invalidInput(parsed.error);
   return parsed.data;
@@ -515,6 +515,7 @@ export class WebhookManager {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     const patch = parseTriggerPatch(value);
+    const placeCleared = placeConfirmed(trigger.placeLost, patch);
     const clean = cleanInput({
       name: patch.name ?? trigger.name,
       prompt: patch.prompt ?? trigger.prompt,
@@ -533,7 +534,7 @@ export class WebhookManager {
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
-    if (placeChosen(patch)) delete trigger.placeLost;
+    if (placeCleared) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
     if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;

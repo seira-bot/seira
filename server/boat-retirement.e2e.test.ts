@@ -96,7 +96,14 @@ describe("starting the server on a data folder that still holds Boat", () => {
     const refused = await fetch(`${base}/api/routines/${routine.id}/run`, { method: "POST" });
     expect(refused.status).toBe(409);
     expect((await refused.json() as { error: string }).error).toMatch(/Choose where it runs/);
-    const chosen = await fetch(`${base}/api/routines/${routine.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ runOn: "seira" }) });
+    // Switching it on, or saving the place again, does not clear the mark; only the explicit confirmation does.
+    const patch = (body: object) => fetch(`${base}/api/routines/${routine.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const resumed = await patch({ enabled: true });
+    expect(resumed.status).toBe(409);
+    expect((await resumed.json() as { error: string }).error).toMatch(/Choose where it runs/);
+    expect((await patch({ runOn: "seira" })).status).toBe(200);
+    expect((await fetch(`${base}/api/routines/${routine.id}/run`, { method: "POST" })).status).toBe(409);
+    const chosen = await patch({ runOn: "seira", confirmPlace: true });
     expect(chosen.status).toBe(200);
     expect((await fetch(`${base}/api/routines/${routine.id}/run`, { method: "POST" })).status).toBe(201);
   });

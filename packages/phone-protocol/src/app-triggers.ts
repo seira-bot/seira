@@ -38,6 +38,8 @@ export interface AppTrigger {
   botId: string;
   runOn: RoutineRunOn;
   enabled: boolean;
+  /** Moved off a cloud computer that is gone: paused until an edit confirms where it runs. */
+  placeLost?: true;
   /** Composio toolkit slug, e.g. `gmail`. */
   app: string;
   appName: string;

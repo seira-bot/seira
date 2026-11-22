@@ -1422,7 +1422,7 @@ export class RoutineRequestService {
       case "pause":
       case "resume": {
         verifyManageSnapshot(operation, this.routines, operation.forBot?.botId ?? payload.botId);
-        const updated = this.routines.update(operation.routineId, { enabled: operation.action === "resume" }, {
+        const updated = placeLostAs(RoutineRequestError, () => this.routines.update(operation.routineId, { enabled: operation.action === "resume" }, {
           requestId: payload.requestId,
           messageId,
           botId: payload.botId,
@@ -1430,7 +1430,7 @@ export class RoutineRequestService {
           action: operation.action,
           fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION,
           fingerprint,
-        });
+        }));
         if (!updated) throw new RoutineRequestError("That routine no longer exists", 404);
         return updated.id;
       }
