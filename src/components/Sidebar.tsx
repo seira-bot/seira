@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderInput, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
 import { sidebarState } from "./sidebar-state"; import { sameFields, useStoreDispatch, useStoreSelector } from "@/state/store-select"; import { useStoreRef } from "@/state/store-ref"; import { sameDrawnBots } from "@/lib/drawn-bots";
-import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
+import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
 import { ADV_ACTIONS_PAD_1, ADV_ACTIONS_PAD_3, AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { formatRowTime } from "./sidebar-row-time"; import { BotRowPreview } from "./SidebarBotRowPreview";
@@ -99,7 +99,7 @@ import { AvatarActivityDot, AvatarCornerDot, RowDot, RowStatusText, rowSelectedS
 import { SidebarAttentionPanel } from "./SidebarAttentionPanel";
 import { SidebarPinnedThreadsPanel } from "./SidebarPinnedThreadsPanel";
 import { useLiveMedia } from "@/lib/live-call-media";
-import { LiveCallPill, liveBadgeFor } from "./LiveCallPill";
+import { liveBadgeFor } from "@/lib/call-session";
 import { ShortcutHint } from "./ShortcutHint";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { useAdvancedMode } from "@/lib/interface-mode";
@@ -1494,12 +1494,6 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       </p>
 
       <GlassBar edge="bottom">
-      <LiveCallPill
-        currentBotId={state.activeView === "chat" ? state.selectedId : null}
-        onOpen={(botId, threadId) => openThread(dispatch, { botId, threadId }, state, showThreads)}
-        iconOnly={density === "icons"}
-      />
-
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}

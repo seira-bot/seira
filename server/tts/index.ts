@@ -1,3 +1,4 @@
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability, isCallLanguage, isCallSpeed, CALL_LANGUAGE_AUTO } from "../../shared/call-voice.ts";
 import type { AppConfig } from "../config.ts";
 import { voiceCredential } from "../included-services.ts";
 import * as chatterbox from "./chatterbox.ts";
@@ -29,6 +30,19 @@ export class NoVoiceConfigured extends Error {
 const elevenLabs = (cfg: AppConfig) => voiceCredential(cfg.tts?.key);
 /** A bot's voice from another provider's catalog speaks in the workspace's DeepSeek voice. */
 const deepseekVoice = (cfg: AppConfig, voiceId?: string) => (deepseek.isDeepSeekVoice(voiceId) ? voiceId : cfg.tts?.voice ?? "");
+
+/** What a call asks of one reply: the bot's saved speed and language, as sent by the client. */
+export interface SpeakCall {
+  speed?: unknown;
+  language?: unknown;
+}
+
+/** The speed sent to a provider that takes one, clamped to its range; undefined when none was asked or the provider has none. */
+function nativeSpeed(provider: VoiceProvider, asked: unknown): number | undefined {
+  if (!isCallSpeed(asked)) return undefined;
+  const support = callVoiceCapability({ mode: "turns", provider }).speed;
+  return support.kind === "native" ? callSpeedFor(asked, support) : undefined;
+}
 
 /**
  * Resolves the active voice synthesis provider from configuration.
@@ -182,8 +196,10 @@ export async function addSharedVoice(cfg: AppConfig, publicOwnerId: string, voic
  * @param run Optional runner for system voices.
  * @returns Synthesized audio buffer or stream promise.
  */
-export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner, signal?: AbortSignal) {
+export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner, signal?: AbortSignal, call: SpeakCall = {}) {
   const provider = voiceProvider(cfg);
+  const speed = nativeSpeed(provider, call.speed);
+  const language = call.language !== undefined && call.language !== CALL_LANGUAGE_AUTO && isCallLanguage(call.language) ? callLanguage(call.language) : undefined;
   if (provider === "gemini") {
     const key = cfg.tts?.geminiKey;
     if (!key) throw new NoVoiceConfigured("key", "Add a Gemini API key in Settings to use Gemini voice.");
@@ -191,14 +207,14 @@ export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: syst
     if (!voice) throw new NoVoiceConfigured("voice");
     return gemini.synthesize(text, voice, key, cfg.tts?.model);
   }
-  if (provider === "openai") return openai.synthesize(text, voiceId || cfg.tts?.voice || "", cfg.openai?.key || "", signal);
+  if (provider === "openai") return openai.synthesize(text, voiceId || cfg.tts?.voice || "", cfg.openai?.key || "", signal, undefined, speed);
   if (provider === "deepseek") return deepseek.synthesize(text, deepseekVoice(cfg, voiceId), cfg.deepseek?.key || "", signal);
   if (provider === "xai") {
     const key = cfg.xai?.key;
     if (!key) throw new NoVoiceConfigured("key", "Add an xAI key in Settings to use Grok voice.");
     const voice = voiceId || cfg.tts?.voice;
     if (!voice) throw new NoVoiceConfigured("voice");
-    return grok.synthesize(text, voice, key);
+    return grok.synthesize(text, voice, key, { speed, language: language?.code });
   }
   if (provider === "system") {
     const voice = voiceId || cfg.tts?.voice;
@@ -228,13 +244,13 @@ export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: syst
     }
     const voice = voiceId || cfg.tts?.voice;
     if (!voice) throw new NoVoiceConfigured("voice");
-    return fish.synthesize(text, voice, key, cfg.tts?.fishModel);
+    return fish.synthesize(text, voice, key, cfg.tts?.fishModel, speed);
   }
   const credential = elevenLabs(cfg);
   if (!credential) throw new NoVoiceConfigured("key");
   const voice = voiceId || cfg.tts?.voice;
   if (!voice) throw new NoVoiceConfigured("voice");
-  return elevenlabs.synthesize(text, voice, credential.token, credential.api, credential.included).audio;
+  return elevenlabs.synthesize(text, voice, credential.token, credential.api, credential.included, { speed, language: language && callLanguageBase(language) }).audio;
 }
 
 export type { Voice } from "./elevenlabs.ts";

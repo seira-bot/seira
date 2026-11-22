@@ -86,7 +86,10 @@ class ElevenLabsLiveSession implements FishAgentSession {
       socket.onopen = () => {
         socket.send(JSON.stringify({
           type: "conversation_initiation_client_data",
-          conversation_config_override: { agent: { prompt: { prompt: session.instructions } } },
+          conversation_config_override: {
+            agent: { prompt: { prompt: session.instructions }, ...session.overrides?.agent },
+            ...(session.overrides?.tts ? { tts: session.overrides.tts } : {}),
+          },
         }));
       };
       socket.onmessage = (event) => {

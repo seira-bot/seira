@@ -203,6 +203,7 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "GET", path: /^\/api\/tts\/voices$/ },
   { method: "POST", path: /^\/api\/tts\/prepare$/ },
   { method: "POST", path: /^\/api\/tts\/speak$/ },
+  { method: "POST", path: /^\/api\/call\/voice-preview$/ },
 
   // The phone holds its own WebRTC audio; the Mac creates the session, so the
   // key never leaves it.

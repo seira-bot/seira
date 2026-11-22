@@ -38,7 +38,7 @@ describe("a Fish Audio call's session", () => {
     const w = wiring(fetchImpl);
     const answer = await w.calls.createSession({ ...start, endpoint: fishLiveEndpoint("", {}) });
     expect(routes(fetchImpl)).toEqual(["POST /tools", "POST /agents", "PATCH /agents/agent_new", "POST /agents/agent_new/publish", "POST /sessions"]);
-    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_new", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "en" });
+    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_new", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "en", fishAgentSpeed: 1 });
     const created = fetchImpl.mock.calls.find(([url, init]) => init!.method === "POST" && String(url).endsWith("/agents"))!;
     expect(JSON.parse(String(created[1]!.body)).name).toBe("Acme Live calls");
     expect(answer).toMatchObject({ sessionId: "sess_1", fish: { type: "fish", session: TOKEN } });
@@ -69,7 +69,7 @@ describe("a Fish Audio call's session", () => {
     await w.calls.createSession({ ...start, endpoint: fishLiveEndpoint("", {}) });
     const created = fetchImpl.mock.calls.find(([url, init]) => init!.method === "POST" && String(url).endsWith("/agents"))!;
     expect(JSON.parse(String(created[1]!.body)).config.voice.speaking_language).toBe("vi");
-    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_new", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "vi" });
+    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_new", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "vi", fishAgentSpeed: 1 });
   });
 
   it("moves the saved agent to the app's language before the call, once", async () => {
@@ -78,7 +78,7 @@ describe("a Fish Audio call's session", () => {
     await w.calls.createSession({ ...start, endpoint: fishLiveEndpoint("agent_saved", {}) });
     expect(routes(fetchImpl)).toEqual(["PATCH /agents/agent_saved/config", "POST /agents/agent_saved/publish", "POST /sessions"]);
     expect(JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body))).toEqual({ voice: { speaking_language: "vi" } });
-    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_saved", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "vi" });
+    expect(w.saveAgent).toHaveBeenCalledWith({ fishAgentId: "agent_saved", fishAgentFor: fishKeyPrint("fish-key"), fishAgentLanguage: "vi", fishAgentSpeed: 1 });
 
     const again = fakeFish();
     const moved = wiring(again, {}, { language: "vi", fishAgentLanguage: "vi" });

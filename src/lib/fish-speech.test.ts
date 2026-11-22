@@ -155,6 +155,20 @@ describe("Fish Audio listener", () => {
     expect(contextsClosed).toBe(1);
   });
 
+  it("sends the chosen dictation language with the clip, and none when the language follows the conversation", async () => {
+    await fishSpeech.speechStart({ endpointMs: 850, locale: "id-ID" });
+    feed(loud, 5);
+    await fishSpeech.speechFinish();
+    await settle();
+    expect(sent.api.mock.calls[0]![1].headers).toEqual({ "content-type": "audio/wav", "x-speech-language": "id-ID" });
+    sent.api.mockClear();
+    await fishSpeech.speechStart({ endpointMs: 850 });
+    feed(loud, 5);
+    await fishSpeech.speechFinish();
+    await settle();
+    expect(sent.api.mock.calls[0]![1].headers).toEqual({ "content-type": "audio/wav" });
+  });
+
   it("ends a turn that heard no speech without sending anything", async () => {
     await fishSpeech.speechStart({ endpointMs: 850 });
     feed(quiet, 20);

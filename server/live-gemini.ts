@@ -60,6 +60,8 @@ export interface CreateGeminiSessionInput {
   endpoint: LiveEndpoint;
   /** A Gemini prebuilt voice name; anything else gets the default voice. */
   voice: string;
+  /** The bot's saved call language (`Bot.callLanguage`). */
+  callLanguage?: string;
   bot: LiveBot;
   history: LiveHistoryMessage[];
   cloudHome: boolean;
@@ -73,7 +75,7 @@ export async function createGeminiLiveSession(input: CreateGeminiSessionInput): 
   const key = input.key.trim();
   if (!key) throw new LiveSessionError("Add a Gemini API key in Settings → AI → Other services to use Live calls.", 409);
   const now = (input.now ?? Date.now)();
-  const setup = geminiLiveSetup(input.endpoint.model, fishInstructions(input.bot, input.history, { cloudHome: input.cloudHome }), input.voice);
+  const setup = geminiLiveSetup(input.endpoint.model, fishInstructions(input.bot, input.history, { cloudHome: input.cloudHome, language: input.callLanguage }), input.voice);
   const expiresAt = new Date(now + CONNECT_WITHIN_MS).toISOString();
   let response: Response;
   try {

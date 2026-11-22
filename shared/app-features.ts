@@ -258,6 +258,24 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["liveYes"],
   },
   {
+    id: "call-view",
+    name: "Call view",
+    place: "the full screen that opens in the chat when you call a bot",
+    does: "Shows the bot while the call rings, then the call time and what the bot is doing. Mute, Captions, Call voice, Minimize and Hang up sit under the face. Esc hangs up. It works for Take turns and Live.",
+  },
+  {
+    id: "call-pill",
+    name: "Call pill",
+    place: "the bar at the top of the chat area while a call is minimized, in every chat",
+    does: "Keeps a call within reach while you work in any chat. Click the face or the name to open the call view again. It has Call voice, Captions, Mute and Hang up.",
+  },
+  {
+    id: "call-voice",
+    name: "Call voice",
+    place: "the Call voice button in the call view or on the call pill",
+    does: "Sets the speed, the voice and the language of calls with one bot. It shows only what the call service can do. A change is saved on that bot and used on its next call; some changes start with the next reply.",
+  },
+  {
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",

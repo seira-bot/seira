@@ -38,7 +38,7 @@ import type { CompanionEndpointsSnapshot } from "./responses.ts";
 /** What a team bot's main chat is called, beside each person's own chats. */
 export const SHARED_CHAT_TITLE = "Shared chat";
 
-export type { LiveCallRecord, LiveCallState, LiveCallStatus, LiveClient, LiveElevenLabsSession, LiveElevenLabsTransport, LiveEndReason, LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken, LiveFishTransport, LiveGeminiSession, LiveGeminiTransport, LiveKeySource, LiveProvider, LiveSettings } from "./live-call-wire.ts";
+export type { LiveCallRecord, LiveCallState, LiveCallStatus, LiveClient, LiveElevenLabsOverrides, LiveElevenLabsSession, LiveElevenLabsTransport, LiveEndReason, LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken, LiveFishTransport, LiveGeminiSession, LiveGeminiTransport, LiveKeySource, LiveProvider, LiveSettings } from "./live-call-wire.ts";
 export type { ForkOrigin, TaskClosedBy, TaskOpenedBy } from "./task-provenance.ts";
 export type { AuthPairResponse, AuthSessionResponse, BotCreateResponse, BotsResponse, BotUpdateResponse, CompanionE2EDescriptor, CompanionEndpointsSnapshot, InstancesResponse, LoopbackSessionResponse, PairedDevice, PairedSession, PairRequest, PairResponse, RoomCreateResponse, RoomTaskCreateResponse, RoomTaskUpdateResponse, RoomUpdateResponse, SearchHit, SearchResponse, SignedInSessionResponse, TaskResponse, WireComputerControl, WireInstance, WireMessagePage, WireModelOption } from "./responses.ts";
 
@@ -325,7 +325,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccess
   replyStyle?: ReplyStyle;
   /** This bot's own voice id, so a room of bots doesn't sound like one person. */
   voice?: string;
-  /** This bot's own Live call voice, a GPT-Live or Gemini Live voice id; absent, or not the call provider's, uses the app's. */ liveVoice?: string;
+  /** This bot's own Live call voice, a GPT-Live or Gemini Live voice id; absent, or not the call provider's, uses the app's. */ liveVoice?: string; /** Call speech speed 0.5–2.0, clamped by each provider; absent: 1. */ callSpeed?: number; /** Call language: a BCP-47 tag from the call language list, or "auto"; absent follows the conversation. */ callLanguage?: string;
   /** Whether this bot may send voice notes. Absent/true = allowed; false
    * hides the tool and refuses the route even with a voice configured. */
   voiceNotes?: boolean; /** The harness speaks each reply as a voice note; absent follows the installation's `tts.everyReply`. */ voiceNoteEveryReply?: boolean;
