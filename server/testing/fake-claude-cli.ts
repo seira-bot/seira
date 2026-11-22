@@ -77,6 +77,7 @@
 //   FAKE_CLAUDE_LATE_STEER_GATE  path: a late steer runs as the next native turn (2.1.282), replying once it exists
 //   FAKE_CLAUDE_LATE_STEER_INIT_GATE  path: that late turn's `init` also waits for it
 //   FAKE_CLAUDE_LATE_STEER_SILENT  1: the late turn prints `init` and nothing else
+//   FAKE_CLAUDE_STEER_TEXTS  path: each message sent while a turn runs is added to it as one line of text
 //   FAKE_CLAUDE_SLOW_FINISH_GATE  path: `slow` replies once it exists; a body of "fail" ends as is_error
 //   FAKE_CLAUDE_SLOW_TAIL_TOOL  1: `slow` makes one more tool call right before its reply
 //   FAKE_CLAUDE_QUEUED_TURN_COUNT  unset | zero (what 2.1.282 reports for stdin words) | count
@@ -1393,6 +1394,7 @@ process.stdin.on("data", (c) => {
         steeredMessages.push(prompt);
       }
       if (process.env.FAKE_CLAUDE_STEER_RECEIVED) writeFileSync(process.env.FAKE_CLAUDE_STEER_RECEIVED, "received");
+      if (process.env.FAKE_CLAUDE_STEER_TEXTS) appendFileSync(process.env.FAKE_CLAUDE_STEER_TEXTS, `${steeredText(prompt)}\n`);
     } else {
       playTurn(prompt);
       armSteerGate();

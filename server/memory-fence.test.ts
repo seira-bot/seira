@@ -292,6 +292,22 @@ describe("telling a turn that a program ran out of memory", () => {
     expect(w.logs).toHaveLength(1);
   });
 
+  it("does not tell the same stop again as the turn ends, when the engine is gone and only the slice can be read", async () => {
+    const w = watch();
+    w.engine.state.pid = 10;
+    w.fence.state.scopes.set(10, 0);
+    await w.wrapped.adapter.sendTurn({ threadId: "t1" } as never);
+    w.fence.state.slice = 1;
+    w.fence.state.scopes.set(10, 1);
+    w.poll();
+    await settle();
+    expect(w.engine.steers).toHaveLength(1);
+    w.engine.state.pid = undefined;
+    w.engine.emit({ type: "turn.completed", threadId: "t1", turnId: "u", ok: true });
+    expect(notices(w.seen)).toHaveLength(1);
+    expect(w.logs).toEqual([]);
+  });
+
   it("watches nothing where the fence is not active", async () => {
     const w = watch({ active: false });
     await w.wrapped.adapter.sendTurn({ threadId: "t1" } as never);

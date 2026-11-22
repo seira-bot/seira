@@ -247,7 +247,9 @@ export function withMemoryFence(instance: ProviderInstance, options: FenceWatchO
     const scope = scopeOf(threadId);
     if (scope !== null) {
       if (scope <= Math.max(mark.scope, mark.toldScope)) return false;
+      // The slice counted the same stop: the check as the turn ends may find no engine and read only the slice.
       mark.toldScope = scope;
+      mark.toldSlice = Math.max(mark.toldSlice, fence.sliceKills() ?? 0);
       return true;
     }
     const slice = fence.sliceKills();
