@@ -281,6 +281,25 @@ describe("BotBox", () => {
     }
   });
 
+  it.skipIf(process.platform === "win32")("limited: a folder a box was given stays distrusted where it was, after a link to it changes", async () => {
+    const home = realpathSync(temp()), dataDir = join(home, ".seira"), first = realpathSync(temp()), second = realpathSync(temp());
+    const cwd = join(realpathSync(temp()), "project");
+    symlinkSync(first, cwd);
+    const box = new BotBox();
+    boxes.push(box);
+    box.scopeFolders(() => ({ limited: true, grants: [] }));
+    await box.start({
+      dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!.release();
+    expect(serverMayRunFrom(join(first, "bin"))).toBe(false);
+    rmSync(cwd);
+    symlinkSync(second, cwd);
+    expect(serverMayRunFrom(join(first, "bin")), "the box still writes the folder it was bound to").toBe(false);
+    expect(serverMayRunFrom(join(cwd, "bin"))).toBe(false);
+  });
+
   it.skipIf(process.platform === "win32")("limited: no box has a program folder of a sign-in folder writable, so trust needs no memory across a restart", async () => {
     const home = realpathSync(temp()), dataDir = join(home, ".seira"), cwd = realpathSync(temp());
     mkdirSync(join(home, ".kimi-code"), { recursive: true });

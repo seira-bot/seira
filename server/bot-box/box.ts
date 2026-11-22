@@ -3,7 +3,7 @@
 // (server/procs.ts spawnCli with owner "bot") in bubblewrap by the plan (plan.ts). Nothing here changes a spawn the box
 // does not take: the command, its arguments and its environment go through untouched.
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { engineInstallRoots } from "../engine-roots.ts";
@@ -439,6 +439,8 @@ export class BotBox {
         this.limitedSignInViews.set([path, ...kept].join("\0"), { signIn: path, kept });
       } else if (this.limitedSignIns.some((signIn) => under(path, signIn)) || !this.limitedFolders.some((dir) => under(path, dir))) {
         this.limitedWritten.add(path);
+        // Security: the box keeps the folder it was bound to when a link on the way changes later.
+        try { this.limitedWritten.add(realpathSync(path)); } catch {}
       }
     }
   }
