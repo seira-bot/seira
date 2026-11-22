@@ -4056,7 +4056,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10504,7 +10508,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14342,7 +14350,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18060,7 +18072,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -25974,7 +25990,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -37818,7 +37838,19 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "releaseNotes.items.memoryForBots.title": "b27bba38aa71571b8dea53b619f08fed05d6fcc8e94525fbf750fb45eb511a0a",
+      "releaseNotes.items.memoryForBots.body": "0f465411d9f3539fb7009513a0f36482b9b69a3a0cda5cd7ce04a4f9afabab62",
+      "releaseNotes.items.crashReports.title": "d175b55b12141a4f957f774072bb9dcedec8d19fbad2d73fe5ffc3b23df1f9fa",
+      "releaseNotes.items.crashReports.body": "c39b312137a1b4d9f85e0eace7b6538a2a244892598be2dd18a30fd7ebcf67b2",
+      "routines.placeLostConfirm": "11b69cf4a00c91ca2ea0cae1e176a39224daf12b0177e2f7e5ca6ee8f3411e5c",
+      "routines.placeLost": "b00c6b8ddf4faae0ea1182caaf68193bee6c9da83c122791f45ff457bf65ce2f",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "releaseNotes.items.boatGone.title": "d8cd6767dfeef907932df2451addedeb4f524a60404b377804ee11288bb22723",
+      "releaseNotes.items.boatGone.body": "192bb2070fcecdd724ddc0a3f13359471929c12254fc240ffdd3676c1aec79d0"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -47858,7 +47890,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -57988,7 +58024,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62125,7 +62165,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68075,7 +68119,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74025,7 +74073,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81123,7 +81175,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88270,7 +88326,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95235,7 +95295,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -102845,7 +102909,11 @@
       "chat.notice.memoryFenceStop": "5fa1a1d4904e463539b8500a8b2e7b6edb674a02b29e49fbde29334778279e96",
       "serverError.botMemory.range": "f63f4ea9baa65908d00758047aba1604526f7f46291f30d8c89ad22d574b3b40",
       "chat.notice.memoryFenceStopUntold": "e9d39017d98c05aeeafa616efb5a93f373f0b8af300105700a2b0b5588e05af1",
-      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e"
+      "chat.notice.outOfRoomComputer": "85aeb20999a2e0d44bd05b0e9bbba6d5954e88b819ff1f7853211fd25579164e",
+      "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
+      "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
     }
   }
 }
