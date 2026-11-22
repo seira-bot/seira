@@ -31,12 +31,15 @@ export function messageFileRoots(options: {
   attachments: string;
   pinnedCwd: string | null | undefined;
   configuredCwd?: string;
+  /** Folders the person opened to this bot for the turn, after the conversation's own roots. */
+  extraRoots?: readonly string[];
 }): string[] {
   const conversationRoot = options.pinnedCwd === undefined ? options.configuredCwd : options.pinnedCwd;
   return [...new Set([
     ...(typeof conversationRoot === "string" ? [conversationRoot] : []),
     options.senderWorkspace,
     options.attachments,
+    ...(options.extraRoots ?? []),
   ])];
 }
 

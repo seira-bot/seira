@@ -15,11 +15,11 @@ function fakePublisher() {
   } satisfies AppPublisher;
 }
 
-async function call(publisher: AppPublisher, input: { path?: string; method?: string; body?: unknown; vmWorkspace?: string | null } = {}) {
+async function call(publisher: AppPublisher, input: { path?: string; method?: string; body?: unknown; vmWorkspace?: string | null; roots?: string[]; readOnlyRoots?: string[] } = {}) {
   const sent: { status?: number; body?: any } = {};
   const json = ((_res: unknown, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as AppHostingContext["json"];
   const out = await createAppHostingInternalRoutes(publisher)({ method: input.method ?? "POST", path: input.path ?? "/api/internal/apps/publish", res: {} as AppHostingContext["res"], json, botId: "bot-1",
-    readBody: async () => input.body ?? {}, folders: async () => ({ roots: ["/work/bot-1"], vmWorkspace: input.vmWorkspace ?? null }) });
+    readBody: async () => input.body ?? {}, folders: async () => ({ roots: input.roots ?? ["/work/bot-1"], vmWorkspace: input.vmWorkspace ?? null, ...(input.readOnlyRoots ? { readOnlyRoots: input.readOnlyRoots } : {}) }) });
   return { out, ...sent };
 }
 
@@ -34,6 +34,12 @@ describe("publish_app's internal route", () => {
     const answer = await call(publisher, { body: { path: "shop/dist", project: "shop", title: "Shop", botId: "someone-else", roots: ["/"] } });
     expect(answer).toMatchObject({ status: 200, body: { ok: true, live: true } });
     expect(publisher.publish).toHaveBeenCalledWith({ botId: "bot-1", roots: ["/work/bot-1"], path: "shop/dist", project: "shop", title: "Shop" });
+  });
+
+  it("never offers a read-only folder to publish from, and names it so no record lands inside one", async () => {
+    const publisher = fakePublisher();
+    await call(publisher, { roots: ["/work/bot-1", "/shared/read", "/shared/write"], readOnlyRoots: ["/shared/read"], body: { path: "shop" } });
+    expect(publisher.publish).toHaveBeenCalledWith({ botId: "bot-1", roots: ["/work/bot-1", "/shared/write"], readOnly: ["/shared/read"], path: "shop" });
   });
 
   it("answers status with or without a folder, and delete only with one", async () => {

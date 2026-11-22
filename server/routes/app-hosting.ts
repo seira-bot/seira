@@ -32,10 +32,11 @@ export function createAppHostingInternalRoutes(publisher: AppPublisher) {
     if (ctx.method !== "POST" || ctx.path !== ROUTE) return PASS;
     const parsed = body.safeParse(await ctx.readBody() ?? {});
     if (!parsed.success) return void ctx.json(ctx.res, 400, { error: "publish_app takes action (publish or delete), path, project and title, all text." });
-    const { roots, vmWorkspace } = await ctx.folders();
+    const { roots: reachable, vmWorkspace, readOnlyRoots = [] } = await ctx.folders();
+    const roots = reachable.filter((root) => !readOnlyRoots.includes(root));
     const hostPath = (path: string | undefined) => (path && vmWorkspace ? guestWorkspaceToHost(path, VM_WORKSPACE_GUEST, vmWorkspace) ?? path : path);
     const { action = "publish", title } = parsed.data, path = hostPath(parsed.data.path), project = hostPath(parsed.data.project);
-    const input = { botId: ctx.botId, roots: vmWorkspace ? [vmWorkspace, ...roots] : roots, ...(project ? { project } : {}) };
+    const input = { botId: ctx.botId, roots: vmWorkspace ? [vmWorkspace, ...roots] : roots, ...(project ? { project } : {}), ...(readOnlyRoots.length ? { readOnly: readOnlyRoots } : {}) };
     if (action !== "status" && !path?.trim()) return void ctx.json(ctx.res, 400, { error: `publish_app ${action} needs path: the folder to ${action}.` });
     const answer = action === "status" ? await publisher.status({ ...input, ...(path ? { path } : {}) })
       : action === "delete" ? await publisher.remove({ ...input, path: path! })

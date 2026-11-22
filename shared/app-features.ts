@@ -83,6 +83,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["sendSetting", "teamSuggestion"],
   },
   {
+    id: "folder-access",
+    name: "Folder access",
+    place: "a bot's panel, Other folders; Advanced bot settings, Access; the menu of a department on the map, Folders",
+    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders. A bot gets its department's folders plus its own.",
+  },
+  {
     id: "handoffs",
     name: "Threads and handoffs",
     place: "Bot threads in the sidebar",

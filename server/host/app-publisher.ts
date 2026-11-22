@@ -133,6 +133,18 @@ export interface AppPublishInput {
   /** The project's folder, which keeps the record; the published folder itself when absent. */
   project?: string;
   title?: string;
+  /** Folders opened to the bot read-only: no record is written or removed in one unless a deeper turn folder holds it. */
+  readOnly?: readonly string[];
+}
+
+type RecordFolders = Pick<AppPublishInput, "roots" | "readOnly">;
+
+/** The deepest folder that holds `project` decides; a turn folder wins a tie. */
+function recordAllowed(project: string, input: RecordFolders): boolean {
+  const holders = [...input.roots.map((root) => ({ root: resolve(root), write: true })), ...(input.readOnly ?? []).map((root) => ({ root: resolve(root), write: false }))]
+    .filter(({ root }) => containedBy(root, project));
+  const deepest = holders.reduce<{ root: string; write: boolean } | null>((best, each) => !best || each.root.length > best.root.length ? each : best, null);
+  return deepest?.write !== false;
 }
 
 export type AppPublishAnswer = { status: 200 | 400 | 403 | 409 | 502; body: Record<string, unknown> };
@@ -162,7 +174,8 @@ export function createAppPublisher(deps: AppPublisherDeps) {
     }
   }
 
-  async function writeRecord(project: string, record: Record<string, unknown>): Promise<void> {
+  async function writeRecord(project: string, record: Record<string, unknown>, input: RecordFolders): Promise<void> {
+    if (!recordAllowed(project, input)) return;
     // Written beside and renamed over: a record a bot swapped for a link is replaced, never written through.
     if (await realpath(project).catch(() => null) !== project) return;
     const temp = join(project, `${SITE_FILE}.${randomBytes(6).toString("hex")}.tmp`);
@@ -174,7 +187,8 @@ export function createAppPublisher(deps: AppPublisherDeps) {
     }
   }
 
-  async function forgetRecord(project: string): Promise<void> {
+  async function forgetRecord(project: string, input?: RecordFolders): Promise<void> {
+    if (input && !recordAllowed(project, input)) return;
     const file = join(project, SITE_FILE);
     if ((await readSite(file, deps.env))?.hosting === "included") await unlink(file).catch(() => {});
   }
@@ -212,7 +226,7 @@ export function createAppPublisher(deps: AppPublisherDeps) {
       createdAt: iso(app.createdAt ?? now()),
     };
     if (app.state !== "ready" || !app.url) {
-      await writeRecord(project, { ...base, ...(app.publishedAt ? { publishedAt: iso(app.publishedAt) } : {}), deployState: app.state });
+      await writeRecord(project, { ...base, ...(app.publishedAt ? { publishedAt: iso(app.publishedAt) } : {}), deployState: app.state }, input);
       return { url: app.url, state: app.state, live: false };
     }
     const opened = app.visibility === "private" ? await hosting.makePublic(app.key) ?? app : app;
@@ -220,7 +234,7 @@ export function createAppPublisher(deps: AppPublisherDeps) {
     await writeRecord(project, {
       ...base, publishedAt: iso(firstLook ? now() : app.publishedAt ?? now()), deployState: "ready",
       ...(link.liveStatus === 200 ? { access: "public" } : link.liveStatus === 401 ? { access: "private" } : {}),
-    });
+    }, input);
     return { url: opened.url ?? app.url, state: "ready", ...link };
   }
 
@@ -309,11 +323,11 @@ export function createAppPublisher(deps: AppPublisherDeps) {
         const project = await locateFolder(input.project?.trim() || input.path, folders(input), "path");
         const key = await hosting.keyFor(input.botId, project);
         const app = await hosting.app(key).catch(async (error: unknown) => {
-          if (error instanceof HostingRefusal && error.code === "not_found") await forgetRecord(project);
+          if (error instanceof HostingRefusal && error.code === "not_found") await forgetRecord(project, input);
           throw error;
         });
         await hosting.remove(key);
-        await forgetRecord(project);
+        await forgetRecord(project, input);
         const { allowance } = await hosting.list().catch(() => ({ allowance: null }));
         return { status: 200, body: { ok: true, deleted: true, title: app.title, url: app.url, message: "The app was deleted and its link no longer works. Your files stay.", ...(allowance ? said(allowance) : {}) } };
       } catch (error) {

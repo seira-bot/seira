@@ -67,7 +67,7 @@ import { parseProtocolAskQuestions, questionChoices } from "../../shared/ask-que
 import { codexQuestionReply, openAsyncQuestion, type CodexAsk } from "./codex-questions.ts";
 import { codexReleaseUpdate, codexUpdateCommand } from "./codex-update.ts";
 export { codexUpdateCommand };
-import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
+import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withFolderGrants, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
 import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
 import { appMountFor, gateServer, mcpStdioServer } from "../mcp-gate-config.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
@@ -1263,7 +1263,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           // Omitting these on a resumed thread would keep the previous named mode.
           approvalParams = customApprovalParams(effectiveConfig);
         } else {
-          approvalParams = namedApprovalParams(approvalMode);
+          approvalParams = namedApprovalParams(approvalMode, turn.folders);
         }
         // Codex's `never` means "do not ask to escalate", not "grant every requested permission":
         // only Full may synthesize approvals.
@@ -1371,7 +1371,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           return request("turn/start", {
             threadId: codexThreadId,
             input: turnInput,
-            ...approvalParams.turn,
+            ...withFolderGrants(approvalParams, turn.folders, turn.cwd).turn,
             // No environment: exec_command, apply_patch and view_image are refused (codex-cli 0.159.0).
             // Without the experimental API the field is rejected, not ignored.
             ...(turn.guestConfined ? { environments: [] } : {}),
