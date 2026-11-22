@@ -76,6 +76,7 @@ describe("workersFor", () => {
   });
   it("runs the Worker that reads a file outside its folder", () => {
     expect(names(["shared/composio-storage.ts"])).toEqual(["composio-broker"]);
+    expect(names(["shared/connector-account-identity.ts"])).toEqual(["composio-broker"]);
     expect(names(["companion/src/e2e/vectors/v1.json"])).toEqual(["control-plane"]);
   });
   it.each(WORKER_INPUTS)("runs every Worker for %s", (input) => {
