@@ -296,6 +296,13 @@ describe("formatDesktopCrashRecord", () => {
     ).toBe("event=child-process-gone type=GPU reason=oom exitCode=34");
   });
 
+  it("records a stopped recovery with the exit code in decimal and hex", () => {
+    expect(formatDesktopCrashRecord({ kind: "renderer-stuck", reason: "launch-failed", exitCode: -36861, next: "dialog", url: "https://example.test/?token=x" })).toBe(
+      "event=renderer-stuck reason=launch-failed exitCode=-36861 hex=0xffff7003 next=dialog",
+    );
+    expect(formatDesktopCrashRecord({ kind: "renderer-stuck", reason: "canary", next: "other" })).toBe("event=renderer-stuck reason=unknown exitCode=unknown next=page");
+  });
+
   it("omits normal clean exits", () => {
     expect(formatDesktopCrashRecord({ kind: "renderer", reason: "clean-exit" })).toBeNull();
     expect(formatDesktopCrashRecord({ kind: "child", reason: "clean-exit" })).toBeNull();

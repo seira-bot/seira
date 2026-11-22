@@ -181,6 +181,7 @@ export const CRASH_REPORT_KINDS = new Set([
   "page-boundary",
   "renderer-error",
   "renderer-rejection",
+  "renderer-stuck",
   "server-exit",
   "server-turn",
 ]);
@@ -216,6 +217,10 @@ export function formatDesktopCrashRecord(event = {}) {
       if (reason === "clean-exit") return null;
       const type = known(event.type, CHILD_PROCESS_TYPES);
       return `event=child-process-gone type=${type} reason=${reason} exitCode=${exitCode(event.exitCode)}`;
+    }
+    if (event.kind === "renderer-stuck") {
+      const code = Number.isSafeInteger(event.exitCode) ? `${event.exitCode} hex=0x${(event.exitCode >>> 0).toString(16)}` : "unknown";
+      return `event=renderer-stuck reason=${known(event.reason, PROCESS_GONE_REASONS)} exitCode=${code} next=${event.next === "dialog" ? "dialog" : "page"}`;
     }
     if (event.kind === "crash-report") {
       if (typeof event.id !== "string" || !REPORT_ID.test(event.id) || !CRASH_REPORT_KINDS.has(event.reportKind)) return null;

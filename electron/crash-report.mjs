@@ -32,6 +32,7 @@ const inert = Object.freeze({
   available: false,
   receive: () => false,
   hang() {},
+  recoveryStopped() {},
   stopping() {},
   serverExit() {},
   crashReportIds: () => [],
@@ -276,6 +277,10 @@ export function createCrashReports({
       addBreadcrumb("process", "renderer unresponsive");
       safe(() => hung.set(contents, now() + HANG_SUPPRESS_MS));
       capture({ kind: "hang", process: "renderer", page: safe(() => pages.get(contents)) ?? "other" });
+    },
+    /** The main window's page ended too often to reload: one report for each reason in a session. */
+    recoveryStopped(stop) {
+      capture({ kind: "renderer-stuck", process: "renderer", reason: stop?.reason, exitCode: stop?.exitCode });
     },
     /** Main asks the server to stop: its exit is then on purpose. */
     stopping(proc) { if (proc) stopping.add(proc); },

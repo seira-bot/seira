@@ -292,3 +292,11 @@ test("AC-41: a canary in every field a person or a crash can control does not re
     assert.doesNotMatch(text, /canary/i, message);
   }
 });
+
+test("a renderer-stuck report has a fixed signature, no value and no stack", () => {
+  const stuck = buildEvent({ kind: "renderer-stuck", process: "renderer", reason: "launch-failed", exitCode: 18, message: "canary" }, context());
+  assert.equal(stuck.signature, "renderer-stuck:launch-failed");
+  assert.deepEqual(stuck.event.exception.values[0], { type: "Error" });
+  assert.deepEqual([stuck.event.tags.kind, stuck.event.tags.reason, stuck.event.tags.exit_code, stuck.event.level], ["renderer-stuck", "launch-failed", "18", "error"]);
+  assert.equal(buildEvent({ kind: "renderer-stuck", process: "renderer", reason: "canary" }, context()).signature, "renderer-stuck:unknown");
+});

@@ -21,6 +21,7 @@ import {
   appendDesktopCrashRecord,
   buildDiagnosticsReport,
   diagnosticsFileName,
+  formatDesktopCrashRecord,
   readSafeLogTail,
 } from "./diagnostics.mjs";
 import { CRASH_REPORTS_ARG, createCrashReports } from "./crash-report.mjs";
@@ -519,7 +520,9 @@ const crashReports = createCrashReports({ app, ipcMain, crashReporter, fetch: (u
   roots: [app.getAppPath(), process.resourcesPath], appendCrashLog: (line) => appendDesktopCrashRecord(DESKTOP_CRASH_LOG, DESKTOP_CRASH_LOG_MAX_BYTES, line),
   isShuttingDown: () => desktopShutdownStarted, mainWebContents: () => mainWindow?.webContents ?? null, isLocalSender: senderIsLocal });
 
-const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog, onHang: (contents) => crashReports.hang(contents) });
+const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog, onHang: (contents) => crashReports.hang(contents), text: nativeText,
+  onStop: (stop) => { appendDesktopCrashRecord(DESKTOP_CRASH_LOG, DESKTOP_CRASH_LOG_MAX_BYTES, formatDesktopCrashRecord({ kind: "renderer-stuck", ...stop })); crashReports.recoveryStopped(stop); },
+  fallbackUrl: rendererOrigin, showMessageBox: (options) => dialog.showMessageBox(options), createWindow: () => createWindow(), relaunch: () => { app.relaunch(); app.quit(); } });
 
 let managedCompanionConnector = null;
 let companionAccountService = null;
