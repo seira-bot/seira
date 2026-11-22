@@ -2,7 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { LiveCallState } from "../../shared/wire";
 import { endCall, useOnCall } from "./call";
-import { hangUpLiveCall, isLiveCallRunning, setLiveMuted, useLiveMedia, type LiveMediaState } from "./live-call-media";
+import { hangUpLiveCall, isLiveCallRunning, liveMedia, setLiveMuted, subscribeLiveMedia, useLiveMedia, type LiveMediaState } from "./live-call-media";
 import { useSpeech } from "./tts/useSpeech";
 
 export type CallStage = "calling" | "connected";
@@ -17,6 +17,9 @@ export interface CaptionLine {
 
 export const CAPTION_LINES_SHOWN = 4;
 const CAPTION_LINES_KEPT = 40;
+const LONG_CAPTION_CHARS = 120;
+const CAPTION_HEAD_CHARS = 48;
+const LIVE_SPEAKING_MS = 1_500;
 
 export interface CallSessionState {
   botId: string | null;
@@ -76,14 +79,19 @@ export function setCallMinimized(minimized: boolean): void {
   if (session.minimized !== minimized) commit({ ...session, minimized });
 }
 
-/** One utterance grows as the recognizer or the voice sends more of it, so a line that the new text extends is replaced; anything else is a new line. */
+/** One utterance grows as the recognizer or the voice sends more of it, so a line that the new text extends, or that a window which moved on still overlaps, is replaced; anything else is a new line. */
 export function foldCaption(lines: readonly CaptionLine[], who: CaptionWho, text: string, nextId: () => number): readonly CaptionLine[] {
   const clean = text.trim();
   if (!clean) return lines;
   const last = lines[lines.length - 1];
-  if (last && last.who === who && (clean.startsWith(last.text) || last.text.startsWith(clean))) {
-    if (last.text === clean) return lines;
-    return [...lines.slice(0, -1), { ...last, text: clean.length >= last.text.length ? clean : last.text }];
+  if (last && last.who === who) {
+    if (clean.startsWith(last.text) || last.text.startsWith(clean)) {
+      if (last.text === clean) return lines;
+      return [...lines.slice(0, -1), { ...last, text: clean.length >= last.text.length ? clean : last.text }];
+    }
+    if (clean.length >= LONG_CAPTION_CHARS && last.text.includes(clean.slice(0, CAPTION_HEAD_CHARS))) {
+      return [...lines.slice(0, -1), { ...last, text: clean }];
+    }
   }
   return [...lines, { id: nextId(), who, text: clean }].slice(-CAPTION_LINES_KEPT);
 }
@@ -91,6 +99,27 @@ export function foldCaption(lines: readonly CaptionLine[], who: CaptionWho, text
 export function pushCaption(who: CaptionWho, text: string): void {
   const captions = foldCaption(session.captions, who, text, () => ++lineId);
   if (captions !== session.captions) commit({ ...session, captions });
+}
+
+/** Turns the captions of a Live call into lines. Reads every change of the store, so two changes in one task both reach the list. */
+export function watchLiveCaptions(subscribe: (watcher: () => void) => () => void = subscribeLiveMedia, read: () => Pick<LiveMediaState, "heard" | "caption"> = liveMedia): () => void {
+  let before = read();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const unsubscribe = subscribe(() => {
+    const after = read();
+    if (after.heard && after.heard !== before.heard) pushCaption("you", after.heard);
+    if (after.caption && after.caption !== before.caption) {
+      pushCaption("bot", after.caption);
+      patchCallSession({ liveSpeaking: true });
+      clearTimeout(timer);
+      timer = setTimeout(() => patchCallSession({ liveSpeaking: false }), LIVE_SPEAKING_MS);
+    }
+    before = after;
+  });
+  return () => {
+    unsubscribe();
+    clearTimeout(timer);
+  };
 }
 
 export function lastCaptions(lines: readonly CaptionLine[]): readonly CaptionLine[] {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   beginCallSession,
@@ -12,6 +12,7 @@ import {
   pushCaption,
   resetCallSession,
   setCallMinimized,
+  watchLiveCaptions,
   type CaptionLine,
 } from "./call-session";
 
@@ -53,6 +54,47 @@ describe("foldCaption", () => {
     for (let index = 0; index < 50; index += 1) lines = fold(lines, index % 2 ? "bot" : "you", `line ${index}`);
     expect(lines).toHaveLength(40);
     expect(lines[0]?.text).toBe("line 10");
+  });
+});
+
+describe("foldCaption with a long turn", () => {
+  it("replaces a long line whose window moved on by a few characters", () => {
+    const text = "The first words of a long answer that keeps going and going, with enough text to fill the window and then some more words after it.";
+    let lines = fold([], "bot", text);
+    lines = fold(lines, "bot", text.slice(4) + " Done.");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.text).toBe(text.slice(4) + " Done.");
+  });
+
+  it("keeps a short new turn that repeats words of the last line as its own line", () => {
+    let lines = fold([], "bot", "You have three tasks on your list for today, and one of them is overdue by two days already.");
+    lines = fold(lines, "bot", "You have three tasks");
+    expect(lines).toHaveLength(2);
+  });
+});
+
+describe("watchLiveCaptions", () => {
+  it("keeps both lines when two store changes land in one task", () => {
+    vi.useFakeTimers();
+    try {
+      const watchers = new Set<() => void>();
+      const store = { heard: "", caption: "" };
+      const change = (patch: Partial<typeof store>) => {
+        Object.assign(store, patch);
+        for (const watcher of watchers) watcher();
+      };
+      const stop = watchLiveCaptions((watcher) => { watchers.add(watcher); return () => void watchers.delete(watcher); }, () => ({ ...store }));
+      change({ heard: "What is on my list?" });
+      change({ caption: "Three tasks.", heard: "" });
+      expect(callSession().captions.map((line) => `${line.who}:${line.text}`)).toEqual(["you:What is on my list?", "bot:Three tasks."]);
+      expect(callSession().liveSpeaking).toBe(true);
+      vi.advanceTimersByTime(1_500);
+      expect(callSession().liveSpeaking).toBe(false);
+      stop();
+      expect(watchers.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
