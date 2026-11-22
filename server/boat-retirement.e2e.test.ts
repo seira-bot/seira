@@ -17,14 +17,14 @@ describe("starting the server on a data folder that still holds Boat", () => {
   let output = "";
   let child: ChildProcess | null = null;
 
-  async function start() {
+  async function start(extraEnv: Record<string, string> = {}) {
     const port = await freePortBlock([0, 1]);
     output = "";
     child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT,
       env: {
         PATH: process.env.PATH, HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
-        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), ...extraEnv,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -70,5 +70,34 @@ describe("starting the server on a data folder that still holds Boat", () => {
     expect(output).not.toContain("[boat]");
     expect(readFileSync(join(data, "bots.json"), "utf8")).toBe(settled);
     expect(readFileSync(join(data, "config.json"), "utf8")).toBe(config);
+    await stop();
+  });
+
+  it("keeps an old Cloud routine paused and refuses Run now until a place is chosen, and ignores BOX_TOKEN", { timeout: 120_000 }, async () => {
+    let base = await start();
+    const { bots } = await (await fetch(`${base}/api/bots?messages=0`)).json() as { bots: Array<{ id: string }> };
+    const created = await fetch(`${base}/api/routines`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Nightly check", prompt: "Check the fixture", botId: bots[0]!.id, runOn: "seira", schedule: { type: "interval", everyMinutes: 60, anchorAt: Date.now() } }),
+    });
+    expect(created.status).toBe(201);
+    const { routine } = await created.json() as { routine: { id: string } };
+    await stop();
+    const saved = json("routines.json") as { routines: Array<Record<string, unknown>> };
+    saved.routines.find(row => row.id === routine.id)!.runOn = "cloud";
+    writeFileSync(join(data, "routines.json"), JSON.stringify(saved));
+
+    base = await start({ BOX_TOKEN: "boat-env-key-456" });
+    expect(output).toContain("BOX_TOKEN is ignored");
+    expect(output.split("BOX_TOKEN is ignored")).toHaveLength(2);
+    expect(output).not.toContain("boat-env-key-456");
+    const listed = await (await fetch(`${base}/api/routines`)).json() as { routines: Array<{ id: string; enabled: boolean; runOn: string; placeLost?: boolean }> };
+    expect(listed.routines.find(row => row.id === routine.id)).toMatchObject({ enabled: false, runOn: "seira", placeLost: true });
+    const refused = await fetch(`${base}/api/routines/${routine.id}/run`, { method: "POST" });
+    expect(refused.status).toBe(409);
+    expect((await refused.json() as { error: string }).error).toMatch(/Choose where it runs/);
+    const chosen = await fetch(`${base}/api/routines/${routine.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ runOn: "seira" }) });
+    expect(chosen.status).toBe(200);
+    expect((await fetch(`${base}/api/routines/${routine.id}/run`, { method: "POST" })).status).toBe(201);
   });
 });
