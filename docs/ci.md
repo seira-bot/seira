@@ -111,7 +111,11 @@ full commit SHA.
 
 A job that needs write access or reads a secret must use the GitHub
 environment `release`. The test fails a job that asks for write access or
-reads a secret without it. A job with no secret and no permission can use the
+reads a secret without it. One job is an exception: the `milestones` job of
+`milestones.yml` has `issues: write` and `pull-requests: write` and no
+environment. It runs one script from `main`, installs no dependency, and reads
+no secret. The test pins its exact shape (see
+[Milestones workflow](#milestones-workflow)). A job with no secret and no permission can use the
 environment `release-approval`. It holds the approval (see
 [The `release-approval` environment](#the-release-approval-environment)).
 Two workflows read secrets in the `release` environment:
@@ -222,6 +226,16 @@ for more rights than `ci.yml` has, and `publish` needs `packages: write`.
 - The `publish` job does no checkout, so it runs no code of the repository.
 - It publishes only to this repository's own package, with no build cache, so
   another run cannot change the image.
+
+## Milestones workflow
+
+`milestones.yml` starts on a push to `main` and on a published release.
+After a push, it puts each merged pull request into the milestone of the next
+release. It does the same for the issues that the pull request closes.
+After a release, it closes the milestone of that release and opens the next one.
+It never replaces a milestone that a person set.
+The workflow is not part of the `CI` gate, so a failed run does not block a
+merge. See the [Milestones section of Releasing](releasing.md#milestones).
 
 ## Required check
 

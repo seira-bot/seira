@@ -12,7 +12,7 @@ function httpError(status, message = "failed") {
   return error;
 }
 
-function fakeApi({ versions = {}, milestones = [], pulls = {}, closing = {}, createFails = false } = {}) {
+function fakeApi({ versions = {}, milestones = [], pulls = {}, closing = {}, createFails = false, latest, pullDetails = {} } = {}) {
   const state = { milestones: milestones.map((each) => ({ state: "open", ...each })), calls: [], nextNumber: 100 };
   const writes = () => state.calls.filter((call) => call.method !== "GET" && call.path !== "/graphql");
   const api = {
@@ -23,6 +23,14 @@ function fakeApi({ versions = {}, milestones = [], pulls = {}, closing = {}, cre
         const version = versions[match[1]];
         if (version === undefined) throw httpError(404);
         return { content: Buffer.from(JSON.stringify({ version })).toString("base64") };
+      }
+      if (path.endsWith("/releases/latest")) {
+        if (latest === null) throw httpError(404);
+        return { tag_name: latest };
+      }
+      if ((match = /\/pulls\/(\d+)$/.exec(path))) {
+        if (pullDetails[match[1]] === undefined) throw httpError(404);
+        return pullDetails[match[1]];
       }
       if ((match = /\/commits\/(\w+)\/pulls$/.exec(path))) return pulls[match[1]] ?? [];
       if ((match = /\/milestones\?state=all&per_page=100&page=(\d+)$/.exec(path))) {
@@ -51,7 +59,7 @@ function fakeApi({ versions = {}, milestones = [], pulls = {}, closing = {}, cre
       return { repository: { pullRequest: { closingIssuesReferences: { nodes: closing[variables.number] ?? [] } } } };
     },
   };
-  return { api, state, writes };
+  return { api, state, writes, setLatest: (tag) => { if (latest === undefined) latest = tag; } };
 }
 
 const pull = (number, extra = {}) => ({ number, merged_at: "2026-11-23T00:00:00Z", base: { ref: "main" }, milestone: null, ...extra });
@@ -61,7 +69,10 @@ const runPush = (fake, event = pushEvent()) => {
   return onPush({ api: fake.api, repository: REPO, event, log: (line) => lines.push(line) }).then(() => lines);
 };
 const releaseEvent = (tag, extra = {}) => ({ release: { tag_name: tag, prerelease: false, draft: false, ...extra } });
-const runRelease = (fake, event) => onRelease({ api: fake.api, repository: REPO, event, log: () => {} });
+const runRelease = (fake, event, latest = event.release.tag_name) => {
+  fake.setLatest(latest);
+  return onRelease({ api: fake.api, repository: REPO, event, log: () => {} });
+};
 const issuePatches = (fake) => fake.writes().filter((call) => /\/issues\/\d+$/.test(call.path));
 
 describe("version helpers", () => {
@@ -206,6 +217,48 @@ describe("push to main", () => {
     expect(issuePatches(twice)).toHaveLength(1);
   });
 
+  describe("when the commit has no pull request in the list", () => {
+    const setup = (extra = {}) => ({
+      versions: { aaa: "0.1.188", bbb: "0.1.188" },
+      milestones: [{ number: 5, title: "v0.1.189" }],
+      ...extra,
+    });
+    const event = (message) => pushEvent({ commits: [{ id: "aaa", message }] });
+    const gets = (fake) => fake.state.calls.filter((call) => /\/pulls\/\d+$/.test(call.path));
+
+    it("finds the pull request by the number in the message and sets the milestone", async () => {
+      const fake = fakeApi(setup({ pullDetails: { 42: pull(42, { merge_commit_sha: "aaa" }) } }));
+      await runPush(fake, event("Fix a thing (#42)\n\nBody"));
+      expect(issuePatches(fake).map((call) => [call.path, call.body])).toEqual([[`/repos/${REPO}/issues/42`, { milestone: 5 }]]);
+    });
+
+    it("uses the head commit message when the push lists no commit", async () => {
+      const fake = fakeApi(setup({ pullDetails: { 42: pull(42, { merge_commit_sha: "aaa" }) } }));
+      await runPush(fake, pushEvent({ commits: [], head_commit: { message: "Fix a thing (#42)" } }));
+      expect(issuePatches(fake)).toHaveLength(1);
+    });
+
+    it("ignores a number whose merge commit is another commit", async () => {
+      const fake = fakeApi(setup({ pullDetails: { 42: pull(42, { merge_commit_sha: "zzz" }) } }));
+      await runPush(fake, event("Fix a thing (#42)"));
+      expect(fake.writes()).toEqual([]);
+    });
+
+    it("reads no pull request when the message has no number at the end of the first line", async () => {
+      const fake = fakeApi(setup());
+      await runPush(fake, event("Fix a thing\n\nSee (#42)"));
+      expect(gets(fake)).toEqual([]);
+      expect(fake.writes()).toEqual([]);
+    });
+
+    it("writes nothing when the pull request is not found", async () => {
+      const fake = fakeApi(setup());
+      await runPush(fake, event("Fix a thing (#42)"));
+      expect(gets(fake)).toHaveLength(1);
+      expect(fake.writes()).toEqual([]);
+    });
+  });
+
   it("finds a milestone on the second page of the list", async () => {
     const many = Array.from({ length: 100 }, (_, index) => ({ number: index + 1, title: `old ${index}` }));
     const fake = fakeApi({
@@ -275,6 +328,25 @@ describe("published release", () => {
       await runRelease(fake, event);
       expect(fake.state.calls).toEqual([]);
     }
+  });
+
+  it("closes the milestone of the tag but renames nothing and creates no next milestone when the release is not the latest", async () => {
+    const fake = fakeApi({ milestones: [{ number: 1, title: "v0.1.150" }, { number: 5, title: "v0.1.151" }], latest: "v0.1.189" });
+    await runRelease(fake, releaseEvent("v0.1.151"));
+    expect(fake.state.milestones.find((each) => each.number === 5).state).toBe("closed");
+    expect(fake.writes().map((call) => call.method)).toEqual(["PATCH"]);
+
+    const old = fakeApi({ milestones: [{ number: 1, title: "v0.1.150" }], latest: "v0.1.189" });
+    await runRelease(old, releaseEvent("v0.1.151"));
+    expect(old.writes()).toEqual([]);
+    expect(old.state.milestones[0].title).toBe("v0.1.150");
+  });
+
+  it("treats a 404 for the latest release as not the latest", async () => {
+    const fake = fakeApi({ milestones: [{ number: 5, title: "v0.1.189" }], latest: null });
+    await runRelease(fake, releaseEvent("v0.1.189"));
+    expect(fake.state.milestones[0].state).toBe("closed");
+    expect(fake.writes().map((call) => call.method)).toEqual(["PATCH"]);
   });
 
   it("leaves a closed milestone of the tag as it is", async () => {

@@ -75,6 +75,28 @@ async function readVersion(api, repository, sha) {
   return JSON.parse(Buffer.from(file.content, "base64").toString("utf8")).version;
 }
 
+async function isLatestRelease(api, repository, tag) {
+  try {
+    const latest = await api.rest("GET", `/repos/${repository}/releases/latest`);
+    return latest.tag_name === tag;
+  } catch (error) {
+    if (error.status === 404) return false;
+    throw error;
+  }
+}
+
+async function pullOfMergeCommit(api, repository, sha, message) {
+  const number = /\(#(\d+)\)$/.exec(String(message).split("\n")[0].trim())?.[1];
+  if (number === undefined) return [];
+  try {
+    const pull = await api.rest("GET", `/repos/${repository}/pulls/${number}`);
+    return pull.merge_commit_sha === sha ? [pull] : [];
+  } catch (error) {
+    if (error.status === 404) return [];
+    throw error;
+  }
+}
+
 async function createMilestone(api, repository, title) {
   try {
     return await api.rest("POST", `/repos/${repository}/milestones`, {
@@ -111,10 +133,13 @@ export async function onPush({ api, repository, event, log }) {
   }
   const title = `v${before === after ? nextPatch(after) : after}`;
 
-  const commits = event.commits?.length ? event.commits.map((commit) => commit.id) : [event.after];
+  const commits = event.commits?.length
+    ? event.commits.map((commit) => ({ id: commit.id, message: commit.message ?? "" }))
+    : [{ id: event.after, message: event.head_commit?.message ?? "" }];
   const pulls = new Map();
-  for (const sha of commits) {
-    const found = await api.rest("GET", `/repos/${repository}/commits/${sha}/pulls`);
+  for (const { id: sha, message } of commits) {
+    let found = await api.rest("GET", `/repos/${repository}/commits/${sha}/pulls`);
+    if (found.length === 0) found = await pullOfMergeCommit(api, repository, sha, message);
     for (const pull of found) {
       if (pull.merged_at !== null && pull.merged_at !== undefined && pull.base?.ref === "main") pulls.set(pull.number, pull);
     }
@@ -155,8 +180,10 @@ export async function onRelease({ api, repository, event, log }) {
   }
 
   const milestones = await listMilestones(api, repository);
+  const isLatest = await isLatestRelease(api, repository, tag);
+  if (!isLatest) log(`Release ${tag} is not the latest release. Only its milestone closes.`);
   let milestone = milestones.find((each) => each.title === tag);
-  if (milestone === undefined) {
+  if (milestone === undefined && isLatest) {
     const lower = milestones
       .filter((each) => each.state === "open")
       .map((each) => ({ each, version: versionOfTitle(each.title) }))
@@ -176,7 +203,7 @@ export async function onRelease({ api, repository, event, log }) {
   }
 
   const next = `v${nextPatch(tag.slice(1))}`;
-  if (!milestones.some((each) => each.title === next)) {
+  if (isLatest && !milestones.some((each) => each.title === next)) {
     await createMilestone(api, repository, next);
     log(`Created milestone ${next}.`);
   }
