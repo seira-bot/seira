@@ -254,13 +254,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "call-view",
     name: "Call view",
     place: "the full screen that opens in the chat when you call a bot",
-    does: "Shows the bot while your phone rings it, then the call time and what the bot is doing. Mute, Captions, Call voice, Minimize and Hang up sit under the face. Esc hangs up. It works for Take turns and Live.",
+    does: "Shows the bot while the call rings, then the call time and what the bot is doing. Mute, Captions, Call voice, Minimize and Hang up sit under the face. Esc hangs up. It works for Take turns and Live.",
   },
   {
     id: "call-pill",
     name: "Call pill",
     place: "the bar at the top of the chat area while a call is minimized, in every chat",
-    does: "Keeps a call within reach while you work in any chat. Click the face or the name to open the call view again. It has Call voice, Captions, Mute and Hang up. It replaces the call chip and the sidebar call pill.",
+    does: "Keeps a call within reach while you work in any chat. Click the face or the name to open the call view again. It has Call voice, Captions, Mute and Hang up.",
   },
   {
     id: "call-voice",
