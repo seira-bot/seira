@@ -23,6 +23,7 @@ static int retry(unsigned long chunk_mib) {
   for (;;) {
     if (!commit((SIZE_T)chunk_mib << 20)) Sleep(20);
   }
+  return 0;
 }
 
 static int hold(unsigned long mib) {
