@@ -11,6 +11,7 @@ import { ApiKeyEngineManage, EngineSetup, EngineUpdateNotice, EngineWarningNotic
 import { AppCopyNotice } from "./EngineAppCopy";
 import { forgetAppCopySwitches } from "@/state/engine-install";
 import { AccountsCard, AddAccount, accountGroupOf, accountsReady, type AccountGroup } from "./EngineAccounts";
+import { ProviderMenu, ProviderOffStatus } from "./ProviderMenu";
 import { ClaudeEndpoints, CodexEndpoints } from "./ClaudeEndpoints";
 import { ClaudeBedrockEndpoints } from "./ClaudeBedrock";
 import { DEVICE_SIGN_IN_COPY, deviceSignInProvider } from "./DeviceSignIn";
@@ -222,17 +223,6 @@ function EngineAdvanced({ instance }: { instance: InstanceInfo }) {
       .finally(() => setSwitching(false));
   };
 
-  /** Out of every model list until Unhide; the CLI and its sign-in stay as they are. Refused while something uses it. */
-  const hide = () => {
-    if (switching || updating) return;
-    setSwitching(true);
-    setError(null);
-    api(`/api/instances/${encodeURIComponent(instance.instanceId)}`, { method: "PATCH", body: JSON.stringify({ hidden: true }) })
-      .then(() => Promise.resolve(refreshInstances()).catch(() => {}))
-      .catch((e) => setError(e.message))
-      .finally(() => setSwitching(false));
-  };
-
   const updateClaude = () => {
     if (switching || updating) return;
     setUpdating(true);
@@ -290,16 +280,6 @@ function EngineAdvanced({ instance }: { instance: InstanceInfo }) {
             </button>
           )}
           <button
-            type="button"
-            data-hide-engine={instance.instanceId}
-            onClick={hide}
-            disabled={switching || updating}
-            title={t("engines.hideHint")}
-            className="shrink-0 text-[12px] text-ink-secondary hover:text-ink disabled:opacity-50"
-          >
-            {t("engines.hide")}
-          </button>
-          <button
             onClick={() => setOpen((v) => !v)}
             disabled={updating}
             aria-expanded={open}
@@ -330,23 +310,20 @@ function EngineAdvanced({ instance }: { instance: InstanceInfo }) {
   );
 }
 
-/** Remove drops an added Antigravity account or an added server; Sign out forgets a signed-in account's sign-in (Antigravity's
- * Google one, or a CLI's own login such as Kimi's) and never hides the provider, which stays listed with Set up. */
-function EngineAccountAction({ instance, action, cli = false, removeBody = "accounts.removeBodyAntigravity" }: { instance: InstanceInfo; action: "remove" | "signOut"; cli?: boolean; removeBody?: LocaleKey }) {
+/** Drops an added Antigravity account or an added server. Signing out and hiding live in the provider menu. */
+function EngineAccountAction({ instance, removeBody = "accounts.removeBodyAntigravity" }: { instance: InstanceInfo; removeBody?: LocaleKey }) {
   const { state, dispatch, refreshInstances } = useStore();
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const remove = action === "remove";
-  const usedBy = remove ? state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId).length : 0;
-  const label = t(remove ? "accounts.remove" : "accounts.signOut");
+  const usedBy = state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId).length;
+  const label = t("accounts.remove");
   const run = async () => {
     setConfirming(false);
     setRunning(true);
     setError(null);
     try {
-      const path = `/api/instances/${encodeURIComponent(instance.instanceId)}${remove ? "" : "/auth/sign-out"}`;
-      const { instances } = await api(path, { method: remove ? "DELETE" : "POST" });
+      const { instances } = await api(`/api/instances/${encodeURIComponent(instance.instanceId)}`, { method: "DELETE" });
       if (Array.isArray(instances)) dispatch({ type: "instances", instances });
       else await refreshInstances();
     } catch (cause) {
@@ -357,17 +334,13 @@ function EngineAccountAction({ instance, action, cli = false, removeBody = "acco
   };
   return <>
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" disabled={running || usedBy > 0} onClick={() => setConfirming(true)} aria-label={remove ? undefined : t("accounts.signOutAria", { name: instance.displayName })} className={cn("rounded-lg px-2.5 py-1.5 text-[12px] font-medium disabled:cursor-not-allowed disabled:opacity-50", remove ? "text-danger hover:bg-danger/10" : "text-ink-secondary hover:bg-raised hover:text-ink")}>
+      <button type="button" disabled={running || usedBy > 0} onClick={() => setConfirming(true)} className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50">
         {running ? <Loader2 size={13} className="animate-spin" /> : label}
       </button>
       {usedBy > 0 && <p className="text-[11px] text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
     </div>
     {error && <p role="alert" className="text-[12px] text-danger">{error}</p>}
-    <ConfirmDialog open={confirming} title={t(remove ? "accounts.removeTitle" : "accounts.signOutTitle", { name: instance.displayName })}
-      body={remove ? t(removeBody) : cli
-        // The CLI's own sign-in is the one removed: its files in the home folder of the computer this app runs on.
-        ? <>{t("accounts.signOutBody")}<span data-sign-out-cli="" className="mt-2 block">{t("accounts.signOutCliBody", { name: instance.displayName })}</span></>
-        : t("accounts.signOutBody")}
+    <ConfirmDialog open={confirming} title={t("accounts.removeTitle", { name: instance.displayName })} body={t(removeBody)}
       confirmLabel={label} tone="neutral" pending={running} onCancel={() => { if (!running) setConfirming(false); }} onConfirm={() => void run()} />
   </>;
 }
@@ -398,12 +371,13 @@ function EngineRow({ instance, bare = false }: { instance: InstanceInfo; bare?: 
 
   return (
     <EngineCard instance={instance} bare={bare}>
+      {!bare && <div className="mb-2 flex justify-end"><ProviderMenu instance={instance} /></div>}
       {policyNote}
       {!engineReady(instance) && <EngineSetup instance={instance} intent={instance.access === "custom" ? "inject" : "cloud"} description={instance.codexEndpoint ? t("agentEndpoints.codexHint") : undefined} unframed />}
       {engineReady(instance) && <ApiKeyEngineManage instance={instance} className="mt-3" />}
       {engineReady(instance) && instance.serverKind === "ollama" && <OllamaModels instance={instance} className="mt-3" />}
       {/* A server added by address (LM Studio, Ollama, a gateway) is removed here too, not only from API keys. */}
-      {isAddedServer(instance) && <div className="mt-3"><EngineAccountAction instance={instance} action="remove" removeBody="claudeEndpoints.removeBody" /></div>}
+      {isAddedServer(instance) && <div className="mt-3"><EngineAccountAction instance={instance} removeBody="claudeEndpoints.removeBody" /></div>}
       {/* The setup panel that first said so is gone once the engine is Ready. */}
       {engineReady(instance) && <AppCopyNotice instance={instance} className="mt-3" />}
       {instance.snapshot.update && <EngineUpdateNotice update={instance.snapshot.update} instance={instance} className="mt-3" quiet />}
@@ -415,17 +389,12 @@ function EngineRow({ instance, bare = false }: { instance: InstanceInfo; bare?: 
             <p className="flex items-center gap-1.5 text-[12px] text-success"><Check size={13} />{t("engineSetup.claude.connectedAccount")}</p>
           )
       )}
-      {/* Not for an engine a provider key signs in: removing its own sign-in would leave it connected. */}
-      {instance.driverKind !== "antigravityAgent" && engineReady(instance) && instance.snapshot.authenticated === true && instance.authentication?.signOut === true && instance.snapshot.account?.method !== "api-key" && (
-        <div data-engine-sign-out={instance.instanceId} className="mt-3"><EngineAccountAction instance={instance} action="signOut" cli /></div>
-      )}
       {instance.freeUpSpace && <AntigravityFreeSpace instance={instance} />}
       {instance.driverKind === "antigravityAgent" && (
         <div className="mt-3 space-y-3">
           {instance.snapshot.authenticated && <p className="break-words text-[12px] text-ink-secondary">{instance.snapshot.account?.email ?? t("engineSetup.antigravity.emailUnavailable")}</p>}
           <AntigravityAddAccount source={instance} />
-          {instance.snapshot.authenticated === true && instance.authentication?.signOut === true && <EngineAccountAction instance={instance} action="signOut" />}
-          {instance.instanceId.startsWith("antigravity-") && <EngineAccountAction instance={instance} action="remove" />}
+          {instance.instanceId.startsWith("antigravity-") && <EngineAccountAction instance={instance} />}
         </div>
       )}
       <EngineAdvanced instance={instance} />
@@ -462,6 +431,7 @@ function ProviderRow({ instance, ready, open, onToggle, compact, children }: {
       <button type="button" aria-expanded={open} className="ui-button ml-3 shrink-0" onClick={onToggle}>
         {t(open ? "common.close" : ready ? "settings.simple.ai.manage" : "settings.simple.ai.setUp")}
       </button>
+      {accountGroupOf(instance) === null && <ProviderMenu instance={instance} />}
     </div>
     {open && <div data-provider-fold={instance.instanceId} className="pb-4 pl-[60px] pr-4 pt-3">{children}</div>}
   </>;
@@ -487,6 +457,7 @@ function SimpleEngines({ rows, isReady, renderEngine, more, accountsOnly = false
   };
   return (
     <SettingsGroup label={t("settings.ai.providers")} actions={<RefreshEngines />}>
+      <ProviderOffStatus className="mx-4 mb-2" />
       <SettingsRows icons>
         {featured.map((instance) => row(instance, false))}
         {others.length + hidden.length > 0 && (
@@ -568,6 +539,7 @@ export function EnginesSettings({ simple = false, more }: { simple?: boolean; mo
       <EngineSections instances={rows} isReady={isReady} renderEngine={renderEngine} />
       {orphanEndpoints && <div className="px-4"><ClaudeEndpoints /><ClaudeBedrockEndpoints /></div>}
       {orphanCodexEndpoints && <div className="px-4"><CodexEndpoints /></div>}
+      <ProviderOffStatus className="mx-4" />
       <HiddenEngines />
       <CacheKeepWarmSettings />
     </div>
