@@ -197,31 +197,31 @@ describe("the sidebar menu's picture rows", () => {
   });
 
   it("opens a file input that is not in the page, so closing the menu cannot cancel the choice", async () => {
-    let chosen: HTMLInputElement | undefined;
-    const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(function (this: HTMLInputElement) { chosen = this; });
+    const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    const chosen = () => click.mock.contexts[0] as HTMLInputElement;
     fixture.upload.mockResolvedValue({ ok: true, avatarUrl: URL_A });
     const onClose = vi.fn();
     draw(createElement(RoomPictureMenuItems, { group: room(), onClose }));
     flushSync(() => host.querySelector<HTMLElement>('[role="menuitem"]')!.click());
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(chosen?.isConnected).toBe(false);
-    expect(chosen?.accept).toBe("image/png,image/jpeg,image/gif,image/webp");
+    expect(chosen().isConnected).toBe(false);
+    expect(chosen().accept).toBe("image/png,image/jpeg,image/gif,image/webp");
     flushSync(() => root.render(null));
-    Object.defineProperty(chosen!, "files", { value: [new File(["x"], "t.png", { type: "image/png" })] });
-    chosen!.dispatchEvent(new Event("change"));
+    Object.defineProperty(chosen(), "files", { value: [new File(["x"], "t.png", { type: "image/png" })] });
+    chosen().dispatchEvent(new Event("change"));
     await settle();
     expect(fixture.dispatch.mock.calls.map(([action]) => action)).toEqual([{ type: "patchGroup", groupId: "desk", patch: { avatarUrl: URL_A } }]);
     click.mockRestore();
   });
 
   it("raises the error notice for a refused file", async () => {
-    let chosen: HTMLInputElement | undefined;
-    const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(function (this: HTMLInputElement) { chosen = this; });
+    const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    const chosen = () => click.mock.contexts[0] as HTMLInputElement;
     fixture.upload.mockResolvedValue({ ok: false, refusal: "size" });
     draw(createElement(RoomPictureMenuItems, { group: room(), onClose: vi.fn() }));
     flushSync(() => host.querySelector<HTMLElement>('[role="menuitem"]')!.click());
-    Object.defineProperty(chosen!, "files", { value: [new File(["x"], "t.png", { type: "image/png" })] });
-    chosen!.dispatchEvent(new Event("change"));
+    Object.defineProperty(chosen(), "files", { value: [new File(["x"], "t.png", { type: "image/png" })] });
+    chosen().dispatchEvent(new Event("change"));
     await settle();
     expect(fixture.dispatch.mock.calls.map(([action]) => action)).toEqual([{ type: "error", message: "That picture is too big. Pick one under 10 MB." }]);
     click.mockRestore();
