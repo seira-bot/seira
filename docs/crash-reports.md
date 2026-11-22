@@ -40,7 +40,9 @@ The report has an error message only when both rules are true:
   `ReferenceError`, `SyntaxError`, `URIError`, or `EvalError`.
 - The message passes a filter. It has at most 200 characters. It has no path,
   no address, no `@`, no long number, no dotted name, no quoted value, no two
-  capitalized words in a row, and no user name or computer name.
+  capitalized words in a row, no user name or computer name, and no secret-shaped
+  token. A secret-shaped token starts with a known key prefix, or has 20 or more
+  letters, digits, `_` or `-` in a row with at least one digit.
 
 For every other error type, and for every crash, hang, and server exit, a
 report has the error type and no message.
