@@ -6475,5 +6475,10 @@
   "settings.pool.floorNumber": "El mínimo es un número entero del 0 al 98.",
   "settings.pool.floorLow": "El mínimo debe ser menor que el último nivel.",
   "settings.pool.error": "No se pudo guardar el grupo de IA. Inténtalo de nuevo.",
-  "aiImport.title": "Pasar desde otra IA"
+  "aiImport.title": "Pasar desde otra IA",
+  "roomPicture.change": "Cambiar imagen",
+  "roomPicture.remove": "Quitar imagen",
+  "roomPicture.typeRefused": "Elige una imagen PNG, JPEG, GIF o WebP.",
+  "roomPicture.tooBig": "Esa imagen es demasiado grande. Elige una de menos de 10 MB.",
+  "roomPicture.failed": "No se pudo guardar la imagen. Inténtalo de nuevo."
 }

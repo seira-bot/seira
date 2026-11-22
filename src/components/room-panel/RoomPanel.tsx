@@ -9,6 +9,8 @@ import { responderShortLabel } from "@/lib/room-responder";
 import type { LocaleKey } from "@/locales";
 import { useStore, type Bot, type Group } from "@/state/store";
 import { BotAvatar } from "../Avatar";
+import { RoomPicture } from "../RoomPicture";
+import { RoomPictureControls } from "../RoomPictureControls";
 import { useCaptionChrome } from "../DesktopCapabilities";
 import { ManageMembersPanel } from "../ManageMembersPanel";
 import { RoomMoreMenu } from "../RoomMoreMenu";
@@ -29,15 +31,18 @@ const PAGES: Record<RoomPage, { title: LocaleKey; intro: LocaleKey }> = {
 function RoomHero({ group, members }: { group: Group; members: Bot[] }) {
   return (
     <div className="flex flex-col items-center text-center">
-      <div data-room-panel-faces className="mt-0.5 flex">
-        {members.slice(0, 3).map((member, index) => (
-          <span key={member.id} className={cn("rounded-full ring-[3px] ring-app", index > 0 && "-ms-4")}>
-            <BotAvatar bot={member} state="happy" size={56} animated={false} />
-          </span>
-        ))}
-      </div>
+      <RoomPicture url={group.dm ? null : group.avatarUrl} size={72} className="mt-0.5" fallback={
+        <div data-room-panel-faces className="mt-0.5 flex">
+          {members.slice(0, 3).map((member, index) => (
+            <span key={member.id} className={cn("rounded-full ring-[3px] ring-app", index > 0 && "-ms-4")}>
+              <BotAvatar bot={member} state="happy" size={56} animated={false} />
+            </span>
+          ))}
+        </div>
+      } />
       <h2 id="room-panel-title" className="mt-2.5 max-w-full truncate px-1.5 text-[18px] font-semibold text-ink">{group.name}</h2>
       {group.description && <p className="mt-px line-clamp-2 max-w-full text-[13px] text-ink-secondary">{group.description}</p>}
+      <RoomPictureControls group={group} />
     </div>
   );
 }

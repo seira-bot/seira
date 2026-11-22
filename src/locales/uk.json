@@ -4162,5 +4162,10 @@
   "settings.pool.floorNumber": "Нижня межа — ціле число від 0 до 98.",
   "settings.pool.floorLow": "Нижня межа має бути нижчою за останній рівень.",
   "settings.pool.error": "Не вдалося зберегти пул ШІ. Спробуйте ще раз.",
-  "aiImport.title": "Переїзд з іншого ШІ"
+  "aiImport.title": "Переїзд з іншого ШІ",
+  "roomPicture.change": "Змінити зображення",
+  "roomPicture.remove": "Прибрати зображення",
+  "roomPicture.typeRefused": "Виберіть зображення PNG, JPEG, GIF або WebP.",
+  "roomPicture.tooBig": "Зображення завелике. Виберіть файл менше 10 МБ.",
+  "roomPicture.failed": "Не вдалося зберегти зображення. Спробуйте ще раз."
 }

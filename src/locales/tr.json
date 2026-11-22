@@ -5975,5 +5975,10 @@
   "settings.pool.floorNumber": "Alt sınır 0 ile 98 arasında bir tam sayıdır.",
   "settings.pool.floorLow": "Alt sınır son seviyeden düşük olmalı.",
   "settings.pool.error": "Yapay zeka havuzu kaydedilemedi. Lütfen tekrar dene.",
-  "aiImport.title": "Başka bir yapay zekâdan taşıyın"
+  "aiImport.title": "Başka bir yapay zekâdan taşıyın",
+  "roomPicture.change": "Resmi değiştir",
+  "roomPicture.remove": "Resmi kaldır",
+  "roomPicture.typeRefused": "PNG, JPEG, GIF veya WebP bir resim seç.",
+  "roomPicture.tooBig": "Bu resim çok büyük. 10 MB'ın altında bir resim seç.",
+  "roomPicture.failed": "Resim kaydedilemedi. Tekrar dene."
 }
