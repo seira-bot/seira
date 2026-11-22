@@ -1,38 +1,71 @@
-// Security: the key is write-only; the server reports configured-or-not, never the value.
-import { useEffect, useState } from "react";
+// Settings → AI → Routing and extraction: what the helper models do first, then one provider picker, then only the
+// picked provider's fields. Security: keys are write-only; the server reports configured-or-not, never the value.
+import { useEffect, useState, type ReactNode } from "react";
+import { BadgeCheck, Server } from "lucide-react";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
-import { LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsFormFoot, SettingsGroup, SettingsRows, StatusDot, Switch } from "./SettingsPrimitives";
+import {
+  LearnMore, SETTINGS_INPUT, SLOT, SettingRow, SettingsField, SettingsFormFoot, SettingsGroup, SettingsMark, SettingsRows, SettingsTag, StatusDot,
+  Switch,
+} from "./SettingsPrimitives";
 import { Select } from "./Select";
-import { WorkersAiKeyCard } from "./WorkersAiKeyCard";
 import { openKeySettings } from "./keys/key-focus";
+import { CloudflareMark, OpenRouterMark, TypeSafeMark } from "./ProviderIcons";
 
 type CustomApi = "systemone" | "decisions" | "chat";
 const customApiOf = (api: string | undefined): CustomApi => (api === "decisions" || api === "chat" ? api : "systemone");
 
-const KEY_URL = { jev: "https://typesafe.ai", openrouter: "https://openrouter.ai/keys" } as const;
-const KEY_SLOT = {
+/** What a person can pick under Provider. `included` is offered only while the Cloud plan supplies decisions. */
+type ProviderPick = "included" | "workersai" | "jev" | "openrouter" | "custom";
+const PICKS: readonly ProviderPick[] = ["included", "workersai", "jev", "openrouter", "custom"];
+type KeyPick = Exclude<ProviderPick, "included">;
+
+const PICK_TITLE: Record<ProviderPick, LocaleKey> = {
+  included: "keys.includedWithCloudPro", workersai: "decider.workersAi.title", jev: "decider.provider.jev",
+  openrouter: "decider.provider.openrouter", custom: "decider.provider.custom",
+};
+const PICK_DETAIL: Record<ProviderPick, LocaleKey> = {
+  included: "decider.pick.included.detail", workersai: "decider.workersAi.detail", jev: "decider.pick.jev.detail",
+  openrouter: "decider.pick.openrouter.detail", custom: "decider.pick.custom.detail",
+};
+
+/** The 32 px mark before each provider. One place, so brand logos can replace these icons later. */
+/** Official brand marks for named providers; plain icons for the plan and for a person's own server. */
+function providerMark(pick: ProviderPick): ReactNode {
+  switch (pick) {
+    case "workersai": return <CloudflareMark size={18} />;
+    case "jev": return <TypeSafeMark size={18} />;
+    case "openrouter": return <OpenRouterMark size={18} />;
+    case "included": return <BadgeCheck aria-hidden="true" />;
+    case "custom": return <Server aria-hidden="true" />;
+  }
+}
+
+const KEY_URL = { jev: "https://typesafe.ai", openrouter: "https://openrouter.ai/keys", workersai: "https://dash.cloudflare.com/profile/api-tokens" } as const;
+const KEY_SLOT: Record<KeyPick, { credential: "jevApiKey" | "workersAiToken" | "openrouterDeciderKey" | "customDeciderKey"; field: string }> = {
   jev: { credential: "jevApiKey", field: "key" },
+  workersai: { credential: "workersAiToken", field: "workersAiToken" },
   openrouter: { credential: "openrouterDeciderKey", field: "openrouterKey" },
   custom: { credential: "customDeciderKey", field: "customKey" },
-} as const;
-const COPY: Record<"jev" | "openrouter" | "custom", { master: LocaleKey; needsKey: LocaleKey; keyLabel: LocaleKey; placeholder: LocaleKey }> = {
-  jev: { master: "decider.master", needsKey: "decider.masterNeedsKey", keyLabel: "decider.key.label", placeholder: "decider.key.placeholder" },
-  openrouter: {
-    master: "decider.openrouter.master", needsKey: "decider.masterNeedsKey.openrouter",
-    keyLabel: "decider.openrouter.key.label", placeholder: "decider.openrouter.key.placeholder",
-  },
-  custom: { master: "decider.custom.master", needsKey: "decider.custom.masterNeedsKey", keyLabel: "decider.custom.key.label", placeholder: "decider.custom.key.placeholder" },
 };
+const KEY_COPY: Record<Exclude<KeyPick, "workersai">, { label: LocaleKey; placeholder: LocaleKey }> = {
+  jev: { label: "decider.key.label", placeholder: "decider.key.placeholder" },
+  openrouter: { label: "decider.openrouter.key.label", placeholder: "decider.openrouter.key.placeholder" },
+  custom: { label: "decider.custom.key.label", placeholder: "decider.custom.key.placeholder" },
+};
+const TEST_OK: Record<ProviderPick, LocaleKey> = {
+  included: "decider.included.test.ok", workersai: "decider.workersAi.test.ok", jev: "decider.test.ok",
+  openrouter: "decider.openrouter.test.ok", custom: "decider.custom.test.ok",
+};
+const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
 /** The room decision budget in server/decider/room-routing.ts; slower falls back to the lead. */
 const ROOM_BUDGET_MS = 1_500;
 
-type Provider = "jev" | "openrouter" | "custom";
 type ModelList = { source: "openrouter" | "builtin"; models: Array<{ id: string; name: string; group: "recommended" | "more" | "chat"; api?: "chat" | "decisions" }> };
 const MODEL_GROUP = { recommended: "decider.model.recommended", more: "decider.model.more", chat: "decider.model.geminiChat" } as const satisfies Record<string, LocaleKey>;
-type TestResult = { ok: true; latencyMs: number } | { ok: false; reason: string; status?: number };
+type TestResult = ({ ok: true; latencyMs: number } | { ok: false; reason: string; status?: number }) & { extraction?: { ok: boolean } };
 
 const FAILURES: Record<string, LocaleKey> = {
   rejected: "decider.error.rejected",
@@ -99,7 +132,7 @@ export function helpersStatusLine(config: ConfigStatus | null): string {
 }
 
 /** A fixed sentence per failure: the vendor's own body never reaches the UI. */
-export function deciderFailureText(result: { reason: string; status?: number }, included = false, provider: Provider | "workersai" = "jev"): string {
+export function deciderFailureText(result: { reason: string; status?: number }, included = false, provider: KeyPick = "jev"): string {
   if (provider === "workersai") {
     if (result.reason === "http_error") return t("decider.workersAi.error.http", { status: String(result.status ?? "?") });
     const key = WORKERS_AI_FAILURES[result.reason];
@@ -124,7 +157,28 @@ export function deciderFailureText(result: { reason: string; status?: number }, 
   return key ? t(key) : t("decider.error.other");
 }
 
-const asProvider = (value: string | undefined): Provider => (value === "openrouter" || value === "custom" ? value : "jev");
+/** The provider shown as picked: the saved pick, else the one deciding now, else the plan's included one or Cloudflare. */
+export function pickedProvider(config: ConfigStatus | null): ProviderPick {
+  const decider = config?.decider;
+  const includedOffered = decider?.includedAvailable === true || decider?.included === true;
+  const chosen = decider?.chosen;
+  if (chosen && (chosen !== "included" || includedOffered)) return chosen;
+  if (decider?.configured && decider.included) return "included";
+  const inUse = decider?.provider;
+  if (decider?.configured && inUse && inUse !== "gemini") return inUse;
+  if (inUse === "custom") return "custom";
+  return includedOffered ? "included" : "workersai";
+}
+
+/** Whether the person's own key for a provider is saved: from the key list, else from what decides now. */
+function ownKeySaved(config: ConfigStatus | null, pick: KeyPick): boolean {
+  const decider = config?.decider;
+  const own = config?.helpers?.own;
+  const listed = { jev: own?.jev, workersai: own?.workersAi, openrouter: own?.openrouter, custom: undefined }[pick];
+  const slot = config?.savedKeys?.[KEY_SLOT[pick].credential]?.configured;
+  const inUse = Boolean(decider?.configured && !decider.included && decider.provider === pick && decider.keySource !== "shared");
+  return listed ?? slot ?? inUse;
+}
 
 /** A text setting saved when it loses focus or on Enter, and only when it changed. */
 function SavedText({ saved, onSave, disabled, label, placeholder, testId }: {
@@ -151,23 +205,22 @@ function SavedText({ saved, onSave, disabled, label, placeholder, testId }: {
   );
 }
 
+const LINK = "cursor-pointer text-accent-text hover:underline focus-visible:underline";
+
 export function DecisionModelSettings() {
   const { state, dispatch } = useStore();
-  const decider = state.config?.decider;
-  const provider = asProvider(decider?.chosen ?? decider?.provider);
-  const openrouter = provider === "openrouter";
-  const custom = provider === "custom";
+  const config = state.config;
+  const decider = config?.decider;
+  const picked = pickedProvider(config);
   const configured = decider?.configured ?? false;
-  const included = configured && decider?.included === true;
-  // The shared OpenRouter key decides, whether OpenRouter is chosen or it stands in for a chosen Jev with no key yet.
-  const usingShared = configured && decider?.keySource === "shared";
-  const sharedOpenRouter = openrouter && usingShared;
-  const sharedKey = openrouter && decider?.sharedKey === true;
-  const borrowedGemini = configured && decider?.provider === "gemini";
-  const ownKey = configured && !included && !usingShared && !borrowedGemini;
+  const includedOffered = decider?.includedAvailable === true || decider?.included === true;
   const enabled = decider?.enabled ?? false;
   const roomRouting = decider?.jobs.roomRouting ?? true;
+  const sharedKey = config?.helpers?.sharedKey ?? decider?.sharedKey ?? false;
+  const own = picked === "included" ? false : ownKeySaved(config, picked);
+  const savedAccount = config?.helpers?.workersAiAccountId ?? "";
   const [value, setValue] = useState("");
+  const [account, setAccount] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -176,25 +229,23 @@ export function DecisionModelSettings() {
   const [models, setModels] = useState<ModelList | null>(null);
   const [more, setMore] = useState(false);
   const draft = value.trim();
-  const clearing = !draft && ownKey;
-  const keyHint: LocaleKey | null = !openrouter || included
-    ? null
-    : usingShared
-      ? "decider.openrouter.status.sharedHint"
-      : !configured
-        ? "decider.openrouter.status.notConnectedHint"
-        : sharedKey
-          ? "decider.openrouter.status.ownFallbackHint"
-          : null;
+  const accountId = (account ?? savedAccount).trim();
+  const accountChanged = picked === "workersai" && account !== null && accountId !== savedAccount;
+  const clearing = !draft && own && !accountChanged;
+  const customReady = decider?.provider === "custom" && configured;
+  const usable = picked === "included" ? decider?.included === true
+    : picked === "openrouter" ? own || sharedKey
+      : picked === "custom" ? customReady : own;
 
-  const applied = (config: ConfigStatus) => dispatch({ type: "configStatus", config });
+  const applied = (status: ConfigStatus) => dispatch({ type: "configStatus", config: status });
+  const put = async (decision: Record<string, unknown>) => applied(await api<ConfigStatus>("/api/config", { method: "PUT", body: JSON.stringify({ decider: decision }) }));
 
   const patch = async (decision: Record<string, unknown>) => {
     if (switching) return;
     setSwitching(true);
     setError(null);
     try {
-      applied(await api<ConfigStatus>("/api/config", { method: "PUT", body: JSON.stringify({ decider: decision }) }));
+      await put(decision);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -203,32 +254,45 @@ export function DecisionModelSettings() {
   };
 
   useEffect(() => {
-    if (!openrouter || models) return;
+    if (picked !== "openrouter" || models) return;
     let cancelled = false;
     api<ModelList>("/api/decider/models").then(
       (list) => { if (!cancelled) setModels(list); },
       () => undefined,
     );
     return () => { cancelled = true; };
-  }, [openrouter, models]);
+  }, [picked, models]);
 
-  const choose = (decision: { provider: Provider } | { openrouterModel: string; openrouterApi: "chat" | "decisions" } | { customApi: CustomApi }) => {
-    setValue("");
+  const reset = () => { setValue(""); setAccount(null); setVerdict(null); setError(null); };
+  const choose = (pick: ProviderPick) => {
+    if (pick === picked && decider?.chosen === pick) return;
+    reset();
+    void patch({ provider: pick });
+  };
+  const edit = (decision: { openrouterModel: string; openrouterApi: "chat" | "decisions" } | { customApi: CustomApi }) => {
     setVerdict(null);
     void patch(decision);
   };
 
   const save = async () => {
-    if (saving || (!draft && !ownKey)) return;
+    if (picked === "included" || saving || (!draft && !own && !accountChanged)) return;
+    if (picked === "workersai" && draft && !ACCOUNT_ID.test(accountId)) return setError(t("decider.workersAi.needsAccount"));
     setSaving(true);
     setError(null);
     setVerdict(null);
     try {
-      const status = window.ogb?.setCredential
-        ? await window.ogb.setCredential(KEY_SLOT[provider].credential, draft)
-        : await api<ConfigStatus>("/api/config", { method: "PUT", body: JSON.stringify({ decider: { [KEY_SLOT[provider].field]: draft } }) });
-      applied(status);
-      setValue("");
+      // A key saved under a provider shown as picked but never saved as the pick keeps that pick.
+      const pick = draft && decider?.chosen !== picked ? { provider: picked } : {};
+      // The account ID before the token: the token's check on save needs it.
+      const accountFirst = picked === "workersai" && (accountChanged || (draft && !savedAccount)) ? { workersAiAccountId: accountId } : {};
+      if (Object.keys(pick).length || Object.keys(accountFirst).length) await put({ ...pick, ...accountFirst });
+      if (draft || clearing) {
+        const slot = KEY_SLOT[picked];
+        applied(window.ogb?.setCredential
+          ? await window.ogb.setCredential(slot.credential, draft)
+          : await api<ConfigStatus>("/api/config", { method: "PUT", body: JSON.stringify({ decider: { [slot.field]: draft } }) }));
+      }
+      reset();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -237,29 +301,26 @@ export function DecisionModelSettings() {
   };
 
   const test = async () => {
-    if (testing || saving || (!draft && !configured)) return;
+    if (testing || saving || (!draft && !usable)) return;
+    if (picked === "workersai" && draft && !ACCOUNT_ID.test(accountId)) return setError(t("decider.workersAi.needsAccount"));
     setTesting(true);
     setVerdict(null);
     setError(null);
-    const testingIncluded = !draft && included;
-    const testingShared = !draft && usingShared;
-    // The saved Gemini key answers a test with no draft; its verdict must not name Jev or OpenRouter.
-    const testingGemini = !draft && borrowedGemini;
+    const body = picked === "included" ? {} : { provider: picked, ...(draft ? { key: draft, ...(picked === "workersai" ? { accountId } : {}) } : {}) };
     try {
-      const result = await api<TestResult>("/api/decider/test", { method: "POST", body: JSON.stringify(draft ? { key: draft } : {}) });
+      const result = await api<TestResult>("/api/decider/test", { method: "POST", body: JSON.stringify(body) });
+      const extraction = result.extraction ? [t(result.extraction.ok ? "decider.test.extractionOk" : "decider.test.extractionFailed")] : [];
+      const sharedOnly = picked === "openrouter" && !draft && !own;
       setVerdict(result.ok
         ? {
-          ok: true,
-          text: openrouter || custom || testingShared || testingGemini
-            ? [
-              t(testingGemini ? "decider.gemini.test.ok" : custom ? "decider.custom.test.ok" : testingShared ? "decider.openrouter.test.okShared" : "decider.openrouter.test.ok", { ms: String(result.latencyMs) }),
-              ...(result.latencyMs > ROOM_BUDGET_MS ? [t("decider.test.slow")] : []),
-            ].join(" ")
-            : t("decider.test.ok", { ms: String(result.latencyMs) }),
+          ok: result.extraction?.ok !== false,
+          text: [
+            t(sharedOnly ? "decider.openrouter.test.okShared" : TEST_OK[picked], { ms: String(result.latencyMs) }),
+            ...(result.latencyMs > ROOM_BUDGET_MS ? [t("decider.test.slow")] : []),
+            ...extraction,
+          ].join(" "),
         }
-        : { ok: false, text: testingGemini
-          ? t(result.reason === "rejected" ? "decider.gemini.error.rejected" : "decider.error.other")
-          : deciderFailureText(result, testingIncluded, testingShared ? "openrouter" : provider) });
+        : { ok: false, text: [deciderFailureText(result, picked === "included", picked === "included" ? "jev" : picked), ...extraction].join(" ") });
     } catch (cause) {
       setVerdict({ ok: false, text: cause instanceof Error ? cause.message : String(cause) });
     } finally {
@@ -267,14 +328,150 @@ export function DecisionModelSettings() {
     }
   };
 
-  const keyLabel = t(COPY[provider].keyLabel);
-  const keyStatus = included
-    ? t("keys.includedWithCloudPro")
-    : usingShared
-      ? t("decider.openrouter.status.shared")
-      : configured
-        ? t(sharedKey ? "decider.openrouter.status.own" : "decider.status.connected")
-        : t("decider.status.notConnected");
+  const typing = (set: (next: string) => void) => (event: { target: { value: string } }) => { setVerdict(null); setError(null); set(event.target.value); };
+
+  /** The picked provider's key: write-only, one field, saved with the card's Save. */
+  const keyField = (label: string, placeholder: string) => (
+    <SettingsField label={label}>
+      <input
+        type="password"
+        data-testid="decider-key"
+        value={value}
+        onChange={typing(setValue)}
+        onKeyDown={(event) => event.key === "Enter" && void save()}
+        disabled={saving}
+        placeholder={own ? t("keys.replace") : placeholder}
+        aria-label={label}
+        autoComplete="off"
+        spellCheck={false}
+        className={SETTINGS_INPUT}
+      />
+    </SettingsField>
+  );
+
+  const openrouterHint: LocaleKey | null = picked !== "openrouter" ? null
+    : own ? (sharedKey ? "decider.openrouter.status.ownFallbackHint" : null)
+      : sharedKey ? "decider.openrouter.status.sharedHint" : "decider.openrouter.status.notConnectedHint";
+
+  /** Rows above the key: the OpenRouter model, or the custom endpoint's address, model and protocol. */
+  const providerRows = () => {
+    if (picked === "openrouter") {
+      return (
+        <SettingRow title={t("decider.model.label")} subtitle={models?.source === "builtin" ? t("decider.model.builtinNote") : undefined}>
+          <Select
+            data-testid="decider-model"
+            value={decider?.model ?? ""}
+            onChange={(event) => edit({
+              openrouterModel: event.target.value,
+              openrouterApi: models?.models.find((model) => model.id === event.target.value)?.api ?? "chat",
+            })}
+            disabled={switching}
+            aria-label={t("decider.model.label")}
+          >
+            {decider?.model && !models?.models.some((model) => model.id === decider.model) && (
+              <option value={decider.model}>{decider.model}</option>
+            )}
+            {(["recommended", "more", "chat"] as const).map((group) => {
+              const inGroup = models?.models.filter((model) => model.group === group) ?? [];
+              return inGroup.length > 0 && (
+                <optgroup key={group} label={t(MODEL_GROUP[group])}>
+                  {inGroup.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </optgroup>
+              );
+            })}
+          </Select>
+        </SettingRow>
+      );
+    }
+    if (picked !== "custom") return null;
+    // The saved custom settings come back only while the custom endpoint is the provider in use.
+    const savedCustom = decider?.provider === "custom";
+    return (
+      <>
+        <SettingRow title={t("decider.custom.baseUrl")} subtitle={t("decider.custom.baseUrlDetail")}>
+          <SavedText testId="decider-custom-base-url" saved={savedCustom ? decider?.baseUrl ?? "" : ""} disabled={switching}
+            label={t("decider.custom.baseUrl")} placeholder={t("decider.custom.baseUrlPlaceholder")}
+            onSave={(customBaseUrl) => void patch({ customBaseUrl })} />
+        </SettingRow>
+        <SettingRow title={t("decider.custom.model")}>
+          <SavedText testId="decider-custom-model" saved={savedCustom ? decider?.model ?? "" : ""} disabled={switching}
+            label={t("decider.custom.model")} placeholder={t("decider.custom.modelPlaceholder")}
+            onSave={(customModel) => void patch({ customModel })} />
+        </SettingRow>
+        <SettingRow title={t("decider.custom.api")}>
+          <Select
+            data-testid="decider-custom-api"
+            value={customApiOf(savedCustom ? decider?.api : undefined)}
+            onChange={(event) => edit({ customApi: customApiOf(event.target.value) })}
+            disabled={switching}
+            aria-label={t("decider.custom.api")}
+          >
+            <option value="systemone">{t("decider.custom.api.systemone")}</option>
+            <option value="decisions">{t("decider.custom.api.decisions")}</option>
+            <option value="chat">{t("decider.custom.api.chat")}</option>
+          </Select>
+        </SettingRow>
+      </>
+    );
+  };
+
+  /** The fields under the rows: the key (and Cloudflare's account ID), then a hint and where to get a key. */
+  const keyFields = () => {
+    if (picked === "included") return null;
+    if (picked === "workersai") {
+      return (
+        <div data-decider-key="" className="flex flex-col gap-3 px-4 pb-1 pt-3">
+          <SettingsField label={t("decider.workersAi.accountId")}>
+            <input
+              type="text"
+              data-testid="decider-account"
+              value={account ?? savedAccount}
+              onChange={typing(setAccount)}
+              disabled={saving}
+              placeholder={t("decider.workersAi.accountIdPlaceholder")}
+              aria-label={t("decider.workersAi.accountId")}
+              autoComplete="off"
+              spellCheck={false}
+              className={SETTINGS_INPUT}
+            />
+          </SettingsField>
+          {keyField(t("decider.workersAi.token"), t("decider.workersAi.tokenPlaceholder"))}
+          <p className="text-[13px] leading-[18px] text-ink-secondary">
+            <a href={KEY_URL.workersai} target="_blank" rel="noopener noreferrer" className={LINK}>{t("decider.workersAi.getKey")}</a>
+          </p>
+        </div>
+      );
+    }
+    const copy = KEY_COPY[picked];
+    const placeholder = picked === "openrouter" && !own && sharedKey ? t("decider.openrouter.key.overridePlaceholder") : t(copy.placeholder);
+    return (
+      <div data-decider-key="" className="flex flex-col gap-2 px-4 pb-1 pt-3">
+        {keyField(t(copy.label), placeholder)}
+        {picked !== "custom" && (
+          <p className="text-[13px] leading-[18px] text-ink-secondary">
+            {openrouterHint && <>{t(openrouterHint)}{" "}</>}
+            {openrouterHint && !own && (
+              <><button type="button" data-testid="decider-manage-keys" onClick={() => dispatch(openKeySettings("openrouter"))}
+                className="cursor-pointer text-accent-text hover:underline">{t("decider.openrouter.key.manageLink")}</button>
+                {!(picked === "openrouter" && sharedKey) && <span aria-hidden="true"> · </span>}</>
+            )}
+            {!(picked === "openrouter" && sharedKey) && (
+              <a href={KEY_URL[picked]} target="_blank" rel="noopener noreferrer" className={LINK}>
+                {t(picked === "openrouter" ? "decider.openrouter.key.getKey" : "decider.key.getKey")}
+              </a>
+            )}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const statusText = picked === "openrouter" && !own && sharedKey ? t("decider.openrouter.status.shared")
+    : !usable ? t("decider.status.notSetUpShort")
+      : picked === "openrouter" && sharedKey ? t("decider.openrouter.status.own")
+        : t("decider.status.connected");
+  const offered = PICKS.filter((pick) => pick !== "included" || includedOffered);
+
   return (
     <>
       <SettingsGroup label={t("settings.ai.routing")} block="routing"
@@ -282,148 +479,19 @@ export function DecisionModelSettings() {
         {more && <p data-decider-more="" className="px-4 text-[12px] leading-4 text-ink-secondary">{t("decider.intro")}</p>}
         <SettingsRows>
           <SettingRow
-            title={t(COPY[provider].master)}
-            subtitle={<span role="status" data-testid="helpers-status">{helpersStatusLine(state.config)}</span>}
-            message={configured ? undefined : t(COPY[provider].needsKey)}
+            title={t("decider.master")}
+            subtitle={<span role="status" data-testid="helpers-status">{helpersStatusLine(config)}</span>}
+            message={configured ? undefined : t("decider.masterNeedsKey")}
           >
             <Switch
               data-testid="decider-master"
-              aria-label={t(COPY[provider].master)}
+              aria-label={t("decider.master")}
               checked={enabled}
-              disabled={!configured || switching || !state.config}
+              disabled={!configured || switching || !config}
               onClick={() => void patch({ enabled: !enabled })}
               className="cursor-pointer"
             />
           </SettingRow>
-        </SettingsRows>
-      </SettingsGroup>
-      <WorkersAiKeyCard failureText={(result) => deciderFailureText(result, false, "workersai")} />
-      <SettingsGroup label={t("decider.provider.label")} block="routing-key">
-        <SettingsRows selectWidth={200}>
-          <SettingRow title={t("decider.provider.title")}>
-            <Select
-              data-testid="decider-provider"
-              value={provider}
-              onChange={(event) => choose({ provider: asProvider(event.target.value) })}
-              disabled={switching || !state.config}
-              aria-label={t("decider.provider.label")}
-            >
-              <option value="jev">{t("decider.provider.jev")}</option>
-              <option value="openrouter">{t("decider.provider.openrouter")}</option>
-              <option value="custom">{t("decider.provider.custom")}</option>
-            </Select>
-          </SettingRow>
-          {custom && (
-            <>
-              <SettingRow title={t("decider.custom.baseUrl")} subtitle={t("decider.custom.baseUrlDetail")}>
-                <SavedText testId="decider-custom-base-url" saved={decider?.baseUrl ?? ""} disabled={switching}
-                  label={t("decider.custom.baseUrl")} placeholder={t("decider.custom.baseUrlPlaceholder")}
-                  onSave={(customBaseUrl) => void patch({ customBaseUrl })} />
-              </SettingRow>
-              <SettingRow title={t("decider.custom.model")}>
-                <SavedText testId="decider-custom-model" saved={decider?.model ?? ""} disabled={switching}
-                  label={t("decider.custom.model")} placeholder={t("decider.custom.modelPlaceholder")}
-                  onSave={(customModel) => void patch({ customModel })} />
-              </SettingRow>
-              <SettingRow title={t("decider.custom.api")}>
-                <Select
-                  data-testid="decider-custom-api"
-                  value={customApiOf(decider?.api)}
-                  onChange={(event) => choose({ customApi: customApiOf(event.target.value) })}
-                  disabled={switching}
-                  aria-label={t("decider.custom.api")}
-                >
-                  <option value="systemone">{t("decider.custom.api.systemone")}</option>
-                  <option value="decisions">{t("decider.custom.api.decisions")}</option>
-                  <option value="chat">{t("decider.custom.api.chat")}</option>
-                </Select>
-              </SettingRow>
-            </>
-          )}
-          {openrouter && (
-            <SettingRow title={t("decider.model.label")} subtitle={models?.source === "builtin" ? t("decider.model.builtinNote") : undefined}>
-              <Select
-                data-testid="decider-model"
-                value={decider?.model ?? ""}
-                onChange={(event) => choose({
-                  openrouterModel: event.target.value,
-                  openrouterApi: models?.models.find((model) => model.id === event.target.value)?.api ?? "chat",
-                })}
-                disabled={switching}
-                aria-label={t("decider.model.label")}
-              >
-                {decider?.model && !models?.models.some((model) => model.id === decider.model) && (
-                  <option value={decider.model}>{decider.model}</option>
-                )}
-                {(["recommended", "more", "chat"] as const).map((group) => {
-                  const inGroup = models?.models.filter((model) => model.group === group) ?? [];
-                  return inGroup.length > 0 && (
-                    <optgroup key={group} label={t(MODEL_GROUP[group])}>
-                      {inGroup.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                    </optgroup>
-                  );
-                })}
-              </Select>
-            </SettingRow>
-          )}
-          <div data-decider-key="" className="flex flex-col gap-2 px-4 pb-1 pt-3">
-            <SettingsField label={keyLabel}>
-              <input
-                type="password"
-                value={value}
-                onChange={(event) => { setVerdict(null); setError(null); setValue(event.target.value); }}
-                onKeyDown={(event) => event.key === "Enter" && void save()}
-                disabled={saving}
-                placeholder={ownKey ? t("keys.replace") : t(sharedOpenRouter ? "decider.openrouter.key.overridePlaceholder" : COPY[provider].placeholder)}
-                aria-label={keyLabel}
-                autoComplete="off"
-                spellCheck={false}
-                className={SETTINGS_INPUT}
-              />
-            </SettingsField>
-            <p className="text-[13px] leading-[18px] text-ink-secondary">
-              {keyHint && <>{t(keyHint)}{" "}</>}
-              {keyHint && !ownKey && (
-                <><button type="button" data-testid="decider-manage-keys" onClick={() => dispatch(openKeySettings("openrouter"))}
-                  className="cursor-pointer text-accent-text hover:underline">{t("decider.openrouter.key.manageLink")}</button>{" "}</>
-              )}
-              {!sharedOpenRouter && provider !== "custom" && (
-                <a href={KEY_URL[provider]} target="_blank" rel="noopener noreferrer" className="cursor-pointer text-accent-text hover:underline focus-visible:underline">
-                  {t(openrouter ? "decider.openrouter.key.getKey" : "decider.key.getKey")}
-                </a>
-              )}
-            </p>
-          </div>
-          <SettingsFormFoot status={<span className="flex flex-col gap-1">
-            <span role="status" className="flex items-center"><StatusDot tone={configured ? "success" : null} />{!configured && <span aria-hidden="true" className="mr-1.5 inline-block size-1.5 rounded-full bg-ink/20" />}{keyStatus}</span>
-            {error && <span role="alert" className="text-danger">{error}</span>}
-            {verdict && <span role="status" className={verdict.ok ? "text-ink-secondary" : "text-danger"}>{verdict.text}</span>}
-          </span>}>
-            <button
-              type="button"
-              data-testid="decider-test"
-              onClick={() => void test()}
-              disabled={testing || saving || (!draft && !configured)}
-              className="ui-button ui-button-md cursor-pointer rounded-full"
-            >
-              {testing ? t("keys.testing") : t("keys.test")}
-            </button>
-            <button
-              type="button"
-              data-testid="decider-save"
-              onClick={() => void save()}
-              disabled={saving || (!draft && !ownKey)}
-              title={clearing ? t("keys.removeKey") : t("common.save")}
-              className={cn("ui-button ui-button-md cursor-pointer rounded-full", clearing && "!text-danger")}
-            >
-              {saving ? t("settings.threads.saving") : clearing ? t("keys.clear") : t("common.save")}
-            </button>
-          </SettingsFormFoot>
-        </SettingsRows>
-      </SettingsGroup>
-
-      <SettingsGroup label={t("decider.jobs.title")} block="routing-jobs">
-        <SettingsRows>
           <SettingRow title={t("decider.jobs.roomRouting")} subtitle={t("decider.jobs.roomRoutingDetail")}>
             <Switch
               data-testid="decider-job-roomRouting"
@@ -435,6 +503,71 @@ export function DecisionModelSettings() {
             />
           </SettingRow>
           {/* Jobs that aren't built yet are not listed: a row nobody can use is noise (§6.5 Not applicable). */}
+        </SettingsRows>
+      </SettingsGroup>
+
+      <SettingsGroup label={t("decider.provider.title")} block="routing-provider">
+        <SettingsRows icons>
+          <div role="radiogroup" aria-label={t("decider.provider.title")} className="contents">
+            {offered.map((pick) => (
+              <label key={pick} data-decider-pick={pick} className={cn("flex min-h-11 items-center gap-3 px-4 py-3", switching || !config ? "cursor-default" : "cursor-pointer")}>
+                <span data-settings-slot="" className={SLOT}><SettingsMark>{providerMark(pick)}</SettingsMark></span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[14px] leading-5 text-ink">
+                    {t(PICK_TITLE[pick])}
+                    {pick !== "included" && ownKeySaved(config, pick) && <SettingsTag>{t("common.saved")}</SettingsTag>}
+                  </span>
+                  <span className="mt-0.5 text-[13px] leading-[18px] text-ink-secondary">{t(PICK_DETAIL[pick])}</span>
+                </span>
+                <input
+                  type="radio"
+                  name="decider-provider"
+                  value={pick}
+                  data-testid={`decider-pick-${pick}`}
+                  checked={picked === pick}
+                  disabled={switching || !config}
+                  onChange={() => choose(pick)}
+                  className="size-4 shrink-0 cursor-pointer accent-[var(--color-ink)] disabled:cursor-default disabled:opacity-40"
+                />
+              </label>
+            ))}
+          </div>
+        </SettingsRows>
+      </SettingsGroup>
+
+      <SettingsGroup label={t(PICK_TITLE[picked])} block="routing-key">
+        <SettingsRows selectWidth={200}>
+          {providerRows()}
+          {keyFields()}
+          <SettingsFormFoot status={<span className="flex flex-col gap-1">
+            <span role="status" data-testid="decider-status" className="flex items-center">
+              {usable ? <StatusDot tone="success" /> : <span aria-hidden="true" className="mr-1.5 inline-block size-1.5 rounded-full bg-ink/20" />}{statusText}
+            </span>
+            {error && <span role="alert" className="text-danger">{error}</span>}
+            {verdict && <span role="status" className={verdict.ok ? "text-ink-secondary" : "text-danger"}>{verdict.text}</span>}
+          </span>}>
+            <button
+              type="button"
+              data-testid="decider-test"
+              onClick={() => void test()}
+              disabled={testing || saving || (!draft && !usable)}
+              className="ui-button ui-button-md cursor-pointer rounded-full"
+            >
+              {testing ? t("keys.testing") : t("keys.test")}
+            </button>
+            {picked !== "included" && (
+              <button
+                type="button"
+                data-testid="decider-save"
+                onClick={() => void save()}
+                disabled={saving || (!draft && !own && !accountChanged)}
+                title={clearing ? t("keys.removeKey") : t("common.save")}
+                className={cn("ui-button ui-button-md cursor-pointer rounded-full", clearing && "!text-danger")}
+              >
+                {saving ? t("settings.threads.saving") : clearing ? t("keys.clear") : t("common.save")}
+              </button>
+            )}
+          </SettingsFormFoot>
         </SettingsRows>
       </SettingsGroup>
     </>

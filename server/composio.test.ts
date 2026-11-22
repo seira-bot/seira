@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppConfig } from "./config.ts";
 import {
@@ -170,7 +170,7 @@ beforeAll(async () => {
     const apiKey = String(req.headers["x-api-key"] ?? "");
     if (!["ak_test", "ak_catalog_a", "ak_catalog_b", "ak_catalog_auth", "ak_catalog_pages", "ak_catalog_partial", "ak_catalog_stuck",
         "ak_catalog_page_stuck", "ak_catalog_exhausted", "ak_catalog_stalled_total", "ak_catalog_end_short",
-        "ak_catalog_http_no_total"].includes(apiKey)) {
+        "ak_catalog_http_no_total", "ak_catalog_own", "ak_catalog_own_fail"].includes(apiKey)) {
       res.writeHead(401, { "content-type": "application/json" });
       return res.end(JSON.stringify({ error: { message: "invalid project key" } }));
     }
@@ -301,7 +301,7 @@ beforeAll(async () => {
       if (apiKey === "ak_catalog_b") {
         return res.end(JSON.stringify({ items: [{ slug: "linear", name: "Catalog B" }] }));
       }
-      if (apiKey === "ak_catalog_auth") {
+      if (apiKey === "ak_catalog_auth" || apiKey === "ak_catalog_own" || apiKey === "ak_catalog_own_fail") {
         return res.end(JSON.stringify({ items: [
           { slug: "ownauth", name: "Own", composio_managed_auth_schemes: [] },
           { slug: "managed", name: "Managed", composio_managed_auth_schemes: ["OAUTH2"] },
@@ -333,6 +333,10 @@ beforeAll(async () => {
       return res.end(JSON.stringify({ session_id: "trs_test" }));
     }
     if (req.method === "GET" && url.pathname === "/api/v3.1/auth_configs") {
+      if (apiKey === "ak_catalog_own_fail") {
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: "unavailable" }));
+      }
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify({ items: customAuthConfigs }));
     }
@@ -506,6 +510,25 @@ describe.sequential("Composio Sessions", () => {
     expect(flagged("managed")).not.toHaveProperty("needsOwnAuth");
     expect(flagged("unknown")).not.toHaveProperty("needsOwnAuth");
     expect(flagged("open")).not.toHaveProperty("needsOwnAuth");
+  });
+
+  describe("apps with a sign-in of the project's own", () => {
+    const flaggedSlugs = async (cfg: AppConfig) =>
+      (await listToolkits(cfg)).cards.filter((card) => card.needsOwnAuth).map((card) => card.slug);
+
+    afterEach(() => {
+      customAuthConfigs = [];
+    });
+
+    it("does not flag a toolkit with an enabled auth config in the person's own project", async () => {
+      customAuthConfigs = [{ id: "ac_own", toolkit: { slug: "ownauth" }, is_composio_managed: false, status: "ENABLED", is_enabled_for_tool_router: true }];
+
+      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own" } })).resolves.toEqual([]);
+    });
+
+    it("keeps the flag and the cards when the person's project cannot list its auth configs", async () => {
+      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own_fail" } })).resolves.toEqual(["ownauth"]);
+    });
   });
 
   it("pages the marketplace catalog past the first page", async () => {

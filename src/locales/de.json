@@ -2642,7 +2642,6 @@
   "decider.test.extractionOk": "Auslesen funktioniert auch.",
   "decider.test.extractionFailed": "Das Auslesen hat nicht geantwortet.",
   "decider.master": "Schnelle Entscheidungen und Auslesen verwenden",
-  "decider.provider.label": "Anderer Schlüssel",
   "apps.connected": "Verbunden",
   "botPanel.conversations.title": "Unterhaltungen",
   "botPanel.conversations.search": "Unterhaltungen durchsuchen",

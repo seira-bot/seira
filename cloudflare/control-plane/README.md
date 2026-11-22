@@ -937,8 +937,11 @@ Seira Cloud. The Worker never stores or returns the token.
 - `SEIRA_ENDPOINTS_PER_ACCOUNT` (default 3, 1 to 100) is the number of tunnels one
   account holds at the same time. A first call that would create a fourth answers
   `429 endpoint_limit` before any Cloudflare call. An installation that already
-  holds its endpoint keeps it. The check and the tunnel creation are two steps, so
-  concurrent first calls can pass together and exceed the limit by a few tunnels.
+  holds its endpoint keeps it. The count includes a provisioning claim whose lease
+  is still live, and the claim applies the limit in the same D1 statement. So
+  concurrent first calls from one account cannot pass the limit together. The
+  claim renews its lease before each Cloudflare call, so it counts until the
+  tunnel is recorded or the claim fails.
 - `account_blocks` (migration `0019`) lists blocked accounts. A block revokes the
   account's installations and credentials and deletes their push devices. The next
   cleanup run (five minutes at most) deletes their tunnels and DNS records. A
