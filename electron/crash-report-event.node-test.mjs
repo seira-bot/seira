@@ -126,9 +126,28 @@ test("AC-41: the message becomes the value only when it passes the filter", () =
   assert.equal("value" in buildEvent(mainError({ message: "cannot read /home/canaryuser/a" }), context()).event.exception.values[0], false);
 });
 
-test("native, hang and server exit reports carry fixed words, never a message", () => {
+test("a message is sent only for a built-in engine error type, never for Error, a custom name or a plain name in free text", () => {
+  const value = (report) => buildEvent(report, context()).event.exception.values[0].value;
+  assert.equal(value(mainError({ errorName: "Error", message: "Contact Budi Santoso failed" })), undefined);
+  assert.equal(value(mainError({ errorName: "CanaryError", message: "x is not a function" })), undefined);
+  assert.equal(value(mainError({ errorName: "TypeError", message: "x is not a function" })), "x is not a function");
+  assert.equal(value(mainError({ errorName: "TypeError", message: "hello canaryuser" })), undefined);
+  assert.equal(value(mainError({ errorName: "TypeError", message: "Contact Budi Santoso failed" })), "Contact Budi Santoso failed", "the pattern filter alone cannot tell a name; the type decides");
+  for (const errorName of ["TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError"]) {
+    for (const kind of [["main-error", "main"], ["renderer-error", "renderer"], ["server-turn", "server"], ["server-exit", "server"]]) {
+      assert.equal(value({ kind: kind[0], process: kind[1], errorName, message: "bad input", stack: "" }), "bad input", `${errorName} ${kind[0]}`);
+    }
+  }
+  for (const kind of [["main-error", "main"], ["renderer-error", "renderer"], ["server-turn", "server"], ["server-exit", "server"]]) {
+    assert.equal(value({ kind: kind[0], process: kind[1], errorName: "Error", message: "bad input", stack: "" }), undefined, kind[0]);
+  }
+  assert.equal(value({ kind: "native", process: "gpu", reason: "crashed", message: "bad input" }), undefined);
+  assert.equal(value({ kind: "hang", process: "renderer", message: "bad input" }), undefined);
+});
+
+test("native, hang and server exit reports carry no message and no value", () => {
   const native = buildEvent({ kind: "native", process: "gpu", reason: "crashed", exitCode: 139, message: "canary" }, context());
-  assert.deepEqual(native.event.exception.values[0], { type: "Error", value: "gpu process gone: crashed" });
+  assert.deepEqual(native.event.exception.values[0], { type: "Error" });
   assert.equal(native.signature, "native:gpu:crashed");
   assert.deepEqual([native.event.tags.reason, native.event.tags.exit_code, native.event.level, native.event.fingerprint], ["crashed", "139", "fatal", ["native:gpu:crashed"]]);
   const weird = buildEvent({ kind: "native", process: "renderer", reason: "canary reason", exitCode: "x" }, context());
@@ -142,7 +161,7 @@ test("native, hang and server exit reports carry fixed words, never a message", 
   assert.equal(buildEvent({ kind: "hang", process: "renderer" }, context()).signature, "hang:other");
   const exit = buildEvent({ kind: "server-exit", process: "server", exitCode: 3 }, context());
   assert.equal(exit.signature, "server-exit:3");
-  assert.equal(exit.event.exception.values[0].value, "server exited with code 3");
+  assert.deepEqual(exit.event.exception.values[0], { type: "Error" });
 });
 
 test("AC-47: the signature of a JS error is its type and its top three frames", () => {

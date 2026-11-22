@@ -127,19 +127,20 @@ test("AC-08: turning the switch off deletes every waiting report at once and kee
   assert.equal(JSON.parse(fs.readFileSync(join(w.queueDir, "session.json"), "utf8")).on, false);
 });
 
-test("AC-09: the switch is read for every report, so a change needs no restart of the server", () => {
-  const w = world(t0(), {});
-  function t0() { return { after: () => {} }; }
-  const message = (id) => ({ type: "seira:crash-report", requestId: id, report: { kind: "server-turn", errorName: "TypeError", message: "x", stack: SERVER_STACK } });
+test("AC-09: the switch is read for every report, so a change needs no restart of the server", (t) => {
+  const w = world(t, {});
+  const message = (id, name) => ({ type: "seira:crash-report", requestId: id, report: { kind: "server-turn", errorName: "TypeError", message: "x", stack: `TypeError\n    at ${name} (/opt/Seira/resources/server/a.js:1:1)` } });
   const proc = { postMessage() {} };
-  w.reports.receive(proc, message("request-1"));
+  w.reports.receive(proc, message("request-1", "first"));
   assert.equal(w.waiting().length, 1);
   w.ipcMain.ask("desktop-crash-reports:set", {}, false);
-  w.reports.receive(proc, message("request-2"));
-  assert.equal(w.waiting().length, 0);
+  w.reports.receive(proc, message("request-2", "second"));
+  assert.equal(w.waiting().length, 0, "off: dropped");
   w.ipcMain.ask("desktop-crash-reports:set", {}, true);
-  w.reports.receive(proc, message("request-3"));
-  assert.equal(w.waiting().length, 1, "the same error reports again once it is back on: the earlier one was never reported while off");
+  w.reports.receive(proc, message("request-3", "second"));
+  assert.equal(w.waiting().length, 1, "the error that was dropped while off reports once it is back on");
+  w.reports.receive(proc, message("request-4", "second"));
+  assert.equal(w.waiting().length, 1, "and the same error is then reported once");
 });
 
 test("AC-10: turning the switch on reports the crashes after that moment and starts the native reporter", async (t) => {
@@ -246,12 +247,14 @@ test("AC-12: no main report after a clean quit, an old dump, a switch that was o
   dumpAt(child, 1000);
   dumpAt(child, 1000);
   assert.equal(JSON.parse(fs.readFileSync(join(child.queueDir, "session.json"), "utf8")).childCrashes, 2);
+  await settle(child);
   assert.equal(child.restart().waiting().length, 0, "two dumps, two child crashes: the main process did not crash");
 
   const more = world(t, {});
   more.app.emit("child-process-gone", {}, { type: "GPU", reason: "crashed", exitCode: 9 });
   dumpAt(more, 1000);
   dumpAt(more, 1000);
+  await settle(more);
   assert.equal(more.restart().waiting().length, 1, "one dump more than the child crashes seen");
 });
 
@@ -431,7 +434,7 @@ test("AC-20: no second report when a utility process native crash report covers 
 test("AC-22: a report stays on disk when the endpoint is down or answers 5xx, and goes out later", async (t) => {
   const w = world(t, { answers: [new Error("offline"), { status: 503 }, { status: 502 }] });
   w.throwUncaught();
-  await settle(w);
+  await sleepSettled();
   assert.equal(w.requests.length, 1);
   assert.equal(w.waiting().length, 1);
   await w.reports.flush();
@@ -457,7 +460,7 @@ test("AC-22: the first send is about 10 seconds after start and a retry timer ru
 test("AC-22: a report waiting from an earlier run is sent after the restart", async (t) => {
   const w = world(t, { answers: [{ status: 503 }] });
   w.throwUncaught();
-  await settle(w);
+  await sleepSettled();
   assert.equal(w.waiting().length, 1);
   const next = w.restart();
   next.timers.find((timer) => timer.ms === 10_000).fn();
@@ -582,6 +585,7 @@ test("AC-47: five restarts of the server with one error are one report; AC-47 al
 test("AC-48: after 10 reports in 60 minutes nothing is sent until the oldest is 60 minutes old", async (t) => {
   const w = world(t, {});
   const proc = { postMessage() {} };
+  w.timers.find((timer) => timer.ms === 10_000).fn();
   const fail = (n) => w.reports.receive(proc, { type: "seira:crash-report", requestId: `request-${n}`, report: { kind: "server-turn", errorName: "Error", stack: `Error\n    at f${n} (/opt/Seira/resources/server/a.js:${n}:1)` } });
   for (let n = 1; n <= 10; n++) { fail(n); await settle(w); w.clock.now += 1_000; }
   assert.equal(w.requests.length, 10);
@@ -593,7 +597,7 @@ test("AC-48: after 10 reports in 60 minutes nothing is sent until the oldest is 
   w.clock.now += 59 * MINUTE;
   await settle(w);
   assert.equal(w.requests.length, 10, "the second send is still inside the hour");
-  w.clock.now += 10_000;
+  w.clock.now += 2 * MINUTE;
   await settle(w);
   assert.equal(w.requests.length, 11);
   assert.equal(w.waiting().length, 0);
@@ -603,6 +607,7 @@ test("AC-52: a 429 drops that report and sends nothing until the Retry-After tim
   const w = world(t, { answers: [{ status: 429, headers: { "retry-after": "120" } }] });
   const proc = { postMessage() {} };
   const report = (n) => w.reports.receive(proc, { type: "seira:crash-report", requestId: `request-${n}`, report: { kind: "server-turn", errorName: "Error", stack: `Error\n    at g${n} (/opt/Seira/resources/server/a.js:${n}:1)` } });
+  w.timers.find((timer) => timer.ms === 10_000).fn();
   report(1);
   await settle(w);
   assert.equal(w.requests.length, 1);

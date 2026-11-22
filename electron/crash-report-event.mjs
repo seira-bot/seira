@@ -112,14 +112,13 @@ export function detectPackageType({ isPackaged, platform = process.platform, env
   return ["deb", "pacman", "flatpak", "snap"].includes(declared) ? declared : "linux";
 }
 
+const ENGINE_ERROR_TYPES = new Set(["TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError"]);
 const exitCodeText = (value) => (Number.isSafeInteger(value) ? String(value) : "unknown");
 
 function describeProcess(report, type) {
-  if (report.kind === "native") return { type: "Error", value: `${report.process} process gone: ${known(report.reason, PROCESS_GONE_REASONS)}` };
-  if (report.kind === "hang") return { type: "Error", value: "page did not respond" };
-  if (report.kind === "server-exit" && report.exitCode !== undefined && report.stack === undefined) {
-    return { type: "Error", value: `server exited with code ${exitCodeText(report.exitCode)}` };
-  }
+  // No text of its own: the tags (kind, process, reason, exit_code) already say what happened.
+  if (report.kind === "native" || report.kind === "hang") return { type: "Error", value: null };
+  if (report.kind === "server-exit" && report.exitCode !== undefined && report.stack === undefined) return { type: "Error", value: null };
   return { type, value: null };
 }
 
@@ -171,7 +170,8 @@ export function buildEvent(report, context) {
   const named = known(report.errorName, ERROR_NAMES, "Error");
   const described = describeProcess({ ...report, page }, named);
   const signature = crashSignature({ ...report, page }, frames, described.type);
-  const value = described.value ?? filterMessage(report.message, { username, hostname });
+  // Free text can hold a name that no pattern catches, so only a built-in engine error type may carry its message.
+  const value = ENGINE_ERROR_TYPES.has(described.type) ? filterMessage(report.message, { username, hostname }) : null;
   const tags = {
     kind: report.kind,
     process: report.process,

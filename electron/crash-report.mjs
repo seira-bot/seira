@@ -39,7 +39,8 @@ const inert = Object.freeze({
 });
 
 function retryAfterMs(response) {
-  const seconds = Number(response.headers?.get?.("retry-after"));
+  const raw = response.headers?.get?.("retry-after");
+  const seconds = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN;
   if (!Number.isFinite(seconds) || seconds < 0) return DEFAULT_RETRY_AFTER_MS;
   return Math.min(Math.max(Math.round(seconds * 1000), 1000), MAX_RETRY_AFTER_MS);
 }
