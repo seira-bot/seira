@@ -331,3 +331,26 @@ describe("a run the server had no room to start", () => {
     expect(crash.continued).toEqual([]);
   });
 });
+
+describe("a run that stopped on a full conversation", () => {
+  it("is retried by Seira once, then told to the Chief in words that keep the thread", () => {
+    const f = fixture();
+    f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: "Prompt is too long", facts: { stopReason: "context_full" } });
+    expect(f.turnsOf("ada")).toHaveLength(1);
+    expect(f.turnsOf("ada")[0]!.text).toContain(AUTO_RETRY_LEAD);
+    f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: "Prompt is too long", facts: { stopReason: "context_full" } });
+    const chief = f.turnsOf("chief");
+    expect(chief).toHaveLength(1);
+    expect(chief[0]!.text).toContain("new session that starts from a summary");
+  });
+
+  it("does not count incidents a usage limit holds toward the retry limit", () => {
+    const f = fixture();
+    for (let i = 0; i < 4; i++) f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: "You've hit your weekly limit", facts: { limit: "engine" }, notified: true });
+    f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: CRASH });
+    expect(f.turnsOf("ada")).toHaveLength(1);
+    const texts = f.turnsOf("chief").map((turn) => turn.text);
+    expect(texts.every((text) => !text.includes("incident on that thread within the hour"))).toBe(true);
+    expect(texts.every((text) => !text.includes("Retries for that thread are used up"))).toBe(true);
+  });
+});
