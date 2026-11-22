@@ -5,7 +5,7 @@ import { openStartPlace } from "./start-place.mjs";
 
 /** A launch: the home window's word on each place (`opens`), the workspaces that open (`workspaces`), the servers that answer. */
 function launch({ remembered = null, kind = "cloud", opens = {}, workspaces = ["default", "work"], servers = [], profiles = true } = {}) {
-  const w = { remembered, steps: [], forgot: 0 };
+  const w = { remembered, steps: [], forgot: 0, windows: 0, windowAtOpen: [] };
   const args = {
     home: {
       refresh: async () => { w.steps.push("refresh"); return { kind }; },
@@ -13,7 +13,8 @@ function launch({ remembered = null, kind = "cloud", opens = {}, workspaces = ["
       opensNow: (ask) => { const key = ask === "cloud" ? "cloud" : ask.team ?? ask.cloud; return key in opens ? opens[key] : true; },
     },
     places: { remembered: () => w.remembered, remember: (place) => { w.remembered = place; w.forgot++; } },
-    profiles: profiles ? { open: async (id) => { w.steps.push(`profile:${id}`); return workspaces.includes(id); } } : null,
+    profiles: profiles ? { open: async (id) => { w.steps.push(`profile:${id}`); w.windowAtOpen.push(w.windows > 0); return workspaces.includes(id); } } : null,
+    ensureWindow: () => { w.windows++; },
     server: async (id) => { w.steps.push(`server:${id}`); if (id === "throws") throw new Error("boom"); return servers.includes(id); },
   };
   w.run = () => openStartPlace(args);
@@ -61,6 +62,15 @@ test("then This Mac, when My Cloud doesn't run either; neither when This Mac can
   assert.deepEqual(computer.steps, ["refresh", "profile:gone", "show"]);
   const noProfiles = launch({ remembered: { profile: "default" }, profiles: false });
   assert.equal(await noProfiles.run(), "cloud");
+});
+
+test("a workspace of this computer's own opens into a window made first, as a launch has none yet", async () => {
+  for (const [remembered, extra] of [[{ profile: "work" }, {}], [{ profile: "work" }, { kind: "computer" }], [{ profile: "gone" }, { opens: { cloud: false } }]]) {
+    const w = launch({ remembered, ...extra });
+    await w.run();
+    assert.ok(w.windowAtOpen.length > 0, JSON.stringify({ remembered, ...extra }));
+    assert.ok(w.windowAtOpen.every(Boolean), "each workspace opens with a window to show it");
+  }
 });
 
 test("nobody signed in: home as ever, and the place stays remembered for when they're back", async () => {
