@@ -49,8 +49,8 @@ import { cacheUntilConfigChanges,
   openCodeProviderKeys,
   OPENCODE_PROVIDER_KEY_LIMIT,
   type AppConfig,
-  resetBoatEnvWarningForTest,
 } from "./config.ts";
+import { resetBoatEnvWarningForTest } from "./boat-env.ts";
 
 const reloaded = (patch: object, cfg: AppConfig = {}) =>
   changedInstanceIds(engineLaunches(instanceConfigs(cfg), {}), engineLaunches(instanceConfigs({ ...cfg, ...patch } as AppConfig), {}));

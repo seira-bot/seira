@@ -780,16 +780,6 @@ export function cacheUntilConfigChanges<T>(derive: (config: AppConfig) => T): ()
   };
 }
 
-let boatEnvWarned = false;
-/** Boat is retired: BOX_TOKEN is never read, so it can no longer turn Boat on. Says so once per process. */
-function warnBoatEnvIgnored(): void {
-  if (process.env.BOX_TOKEN === undefined || boatEnvWarned) return;
-  boatEnvWarned = true;
-  console.warn("config: BOX_TOKEN is ignored. Boat has been retired; use a VPS or Local VM for a bot's computer.");
-}
-/** Test hook: forget that the BOX_TOKEN notice was already logged. */
-export function resetBoatEnvWarningForTest(): void { boatEnvWarned = false; }
-
 /** Keeps process.env in step with a saved credential ("" drops the var), because loadConfig() prefers env. */
 export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { imageGen?: ImageGenCredentialPatch }): void {
   const secrets: Array<[value: string | undefined, name: string]> = [
@@ -835,6 +825,7 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
 }
 
+import { warnBoatEnvIgnored } from "./boat-env.ts";
 import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV } from "./credential-env.ts";
 export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV };
 

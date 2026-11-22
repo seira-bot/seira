@@ -11,3 +11,9 @@ export class PlaceLostError extends Error {
 export function placeChosen(patch: { runOn?: unknown; enabled?: unknown }): boolean {
   return patch.runOn !== undefined || patch.enabled === true;
 }
+
+/** Runs `start`, and says a refused run in the caller's own error type (a 409 with the same words). */
+export function placeLostAs<T>(make: new (message: string, status: number) => Error, start: () => T): T {
+  try { return start(); }
+  catch (error) { throw error instanceof PlaceLostError ? new make(error.message, 409) : error; }
+}
