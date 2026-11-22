@@ -96,7 +96,9 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
     receive(message) {
       if (message.type !== WORKSPACES_MESSAGE) return false;
       facts = cleanList(message.workspaces);
-      for (const waiter of [...waiters]) waiter();
+      const pending = waiters;
+      waiters = [];
+      for (const waiter of pending) waiter();
       return true;
     },
     list: () => facts,
