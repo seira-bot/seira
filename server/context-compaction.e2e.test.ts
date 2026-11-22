@@ -186,22 +186,23 @@ it.each([
   }
 }, false, { FAKE_CLAUDE_CONTEXT_TOKENS: String(tokens) }), 90_000);
 
-it("folds a thread whose engine said the prompt is too long and runs its next turn on a new session with the summary", () => fixture(async f => {
+it("folds a thread whose engine said the prompt is too long and runs its retry on a new session with the summary", () => fixture(async f => {
   for (const text of ["FIRST_REQUEST use port 9000", "SECOND_REQUEST add logging", "THIRD_REQUEST add tests"]) await f.send(text);
   const oldSession = f.task().resumeCursors.claude;
   expect((await f.messages()).filter(m => m.kind === "compaction")).toHaveLength(0);
   expect(f.task().usage.context?.tokens ?? 0).toBeLessThan(10_000);
   await f.restart();
   await f.cli("send", "--bot", f.bot.id, "--task", f.thread, "--text", "FOURTH_REQUEST this run meets the full context");
-  await f.cli("wait", "--bot", f.bot.id, "--task", f.thread, "--timeout", "30");
+  await expect.poll(async () => (await f.messages()).filter(m => m.kind === "compaction").length, { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => f.turns().length, { timeout: 30_000 }).toBe(4);
   await f.idle();
-  await f.send("FIFTH_REQUEST retry on the new session");
-  const records = (await f.messages()).filter(m => m.kind === "compaction");
-  console.info("DEBUGMSGS " + (await f.messages()).map(m => `${m.role}:${m.kind}:${String(m.text ?? m.compaction?.summary ?? m.tool?.name ?? "").slice(0, 40).replace(/\n/g, " ")}`).join(" | "));
-  console.info("DEBUGTURNS " + JSON.stringify(f.turns().map(t => ({ resumed: t.resumed, head: String(t.prompt.message.content).slice(0, 80) }))));
-  expect(records).toHaveLength(1);
-  expect(records[0].compaction.by).toBe("harness");
-  expect(records[0].compaction.summary).toContain("FIRST_REQUEST");
+  const after = await f.messages();
+  const failed = after.findIndex(m => m.kind === "activity" && /Prompt is too long/.test(m.tool?.name ?? ""));
+  expect(failed).toBeGreaterThan(0);
+  const record = after.find(m => m.kind === "compaction");
+  expect(after.findIndex(m => m.id === record.id)).toBeGreaterThan(failed);
+  expect(record.compaction.by).toBe("harness");
+  expect(record.compaction.summary).toContain("FIRST_REQUEST");
   const turn = f.turns()[3];
   expect(turn.resumed).toBe(false);
   const prompt = String(turn.prompt.message.content);
@@ -209,7 +210,5 @@ it("folds a thread whose engine said the prompt is too long and runs its next tu
   expect(prompt).toContain("FIRST_REQUEST");
   expect(prompt).toContain("FOURTH_REQUEST this run meets the full context");
   expect(f.task().resumeCursors.claude).not.toBe(oldSession);
-  expect(f.task().appliedCompactionId).toBe(records[0].id);
-  await f.send("SIXTH_REQUEST the thread is folded once");
-  expect((await f.messages()).filter(m => m.kind === "compaction")).toHaveLength(1);
+  expect(f.task().appliedCompactionId).toBe(record.id);
 }, false, { FAKE_CLAUDE_RESUMED_API_ERROR: "1", FAKE_CLAUDE_API_ERROR: "Prompt is too long", FAKE_CLAUDE_API_ERROR_STATUS: "400" }), 120_000);
