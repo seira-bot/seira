@@ -3,6 +3,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { EgressRules } from "../browser/egress/policy.ts";
 import { CONTROL_PLANE_ENV, WORKSPACE_CREDENTIAL_ENV } from "../config.ts";
 import { BOX_BRIDGE_SCRIPT, botBox, type BotBox } from "./box.ts";
 import { serverPath } from "./program-trust.ts";
@@ -22,13 +23,15 @@ export async function startBotBoxAtBoot(options: {
   home?: string;
   log?: (line: string) => void;
   box?: BotBox;
+  /** With only limited bots boxed: where their commands may connect, read at each connection. */
+  limitedEgress?: () => EgressRules;
   /** Off in tests that only want the gates. */
   selfCheck?: boolean;
   delayMs?: number;
 }): Promise<void> {
   const box = options.box ?? botBox;
   const log = options.log ?? ((line: string) => console.log(line));
-  const detection = await box.start({ dataDir: options.dataDir, home: options.home ?? homedir(), port: options.port, denyEnv: BOX_DENY_ENV, log });
+  const detection = await box.start({ dataDir: options.dataDir, home: options.home ?? homedir(), port: options.port, denyEnv: BOX_DENY_ENV, log, ...(options.limitedEgress ? { limitedEgress: options.limitedEgress } : {}) });
   // What the server starts with no PATH of its own (a plain spawn) finds nothing in HOME either.
   if (box === botBox && box.enabled()) process.env.PATH = serverPath(process.env.PATH);
   if (detection.box !== "bwrap" || !detection.tools || options.selfCheck === false) return;

@@ -16,6 +16,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
 import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
+import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
 import { engineOwners } from "./engine-owners.ts";
 import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./engine-records.ts";
@@ -262,32 +263,38 @@ export interface BoxSpawnOptions {
 }
 export type CliSpawnOptions = SpawnOptions & BoxSpawnOptions;
 
+/** The conversation and bot a spawn runs for: a Team Cloud's engine home, else the turn the driver runs. */
+function spawnConversation(): { threadId?: string; conversationBot?: string } {
+  const turn = currentTurn();
+  const threadId = engineHomes.thread() ?? turn?.threadId, conversationBot = engineHomes.bot() ?? turn?.botId;
+  return { ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) };
+}
+
 /** The box for this spawn, or null when it runs as is. A spawn in an engine home has that home in place of HOME. */
 export function boxedSpawn(resolved: ResolvedSpawn, opts: CliSpawnOptions, owner: CliOwner, homed: HomedSpawn | null = null): WrappedSpawn | null {
   if (opts.box === false || (owner !== "bot" && !opts.box)) return null;
   const request = typeof opts.box === "object" ? opts.box : {};
   const home = homed ? { home: homed.home, shared: homed.shared } : {};
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}), ...request, ...home });
+  return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...spawnConversation(), ...request, ...home });
 }
 
-/** What the audience rule gives a box in `cwd` now, as a key (null off a team or with the box off): a process kept
- * between turns is started again when it changes, such as a bot's "Can edit team files". */
+/** What the audience rule and the bot's folders give a box in `cwd` now, as a key (null off a team with no folder
+ * setting, or for a spawn the box does not take): a process kept between turns is started again when it changes, such
+ * as a bot's "Can edit team files" or "Only chosen folders". */
 export function boxAudienceKey(cwd: string): string | null {
-  if (!botBox.enabled()) return null;
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  return botBox.audienceKey({ cwd, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) });
+  const request = { cwd, ...spawnConversation() };
+  return botBox.takes(request) ? botBox.audienceKey(request) : null;
 }
 
-/** What a process several conversations share must be boxed with to serve `cwd` (null with the box off): all of the bot's
- * conversation folders for a conversation folder (task-workspaces/<bot>/<thread>, BoxRequest.botThreads), on a Team
- * Cloud only those its audience may read (BoxAudience.threads), else `cwd`. */
+/** What a process several conversations share must be boxed with to serve `cwd` (null for a spawn the box does not
+ * take): all of the bot's conversation folders for a conversation folder (task-workspaces/<bot>/<thread>,
+ * BoxRequest.botThreads), on a Team Cloud only those its audience may read (BoxAudience.threads), else `cwd`. */
 export function sharedBoxScope(cwd: string): string | null {
-  if (!botBox.enabled()) return null;
+  const request = { cwd, ...spawnConversation() };
+  if (!botBox.takes(request)) return null;
   const parent = dirname(resolve(cwd));
   if (basename(dirname(parent)) !== "task-workspaces") return resolve(cwd);
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  const threads = botBox.sharedThreadsKey({ cwd, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) });
+  const threads = botBox.sharedThreadsKey(request);
   return threads ? `${parent}#${createHash("sha256").update(threads).digest("hex").slice(0, 16)}` : parent;
 }
 

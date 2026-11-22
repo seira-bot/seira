@@ -276,6 +276,13 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     rw(dataDir);
   }
   if (ownHome) rw(ownHome);
+  // Code the lines above hid (an AppImage's mount in /tmp, an install or checkout in a limited box's HOME) is bound again
+  // read-only; never a root that holds HOME or the data folder.
+  for (const root of setup.codeRoots) {
+    const code = resolve(root);
+    const hidden = PRIVATE_INSIDE.some((base) => under(code, base) && code !== base) || (limited && (under(code, home) || under(code, realHome)));
+    if (hidden && !holdsHome(code) && !holdsHome(realPathOf(code)) && !under(code, dataDir)) mounts.push({ kind: "ro", source: code, target: code });
+  }
   const dataHidden = !mutate.has("bind-data");
   /** A path is already readable and writable through an earlier line (and not hidden by the data folder's tmpfs). */
   const covered = (path: string) => (ownHome !== null && under(path, ownHome)) || (writable.some((root) => under(path, root)) && !(dataHidden && under(path, dataDir)));
@@ -348,6 +355,9 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     const shown = scoped ? [...scoped.rw, ...scoped.ro].filter((id) => ID.test(id)).map((id) => boxUploadsDir(dataDir, threads!, id))
       : [threads ? join(dataDir, "box-uploads", threads) : boxUploadsDir(dataDir, ids.botId, ids.threadId)];
     for (const folder of shown) mounts.push({ kind: "ro", source: folder, target: folder, optional: true });
+  } else if (limited && botId && ID.test(botId) && request.threadId && ID.test(request.threadId)) {
+    const folder = boxUploadsDir(dataDir, botId, request.threadId);
+    mounts.push({ kind: "ro", source: folder, target: folder, optional: true });
   }
   // The team's conversations a non-team shared process may read, and the team's folder, after every read-write line too.
   for (const id of scoped?.ro ?? []) {

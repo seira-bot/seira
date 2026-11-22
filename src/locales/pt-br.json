@@ -11791,6 +11791,7 @@
   "folderAccess.add.pick": "Adicionar pasta…",
   "folderAccess.add.pathLabel": "Caminho da pasta",
   "folderAccess.add.pathPlaceholder": "Caminho completo de uma pasta",
+  "folderAccess.boxNote": "Os comandos também veem só estas pastas e não alcançam outros apps deste computador.",
   "folderAccess.aiNote": "Neste computador, um comando ainda pode abrir outros arquivos. Para conferir cada comando antes, defina a aprovação como {approval}.",
   "folderAccess.setElsewhere": "As pastas são definidas no computador onde o Seira roda.",
   "team.folders": "Pastas",

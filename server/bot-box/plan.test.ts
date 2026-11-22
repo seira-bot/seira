@@ -507,6 +507,35 @@ linuxBox("a bot's folder list", () => {
       expect(plan.mounts.some((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBe(false);
     });
 
+    it("keeps the code readable when it runs from under HOME, /tmp or /run, and never gives back /tmp, HOME or the data folder (AC-12)", () => {
+      const checkout = join(fakeHome, "src", "seira"), appImage = "/tmp/.mount_SeiraX1/resources", runtime = "/run/user/1000/seira";
+      const roots = [checkout, appImage, runtime, "/tmp", fakeHome, fakeData, "/app"];
+      const plan = planBox({ ...setup(), codeRoots: roots, dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
+      });
+      for (const code of [checkout, appImage, runtime]) expect(visibleInBox(plan, join(code, "dist-server", "index.js")), code).toBe("ro");
+      expect(visibleInBox(plan, "/tmp/other-user-file"), "the host's /tmp").toBe("none");
+      expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519"))).toBe("none");
+      expect(visibleInBox(plan, join(fakeData, "messages.db"))).toBe("none");
+      const unlimited = planBox({ ...setup(), codeRoots: roots, dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome },
+      });
+      expect(visibleInBox(unlimited, join(checkout, "x.js")), "HOME stays writable for a box of every bot").toBe("rw");
+      expect(visibleInBox(unlimited, join(appImage, "x.js"))).toBe("ro");
+    });
+
+    it("reads its conversation's uploads when a limited bot works in a folder of its own choosing (AC-09)", () => {
+      const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: "/work/repo", botId: "bot-a", threadId: "thread-1", env: { HOME: fakeHome }, folders: folders(true, ["/work/repo", true]),
+      });
+      expect(visibleInBox(plan, join(fakeData, "box-uploads", "bot-a", "thread-1", "a.png")), "the uploads folder, read-only").toBe("ro");
+      expect(visibleInBox(plan, join(fakeData, "box-uploads", "bot-b", "thread-1", "a.png"))).toBe("none");
+      const other = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: "/work/repo", botId: "bot-a", threadId: "../bot-b/thread-1", env: { HOME: fakeHome }, folders: folders(true, ["/work/repo", true]),
+      });
+      expect(other.mounts.some((mount) => "source" in mount && mount.source.includes("bot-b"))).toBe(false);
+    });
+
     it("with limited off, HOME stays and only the grants are added", () => {
       const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
         command: "claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(false, [join(fakeHome, "Documents"), false]),
