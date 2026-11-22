@@ -87,6 +87,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Folder access",
     place: "a bot's panel, Other folders; Advanced bot settings, Access; the menu of a department on the map, Folders",
     does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders, which on Linux its commands obey too. A bot gets its department's folders plus its own.",
+    releaseNotes: ["chosenFolders"],
+  },
+  {
+    id: "people-access",
+    name: "People and access",
+    place: "Settings → People",
+    does: "An admin invites a person by email or a whole @domain, as admin or member. A member can be kept to chosen departments: they see only the bots and chats of those departments, and bots there reach only each other.",
+    releaseNotes: ["departmentAccess"],
   },
   {
     id: "handoffs",
@@ -101,13 +109,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Group chats in the sidebar",
     does: "A shared chat where several bots and people talk together. A bot can post to a group chat it belongs to.",
     tools: ["list_rooms", "post_to_room", "manage_room"],
+    releaseNotes: ["pictures"],
   },
   {
     id: "chats",
     name: "Chats",
     place: "a conversation with a bot",
     does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats", "turnActivity"],
+    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat"],
   },
   {
     id: "skills",
@@ -149,7 +158,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The person can spread work across several AIs. Each Claude account keeps its own approvals. The Flatpak app finds engines the host installs.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings"],
+    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu"],
   },
   {
     id: "models",
@@ -262,6 +271,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Call view",
     place: "the full screen that opens in the chat when you call a bot",
     does: "Shows the bot while the call rings, then the call time and what the bot is doing. Mute, Captions, Call voice, Minimize and Hang up sit under the face. Esc hangs up. It works for Take turns and Live.",
+    releaseNotes: ["callView"],
   },
   {
     id: "call-pill",
