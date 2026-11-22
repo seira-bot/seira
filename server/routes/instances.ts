@@ -498,7 +498,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
           return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
         }
         if (body.hidden === true && deps.moveNewBotModelOff
-          && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection.instanceId === instanceId)) {
+          && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection?.instanceId === instanceId)) {
           await deps.moveNewBotModelOff(instanceId);
         }
         if (body.hidden === true && providerInUse(instanceId)) {
