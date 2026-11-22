@@ -66,13 +66,14 @@ recognized rather than replaced.
 | **Citcat.id**, WhatsApp CRM: chats, contacts and sales funnel | `https://api-crm.citcat.id/api/mcp` | Browser sign-in |
 | **Repliz**, social media: comments, messages, scheduled posts and automations | `https://mcp.repliz.com/mcp` | Browser sign-in |
 | **Dalekta**, WhatsApp ads tracking: leads, closing, revenue and conversions | `https://mcp.dalekta.id/mcp` | Browser sign-in |
+| **Grupy.chat**, WhatsApp groups: AI summaries, members and join requests | `https://mcp.grupy.chat/mcp` | Browser sign-in |
 
 A Konektor.id server added earlier with a pasted key keeps working and counts as
 connected. **Disconnect** deletes that server and its key. Connect again to use
 browser sign-in.
 
 A bot that can use one of these services acts on your account there: it can
-change your pages, maps, bookings, contacts, social posts or WhatsApp messages. Choose which bots get
+change your pages, maps, bookings, contacts, social posts, WhatsApp messages or WhatsApp groups. Choose which bots get
 each card under **Bot access**.
 
 ### Servers that ask you to sign in

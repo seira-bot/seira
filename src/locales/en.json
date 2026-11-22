@@ -11638,6 +11638,8 @@
   "repliz.notice": "Sign in with Repliz. No API key needed here: Repliz asks for your Access Key and Secret Key once, on its own page. A bot that can use Repliz can reply to comments, send messages and post on your social accounts, so choose which bots get it under Bot access.",
   "dalekta.description": "Track your Click to WhatsApp and landing page ads from the first chat to closing and revenue in Dalekta.",
   "dalekta.notice": "Sign in with Dalekta. No API key needed. A bot that can use Dalekta can read and change your leads, chats, tracking links and Meta ads settings, so choose which bots get it under Bot access.",
+  "grupy.description": "AI summaries, members and join requests of your WhatsApp groups in Grupy.chat.",
+  "grupy.notice": "Sign in with Grupy.chat. No API key needed. A bot that can use Grupy.chat can read the summaries and members of your groups. If you allow it in Grupy.chat, it can also read messages, approve join requests and change group settings, so choose which bots get it under Bot access.",
   "aiImport.title": "Move from another AI",
   "aiImport.subtitle": "Bring over the persona, memories, skills, tools, routines and chats of another AI.",
   "aiImport.source.chatgpt": "ChatGPT",
