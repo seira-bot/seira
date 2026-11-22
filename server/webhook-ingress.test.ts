@@ -240,6 +240,23 @@ describe("malformed requests", () => {
     }
   });
 
+  it("never puts a stack or a non-Error value in the answer", async () => {
+    for (const thrown of [Object.assign(new Error("Webhook is paused"), { status: 409 }), { status: 409 }, "/srv/data/webhooks.json"]) {
+      const failing = { authorize: () => true, receive: async () => { throw thrown; } } as unknown as WebhookManager;
+      const receiver = await listenWebhookIngress(failing, { port: 0 });
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const response = await fetch(`${receiver.baseUrl}/hooks/wh_failing`, { method: "POST", body: "{}" });
+        const text = await response.text();
+        expect(text).not.toMatch(/\bat .*\.ts|webhooks\.json/);
+        expect(JSON.parse(text)).toEqual(thrown instanceof Error ? { error: "Webhook is paused" } : { error: "Webhook receiver failed" });
+      } finally {
+        logged.mockRestore();
+        await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
+      }
+    }
+  });
+
   it("keeps the message of a failure that carries a status", async () => {
     const refusing = {
       authorize: () => true,

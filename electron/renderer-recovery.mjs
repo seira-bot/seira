@@ -8,9 +8,10 @@ export const RELOAD_WINDOW_MS = 60_000;
 export const HANG_LIMIT_MS = 30_000;
 
 /**
- * @param {{ isShuttingDown?: () => boolean, now?: () => number, log?: (line: string) => void }} deps
+ * `onHang(contents)` runs just before the forced end, so a listener can tell that end from a crash.
+ * @param {{ isShuttingDown?: () => boolean, now?: () => number, log?: (line: string) => void, onHang?: (contents: unknown) => void }} deps
  */
-export function createRendererRecovery({ isShuttingDown = () => false, now = Date.now, log = () => {} } = {}) {
+export function createRendererRecovery({ isShuttingDown = () => false, now = Date.now, log = () => {}, onHang = () => {} } = {}) {
   return {
     /** Watches one window's page for as long as the window lives. */
     attach(win) {
@@ -43,6 +44,7 @@ export function createRendererRecovery({ isShuttingDown = () => false, now = Dat
           hang = null;
           if (isShuttingDown() || !alive() || exhausted()) return;
           log(`main window: its page did not respond for ${HANG_LIMIT_MS / 1000} seconds; ending it`);
+          try { onHang(contents); } catch {}
           contents.forcefullyCrashRenderer();
         }, HANG_LIMIT_MS);
         hang.unref?.();

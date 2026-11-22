@@ -355,6 +355,39 @@ usable while an optional Composio broker stalls, verify that an old local-contro
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.
 
+## Memory for bots
+
+All bot work on this computer runs under one memory limit. The limit keeps your other apps and Seira itself running
+when a bot starts a heavy task, such as a full test suite, a build, containers, or a video render.
+
+- Each engine starts in its own systemd user scope, under one slice for all bots. The slice has the memory limit, no
+  swap, and a CPU quota of all CPUs but one, so tools that count CPUs start fewer workers.
+- The default limit is the computer's memory less the larger of 3 GB and a quarter of it: 5 GB of 8 GB, 12 GB of
+  16 GB, and 24 GB of 32 GB.
+- To change it, open **Settings → You and your bots → Limits**, find **Memory for bots**, and enter a number of GB.
+  Leave the field empty for Auto. The new value applies to the next task that a bot starts.
+- When a program goes over the limit, the kernel stops that program and nothing else. The bot is told in the same
+  turn to try again with fewer parallel workers, and the chat shows one line.
+- On Linux, while the memory for bots is full, a new task waits and starts by itself when there is room. Windows and
+  macOS do not wait.
+- Without a systemd user session or a memory controller for user programs (some containers and old WSL setups), a watchdog keeps bot work under the same
+  limit. The watchdog looks every 5 seconds, so it is slower than the kernel.
+- The installed app and a development copy use different slices, one for each data folder.
+- The Flatpak package runs engines on the host, outside the slice.
+
+These environment variables change the defaults for the app's server:
+
+| Variable | Value | Effect |
+| --- | --- | --- |
+| `SEIRA_BOT_MEMORY_MAX_MB` | a number | The limit in MB, at least 1024. A smaller number is raised to 1024. Settings shows it and cannot change it. |
+| `SEIRA_BOT_MEMORY_MAX_MB` | `off` or `0` | No limit for bot work. |
+| `SEIRA_BOT_MEMORY_FENCE` | `off` | No slice. |
+| `SEIRA_BOT_MEMORY_FENCE` | `on` | The slice also on a Linux server that is not the desktop app. |
+| `SEIRA_TURNS_MAX_RUNNING` | `off` | New tasks never wait for memory. |
+
+The health report names the protection in force (`slice`, `watchdog`, or `none`) and the limit in GB. The
+[verification recipe](verification/bot-memory-fence.md) shows how to check each part on a real systemd host.
+
 ## Troubleshooting
 
 ### An agent CLI is missing

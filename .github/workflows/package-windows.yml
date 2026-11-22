@@ -83,7 +83,14 @@ jobs:
           need "$res/licenses/cloudflared-LICENSE.txt"
           need "$res/licenses/cloudflared-README.md"
           need "$res/app-update.yml"
+          # Without the helper, bot work runs with no memory limit.
+          need "$res/job-fence/seira-job-fence.exe"
           node scripts/check-module-scopes.mjs "$res" || fail=1
+          if [ -f "$res/job-fence/seira-job-fence.exe" ]; then
+            code=0
+            "$res/job-fence/seira-job-fence.exe" -- node -e "process.exit(3)" || code=$?
+            [ "$code" = 3 ] || { echo "::error::seira-job-fence.exe did not pass the exit code on (got $code)"; fail=1; }
+          fi
           if [ -f "$res/cloudflared/cloudflared.exe" ]; then
             expected=$(node --input-type=module -e "import { CLOUDFLARED_ASSETS } from './scripts/prepare-cloudflared.mjs'; console.log(Object.values(CLOUDFLARED_ASSETS).find((asset) => asset.name === 'cloudflared-windows-amd64.exe').binarySha256)")
             pinned=$(node --input-type=module -e "import { CLOUDFLARED_VERSION } from './scripts/prepare-cloudflared.mjs'; console.log(CLOUDFLARED_VERSION)")
@@ -193,6 +200,7 @@ jobs:
           rm -rf "$extracted"
           7z x -y -o"$extracted" "$appx" > /dev/null
           node scripts/check-appx.mjs "$extracted"
+          [ -f "$extracted/app/resources/job-fence/seira-job-fence.exe" ] || { echo "::error::the Store package has no job-fence/seira-job-fence.exe"; exit 1; }
       - name: Stage the Store package
         env:
           VERSION: ${{ steps.version.outputs.version }}

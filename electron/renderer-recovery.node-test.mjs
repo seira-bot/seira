@@ -166,3 +166,20 @@ test("main attaches the recovery to each window that createWindow makes", () => 
   assert.match(body, /rendererRecovery\.attach\(win\)/);
   assert.match(source, /createRendererRecovery\(\{[^}]*isShuttingDown: \(\) => desktopShutdownStarted/);
 });
+
+test("AC-15: onHang runs with the page just before the forced end, and a failing onHang changes nothing", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const order = [];
+  const { win, page } = appWindow();
+  createRendererRecovery({ onHang: (contents) => { order.push(["hang", contents === page, page.crashes]); } }).attach(win);
+  page.emit("unresponsive");
+  t.mock.timers.tick(HANG_LIMIT_MS);
+  assert.deepEqual(order, [["hang", true, 0]], "onHang ran before the crash was forced");
+  assert.equal(page.crashes, 1);
+
+  const second = appWindow();
+  createRendererRecovery({ onHang: () => { throw new Error("listener"); } }).attach(second.win);
+  second.page.emit("unresponsive");
+  t.mock.timers.tick(HANG_LIMIT_MS);
+  assert.equal(second.page.crashes, 1, "a listener that throws does not stop the recovery");
+});

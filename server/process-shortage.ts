@@ -14,8 +14,8 @@ export function shortageCode(error: unknown): ShortageCode | null {
   return typeof code === "string" && SHORTAGE_CODES.has(code) ? (code as ShortageCode) : null;
 }
 
-/** chat.notice.outOfProcesses's own words, and Node's error for a spawn it was refused, as a failure's first line. */
-const NO_ROOM_NOTICE = /^There is no room to start another program \((?:EAGAIN|EMFILE|ENFILE|ENOMEM)\)/;
+/** chat.notice.outOfProcesses's and chat.notice.outOfRoomComputer's own words, and Node's error for a spawn it was refused, as a failure's first line. */
+const NO_ROOM_NOTICE = /^There is no room (?:to start another program \((?:EAGAIN|EMFILE|ENFILE|ENOMEM)\)|on this computer to start another program,)/;
 const SPAWN_REFUSED = /^(?:Error: )?(?:spawn failed: )?(?:posix_)?spawn(?:Sync)?\b[^\n]*\b(?:EAGAIN|EMFILE|ENFILE|ENOMEM)\b/;
 
 /** Whether a failed turn's cause is the server's own refused spawn: the server's notice for it or Node's spawn error at the

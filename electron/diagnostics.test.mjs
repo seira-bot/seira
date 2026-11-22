@@ -461,3 +461,20 @@ it("appends a crash line, truncates a full log, and refuses a hard-linked one", 
   expect(readFileSync(file, "utf8")).not.toContain("third crash");
   rmSync(dir, { recursive: true, force: true });
 });
+
+describe("crash report log line and ids (AC-25, AC-26)", () => {
+  const ID = "0123456789abcdef0123456789abcdef";
+  it("writes one line with the id and the kind, and drops anything else", () => {
+    expect(formatDesktopCrashRecord({ kind: "crash-report", id: ID, reportKind: "main-error", message: "secret words" })).toBe(`event=crash-report id=${ID} kind=main-error`);
+    for (const bad of [{ id: "../x", reportKind: "native" }, { id: ID, reportKind: "made-up" }, { id: 5, reportKind: "native" }, { reportKind: "native" }]) {
+      expect(formatDesktopCrashRecord({ kind: "crash-report", ...bad })).toBeNull();
+    }
+  });
+  it("lists the ids sent in the last 7 days, and says so when there are none", () => {
+    const report = buildDiagnosticsReport({ crashReportIds: [ID, "not an id", 7, null] });
+    expect(report).toContain(`## Crash report ids\nid=${ID}\n`);
+    expect(report).not.toContain("not an id");
+    expect(buildDiagnosticsReport({ crashReportIds: [] })).toContain("## Crash report ids\n(no crash reports sent in the last 7 days)");
+    expect(buildDiagnosticsReport({})).toContain("(no crash reports sent in the last 7 days)");
+  });
+});

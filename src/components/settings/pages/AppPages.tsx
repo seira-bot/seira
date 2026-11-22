@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 import { useStore } from "@/state/store";
 import { AboutDialog } from "../../AboutDialog";
 import { AnalyticsRow } from "../../AnalyticsRow";
+import { CrashReportsRow } from "../../CrashReportsRow";
 import { ChatWidthRow, FontRow, SidebarToolsLayoutRow } from "../../AppearanceSelectRows";
 import {
   ColorUserBubblesRow, FollowUpRow, LanguageRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, SendKeyRow, ShowThreadsRow,
@@ -139,7 +140,7 @@ export function GeneralPage() {
       </SettingsGroup>
     )}
     <SettingsGroup label={t("settings.general.privacy")} block="privacy">
-      <SettingsRows><AnalyticsRow simple /></SettingsRows>
+      <SettingsRows><AnalyticsRow simple /><CrashReportsRow /></SettingsRows>
     </SettingsGroup>
   </>;
 }

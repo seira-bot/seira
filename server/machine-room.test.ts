@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { HEAVY_WORK_PROMPT } from "./heavy-work-prompt.ts";
-import { nodeBudgetSource, readMachineRoom, suggestedWorkers, type BudgetSource } from "./machine-room.ts";
+import { botShare, currentBotLimit, nodeBudgetSource, readMachineRoom, suggestedWorkers, type BotLimit, type BudgetSource } from "./machine-room.ts";
 import { buildSystemPrompt, longCommandsPrompt } from "./system-prompt.ts";
 
 const GB = 1024 ** 3;
@@ -51,6 +51,76 @@ describe("readMachineRoom", () => {
     const started = performance.now();
     readMachineRoom();
     expect(performance.now() - started).toBeLessThan(200);
+  });
+});
+
+describe("the memory limit for all bots", () => {
+  const limited = (limit: BotLimit | null, free = 20) => source({ memory: () => ({ totalBytes: 32 * GB, freeBytes: free * GB }), botLimit: () => limit });
+
+  it("reports the budget less what bot work uses, not the computer's free memory, under the kernel limit", () => {
+    const room = readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: 14 * GB }));
+    expect(room.memoryGB).toEqual({ total: 24, used: 14, free: 10, sharedBy: "all bots" });
+    expect(room.suggestedWorkers).toBe(6);
+  });
+  it("keeps the computer's free memory when that is smaller", () => {
+    expect(readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: 2 * GB }, 5)).memoryGB).toEqual({ total: 24, used: 19, free: 5, sharedBy: "all bots" });
+  });
+  it("holds free memory to the budget where only the budget is known", () => {
+    expect(readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: null }, 28)).memoryGB).toEqual({ total: 24, used: 0, free: 24, sharedBy: "all bots" });
+    expect(readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: null })).memoryGB.free).toBe(20);
+  });
+  it("reports no room and one worker when bot work is over the budget", () => {
+    const room = readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: 26 * GB }));
+    expect(room.memoryGB).toMatchObject({ total: 24, free: 0 });
+    expect(room.suggestedWorkers).toBe(1);
+  });
+  it("gives the same answer as before with no limit", () => {
+    expect(readMachineRoom(limited(null)).memoryGB).toEqual({ total: 32, used: 12, free: 20 });
+    expect(botShare({ totalBytes: 8 * GB, freeBytes: 3 * GB }, null)).toEqual({ totalBytes: 8 * GB, freeBytes: 3 * GB });
+  });
+  it("holds total memory to the computer's when the budget is larger", () => {
+    expect(botShare({ totalBytes: 8 * GB, freeBytes: 3 * GB }, { budgetBytes: 12 * GB, usedBytes: 1 * GB })).toEqual({ totalBytes: 8 * GB, freeBytes: 3 * GB });
+  });
+  it("names nothing internal in the answer", () => {
+    const text = JSON.stringify(readMachineRoom(limited({ budgetBytes: 24 * GB, usedBytes: 14 * GB })));
+    expect(text).not.toMatch(/slice|cgroup|fence|watchdog|systemd|\//i);
+  });
+});
+
+describe("currentBotLimit", () => {
+  const fence = (protection: "slice" | "watchdog" | "none", current: number | null = 14 * GB, applied: number | null = 24 * GB) =>
+    ({ protection: () => protection, budgetBytes: () => applied, sliceCurrent: vi.fn(() => current) });
+  const linux = (one: ReturnType<typeof fence>, budget: () => number | null = () => 30 * GB) => currentBotLimit({ platform: "linux", fence: one, budget });
+
+  it("reads the limit in force and what bot work uses under it", () => {
+    expect(linux(fence("slice"))).toEqual({ budgetBytes: 24 * GB, usedBytes: 14 * GB });
+  });
+  it("uses the budget alone when what bot work uses cannot be read", () => {
+    expect(linux(fence("slice", null))).toEqual({ budgetBytes: 24 * GB, usedBytes: null });
+  });
+  it("uses the budget alone under the watchdog, without reading bot work's use", () => {
+    const watched = fence("watchdog");
+    expect(linux(watched, () => 22 * GB)).toEqual({ budgetBytes: 22 * GB, usedBytes: null });
+    expect(watched.sliceCurrent).not.toHaveBeenCalled();
+  });
+  it("is null with no protection or no budget", () => {
+    expect(linux(fence("none"))).toBeNull();
+    expect(linux(fence("watchdog"), () => null)).toBeNull();
+    expect(linux(fence("slice", 1 * GB, null), () => null)).toBeNull();
+  });
+  it("reads the Windows and macOS limit and its use from the guard", () => {
+    const guard = (protection: "job" | "watchdog" | "none") => ({ protection: () => protection, budgetBytes: () => 12 * GB, usedBytes: () => 5 * GB });
+    const unused = fence("slice");
+    for (const platform of ["win32", "darwin"] as const) {
+      expect(currentBotLimit({ platform, guard: guard("job"), fence: unused })).toEqual({ budgetBytes: 12 * GB, usedBytes: 5 * GB });
+      expect(currentBotLimit({ platform, guard: guard("watchdog"), fence: unused })).toEqual({ budgetBytes: 12 * GB, usedBytes: 5 * GB });
+      expect(currentBotLimit({ platform, guard: guard("none"), fence: unused })).toBeNull();
+    }
+    expect(unused.sliceCurrent).not.toHaveBeenCalled();
+  });
+  it("is what the default source reports, unless one is given", () => {
+    expect(nodeBudgetSource({ botLimit: () => null }).botLimit?.()).toBeNull();
+    expect(readMachineRoom(nodeBudgetSource({ botLimit: () => ({ budgetBytes: 1 * GB, usedBytes: 0 }) })).memoryGB).toMatchObject({ total: 1, sharedBy: "all bots" });
   });
 });
 
