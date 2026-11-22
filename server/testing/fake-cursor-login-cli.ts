@@ -4,7 +4,7 @@
 //   FAKE_CURSOR_MODE  approve (signed in once HOME/.seira-fake-cursor-approved exists, as when the person finishes in their
 //     browser) | evil (a link on another host) | extra (a link carrying a token) | crash | curl (answers --version as
 //     curl does, as an install command pasted as the CLI path runs)
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 const home = process.env.HOME;
@@ -30,6 +30,9 @@ if (args.join(" ") === "--version") {
   process.stdout.write(`${JSON.stringify({ status: signedIn ? "authenticated" : "unauthenticated", isAuthenticated: signedIn, hasAccessToken: signedIn, hasRefreshToken: signedIn }, null, 2)}\n`);
 } else if (args.join(" ") === "status") {
   process.stdout.write(existsSync(auth) ? "Logged in\n" : "Not logged in\n");
+} else if (args.join(" ") === "logout") {
+  rmSync(auth, { force: true });
+  process.stdout.write("Logged out\n");
 } else if (args.join(" ") === "login") {
   writeFileSync(join(home, "fake-cursor-login.pid"), String(process.pid));
   process.stdout.write(["Starting login process...", "Authenticating with Cursor...", "Waiting for browser authentication...", `Open a browser and navigate to this link: ${link}`, ""].join("\n"));

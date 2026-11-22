@@ -41,6 +41,12 @@ function pidsFiles(read: Read): string[] {
   return dirs;
 }
 
+/** The file pages in a cgroup's memory.stat that the kernel can drop at once; 0 where the text has none. */
+export const inactiveFileBytes = (stat: string | null): number => {
+  const found = stat === null ? null : /^inactive_file (\d+)$/m.exec(stat);
+  return found ? Number(found[1]) : 0;
+};
+
 export interface CgroupMemory { limitBytes: number; usedBytes: number; oomKills: number | null; fullStall10: number | null }
 
 /** This process's cgroup memory limit and what counts against it now (file pages the kernel can drop at once left out);
@@ -52,7 +58,7 @@ export function readCgroupMemory(read: Read = readText): CgroupMemory | null {
   for (const dir of [...(v2 && v2 !== "/" ? [`/sys/fs/cgroup${v2}`] : []), "/sys/fs/cgroup"]) {
     const limit = count(read(`${dir}/memory.max`)), used = count(read(`${dir}/memory.current`));
     if (typeof limit !== "number" || typeof used !== "number") continue;
-    const droppable = number(read(`${dir}/memory.stat`), /^inactive_file (\d+)$/m) ?? 0;
+    const droppable = inactiveFileBytes(read(`${dir}/memory.stat`));
     return { limitBytes: limit, usedBytes: Math.max(0, used - droppable), oomKills: number(read(`${dir}/memory.events`), /^oom_kill (\d+)$/m),
       fullStall10: number(read(`${dir}/memory.pressure`), /^full avg10=([\d.]+)/m) };
   }

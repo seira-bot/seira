@@ -169,6 +169,18 @@ describe.skipIf(process.platform === "win32")("Cursor sign-in from the app, wher
     expect((await instance.snapshot()).authenticated).toBe(true);
   });
 
+  it("signs out through Cursor's own logout and reads the account as signed out", async () => {
+    expect(instance.signOut).toBeTypeOf("function");
+    const start = await instance.startAuthentication!();
+    writeFileSync(join(home, ".seira-fake-cursor-approved"), "");
+    await expect.poll(async () => (await instance.getAuthentication!(start.flowId!)).phase, { timeout: 5_000 }).toBe("succeeded");
+    expect((await instance.snapshot()).authenticated).toBe(true);
+    await instance.signOut!();
+    expect(calls().some((call) => call.args[0] === "logout")).toBe(true);
+    expect(existsSync(join(home, ".config", "cursor", "auth.json"))).toBe(false);
+    expect((await instance.snapshot()).authenticated).toBe(false);
+  });
+
   it("cancels: the login stops and the link is gone", async () => {
     const start = await instance.startAuthentication!();
     expect(alive(pid())).toBe(true);

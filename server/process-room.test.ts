@@ -73,7 +73,7 @@ describe("where turns wait for room, and the one setting", () => {
     for (const value of [undefined, "", "auto", "-3", "2.5", "many"]) expect(turnsSetting(value)).toBe("auto");
   });
 
-  it("is on for a Cloud home and for a self-hosted Linux server in a container with a limit, never for the desktop app, and elsewhere only when asked for", () => {
+  it("is on for a Cloud home and for a self-hosted Linux server in a container with a limit, the desktop app on Linux unless turned off, and elsewhere only when asked for", () => {
     const limited = () => true, open = () => false;
     expect(gateHost({}, "linux", limited)).toBe("server");
     expect(gateHost({}, "linux", open)).toBeNull();
@@ -81,8 +81,11 @@ describe("where turns wait for room, and the one setting", () => {
     expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "8" }, "linux", open)).toBe("server");
     expect(gateHost({ SEIRA_CLOUD_ROLE: "home" }, "linux", open)).toBe("cloud");
     expect(gateHost({ SEIRA_CLOUD_ROLE: "team", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", open)).toBe("cloud");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "linux", limited)).toBeNull();
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "4" }, "linux", limited)).toBeNull();
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "linux", limited)).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "win32", open)).toBeNull();
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "4" }, "linux", limited)).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", limited)).toBeNull();
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "darwin", open)).toBeNull();
     expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", limited)).toBeNull();
     for (const platform of ["darwin", "win32"] as const) {
       expect(gateHost({}, platform, () => { throw new Error("nothing is read off Linux"); })).toBeNull();

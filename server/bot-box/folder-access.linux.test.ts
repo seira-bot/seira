@@ -1,6 +1,6 @@
 // The real box, where it can run (Linux with an unprivileged bubblewrap): what a bot's folder list shows and allows.
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { TurnFolders } from "../folder-access.ts";
 import { BotBox } from "./box.ts";
 import { detectBox } from "./detect.ts";
+import { serverMayRunFrom } from "./program-trust.ts";
 
 const ENV = { PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin", SEIRA_BOT_BOX: "1" };
 const detection = detectBox({ env: ENV });
@@ -102,6 +103,33 @@ describe.skipIf(desktop.box !== "bwrap")(`only the bots limited to chosen folder
     expect(out).toContain(`REFUSED ${join(root, "other", "d.txt")}`);
     expect(existsSync(join(root, "other", "d.txt"))).toBe(false);
     expect(existsSync(join(project, "b.txt"))).toBe(true);
+  }, 60_000);
+
+  it("refuses a write in a program folder of a sign-in folder, and in the folder its link leads to, and allows the rest", async () => {
+    const grok = join(home, ".grok"), bin = join(grok, "bin"), downloads = join(grok, "downloads");
+    for (const dir of [bin, downloads, join(grok, "sessions")]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(downloads, "grok-1"), "real");
+    symlinkSync(join("..", "downloads", "grok-1"), join(bin, "grok"));
+    const script = [write(join(bin, "grok")), write(join(bin, "other")), write(join(downloads, "grok-2")), `(mv "${bin}" "${join(grok, "moved")}") 2>/dev/null && echo MOVED || echo STAYED`,
+      `(rm -f "${join(bin, "grok")}") 2>/dev/null && echo REMOVED || echo NOT-REMOVED`, write(join(grok, "sessions", "s.json"))].join("; ");
+    const wrapped = box.wrap({ command: "/bin/sh", args: ["-c", script], cwd: project, conversationBot: "bot-1", threadId: "thread-1", env: { ...DESKTOP_ENV, HOME: home } })!;
+    const out = await new Promise<string>((resolve) => {
+      const child = spawn(wrapped.command, wrapped.args, { env: wrapped.env, stdio: ["ignore", "pipe", "pipe", ...wrapped.extraFds] });
+      for (const fd of wrapped.extraFds) try { closeSync(fd); } catch {}
+      let text = "";
+      child.stdout?.on("data", (chunk) => { text += chunk; });
+      child.stderr?.on("data", (chunk) => { text += chunk; });
+      child.once("exit", () => { wrapped.release(); resolve(text); });
+    });
+    for (const path of [join(bin, "grok"), join(bin, "other"), join(downloads, "grok-2")]) expect(out).toContain(`REFUSED ${path}`);
+    expect(out).toContain("STAYED");
+    expect(out).toContain("NOT-REMOVED");
+    expect(out).toContain(`WROTE ${join(grok, "sessions", "s.json")}`);
+    expect(readFileSync(join(downloads, "grok-1"), "utf8")).toBe("real");
+    expect(readlinkSync(join(bin, "grok"))).toBe(join("..", "downloads", "grok-1"));
+    expect(existsSync(join(bin, "other"))).toBe(false);
+    expect(serverMayRunFrom(join(bin, "grok")), "the box has it read-only, so the server still runs it").toBe(true);
+    expect(serverMayRunFrom(join(grok, "sessions")), "the box writes the rest of the sign-in folder").toBe(false);
   }, 60_000);
 
   it("leaves a bot that is not limited, and a spawn of no bot, unboxed (AC-03)", () => {

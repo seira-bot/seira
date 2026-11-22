@@ -1,6 +1,7 @@
 // Fish Audio Live 3 calls. The Fish key never leaves the harness: the client gets only Fish's single-use session token,
 // and Fish has no server sideband, so the client relays what was said and the harness answers through FishRelay.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken } from "../shared/wire.ts";
 import type { LiveSocket } from "./live-call-controller.ts";
 import { liveInstructions, LiveSessionError, type LiveBot, type LiveEndpoint, type LiveHistoryMessage } from "./live-call.ts";
@@ -60,9 +61,21 @@ export function fishSpeakingLanguage(language: string | undefined): string {
   return FISH_SPEAKING_LANGUAGES.has(base) ? base : "en";
 }
 
+/** The language a bot's chosen call language gives a Fish agent: its base code when Fish Audio speaks it; undefined for auto or one it lacks. */
+export function fishCallLanguage(saved: string | undefined): string | undefined {
+  const chosen = callLanguage(saved);
+  const base = chosen ? callLanguageBase(chosen) : undefined;
+  return base && FISH_SPEAKING_LANGUAGES.has(base) ? base : undefined;
+}
+
+/** The speed to set on a Fish agent: the bot's saved speed clamped to Fish's range. */
+export function fishCallSpeed(saved: number | undefined): number {
+  return callSpeedFor(saved, callVoiceCapability({ mode: "live", provider: "fish" }).speed);
+}
+
 /** Fish API v1: a Live 3 agent speaking `language` named for `product`, with the client tool `delegate` and a system prompt
  * each session may override (`createFishLiveSession` sends one), published so sessions can start. Returns its id. */
-export async function setUpFishAgent(key: string, endpoint: LiveEndpoint, product: string, language: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function setUpFishAgent(key: string, endpoint: LiveEndpoint, product: string, language: string, fetchImpl: typeof fetch = fetch, speed?: number): Promise<string> {
   const call = (method: string, path: string, body: unknown) => fishSetupRequest(fetchImpl, key, method, `${endpoint.apiBase}${path}`, body);
   const tool = await call("POST", "/tools", {
     name: FISH_DELEGATE_TOOL,
@@ -76,7 +89,7 @@ export async function setUpFishAgent(key: string, endpoint: LiveEndpoint, produc
   if (!toolId) throw new LiveSessionError(FISH_UNEXPECTED, 502);
   const agent = await call("POST", "/agents", {
     name: `${product} Live calls`.slice(0, 120),
-    config: { voice: { engine: "live3", speaking_language: language }, tools: { enabled: true, tool_ids: [toolId] } },
+    config: { voice: { engine: "live3", speaking_language: language, ...(speed === undefined ? {} : { speed }) }, tools: { enabled: true, tool_ids: [toolId] } },
   });
   const agentId = typeof agent.agent_id === "string" && AGENT_ID.test(agent.agent_id) ? agent.agent_id : "";
   if (!agentId) throw new LiveSessionError(FISH_UNEXPECTED, 502);
@@ -85,11 +98,18 @@ export async function setUpFishAgent(key: string, endpoint: LiveEndpoint, produc
   return agentId;
 }
 
-/** Fish API v1: the agent speaks and listens for `language` from its next session on (a draft config change, published). */
-export async function setFishAgentLanguage(key: string, endpoint: LiveEndpoint, agentId: string, language: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+/** Fish API v1: the agent speaks and listens for `language`, at `speed`, from its next session on (a draft config change, published). */
+export async function setFishAgentVoice(key: string, endpoint: LiveEndpoint, agentId: string, change: { language?: string; speed?: number }, fetchImpl: typeof fetch = fetch): Promise<void> {
   const agent = `${endpoint.apiBase}/agents/${encodeURIComponent(agentId)}`;
-  await fishSetupRequest(fetchImpl, key, "PATCH", `${agent}/config`, { voice: { speaking_language: language } });
+  await fishSetupRequest(fetchImpl, key, "PATCH", `${agent}/config`, { voice: {
+    ...(change.language === undefined ? {} : { speaking_language: change.language }),
+    ...(change.speed === undefined ? {} : { speed: change.speed }),
+  } });
   await fishSetupRequest(fetchImpl, key, "POST", `${agent}/publish`, {});
+}
+
+export function setFishAgentLanguage(key: string, endpoint: LiveEndpoint, agentId: string, language: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  return setFishAgentVoice(key, endpoint, agentId, { language }, fetchImpl);
 }
 
 const FISH_UNEXPECTED = "Fish Audio returned an unexpected answer. Try the call again.";
@@ -117,9 +137,9 @@ async function fishSetupRequest(fetchImpl: typeof fetch, key: string, method: st
 }
 
 /** The Fish agent's system prompt for this call: the GPT-Live instructions, how this agent delegates, and the recent chat. */
-export function fishInstructions(bot: LiveBot, history: LiveHistoryMessage[], { cloudHome = false }: { cloudHome?: boolean } = {}): string {
+export function fishInstructions(bot: LiveBot, history: LiveHistoryMessage[], { cloudHome = false, language }: { cloudHome?: boolean; language?: string } = {}): string {
   const lines = [
-    liveInstructions(bot, { cloudHome }),
+    liveInstructions(bot, { cloudHome, language }),
     "",
     `To delegate, call the \`${FISH_DELEGATE_TOOL}\` tool with the user's request in their own words. Its result is what you learned or did; speak it naturally and briefly.`,
     `A user message that starts with ${FISH_UPDATE_PREFIX} is not the user speaking: it is a later result or a status note from your work. Speak it to the user naturally, in the first person, without reading the prefix.`,

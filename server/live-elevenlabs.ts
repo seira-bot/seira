@@ -2,7 +2,8 @@
 // tool `delegate` on the person's account once, and for each call asks ElevenLabs for a signed URL the client opens; the
 // client relays what was said as on a Fish Audio call.
 import { randomBytes } from "node:crypto";
-import type { LiveElevenLabsSession } from "../shared/wire.ts";
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
+import type { LiveElevenLabsOverrides, LiveElevenLabsSession } from "../shared/wire.ts";
 import { LiveSessionError, type LiveBot, type LiveEndpoint, type LiveHistoryMessage } from "./live-call.ts";
 import type { LiveConfig } from "./live-config.ts";
 import { elevenLabsProviderApi } from "./included-services.ts";
@@ -96,12 +97,42 @@ export async function setUpElevenLabsAgent(key: string, endpoint: LiveEndpoint, 
   }
 }
 
+/** The overrides a call with this bot sends; undefined when the bot has neither a speed nor a language. */
+export function elevenLabsCallOverrides(callSpeed: number | undefined, language: string | undefined): LiveElevenLabsOverrides | undefined {
+  const chosen = callLanguage(language);
+  const overrides: LiveElevenLabsOverrides = {
+    ...(callSpeed === undefined ? {} : { tts: { speed: callSpeedFor(callSpeed, callVoiceCapability({ mode: "live", provider: "elevenlabs" }).speed) } }),
+    ...(chosen ? { agent: { language: callLanguageBase(chosen) } } : {}),
+  };
+  return overrides.tts || overrides.agent ? overrides : undefined;
+}
+
+/** ElevenLabs API v1: lets each conversation of the agent override its speed and language (and keep its prompt override). */
+export async function allowElevenLabsCallOverrides(key: string, endpoint: LiveEndpoint, agentId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`${endpoint.apiBase}/agents/${encodeURIComponent(agentId)}`, {
+      method: "PATCH",
+      headers: { "xi-api-key": key.trim(), "content-type": "application/json" },
+      redirect: "error",
+      body: JSON.stringify({ platform_settings: { overrides: { conversation_config_override: { tts: { speed: true }, agent: { language: true, prompt: { prompt: true } } } }, auth: { enable_auth: true } } }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new LiveSessionError("Could not reach ElevenLabs. Check the internet connection.", 502);
+  }
+  await response.body?.cancel().catch(() => undefined);
+  if (!response.ok) throw Object.assign(new LiveSessionError(elevenLabsErrorMessage(response.status), 502), { elevenlabsStatus: response.status });
+}
+
 export interface CreateElevenLabsSessionInput {
   key: string;
   endpoint: LiveEndpoint;
   bot: LiveBot;
   history: LiveHistoryMessage[];
   cloudHome: boolean;
+  /** Sent to the client as `overrides`; pass only when the agent allows them. */
+  overrides?: LiveElevenLabsOverrides;
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
@@ -120,6 +151,7 @@ export async function createElevenLabsLiveSession(input: CreateElevenLabsSession
     session_id: `elevenlabs_${randomBytes(12).toString("hex")}`,
     signed_url: url,
     instructions: fishInstructions(input.bot, input.history, { cloudHome: input.cloudHome }),
+    ...(input.overrides ? { overrides: input.overrides } : {}),
     expires_at: new Date((input.now ?? Date.now)() + CONNECT_WITHIN_MS).toISOString(),
   };
 }

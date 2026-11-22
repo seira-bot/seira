@@ -162,6 +162,7 @@ export const USER_ERROR = {
   "serverError.botDefaults.nameLength": "name must be at most 100 characters",
   "serverError.botDefaults.sectionLength": "section must be at most 60 characters",
   "serverError.botDefaults.invalid": "These bot settings are not valid.",
+  "serverError.botMemory.range": "Enter a number of GB from 1 to {max}.",
   "serverError.setup.seiraMissing": "no such Seira",
   "serverError.setup.seiraOwnerOnly": "only Seira's own person can do this",
   "serverError.setup.noIntroToFollowUp": "this conversation has no intro to follow up",

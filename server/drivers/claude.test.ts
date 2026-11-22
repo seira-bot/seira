@@ -921,6 +921,26 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(recorder.events.at(-1)).toMatchObject({ type: "turn.completed", ok: false, stopReason });
   });
 
+  it.each([
+    "Prompt is too long",
+    "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.",
+    "Automatic compaction failed. Run /compact manually.",
+  ])("settles a turn the engine refused for a full conversation as context_full and keeps the engine's error (%#)", async (message) => {
+    await create("api-error", { FAKE_CLAUDE_API_ERROR: message, FAKE_CLAUDE_API_ERROR_KIND: "invalid_request", FAKE_CLAUDE_API_ERROR_STATUS: "400" });
+    await instance.adapter.sendTurn({ threadId: "t-context-full", text: "hi" });
+    await recorder.until((event) => event.type === "turn.completed");
+    expect(recorder.events.filter((event) => event.type === "runtime.error")).toEqual([expect.objectContaining({ message: expect.stringContaining(message.split(".")[0]!) })]);
+    expect(recorder.events.some((event) => event.type === "item.completed" && event.itemType === "assistant_text")).toBe(false);
+    expect(recorder.events.at(-1)).toMatchObject({ type: "turn.completed", ok: false, stopReason: "context_full" });
+  });
+
+  it("settles any other API error with the stop reason it had before", async () => {
+    await create("api-error", { FAKE_CLAUDE_API_ERROR: "API Error: Repeated 529 Overloaded errors. Try again in a moment.", FAKE_CLAUDE_API_ERROR_KIND: "overloaded" });
+    await instance.adapter.sendTurn({ threadId: "t-not-context-full", text: "hi" });
+    await recorder.until((event) => event.type === "turn.completed");
+    expect(recorder.events.at(-1)).toMatchObject({ type: "turn.completed", ok: false, stopReason: "api_error" });
+  });
+
   it("retires an outdated child before retry while preserving a healthy pooled session", async () => {
     await create(undefined, {
       FAKE_CLAUDE_API_ERROR: "Claude Code 2.1.268 does not support this model; version 2.1.280 or newer is required.",

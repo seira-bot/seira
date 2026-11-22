@@ -115,7 +115,7 @@ describe("ChatMoreMenu, the round ⋯ for the bot panel", () => {
     expect(menuOf(createElement(ChatMoreMenu, { bot: fresh })).items.find((one) => one.key === "start-fresh")!.disabled).toBe(true);
   });
 
-  it("starts a new thread with the bot", () => {
+  it("starts a new thread with the bot, as a continuation of the thread it is in", () => {
     const menu = menuOf(createElement(ChatMoreMenu, { bot }));
     menu.items.find((item) => item.key === "new-thread")!.onSelect();
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "newTask", botId: "pepper" });

@@ -28,7 +28,7 @@ export const isLightPath = (file) =>
  */
 export const WORKERS = [
   { name: "bug-reports", check: "bugs:check", test: "bugs:test", fast: true, paths: [] },
-  { name: "composio-broker", check: "broker:check", test: "broker:test", fast: true, paths: ["shared/composio-storage.ts", "shared/connector-account-link.ts"] },
+  { name: "composio-broker", check: "broker:check", test: "broker:test", fast: true, paths: ["shared/composio-storage.ts", "shared/connector-account-identity.ts", "shared/connector-account-link.ts"] },
   { name: "control-plane", check: "control-plane:check", test: "control-plane:test", fast: false, paths: ["companion/src/e2e/vectors/v1.json"] },
   { name: "push-relay", check: "push:check", test: "push:test", fast: true, paths: [] },
   { name: "updates", check: "updates:check", test: "updates:test", fast: true, paths: [] },

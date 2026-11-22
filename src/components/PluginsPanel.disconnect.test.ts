@@ -78,7 +78,7 @@ describe("disconnecting an app account", () => {
     expect(nativeConfirm).not.toHaveBeenCalled();
     expect(deletes()).toEqual([]);
     const dialog = document.body.querySelector("[role=alertdialog]");
-    expect(dialog?.textContent).toContain("“work” (ca_old)");
+    expect(dialog?.textContent).toContain("“work”");
     expect(dialog?.textContent).toContain("Only this Apollo account will be revoked");
     await act(async () => { byLabel(dialog!, "Disconnect")!.click(); });
     await flush();

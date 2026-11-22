@@ -205,6 +205,16 @@ describe("independent bot threads", () => {
     expect(cleared.bots[0]?.liveVoice).toBeUndefined();
   });
 
+  it("a frame without callSpeed or callLanguage clears them, and updateBot sets them", () => {
+    const set = reducer(start(), { type: "updateBot", botId: bot.id, patch: { callSpeed: 1.15, callLanguage: "id" } });
+    expect(set.bots[0]).toMatchObject({ callSpeed: 1.15, callLanguage: "id" });
+    const framed = reducer(set, { type: "botPatched", bot: { ...bot, callSpeed: 1.15, callLanguage: "id" } });
+    expect(framed.bots[0]).toMatchObject({ callSpeed: 1.15, callLanguage: "id" });
+    const cleared = reducer(framed, { type: "botPatched", bot: { ...bot } });
+    expect(cleared.bots[0]?.callSpeed).toBeUndefined();
+    expect(cleared.bots[0]?.callLanguage).toBeUndefined();
+  });
+
   it("a thread-switch snapshot without liveVoice clears the bot's own call voice", () => {
     const voiced = reducer(start(), { type: "botPatched", bot: { ...bot, liveVoice: "marin" } });
     const full = { ...bot, threadId: "second", activeLeafId: null, tasks: bot.tasks!.slice(1), messages: [] };

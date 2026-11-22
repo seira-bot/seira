@@ -104,9 +104,14 @@ export function resetPathCache(): void {
   probed = false;
 }
 
+/** The folders under `home` that CLI installers put programs in, there or not. */
+export function homeProgramCandidates(home: string): string[] {
+  return (process.platform === "win32" ? [] : knownDirs(home)).filter((dir) => dir.startsWith(`${home}/`));
+}
+
 /** The folders under `home` that CLI installers put programs in, which exist: a boxed process's own PATH keeps them. */
 export function homeProgramDirs(home: string): string[] {
-  return (process.platform === "win32" ? [] : knownDirs(home)).filter((dir) => dir.startsWith(`${home}/`) && existsSync(dir));
+  return homeProgramCandidates(home).filter((dir) => existsSync(dir));
 }
 
 export function augmentedPath(): string {

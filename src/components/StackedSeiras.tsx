@@ -3,15 +3,19 @@ import { cn } from "@/lib/cn";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
 import type { Bot } from "@/state/store";
 import { BotAvatar } from "./Avatar";
+import { RoomPicture } from "./RoomPicture";
 
 const slotFor = (density: SidebarDensity, large: boolean) => density === "icons" ? "size-12" : large ? "size-9" : "size-8";
 
-export function RoomMark({ density, large = false }: { density: SidebarDensity; large?: boolean }) {
-  return (
+const pictureSize = (density: SidebarDensity, large: boolean) => density === "icons" ? 44 : large ? 34 : 30;
+
+export function RoomMark({ density, large = false, picture }: { density: SidebarDensity; large?: boolean; picture?: string | null }) {
+  const mark = (
     <div data-room-mark="" className={cn("flex shrink-0 items-center justify-center", slotFor(density, large))}>
       <Users aria-hidden="true" size={16} className="text-ink-secondary" />
     </div>
   );
+  return <RoomPicture url={picture} size={pictureSize(density, large)} fallback={mark} />;
 }
 
 export function StackedSeiras({ members, density, large = false }: { members: Bot[]; density: SidebarDensity; large?: boolean }) {

@@ -99,4 +99,21 @@ describe("OAuth tab reservation", () => {
     vi.stubGlobal("window", { ogb: { openExternal: vi.fn(async () => { throw new Error("only available while using the local server"); }) }, open: vi.fn() });
     expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
   });
+
+  it("opens the clean window only when asked and available, else the old path", async () => {
+    const openExternal = vi.fn(async () => true);
+    const openCleanSignInPage = vi.fn(async () => true);
+    vi.stubGlobal("window", { ogb: { openExternal, openCleanSignInPage } });
+    const url = "https://auth.example.test/flow";
+    await reserveConnectionPage().open(url);
+    await reserveConnectionPage().open(url, { cleanWindow: false });
+    expect(openCleanSignInPage).not.toHaveBeenCalled();
+    expect(openExternal).toHaveBeenCalledTimes(2);
+    await reserveConnectionPage().open(url, { cleanWindow: true });
+    expect(openCleanSignInPage).toHaveBeenCalledWith(url);
+    expect(openExternal).toHaveBeenCalledTimes(2);
+    vi.stubGlobal("window", { ogb: { openExternal } });
+    await reserveConnectionPage().open(url, { cleanWindow: true });
+    expect(openExternal).toHaveBeenCalledTimes(3);
+  });
 });

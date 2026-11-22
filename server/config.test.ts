@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { botThreadLimitText, defaultBotThreads, maxConcurrentBotThreads, maxConcurrentChildThreads } from "./bot-thread-limits.ts";
+import { currentBotBudget } from "./bot-memory-budget.ts";
+import { botThreadLimitText,defaultBotThreads, maxConcurrentBotThreads, maxConcurrentChildThreads } from "./bot-thread-limits.ts";
 import type { JsonValue } from "./schema.ts";
 import { imageSlots } from "./image-generation.ts";
 
@@ -744,6 +745,23 @@ describe("a config.json saved with a byte order mark", () => {
         mcpServers: { notes: { command: "npx", args: ["notes-mcp"] } },
         budgets: { monthlyUsd: 25, warnAtPercent: 70 },
       });
+    } finally {
+      rmSync(path, { force: true });
+    }
+  });
+
+  it("saves the memory for bots, shows it to the next engine start, and goes back to Auto on null", () => {
+    const path = join(DATA_DIR, "config.json");
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(path, JSON.stringify({ language: "en" }));
+    try {
+      expect(currentBotBudget({})?.source).toBe("auto");
+      saveConfig({ botMemoryGb: 6 });
+      expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ language: "en", botMemoryGb: 6 });
+      expect(currentBotBudget({})).toMatchObject({ bytes: 6 * 1024 ** 3, source: "setting" });
+      saveConfig({ botMemoryGb: null });
+      expect(JSON.parse(readFileSync(path, "utf8"))).not.toHaveProperty("botMemoryGb");
+      expect(currentBotBudget({})?.source).toBe("auto");
     } finally {
       rmSync(path, { force: true });
     }

@@ -103,3 +103,11 @@ describe("workspace backup data boundary", () => {
     expect(excludedWorkspaceAuthPath(path)).toBe(false);
   });
 });
+
+describe("department access in a restore", () => {
+  it("keeps the destination's grants: the file and its temporary copies are never taken from a backup", () => {
+    expect(excludedWorkspaceAuthPath("department-access.json")).toBe(true);
+    expect(excludedWorkspaceAuthPath("department-access.json.123.aa-bb.tmp")).toBe(true);
+    expect(excludedWorkspaceAuthPath("department-folders.json")).toBe(false);
+  });
+});

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, InstanceInfo } from "@/state/store";
 import { setLocale, t } from "@/lib/i18n";
 import { BUILT_IN_INSTANCE_DRIVERS } from "@/lib/built-in-instances";
+import { rememberProviderOff } from "@/lib/provider-off";
 
 const server = vi.hoisted(() => ({
   all: [] as InstanceInfo[], hidden: new Set<string>(), calls: [] as Array<{ method: string; path: string; body?: unknown }>, refuseUnhide: false,
@@ -66,6 +67,7 @@ beforeEach(() => {
   server.hidden = new Set();
   server.calls = [];
   server.refuseUnhide = false;
+  rememberProviderOff(null);
   fixture.state = { instances: [...server.all], bots: [], config: {} };
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -83,6 +85,8 @@ const click = async (target: Element | null | undefined) => {
   await render();
 };
 const rowButton = (instanceId: string) => container.querySelector(`[data-simple-engine="${instanceId}"] button`);
+const openProviderMenu = (instanceId: string) =>
+  click(container.querySelector(`[data-provider-menu="${instanceId}"] button[aria-haspopup="menu"]`));
 const moreCount = () => container.querySelector('[data-settings-disclosure="ai-more"]')?.textContent;
 
 describe("Settings → AI: a provider hidden from its own card", () => {
@@ -90,13 +94,14 @@ describe("Settings → AI: a provider hidden from its own card", () => {
     await render();
     expect(rows()).toContain("kimi");
     await click(rowButton("kimi"));
-    // The Hide button on the connected card (the customer's "disconnect").
-    await click(container.querySelector('[data-hide-engine="kimi"]'));
+    await openProviderMenu("kimi");
+    await click(document.body.querySelector('[data-provider-floating] [data-provider-hide]'));
     expect(server.calls).toContainEqual({ method: "PATCH", path: "/api/instances/kimi", body: { hidden: true } });
     expect(fixture.state.instances.map((instance) => instance.instanceId)).toEqual(["codex"]);
 
     expect(rows()).not.toContain("kimi");
     expect(hiddenRows()).toEqual(["kimi"]);
+    expect(container.querySelector("[data-provider-off-status]")?.textContent).toContain(t("provider.hidden", { name: "Kimi" }));
     expect(moreCount()).toContain("More providers");
     expect(moreCount()).toContain("1");
     const hiddenRow = container.querySelector('[data-hidden-engine="kimi"]')!;
@@ -135,9 +140,9 @@ describe("Settings → AI: a provider hidden from its own card", () => {
   it("signs a connected CLI out from its card without hiding it", async () => {
     await render();
     await click(rowButton("kimi"));
-    const signOut = container.querySelector('[data-engine-sign-out="kimi"] button');
+    await openProviderMenu("kimi");
+    const signOut = document.body.querySelector('[data-provider-floating] [data-provider-sign-out]');
     expect(signOut?.textContent).toBe("Sign out");
-    expect(signOut?.getAttribute("aria-label")).toBe("Sign out of Kimi");
     await click(signOut);
     // The dialog says the CLI's own sign-in on this computer goes too.
     expect(document.body.querySelector("[data-sign-out-cli]")?.textContent).toBe(t("accounts.signOutCliBody", { name: "Kimi" }));
@@ -170,9 +175,8 @@ describe("Settings → AI: Sign out on other CLI sign-ins", () => {
     fixture.state = { ...fixture.state, instances: [...server.all] };
     await render();
     await click(rowButton(engine.instanceId));
-    const signOut = container.querySelector(`[data-engine-sign-out="${engine.instanceId}"] button`);
-    expect(signOut?.getAttribute("aria-label")).toBe(`Sign out of ${name}`);
-    await click(signOut);
+    await openProviderMenu(engine.instanceId);
+    await click(document.body.querySelector('[data-provider-floating] [data-provider-sign-out]'));
     expect(document.body.querySelector("[data-sign-out-cli]")?.textContent).toContain(name);
     await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "Sign out").at(-1));
     expect(server.calls).toContainEqual({ method: "POST", path: `/api/instances/${engine.instanceId}/auth/sign-out` });
@@ -185,7 +189,9 @@ describe("Settings → AI: Sign out on other CLI sign-ins", () => {
     await render();
     await click(rowButton("mistralVibe"));
     expect(container.querySelector('[data-engine-card="mistralVibe"]')).toBeTruthy();
-    expect(container.querySelector('[data-engine-sign-out="mistralVibe"]')).toBeNull();
+    await openProviderMenu("mistralVibe");
+    expect(document.body.querySelector('[data-provider-floating] [data-provider-hide]')).toBeTruthy();
+    expect(document.body.querySelector('[data-provider-sign-out]')).toBeNull();
   });
 });
 
@@ -229,7 +235,7 @@ describe("Settings → AI lists every provider the app knows", () => {
 });
 
 describe("Settings → AI → ChatGPT: the built-in account rows can be hidden", () => {
-  const codexAccount: InstanceInfo = { ...codex, authentication: { method: "device-code", signOut: true } };
+  const codexAccount: InstanceInfo = { ...codex, authentication: { method: "device-code", signOut: true }, models: { default: "gpt", options: [{ id: "gpt", label: "GPT" }] } };
   const plan: InstanceInfo = {
     instanceId: "chatgpt", driverKind: "codex", displayName: "ChatGPT plan", cliDefault: "codex",
     snapshot: { state: "available", authenticated: false, chatgptPlan: true }, models: { default: "gpt", options: [] },
@@ -251,8 +257,8 @@ describe("Settings → AI → ChatGPT: the built-in account rows can be hidden",
   it("hides only the signed-out ChatGPT plan row, and Unhide brings it back to the card", async () => {
     await openCard();
     expect(accounts()).toEqual(["codex", "chatgpt", "chatgpt-work"]);
-    const hide = (await menuItems("chatgpt")).find((item) => item.textContent === "Hide");
-    await click(hide);
+    await menuItems("chatgpt");
+    await click(container.querySelector("[data-provider-hide]"));
     expect(server.calls).toContainEqual({ method: "PATCH", path: "/api/instances/chatgpt", body: { hidden: true } });
     expect(accounts()).toEqual(["codex", "chatgpt-work"]);
     expect(hiddenRows()).toEqual(["chatgpt"]);
@@ -273,19 +279,29 @@ describe("Settings → AI → ChatGPT: the built-in account rows can be hidden",
     expect(container.querySelector('[data-account="chatgpt-work"]')?.textContent).toContain("Remove");
   });
 
-  it("won't hide an account a bot still uses", async () => {
+  it("offers Move and hide, not Hide, for an account a bot uses", async () => {
     fixture.state = { ...fixture.state, bots: [{ modelSelection: { instanceId: "chatgpt" } } as Bot] };
     await openCard();
-    const hide = (await menuItems("chatgpt")).find((item) => item.textContent === "Hide");
-    expect(hide?.disabled).toBe(true);
-    expect(container.textContent).toContain(t("accounts.inUse", { count: "1" }));
+    await menuItems("chatgpt");
+    expect(container.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "1" }));
+    expect(container.querySelector("[data-provider-move]")?.textContent).toBe(t("provider.moveAndHide", { count: "1", target: "Codex" }));
+    expect(container.querySelector("[data-provider-hide]")).toBeNull();
   });
 
-  it("won't hide an account a bot only keeps as a backup AI", async () => {
+  it("counts an account a bot only keeps as a backup AI as in use", async () => {
     fixture.state = { ...fixture.state, bots: [{ modelSelection: { instanceId: "codex" }, fallback: [{ instanceId: "chatgpt", model: "gpt-5" }] } as Bot] };
     await openCard();
-    const hide = (await menuItems("chatgpt")).find((item) => item.textContent === "Hide");
-    expect(hide?.disabled).toBe(true);
-    expect(container.textContent).toContain(t("accounts.inUse", { count: "1" }));
+    await menuItems("chatgpt");
+    expect(container.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "1" }));
+    expect(container.querySelector("[data-provider-hide]")).toBeNull();
+  });
+
+  it("says so when no other AI is ready to take the bots", async () => {
+    server.all = [{ ...codexAccount, snapshot: { state: "available", authenticated: false } }, plan];
+    fixture.state = { ...fixture.state, instances: [...server.all], bots: [{ modelSelection: { instanceId: "chatgpt" } } as Bot] };
+    await openCard();
+    await menuItems("chatgpt");
+    expect(container.querySelector("[data-provider-no-target]")?.textContent).toBe(t("provider.noTarget"));
+    expect(container.querySelector("[data-provider-move]")).toBeNull();
   });
 });
