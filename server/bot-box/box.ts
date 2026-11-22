@@ -356,23 +356,22 @@ export class BotBox {
   enabled(): boolean { return this.runner !== null && this.boxScope === "all"; }
 
   /** Which spawns the box takes, or null when it is off. */
-  scope(): BoxScope | null { return this.runner ? this.boxScope : null; }
+  scope(): BoxScope | null { return this.enabled() ? "all" : this.runner ? this.boxScope : null; }
 
   /** Whether the spawns of a bot with these folders run boxed. */
   boxesFolders(folders: TurnFolders | null | undefined): boolean {
-    return this.runner !== null && (this.boxScope === "all" || folders?.limited === true);
+    return this.enabled() || (this.runner !== null && folders?.limited === true);
   }
 
   /** Whether `botId`'s spawns run boxed now. */
   boxesBot(botId: string | null | undefined): boolean {
-    if (!this.runner) return false;
-    return this.boxScope === "all" || (Boolean(botId) && this.boxesFolders(this.folders?.(botId!)));
+    return this.enabled() || (Boolean(botId) && this.boxesFolders(this.folders?.(botId!)));
   }
 
   /** Whether this spawn runs boxed: every one in scope `all`, else one of a bot with "Only chosen folders" on. */
   takes(request: Pick<BoxRequest, "cwd" | "threadId" | "conversationBot" | "botId" | "folders">): boolean {
-    if (!this.runner) return false;
-    return this.boxScope === "all" || this.runner.foldersFor({ command: "", args: [], env: {}, ...request })?.limited === true;
+    if (this.enabled()) return true;
+    return this.runner?.foldersFor({ command: "", args: [], env: {}, ...request })?.limited === true;
   }
 
   /** A relay for one boxed spawn (BoxRequest.relay), or null unless every bot spawn is boxed here. */
