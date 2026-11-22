@@ -9,6 +9,15 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { removeTempDir } from "./testing/cleanup.ts";
 import { openSse } from "./testing/sse.ts";
 
+async function boatOutage(): Promise<string> {
+  const upstream = createServer((_req, res) => { res.statusCode = 500; res.setHeader("content-type", "application/json"); res.end('{"ok":false,"message":"fixture outage"}'); });
+  upstream.unref();
+  await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+  const address = upstream.address();
+  if (!address || typeof address === "string") throw new Error("fixture failed to bind");
+  return `http://127.0.0.1:${address.port}`;
+}
+
 async function launch(boat?: string, enterprise?: { dir: string; licenseKey: string }) {
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, enterprise, undefined, [], boat);
   const { url, dataDir } = fixture.info;
@@ -157,7 +166,7 @@ it("files a failed run's incident only once its thread has settled, so the Chief
 }, 150_000);
 
 it("queues reports that find the Chief's incidents thread busy, answers them together, and runs each without a computer it cannot have", async () => {
-  const { api, control, file, dump, messages, useCli, incidentsThread, close } = await launch();
+  const { api, control, file, dump, messages, useCli, incidentsThread, close } = await launch(await boatOutage());
   try {
     // The Chief works on a cloud computer this home has no Boat key for.
     const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
@@ -209,7 +218,7 @@ it("queues reports that find the Chief's incidents thread busy, answers them tog
 }, 150_000);
 
 it("reviews the work it handed on from a report without the Chief's computer, even after the person wrote there", async () => {
-  const { api, control, file, dump, messages, useCli, turnEnded, incidentsThread, close } = await launch();
+  const { api, control, file, dump, messages, useCli, turnEnded, incidentsThread, close } = await launch(await boatOutage());
   try {
     // The Chief's Works-on computer cannot start here.
     const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
@@ -354,7 +363,7 @@ it("keeps the team computer for a report turn, and reports a run that reaches fo
 }, 150_000);
 
 it("adds no push for answering reports that waited, about failures the person already heard of", async () => {
-  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch();
+  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch(await boatOutage());
   try {
     // Ada, Ben and Cara work on a cloud computer this home has no Boat key for, so none of their runs can start.
     const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
@@ -399,7 +408,7 @@ it("adds no push for answering reports that waited, about failures the person al
 }, 150_000);
 
 it("keeps a report that waited quiet through the work it hands on, when the person already heard of the failure", async () => {
-  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch();
+  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch(await boatOutage());
   try {
     // One thread at a time per bot: a Chief busy anywhere makes a report wait.
     await api("PATCH", "/api/config", { threads: { maxConcurrentPerBot: 1 } });

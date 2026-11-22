@@ -6383,7 +6383,7 @@ describe("harness HTTP API", () => {
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
@@ -6418,7 +6418,7 @@ describe("harness HTTP API", () => {
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, {
@@ -7283,7 +7283,7 @@ describe("harness HTTP API", () => {
     let routineId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
