@@ -99,6 +99,14 @@ the engine.
 
 ### Last exercised
 
-To be run again with the 1024 MB budget above, which is the smallest the
-environment variable accepts. The last run used a 512 MB budget, at commit
-`de79fc81c`.
+2026-11-22, commit `ef12e2d5d`, on a Linux host with systemd and cgroup v2,
+16 CPUs, with a 1024 MB budget. All four runs passed:
+
+| Run | Result |
+|-----|--------|
+| Memory hog | One kill in the scope. Health stayed 200. One notice line, no "no room" line. The bot got the lower-load hint in the same turn. Slice: `memory.max` 1073741824, `memory.swap.max` 0, `cpu.max` 1500000 100000. |
+| Settings | 0.5 GB was refused with the 1 to 8 GB range. 2 GB was accepted. The next engine got `memory.max` 2147483648 in a different slice. |
+| No user manager | Protection was `watchdog` with the same 1 GB budget. |
+| Bot box | `bwrap`, the box bridge, and the engine ran in one scope. The turn settled. |
+
+No slice was left after the runs.
