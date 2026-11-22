@@ -19,6 +19,8 @@ Regenerate it after a change to `pnpm-lock.yaml` or the Electron version:
 flatpak-node-generator pnpm pnpm-lock.yaml -o packaging/flatpak/generated-sources.json
 ```
 
+CI and the pre-push hook run `node scripts/check-flatpak-sources.mjs`. It fails when the file does not match the lockfile.
+
 For Flathub, replace the `dir` source in the manifest with a `git` source pinned to a release tag and commit.
 
 ## Lint

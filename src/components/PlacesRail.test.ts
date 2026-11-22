@@ -837,6 +837,47 @@ it("with only the new workspace to add, ＋ goes straight to its name, and Close
   expect(create).not.toHaveBeenCalled();
 });
 
+it("a server saved by hand: its menu offers Rename with its own name, says why a name is refused, saves the trimmed name and closes; a Cloud's menu has no Rename", async () => {
+  const rename = vi.fn(async (_id: string, _name: string) => ({ outcome: "saved" }) as { outcome: "saved" | "taken" | "name" | "gone" | "failed" | "unsupported" });
+  rail = { places: [
+    place("home", "My Cloud", { active: true, paint: { swatch: null } }),
+    place("a", "Client A", { paint: { swatch: "green" } }),
+    place("vps", "instabox-seira", { kind: "server", removable: true, forget: true, paint: { swatch: null } }),
+  ], add: { cloud: false, link: true, address: false } };
+  Object.assign(window, { ogb: { workspaces: { ...workspaces, rename }, cloudAdd, rail: { expand: vi.fn(async () => {}), onSkin: () => () => {} } } });
+  await mount(createElement(PlacesRail, { chrome: true }));
+  const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
+  const menuOf = async (id: string) => {
+    await act(async () => { host.querySelector(`[data-rail-place="${id}"]`)!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    return host.querySelector(`[data-rail-menu="${id}"]`)!;
+  };
+  expect((await menuOf("a")).querySelector("[data-rail-rename]"), "a Cloud: no Rename").toBeNull();
+  await act(async () => { host.querySelector("[data-rail-menu]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  const menu = await menuOf("vps");
+  expect(document.activeElement, "the first row takes the focus").toBe(menu.querySelector("[data-rail-rename]"));
+  await click(menu.querySelector("[data-rail-rename]"));
+  const field = menu.querySelector<HTMLInputElement>("[data-rail-rename-form] input")!;
+  expect([field.value, field.maxLength]).toEqual(["instabox-seira", 60]);
+  await type(field, "Studio");
+  await act(async () => { field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(menu.querySelector("[data-rail-rename-form]"), "Escape leaves the name as it was").toBeNull();
+  expect(rename).not.toHaveBeenCalled();
+  await click(menu.querySelector("[data-rail-rename]"));
+  await type(menu.querySelector("[data-rail-rename-form] input"), "  Office ");
+  for (const [outcome, text] of [["taken", "Another place here has that name. Choose another."], ["name", "Use a name of 1 to 60 characters."], ["failed", "That didn't work. Try again in a moment."]] as const) {
+    rename.mockResolvedValueOnce({ outcome });
+    await submit(menu.querySelector("[data-rail-rename-form]"));
+    await settle();
+    expect(menu.querySelector("[data-rail-rename-form] [role='alert']")?.textContent, outcome).toBe(text);
+    expect(host.querySelector("[data-rail-menu]"), "the menu stays open").toBeTruthy();
+  }
+  await submit(menu.querySelector("[data-rail-rename-form]"));
+  await settle();
+  expect(rename.mock.calls, "by the circle's own id, the trimmed name").toEqual([["vps", "Office"], ["vps", "Office"], ["vps", "Office"], ["vps", "Office"]]);
+  expect(host.querySelector("[data-rail-menu]"), "saved: the menu closes").toBeNull();
+  expect(workspaces.places, "and the list is read again").toHaveBeenCalled();
+});
+
 it("a workspace's menu: Rename (Enter saves, Escape leaves it), its colour, and Remove asked first in plain words; Cancel changes nothing", async () => {
   const edit = vi.fn(async (_id: string, _changes: unknown) => ({ outcome: "saved" as const }) as { outcome: "saved" | "taken" | "name" | "full" | "gone" });
   const remove = vi.fn(async (_id: string) => ({ outcome: "removed" as const }) as { outcome: "removed" | "gone" | "failed" });

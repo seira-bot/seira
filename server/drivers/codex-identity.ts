@@ -19,21 +19,34 @@ export async function codexAccountEmail(
   env: Record<string, string | undefined>,
   timeoutMs = 3_000,
 ): Promise<string | null> {
+  const account = await codexAccountRead(cli, env, { refreshToken: false }, timeoutMs);
+  const email = account?.type === "chatgpt" ? account.email : null;
+  return typeof email === "string" && email.length <= 254 && EMAIL.test(email) && !/[\p{Cc}\p{Cf}]/u.test(email) ? email : null;
+}
+
+/** Codex's `account/read` answer, or null when Codex could not answer. `refreshToken` makes Codex renew its own
+ * ChatGPT sign-in first (managed auth mode), so this app never rotates Codex's refresh token itself. */
+export async function codexAccountRead(
+  cli: string,
+  env: Record<string, string | undefined>,
+  { refreshToken }: { refreshToken: boolean },
+  timeoutMs = 3_000,
+): Promise<Record<string, unknown> | null> {
   const cwd = userHome(env);
   if (!isAbsolute(cwd) || !codexHome(env)) return null;
-  return new Promise((resolveEmail) => {
+  return new Promise((resolveAccount) => {
     let child: ReturnType<typeof spawnCli>;
     try {
       child = spawnCli(cli, ["app-server"], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     } catch {
-      resolveEmail(null);
+      resolveAccount(null);
       return;
     }
     let finishing = false;
     let buffer = "";
     let outputBytes = 0;
     let initialized = false;
-    const finish = async (email: string | null) => {
+    const finish = async (account: Record<string, unknown> | null) => {
       if (finishing) return;
       finishing = true;
       clearTimeout(timer);
@@ -47,7 +60,7 @@ export async function codexAccountEmail(
         }
         stopped = await killCliTree(child, 1_000);
       }
-      resolveEmail(stopped ? email : null);
+      resolveAccount(stopped ? account : null);
     };
     const timer = setTimeout(() => { void finish(null); }, timeoutMs);
     timer.unref();
@@ -75,11 +88,10 @@ export async function codexAccountEmail(
           if (message.error || !message.result) { void finish(null); return; }
           initialized = true;
           send({ method: "initialized", params: {} });
-          send({ id: 2, method: "account/read", params: { refreshToken: false } });
+          send({ id: 2, method: "account/read", params: { refreshToken } });
         } else if (initialized && message?.id === 2) {
           const account = message.error ? null : message.result?.account;
-          const email = account?.type === "chatgpt" ? account.email : null;
-          void finish(typeof email === "string" && email.length <= 254 && EMAIL.test(email) && !/[\p{Cc}\p{Cf}]/u.test(email) ? email : null);
+          void finish(account && typeof account === "object" && !Array.isArray(account) ? account : null);
         }
       }
     });

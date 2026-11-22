@@ -7,7 +7,7 @@ import { useCopyFeedback } from "@/lib/copy-text";
 import { engineSignedIn } from "@/lib/product-events";
 import type { LocaleKey } from "@/locales";
 import { deviceSignInHasCode, deviceSignInLink, isDeviceSignInCode, type DeviceSignInProvider } from "../../shared/device-sign-in";
-import { CodexMark } from "./ProviderIcons";
+import { OpenAIMark } from "./ProviderIcons";
 
 export interface DeviceSignInStatus {
   phase: "waiting" | "succeeded" | "failed" | "expired" | "cancelled";
@@ -136,7 +136,7 @@ export function DeviceSignInProgress({ auth, browserPkce = false, provider = "co
       <a href={link} target="_blank" rel="noopener noreferrer" onClick={(event) => {
         if (window.ogb?.openExternal) { event.preventDefault(); void openExternalLink(link); }
       }} className={browserPkce ? chatgptButton : "flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:brightness-110"}>
-        {browserPkce && <CodexMark size={16} className="fill-current" />}
+        {browserPkce && <OpenAIMark size={16} className="fill-current" />}
         {t(browserPkce ? "engineSetup.chatgpt.start" : copy.open)} <ExternalLink size={13} />
       </a>
       <p role="status" className="flex items-center gap-1.5 text-[12px] text-ink-secondary">
@@ -257,7 +257,7 @@ export function DeviceSignIn({ instanceId, browserPkce = false, provider = "code
         </button>
       ) : auth?.phase !== "succeeded" && (
         <button type="button" disabled={busy} onClick={() => void start()} className={browserPkce ? chatgptButton : "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:brightness-110 disabled:opacity-50"}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : browserPkce ? <CodexMark size={16} className="fill-current" /> : <LogIn size={14} />}
+          {busy ? <Loader2 size={14} className="animate-spin" /> : browserPkce ? <OpenAIMark size={16} className="fill-current" /> : <LogIn size={14} />}
           {startLabel}
         </button>
       )}

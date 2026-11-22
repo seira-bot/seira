@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { IMAGE_MAX_PER_TURN_DEFAULT } from "../shared/image-generation.ts";
+import { codexImageLogin } from "./codex-image-login.ts";
 import {
   customImageUrl, generateImage, IMAGE_GENERATION_TIMEOUT_MS, imageGenerationReady, imageSlotConfigured, imageSlots,
   type GeneratedImage, type ImageCredentials, type ImageSlot,
@@ -17,9 +18,12 @@ export const avatarGenerationRequestSchema = z.object({
 type AvatarIdentity = Pick<BotRecord, "name" | "title" | "description">;
 type AvatarGenerationState = Pick<BotRecord, "avatarUrl" | "avatarCrop">;
 
-/** Public settings describe availability without returning provider secrets. */
+/** Public settings describe availability without returning provider secrets. For Codex only the sign-in state and the
+ * plan name leave the server: never its token or its account id. */
 export function avatarImageStatus(cfg: ImageCredentials) {
   const { primary, fallback } = imageSlots(cfg);
+  const codex = codexImageLogin(cfg.instances)?.login;
+  const ownOpenaiKey = Boolean(cfg.imageGen?.key?.trim());
   const slotStatus = (slot: ImageSlot) => ({ ...slot, configured: imageSlotConfigured(cfg, slot) });
   return {
     provider: primary.provider,
@@ -32,7 +36,11 @@ export function avatarImageStatus(cfg: ImageCredentials) {
     complexity: cfg.imageGen?.complexity,
     customUrl: customImageUrl(cfg),
     customModel: [primary, fallback].find((slot) => slot?.provider === "custom")?.model ?? "",
-    openaiConfigured: Boolean(cfg.imageGen?.key?.trim()),
+    openaiConfigured: ownOpenaiKey,
+    /** OpenAI images use the main OpenAI key, because no image key of their own is saved. */
+    openaiShared: !ownOpenaiKey && Boolean(cfg.openai?.key?.trim()),
+    codexSignedIn: Boolean(codex),
+    codexPlan: codex?.plan ?? null,
     xaiConfigured: Boolean(cfg.xai?.key?.trim()),
     customKeyConfigured: Boolean(cfg.imageGen?.customApiKey?.trim()),
     geminiConfigured: Boolean(cfg.imageGen?.geminiKey?.trim()),

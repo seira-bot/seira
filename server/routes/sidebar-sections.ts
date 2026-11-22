@@ -4,6 +4,7 @@ import type { WireBot } from "../../shared/wire.ts";
 import type { BotRecord, Store } from "../store.ts";
 import type { TeamComputers } from "../team-computers.ts";
 import { USER_ERROR, userError, type UserErrorKey } from "../user-errors.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 const STORE_REFUSALS: readonly UserErrorKey[] = ["serverError.department.notFound", "serverError.department.nameRule",
@@ -32,7 +33,12 @@ export function createSidebarSectionRoutes(deps: SidebarSectionRouteDeps): Route
     botIds: z.array(z.string().regex(/^[\w-]+$/)).max(MAX_WORKSPACE_BOTS).default([]),
   }).strict();
 
-  return async ({ req, res, url, path, method, json, readBody }) => {
+  const movesTeamComputer = (bot: BotRecord, section: string | undefined) =>
+    teamComputers.forBot(bot)?.id !== teamComputers.forBot({ ...bot, section })?.id;
+  const PAIRED_TEAM_COMPUTER_REFUSAL = { error: "Move this bot to a team computer on the host computer." };
+
+  return async ({ req, res, url, path, method, auth, json, readBody }) => {
+    const pairedDevice = fromPairedDevice(req, auth);
     if (path === "/api/sidebar-sections" && method === "GET") {
       return json(res, 200, { sections: store.sections });
     }
@@ -60,6 +66,7 @@ export function createSidebarSectionRoutes(deps: SidebarSectionRouteDeps): Route
       for (const [botIds, destination] of [[parsed.data.addBotIds, section], [parsed.data.removeBotIds, undefined]] as const) {
         for (const id of botIds) {
           const bot = store.bot(id);
+          if (bot && pairedDevice && movesTeamComputer(bot, destination)) return json(res, 403, PAIRED_TEAM_COMPUTER_REFUSAL);
           if (bot) assertTeamComputerChangeIdle(bot, { ...bot, section: destination });
         }
       }
@@ -82,6 +89,7 @@ export function createSidebarSectionRoutes(deps: SidebarSectionRouteDeps): Route
       if (!name && !botIds.length) return json(res, 400, { error: "Department name is required" });
       for (const botId of botIds) {
         const bot = store.bot(botId);
+        if (bot && pairedDevice && movesTeamComputer(bot, name || undefined)) return json(res, 403, PAIRED_TEAM_COMPUTER_REFUSAL);
         if (bot) assertTeamComputerChangeIdle(bot, { ...bot, section: name || undefined });
       }
       const result = store.setBotsSection(botIds, name);

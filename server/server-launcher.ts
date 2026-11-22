@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { boxMemory, heapSizeArgs, type BoxMemory } from "./box-memory.ts";
 import { containerInit, execUnderInit, UNDER_IMAGE_INIT } from "./container-init.ts";
+import { createContainerTunnel } from "./container-tunnel.ts";
 import { clearRecordsFromEarlierRunOfThisContainer } from "./data-dir-lease.ts";
 import { restartLine, restartPolicy } from "./restart.ts";
 
@@ -22,28 +23,48 @@ export function serverCommand(here: string, env: NodeJS.ProcessEnv, options: { e
   };
 }
 
-export function superviseServer(start: () => ChildProcess, options: { signals?: Pick<NodeJS.Process, "on" | "off">; now?: () => number } = {}): Promise<number> {
+export interface SupervisorHooks {
+  /** Awaited before each start. */
+  prepare?: () => Promise<void>;
+  spawned?: (child: ChildProcess) => void;
+  /** Awaited when the server is about to be stopped, and after it exits, before it starts again. */
+  release?: () => Promise<void>;
+}
+
+export function superviseServer(start: () => ChildProcess, options: { signals?: Pick<NodeJS.Process, "on" | "off">; now?: () => number } & SupervisorHooks = {}): Promise<number> {
   const signals = options.signals ?? process, now = options.now ?? Date.now;
   return new Promise((done) => {
-    let child: ChildProcess, stopping = false, waiting: ReturnType<typeof setTimeout> | undefined;
+    let child: ChildProcess, stopping = false, preparing = false, waiting: ReturnType<typeof setTimeout> | undefined;
     const policy = restartPolicy(now);
     const finish = (code: number) => { signals.off("SIGTERM", onTerm); signals.off("SIGINT", onInt); done(code); };
     // Stopped while waiting to start again after a crash: there is no server to pass the signal to.
-    const pass = (signal: NodeJS.Signals) => () => { stopping = true; if (waiting) { clearTimeout(waiting); waiting = undefined; finish(0); } else child.kill(signal); };
+    const pass = (signal: NodeJS.Signals) => () => { stopping = true; if (waiting) { clearTimeout(waiting); waiting = undefined; finish(0); } else if (!preparing) { if (options.release) void options.release().finally(() => child.kill(signal)); else child.kill(signal); } };
     const onTerm = pass("SIGTERM"), onInt = pass("SIGINT");
-    const run = () => {
-      waiting = undefined;
+    const go = () => {
+      preparing = false;
+      if (stopping) { if (options.release) void options.release().then(() => finish(0), () => finish(0)); else finish(0); return; }
       child = start();
+      options.spawned?.(child);
       child.once("error", () => finish(1));
       child.once("exit", (code, signal) => {
-        if (policy.again(code, stopping, signal)) {
-          console.log(restartLine(code, policy.delayMs()));
-          if (policy.delayMs() > 0) waiting = setTimeout(run, policy.delayMs());
-          else run();
-          return;
-        }
-        finish(code ?? (stopping && (signal === "SIGTERM" || signal === "SIGINT") ? 0 : 1));
+        const settle = () => {
+          if (policy.again(code, stopping, signal)) {
+            console.log(restartLine(code, policy.delayMs()));
+            if (policy.delayMs() > 0) waiting = setTimeout(run, policy.delayMs());
+            else run();
+            return;
+          }
+          finish(code ?? (stopping && (signal === "SIGTERM" || signal === "SIGINT") ? 0 : 1));
+        };
+        if (options.release) void options.release().then(settle, settle);
+        else settle();
       });
+    };
+    const run = () => {
+      waiting = undefined;
+      if (!options.prepare) { go(); return; }
+      preparing = true;
+      void options.prepare().then(go, go);
     };
     signals.on("SIGTERM", onTerm);
     signals.on("SIGINT", onInt);
@@ -70,5 +91,11 @@ if (isEntry()) {
     console.warn(`The data folder's lease could not be checked: ${error instanceof Error ? error.message : String(error)}`);
   }
   const server = serverCommand(dirname(fileURLToPath(import.meta.url)), process.env);
-  void superviseServer(() => spawn(process.execPath, server.args, { stdio: "inherit", env: server.env })).then((code) => { process.exitCode = code; });
+  const tunnel = process.env.SEIRA_ACCESS === "tunnel" ? createContainerTunnel({ dataDir, port: Number(process.env.SEIRA_PORT) || 8799, log: (line) => console.log(line) }) : null;
+  let tunnelEnv: Record<string, string> = {};
+  void superviseServer(() => spawn(process.execPath, server.args, { stdio: "inherit", env: { ...server.env, ...tunnelEnv } }), tunnel ? {
+    prepare: async () => { tunnelEnv = {}; tunnelEnv = await tunnel.prepare(); },
+    spawned: (child) => { if (child.pid) void tunnel.attach(child.pid); },
+    release: () => tunnel.release(),
+  } : {}).then((code) => { process.exitCode = code; });
 }

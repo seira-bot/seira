@@ -1,3 +1,4 @@
+import type { BoardClosure } from "./board-closed.ts";
 import { BOARD_DONE_MAX, BOARD_DONE_WINDOW_MS, BOARD_TITLE_CHARS, type BoardCard, type BoardColumn, type BoardView } from "../shared/board.ts";
 
 interface HandoffRow {
@@ -48,6 +49,7 @@ export interface BoardSources {
   handoffs(from: number): readonly HandoffRow[];
   threads: ReadonlyArray<{ botId: string; task: ThreadRow }>;
   runs(from: number): readonly RunRow[];
+  closed?: (cardId: string) => BoardClosure | undefined;
 }
 
 export interface BoardViewer {
@@ -133,6 +135,31 @@ function runCards(runs: readonly RunRow[], viewer: BoardViewer): BoardCard[] {
   return cards;
 }
 
+function withClosure(card: BoardCard, closed: BoardSources["closed"]): BoardCard {
+  if (card.column !== "needs-you") return card;
+  const closure = closed?.(card.id);
+  if (!closure || closure.at < card.updatedAt) return card;
+  const moved: BoardCard = { ...card, column: "done", state: "closed", updatedAt: closure.at, closedBy: closure.by };
+  delete moved.question;
+  if (closure.reason) moved.closedReason = closure.reason;
+  return moved;
+}
+
+/** A bot may move a card to Done when the work is its own or it handed the work over. A Chief of Staff may also close a
+ * teammate's card: any card off a Team Cloud, and on one only a card of a bot in its own non-empty section. */
+export function botMayClose(
+  card: Pick<BoardCard, "botId" | "fromBotId">,
+  bot: { id: string; chiefOfStaff?: boolean; section?: string },
+  cardBot: { section?: string } | undefined,
+  teamCloud: boolean,
+): boolean {
+  if (card.botId === bot.id || card.fromBotId === bot.id) return true;
+  if (bot.chiefOfStaff !== true) return false;
+  if (!teamCloud) return true;
+  const section = bot.section?.trim();
+  return Boolean(section) && cardBot?.section?.trim() === section;
+}
+
 export function boardView(sources: BoardSources, viewer: BoardViewer, now = Date.now()): BoardView {
   const runs = sources.runs(now - BOARD_DONE_WINDOW_MS);
   const handoffs = handoffCards(sources.handoffs(now - BOARD_DONE_WINDOW_MS), viewer);
@@ -141,6 +168,7 @@ export function boardView(sources: BoardSources, viewer: BoardViewer, now = Date
   for (const run of runs) if (run.threadId) taken.add(run.threadId);
   const cutoff = now - BOARD_DONE_WINDOW_MS;
   const recent = [...handoffs, ...threadCards(sources.threads, taken, viewer), ...runCards(runs, viewer)]
+    .map((card) => withClosure(card, sources.closed))
     .filter((card) => (card.column !== "done" && card.state !== "failed") || card.updatedAt >= cutoff);
   const cards: BoardCard[] = [];
   const seen = new Set<string>();

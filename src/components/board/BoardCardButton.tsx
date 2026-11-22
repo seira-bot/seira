@@ -6,13 +6,15 @@ import type { Bot } from "@/state/store";
 import { BotAvatar } from "../Avatar";
 import { STATE_LABELS } from "./board-model";
 
-export function stateLine(card: BoardCard, bot: Bot | undefined): string {
+export function stateLine(card: BoardCard, bot: Bot | undefined, closer?: string): string {
+  if (closer) return t("board.state.closedBy", { name: closer });
   const time = localizedRelativeTime(card.updatedAt, activeLocale());
   return t(STATE_LABELS[card.state], { bot: bot?.name ?? "", time });
 }
 
-export function BoardCardButton({ card, bot, fromBot, selected, onOpen }: {
+export function BoardCardButton({ card, bot, fromBot, closer, selected, onOpen }: {
   card: BoardCard;
+  closer: string | undefined;
   bot: Bot | undefined;
   fromBot: Bot | undefined;
   selected: boolean;
@@ -31,7 +33,7 @@ export function BoardCardButton({ card, bot, fromBot, selected, onOpen }: {
           {bot && <BotAvatar bot={bot} size={16} label="" />}
           <span className="min-w-0 truncate">{bot?.name}</span>
         </span>
-        <span className={cn("text-[12px]", alert ? "font-medium text-accent-text" : "text-ink-tertiary")}>{stateLine(card, bot)}</span>
+        <span className={cn("text-[12px]", alert ? "font-medium text-accent-text" : "text-ink-tertiary")}>{stateLine(card, bot, closer)}</span>
         {card.kind === "handoff" && card.fromBotId && fromBot && <span className="truncate text-[12px] text-ink-tertiary">{t("board.card.from", { bot: fromBot.name })}</span>}
       </button>
     </li>

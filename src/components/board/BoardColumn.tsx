@@ -3,6 +3,7 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import type { Bot } from "@/state/store";
 import { BoardCardButton } from "./BoardCardButton";
+import { closerName } from "./board-model";
 
 export function BoardColumn({ id, label, cards, bots, openId, onOpen }: {
   id: string;
@@ -21,7 +22,7 @@ export function BoardColumn({ id, label, cards, bots, openId, onOpen }: {
       </h2>
       <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-2">
         {cards.map((card) => (
-          <BoardCardButton key={card.id} card={card} bot={botOf(card.botId)} fromBot={botOf(card.fromBotId)} selected={openId === card.id} onOpen={() => onOpen(card)} />
+          <BoardCardButton key={card.id} card={card} bot={botOf(card.botId)} fromBot={botOf(card.fromBotId)} closer={closerName(card, bots)} selected={openId === card.id} onOpen={() => onOpen(card)} />
         ))}
       </ul>
     </section>

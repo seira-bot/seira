@@ -9,6 +9,9 @@ import {
   acceptLegacyOrigins,
   BROWSER_SIGN_IN,
   clearSessionCookie,
+  clearSessionCookies,
+  presentedSessionCookie,
+  sessionCookieHeaders,
   fromBrowser,
   adminOnlyBotSetting,
   botProfileSettings,
@@ -73,8 +76,8 @@ describe("origin and cookies", () => {
     expect(parseCookies("a=1; seira_session_8799_abc=tok; b = 2")).toEqual(new Map([["a", "1"], ["seira_session_8799_abc", "tok"], ["b", "2"]]));
     expect(parseCookies(undefined).size).toBe(0);
     expect(sessionCookieName(8799, "3f2a-uuid-like-id")).toBe("seira_session_8799_3f2auuidlike");
-    expect(serializeSessionCookie("c", "t", { secure: true, maxAgeSeconds: 60 })).toBe("c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60; Secure");
-    expect(serializeSessionCookie("c", "t", { secure: false, maxAgeSeconds: 60 })).not.toContain("Secure");
+    expect(serializeSessionCookie("c", "t", { secure: true, maxAgeSeconds: 60 })).toBe("__Host-c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60; Secure");
+    expect(serializeSessionCookie("c", "t", { secure: false, maxAgeSeconds: 60 })).toBe("c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60");
     expect(clearSessionCookie("c")).toContain("Max-Age=0");
   });
 });
@@ -90,6 +93,21 @@ describe("request source for the lockout", () => {
     expect(requestSource(withPeer("100.64.0.7", { "x-forwarded-for": "1.1.1.1" }))).toBe("100.64.0.7");
     expect(requestSource(withPeer("127.0.0.1", { "x-forwarded-for": "evil\n\u0007 <script>" + "x".repeat(200) }))).toMatch(/^[\w.:%[\]-]{1,64}$/);
     expect(sanitizeSource("")).toBe("unknown");
+  });
+
+  it("keys an IPv6 forwarded source by its /64", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("2001:db8:1:2::1")).toBe(via("2001:db8:1:2::ffff"));
+    expect(via("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:3::1")).not.toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:2::1")).toMatch(/^[\w.:%[\]-]{1,64}$/);
+  });
+
+  it("keeps an IPv4 and an IPv4-mapped IPv6 source as the IPv4 address", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("203.0.113.9")).toBe("203.0.113.9");
+    expect(via("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(requestSource(withPeer("::1", {}))).toBe("::1");
   });
 });
 
@@ -282,6 +300,32 @@ describe("scopes", () => {
   });
 });
 
+describe("the session cookie name", () => {
+  it("is __Host- on https, with Secure and Path=/ and no Domain, and clears the old name beside it", () => {
+    const issued = serializeSessionCookie("seira_session_1_x", "tok", { secure: true, maxAgeSeconds: 60 });
+    expect(issued.startsWith("__Host-seira_session_1_x=tok")).toBe(true);
+    expect(issued).toContain("Secure");
+    expect(issued).toContain("Path=/");
+    expect(issued).not.toContain("Domain");
+    const headers = sessionCookieHeaders("seira_session_1_x", "tok", { secure: true, maxAgeSeconds: 60 });
+    expect(headers).toEqual([issued, expect.stringMatching(/^seira_session_1_x=; .*Max-Age=0/)]);
+    expect(sessionCookieHeaders("n", "tok", { secure: false, maxAgeSeconds: 60 })).toEqual([expect.stringMatching(/^n=tok; /)]);
+  });
+
+  it("clears both names on logout", () => {
+    const [plain, prefixed] = clearSessionCookies("n");
+    expect(plain).toMatch(/^n=; .*Max-Age=0/);
+    expect(prefixed).toMatch(/^__Host-n=; .*Max-Age=0; Secure$/);
+  });
+
+  it("reads the __Host- cookie first and the old name only when it is absent", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n")).toBe("new");
+    expect(presentedSessionCookie("__Host-n=new; n=junk", "n")).toBe("new");
+    expect(presentedSessionCookie("n=old", "n")).toBe("old");
+    expect(presentedSessionCookie(undefined, "n")).toBeUndefined();
+  });
+});
+
 describe("resolveRequestAuth", () => {
   let dir: string;
   let sessions: SessionRegistry;
@@ -294,6 +338,28 @@ describe("resolveRequestAuth", () => {
     sessions = new SessionRegistry({ file: join(dir, "sessions.json") });
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function pairedSession() {
+    const { code } = sessions.openPairing({ scopes: ["admin", "client"] });
+    const result = sessions.exchange({ code, label: "browser", source: "1.2.3.4" });
+    if (!result.ok) throw new Error(result.error);
+    return result;
+  }
+
+  it("a same-name cookie without the prefix does not replace an https session", () => {
+    const { token } = pairedSession();
+    const headers = { host: "bots.example.com", origin: "http://bots.example.com" };
+    const mixed = resolve({ ...headers, cookie: `__Host-${cookieName}=${token}; ${cookieName}=junk` });
+    expect(mixed.auth?.kind).toBe("session");
+    expect(resolve({ ...headers, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+    expect(resolve({ ...headers, cookie: `${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("still accepts a session that has only the old cookie name", () => {
+    const { token } = pairedSession();
+    const old = resolve({ host: "bots.example.com", origin: "http://bots.example.com", cookie: `${cookieName}=${token}` });
+    expect(old.auth?.kind).toBe("session");
+  });
 
   it("accepts authenticated relay mutations without exposing the desktop owner capability", () => {
     const headers = {

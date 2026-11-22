@@ -51,6 +51,12 @@ describe("what a push's changed files call for", () => {
     }
   });
 
+  it("checks the Flatpak source list when the lockfile or the list changed", () => {
+    expect(names(["pnpm-lock.yaml"])).toContain("flatpak sources");
+    expect(names(["packaging/flatpak/generated-sources.json"])).toContain("flatpak sources");
+    expect(names(["server/a.ts"])).not.toContain("flatpak sources");
+  });
+
   it("reads the pushed commits, and a deleted branch sends none", () => {
     const sha = "a".repeat(40);
     expect(pushedCommits(`refs/heads/x ${sha} refs/heads/x ${"0".repeat(40)}\n`)).toEqual([sha]);

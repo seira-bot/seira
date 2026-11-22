@@ -93,7 +93,8 @@ export function ConnectedWorkspacesSettings({ label, description }: { label?: st
     <SettingsGroup label={label} description={description} block="your-computers">
       {!saved ? <SettingsRows><SettingRow title={t(error ? "servers.yours.loadFailed" : "servers.yours.loading")}>{null}</SettingRow></SettingsRows> :
         <ServerList saved={saved} busy={busy} sharingOffered={sharingOffered} ownServers={ownServers} appVersion={window.ogb?.app?.version ?? null} onShare={share}
-          onSwitch={(id) => void perform(async () => { await bridge.switch(id); return true; })} onForget={(id) => void perform(() => bridge.forget(id))} onComputerAccess={setComputerId} />}
+          onSwitch={(id) => void perform(async () => { await bridge.switch(id); return true; })} onForget={(id) => void perform(() => bridge.forget(id))} onComputerAccess={setComputerId}
+          onRename={bridge.rename ? async (id, name) => { const answer = await bridge.rename!(id, name).catch(() => null); if (answer?.outcome === "saved") setSaved(await bridge.state()); return answer?.outcome ?? "failed"; } : undefined} />}
       {saved && error && <p role="alert" className="px-4 text-[12px] leading-4 text-danger">{error}</p>}
     </SettingsGroup>
     {advanced && saved?.packaged && (

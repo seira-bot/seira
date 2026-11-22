@@ -10,6 +10,7 @@ const server = vi.hoisted(() => ({
   cards: [] as unknown[],
   loadFails: false,
   taskFails: false,
+  closeFails: false,
 }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("@/lib/live-events", () => ({ listenLiveFrames: () => () => {} }));
@@ -17,6 +18,7 @@ vi.mock("@/state/api", () => ({
   api: vi.fn(async (path: string, init?: RequestInit) => {
     server.calls.push({ path, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
     if (path === "/api/board") { if (server.loadFails) throw new Error("down"); return { cards: server.cards }; }
+    if (path === "/api/board/close") { if (server.closeFails) throw new Error("down"); return { ok: true }; }
     if (path === "/api/auth/session") return {};
     if (path.endsWith("/tasks")) { if (server.taskFails) throw new Error("down"); return { task: { threadId: "new-thread" } }; }
     if (path === "/api/inbox") return inboxFixture.view();
@@ -67,7 +69,7 @@ const key = (el: HTMLElement, name: string) => act(async () => { el.dispatchEven
 
 beforeEach(async () => {
   root = createRoot(document.body.appendChild(document.createElement("div")));
-  server.calls.length = 0; server.cards = CARDS; server.loadFails = false; server.taskFails = false;
+  server.calls.length = 0; server.cards = CARDS; server.loadFails = false; server.taskFails = false; server.closeFails = false;
   inboxFixture.view = () => inboxView([questionRow]);
   dispatch.mockClear();
   resetBoardForTest();
@@ -108,6 +110,61 @@ describe("the Board page", () => {
     await mount(); await settle();
     await click($("[data-board-card='thread:n']")); await settle();
     expect($("[data-board-panel] [data-inbox-answer-kind='question']")).not.toBeNull();
+  });
+
+  it("moves a Needs you card to Done with one button, and says so", async () => {
+    await mount(); await settle();
+    await click($("[data-board-card='thread:n']")); await settle();
+    server.cards = CARDS.map((one) => one.id === "thread:n"
+      ? { ...one, column: "done", state: "closed", question: undefined, closedBy: { kind: "person", name: "Rama" }, closedReason: "Handled by phone" } as BoardCard : one);
+    await click(buttonNamed("Move to Done")); await settle();
+    expect(server.calls.find((call) => call.path === "/api/board/close")?.body).toEqual({ cardId: "thread:n" });
+    expect($("[aria-live=polite]")!.textContent).toContain("Moved to Done.");
+    expect($("[data-board-column=done] [data-board-card='thread:n']")!.textContent).toContain("Closed by Rama");
+    const panel = $("[data-board-panel]")!;
+    expect(panel.textContent).toContain("Closed by Rama");
+    expect(panel.textContent).toContain("Handled by phone");
+    expect(buttonNamed("Move to Done")).toBeNull();
+  });
+
+  it("says when a card could not be moved, and keeps the button", async () => {
+    server.closeFails = true;
+    await mount(); await settle();
+    await click($("[data-board-card='thread:n']")); await settle();
+    await click(buttonNamed("Move to Done")); await settle();
+    expect($("[data-board-panel] [role=alert]")!.textContent).toBe("Couldn't move this card. Try again.");
+    expect(buttonNamed("Move to Done")).not.toBeNull();
+  });
+
+  it("offers Move to Done only on a Needs you card", async () => {
+    await mount(); await settle();
+    for (const id of ["thread:q", "thread:w1", "handoff:h"]) {
+      await click($(`[data-board-card='${id}']`));
+      expect(buttonNamed("Move to Done"), id).toBeNull();
+    }
+    await click($("[data-board-card='thread:n']"));
+    expect(buttonNamed("Move to Done")).not.toBeNull();
+  });
+
+  it("hides Move to Done when the person may only view the card's bot", async () => {
+    const view = { ...bot("scout", "Scout"), yourAccess: "view" } as unknown as Bot;
+    server.cards = [card("thread:v", { column: "needs-you", state: "waiting-on-you" })];
+    await act(async () => {
+      root.render(createElement(StoreContext.Provider,
+        { value: { state: { ...initialState, bots: [view], groups: [] } as AppState, dispatch, flushBotPatches: vi.fn(), refreshInstances: vi.fn(), refreshModels: vi.fn() } as never }, createElement(BoardPage)));
+    });
+    await settle();
+    await click($("[data-board-card='thread:v']"));
+    expect($("[data-board-panel]")).not.toBeNull();
+    expect(buttonNamed("Move to Done")).toBeNull();
+  });
+
+  it("names a bot that closed a card", async () => {
+    server.cards = [card("thread:c", { column: "done", state: "closed", closedBy: { kind: "bot", botId: "cleo" }, closedReason: "No longer needed" })];
+    await mount(); await settle();
+    expect($("[data-board-card='thread:c']")!.textContent).toContain("Closed by Cleo");
+    await click($("[data-board-card='thread:c']"));
+    expect($("[data-board-panel]")!.textContent).toContain("No longer needed");
   });
 
   it("makes every card a button that a keyboard reaches", async () => {

@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -8,6 +11,8 @@ import {
   generateAvatarImage,
   snapshotAvatarGenerationState,
 } from "./avatar-image.ts";
+import { removeTempDir } from "./testing/cleanup.ts";
+import { codexAuthFile } from "./testing/codex-image-auth.ts";
 
 const BOT = { name: "Scout", title: "Research agent", description: "Finds evidence quickly." };
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
@@ -120,7 +125,8 @@ describe("avatar image generation", () => {
     expect(avatarImageStatus({})).toEqual({
       provider: "openai", configured: false, model: "gpt-image-2", customUrl: "", customModel: "",
       primary: { provider: "openai", model: "gpt-image-2", configured: false }, fallback: null, ready: false, maxPerTurn: 4,
-      openaiConfigured: false, xaiConfigured: false, customKeyConfigured: false, geminiConfigured: false, openrouterConfigured: false,
+      openaiConfigured: false, openaiShared: false, codexSignedIn: false, codexPlan: null,
+      xaiConfigured: false, customKeyConfigured: false, geminiConfigured: false, openrouterConfigured: false,
     });
     expect(avatarImageStatus({ imageGen: { key: "k", primary: { provider: "gemini" }, fallback: { provider: "openai" } } })).toMatchObject({
       primary: { provider: "gemini", configured: false }, fallback: { provider: "openai", configured: true }, ready: true,
@@ -132,6 +138,30 @@ describe("avatar image generation", () => {
       provider: "xai", configured: true, model: "grok-imagine-image-2.0",
     });
     expect(JSON.stringify(avatarImageStatus(ALL_KEYS))).not.toContain("secret");
+  });
+
+  it("says when OpenAI images use the main OpenAI key", () => {
+    expect(avatarImageStatus({ openai: { key: "main-secret" } })).toMatchObject({ configured: true, openaiConfigured: false, openaiShared: true });
+    expect(avatarImageStatus({ openai: { key: "main-secret" }, imageGen: { key: "image-secret" } })).toMatchObject({ openaiConfigured: true, openaiShared: false });
+    expect(JSON.stringify(avatarImageStatus({ openai: { key: "main-secret" } }))).not.toContain("secret");
+  });
+
+  it("shows only the Codex sign-in state and plan name, never its token or account id", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "seira-codex-status-"));
+    try {
+      const instances = { codex: { driver: "codex", environment: { CODEX_HOME: codexHome } } };
+      const cfg = { instances, imageGen: { primary: { provider: "codex" as const } } };
+      expect(avatarImageStatus(cfg)).toMatchObject({ codexSignedIn: false, codexPlan: null, configured: false, ready: false });
+      const access = codexAuthFile(codexHome, { token: "status-token", accountId: "acct-status", plan: "pro", expiresAt: Date.now() + 3_600_000 });
+      const status = avatarImageStatus(cfg);
+      expect(status).toMatchObject({ provider: "codex", codexSignedIn: true, codexPlan: "pro", configured: true, ready: true });
+      const wire = JSON.stringify(status);
+      for (const secret of [access, "status-token", "acct-status", "synthetic-refresh"]) expect(wire).not.toContain(secret);
+      codexAuthFile(codexHome, { token: "status-token", accountId: "acct-status", plan: "free" });
+      expect(avatarImageStatus(cfg)).toMatchObject({ codexSignedIn: true, codexPlan: "free", configured: false, ready: false });
+    } finally {
+      await removeTempDir(codexHome);
+    }
   });
 
   it("requires a valid custom URL and model but does not require a gateway key", () => {

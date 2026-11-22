@@ -1,5 +1,6 @@
 import type { BoardCard, BoardCardState, BoardColumn } from "../../../shared/board";
 import type { LocaleKey } from "@/locales";
+import type { Bot } from "@/state/store";
 
 export const COLUMNS: ReadonlyArray<{ id: BoardColumn; label: LocaleKey }> = [
   { id: "todo", label: "board.column.todo" },
@@ -28,3 +29,11 @@ export function cardsIn(cards: readonly BoardCard[], column: BoardColumn): Board
 }
 
 export const isStoppable = (card: BoardCard): boolean => card.column === "working" && (card.state === "running" || card.state === "waiting-teammate");
+
+export function closerName(card: BoardCard, bots: readonly Bot[]): string | undefined {
+  if (!card.closedBy) return undefined;
+  const name = card.closedBy.kind === "person" ? card.closedBy.name : bots.find((bot) => bot.id === (card.closedBy as { botId: string }).botId)?.name;
+  return name || undefined;
+}
+
+export const canMoveToDone = (card: BoardCard, bot: Bot | undefined): boolean => card.column === "needs-you" && bot?.yourAccess !== "view";

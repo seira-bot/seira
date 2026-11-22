@@ -1287,6 +1287,7 @@
             "type": "string",
             "enum": [
               "openai",
+              "codex",
               "xai",
               "gemini",
               "openrouter",
@@ -1573,6 +1574,24 @@
           "bot_id",
           "thread_id"
         ]
+      }
+    },
+    {
+      "name": "board_close",
+      "description": "Move a Board card from Needs you to Done as closed, with your reason, when the person no longer needs to act on it. It does not rerun or cancel any work. Without card_id it lists the Needs you cards you may close.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The card's id from the list. Omit to list the cards you may close."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Required with card_id: why the card is done, in one plain sentence."
+          }
+        }
       }
     },
     {

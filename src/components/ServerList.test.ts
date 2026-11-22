@@ -133,3 +133,39 @@ it("a server of the person's own has \"Share this computer\" with its switch; Ch
   await render([{ id: "vps", enabled: true, connected: false, paused: true }]);
   expect(row("vps").querySelector("[data-server-share]")?.textContent).toContain("Paused: hetzner-1's bots can't use this computer until you resume.");
 });
+
+it("Rename shows only for a server connected by hand: the field starts with its name, refusals say why, and a saved name closes it", async () => {
+  const onRename = vi.fn(async (_id: string, _name: string) => "saved" as "saved" | "name" | "taken" | "gone" | "failed");
+  root = createRoot(host);
+  await act(async () => { root!.render(createElement(ServerList, { ...props, onRename })); });
+  await act(async () => { await Promise.resolve(); });
+  expect(host.querySelector('[data-server-rename="cloud"]'), "My Cloud's name is the Admin's").toBeNull();
+  expect(host.querySelector('[data-server-rename="local"]')).toBeNull();
+  expect(host.querySelectorAll("[data-server-rename]")).toHaveLength(4);
+  await click(host.querySelector('[data-server-rename="vps"]'));
+  const field = row("vps").querySelector<HTMLInputElement>("[data-server-rename-form] input")!;
+  expect([field.value, field.maxLength]).toEqual(["hetzner-1", 60]);
+  const type = async (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const submit = () => act(async () => { row("vps").querySelector<HTMLFormElement>("[data-server-rename-form]")!.requestSubmit(); await Promise.resolve(); await Promise.resolve(); });
+  await type("  Studio  ");
+  for (const [outcome, text] of [["taken", "Another place here has that name. Choose another."], ["name", "Use a name of 1 to 60 characters."], ["failed", "That didn't work. Try again in a moment."]] as const) {
+    onRename.mockResolvedValueOnce(outcome);
+    await submit();
+    expect(row("vps").querySelector("[data-server-rename-form] [role='alert']")?.textContent, outcome).toBe(text);
+  }
+  await submit();
+  expect(onRename.mock.calls, "by the row's id, the trimmed name").toEqual([["vps", "Studio"], ["vps", "Studio"], ["vps", "Studio"], ["vps", "Studio"]]);
+  expect(row("vps").querySelector("[data-server-rename-form]"), "saved: the field closes").toBeNull();
+  await click(host.querySelector('[data-server-rename="vps"]'));
+  await act(async () => { row("vps").querySelector("[data-server-rename-form] input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(row("vps").querySelector("[data-server-rename-form]"), "Escape leaves the name as it was").toBeNull();
+  expect(onRename).toHaveBeenCalledTimes(4);
+});
+
+it("without a rename from main, the list offers no Rename", async () => {
+  await mount();
+  expect(host.querySelector("[data-server-rename]")).toBeNull();
+});

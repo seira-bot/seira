@@ -322,7 +322,7 @@ describe("pairing", () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeUndefined();
     const setCookie = header(res.headers, "set-cookie");
-    expect(setCookie).toMatch(new RegExp(`^seira_session_${PORT}_[a-f0-9]{12}=seira_sess_`));
+    expect(setCookie).toMatch(new RegExp(`^__Host-seira_session_${PORT}_[a-f0-9]{12}=seira_sess_`));
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Lax");
     expect(setCookie).toContain("Secure");
@@ -331,7 +331,7 @@ describe("pairing", () => {
     const sameOrigin = await call("/api/bots", { headers: remote("10.0.0.4", { cookie, origin: `http://${REMOTE_HOST}` }) });
     expect(sameOrigin.status).toBe(200);
     const refreshed = header(sameOrigin.headers, "set-cookie");
-    expect(refreshed.split(";")[0]).toBe(cookie);
+    expect(refreshed.split(";")[0]).toBe(cookie.replace("__Host-", ""));
     expect(refreshed).toMatch(/Max-Age=\d+/);
     expect(refreshed).toContain("HttpOnly");
     const stranger = await call("/api/bots", { headers: remote("10.0.0.4", { cookie: `${cookie.split("=")[0]}=seira_sess_nope`, origin: `http://${REMOTE_HOST}` }) });

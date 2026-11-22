@@ -30,14 +30,14 @@ it("says one plain thing, names OpenAI, and offers only the way to Settings → 
   expect(renderToStaticMarkup(createElement(LiveKeyNeeded))).toContain("The OpenAI key stays in the Cloud.");
 });
 
-it("opens Settings at the OpenAI key in Voice and calls, and puts the prompt away", () => {
+it("opens Settings at the OpenAI key itself, the one field for it, and puts the prompt away", () => {
   const button = nodes(LiveKeyNeeded()).find((node) => node.type === "button");
   expect(button).toBeTruthy();
   button!.props.onClick!();
   expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ type: "toggleAppSettings", open: true, section: "connections" });
   let request: ReturnType<typeof useKeyFocus> = null;
   renderToStaticMarkup(createElement(() => { request = useKeyFocus(); return null; }));
-  expect(request).toMatchObject({ id: "openai", row: "liveCalls" });
+  expect(request).toMatchObject({ id: "openai", row: "openai" });
   finishKeyFocus(request!);
   expect(f.dismiss).toHaveBeenCalledOnce();
 });
