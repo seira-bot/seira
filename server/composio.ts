@@ -19,6 +19,7 @@ import {
   responseError,
   type ConnectedAccountResponse,
 } from "./composio-project.ts";
+import { applyAccountIdentity, brokerAccountsSchema, publicAccount, revokeOnRemoval } from "./composio-account-identity.ts";
 import { MULTI_ACCOUNT_CONFIG, authConfigRefusal, ensureProjectSession, projectApiKey, raiseAccountCap, sessionForToolkit } from "./composio-session.ts";
 import { authConfigUseLine, needsOwnAuth, noManagedAuthToolkit, withNoManagedAuthNote } from "./connector-auth-config-hint.ts";
 import type { ToolkitCard } from "../shared/toolkit-card.ts";
@@ -48,6 +49,8 @@ export interface ConnectedAccountSummary {
   id: string;
   alias?: string;
   status: string;
+  displayName?: string;
+  duplicateOf?: string;
 }
 
 export interface ConnectorServiceState {
@@ -66,7 +69,7 @@ const connectorServiceSchema = z.object({
   connected: z.boolean(),
   pending: z.boolean().optional(),
   status: z.string().optional(),
-  accounts: z.array(z.object({ id: z.string(), alias: z.string().optional(), status: z.string() })).optional(),
+  accounts: brokerAccountsSchema.optional(),
 });
 const connectorServicesResponseSchema = z.object({ services: z.record(z.string(), connectorServiceSchema).optional(), complete: z.boolean().optional() });
 const removalResponseSchema = z.object({ removed: z.number() });
@@ -348,14 +351,15 @@ async function listSessionToolkits(
 
 function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]) {
   const requested = new Set(slugs.map(canonicalToolkitSlug));
-  const bySlug = new Map<string, Array<ConnectedAccountSummary & { updatedAt: string }>>();
+  const bySlug = new Map<string, Array<ConnectedAccountSummary & { createdAt: string; updatedAt: string }>>();
   for (const account of accounts) {
     const slug = account.toolkit?.slug ? canonicalToolkitSlug(account.toolkit.slug) : "";
     if (!slug || (requested.size && !requested.has(slug)) || !validAccountId(account.id)) continue;
     const alias = account.alias?.trim() ?? "";
-    const summary: ConnectedAccountSummary & { updatedAt: string } = {
+    const summary: ConnectedAccountSummary & { createdAt: string; updatedAt: string } = {
       id: account.id,
       status: account.status || "UNKNOWN",
+      createdAt: account.created_at ?? "",
       updatedAt: account.updated_at ?? "",
     };
     if (printableAliasSchema.safeParse(alias).success) summary.alias = alias;
@@ -363,14 +367,8 @@ function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]
     list.push(summary);
     bySlug.set(slug, list);
   }
-  for (const list of bySlug.values()) list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const list of bySlug.values()) { applyAccountIdentity(list, accounts); list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); }
   return bySlug;
-}
-
-function publicAccount({ id, alias, status }: ConnectedAccountSummary): ConnectedAccountSummary {
-  const account: ConnectedAccountSummary = { id, status };
-  if (alias) account.alias = alias;
-  return account;
 }
 
 function serviceStateFromAccounts(
@@ -728,7 +726,9 @@ export async function removeService(cfg: AppConfig, slug: string, as?: BrokerAcc
   const body = toolkitPageSchema.parse(await list.json());
   const id = body.items?.find((item) => item.slug && canonicalToolkitSlug(item.slug) === toolkit)?.connected_account?.id;
   if (!id) return { removed: 0 };
-  await deleteConnectedAccount(apiKey, id);
+  const userId = session.config?.user_id ?? cfg.composio?.userId;
+  const listed = userId ? await listConnectedAccounts(apiKey, userId, [toolkit]).catch(() => null) : null;
+  await deleteConnectedAccount(apiKey, id, { revoke: listed !== null && revokeOnRemoval(listed, toolkit, id) });
   return { removed: 1 };
 }
 
@@ -755,7 +755,7 @@ export async function removeAccount(cfg: AppConfig, slug: string, accountId: str
       && canonicalToolkitSlug(account.toolkit.slug) === toolkit
   );
   if (!owned) return { removed: 0 };
-  await deleteConnectedAccount(apiKey, accountId);
+  await deleteConnectedAccount(apiKey, accountId, { revoke: revokeOnRemoval(accounts, toolkit, accountId) });
   return { removed: 1 };
 }
 
@@ -808,7 +808,7 @@ export async function authorizeService(cfg: AppConfig, slug: string, requestedAl
   );
   const plan = planAccountLink(toolkit, serviceAccounts, alias, MULTI_ACCOUNT_CONFIG.max_accounts_per_toolkit, () => `seira-retry-${randomUUID()}`);
   if (!plan.ok) throw inputError(plan.error, plan.status);
-  for (const id of plan.replace) await deleteConnectedAccount(apiKey, id);
+  for (const id of plan.replace) await deleteConnectedAccount(apiKey, id, { revoke: revokeOnRemoval(serviceAccounts, toolkit, id) });
   await raiseAccountCap(apiKey, session);
   const linkRequest: AccountLinkRequest = plan.alias ? { toolkit, alias: plan.alias } : { toolkit };
   const link = (sessionId: string) =>

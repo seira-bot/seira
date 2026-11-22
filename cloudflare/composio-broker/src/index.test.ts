@@ -426,7 +426,7 @@ describe("connected-apps broker boundaries", () => {
     ];
     const replaced = await fixture.authorize("Work");
     expect(replaced.status).toBe(200);
-    expect(fixture.deletes()).toEqual(["https://backend.composio.dev/api/v3.1/connected_accounts/ca_old_work?revoke_on_delete=true"]);
+    expect(fixture.deletes()).toEqual(["https://backend.composio.dev/api/v3.1/connected_accounts/ca_old_work?revoke_on_delete=false"]);
     expect(fixture.links()).toEqual([{ toolkit: "gmail", alias: "Work" }]);
     const order = fixture.fetchCalls.map((call) => call.init?.method === "DELETE" ? "delete" : call.url.endsWith("/link") ? "link" : "other");
     expect(order.indexOf("delete")).toBeLessThan(order.indexOf("link"));

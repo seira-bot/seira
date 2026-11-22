@@ -17,6 +17,7 @@ export function reserveConnectionPage() {
   const app = window.ogb;
   const appOpensLinks = Boolean(app);
   const confirmedOpen = app?.openExternal ?? app?.openSignInPage;
+  const cleanOpen = app?.openCleanSignInPage;
   let page: Window | null = null;
   let navigated = false;
   let cancelled = false;
@@ -33,11 +34,12 @@ export function reserveConnectionPage() {
     /** False on a desktop page from another server in an app without openSignInPage. Electron 43 gives the window's open
      * handler every window.open, with or without a click, and returns null whether the link opened or not. */
     confirms: !appOpensLinks || Boolean(confirmedOpen),
-    async open(url: string): Promise<boolean> {
+    async open(url: string, options?: { cleanWindow?: boolean }): Promise<boolean> {
       if (cancelled) return false;
       if (appOpensLinks) {
         try {
-          await (confirmedOpen ? confirmedOpen(url) : openExternalLink(url));
+          if (options?.cleanWindow && cleanOpen) await cleanOpen(url);
+          else await (confirmedOpen ? confirmedOpen(url) : openExternalLink(url));
         } catch {
           return false;
         }

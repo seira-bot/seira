@@ -75,6 +75,8 @@ interface FakeAccount {
   toolkit: { slug: string };
   status: string;
   created_at?: string;
+  alias?: string;
+  state?: { val: { displayName?: string } };
   auth_config?: { id: string; is_composio_managed: boolean };
 }
 interface FakeInstance {
@@ -329,7 +331,7 @@ export function brokerHarness(options: { migrations?: number } = {}) {
       const body = await response.json() as { installationId: string; token: string };
       return { id: body.installationId, token: body.token, userId: `seira_${body.installationId.replaceAll("-", "")}` };
     },
-    account(owner: Pick<Installation, "userId">, toolkit = "gmail", status = "ACTIVE", extra: Pick<FakeAccount, "auth_config" | "created_at"> = {}) {
+    account(owner: Pick<Installation, "userId">, toolkit = "gmail", status = "ACTIVE", extra: Pick<FakeAccount, "auth_config" | "created_at" | "alias" | "state"> = {}) {
       const id = `ca_${toolkit}_${++accountCount}`;
       composio.accounts.push({ id, user_id: owner.userId, toolkit: { slug: toolkit }, status, ...extra });
       return id;
