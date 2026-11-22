@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { readMembership } from "../lib/membership";
-import { openFolderDepartments } from "../lib/department-access";
+import { grantFor, openFolderDepartments } from "../lib/department-access";
 import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
 import { accessLine, inviteLink, lastSeenLabel, mergePeople, PeopleTable, peopleFromSessions, PortalPeople, type Person } from "./PeopleSection";
 
@@ -159,5 +159,21 @@ describe("the choice of departments", () => {
     expect(render({ value: ["Finance"], limited: new Set(["Finance"]) })).not.toContain("can still read");
     expect(render({ value: null })).not.toContain("can still read");
     expect(openFolderDepartments(["Sales", "Finance"], new Set(["Finance"]))).toEqual(["Sales"]);
+  });
+});
+
+describe("a user under a domain's departments", () => {
+  const ada: Person = { entry: "ada@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null };
+  const noop = () => {};
+
+  it("shows the departments of the domain, as the server applies them, unless the address has its own", () => {
+    const access = { "@acme.test": ["Sales"], "bob@acme.test": ["Finance"] };
+    expect(grantFor(access, "ada@acme.test")).toEqual(["Sales"]);
+    expect(grantFor(access, "bob@acme.test")).toEqual(["Finance"]);
+    expect(grantFor(access, "cy@other.test")).toBeUndefined();
+    expect(grantFor(access, "@other.test")).toBeUndefined();
+    const html = renderToStaticMarkup(createElement(PeopleTable, { people: [ada], busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access }));
+    expect(html).toContain("Sales</span>");
+    expect(html).not.toContain("Whole team");
   });
 });
