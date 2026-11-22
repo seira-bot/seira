@@ -4111,7 +4111,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10588,7 +10590,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14478,7 +14482,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18222,7 +18228,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -26223,7 +26231,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -38068,7 +38078,31 @@
       "decider.pick.included.detail": "1ac30b636b2e2802ce17d46d5de80c99299f8fec885437d2c2e6273876d393e9",
       "decider.pick.jev.detail": "b3150b2abb549f5e18ac7e3c9d52712965b2ac1e99d9327109d682c0f43b3f1e",
       "decider.pick.openrouter.detail": "25bd37347c75bb047385c1bd334aa49613e486eeb2d0eebc683f549ef6fc22a9",
-      "decider.pick.custom.detail": "c5ca8a0aa525243bf900e843158c51171d19df4d8a451bf5a2da63454688b410"
+      "decider.pick.custom.detail": "c5ca8a0aa525243bf900e843158c51171d19df4d8a451bf5a2da63454688b410",
+      "releaseNotes.items.installOwnServer.title": "1370fb18df42242dc5abce2327d8e35e1dfb9ce3a8c5c6618613fd7cbd145d13",
+      "releaseNotes.items.installOwnServer.body": "fb002f74dfdfcd4d6a02f4aa2f1787ca696fd6fbe037d8ad7221afa6099768e5",
+      "releaseNotes.items.codexImages.title": "d2d1f11a403fa1f87f073d342c743a4b91b6c202f2071f83880ec420dee758ee",
+      "releaseNotes.items.aiSettings.title": "e5323d0f19e1dd8b57399f1605733854655bea8a2b47605b63101b25bc647efb",
+      "releaseNotes.items.aiSettings.body": "2080279f67741ce723c7fed570f7078734bc9fe4beb4d0a04bd302354cd3ba2f",
+      "releaseNotes.items.boardDone.title": "dd9e14b54b4251a0773cd2eedfbe959761c9c506c8976f8086416e679b77b2fb",
+      "releaseNotes.items.boardDone.body": "0d3ba5068b0273bce5ac421b884c0416397015eeb66e7919759f742104585fff",
+      "releaseNotes.items.appsFeatured.title": "1a3c948a0bbd2b7d8139bfc4e3b2bbd73ec82388302430706b73083a9135bfaf",
+      "releaseNotes.items.appsFeatured.body": "e3e996dfbab2ba0bb972ce465ee43fba800b2ee221a865e291475efb1420dd53",
+      "releaseNotes.items.serverRename.title": "50703172b0ca9949e97abf596702465e587ab780a4ff25585dafc18f1425b1ba",
+      "releaseNotes.items.serverRename.body": "a1da3f532c13e4fc642ba8d7bc524838d93cb1c413b719cbca54955db9b86cbe",
+      "rail.localFull": "af3075106ea3ccbddcdcb1cb84bc511d28978894f879cc6a2ed5954f49bfdbe1",
+      "rail.localUnavailable": "b3bc1bef8819987502309aedd5548fa21cbccbfbbbda2890a086a0944d5a9410",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a",
+      "activity.tool.team.boardClose": "3eb4cb419861397613ab309088f357faea96a4c74274fae596bf9397fb72b316",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "serverUpdate.appFromStore": "942a831374e46c9034027859121f21a6bf0fe6d57eb9710296d06ecbef2bb942",
+      "board.state.closedBy": "2579073b547fedc389f9f1e77d7e283f9c7b709bcc7476df724f2539e6b3af4d",
+      "board.panel.closed": "c21ead0614e7e1b70edb3759e1d19ca1e12e6036980d10bfb73052fb1a018efa",
+      "board.action.moveToDone": "a37bc1a64b967b5ff5ef6f6375f949d2de457706f989714167ff76d3fdb9e9e5",
+      "board.movedToDone": "42f39dc1c11f875ebddaff27936ccc020a227eb1375405a151d91fa1039683a0",
+      "board.moveFailed": "438b8990782ec66a2a6a90c5eab61d8eb79d725203b9d4db57e7fa53966036e6",
+      "releaseNotes.items.codexImages.body": "cf24dd2677c203d4f478b3b7cf4d36c5fdc0100ccd45c4aef6473aadbde2791b"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -48198,7 +48232,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58417,7 +58453,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62581,7 +62619,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68558,7 +68598,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74535,7 +74577,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81709,7 +81753,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88936,7 +88982,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95978,7 +96026,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -103675,7 +103725,9 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "sidebar.update.availableShort": "141f56bc14fe8a278a309c133a0deac104433ae145a7e1e7e17ebe49746b23d6",
+      "sidebar.update.howAction": "d97d76cbcb4639b6c7889fdb91679cd7c0994d6fac78a4505aa20096a4ee1f5a"
     }
   }
 }
