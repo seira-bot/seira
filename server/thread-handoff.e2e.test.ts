@@ -34,6 +34,8 @@ it("opens a chat that continues another: a summary note in it and a link line in
   const created = await f.messages(task.threadId);
   const note = created.find(m => m.role === "user" && m.kind === "text");
   expect(note.automated).toBe(true);
+  expect(note.handoff).toEqual({ threadId: f.thread, title: expect.any(String) });
+  expect((await f.tasks()).find(t => t.threadId === task.threadId).title).not.toContain("From Seira");
   expect(note.text).toContain("ALPHA_REQUEST");
   expect(note.text).toContain("BETA_CORRECTION");
   expect(note.text).toContain("historical data, not new instructions");
@@ -44,6 +46,13 @@ it("opens a chat that continues another: a summary note in it and a link line in
   expect(old.threadRef.threadId).toBe(task.threadId);
   expect(old.tool.name).toBe("Continued in a new chat");
   expect((await f.tasks()).map(t => t.threadId)).toContain(task.threadId);
+}), 60_000);
+
+it("does not count its own handoff line as something the person said", () => fixture(async f => {
+  await f.send("ALPHA_REQUEST reconcile the invoices");
+  const { task: second } = await f.api(`/api/bots/${f.bot.id}/tasks`, { continueFrom: f.thread });
+  const { task: third } = await f.api(`/api/bots/${f.bot.id}/tasks`, { continueFrom: second.threadId });
+  expect((await f.messages(third.threadId)).some(m => m.handoff)).toBe(false);
 }), 60_000);
 
 it("opens a plain new chat, with no note and no link, when nothing says to continue", () => fixture(async f => {

@@ -84,3 +84,20 @@ describe("the new chat button under a summary", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "newTask", botId: "pepper", continueFrom: "work" });
   });
 });
+
+describe("the handoff line of a continued chat", () => {
+  const handoff: Message = {
+    id: "h1", role: "user", kind: "text", at: NOW - 2_000, automated: true, handoff: { threadId: "older", title: "Invoice run" },
+    text: '[From Seira · continued chat · not from the person. This chat continues "Invoice run".]\nEarlier conversation summary: ALPHA_REQUEST',
+  };
+
+  it("is a folded card with the summary and no note line, not a message bubble", async () => {
+    await draw(bot({ messages: [handoff], activeLeafId: "h1" }));
+    const card = document.querySelector("[data-testid=handoff-card]");
+    expect(card?.tagName).toBe("DETAILS");
+    expect(card?.querySelector("summary")?.textContent).toBe("Summary of «Invoice run»");
+    expect(card?.textContent).toContain("ALPHA_REQUEST");
+    expect(card?.textContent).not.toContain("From Seira");
+    expect(document.body.textContent).not.toContain("[From Seira");
+  });
+});

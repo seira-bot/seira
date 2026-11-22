@@ -521,6 +521,8 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   /** A user line a routine, webhook, room coordination or another bot's
    * message started a turn with: the person did not write it. */
   automated?: boolean;
+  /** The line Seira puts at the start of a continued chat: the summary of the earlier chat, for the bot to read. */
+  handoff?: { threadId: string; title: string };
   /** Which person sent this user message, when the workspace has more than
    * one. Absent reads as the profile name. */
   sender?: ResolvedSender;

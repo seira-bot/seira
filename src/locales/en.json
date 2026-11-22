@@ -2705,6 +2705,7 @@
   "chat.digestChipNoFiles": "Did {tools} tool calls",
   "chat.digestTitle": "What this turn did",
   "chat.compactionTitle": "Earlier context summarized",
+  "chat.handoff.title": "Summary of «{title}»",
   "chat.engineCompactionTitle": "Chat condensed into a summary",
   "chat.engineCompactionHint": "The AI summarized earlier messages to make room. Your full conversation is still here, but the agent may not recall older details exactly.",
   "chat.newChatHint": "Start a new chat to save tokens.",
