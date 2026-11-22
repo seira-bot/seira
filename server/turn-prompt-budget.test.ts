@@ -62,7 +62,7 @@ async function measured(): Promise<Record<string, number>> {
   };
 }
 
-/** Bytes when the budget was last set. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
+/** Bytes when the budget was last set. Removing Boat shrank "meetings" (the Boat key line), "credential" and "computer:vps" (the Boat mentions), so those three were lowered to lock in the win. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
@@ -72,9 +72,9 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "chief-of-staff": 4850,
   "memory-rules": 2048,
   "setup": 2396,
-  "meetings": 294,
+  "meetings": 224,
   "computer-selection": 1263,
-  "credential": 1091,
+  "credential": 1035,
   "routine": 2838,
   "profile": 1097,
   "team-memory": 286,
@@ -82,7 +82,7 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "computer:vm-private": 5559,
   "computer:vm-shared": 5554,
   "computer:box": 4028,
-  "computer:vps": 4672,
+  "computer:vps": 4630,
   "computer:local": 4969,
   "claude:direct-chat": 9023,
   "claude:setup-chat": 11418,

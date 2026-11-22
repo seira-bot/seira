@@ -5106,6 +5106,8 @@
   "routines.unread": "Falha não vista",
   "routines.activeSchedule": "Ativa",
   "routines.pausedSchedule": "Pausada",
+  "routines.placeLostConfirm": "Verifiquei onde ela roda agora. Salve com isto marcado para que ela possa rodar de novo e, depois, ligue-a.",
+  "routines.placeLost": "Esta automação usava um desktop na nuvem que não existe mais, por isso está pausada. Abra-a, confira onde ela roda e salve para ligá-la de novo.",
   "routines.heldFor.plan_cancelled": "Pausada porque o plano foi cancelado. Ligue-a para mantê-la funcionando até o plano terminar.",
   "routines.heldFor.no_engine": "Pausada porque nenhuma das suas contas de IA está conectada aqui. Ela liga automaticamente quando você faz login novamente.",
   "routines.heldFor.no_connections": "Pausada porque todos os apps conectados e servidores MCP foram removidos. Ela liga automaticamente quando você conecta um deles. Você também pode ligá-la aqui.",
