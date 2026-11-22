@@ -1,6 +1,6 @@
 import { createServer, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import {
   parsePhoneWorkspaceList,
@@ -162,10 +162,10 @@ describe("the phone's workspace list", () => {
 
 describe("a request to switch", () => {
   it("asks the app to open a ready workspace, and answers with the list the app sends next (AC 3, 4)", async () => {
+    workspaces = createWorkspaces({ send: (message) => sent.push(message as Record<string, unknown>), settleMs: 10_000 });
     facts(LIST);
     const pending = call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
-    await new Promise((resolve) => setTimeout(resolve, 1));
-    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+    await vi.waitFor(() => expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]));
     facts([{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting", waitingFor: "Scout" }, { id: "home", current: false, state: "unavailable" }]);
     const { status, json } = await pending;
     expect(status).toBe(200);
