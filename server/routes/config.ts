@@ -1,4 +1,4 @@
-import { GIB, machineMemoryBytes, validBotMemoryGb } from "../bot-memory-budget.ts";
+import { machineMemoryBytes, maxBotMemoryGb, validBotMemoryGb } from "../bot-memory-budget.ts";
 import { liveSavePatch } from "../live-config.ts";
 import { signInEnvRefusal } from "../sign-in-env.ts";
 import * as boat from "../boat.ts";
@@ -135,7 +135,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       if (hostedModels && ["instances", "anthropic", "openai", "openrouter", "openaiCompat", "xai", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "opencodeGo"].some(key => Object.hasOwn(body, key))) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
       const patch = parseConfigPatchForPerson(body);
       if (typeof patch.botMemoryGb === "number" && !validBotMemoryGb(patch.botMemoryGb, machineMemoryBytes())) {
-        return json(res, 400, { error: `Enter a number of GB from 1 to ${Math.floor((machineMemoryBytes() / GIB) * 10) / 10}.` });
+        return json(res, 400, userError("serverError.botMemory.range", { max: maxBotMemoryGb(machineMemoryBytes()) }));
       }
       if (deps.cloudTeam && patch.browserEngine?.egress?.proxy !== undefined && !(auth.kind === "session" && auth.session.teamRole === "owner")) {
         return json(res, 403, { error: "Only the Team Cloud owner can configure the browser proxy." });

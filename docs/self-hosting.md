@@ -673,7 +673,7 @@ The worked-out number is the smaller of two: the memory limit less a tenth
 less a tenth (at least 32) and 40 for the server, divided by 60. A 4 GB
 container runs 5 turns at once, an 8 GB one 10; a process limit of 512 allows
 7, 1,024 allows 14, 4,096 allows 60. The desktop app does not use a number
-here: on Linux and Windows a new turn waits while the memory for bots is full,
+here: on Linux a new turn waits while the memory for bots is full,
 and `off` turns that off ([memory for bots](linux-desktop.md#memory-for-bots)).
 A Seira Cloud keeps its own rules.
 

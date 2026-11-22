@@ -1,6 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, existsSync, renameSync } from "node:fs";
-import { dataHome, ensurePrivateDir } from "./data-dir.ts"; import { useBotMemorySetting } from "./bot-memory-budget.ts";
+import { dataHome, ensurePrivateDir } from "./data-dir.ts";
+import { useBotMemorySetting } from "./bot-memory-budget.ts";
 import "../electron/legacy-env-boot.mjs"; import { isHarnessEnvName } from "../electron/legacy-env.mjs"; import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
@@ -386,7 +387,7 @@ const appConfigSchema = z.object({
   /** Non-secret profile details; aboutMe is shared with every bot, and so are everyBotRules, ahead of each bot's own instructions. */
   everyBotRules: z.string().max(24_000).optional(), profile: z.object({ name: optionalText, email: optionalText, aboutMe: z.string().max(24_000).optional(), avatarUrl: z.union([z.literal(""), botAvatarUrlSchema]).optional(), look: personLookSchema.optional() }).optional(),
   /** UI language override (BCP-47, lowercase), absent follows the system; what a paired phone calls this computer, "" for the default. */
-  language: optionalText, computerName: z.string().trim().max(63).optional(), botMemoryGb: z.number().finite().nullable().optional(), // botMemoryGb: GB for all bot work together, null for Auto
+  language: optionalText, computerName: z.string().trim().max(63).optional(), botMemoryGb: z.number().finite().nullable().optional(),
   rooms: roomConfigSchema.optional(),
   mcp: mcpConfigSchema.optional(),
   context: z.object({
@@ -446,7 +447,9 @@ export interface AppConfig extends HelperConfig {
     phone?: "ios" | "android";
   };
   mcpServers?: Record<string, unknown>;
-  language?: string; computerName?: string; botMemoryGb?: number | null;
+  language?: string; computerName?: string;
+  /** GB that all bot work may use together; null or absent for Auto. */
+  botMemoryGb?: number | null;
   xai?: { key?: string; url?: string };
   mistral?: { key?: string };
   cerebras?: { key?: string }; treg?: { key?: string };
@@ -705,7 +708,8 @@ export function ensureDirs() {
 }
 
 let lastIgnoredConfigWarning = "";
-const storedConfig = settledFileCache(() => join(DATA_DIR, "config.json"), () => parseStoredConfig(parseJson(readFileSync(join(DATA_DIR, "config.json"), "utf8")))); useBotMemorySetting(() => storedConfig.read().botMemoryGb);
+const storedConfig = settledFileCache(() => join(DATA_DIR, "config.json"), () => parseStoredConfig(parseJson(readFileSync(join(DATA_DIR, "config.json"), "utf8"))));
+useBotMemorySetting(() => storedConfig.read().botMemoryGb);
 
 export function loadConfig(): AppConfig {
   let cfg: AppConfig = {};

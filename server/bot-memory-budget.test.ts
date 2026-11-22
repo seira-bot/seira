@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { botMemoryBudget, botMemoryStatusOf, currentBotBudget, defaultBotBudget, GIB, useBotMemorySetting, validBotMemoryGb } from "./bot-memory-budget.ts";
+import { botMemoryBudget, botMemoryStatusOf, currentBotBudget, defaultBotBudget, GIB, maxBotMemoryGb, useBotMemorySetting, validBotMemoryGb } from "./bot-memory-budget.ts";
 
 describe("the default budget for bots", () => {
   it("leaves the larger of 3 GiB and a quarter of the machine to the person", () => {
@@ -66,5 +66,30 @@ describe("what Settings is told", () => {
   it("rounds to one decimal and names the number the environment fixes", () => {
     expect(botMemoryStatusOf({ savedGb: 7.26, env: {}, totalBytes: 16 * GIB, protection: "slice" })).toEqual({ gb: 7.3, autoGb: 12, machineGb: 16, protection: "slice", envGb: null });
     expect(botMemoryStatusOf({ savedGb: undefined, env: { SEIRA_BOT_MEMORY_MAX_MB: "4096" }, totalBytes: 8 * GIB, protection: "watchdog" })).toEqual({ gb: null, autoGb: 5, machineGb: 8, protection: "watchdog", envGb: 4 });
+  });
+});
+
+describe("a machine of 15.56 GiB", () => {
+  const total = Math.round(15.56 * GIB);
+
+  it("gives Settings and the server the same largest number, floored to one decimal", () => {
+    const status = botMemoryStatusOf({ savedGb: null, env: {}, totalBytes: total, protection: "slice" });
+    expect(status.machineGb).toBe(15.5);
+    expect(maxBotMemoryGb(total)).toBe(15.5);
+    expect(validBotMemoryGb(status.machineGb, total)).toBe(true);
+    expect(validBotMemoryGb(15.6, total)).toBe(false);
+  });
+});
+
+describe("a number of MB in the environment below the minimum", () => {
+  it("is raised to 1024 MB, with one line, and a number at the minimum is left as it is", () => {
+    const lines: string[] = [];
+    const warn = (line: string) => lines.push(line);
+    expect(botMemoryBudget({ env: { SEIRA_BOT_MEMORY_MAX_MB: "100" }, totalBytes: 16 * GIB, warn })).toEqual({ bytes: GIB, source: "env" });
+    expect(lines).toEqual(["SEIRA_BOT_MEMORY_MAX_MB=100 is below 1024, so 1024 MB is used"]);
+    expect(botMemoryBudget({ env: { SEIRA_BOT_MEMORY_MAX_MB: "1024" }, totalBytes: 16 * GIB, warn })?.bytes).toBe(GIB);
+    expect(botMemoryBudget({ env: { SEIRA_BOT_MEMORY_MAX_MB: "0" }, totalBytes: 16 * GIB, warn })).toBeNull();
+    expect(botMemoryBudget({ env: { SEIRA_BOT_MEMORY_MAX_MB: "off" }, totalBytes: 16 * GIB, warn })).toBeNull();
+    expect(lines).toHaveLength(1);
   });
 });

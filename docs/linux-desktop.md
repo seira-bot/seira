@@ -368,8 +368,9 @@ when a bot starts a heavy task, such as a full test suite, a build, containers, 
   Leave the field empty for Auto. The new value applies to the next task that a bot starts.
 - When a program goes over the limit, the kernel stops that program and nothing else. The bot is told in the same
   turn to try again with fewer parallel workers, and the chat shows one line.
-- While the memory for bots is full, a new task waits and starts by itself when there is room.
-- Without a systemd user session (some containers and old WSL setups), a watchdog keeps bot work under the same
+- On Linux, while the memory for bots is full, a new task waits and starts by itself when there is room. Windows and
+  macOS do not wait.
+- Without a systemd user session or a memory controller for user programs (some containers and old WSL setups), a watchdog keeps bot work under the same
   limit. The watchdog looks every 5 seconds, so it is slower than the kernel.
 - The installed app and a development copy use different slices, one for each data folder.
 - The Flatpak package runs engines on the host, outside the slice.
@@ -378,7 +379,7 @@ These environment variables change the defaults for the app's server:
 
 | Variable | Value | Effect |
 | --- | --- | --- |
-| `SEIRA_BOT_MEMORY_MAX_MB` | a number | The limit in MB. Settings shows it and cannot change it. |
+| `SEIRA_BOT_MEMORY_MAX_MB` | a number | The limit in MB, at least 1024. A smaller number is raised to 1024. Settings shows it and cannot change it. |
 | `SEIRA_BOT_MEMORY_MAX_MB` | `off` or `0` | No limit for bot work. |
 | `SEIRA_BOT_MEMORY_FENCE` | `off` | No slice. |
 | `SEIRA_BOT_MEMORY_FENCE` | `on` | The slice also on a Linux server that is not the desktop app. |

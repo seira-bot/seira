@@ -12,7 +12,7 @@ uses.
 ```sh
 pnpm exec vitest run server/memory-fence.test.ts server/bot-memory-budget.test.ts \
   server/bot-memory-cap.test.ts server/bot-memory-protection.test.ts server/engine-memory.test.ts \
-  server/process-room.test.ts server/routes/config-bot-memory.test.ts src/components/BotMemorySettings.test.ts
+  server/process-room.test.ts server/routes/config-bot-memory.test.ts server/procs.test.ts src/components/BotMemorySettings.test.ts
 ```
 
 ## A stop inside the slice
@@ -23,7 +23,7 @@ pnpm exec vitest run server/memory-fence.test.ts server/bot-memory-budget.test.t
 what reaches the engine while the turn runs.
 
 ```sh
-export SEIRA_BOT_MEMORY_FENCE=on SEIRA_BOT_MEMORY_MAX_MB=512
+export SEIRA_BOT_MEMORY_FENCE=on SEIRA_BOT_MEMORY_MAX_MB=1024
 export FAKE_CLAUDE_TOOL_CALLS='[{"name":"Bash","input":{"command":"pnpm test"},"hold":"memory"}]'
 export FAKE_CLAUDE_RELEASE=/tmp/fence/release FAKE_CLAUDE_STEER_TEXTS=/tmp/fence/steers.txt
 node --experimental-strip-types scripts/control-seira.ts launch
@@ -48,17 +48,17 @@ cat /tmp/fence/steers.txt
 
 Expected:
 
-- `memory.max` is `536870912`, `memory.swap.max` is `0`, and `cpu.max` gives
+- `memory.max` is `1073741824`, `memory.swap.max` is `0`, and `cpu.max` gives
   all CPUs but one. `nproc` in a scope of the slice prints that number.
 - The engine process is in a `run-*.scope` under the slice.
 - `oom_kill` goes to 1 in the slice and in the engine's scope within about one
   second. Health stays `200`, and the turn settles after the release.
 - The messages hold the notice "A program in this task used all the memory set
-  aside for bots on this computer (0.5 GB)…" once.
-- `steers.txt` holds one line that names 0.5 GB and asks for fewer parallel
+  aside for bots on this computer (1 GB)…" once.
+- `steers.txt` holds one line that names 1 GB and asks for fewer parallel
   workers.
 - `GET /api/config` shows `botMemory.protection` `slice`, and the performance
-  report says "Memory for all bots together: 0.5 GB, protection: slice".
+  report says "Memory for all bots together: 1 GB, protection: slice".
 
 ## The Settings value
 
@@ -77,10 +77,10 @@ slice of its own name.
 
 ## The watchdog fallback
 
-Launch with `SEIRA_BOT_MEMORY_FENCE=on SEIRA_BOT_MEMORY_MAX_MB=512` and without
+Launch with `SEIRA_BOT_MEMORY_FENCE=on SEIRA_BOT_MEMORY_MAX_MB=1024` and without
 `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS`. The log says the kernel
 memory limit is not available, `botMemory.protection` is `watchdog`, and the
-performance report says "Memory for all bots together: 0.5 GB, protection:
+performance report says "Memory for all bots together: 1 GB, protection:
 watchdog".
 
 ## The bot box inside a scope
@@ -99,6 +99,6 @@ the engine.
 
 ### Last exercised
 
-2026-11-22 on a Linux host with systemd 262 and cgroup v2, at commit
-`de79fc81c`: every expected result above held. The `oom_kill` count rose one
-second after the send, and health answered `200` for each of 12 checks.
+To be run again with the 1024 MB budget above, which is the smallest the
+environment variable accepts. The last run used a 512 MB budget, at commit
+`de79fc81c`.
