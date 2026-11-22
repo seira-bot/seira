@@ -403,6 +403,7 @@ one, and any other value answers 400. A bot without them leaves every provider r
   last set.
 - `POST /api/call/voice-preview` with `{ provider, voice, text, speed? }` answers a short sample as audio
   (`cache-control: no-store`), 400 for a bad request, and 404 when the voice has no sample outside a call.
+  It needs the admin scope, like `/api/live/*`: a session with only the client scope gets 403.
 
 ```sh
 pnpm exec vitest run server/call-voice-server.test.ts server/routes/bot-patch.test.ts server/live-call-controller.test.ts

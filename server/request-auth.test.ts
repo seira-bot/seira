@@ -222,7 +222,7 @@ describe("scopes", () => {
       ["POST", "/api/bots/x/slack-management"], ["GET", "/api/bots/x/slack-management/extra"],
       ["PUT", "/api/config"], ["POST", "/api/auth/pairing"], ["GET", "/api/auth/sessions"], ["DELETE", "/api/auth/sessions/abc"],
       ["POST", "/api/live/session"], ["POST", "/api/live/call/end"], ["GET", "/api/live/call"], ["PATCH", "/api/live/settings"],
-      ["POST", "/api/live/device-revoked"],
+      ["POST", "/api/live/device-revoked"], ["POST", "/api/call/voice-preview"],
       ["POST", "/api/auth/pair"],
       ["GET", "/api/something-new"],
       ["POST", "/api/bots/x/sign-in-cards/m/provide"], ["POST", "/api/browser-engine/install"],
@@ -340,8 +340,8 @@ describe("resolveRequestAuth", () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  function pairedSession() {
-    const { code } = sessions.openPairing({ scopes: ["admin", "client"] });
+  function pairedSession(scopes: Array<"admin" | "client"> = ["admin", "client"]) {
+    const { code } = sessions.openPairing({ scopes });
     const result = sessions.exchange({ code, label: "browser", source: "1.2.3.4" });
     if (!result.ok) throw new Error(result.error);
     return result;
@@ -354,6 +354,14 @@ describe("resolveRequestAuth", () => {
     expect(mixed.auth?.kind).toBe("session");
     expect(resolve({ ...headers, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
     expect(resolve({ ...headers, cookie: `${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("keeps Live voice samples an admin's, since each sample spends the owner's voice key", () => {
+    const preview = (token: string) => resolve({ host: "127.0.0.1:8799", authorization: `Bearer ${token}` }, "/api/call/voice-preview", "POST");
+    const member = preview(pairedSession(["client"]).token);
+    expect(member.auth).toBeNull();
+    expect(member.status).toBe(403);
+    expect(preview(pairedSession().token).auth?.kind).toBe("session");
   });
 
   it("still accepts a session that has only the old cookie name", () => {

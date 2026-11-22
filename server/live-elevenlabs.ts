@@ -115,7 +115,7 @@ export async function allowElevenLabsCallOverrides(key: string, endpoint: LiveEn
       method: "PATCH",
       headers: { "xi-api-key": key.trim(), "content-type": "application/json" },
       redirect: "error",
-      body: JSON.stringify({ platform_settings: { overrides: { conversation_config_override: { tts: { speed: true }, agent: { language: true, prompt: { prompt: true } } } } } }),
+      body: JSON.stringify({ platform_settings: { overrides: { conversation_config_override: { tts: { speed: true }, agent: { language: true, prompt: { prompt: true } } } }, auth: { enable_auth: true } } }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {

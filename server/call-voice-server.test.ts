@@ -141,6 +141,7 @@ describe("ElevenLabs call overrides", () => {
     const patches = calls.filter((c) => c.method === "PATCH");
     expect(patches).toHaveLength(1);
     expect(patches[0]!.body.platform_settings.overrides.conversation_config_override).toMatchObject({ tts: { speed: true }, agent: { language: true } });
+    expect(patches[0]!.body.platform_settings.auth).toEqual({ enable_auth: true });
   });
   it("sends nothing extra without a saved speed or language", async () => {
     const { calls, wiring } = wire(200);
