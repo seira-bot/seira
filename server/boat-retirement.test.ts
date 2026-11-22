@@ -180,7 +180,7 @@ describe("config.json: the Boat key and new-bot defaults", () => {
 });
 
 describe("routines, webhooks and app automations", () => {
-  it("moves a routine that ran on Boat to this server's provider, with the runs still to happen", () => {
+  it("moves a routine that ran on Boat off Cloud and pauses it, with the runs still to happen cancelled", () => {
     write("bots.json", [{ id: "away", computer: "cloud" }]);
     write("routines.json", {
       version: 1,
@@ -210,38 +210,37 @@ describe("routines, webhooks and app automations", () => {
     expect(read("app-triggers.json").triggers[0].runOn).toBe("seira");
   });
 
-  it("switches off every old Cloud automation whose bot has no settled place, Auto included, and moves the rest", () => {
-    write("bots.json", [{ id: "here", computer: "local" }, { id: "vm", computer: "vm" }, { id: "away", computer: "cloud" }, { id: "plain" }, { id: "none", computer: "off" }]);
+  it("switches off every old Cloud automation, whatever its bot or conversation is set to, and cancels what waits", () => {
+    // Cloud, Auto, this computer, a virtual machine, no computer: and a Cloud bot whose reused conversation is pinned to this computer.
+    write("bots.json", [
+      { id: "here", computer: "local" }, { id: "vm", computer: "vm" }, { id: "away", computer: "cloud", tasks: [{ threadId: "pinned", surface: "local", surfaceSource: "user" }] },
+      { id: "plain" }, { id: "none", computer: "off" },
+    ]);
+    const routine = (id: string, botId: string) => ({ id, botId, runOn: "cloud", enabled: true, nextRunAt: 5 });
     write("routines.json", {
-      routines: [
-        { id: "r1", botId: "here", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r2", botId: "vm", runOn: "cloud", enabled: true, nextRunAt: 5 },
-        { id: "r3", botId: "away", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r4", botId: "plain", runOn: "cloud", enabled: true, nextRunAt: 5 },
-        { id: "r5", botId: "none", runOn: "cloud", enabled: true, nextRunAt: 5 },
-      ],
-      runs: [{ id: "a", botId: "here", runOn: "cloud", status: "queued" }, { id: "b", botId: "away", runOn: "cloud", status: "queued" }, { id: "c", botId: "plain", runOn: "cloud", status: "queued" }],
+      routines: [routine("r1", "here"), routine("r2", "vm"), { ...routine("r3", "away"), sameConversation: true, threadId: "pinned" }, routine("r4", "plain"), routine("r5", "none")],
+      runs: ["here", "away", "plain"].map((botId, index) => ({ id: `run${index}`, botId, runOn: "cloud", status: "queued" })),
     });
     write("webhooks.json", { version: 1, webhooks: [{ id: "w1", botId: "vm", runOn: "cloud", enabled: true }, { id: "w2", botId: "away", runOn: "cloud", enabled: true }, { id: "w3", botId: "plain", runOn: "cloud", enabled: true }], deliveries: [] });
-    write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t1", botId: "here", runOn: "cloud", enabled: true }], attempts: [], deleted: [] });
+    write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t1", botId: "here", runOn: "cloud", enabled: true }, { id: "t2", botId: "away", runOn: "cloud", enabled: true }], attempts: [], deleted: [] });
     retireBoatFromFiles(dir, log);
     const routines = read("routines.json");
-    expect(routines.routines.map((routine: { enabled: boolean; nextRunAt: number | null }) => [routine.enabled, routine.nextRunAt])).toEqual([[false, null], [false, null], [true, 5], [false, null], [true, 5]]);
-    expect(routines.runs.map((run: { status: string }) => run.status)).toEqual(["cancelled", "queued", "cancelled"]);
+    expect(routines.routines.map((row: { enabled: boolean; nextRunAt: number | null; runOn: string }) => [row.enabled, row.nextRunAt, row.runOn])).toEqual(Array(5).fill([false, null, "seira"]));
+    expect(routines.runs.map((run: { status: string }) => run.status)).toEqual(["cancelled", "cancelled", "cancelled"]);
     expect(routines.runs[0].error).toMatch(/Choose where the bot works/);
-    expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, true, false]);
-    expect(read("app-triggers.json").triggers[0].enabled).toBe(false);
+    expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, false, false]);
+    expect(read("app-triggers.json").triggers.map((trigger: { enabled: boolean }) => trigger.enabled)).toEqual([false, false]);
     const again = [bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")];
     retireBoatFromFiles(dir, log);
     expect([bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")]).toEqual(again);
   });
 
-  it("waits for the next start when the list of bots cannot be read", () => {
+  it("does not need the list of bots, and leaves a broken one alone", () => {
     writeFileSync(join(dir, "bots.json"), "{ not json");
     write("routines.json", { routines: [{ id: "r", botId: "a", runOn: "cloud", enabled: true }], runs: [] });
     retireBoatFromFiles(dir, log);
-    expect(read("routines.json").routines[0]).toEqual({ id: "r", botId: "a", runOn: "cloud", enabled: true });
-    write("bots.json", [{ id: "a" }]);
-    retireBoatFromFiles(dir, log);
-    expect(read("routines.json").routines[0].runOn).toBe("seira");
+    expect(read("routines.json").routines[0]).toMatchObject({ runOn: "seira", enabled: false });
+    expect(bytes("bots.json")).toBe("{ not json");
   });
 
   it("changes nothing the second time, and leaves a file it cannot read as it is while the others still move", () => {
