@@ -610,6 +610,7 @@
   "cloudAdd.close": "Fechar",
   "cloudAdd.checking": "Consultando o Seira Cloud…",
   "cloudAdd.unreachable": "Não foi possível acessar o Seira Cloud agora. Verifique sua conexão e tente novamente.",
+  "cloudAdd.noPlans": "Não há planos do Cloud para escolher.",
   "cloudAdd.tryAgain": "Tentar novamente",
   "cloudAdd.failed": "Não foi possível abrir a página de pagamento. Nada foi cobrado. Tente novamente.",
   "cloudAdd.rateLimited": "Você abriu várias páginas de pagamento na última hora. Use a que está aberta no navegador ou tente novamente mais tarde.",

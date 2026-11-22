@@ -634,6 +634,7 @@
   "cloudAdd.close": "Close",
   "cloudAdd.checking": "Checking with Seira Cloud…",
   "cloudAdd.unreachable": "Can't reach Seira Cloud right now. Check your connection and try again.",
+  "cloudAdd.noPlans": "There are no Cloud plans to choose from.",
   "cloudAdd.tryAgain": "Try again",
   "cloudAdd.failed": "Checkout couldn't open. Nothing was charged. Try again.",
   "cloudAdd.rateLimited": "You've opened several checkouts in the last hour. Use the one in your browser, or try again later.",

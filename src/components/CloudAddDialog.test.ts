@@ -169,6 +169,10 @@ describe("each screen of the sheet says one thing and offers one next step", () 
     const unreachable = panel({ kind: "unreachable" });
     expect(text(unreachable.html)).toContain("Can't reach Seira Cloud right now. Check your connection and try again.");
     button(unreachable.tree, "Try again")!.props.onClick(); expect(unreachable.handlers.retry).toHaveBeenCalledOnce();
+    const none = panel({ kind: "no-plans" });
+    expect(text(none.html)).toContain("There are no Cloud plans to choose from.");
+    expect(text(none.html)).not.toContain("connection");
+    button(none.tree, "Try again")!.props.onClick(); expect(none.handlers.retry).toHaveBeenCalledOnce();
     expect(text(panel({ kind: "error", reason: "failed" }).html)).toContain("Checkout couldn't open. Nothing was charged. Try again.");
     expect(text(panel({ kind: "error", reason: "rate-limited" }).html)).toContain("You've opened several checkouts in the last hour.");
   });
@@ -348,6 +352,7 @@ describe("the sheet", () => {
   let account: CloudAccountState;
   let offer: CloudOffer | null;
   let bridge: Record<string, ReturnType<typeof vi.fn>>;
+  let selling = true;
   let focused = true, push: (state: CloudAccountState) => void = () => {};
   const opener = { focus: vi.fn(), isConnected: true };
   const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
@@ -358,14 +363,14 @@ describe("the sheet", () => {
     const cleanup = effect();
     f.ran[i] = { deps, cleanup: typeof cleanup === "function" ? cleanup : undefined };
   });
-  const render = () => { f.index = 0; f.effects = []; return renderToStaticMarkup(createElement(CloudAddDialog, { now: () => NOW })); };
+  const render = () => { f.index = 0; f.effects = []; return renderToStaticMarkup(createElement(CloudAddDialog, { now: () => NOW, sells: () => selling })); };
   async function settle() { for (let i = 0; i < 5; i++) { render(); runEffects(); await flush(); } return text(render()); }
-  const tree = () => { f.index = 0; f.effects = []; return nodes(CloudAddDialog({ now: () => NOW })); };
+  const tree = () => { f.index = 0; f.effects = []; return nodes(CloudAddDialog({ now: () => NOW, sells: () => selling })); };
   const press = async (name: string) => { button(tree(), name)!.props.onClick(); await flush(); return settle(); };
   const buy = async (tier: string) => { tree().find(node => node.props["data-plan-buy"] === tier)!.props.onClick(); await flush(); return settle(); };
   beforeEach(() => {
     f.values = []; f.index = 0; f.effects = []; f.ran = []; f.dispatch = vi.fn(); f.state = { cloudAdd: { source: "app_menu" }, config: { profile: { email: EMAIL } } };
-    account = { status: "signed-out" }; offer = TRIAL; focused = true; opener.focus.mockClear();
+    account = { status: "signed-out" }; offer = TRIAL; selling = true; focused = true; opener.focus.mockClear();
     bridge = { state: vi.fn(async () => account), onState: vi.fn((callback: (state: CloudAccountState) => void) => { push = callback; return () => {}; }), offer: vi.fn(async () => offer),
       checkout: vi.fn(async (plan: string): Promise<CloudCheckoutResult> => ({ outcome: "opened", state: { ...free, checkout: { plan, startedAt: NOW, link: true } } })),
       begin: vi.fn(async () => ({ status: "connecting" })), reopen: vi.fn(async () => account), cancel: vi.fn(async () => ({ status: "signed-out" })),
@@ -620,6 +625,35 @@ describe("the sheet", () => {
     account = paid({ machine: ready }); focused = false;
     expect(await settle()).toContain("My Cloud is ready");
     expect(bridge.checkout).not.toHaveBeenCalled();
+  });
+
+  it("signed in at Sign in from a build that sells no Cloud: the sheet closes on Settings, asks for no offer and never says Cloud is out of reach", async () => {
+    selling = false;
+    f.state = { cloudAdd: { source: "app_settings", signIn: true }, config: {} };
+    expect(await settle()).toContain("Sign in to Seira Cloud");
+    bridge.signInVerify.mockResolvedValueOnce({ outcome: "signed-in", state: free });
+    tree().find(node => node.props.id === "cloud-add-email")!.props.onChange({ target: { value: "me@example.test" } });
+    await settle();
+    tree().find(node => node.type === "form")!.props.onSubmit({ preventDefault() {} }); await flush(); await settle();
+    tree().filter(node => node.type === "input")[0]!.props.onChange({ target: { value: "48201937" }, currentTarget: { parentElement: { querySelectorAll: () => [] } } });
+    await flush(); await flush();
+    account = free;
+    expect(await settle()).not.toContain("Can't reach");
+    expect(f.dispatch).toHaveBeenCalledWith({ type: "closeCloudAdd" });
+    expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
+    expect(bridge.offer).not.toHaveBeenCalled();
+  });
+
+  it("an offer with no plan says there is nothing to choose, an offer that fails says Cloud is out of reach, and Try again asks again", async () => {
+    account = free; offer = null;
+    const none = await settle();
+    expect(none).toContain("There are no Cloud plans to choose from."); expect(none).not.toContain("Can't reach");
+    const asked = bridge.offer.mock.calls.length;
+    bridge.offer.mockRejectedValue(new Error("Cloud offer unavailable."));
+    expect(await press("Try again")).toContain("Can't reach Seira Cloud right now.");
+    expect(bridge.offer.mock.calls.length).toBeGreaterThan(asked);
+    bridge.offer.mockResolvedValue(TRIAL);
+    expect(await press("Try again")).toContain("Start free trial");
   });
 
   it("signed in here to a Team plan: the team's Cloud is ready to open, never a My Cloud being set up; Open opens the team and closes", async () => {

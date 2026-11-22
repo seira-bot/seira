@@ -116,7 +116,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   let plan = null, savedHint = null;
   /** The plan's own Cloud that Cancel and Keep act on, as the last verified session names it. */
   let renewalCloud = null;
-  let offerCache = null, offerPending = null, waking = false;
+  let offerCache = null, offerPending = null, offerOutcome = null, waking = false;
   /** The checkout this app opened, its address kept here for Reopen and Copy link: never published, never asked for again. */
   let opened = null;
   /** Another Cloud this app is buying (POST clouds): its id, name, colour and plan, and its checkout page, kept like `opened`'s. */
@@ -580,16 +580,26 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       catch (error) { return renewalFailure(error, signedIn); }
       return { outcome: "kept", state: await refresh().catch(() => state()) };
     },
+    /** Throws when the public config cannot be read; null when Seira Cloud lists no plan this app can sell. */
     async offer() {
       const current = state();
       if (current.status === "connected" && current.offer) return current.offer;
       if (!offerCache || now() >= offerCache.until) {
+        const note = outcome => { if (outcome !== offerOutcome) { offerOutcome = outcome; if (outcome) warn(outcome); } };
         offerPending ??= request(null, { path: "/api/public/config", signal: AbortSignal.timeout(10_000) }).then(
-          config => { const offer = parsePublicOffer(config); offerCache = { value: offer, until: now() + (offer ? OFFER_MS : OFFER_RETRY_MS) }; return offer; },
-          () => { offerCache = { value: null, until: now() + OFFER_RETRY_MS }; return null; },
+          config => {
+            const offer = parsePublicOffer(config);
+            offerCache = { value: offer, until: now() + (offer ? OFFER_MS : OFFER_RETRY_MS) };
+            note(offer ? null : "[cloud] offer: Seira Cloud lists no plan this app can sell");
+          },
+          error => {
+            offerCache = { failed: true, until: now() + OFFER_RETRY_MS };
+            note(`[cloud] offer: public config failed (${Number.isInteger(error?.status) ? error.status : error?.name ?? "error"})`);
+          },
         ).finally(() => { offerPending = null; });
         await offerPending;
       }
+      if (offerCache.failed) throw new Error("Cloud offer unavailable.");
       return current.status === "connected" ? withoutTrial(offerCache.value) : offerCache.value;
     },
     /** Not now on the room card: the Admin offers this Cloud nothing more for two weeks. The Cloud is the session's own. */

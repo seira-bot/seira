@@ -169,8 +169,8 @@ const plans = () => [
 test("what this person may buy: the session's own offer when signed in, else the public plans, read with no sign-in or cookie at most every 10 minutes", async t => {
   const f = await fixture(t);
   const asked = () => f.requests.filter(row => row.route === "/api/public/config");
-  assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1);
-  assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
+  await assert.rejects(f.client.offer()); assert.equal(asked().length, 1);
+  await assert.rejects(f.client.offer()); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
   f.now += 30_000; f.publicConfig = { status: 200, body: { name: "Seira", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
   const [first, second] = await Promise.all([f.client.offer(), f.client.offer()]);
   assert.deepEqual(first.plans.map(plan => [plan.tier, plan.amount, plan.trialDays]), [["starter", 1500, 7], ["pro", 4900, 7]]);
@@ -180,7 +180,8 @@ test("what this person may buy: the session's own offer when signed in, else the
   assert.ok(asked().every(row => row.token === undefined && row.cookie === undefined && row.method === "GET" && row.version === undefined));
   for (const publicConfig of [{ status: 200, body: { plans: "pro" } }, { status: 503, body: { error: "down" } }, { status: 403, body: "<!doctype html>Just a moment" }]) {
     f.now += 10 * 60_000; f.publicConfig = publicConfig;
-    assert.equal(await f.client.offer(), null, JSON.stringify(publicConfig));
+    if (publicConfig.status === 200) assert.equal(await f.client.offer(), null, JSON.stringify(publicConfig));
+    else await assert.rejects(f.client.offer(), JSON.stringify(publicConfig));
   }
   assert.equal(f.client.state().status, "signed-out"); assert.deepEqual(f.browsers, []);
   f.now += 10 * 60_000; f.publicConfig = { status: 200, body: { plans: plans(), trial: { days: 7 }, refundDays: 14 } };
@@ -193,6 +194,30 @@ test("what this person may buy: the session's own offer when signed in, else the
   assert.equal(f.client.state().offer, undefined);
   const fallback = await f.client.offer();
   assert.deepEqual(fallback.plans.map(plan => plan.trialDays ?? null), [null, null]); assert.equal(fallback.refundDays, 14);
+});
+
+test("the offer tells a failed ask from Seira Cloud listing no plan, and logs each change once without a token", async t => {
+  const warnings = [], f = await fixture(t, { warn: message => warnings.push(message) });
+  const next = async publicConfig => { f.now += 10 * 60_000; f.publicConfig = publicConfig; };
+  await next({ status: 503, body: { error: "down" } });
+  await assert.rejects(f.client.offer()); await assert.rejects(f.client.offer());
+  await next({ status: 403, body: "<!doctype html>Just a moment" });
+  await assert.rejects(f.client.offer());
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: [] } });
+  assert.equal(await f.client.offer(), null);
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: [] } });
+  assert.equal(await f.client.offer(), null);
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: plans(), refundDays: 14 } });
+  assert.ok((await f.client.offer()).plans.length);
+  await next({ status: 500, body: { error: "down" } });
+  await assert.rejects(f.client.offer());
+  assert.deepEqual(warnings, [
+    "[cloud] offer: public config failed (503)",
+    "[cloud] offer: public config failed (403)",
+    "[cloud] offer: Seira Cloud lists no plan this app can sell",
+    "[cloud] offer: public config failed (500)",
+  ]);
+  assert.ok(warnings.every(line => !/token|bearer|https?:/i.test(line)));
 });
 
 test("Dodo's own checkout page is the only checkout address ever opened", () => {
