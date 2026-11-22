@@ -67,6 +67,9 @@ export interface InstanceRouteDeps {
   activeGroupTurnForBot(botId: string): { threadId: string } | null;
   /** The server's tested-AI record (server/tested-ai.ts): a check there also settles the new-bot default. */
   checkInstance?(instance: ProviderInstance): Promise<EngineCheck>;
+  /** Moves the model new bots start with off a provider that is about to be hidden, to the first provider that is ready.
+   * Answers null when none is ready. */
+  moveNewBotModelOff?(instanceId: string): Promise<ModelSelection | null>;
   /** Whether an added server lists its models (server/openai-compat-endpoints.ts); replaced in tests. */
   endpointModelsReadable?(config: { url: string; key: string; catalog?: unknown }): Promise<boolean>;
 }
@@ -493,6 +496,10 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         const entry = instances[instanceId];
         if ((body.configDir !== undefined && entry.driver !== "claudeAgent") || (body.displayName !== undefined && !["claudeAgent", "codex"].includes(entry.driver))) {
           return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
+        }
+        if (body.hidden === true && deps.moveNewBotModelOff
+          && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection.instanceId === instanceId)) {
+          await deps.moveNewBotModelOff(instanceId);
         }
         if (body.hidden === true && providerInUse(instanceId)) {
           return json(res, 409, { error: "Choose another model for the bots and default model using this provider before hiding it." });

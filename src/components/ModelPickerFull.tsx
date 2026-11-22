@@ -5,6 +5,7 @@ import { modelOptionLabel } from "@/lib/model-label";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { InstanceProviderMark } from "./ProviderIcons";
+import { providerHealth, type HealthOf } from "@/lib/provider-health";
 import { hasSavedApiKey, needsCli, needsSignIn } from "./EngineSetup";
 import { MENU_META, MENU_ROW, MENU_STROKE } from "./menu-recipe";
 import { Select } from "./Select";
@@ -128,18 +129,24 @@ export function railProviders(instances: InstanceInfo[], selectedInstance: Insta
 
 const RAIL_LABEL = "pb-0.5 text-center text-[11px] leading-[14px] text-ink-tertiary";
 
-export function ModelEngineRail({ instances, selectedInstance, claudeInstance, openaiInstance, onSelect, onAddApiKeys }: {
+export function ModelEngineRail({ instances, selectedInstance, claudeInstance, openaiInstance, onSelect, onAddApiKeys, health = (instance) => providerHealth(instance) }: {
   instances: InstanceInfo[];
   selectedInstance?: InstanceInfo;
   claudeInstance?: InstanceInfo;
   openaiInstance?: InstanceInfo;
   onSelect: (instance: InstanceInfo) => void;
   onAddApiKeys?: () => void;
+  /** Providers that cannot start a task now go last, dimmed, with the reason in their title. */
+  health?: HealthOf;
 }) {
-  const { subscription, api, custom: local } = railProviders(instances, selectedInstance, claudeInstance, openaiInstance);
+  const { subscription: allCloud, api: allApi, custom: allLocal } = railProviders(instances, selectedInstance, claudeInstance, openaiInstance);
+  const ready = (entry: RailProvider) => health(entry.target).usable;
+  const [subscription, api, local] = [allCloud, allApi, allLocal].map((entries) => entries.filter(ready)) as [RailProvider[], RailProvider[], RailProvider[]];
+  const notReady = [...allCloud, ...allApi, ...allLocal].filter((entry) => !ready(entry));
   const railButton = ({ instance, target, selected, label }: RailProvider) => {
     const attention = needsCli(target) || needsSignIn(target) || Boolean(target.snapshot.update);
     const managedBy = target.policy ? t("policy.managedBy", { organization: target.policy.organizationName }) : undefined;
+    const reason = health(target).reason;
     return (
       <button
         type="button"
@@ -147,11 +154,12 @@ export function ModelEngineRail({ instances, selectedInstance, claudeInstance, o
         onClick={() => onSelect(target)}
         aria-label={managedBy ? `${label} · ${managedBy}` : label}
         aria-pressed={selected}
-        title={`${label} · ${managedBy ?? engineStatus(target)}`}
+        data-rail-unusable={reason ? "" : undefined}
+        title={`${label} · ${reason ?? engineStatus(target)}`}
         className={cn(
           "group relative flex size-9 shrink-0 items-center justify-center rounded-[8px]",
           selected ? "bg-ink/[0.08]" : "hover:bg-ink/[0.06]",
-          managedBy && "opacity-40",
+          (managedBy || reason) && "opacity-40",
         )}
       >
         <InstanceProviderMark instance={target} size={18} subtle={!selected} />
@@ -184,6 +192,8 @@ export function ModelEngineRail({ instances, selectedInstance, claudeInstance, o
       )}
       {local.length > 0 && <div className={cn(RAIL_LABEL, "pt-2")}>{t("model.rail.local")}</div>}
       {local.map(railButton)}
+      {notReady.length > 0 && <div data-rail-not-ready className={cn(RAIL_LABEL, "pt-2")}>{t("model.rail.notReady")}</div>}
+      {notReady.map(railButton)}
     </div>
   );
 }

@@ -417,7 +417,7 @@ describe("Settings → Engines → Claude accounts", () => {
   });
 
   it("keeps the default account and signs out only a signed-in account the server can sign out", () => {
-    expect(accountActions("claude", claude("claude", "Personal", true))).toEqual({ signOut: true, remove: false, hide: false });
+    expect(accountActions("claude", claude("claude", "Personal", true))).toEqual({ signOut: true, remove: false, hide: true });
     expect(accountActions("claude", claude("claude-work", "Work", false))).toEqual({ signOut: false, remove: true, hide: false });
     expect(accountActions("claude", claude("claude-work", "Work", true, { authentication: { method: "paste-code", signOut: false } }))).toEqual({ signOut: false, remove: true, hide: false });
     expect(renderClaude(claude("claude-work", "Work", true))).toContain(">Remove<");
