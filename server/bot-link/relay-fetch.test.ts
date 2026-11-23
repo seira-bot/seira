@@ -90,7 +90,7 @@ async function rig(): Promise<Rig> {
     if (url.pathname === "/trickle") {
       res.writeHead(200, { "content-type": "text/plain" });
       let ticks = 0;
-      const tick = setInterval(() => { if (++ticks > 40) res.end(); else res.write("tick\n"); }, 10);
+      const tick = setInterval(() => { if (++ticks > 40) { clearInterval(tick); res.end(); } else res.write("tick\n"); }, 10);
       res.once("close", () => clearInterval(tick));
       return;
     }
@@ -200,7 +200,7 @@ describe("fetchOverSession", () => {
     expect((await reader.read()).done).toBe(false);
     controller.abort(new Error("enough"));
     await expect((async () => { for (;;) { if ((await reader.read()).done) return; } })()).rejects.toThrow();
-    await noStreams(r);
+    await waitFor(() => (r.session.activeStreams === 0 ? true : null), 5_000);
   });
 
   it("puts a 5 MiB Blob whole", async () => {
