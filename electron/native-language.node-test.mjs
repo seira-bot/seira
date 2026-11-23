@@ -82,7 +82,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
   lendingTray.update({ clouds: ["My Cloud"], using: [], paused: false });
   const office = { id: "o", kind: "remote", name: "Office", origin: "https://office.example.test" };
   const context = vm.createContext({
-    desktopTray, lendingTray, nativeT: text.t, relabelDesktop,
+    desktopTray, lendingTray, glanceControl: { relabel: () => calls.push(["glance"]) }, nativeT: text.t, relabelDesktop,
     refreshApplicationMenu: () => calls.push(["menu", text.t("native.menu.server")]),
     applyUnreadBadge: () => calls.push(["badge", text.t("native.badge.none")]),
     mainWindow: { isDestroyed: () => false, setTitle: (title) => calls.push(["title", title]) },
@@ -98,7 +98,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
 
   text.set("pt-br");
   context.applyNativeLanguage();
-  assert.deepEqual(calls, [["menu", "Servidor"], ["title", "Seira — Conectado a: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"]]);
+  assert.deepEqual(calls, [["menu", "Servidor"], ["glance"], ["title", "Seira — Conectado a: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"]]);
   assert.deepEqual(said(trays[0]), ["Abrir o Seira", "Sair do Seira"]);
   assert.deepEqual(said(trays[1]), ["My Cloud com acesso a este PC", "Pausar", "Permitir que os Clouds executem comandos neste PC", "Ver atividade"]);
   assert.equal(trays[1].tip, "Seira: My Cloud com acesso a este PC");

@@ -159,7 +159,7 @@ test("AC-06 a choice sends the act; AC-07 a failed answer keeps the card and sho
   w.setAnswer(true);
   allow.fire("click");
   await w.flush();
-  assert.deepEqual(w.calls.act.at(-1), { kind: "approval", botId: "a", threadId: "t", requestId: "r1", choice: "once" });
+  assert.deepEqual(JSON.parse(JSON.stringify(w.calls.act.at(-1))), { kind: "approval", botId: "a", threadId: "t", requestId: "r1", choice: "once" });
   assert.doesNotMatch(w.visor.text(), /couldNotSend/);
   const again = w.visor.all().find((n) => n.tag === "button" && n.textContent === "deny");
   w.setAnswer(false);
@@ -190,7 +190,7 @@ test("AC-08 Open chat sends an open act and folds the card", async () => {
   await w.advance(GLANCE_TIMING.fadeMs + 10);
   w.visor.all().find((n) => n.tag === "button" && n.textContent === "openChat").fire("click");
   await w.advance(GLANCE_TIMING.fadeMs + 10);
-  assert.deepEqual(w.calls.act.at(-1), { kind: "open", botId: "a", threadId: "t" });
+  assert.deepEqual(JSON.parse(JSON.stringify(w.calls.act.at(-1))), { kind: "open", botId: "a", threadId: "t" });
   assert.equal(w.visor.attrs["data-level"], "compact");
 });
 
