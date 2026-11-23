@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -117,6 +117,41 @@ afterEach(() => {
 });
 
 describe("CLI startup lifecycle", () => {
+  describe("while the server applies a backup restore", () => {
+    const marker = () => join(dataDir, ".backups", "restore-progress");
+    const touch = () => { mkdirSync(join(dataDir, ".backups"), { recursive: true }); writeFileSync(marker(), "x"); utimesSync(marker(), new Date(), new Date()); };
+
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it("waits past the normal minute and tells the person why", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => { if (mocks.spawn.mock.calls.length) touch(); return Response.json({}, { status: 503 }); }));
+      const log = vi.fn();
+      const errors: string[] = [];
+      vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+      let done = false;
+      const result = runServe(options, log).then((code) => { done = true; return code; });
+      await vi.advanceTimersByTimeAsync(130_000);
+      expect(done).toBe(false);
+      expect(errors).toEqual([]);
+      expect(log).toHaveBeenCalledWith("Seira is restoring your backup. This can take several minutes. Keep this running.");
+      expect(log).toHaveBeenCalledWith("Seira is still restoring your backup. Keep this running.");
+      interrupt();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await result;
+    });
+
+    it("still gives up after a minute when no restore is running", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, { status: 503 })));
+      const errors: string[] = [];
+      vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+      const result = runServe(options, vi.fn());
+      await vi.advanceTimersByTimeAsync(65_000);
+      expect(await result).toBe(1);
+      expect(errors.join("\n")).toContain("did not become ready within a minute");
+    });
+  });
+
   it("does not enable Tailscale or spawn a server when guided logs cannot be opened", async () => {
     mocks.denyLogOpen = true;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 503 })));

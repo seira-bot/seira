@@ -46,6 +46,7 @@ import { cliCommand, cliPrefix } from "./cli-invocation.ts";
 import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
 import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
+import { restoreInProgress } from "./restore-progress.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
@@ -780,9 +781,13 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   process.on("SIGTERM", onSignal);
 
   try {
-    const deadline = Date.now() + 60_000;
+    let deadline = Date.now() + 60_000, restoreNoticeAt = 0;
     while (Date.now() < deadline && exited === null && !stopping) {
       if (await serverUp(options.port, child.pid)) break;
+      if (restoreInProgress(options.dataDir)) {
+        deadline = Date.now() + 60_000;
+        if (Date.now() >= restoreNoticeAt) { log(restoreNoticeAt ? "Seira is still restoring your backup. Keep this running." : "Seira is restoring your backup. This can take several minutes. Keep this running."); restoreNoticeAt = Date.now() + 30_000; }
+      }
       await new Promise((r) => setTimeout(r, 250));
     }
     if (exited !== null) {
