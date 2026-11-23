@@ -2,7 +2,15 @@ import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { PANEL_TABS, TAB_LABEL, type PanelTab } from "./page-registry";
+
+const TAB_UI = {
+  activity: ui("panel.tab-activity"),
+  details: ui("panel.tab-details"),
+  library: ui("panel.tab-library"),
+  computer: ui("panel.tab-computer"),
+} as const satisfies Record<PanelTab, string>;
 
 function TabThumb({ tab }: { tab: PanelTab }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -64,6 +72,7 @@ export function PanelTabs({ tab, onSelect }: { tab: PanelTab; onSelect: (tab: Pa
             aria-selected={tab === id}
             tabIndex={tab === id ? 0 : -1}
             data-panel-tab={id}
+            data-ui={TAB_UI[id]}
             onClick={() => onSelect(id)}
             className={cn(
               "relative h-[26px] min-w-0 flex-auto truncate rounded-full px-2.5 text-[13px] leading-[18px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",

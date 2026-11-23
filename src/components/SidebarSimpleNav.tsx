@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useStore } from "@/state/store";
 
 import { openCommandPalette } from "./CommandPalette";
@@ -24,7 +25,7 @@ export function SimpleSearchPill() {
     <div className="px-3 pb-1.5 pt-0.5">
       <button
         type="button"
-        data-sidebar-search-pill=""
+        data-sidebar-search-pill="" data-ui={ui("sidebar.search")}
         onClick={openCommandPalette}
         aria-label={t("sidebar.searchAria")}
         title={t("sidebar.searchAria")}
@@ -46,7 +47,7 @@ export function SimpleBoardRow() {
   const active = state.activeView === "board";
   return (
     <div className="px-3 pb-1">
-      <button type="button" data-sidebar-board="" aria-current={active || undefined} onClick={() => dispatch({ type: "showBoard" })} className={SIMPLE_NAV_ROW}>
+      <button type="button" data-sidebar-board="" data-ui={ui("sidebar.board")} aria-current={active || undefined} onClick={() => dispatch({ type: "showBoard" })} className={SIMPLE_NAV_ROW}>
         <SquareKanban size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">{t("sidebar.nav.board")}</span>
       </button>

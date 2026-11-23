@@ -4,6 +4,7 @@ import { api, useStore, type Bot, type InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { glassPopupFrameStyle } from "@/lib/glass-popup";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { LocaleKey } from "@/locales";
 import { readCachedInventory } from "@/lib/connected-apps-cache";
 import { connectorStatusMemory, preloadConnectedApps, rememberConnectorStatus } from "@/lib/connected-apps";
@@ -463,6 +464,7 @@ export function PluginsPanel() {
               <button
                 type="button"
                 data-apps-filter="connected"
+                data-ui={ui("apps.connected")}
                 aria-pressed={filter === "connected"}
                 onClick={() => chooseFilter(filter === "connected" ? "all" : "connected")}
                 className={cn(
@@ -508,6 +510,7 @@ export function PluginsPanel() {
             <label className="flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-full bg-control/70 px-3.5 focus-within:ring-1 focus-within:ring-accent">
               <Search size={15} className="shrink-0 text-ink-secondary" />
               <input
+                data-ui={ui("apps.search")}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t("connectors.searchPlaceholder")}
@@ -518,6 +521,7 @@ export function PluginsPanel() {
             <button
               type="button"
               data-apps-filter="mcp"
+              data-ui={ui("apps.mcp")}
               aria-pressed={filter === "mcp"}
               onClick={() => chooseFilter(filter === "mcp" ? "all" : "mcp")}
               className={cn(pill, "h-9 border border-hairline/40 px-3.5", filter === "mcp" ? "bg-ink text-app" : "text-ink hover:bg-raised")}

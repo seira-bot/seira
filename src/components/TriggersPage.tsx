@@ -5,6 +5,7 @@ import { AUTOMATION_VIEWS } from "../../shared/automation-views";
 import { automationsFrom, automationSentence, automationStatus, orderAutomations, runLine, statusLine, type Automation } from "@/lib/automations";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { isRoutineProblemRun } from "@/lib/routines";
 import { saveWebhookCredential, webhookCredentialStore } from "@/lib/webhook-credentials";
 import { botInDepartment, filterableDepartments, GENERAL_DEPARTMENT } from "@/lib/department-filter";
@@ -31,6 +32,11 @@ import { schedulableBots, useTeamPeople } from "@/state/team-people";
 
 /** The bot filter earns its place only on a long list shared by several bots. */
 const FILTER_FROM = 9;
+const AUTOMATION_VIEW_UI = {
+  list: ui("automations.list"),
+  calendar: ui("automations.calendar"),
+  workflows: ui("automations.workflows"),
+} as const satisfies Record<(typeof AUTOMATION_VIEWS)[number], string>;
 
 /** Automations: every schedule and every "when another app sends something", each as one plain sentence. */
 export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpenRoom: (id: string) => void }) {
@@ -103,13 +109,13 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
             )}
             <div role="group" aria-label={t("automations.view")} className="flex items-center rounded-lg border border-hairline/50 bg-panel p-0.5">
               {AUTOMATION_VIEWS.filter((option) => option !== "workflows" || !workflows.unavailable).map((option) => (
-                <button key={option} type="button" aria-pressed={view === option} onClick={() => dispatch({ type: "showRoutines", view: option, botId: botFilter === "all" ? undefined : botFilter })}
+                <button key={option} type="button" data-ui={AUTOMATION_VIEW_UI[option]} aria-pressed={view === option} onClick={() => dispatch({ type: "showRoutines", view: option, botId: botFilter === "all" ? undefined : botFilter })}
                   className={cn("rounded-md px-3 py-1 text-[13px] font-medium", view === option ? "bg-raised text-ink shadow-sm" : "text-ink-secondary hover:text-ink")}>
                   {option === "list" ? t("automations.list") : option === "calendar" ? t("automations.calendar") : t("workflow.view")}
                 </button>
               ))}
             </div>
-            <button type="button" onClick={view === "workflows" ? () => void createWorkflow() : () => setNewText("")} className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110"><Plus size={15} aria-hidden="true" />{view === "workflows" ? t("workflow.new") : t("automations.new")}</button>
+            <button type="button" data-ui={ui("automations.new")} onClick={view === "workflows" ? () => void createWorkflow() : () => setNewText("")} className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110"><Plus size={15} aria-hidden="true" />{view === "workflows" ? t("workflow.new") : t("automations.new")}</button>
           </ToolPageActions>
       </ToolPageHeader>
 

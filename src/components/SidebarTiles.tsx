@@ -3,6 +3,7 @@ import { memo, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useLiveMedia } from "@/lib/live-call-media";
 import { stateForBot } from "@/lib/mascot";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -65,6 +66,7 @@ export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, ki
       role={renaming ? undefined : "button"}
       tabIndex={renaming ? undefined : 0}
       data-sidebar-bot-row={bot.id}
+      data-ui={ui("sidebar.bots")}
       data-sidebar-tile={kind ?? (primary ? "primary" : "pinned")}
       draggable={Boolean(drag) && !renaming} data-look="sidebar-bot"
       aria-label={renaming ? undefined : label}

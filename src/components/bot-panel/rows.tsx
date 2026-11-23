@@ -122,6 +122,7 @@ export function NavRow({ title, hint, value, icon, onClick, drill = true, danger
   ref?: Ref<HTMLButtonElement>;
   "data-panel-row"?: string;
   "data-panel-page"?: string;
+  "data-ui"?: string;
 }) {
   return (
     <button

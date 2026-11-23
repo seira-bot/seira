@@ -58,6 +58,7 @@ import { cn } from "@/lib/cn";
 import { meterPercent, resetLine } from "@/lib/usage-meter";
 import type { CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { FEEDBACK_URL, HELP_CENTER_URL, appVersion, desktopAppVersion, openExternalLink } from "@/lib/app-links";
 import { pageIsThisComputer } from "@/lib/companion-bridge";
 import { cloudPlanLabel } from "@/lib/cloud-plan";
@@ -344,8 +345,8 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   return [
     { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
-    ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
-    ...(onPublishedApps ? [{ key: "published-apps", label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
+    ...(onFiles ? [{ key: "files", ui: ui("sidebar.files"), label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
+    ...(onPublishedApps ? [{ key: "published-apps", ui: ui("sidebar.published-apps"), label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
     ...(onTeamFiles ? [{ key: "team-files", label: t("sidebar.nav.teamFiles"), icon: <FolderTree size={16} />, active: activeView === "team-files", onSelect: onTeamFiles }] : []),
     ...(archived?.count ? [{ key: "archived", label: t("sidebar.archived.title"), icon: <Archive size={16} />, value: String(archived.count), onSelect: archived.open }] : []),
   ];
@@ -517,7 +518,7 @@ export function profileMenuItems({
     { key: "about", label: t("sidebar.menu.aboutApp", { app: productName() }), icon: <Info size={16} />, separatorBefore: !(update && !raised), onSelect: onAbout },
   ];
   const account: SidebarMenuItem = { key: "account", label: header.name, subtitle: header.line, icon: header.avatar, large: true, chevron: true, onSelect: header.onOpen };
-  const settings: SidebarMenuItem = { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={16} />, trailing: settingsKeyHint(), onSelect: onSettings };
+  const settings: SidebarMenuItem = { key: "settings", ui: ui("sidebar.settings"), label: t("sidebar.menu.settings"), icon: <SettingsIcon size={16} />, trailing: settingsKeyHint(), onSelect: onSettings };
   const support: SidebarMenuItem = { key: "support", label: t("sidebar.menu.helpShort"), icon: <LifeBuoy size={16} />, submenu: help, onSelect: () => {} };
   const news: SidebarMenuItem | null = announcements ? { key: "announcements", label: t("announcements.title"), icon: <Megaphone size={16} />, active: announcements.active,
     attention: announcements.unread, onSelect: announcements.onSelect } : null;
@@ -675,7 +676,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         triggerLabel={label}
         triggerTour={account?.place.switchable ? "server-switcher" : undefined}
         renderTrigger={({ open }) => simple && named ? (
-          <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
+          <span ref={triggerRef} data-sidebar-account="" data-ui={ui("sidebar.account")} className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
             <span className="relative flex shrink-0">
               <PersonAvatar profile={profile} size={28} />
               {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
@@ -685,7 +686,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         ) : simple ? (
           <span
             ref={triggerRef}
-            data-sidebar-account=""
+            data-sidebar-account="" data-ui={ui("sidebar.account")}
             className={cn("relative flex size-9 items-center justify-center rounded-full ring-2 transition-shadow", open ? "ring-ink/15" : "ring-transparent hover:ring-ink/10")}
           >
             <PersonAvatar profile={profile} size={36} className="ring-1 ring-inset ring-ink/[0.04]" />

@@ -5,6 +5,7 @@ import type { CloudFilesBridge, CloudFilesDisk, CloudFilesState, FolderCheck, Sh
 import { cn } from "@/lib/cn";
 import { cloudFilesBridge, useCloudFiles } from "@/lib/cloud-files";
 import { activeLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -65,7 +66,7 @@ export function FilesView() {
   return <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-app text-ink">
     <header {...dragProps} className="flex shrink-0 items-center gap-2.5 border-b border-hairline/40 px-6 py-4 max-md:pl-12">
       <FolderOpen size={18} className="text-ink-secondary" />
-      <h1 className="text-[17px] font-semibold">{t("files.title")}</h1>
+      <h1 data-ui={ui("files.page")} className="text-[17px] font-semibold">{t("files.title")}</h1>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-6">
@@ -128,7 +129,7 @@ function FilesPage({ bridge }: { bridge: CloudFilesBridge }) {
           {state.shared.map((folder) => <FolderRow key={folder.id} folder={folder} bridge={bridge} busy={busy} run={run} onStop={() => setAsk({ kind: "stop", folder })} />)}
         </ul>
         : <div className="flex items-center gap-3"><SeiraCharacter state="sleep" size={48} /><p className="text-[13px] text-ink-secondary">{t("files.empty")}</p></div>}
-      <button type="button" disabled={busy} className="ui-button self-start"
+      <button type="button" data-ui={ui("files.add")} disabled={busy} className="ui-button self-start"
         onClick={() => void run(async () => { const check = await bridge.pickFolder(); if (check) setAsk({ kind: "share", check }); })}>{t("files.add")}</button>
       {state.disk && <Storage disk={state.disk} busy={busy} onMore={moreSpace} />}
     </section>
