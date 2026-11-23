@@ -22,7 +22,7 @@
 // Open risk: a bot at work for a linked server can create a routine. That routine later starts work that the rule
 // against handing work on to another server does not see.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { writeFileAtomic } from "../atomic.ts";
@@ -177,7 +177,7 @@ export interface CoordinateContext {
 type CoordinateResult = { status: number; body: Record<string, unknown> };
 type Remote = { peer: string; bot: LinkedBot };
 /** `level`: what that place's version reads (protocol.ts), 1 until it says more. `told`: the level its last hello was made for. */
-type Live = { online: boolean; seq: number; outbox: Numbered[]; level: number; told?: number };
+type Live = { online: boolean; seq: number; outbox: Numbered[]; level: number; told?: number; results: Map<string, number> };
 
 export type BotLink = ReturnType<typeof createBotLink>;
 
@@ -209,8 +209,12 @@ export function createBotLink(deps: BotLinkDeps) {
   const retries = new Map<string, { timer: NodeJS.Timeout; delay: number }>();
   let transfer: FileTransfer | null = null;
 
-  const save = () => { if (state) writeFileAtomic(file, JSON.stringify(state), { mode: 0o600 }); };
-  const linkOf = (peer: string): Live => { let one = live.get(peer); if (!one) { one = { online: false, seq: 0, outbox: [], level: 1 }; live.set(peer, one); } return one; };
+  /** Set while a guest peer's frames are taken: the state is written once, at the end, before they are acknowledged. */
+  let batch: { dirty: boolean } | null = null;
+  const write = () => { if (state) writeFileAtomic(file, JSON.stringify(state), { mode: 0o600 }); };
+  const save = () => { if (batch) batch.dirty = true; else write(); };
+  const linkOf = (peer: string): Live => { let one = live.get(peer); if (!one) { one = { online: false, seq: 0, outbox: [], level: 1, results: new Map() }; live.set(peer, one); } return one; };
+  const counted = (one: Live, frame: Frame, by: number) => { if (frame.t !== "result") return; const left = (one.results.get(frame.id) ?? 0) + by; if (left > 0) one.results.set(frame.id, left); else one.results.delete(frame.id); };
   const isOnline = (peer: string) => live.get(peer)?.online === true;
   const placeName = (peer: string) => state?.peers[peer]?.place.name ?? "the other place";
   const policy = deps.policy;
@@ -244,6 +248,7 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state?.peers[peer]) return;
     const one = linkOf(peer);
     one.outbox.push({ seq: ++one.seq, frame });
+    counted(one, frame, 1);
     for (const listener of outboundListeners) listener(peer);
   }
   /** A place on the first version takes a hello only with the fields that version knows. */
@@ -287,13 +292,14 @@ export function createBotLink(deps: BotLinkDeps) {
     const waiting = metas.map((meta, index) => ({ path: spoolFile(peer, id, way, index, meta.name), name: meta.name, meta }));
     if (state?.role === "dialer") {
       if (!transfer) throw new Error("not connected");
-      mkdirSync(join(spoolOf(peer, id), way), { recursive: true, mode: 0o700 });
       for (const [index, file] of waiting.entries()) {
         let have = -1;
         try { have = statSync(file.path).size; } catch { /* not got yet */ }
         if (have !== file.meta.bytes) await transfer.pull(id, way, index, file.meta, file.path);
       }
     } else if (waiting.some((file) => !existsSync(file.path))) throw gone("its files did not arrive");
+    const entry = pending.get(id);
+    if (policy && (way === "sent" ? state?.work[id] !== undefined || fetching.get(id) !== peer : entry?.peer !== peer || entry.cancelled)) { unspool(peer, id); throw gone("it was stopped"); }
     let stored: PassedFile[];
     try {
       stored = await deps.files.store(waiting);
@@ -436,7 +442,7 @@ export function createBotLink(deps: BotLinkDeps) {
   function dispatchResult(id: string): void {
     const work = state?.work[id], frame = work ? resultFrame(id, work) : null;
     if (!work || !frame) return;
-    if (policy && linkOf(work.peer).outbox.some((entry) => entry.frame.t === "result" && entry.frame.id === id)) return;
+    if (policy && linkOf(work.peer).results.has(id)) return;
     const files = returned(work);
     if (!files.length) { send(work.peer, frame); return; }
     const withFiles: ResultFrame = { ...frame, files: metaOf(files) };
@@ -462,12 +468,17 @@ export function createBotLink(deps: BotLinkDeps) {
     audit({ kind: "result-sent", peer: work.peer, bot: work.to ?? "", far: work.by ?? "", id, ok: result.ok, ...(result.outcome ? { outcome: result.outcome } : {}) });
     dispatchResult(id);
   }
+  /** Work whose turn here ended while a crash kept its result out of the record: the runtime's row has it. */
+  function reconcile(id: string): void {
+    const work = state?.work[id], child = work?.child ? deps.coordinator().node(work.child) : undefined;
+    if (work && !work.done && child && ENDED.has(child.status)) recordResult(id, { ok: child.status === "completed", ...(child.outcome ? { outcome: child.outcome } : {}) }, child.id);
+  }
 
   /** The working side of one hand-off. A second arrival of the same id starts nothing: it is answered from the record. */
   function accept(peer: string, frame: HandoffFrame): void {
     if (!state) return;
     const known = state.work[frame.id];
-    if (known) { if (known.peer === peer && known.done) dispatchResult(frame.id); return; }
+    if (known) { if (known.peer === peer) { if (known.done) dispatchResult(frame.id); else reconcile(frame.id); } return; }
     if (!frame.files?.length || !deps.files) { start(peer, frame, []); return; }
     if (policy && !fetching.has(frame.id)) {
       const refused = gate(peer, frame);
@@ -491,9 +502,11 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!offered(bot)) return [NOT_HERE, "bot"];
     const refusal = deps.refusal?.(bot);
     if (refusal) return [peerText(refusal), "unavailable"];
-    // Security invariant: a guest peer chooses the hand-off id, so a root it names that already exists belongs to other work.
-    if (policy && deps.coordinator().node(linkRoot(frame.id))) return [NOT_HERE, "root"];
-    const limited = admitted ? null : policy?.admit(peer, openOf(peer));
+    // Security invariant: a guest peer chooses the hand-off id, so a root it names that already exists belongs to other
+    // work, unless that peer's own hand-off began it and handed it on, and a crash kept its record from being written.
+    const root = policy ? deps.coordinator().node(linkRoot(frame.id)) : undefined;
+    if (root && (root.parentId || parseLinked(root.botId)?.peer !== peer || !deps.coordinator().children(root.id).length)) return [NOT_HERE, "root"];
+    const limited = admitted || root ? null : policy?.admit(peer, openOf(peer));
     return limited ? [limited, "limit"] : null;
   }
   /** Ends a hand-off from a peer that did not start. On a guest link, its files go, crossed or stored. */
@@ -513,7 +526,17 @@ export function createBotLink(deps: BotLinkDeps) {
     const work = workFor(peer, frame, true);
     const refused = gate(peer, frame, admitted);
     if (refused) return refuse(frame, work, refused, files);
-    const bot = deps.bot(frame.to)!, coordinator = deps.coordinator();
+    const bot = deps.bot(frame.to)!, coordinator = deps.coordinator(), lost = policy ? coordinator.children(root)[0] : undefined;
+    if (lost) {
+      if (files.length && !deps.files?.carried(lost.id, "sent").length) deps.files?.crossed(lost.id, "sent", { botId: address.botId, name: frame.from.name }, files);
+      else if (files.length) deps.files?.discard?.(files);
+      state.threads[`${peer}:${frame.thread}`] = { threadId: lost.threadId, at: now() };
+      state.work[frame.id] = { ...work, child: lost.id };
+      save();
+      if (coordinator.node(root)?.status === "running") coordinator.endTurn(root, { ok: true, text: "" });
+      if (frame.mode === "notify") recordResult(frame.id, { ok: true, text: "" }); else reconcile(frame.id);
+      return;
+    }
     try {
       coordinator.beginTurn({ id: root, address, brief: frame.text, level: deps.level(bot), opener: {
         requester: { kind: "external_runtime", runId: root, botId: address.botId, threadId: address.threadId },
@@ -601,6 +624,7 @@ export function createBotLink(deps: BotLinkDeps) {
         if (work.peer !== peer) return;
         if (work.done) { dispatchResult(frame.id); return; }
         deps.coordinator().cancelDirect(work.root, `Stopped by ${work.from || "the requester"}`);
+        reconcile(frame.id);
         return;
       }
       case "bye": return state.role === "acceptor" ? dropPeer(peer, `The link to ${placeName(peer)} was turned off before the work came back.`) : off(true);
@@ -894,7 +918,7 @@ export function createBotLink(deps: BotLinkDeps) {
     /** A session with a place began: each side sends again what the other has not acknowledged. */
     sessionStarted(peer: string): void {
       if (!state?.peers[peer]) return;
-      linkOf(peer).outbox = [];
+      Object.assign(linkOf(peer), { outbox: [], results: new Map() });
       prune();
       hello(peer);
       for (const [id, entry] of pending) { if (entry.peer !== peer) continue; if (entry.cancelled) send(peer, { t: "cancel", id }); else dispatch(entry); }
@@ -937,17 +961,20 @@ export function createBotLink(deps: BotLinkDeps) {
     },
     /** Frames from a place, each checked; one that does not parse is dropped. */
     receive(peer: string, frames: readonly unknown[]): void {
-      for (const raw of frames) {
-        const parsed = (policy ? guestFrameSchema : frameSchema).safeParse(raw);
-        if (!parsed.success) { log("bot link: a frame that did not parse was dropped"); continue; }
-        try { take(peer, parsed.data); } catch (error) { log(`bot link: ${parsed.data.t} failed (${String(error)})`); }
-      }
+      const own = policy && !batch ? (batch = { dirty: false }) : null;
+      try {
+        for (const raw of frames) {
+          const parsed = (policy ? guestFrameSchema : frameSchema).safeParse(raw);
+          if (!parsed.success) { log("bot link: a frame that did not parse was dropped"); continue; }
+          try { take(peer, parsed.data); } catch (error) { log(`bot link: ${parsed.data.t} failed (${String(error)})`); }
+        }
+      } finally { if (own) { batch = null; if (own.dirty) write(); } }
     },
     /** What waits to go to a place, after `ack` (frames up to it were taken and are dropped), as much as one exchange carries. */
     outgoing(peer: string, ack: number): Numbered[] {
       const one = live.get(peer);
       if (!one) return [];
-      one.outbox = one.outbox.filter((entry) => entry.seq > ack);
+      one.outbox = one.outbox.filter((entry) => { if (entry.seq > ack) return true; counted(one, entry.frame, -1); return false; });
       const taken: Numbered[] = [];
       let bytes = 0;
       for (const entry of one.outbox) {
