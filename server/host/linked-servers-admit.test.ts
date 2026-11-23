@@ -29,7 +29,8 @@ describe("a frame budget", () => {
     budget.giveBack("a", 5);
     expect(budget.left("a")).toBe(8);
     now = W;
-    expect(budget.left("a")).toBe(9);
+    expect(budget.left("a")).toBe(10);
+    budget.spend("a", 6);
     budget.giveBack("a", 100);
     expect(budget.left("a")).toBe(10);
     budget.giveBack("b", 3);
