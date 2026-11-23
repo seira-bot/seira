@@ -3430,6 +3430,7 @@
   "settings.runCard.line": "आपके मौजूदा अनुरोध के शेल कमांड दिखाता है।",
   "settings.chatWidth.line": "इस डिवाइस पर संदेश बबल कितने चौड़े हो सकते हैं।",
   "settings.font.line": "इस डिवाइस पर थीम का फ़ॉन्ट बदलता है।",
+  "settings.textSize.title": "टेक्स्ट का आकार",
   "accounts.manage": "खाता और साइन आउट",
   "accounts.signOut": "साइन आउट",
   "cloudSetup.myCloud": "मेरा क्लाउड",

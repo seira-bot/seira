@@ -7421,6 +7421,7 @@
   "settings.runCard.line": "현재 요청의 셸 명령을 보여 줍니다.",
   "settings.chatWidth.line": "이 기기에서 메시지 말풍선이 얼마나 넓어질 수 있는지 정합니다.",
   "settings.font.line": "이 기기에서 테마의 글꼴을 바꿉니다.",
+  "settings.textSize.title": "글자 크기",
   "accounts.manage": "계정 및 로그아웃",
   "policy.teamRemoteBlocked": "{organization}에서 관리: 휴대폰에서 이 클라우드를 여는 기능이 꺼져 있습니다. 팀 관리자에게 문의하세요.",
   "remote.status.pairedMany": "기기 {count}대 페어링됨",

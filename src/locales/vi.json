@@ -5720,6 +5720,7 @@
   "settings.runCard.line": "Hiện các lệnh shell cho yêu cầu hiện tại của bạn.",
   "settings.chatWidth.line": "Bong bóng tin nhắn có thể rộng đến đâu trên thiết bị này.",
   "settings.font.line": "Thay phông chữ của chủ đề trên thiết bị này.",
+  "settings.textSize.title": "Cỡ chữ",
   "accounts.manage": "Tài khoản và đăng xuất",
   "common.ok": "OK",
   "connectedWorkspaces.localTitle": "Môi trường trên máy tính này",

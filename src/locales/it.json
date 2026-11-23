@@ -6729,6 +6729,7 @@
   "settings.runCard.line": "Mostra i comandi shell della tua richiesta attuale.",
   "settings.chatWidth.line": "Quanto possono allargarsi le bolle dei messaggi su questo dispositivo.",
   "settings.font.line": "Sostituisce il carattere del tema su questo dispositivo.",
+  "settings.textSize.title": "Dimensione del testo",
   "accounts.manage": "Account ed esci",
   "cloudSetup.myCloud": "Il mio Cloud",
   "common.ok": "OK",
