@@ -534,6 +534,7 @@ describe("the A2A outbound side", () => {
       first.outbound.send(handoff("h2"));
       await flush();
       first.outbound.close();
+      first.tasks.flush();
       far.on("GetTask", result(task("COMPLETED", { artifacts: [{ parts: [{ text: "Booked" }] }] })));
       const second = fixture({ far, dir: first.dir });
       second.outbound.send(handoff("h1"));
@@ -552,6 +553,7 @@ describe("the A2A outbound side", () => {
       first.outbound.send(handoff("h1"));
       await flush();
       first.outbound.close();
+      first.tasks.flush();
       const second = fixture({ far, dir: first.dir });
       second.outbound.cancel("h1");
       await flush();

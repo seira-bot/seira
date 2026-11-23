@@ -536,6 +536,25 @@ describe("GetTask and CancelTask (AC-22 to AC-24)", () => {
   });
 });
 
+describe("a task and the bot in the path", () => {
+  it("answers -32001 to a task read or cancelled through the path of another bot, and still serves it through its own", async () => {
+    const w = await world([{ label: "one", exposed: ["writer", "analyst"] }]);
+    const [peer] = w.peers as [Peer];
+    const release = gated(w);
+    const id = (await rpc(w, peer, sendMessage("m1"))).body.result.task.id as string;
+    await until(() => w.runs.length === 1, "m1 runs");
+    const unknown = (await rpc(w, peer, getTask("f".repeat(32)))).body.error;
+    const other = (await rpc(w, peer, getTask(id), "analyst")).body;
+    expect(other.result).toBeUndefined();
+    expect(other.error).toEqual(unknown);
+    expect((await rpc(w, peer, cancelTask(id), "analyst")).body.error.code).toBe(-32001);
+    expect((await rpc(w, peer, getTask(id), "writer")).body.result).toMatchObject({ id, status: { state: "TASK_STATE_WORKING" } });
+    release();
+    await until(async () => await stateOf(w, peer, id) === "TASK_STATE_COMPLETED", "m1 is done");
+    expect((await rpc(w, peer, getTask(id), "analyst")).body.error.code).toBe(-32001);
+  });
+});
+
 describe("budgets of one peer", () => {
   it("answers 429 once the peer spent its requests in the window", async () => {
     const w = await world([{ label: "one", limits: { requests: 3 } }]);
@@ -603,6 +622,7 @@ describe("a request that starts nothing (lesson 6)", () => {
     expect(res.body.error.code).toBe(-32603);
     expect(received).toHaveLength(1);
     expect(tasks.get(frameId("abcd1234", "m1"))).toBeNull();
+    tasks.flush();
     expect(createTaskIndex(dir, Date.now).get(frameId("abcd1234", "m1"))).toBeNull();
   });
 });

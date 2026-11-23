@@ -494,7 +494,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   const a2a = createLinkedA2a({
     dataDir: deps.dataDir, now, log, audit: deps.audit, coordinator: deps.coordinator, bot: deps.bot,
-    link: (dataDir, policy, cap) => guestLink(dataDir, policy, cap, limitLog(log, now)),
+    link: (dataDir, policy, cap, linkLog) => guestLink(dataDir, policy, cap, linkLog),
     register: (id, key, link, cap) => { instances.set(id, { id, key, link, cap, dialer: null, exchange: null }); },
     unregister: (id) => { instances.delete(id); },
     admit: (id, openCount) => admission.admit(id, openCount),

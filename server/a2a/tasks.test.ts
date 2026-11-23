@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -13,7 +13,7 @@ function fixture(start = 1_000_000) {
   const dir = mkdtempSync(join(tmpdir(), "seira-a2a-tasks-"));
   const clock = { now: start };
   const log = vi.fn();
-  const open = () => createTaskIndex(dir, () => clock.now, log);
+  const open = () => createTaskIndex(dir, () => clock.now, log, { writeGapMs: 0 });
   return { dir, clock, log, open, file: join(dir, "a2a-tasks.json") };
 }
 
@@ -301,5 +301,92 @@ describe("a broken file", () => {
     index.put(entry("a", { at: 1 }));
     expect(index.get("a")).not.toBeNull();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("could not be saved"));
+  });
+});
+
+describe("writing the file", () => {
+  const counted = () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-a2a-tasks-"));
+    const writes: string[] = [];
+    const write = ((path: string, data: string | Uint8Array, options?: { mode?: number }) => { writes.push(String(data)); writeFileSync(path, data, options); }) as typeof import("../atomic.ts").writeFileAtomic;
+    const open = () => createTaskIndex(dir, () => Date.now(), () => {}, { write });
+    return { dir, writes, open, file: join(dir, "a2a-tasks.json") };
+  };
+
+  it("writes at most twice for 150 changes in one gap, and the last state reaches the disk when the gap ends", () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, open, file } = counted();
+      const index = open();
+      for (let n = 0; n < 150; n += 1) index.put(entry(`t${n}`, { at: Date.now() }));
+      expect(writes.length).toBeLessThanOrEqual(2);
+      vi.advanceTimersByTime(1_000);
+      expect(writes.length).toBe(2);
+      expect((JSON.parse(readFileSync(file, "utf8")) as { tasks: unknown[] }).tasks).toHaveLength(150);
+      vi.advanceTimersByTime(10_000);
+      expect(writes.length).toBe(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("writes at once when the last write is a gap old", () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, open } = counted();
+      const index = open();
+      index.put(entry("a", { at: Date.now() }));
+      vi.advanceTimersByTime(1_000);
+      index.put(entry("b", { at: Date.now() }));
+      expect(writes.length).toBe(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("writes a waiting change on flush, and a new index from the folder reads every task", () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, open } = counted();
+      const index = open();
+      for (let n = 0; n < 5; n += 1) index.put(entry(`t${n}`, { at: Date.now() }));
+      expect(writes.length).toBe(1);
+      index.flush();
+      expect(writes.length).toBe(2);
+      index.flush();
+      expect(writes.length).toBe(2);
+      const again = open();
+      for (let n = 0; n < 5; n += 1) expect(again.get(`t${n}`)).not.toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("writes what waits on close, and writes nothing after close", () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, open, file } = counted();
+      const index = open();
+      index.put(entry("a", { at: Date.now() }));
+      index.put(entry("b", { at: Date.now() }));
+      index.close();
+      expect(writes.length).toBe(2);
+      expect(readFileSync(file, "utf8")).toContain('"b"');
+      index.put(entry("c", { at: Date.now() }));
+      vi.advanceTimersByTime(10_000);
+      expect(writes.length).toBe(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("writes nothing after discard, so a removed peer's folder does not come back", () => {
+    vi.useFakeTimers();
+    try {
+      const { writes, open, dir, file } = counted();
+      const index = open();
+      index.put(entry("a", { at: Date.now() }));
+      index.put(entry("b", { at: Date.now() }));
+      index.discard();
+      unlinkSync(file);
+      rmdirSync(dir);
+      index.put(entry("c", { at: Date.now() }));
+      index.flush();
+      vi.advanceTimersByTime(10_000);
+      expect(writes.length).toBe(1);
+      expect(existsSync(dir)).toBe(false);
+    } finally { vi.useRealTimers(); }
   });
 });
