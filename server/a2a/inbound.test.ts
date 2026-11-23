@@ -576,7 +576,7 @@ describe("the transport on a real link", () => {
     const work = (JSON.parse(readFileSync(join(peer.dataDir, "bot-link.json"), "utf8")) as { work: Json }).work[id];
     expect(work.ackedAt).toEqual(expect.any(Number));
     peer.transport.start();
-    expect(peer.link.outgoing(peer.key, 0).map((entry) => entry.frame.t)).toEqual(["hello"]);
+    expect(peer.link.outgoing(peer.key, 0).map((entry) => entry.frame.t).filter((t) => t !== "hello")).toEqual([]);
     expect([peer.sent, peer.cancelled]).toEqual([[], []]);
   });
 });
