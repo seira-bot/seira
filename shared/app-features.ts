@@ -104,6 +104,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["departmentAccess"],
   },
   {
+    id: "linked-servers",
+    name: "Linked places",
+    place: "Settings → Linked places (Advanced mode, admins only)",
+    does: "An admin links this Seira to another Seira with a one-time invite. Each side chooses which of its bots the other side may give work to, and the most that work may do without asking. Either side can remove the link.",
+  },
+  {
     id: "handoffs",
     name: "Threads and handoffs",
     place: "Bot threads in the sidebar",
