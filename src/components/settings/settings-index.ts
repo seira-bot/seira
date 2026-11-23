@@ -194,6 +194,8 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "sidebar-picture", page: "overview", anchor: "sidebar", labelKey: "placeLook.sidebarPicture", sectionKey: "settings.overview.sidebar", topFor: ["wallpaper", "background", "sidebar image"], synonyms: ["picture", "banner", "image"] },
   { id: "show-helper", page: "overview", anchor: "sidebar", labelKey: "settings.search.showHelper", sectionKey: "settings.overview.sidebar", synonyms: ["helper", "starter", "default bot"] },
   { id: "providers", page: "ai", anchor: "providers", labelKey: "settings.ai.providers", topFor: ["ollama", "lm studio", "local model", "model providers"], synonyms: ["models", "engines", "claude", "codex", "sign in", "subscription", "cli", "kimi", "cursor", "hidden providers", "unhide"] },
+  { id: "all-bots-model", page: "ai", anchor: "all-bots-model", labelKey: "settings.ai.allBotsModel", topFor: ["change model", "every bot"],
+    synonyms: ["bulk", "switch provider", "move all bots", "set model for all", "change provider"] },
   { id: "keys", page: "ai", anchor: "ai-keys", labelKey: "settings.ai.otherServices", topFor: ["api keys", "api key"], synonyms: ["keys", "key", "openai", "anthropic", "xai", "openrouter", "router", "base url", "mistral", "groq", "cerebras", "deepseek", "opencode", "composio", "elevenlabs"] },
   { id: "backup-model", page: "ai", anchor: "backup-model", labelKey: "settings.recovery.title", sectionKey: "settings.ai.backupModel", advanced: true, synonyms: ["backup model", "fallback", "recovery"] },
   { id: "ai-pool", page: "ai", anchor: "ai-pool", labelKey: "settings.pool.title", sectionKey: "settings.ai.pool", advanced: true, synonyms: ["ai pool", "share usage", "usage limit", "balance", "spread"] },

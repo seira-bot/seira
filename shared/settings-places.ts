@@ -46,6 +46,7 @@ export const SETTINGS_PLACES = [
   {"id":"sidebar-picture","path":"Settings → (the place's own name, at the top) → In the sidebar → Sidebar picture","words":["wallpaper","background","sidebar image","picture","banner","image"]},
   {"id":"show-helper","path":"Settings → (the place's own name, at the top) → In the sidebar → Show the helper in the sidebar","words":["helper","starter","default bot"]},
   {"id":"providers","path":"Settings → AI → Providers","words":["ollama","lm studio","local model","model providers","models","engines","claude","codex","sign in","subscription","cli","kimi","cursor","hidden providers","unhide"]},
+  {"id":"all-bots-model","path":"Settings → AI → Model for all bots","words":["change model","every bot","bulk","switch provider","move all bots","set model for all","change provider"]},
   {"id":"keys","path":"Settings → AI → Other services","words":["api keys","api key","keys","key","openai","anthropic","xai","openrouter","router","base url","mistral","groq","cerebras","deepseek","opencode","composio","elevenlabs"]},
   {"id":"backup-model","path":"Settings → AI → Backup model → Automatic recovery","words":["backup model","fallback","recovery"],"advanced":true},
   {"id":"ai-pool","path":"Settings → AI → AI pool → Share usage across AIs","words":["ai pool","share usage","usage limit","balance","spread"],"advanced":true},
