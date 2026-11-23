@@ -108,6 +108,7 @@ test("a poll in flight when stop runs ends without a hold", async () => {
     settings: () => ({ keepAwake: true }),
   });
   const pending = hold.poll();
+  await new Promise((resolve) => setImmediate(resolve));
   hold.stop();
   release();
   const result = await pending;
