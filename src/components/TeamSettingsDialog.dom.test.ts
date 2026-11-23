@@ -98,7 +98,7 @@ describe("changing the model of every bot", () => {
   it("saves the model new bots start on only when asked to", async () => {
     choose("To", "codex");
     choose("Model", "gpt-5-mini");
-    act(() => { document.body.querySelector<HTMLInputElement>("input[type=checkbox]")!.click(); });
+    act(() => { document.body.querySelector<HTMLElement>("[role=switch]")!.click(); });
     act(() => { [...dialog().querySelectorAll("button")].find((button) => button.textContent?.startsWith("Apply to"))!.click(); });
     await settle();
     const saved = fixture.calls.filter(([path]) => path === "/api/config");

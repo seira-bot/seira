@@ -31,6 +31,7 @@ import { approvalModeOptions } from "./ApprovalModeSelector";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { effortLabel } from "./ModelPicker";
 import { Select } from "./Select";
+import { Switch } from "./SettingsPrimitives";
 
 type Tab = "approval" | "model" | "access";
 const KEEP = "";
@@ -67,7 +68,7 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
   const [fromEngine, setFromEngine] = useState<string>(KEEP);
   const [toEngine, setToEngine] = useState<string>(KEEP);
   const [alsoNewBots, setAlsoNewBots] = useState(false);
-  const [newBotsError, setNewBotsError] = useState("");
+  const [newBotsFailed, setNewBotsFailed] = useState(false);
   const [mode, setMode] = useState<TeamApprovalMode | null>(null);
   const [model, setModel] = useState<string>(KEEP);
   const [effort, setEffort] = useState<string>(KEEP);
@@ -140,8 +141,8 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
           body: JSON.stringify({ defaultModelSelection: { instanceId: change.instanceId, model: change.model } }),
         });
         dispatch({ type: "configStatus", config });
-      } catch (cause) {
-        setNewBotsError(cause instanceof Error ? cause.message : t("teamSettings.all.newBotsFailed"));
+      } catch {
+        setNewBotsFailed(true);
       }
     }
     setResults(outcome);
@@ -172,7 +173,7 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
             <p role="status" className="mb-3 text-[13px] text-ink-secondary">
               {t("teamSettings.summary", { applied: counts.applied, unchanged: counts.unchanged, skipped: counts.skipped })}
             </p>
-            {newBotsError && <p role="alert" className="mb-3 text-[13px] text-warning">{t("teamSettings.all.newBotsFailedWhy", { reason: newBotsError })}</p>}
+            {newBotsFailed && <p role="alert" className="mb-3 text-[13px] text-danger">{t("teamSettings.all.newBotsNotSaved")}</p>}
             <TeamSettingsRows rows={results} />
             <div className="mt-4 flex justify-end">
               <button type="button" onClick={onClose} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white">{t("teamSettings.done")}</button>
@@ -180,7 +181,7 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
           </>
         ) : (
           <>
-            <p className="mb-3 text-[13px] leading-relaxed text-ink-secondary">{t(everyBot ? "teamSettings.all.intro" : "teamSettings.intro", { count: bots.length })}</p>
+            <p className="mb-3 text-[13px] leading-relaxed text-ink-secondary">{t(everyBot ? (bots.length === 1 ? "teamSettings.all.introOne" : "teamSettings.all.intro") : "teamSettings.intro", { count: bots.length })}</p>
             {!everyBot && <div className="mb-3 flex gap-1 rounded-lg bg-inset p-0.5" role="tablist">
               <button type="button" role="tab" aria-selected={tab === "approval"} disabled={running} className={tabClass(tab === "approval")} onClick={() => setTab("approval")}>{t("teamSettings.tab.approval")}</button>
               <button type="button" role="tab" aria-selected={tab === "model"} disabled={running} className={tabClass(tab === "model")} onClick={() => setTab("model")}>{t("teamSettings.tab.model")}</button>
@@ -206,10 +207,10 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
                     {targetModels.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
                   </Select>
                 </label>
-                <label className="flex items-center gap-2 text-[13px] text-ink">
-                  <input type="checkbox" checked={alsoNewBots} onChange={(event) => setAlsoNewBots(event.target.checked)} />
-                  {t("teamSettings.all.newBots")}
-                </label>
+                <div className="flex items-center justify-between gap-3 text-[13px] text-ink">
+                  <span id="team-settings-new-bots">{t("teamSettings.all.newBots")}</span>
+                  <Switch aria-labelledby="team-settings-new-bots" checked={alsoNewBots} onClick={() => setAlsoNewBots(!alsoNewBots)} />
+                </div>
                 <p className="text-[12px] text-ink-secondary">{t("teamSettings.threadModels")}</p>
               </fieldset>
             ) : tab === "approval" ? (
@@ -281,7 +282,8 @@ export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScop
               <button type="button" disabled={running} onClick={close} className="rounded-lg px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised">{t("common.cancel")}</button>
               <button type="button" disabled={running || !(applying || (everyBot && alsoNewBots && change))} onClick={apply}
                 className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
-                {t(applying === 1 ? "teamSettings.applyOne" : "teamSettings.applyMany", { count: applying })}
+                {applying === 0 && everyBot && alsoNewBots ? t("teamSettings.applyDefault")
+                  : t(applying === 1 ? "teamSettings.applyOne" : "teamSettings.applyMany", { count: applying })}
               </button>
             </div>
           </>
