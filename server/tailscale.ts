@@ -24,10 +24,12 @@ export type TailscaleFailure =
   | "needs-operator"
   | "https-not-enabled"
   | "other-server"
+  | "port-taken"
   | "unknown";
 
 export function classifyTailscaleStderr(text: string): TailscaleFailure {
   const t = text.toLowerCase();
+  if (/listener already exists/.test(t)) return "port-taken";
   if (/not logged in|logged out|needs login|please log in/.test(t)) return "not-logged-in";
   if (/is tailscale running|tailscaled is not running|connection refused|failed to connect to local tailscaled/.test(t)) return "not-running";
   if (/access denied|permission denied|operator|must be root|not permitted/.test(t)) return "needs-operator";
@@ -52,6 +54,8 @@ export function explainTailscaleFailure(reason: TailscaleFailure): string {
       return "HTTPS certificates are off for this tailnet: enable them at https://login.tailscale.com/admin/dns (HTTPS Certificates), then try again";
     case "other-server":
       return "this machine's tailnet name already fronts a different Seira server: stop that one, or pass --port for this one";
+    case "port-taken":
+      return "another tailscale serve rule or session already uses this port; run `tailscale serve status` to see it";
     default:
       return "Tailscale reported an error; run `tailscale status` and `tailscale serve status` to see it";
   }
@@ -69,6 +73,36 @@ function run(cli: string, args: string[], timeoutMs: number): Promise<{ ok: bool
       },
     );
   });
+}
+
+/** `tailscale serve status --json` (ServeConfig), or null when it cannot be read. */
+export async function readTailscaleServeConfig(cli: string): Promise<unknown> {
+  const result = await run(cli, ["serve", "status", "--json"], 10_000);
+  if (!result.ok) return null;
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+const field = (value: unknown, key: string): unknown => (typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined);
+
+/**
+ * What a ServeConfig says about one HTTPS port. `ours`: a rule from `tailscale serve --bg` proxies it to this server.
+ * `taken`: another rule, or a foreground session, uses it. Tailscale 1.104 refuses a second listener on such a port.
+ */
+export function servePortState(config: unknown, dnsName: string, httpsPort: number, localPort: number): "free" | "ours" | "taken" {
+  const key = String(httpsPort);
+  if (field(field(config, "TCP"), key) !== undefined) {
+    const proxy = field(field(field(field(field(config, "Web"), `${dnsName}:${httpsPort}`), "Handlers"), "/"), "Proxy");
+    const target = typeof proxy === "string" ? proxy.replace(/\/+$/, "") : "";
+    const ours = [`http://127.0.0.1:${localPort}`, `http://localhost:${localPort}`, `127.0.0.1:${localPort}`, `localhost:${localPort}`];
+    return ours.includes(target) ? "ours" : "taken";
+  }
+  const sessions = field(config, "Foreground");
+  const inForeground = typeof sessions === "object" && sessions !== null && Object.values(sessions).some((session) => field(field(session, "TCP"), key) !== undefined);
+  return inForeground ? "taken" : "free";
 }
 
 export function parseTailscaleStatus(cli: string, stdout: string): TailscaleStatus | null {
@@ -182,35 +216,47 @@ const originFor = (dnsName: string, httpsPort: number) => (httpsPort === 443 ? `
  * the tailnet must have HTTPS certificates (`CertDomains`), or serve waits on an enablement link forever; and the name
  * must not already front a different Seira server. Resolves once the first port has run for `settleMs` without exiting.
  * Another port that fails is skipped with one line; the first port decides the result. `origin` is the first port's.
+ * A port that a `tailscale serve --bg` rule already proxies to this server is used as it is, and stays on at stop.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,
   localPort: number,
-  options: { dataDir: string; httpsPorts?: number[]; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean>; log?: (line: string) => void },
+  options: { dataDir: string; httpsPorts?: number[]; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean>; serveConfig?: () => Promise<unknown>; log?: (line: string) => void },
 ): Promise<{ origin: string; origins: string[]; stop(): Promise<void> } | { failure: TailscaleFailure }> {
   const wanted = options.httpsPorts?.length ? options.httpsPorts : [443];
   if (!status.dnsName) return { failure: "no-magicdns" };
   if (!status.httpsEnabled) return { failure: "https-not-enabled" };
   const dnsName = status.dnsName;
   const running: Array<{ port: number; stop(): Promise<void> }> = [];
+  const serving: number[] = [];
   const stopAll = () => Promise.all(running.map((one) => one.stop())).then(() => undefined);
+  const config = await (options.serveConfig ?? (async () => null))();
   for (const httpsPort of wanted) {
-    const started = await serveOnPort(status, localPort, httpsPort, options);
-    if (!("failure" in started)) { running.push({ port: httpsPort, stop: started.stop }); continue; }
-    if (running.length === 0) return started;
+    const state = servePortState(config, dnsName, httpsPort, localPort);
+    if (state === "ours") {
+      serving.push(httpsPort);
+      options.log?.(`tailscale: port ${httpsPort} already has a tailscale serve rule for this server, so Seira uses that rule and leaves it on.`);
+      continue;
+    }
+    const started = state === "taken" ? { failure: "port-taken" as const } : await serveOnPort(status, localPort, httpsPort, options);
+    if (!("failure" in started)) { running.push({ port: httpsPort, stop: started.stop }); serving.push(httpsPort); continue; }
+    if (serving.length === 0) {
+      if (started.failure === "port-taken") options.log?.(`tailscale: port ${httpsPort} is in use by another tailscale serve rule or session (run: tailscale serve status).`);
+      return started;
+    }
     options.log?.(`tailscale: port ${httpsPort} could not start (${explainTailscaleFailure(started.failure)}). The address on port ${wanted[0]} still works; the next start tries port ${httpsPort} again.`);
   }
   try {
     mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
     writeFileSync(tailscalePortsFile(options.dataDir), JSON.stringify({ ports: wanted }), { mode: 0o600 });
-    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPorts: running.map((one) => one.port), localPort }), { mode: 0o600 });
+    if (running.length > 0) writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPorts: running.map((one) => one.port), localPort }), { mode: 0o600 });
   } catch (error) {
     await stopAll();
     throw error;
   }
   return {
     origin: originFor(dnsName, wanted[0]!),
-    origins: running.map((one) => originFor(dnsName, one.port)),
+    origins: serving.map((port) => originFor(dnsName, port)),
     async stop() {
       await stopAll();
       rmSync(tailscaleMarker(options.dataDir), { force: true });

@@ -35,7 +35,7 @@ import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
 import { startFleetAgent } from "./fleet-agent.ts"; import { fleetLayout } from "./fleet.ts";
 import { migrateBeforeFirstWrite } from "./cli-data-move.ts";
-import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, chooseTailscaleHttpsPorts, explainTailscaleFailure, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, chooseTailscaleHttpsPorts, explainTailscaleFailure, readTailscaleServeConfig, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
 import { listeningPorts, systemProbe } from "./headless/host-doctor.ts";
 import { laptopLinesHere } from "./cli-devices.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
@@ -728,7 +728,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
     }
     if (tailscale) {
       const httpsPorts = chooseTailscaleHttpsPorts(options.dataDir, listeningPorts(systemProbe()));
-      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPorts: httpsPorts.ports, otherServer: answersAsSeira, log });
+      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPorts: httpsPorts.ports, otherServer: answersAsSeira, serveConfig: () => readTailscaleServeConfig(tailscale.cli), log });
       const listening = "failure" in served ? tailnetListenFallback(served.failure, tailscale, options.port) : null;
       if (listening && "failure" in served) tailscaleWhy = explainTailscaleFailure(served.failure); else if (httpsPorts.line) log(httpsPorts.line);
       tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : { ...served, primaryBusy: httpsPorts.primaryBusy };

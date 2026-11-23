@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { chooseTailscaleHttpsPorts, classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, parseTailscaleStatus, tailnetListenFallback, tailscaleHttpsProblem, tailscaleMarker, tailscalePortsFile, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
+import { chooseTailscaleHttpsPorts, classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, parseTailscaleStatus, servePortState, tailnetListenFallback, tailscaleHttpsProblem, tailscaleMarker, tailscalePortsFile, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
 
 describe("tailscale helpers", () => {
   it("reads the MagicDNS name, addresses and state from status --json", () => {
@@ -25,8 +25,9 @@ describe("tailscale helpers", () => {
     expect(classifyTailscaleStderr("failed to connect to local tailscaled; is Tailscale running?")).toBe("not-running");
     expect(classifyTailscaleStderr("Access denied: serve config denied; use 'sudo tailscale set --operator=USER'")).toBe("needs-operator");
     expect(classifyTailscaleStderr("error: HTTPS is not enabled for this tailnet")).toBe("https-not-enabled");
+    expect(classifyTailscaleStderr("error: listener already exists for port 443")).toBe("port-taken");
     expect(classifyTailscaleStderr("something else entirely")).toBe("unknown");
-    for (const reason of ["not-installed", "not-logged-in", "not-running", "no-magicdns", "needs-operator", "https-not-enabled", "unknown"] as const) {
+    for (const reason of ["not-installed", "not-logged-in", "not-running", "no-magicdns", "needs-operator", "https-not-enabled", "port-taken", "unknown"] as const) {
       expect(explainTailscaleFailure(reason).length).toBeGreaterThan(20);
       expect(explainTailscaleFailure(reason)).not.toContain("tskey");
     }
@@ -240,6 +241,96 @@ describe("the tailnet HTTPS ports", () => {
     writeFileSync(tailscaleMarker(dir), JSON.stringify({ cli: process.execPath, httpsPort: 8443, localPort: 8799 }));
     expect(await clearLeftoverTailscaleServe(dir)).toBe(true);
     expect(existsSync(tailscaleMarker(dir))).toBe(false);
+  }));
+});
+
+describe("tailscale serve rules that exist already", () => {
+  const status: TailscaleStatus = { cli: "/usr/bin/tailscale", dnsName: "mini.tail1234.ts.net", addresses: [], backendState: "Running", httpsEnabled: true };
+  const rule = (port: number, proxy: string) => ({ TCP: { [port]: { HTTPS: true } }, Web: { [`mini.tail1234.ts.net:${port}`]: { Handlers: { "/": { Proxy: proxy } } } } });
+  const inTempDir = async (body: (dir: string) => Promise<void> | void) => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
+    try { await body(dir); } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+  const fakeSpawn = (failPorts: number[] = [], stderr = "Access denied: serve config denied") => {
+    const calls: string[][] = [];
+    const killed: string[][] = [];
+    const spawnImpl = ((_cli: string, args: string[]) => {
+      calls.push(args);
+      const port = Number(args[1]!.replace("--https=", ""));
+      const child: EventEmitter & { stderr: EventEmitter; kill(signal: string): void } = Object.assign(new EventEmitter(), {
+        stderr: new EventEmitter(), kill(signal: string) { killed.push([String(port), signal]); setImmediate(() => child.emit("exit", null)); },
+      });
+      if (failPorts.includes(port)) setImmediate(() => { child.stderr.emit("data", Buffer.from(stderr)); child.emit("exit", 1); });
+      return child;
+    }) as never;
+    return { calls, killed, spawnImpl };
+  };
+
+  it("reads a port as free, ours or taken from the serve config", () => {
+    const name = "mini.tail1234.ts.net";
+    expect(servePortState(null, name, 443, 8799)).toBe("free");
+    expect(servePortState({}, name, 443, 8799)).toBe("free");
+    expect(servePortState("nonsense", name, 443, 8799)).toBe("free");
+    for (const proxy of ["http://127.0.0.1:8799", "http://localhost:8799", "http://127.0.0.1:8799/", "127.0.0.1:8799", "localhost:8799"]) {
+      expect(servePortState(rule(443, proxy), name, 443, 8799)).toBe("ours");
+    }
+    expect(servePortState(rule(443, "http://127.0.0.1:9000"), name, 443, 8799)).toBe("taken");
+    const foreground = { Foreground: { abc123: rule(8443, "http://127.0.0.1:8799") } };
+    expect(servePortState(foreground, name, 8443, 8799)).toBe("taken");
+    expect(servePortState(foreground, name, 443, 8799)).toBe("free");
+    expect(servePortState(rule(443, "http://127.0.0.1:8799"), name, 8443, 8799)).toBe("free");
+  });
+
+  it("uses a --bg rule for this server as it is, serves the other port, and leaves the rule on at stop", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const checked: string[] = [];
+    const served = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => rule(443, "http://127.0.0.1:8799"), otherServer: async (origin) => { checked.push(origin); return false; },
+    });
+    if ("failure" in served) throw new Error(served.failure);
+    expect(fake.calls).toEqual([["serve", "--https=8443", "http://127.0.0.1:8799"]]);
+    expect(served.origin).toBe("https://mini.tail1234.ts.net");
+    expect(served.origins).toEqual(["https://mini.tail1234.ts.net", "https://mini.tail1234.ts.net:8443"]);
+    expect(lines).toEqual(["tailscale: port 443 already has a tailscale serve rule for this server, so Seira uses that rule and leaves it on."]);
+    expect(checked).toEqual(["https://mini.tail1234.ts.net:8443"]);
+    expect(JSON.parse(readFileSync(tailscaleMarker(dir), "utf8")).httpsPorts).toEqual([8443]);
+    expect(JSON.parse(readFileSync(tailscalePortsFile(dir), "utf8"))).toEqual({ ports: [443, 8443] });
+    await served.stop();
+    expect(fake.killed.map(([port]) => port)).toEqual(["8443"]);
+    expect(fake.calls).toHaveLength(1);
+  }));
+
+  it("fails with port-taken, and says which port, when a rule for another target uses the first port", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const result = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line), serveConfig: async () => rule(443, "http://127.0.0.1:9000"),
+    });
+    expect(result).toEqual({ failure: "port-taken" });
+    expect(fake.calls).toEqual([]);
+    expect(lines).toEqual([expect.stringContaining("port 443 is in use by another tailscale serve rule or session")]);
+    expect(existsSync(tailscalePortsFile(dir))).toBe(false);
+  }));
+
+  it("skips a second port that another session uses, and still serves the first", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const served = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ Foreground: { abc123: rule(8443, "http://127.0.0.1:9000") } }),
+    });
+    if ("failure" in served) throw new Error(served.failure);
+    expect(fake.calls).toEqual([["serve", "--https=443", "http://127.0.0.1:8799"]]);
+    expect(served.origins).toEqual(["https://mini.tail1234.ts.net"]);
+    expect(lines).toEqual([expect.stringContaining("port 8443 could not start")]);
+    await served.stop();
+  }));
+
+  it("reports port-taken when tailscaled refuses the listener", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn([443], "error: listener already exists for port 443");
+    expect(await tailscaleServe(status, 8799, { dataDir: dir, httpsPorts: [443], settleMs: 200, spawnImpl: fake.spawnImpl })).toEqual({ failure: "port-taken" });
   }));
 });
 

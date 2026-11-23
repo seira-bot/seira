@@ -36,7 +36,7 @@ vi.mock("node:fs", async (original) => {
   };
 });
 vi.mock("./tailscale.ts", () => ({
-  chooseTailscaleHttpsPorts: () => ({ ports: [443], primaryBusy: false, line: null }), tailscaleHttpsProblem: async () => null,
+  chooseTailscaleHttpsPorts: () => ({ ports: [443], primaryBusy: false, line: null }), tailscaleHttpsProblem: async () => null, readTailscaleServeConfig: async () => null,
   tailscaleStatus: mocks.tailscaleStatus, tailscaleServe: mocks.tailscaleServe, tailnetListenFallback: mocks.tailnetListenFallback,
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));
