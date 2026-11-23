@@ -569,7 +569,10 @@ describe("other workspaces switch", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry);
     registry.setOtherWorkspaces(first.device.id, false);
-    expect(repair(registry, first.token).device.otherWorkspaces).toBe(false);
+    const { token: credential } = registry.openPairing();
+    const result = registry.redeem(credential, "iPhone", undefined, first.token);
+    if ("error" in result) throw new Error(`pairing failed: ${result.error}`);
+    expect(result.device.otherWorkspaces).toBe(false);
   });
 });
 
