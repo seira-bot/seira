@@ -36,3 +36,21 @@ export function createTextSize({ prefs, contents, changed = () => {} }) {
     reset: () => set(DEFAULT_TEXT_SIZE),
   };
 }
+
+/** The text size of the main window, which `window()` names while it is open. A small window never reaches this. */
+export function createMainTextSize({ prefs, window }) {
+  const open = () => { const win = window(); return win && !win.isDestroyed() ? win : null; };
+  const size = createTextSize({
+    prefs: { textSize: () => prefs()?.textSize() ?? DEFAULT_TEXT_SIZE, setTextSize: (step) => prefs()?.setTextSize(step) },
+    contents: () => open()?.webContents ?? null,
+    changed: (step) => open()?.webContents.send("text-size:changed", step),
+  });
+  return {
+    ...size,
+    /** Applies the step before the window shows and again on each page it loads: Chromium keeps a zoom per host. */
+    attach(contents) {
+      size.apply(contents);
+      for (const event of ["dom-ready", "did-navigate", "did-finish-load"]) contents.on(event, () => size.apply(contents));
+    },
+  };
+}

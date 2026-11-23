@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createDesktopPrefs } from "./desktop-prefs.mjs";
-import { createTextSize, normalizeTextSize, stepTextSize, TEXT_SIZE_STEPS } from "./text-size.mjs";
+import { createMainTextSize, createTextSize, normalizeTextSize, stepTextSize, TEXT_SIZE_STEPS } from "./text-size.mjs";
 
 const memory = (record) => {
   let saved = record;
@@ -72,4 +72,28 @@ test("AC-03 and AC-04 apply puts the stored step on a page that loaded, also one
   assert.equal(other.zoom, 1.25);
   size.apply(null);
   size.apply({ ...page(), isDestroyed: () => true });
+});
+
+test("AC-03 and AC-04 the main window gets the stored step when it is made and on every load, of any server", () => {
+  const prefs = createDesktopPrefs(memory({ seen: [], textSize: 1.5 }));
+  const handlers = new Map(), sent = [];
+  const contents = { ...page(), on: (event, handler) => handlers.set(event, handler), send: (...args) => sent.push(args) };
+  const win = { isDestroyed: () => false, webContents: contents };
+  const size = createMainTextSize({ prefs: () => prefs, window: () => win });
+  size.attach(contents);
+  assert.equal(contents.zoom, 1.5, "before the window shows");
+  assert.deepEqual([...handlers.keys()].sort(), ["did-finish-load", "did-navigate", "dom-ready"]);
+  contents.zoom = 1;
+  handlers.get("did-navigate")();
+  assert.equal(contents.zoom, 1.5, "a page of another server starts at 100 % and is put back");
+  size.zoomIn();
+  assert.equal(contents.zoom, 1.75);
+  assert.deepEqual(sent, [["text-size:changed", 1.75]]);
+});
+
+test("the main window's size does nothing once the window is gone", () => {
+  const prefs = createDesktopPrefs(memory(undefined));
+  const size = createMainTextSize({ prefs: () => prefs, window: () => null });
+  assert.equal(size.zoomIn(), 1.1);
+  assert.equal(prefs.textSize(), 1.1);
 });
