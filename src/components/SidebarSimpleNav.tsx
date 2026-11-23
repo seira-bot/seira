@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useStore } from "@/state/store";
 
 import { openCommandPalette } from "./CommandPalette";
@@ -28,6 +29,7 @@ export function SimpleSearchPill() {
         onClick={openCommandPalette}
         aria-label={t("sidebar.searchAria")}
         title={t("sidebar.searchAria")}
+        data-ui={ui("sidebar.search")}
         className={cn(
           "flex h-[34px] w-full items-center gap-2 rounded-lg bg-inset ps-2.5 pe-1.5 text-[13px] text-ink-tertiary shadow-[inset_0_0_0_0.5px_var(--color-edge)] transition-colors duration-150 hover:text-ink-secondary motion-reduce:transition-none touch:h-11",
           SIMPLE_ROW_FOCUS,
@@ -46,7 +48,7 @@ export function SimpleBoardRow() {
   const active = state.activeView === "board";
   return (
     <div className="px-3 pb-1">
-      <button type="button" data-sidebar-board="" aria-current={active || undefined} onClick={() => dispatch({ type: "showBoard" })} className={SIMPLE_NAV_ROW}>
+      <button type="button" data-sidebar-board="" data-ui={ui("sidebar.board")} aria-current={active || undefined} onClick={() => dispatch({ type: "showBoard" })} className={SIMPLE_NAV_ROW}>
         <SquareKanban size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">{t("sidebar.nav.board")}</span>
       </button>

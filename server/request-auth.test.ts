@@ -318,11 +318,17 @@ describe("the session cookie name", () => {
     expect(prefixed).toMatch(/^__Host-n=; .*Max-Age=0; Secure$/);
   });
 
-  it("reads the __Host- cookie first and the old name only when it is absent", () => {
-    expect(presentedSessionCookie("n=old; __Host-n=new", "n")).toBe("new");
-    expect(presentedSessionCookie("__Host-n=new; n=junk", "n")).toBe("new");
-    expect(presentedSessionCookie("n=old", "n")).toBe("old");
-    expect(presentedSessionCookie(undefined, "n")).toBeUndefined();
+  it("reads only the __Host- cookie on https", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", true)).toBe("new");
+    expect(presentedSessionCookie("__Host-n=new; n=junk", "n", true)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", true)).toBeUndefined();
+    expect(presentedSessionCookie(undefined, "n", true)).toBeUndefined();
+  });
+
+  it("reads the __Host- cookie first and the unprefixed name when it is absent on http", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", false)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", false)).toBe("old");
+    expect(presentedSessionCookie(undefined, "n", false)).toBeUndefined();
   });
 });
 
@@ -363,7 +369,21 @@ describe("resolveRequestAuth", () => {
     expect(preview(pairedSession().token).auth?.kind).toBe("session");
   });
 
-  it("still accepts a session that has only the old cookie name", () => {
+  it("does not accept a valid session that has only the old cookie name on https", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}` }).auth).toBeNull();
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}; __Host-${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("accepts the __Host- cookie on https, and ignores a same-name cookie without the prefix", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `__Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+    expect(resolve({ ...https, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+  });
+
+  it("accepts the unprefixed cookie name on plain http", () => {
     const { token } = pairedSession();
     const old = resolve({ host: "bots.example.com", origin: "http://bots.example.com", cookie: `${cookieName}=${token}` });
     expect(old.auth?.kind).toBe("session");
@@ -579,7 +599,7 @@ describe("resolveRequestAuth", () => {
     // What the old address's forwarder sends: Host rewritten to this home's name, the page's own Origin kept.
     const forwarded = (origin: string, cookie = token, extra: Record<string, string> = {}) => ({
       host: "seira-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.9", "x-forwarded-host": "seira-u-1.fly.dev",
-      cookie: `${cookieName}=${cookie}`, origin, ...extra,
+      cookie: `__Host-${cookieName}=${cookie}`, origin, ...extra,
     });
     const page = { "sec-fetch-site": "same-origin", "sec-fetch-dest": "empty" };
     try {
@@ -610,7 +630,7 @@ describe("resolveRequestAuth", () => {
     const { credential } = sessions.openPairing({ browser: true, owner: "ada@example.test" });
     const signedIn = sessions.exchange({ code: credential, label: "Chrome on Mac", source: "1.2.3.4", browser: true });
     if (!signedIn.ok) throw new Error(signedIn.error);
-    const cookie = `${cookieName}=${signedIn.token}`;
+    const cookie = `__Host-${cookieName}=${signedIn.token}`;
     const cloud = { host: "seira-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie };
     expect(resolve(cloud).auth?.kind).toBe("session");
     expect(resolve({ ...cloud, origin: "https://seira-u-0123456789ab.fly.dev" }, "/api/bots", "POST").auth?.kind).toBe("session");
@@ -630,7 +650,7 @@ describe("resolveRequestAuth", () => {
     expect(resolve({ ...cloud, "sec-fetch-site": "same-origin" }, connectorRefresh, "GET").auth?.kind).toBe("session");
     expect(resolve({ ...cloud, "sec-fetch-site": "same-site" }, "/api/bots", "GET").auth?.kind).toBe("session");
     const paired = pairedToken();
-    expect(resolve({ host: "seira-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie: `${cookieName}=${paired}` }, "/api/bots", "POST").auth?.kind).toBe("session");
+    expect(resolve({ host: "seira-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie: `__Host-${cookieName}=${paired}` }, "/api/bots", "POST").auth?.kind).toBe("session");
     expect(provesSameOrigin(request({ host: "a.example", origin: "http://a.example" }))).toBe(true);
     expect(provesSameOrigin(request({ host: "a.example" }))).toBe(false);
     expect(provesSameOrigin(request({ host: "a.example", origin: "https://evil.example", "sec-fetch-site": "same-origin" }))).toBe(false);
@@ -684,7 +704,7 @@ describe("resolveRequestAuth", () => {
     const client = pairedToken(["client"]);
     const admin = pairedToken(["admin"]);
     const headers = { host: "bots.example.com", "x-forwarded-proto": "https", origin: "https://bots.example.com" };
-    const clientCredentials: Record<string, string>[] = [{ authorization: `Bearer ${client}` }, { cookie: `${cookieName}=${client}` }];
+    const clientCredentials: Record<string, string>[] = [{ authorization: `Bearer ${client}` }, { cookie: `__Host-${cookieName}=${client}` }];
     for (const credential of clientCredentials) {
       const denied = resolve({ ...headers, ...credential }, path, method);
       expect(denied.auth).toBeNull();

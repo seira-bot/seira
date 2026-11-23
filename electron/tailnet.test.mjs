@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bareAddress, inTailscaleRange, isTailnetHost, isTailnetName, onTailnet, readTailscaleStatusJson, tailnetHosts, tailnetInterfaceAddresses, tailnetOrigin } from "./tailnet.mjs";
+import { bareAddress, inTailscaleRange, isTailnetHost, isTailnetName, onTailnet, readMagicDnsEnabled, readTailscaleStatusJson, tailnetHosts, tailnetInterfaceAddresses, tailnetOrigin } from "./tailnet.mjs";
 
 /** The shape `tailscale status --json` prints (Tailscale 1.7x), trimmed to what is read. */
 const status = (overrides = {}, self = {}) => JSON.stringify({
@@ -80,5 +80,19 @@ describe("what a share answers to", () => {
     const hosts = tailnetHosts({ name: "macmini.tail1234.ts.net", addresses: ["100.101.102.103", "fd7a:115c:a1e0::1"], port: 8799 });
     expect([...hosts].sort()).toEqual(["100.101.102.103:8799", "[fd7a:115c:a1e0::1]:8799", "macmini.tail1234.ts.net:8799"]);
     expect(tailnetHosts({ name: "evil.example.com", addresses: [], port: 8799 }).size).toBe(0);
+  });
+});
+
+describe("reading whether MagicDNS is on", () => {
+  it("reads the current tailnet's MagicDNS flag", () => {
+    expect(readMagicDnsEnabled(status({ CurrentTailnet: { Name: "example-tailnet", MagicDNSEnabled: false } }))).toBe(false);
+    expect(readMagicDnsEnabled(status({ CurrentTailnet: { Name: "example-tailnet", MagicDNSEnabled: true } }))).toBe(true);
+  });
+
+  it("is null when the status does not say", () => {
+    expect(readMagicDnsEnabled(status())).toBeNull();
+    expect(readMagicDnsEnabled(status({ CurrentTailnet: null }))).toBeNull();
+    expect(readMagicDnsEnabled(status({ CurrentTailnet: { MagicDNSEnabled: "no" } }))).toBeNull();
+    for (const text of ["", "Tailscale started", "[]", "null", "{"]) expect(readMagicDnsEnabled(text)).toBeNull();
   });
 });

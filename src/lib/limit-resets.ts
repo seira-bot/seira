@@ -129,6 +129,12 @@ export function windowLabel(window: LimitWindowName): string {
   return window === "5-hour" ? t("planUsage.fiveHour") : window === "weekly" ? t("planUsage.weekly") : window === "monthly" ? t("planUsage.monthly") : t("usage.title");
 }
 
+/** Another AI of the same kind signed in with the same address: its limits are this one's, not a mix-up. */
+export function sameAccountAs(limit: EngineLimit, limits: readonly EngineLimit[]): EngineLimit | undefined {
+  const email = limit.email?.trim().toLowerCase();
+  return email ? limits.find((other) => other.engine !== limit.engine && other.driver === limit.driver && other.email?.trim().toLowerCase() === email) : undefined;
+}
+
 const TONE_RANK: Record<UsageTone, number> = { out: 2, near: 1, fine: 0 };
 
 /** The AI closest to its limit: at the limit before near it before fine, then the most used, then the soonest reset. */

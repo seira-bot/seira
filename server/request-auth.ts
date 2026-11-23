@@ -353,10 +353,16 @@ export function clearSessionCookies(name: string): string[] {
   return [clearSessionCookie(name), `${HOST_PREFIX}${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`];
 }
 
-/** The `__Host-` cookie wins; the unprefixed name counts only when it is absent. */
-export function presentedSessionCookie(cookieHeader: string | undefined, name: string): string | undefined {
+/** On https only the `__Host-` cookie counts: a sibling host can set the unprefixed name, never the prefixed one.
+ * On plain http the `__Host-` cookie wins and the unprefixed name counts when it is absent. */
+export function presentedSessionCookie(cookieHeader: string | undefined, name: string, secure: boolean): string | undefined {
   const cookies = parseCookies(cookieHeader);
-  return cookies.get(`${HOST_PREFIX}${name}`) ?? cookies.get(name);
+  const prefixed = cookies.get(`${HOST_PREFIX}${name}`);
+  return secure ? prefixed : prefixed ?? cookies.get(name);
+}
+
+export function requestIsHttps(req: IncomingMessage): boolean {
+  return requestOrigin(req)?.startsWith("https://") === true;
 }
 
 /** What a `client` session may do. Default deny: a new route is admin-only until listed here. */
@@ -544,8 +550,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/needs-you$/ },
   // a person's own inbox: its lines, how many wait, and one of them read or done; the handler serves the session's own alone
   { methods: ["GET"], path: /^\/api\/inbox(?:\/count)?$/ },
-  { methods: ["POST"], path: /^\/api\/inbox\/read-all$/ },
-  { methods: ["POST"], path: /^\/api\/inbox\/[\w-]+\/(?:read|done)$/ },
+  { methods: ["POST"], path: /^\/api\/inbox\/(?:read-all|done-all|summary|summary\/hide|summarizer)$/ },
+  { methods: ["POST"], path: /^\/api\/inbox\/[\w-]+\/(?:read|done|not-decision)$/ },
   // who a Team Cloud bot can report to, and handing over a bot the member owns: the handler checks who may
   { methods: ["GET"], path: /^\/api\/team\/people$/ },
   // the workspace's banner picture: everyone signed in here sees it; changing it (PUT, DELETE) is an admin's
@@ -721,7 +727,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
 
   // A presented session credential wins over the loopback rule.
   const bearer = bearerToken(req.headers.authorization);
-  const cookie = presentedSessionCookie(headerValue(req.headers.cookie), options.cookieName);
+  const cookie = presentedSessionCookie(headerValue(req.headers.cookie), options.cookieName, requestIsHttps(req));
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
   let session: SessionRecord | null = null;
   let via: "bearer" | "cookie" | "ticket" | null = null;

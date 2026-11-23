@@ -46,6 +46,7 @@ async function serve(options: {
     threadBusy: () => false,
     botForThread: () => null,
     activeGroupTurnForBot: () => null,
+    visibleFor: () => ({ bot: () => true, thread: () => true }),
   } as unknown as InstanceRouteDeps;
   const routes = [createInstanceRoutes(deps)];
   const server = createServer(async (req, res) => {

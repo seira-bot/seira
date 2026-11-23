@@ -5,7 +5,7 @@ import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import {
-  limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, shownUsageLimit, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
+  limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, shownUsageLimit, sameAccountAs, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
 } from "@/lib/limit-resets";
 import type { Routine } from "@/lib/routines";
@@ -124,7 +124,7 @@ export function UsageRing({ limit, className }: { limit: EngineLimit; className?
 
 /** When the usage was last read, each window's share left with its reset and a track filled by use; at the limit, how it
  * clears and a fresh check. */
-export function UsageRows({ limit }: { limit: EngineLimit }) {
+export function UsageRows({ limit, twin }: { limit: EngineLimit; /** Another AI signed in with the same account. */ twin?: EngineLimit }) {
   const [checking, setChecking] = useState(false);
   const { dispatch } = useStore();
   const now = Date.now();
@@ -132,7 +132,10 @@ export function UsageRows({ limit }: { limit: EngineLimit }) {
   return (
     <div data-usage-rows className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 truncate text-[13px] font-semibold leading-[18px] text-ink">{t("limits.cardTitle", { engine: limit.name })}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-[13px] font-semibold leading-[18px] text-ink">{t("limits.cardTitle", { engine: limit.name })}</span>
+          {limit.email && <span data-usage-email className="truncate text-[12px] leading-4 text-ink-tertiary">{limit.email}</span>}
+        </span>
         {checkedAt > 0 && <span data-usage-checked className="shrink-0 text-[12px] leading-4 text-ink-tertiary">{t("limits.checked", { when: threadUpdatedLabel(checkedAt, now) })}</span>}
       </div>
       {usageRows(limit).map((row) => (
@@ -149,6 +152,7 @@ export function UsageRows({ limit }: { limit: EngineLimit }) {
           </div>
         </div>
       ))}
+      {twin && <p data-usage-same-account className="text-[12px] leading-4 text-ink-tertiary">{t("limits.sameAccount", { name: twin.name })}</p>}
       {limit.blocked && (
         <div className="flex items-start justify-between gap-3 border-t-[0.5px] border-ink/10 pt-2.5 text-[12px] leading-4">
           <p className="min-w-0 text-ink-tertiary">{t("limits.clearsOnReply", { engine: limit.name })}</p>
@@ -187,8 +191,8 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
       {limits.some((limit) => limit.engine !== engine) && (
         <div data-usage-rings role="group" aria-label={t("limits.title")} className="-mx-1.5 flex flex-wrap gap-1">
           {limits.map((limit) => (
-            <button key={limit.engine} type="button" data-usage-engine={limit.engine} aria-pressed={limit === shown} aria-label={limitLine(limit, now, ", ")}
-              title={limitLine(limit, now)} onClick={() => { setPicked(limit.engine); onPick?.(limit.engine); }}
+            <button key={limit.engine} type="button" data-usage-engine={limit.engine} aria-pressed={limit === shown} aria-label={`${limitLine(limit, now, ", ")}${limit.email ? `, ${limit.email}` : ""}`}
+              title={`${limitLine(limit, now)}${limit.email ? ` · ${limit.email}` : ""}`} onClick={() => { setPicked(limit.engine); onPick?.(limit.engine); }}
               className={cn("flex h-6 min-w-0 items-center gap-1.5 rounded-full px-1.5 text-[12px] leading-4",
                 limit === shown ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
               <UsageRing limit={limit} />
@@ -197,7 +201,7 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
           ))}
         </div>
       )}
-      {shown && <UsageRows limit={shown} />}
+      {shown && <UsageRows limit={shown} twin={sameAccountAs(shown, limits)} />}
     </div>
   );
 }

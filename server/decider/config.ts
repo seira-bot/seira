@@ -69,7 +69,7 @@ export const deciderConfigSchema = z.object({
     .max(2048)
     .refine((value) => !value || /^https?:\/\//i.test(value), "the OpenRouter address must start with http:// or https://")
     .optional(),
-  jobs: z.object({ roomRouting: z.boolean().optional(), inboxTriage: z.boolean().optional() }).optional(),
+  jobs: z.object({ roomRouting: z.boolean().optional(), inboxTriage: z.boolean().optional(), inboxSort: z.boolean().optional() }).optional(),
 });
 
 /** The decision model; see `deciderConfigSchema`. */
@@ -95,5 +95,5 @@ export interface DeciderConfig {
   workersAiAccountId?: string;
   /** An operator setting with no UI, like `baseUrl`: Workers AI's REST root, `/client/v4` included. */
   workersAiBaseUrl?: string;
-  jobs?: { roomRouting?: boolean; inboxTriage?: boolean };
+  jobs?: { roomRouting?: boolean; inboxTriage?: boolean; inboxSort?: boolean };
 }

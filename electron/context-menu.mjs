@@ -169,7 +169,7 @@ function mediaItems(params, { webContents, downloads, t }) {
   return items;
 }
 
-/** The window's right-click menu, built from Electron's context-menu params: never empty, so right-click always answers. */
+/** The window's right-click menu, built from Electron's context-menu params: empty on a spot with nothing to act on. */
 export function contextMenuTemplate(params, { webContents, clipboard, downloads, t = nativeText.englishText.t }) {
   const sections = [];
   if (params.misspelledWord) {
@@ -185,17 +185,9 @@ export function contextMenuTemplate(params, { webContents, clipboard, downloads,
       ...(mediaLink(params.linkURL) ? [{ label: t("native.context.openInDefaultApp"), click: () => downloads.start(webContents, params.linkURL, "open") }] : []),
     ]);
   }
-  const media = mediaItems(params, { webContents, downloads, t });
-  sections.push(media);
+  sections.push(mediaItems(params, { webContents, downloads, t }));
   if (params.isEditable || params.linkURL || params.misspelledWord || params.selectionText) {
     sections.push(editItems(params, pasteMenuItem(params, clipboard, webContents, t), t));
-  } else if (media.length === 0) {
-    sections.push([
-      { label: t("native.role.copy"), role: "copy", enabled: params.editFlags.canCopy },
-      { label: t("native.role.selectAll"), role: "selectAll" },
-      { type: "separator" },
-      { label: t("native.role.reload"), click: () => webContents.reload() },
-    ]);
   }
   return sections.filter((section) => section.length > 0).flatMap((section, index) => index === 0 ? section : [{ type: "separator" }, ...section]);
 }

@@ -7,7 +7,7 @@ import { useStore } from "@/state/store";
 import { AboutDialog } from "../../AboutDialog";
 import { AnalyticsRow } from "../../AnalyticsRow";
 import { CrashReportsRow } from "../../CrashReportsRow";
-import { ChatWidthRow, FontRow, SidebarToolsLayoutRow } from "../../AppearanceSelectRows";
+import { ChatWidthRow, FontRow, SidebarToolsLayoutRow, TextSizeRow } from "../../AppearanceSelectRows";
 import {
   ColorUserBubblesRow, FollowUpRow, LanguageRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, SendKeyRow, ShowThreadsRow,
   ToolCallsRow, UniversalPinsRow, UpdatesRow,
@@ -165,6 +165,7 @@ export function AppearancePage() {
         <ThemePickerRow open={themes} onToggle={() => setThemes((open) => !open)} />
         {themes && <div data-settings-block="themes" className="p-4"><SkinPicker /></div>}
         <ColorUserBubblesRow simple />
+        <TextSizeRow />
         {!ctx.client && <SettingsLinkRow title={t("placeLook.sidebarColor")} value={place.name} badge={<PlaceBadge place={place} size={14} />} onClick={() => go("overview", "sidebar")} data={{ "data-settings-door": "sidebar-color" }} />}
       </SettingsRows>
     </SettingsGroup>

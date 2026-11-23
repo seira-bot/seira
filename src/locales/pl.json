@@ -6858,6 +6858,7 @@
   "settings.runCard.line": "Pokazuje polecenia powłoki dla Twojej bieżącej prośby.",
   "settings.chatWidth.line": "Jak szerokie mogą być dymki wiadomości na tym urządzeniu.",
   "settings.font.line": "Zastępuje czcionkę motywu na tym urządzeniu.",
+  "settings.textSize.title": "Rozmiar tekstu",
   "accounts.manage": "Konto i wylogowanie",
   "connectedWorkspaces.localTitle": "Środowiska na tym komputerze",
   "connectedWorkspaces.newEnvironment": "Nowe środowisko",

@@ -15,9 +15,10 @@ export interface BotMenuProps {
   allLabel?: string;
   summary: ReactNode;
   className?: string;
+  ui?: string;
 }
 
-export function BotMenu({ label, bots, value, onChange, allLabel, summary, className }: BotMenuProps) {
+export function BotMenu({ label, bots, value, onChange, allLabel, summary, className, ui }: BotMenuProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -47,7 +48,7 @@ export function BotMenu({ label, bots, value, onChange, allLabel, summary, class
   };
 
   return (
-    <div ref={root} className={cn("relative", className)} onKeyDown={onKeyDown}>
+    <div ref={root} data-ui={ui} className={cn("relative", className)} onKeyDown={onKeyDown}>
       <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={open} aria-label={label} onClick={() => setOpen((was) => !was)}
         className="flex h-8 max-w-full items-center gap-1.5 rounded-lg bg-control px-2.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:bg-raised-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none">
         {summary}

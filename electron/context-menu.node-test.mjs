@@ -17,7 +17,6 @@ function harness() {
   const webContents = {
     copyImageAt: (x, y) => calls.push(["copyImageAt", x, y]),
     downloadURL: (url) => calls.push(["downloadURL", url]),
-    reload: () => calls.push(["reload"]),
     replaceMisspelling: (word) => calls.push(["replaceMisspelling", word]),
     paste: () => calls.push(["paste"]),
   };
@@ -53,9 +52,9 @@ test("a video or audio player offers Save As and Open in Default App for its str
   assert.deepEqual(labels(menu({ mediaType: "audio", srcURL: `blob:${CLOUD}/0f8e` })), ["Save Audio As…", "Open in Default App"]);
 });
 
-test("media the session cannot download falls back to the plain menu instead of a dead right-click", () => {
+test("media the session cannot download opens no menu", () => {
   const { menu } = harness();
-  assert.deepEqual(labels(menu({ mediaType: "video", srcURL: "file:///etc/passwd" })), ["Copy", "Select All", "---", "Reload"]);
+  assert.deepEqual(labels(menu({ mediaType: "video", srcURL: "file:///etc/passwd" })), []);
   assert.deepEqual(labels(menu({ mediaType: "image", hasImageContents: true, srcURL: "" })), ["Copy Image"]);
 });
 
@@ -98,13 +97,10 @@ test("an editable field and a spelling mistake keep the existing menu", () => {
   assert.deepEqual(labels(menu({ selectionText: "words" })).at(-1), "Select All");
 });
 
-test("a plain spot answers with Copy, Select All and Reload", () => {
-  const { calls, menu } = harness();
-  const items = menu({});
-  assert.deepEqual(labels(items), ["Copy", "Select All", "---", "Reload"]);
-  assert.equal(items[0].enabled, false);
-  click(items, "Reload");
-  assert.deepEqual(calls, [["reload"]]);
+test("a plain spot with no text, link or media opens no menu", () => {
+  const { menu } = harness();
+  assert.deepEqual(menu({}), []);
+  assert.deepEqual(menu({ mediaType: "canvas" }), []);
 });
 
 function scratch() {

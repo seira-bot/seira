@@ -18,6 +18,7 @@ import { isLiveCallRunning, useLiveMedia } from "@/lib/live-call-media";
 import { useStore } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { liveLineHeldElsewhere } from "./LiveCallBar";
 import { useMenuMotion } from "./MenuMotion";
@@ -35,6 +36,7 @@ export function GoalToggle({ on, onToggle, solo = false, compact = false }: { on
       <button
         type="button"
         data-goal-chip
+        data-ui={ui("composer.goal")}
         aria-label={off}
         title={off}
         onClick={onToggle}
@@ -48,6 +50,7 @@ export function GoalToggle({ on, onToggle, solo = false, compact = false }: { on
   return (
     <button
       type="button"
+      data-ui={ui("composer.goal")}
       aria-pressed={on}
       aria-label={t(solo ? "composer.goal.soloAria" : "composer.goal.aria")}
       title={t(solo ? "composer.goal.soloTitle" : "composer.goal.title")}
@@ -123,6 +126,7 @@ export function TeachTaskButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
+      data-ui={ui("composer.teach")}
       onClick={onClick}
       aria-label={t("composer.teachTask")}
       title={t("composer.teachTask")}
@@ -189,16 +193,17 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   const calling = callBotId !== undefined && (onCall === callBotId || isLiveCallRunning(media.phase) || lineHeldElsewhere);
   const simple = !useAdvancedMode();
   const items: SidebarMenuItem[] = [
-    { key: "attach", label: t("composer.attachFiles"), icon: <Paperclip size={16} />, onSelect: onAttach },
+    { key: "attach", ui: ui("composer.attach"), label: t("composer.attachFiles"), icon: <Paperclip size={16} />, onSelect: onAttach },
     ...(goal ? [{
       key: "goal",
+      ui: ui("composer.goal"),
       label: t(goal.solo ? "composer.goal.soloAria" : "composer.goal.aria"),
       icon: <Target size={16} />,
       active: goal.on,
       trailing: goal.on ? check : undefined,
       onSelect: goal.onToggle,
     } satisfies SidebarMenuItem] : []),
-    ...(teach ? [{ key: "teach", label: t("composer.teachTask"), icon: <GraduationCap size={16} />, onSelect: teach } satisfies SidebarMenuItem] : []),
+    ...(teach ? [{ key: "teach", ui: ui("composer.teach"), label: t("composer.teachTask"), icon: <GraduationCap size={16} />, onSelect: teach } satisfies SidebarMenuItem] : []),
     ...extraItems,
     ...(approval ? [approvalItem(approval.name, approval.choice, simple)] : []),
     ...(callBotId === undefined ? [] : CALL_MODES.map((entry, index): SidebarMenuItem => {
@@ -235,7 +240,7 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   );
   if (!circle && items.length === 1) {
     return (
-      <button type="button" onClick={onAttach} aria-label={t("composer.attachFiles")} title={t("composer.attachFiles")} className="flex shrink-0 rounded-full">
+      <button type="button" data-ui={ui("composer.attach")} onClick={onAttach} aria-label={t("composer.attachFiles")} title={t("composer.attachFiles")} className="flex shrink-0 rounded-full">
         {trigger(false)}
       </button>
     );
@@ -323,6 +328,7 @@ function ComposerMenu({ items, renderTrigger }: { items: SidebarMenuItem[]; rend
               type="button"
               role="menuitem"
               data-menu-key={item.key}
+              data-ui={item.ui}
               disabled={item.disabled}
               onClick={() => {
                 close(false);

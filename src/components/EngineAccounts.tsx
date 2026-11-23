@@ -13,6 +13,8 @@ import { EngineCard, engineReady, providerName, type EngineCardSummary } from ".
 import { CommandRow, EngineSetup, EngineUpdateNotice, EngineWarningNotice } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
 import { ProviderOffItems, useProviderOff } from "./ProviderMenu";
+import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
+import type { ProviderUse } from "../../shared/provider-uses";
 
 /** Providers whose accounts are listed together on one card, each signed in on its own. */
 export type AccountGroup = "claude" | "chatgpt";
@@ -75,6 +77,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
   const [confirm, setConfirm] = useState<"signOut" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removeBlocked, setRemoveBlocked] = useState<ProviderUse[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const { signOut: canSignOut, remove: canRemove, hide: canHide } = accountActions(group, instance);
   const off = useProviderOff(instance);
@@ -98,6 +101,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
     setConfirm(null);
     setBusy(true);
     setError(null);
+    setRemoveBlocked([]);
     try {
       const path = `/api/instances/${encodeURIComponent(instance.instanceId)}${action === "signOut" ? "/auth/sign-out" : ""}`;
       const { instances } = await api(path, { method: action === "signOut" ? "POST" : "DELETE" });
@@ -105,7 +109,9 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
       if (Array.isArray(instances)) dispatch({ type: "instances", instances });
       else await refreshInstances().catch(() => {});
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const uses = action === "remove" ? blockedUses(cause) : [];
+      if (uses.length > 0) setRemoveBlocked(uses);
+      else setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
@@ -131,6 +137,12 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
           {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} />}
           {canRemove && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
         </div>
+      )}
+      {(off.blocked.length > 0 || removeBlocked.length > 0) && (
+        <ProviderBlockers name={engineDisplayName(instance)} uses={off.blocked.length > 0 ? off.blocked : removeBlocked}
+          onClose={() => { off.dismissBlocked(); setRemoveBlocked([]); }}
+          hideAnyway={off.blocked.length > 0 ? { run: off.hideAnyway, busy: off.busy } : undefined}
+          className="absolute right-0 top-full z-30 mt-1 w-[280px]" />
       )}
       {(error ?? off.error) && <p role="alert" className="absolute right-0 top-full z-30 mt-1 w-[260px] rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error ?? off.error}</p>}
       <ConfirmDialog

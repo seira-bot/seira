@@ -3551,6 +3551,7 @@
   "settings.runCard.line": "Affiche les commandes shell de votre demande en cours.",
   "settings.chatWidth.line": "Largeur maximale des bulles de message sur cet appareil.",
   "settings.font.line": "Remplace la police du thème sur cet appareil.",
+  "settings.textSize.title": "Taille du texte",
   "accounts.manage": "Compte et déconnexion",
   "accounts.signOut": "Se déconnecter",
   "cloudSetup.myCloud": "Mon Cloud",

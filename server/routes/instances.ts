@@ -1,6 +1,8 @@
 import { agentEndpointAddress, discoverAgentEndpointModels, hasExplicitModel, isGatewayEndpoint } from "../agent-endpoint-models.ts";
 import { codexEndpointSchema, codexEndpointUpdateSchema, newCodexEndpoint, updateCodexEndpoint, withCodexEndpointInfo, isCodexEndpoint } from "../codex-endpoints.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
+import { providerUses, usesVisibleTo } from "../provider-uses.ts";
+import type { VisibleSet } from "../bot-visibility.ts";
 import { modelManifest } from "../model-manifest/manifest.ts";
 import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
@@ -40,7 +42,7 @@ import { checkEngine, type EngineCheck } from "../engine-check.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import type { ProviderAuthSessions } from "../provider-auth-sessions.ts";
 import { instanceIcon, providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
-import { isLoopbackHost, isProxied, ownerOrAdmin } from "../request-auth.ts";
+import { isLoopbackHost, isProxied, ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
@@ -62,6 +64,7 @@ export interface InstanceRouteDeps {
   broadcast(payload: Record<string, unknown>): void;
   testCliBinary(cli: string, driver: (typeof BUILT_IN_DRIVERS)[number] | undefined): Promise<unknown>;
   cliProbeEnvironment(): NodeJS.ProcessEnv;
+  visibleFor: (auth: RequestAuth) => Pick<VisibleSet, "bot" | "thread">;
   threadBusy(botId: string, threadId: string): boolean;
   botForThread(botId: string, threadId: string): Pick<{ modelSelection: ModelSelection }, "modelSelection"> | null;
   activeGroupTurnForBot(botId: string): { threadId: string } | null;
@@ -78,20 +81,22 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   const {
     store, cfg, registry, sessions, providerAuthSessions, hostedModels, providerConfigBusy, providerInstancesChanging,
     persistProviderInstance, configStatus, broadcast, testCliBinary, cliProbeEnvironment, threadBusy,
-    botForThread, activeGroupTurnForBot,
+    botForThread, activeGroupTurnForBot, visibleFor,
   } = deps;
   const detectModels = deps.endpointModelsReadable ?? endpointModelsReadable;
   const describeInstances = async () => hostedModels ? deps.describeInstances()
     : withEndpointUrls(withCodexEndpointInfo(withClaudeBedrockInfo(withClaudeEndpointInfo(await deps.describeInstances(), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {});
-  /** Bots, their backups and threads, the new-bot default, or a turn running on it: a provider in use can't go away. */
-  const providerInUse = (instanceId: string, withDefault = true): boolean => (withDefault && cfg.defaultModelSelection?.instanceId === instanceId) || store.bots.some((bot) =>
-    bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) => task.modelSelection?.instanceId === instanceId)) ||
-    busyProviderSelections().some((selection) => selection.instanceId === instanceId);
-  const busyProviderSelections = () => store.bots.flatMap((bot) => {
+  const busyBotSelections = () => store.bots.flatMap((bot) => {
     const busyTasks = store.tasks(bot.id).filter((task) => threadBusy(bot.id, task.threadId));
     const selections = busyTasks.map((task) => botForThread(bot.id, task.threadId)!.modelSelection);
     if (activeGroupTurnForBot(bot.id) || (bot.busy && busyTasks.length === 0)) selections.push(bot.modelSelection);
-    return selections;
+    return selections.map((selection) => ({ botId: bot.id, instanceId: selection.instanceId }));
+  });
+  const busyProviderSelections = () => busyBotSelections();
+  /** The new-bot default, bots, their backups and conversations, and turns running on it: a provider in use can't go away. */
+  const providerUsesOf = (instanceId: string, withDefault = true) => providerUses({
+    instanceId, defaultInstanceId: withDefault ? cfg.defaultModelSelection?.instanceId ?? null : null,
+    bots: store.bots, tasks: (botId) => store.tasks(botId), running: busyBotSelections(),
   });
   /** After the app installed its own copy of an engine whose CLI found a copy that does not start: point the engine at the
    * app's copy, as Set CLI would. Not while provider settings are changing or a bot is using the engine. */
@@ -480,8 +485,9 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       if (!parsed.success) return json(res, 400, { ...userError("serverError.instance.settingsInvalid") });
       const body = parsed.data;
       const instanceId = instancePatch[1];
+      if (body.force && !ownerOrAdmin(auth)) return json(res, 403, { ...userError("serverError.chat.ownerOrAdmin") });
       if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      if (busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
+      if (body.hidden !== true && busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
         return json(res, 409, { error: "Wait for bots using this account to finish before changing its settings." });
       }
       /** Set when the model list is read again from a new address or with a new key: after the busy guard, so bots on
@@ -497,12 +503,14 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         if ((body.configDir !== undefined && entry.driver !== "claudeAgent") || (body.displayName !== undefined && !["claudeAgent", "codex"].includes(entry.driver))) {
           return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
         }
-        if (body.hidden === true && deps.moveNewBotModelOff && !providerInUse(instanceId, false)
+        if (body.hidden === true && deps.moveNewBotModelOff && providerUsesOf(instanceId, false).length === 0
           && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection?.instanceId === instanceId)) {
           await deps.moveNewBotModelOff(instanceId);
         }
-        if (body.hidden === true && providerInUse(instanceId)) {
-          return json(res, 409, { error: "Choose another model for the bots and default model using this provider before hiding it." });
+        if (body.hidden === true) {
+          const uses = providerUsesOf(instanceId);
+          if (uses.some((use) => use.kind === "running")) return json(res, 409, { ...userError("serverError.instance.hideRunning"), uses: usesVisibleTo(uses, visibleFor(auth)) });
+          if (uses.length > 0 && !body.force) return json(res, 409, { ...userError("serverError.instance.hideBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
         }
         if (body.hidden !== undefined) {
           if (body.hidden) entry.hidden = true;
@@ -574,9 +582,8 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       if (!addedChatgpt && !addedAntigravity && !isCodexEndpoint(instances[instanceId]) && !isAddedEndpoint(instanceId, instances[instanceId]) && (instances[instanceId].driver !== "claudeAgent" || instanceId === "claude")) {
         return json(res, 400, { error: "Only added accounts and custom endpoints can be removed here." });
       }
-      if (providerInUse(instanceId)) {
-        return json(res, 409, { error: "Choose another account for the bots and default model using this account before removing it." });
-      }
+      const uses = providerUsesOf(instanceId);
+      if (uses.length > 0) return json(res, 409, { ...userError("serverError.instance.removeBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
       // Seira keeps a ChatGPT account's sign-in in its own data folder: removing the account clears it.
       const live = addedChatgpt ? registry.get(instanceId) : undefined;
       if (live?.signOut) {

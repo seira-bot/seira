@@ -141,6 +141,22 @@ describe("the monthly window", () => {
   });
 });
 
+describe("accounts signed in with one address", () => {
+  const at = (engine: string, email?: string, driver: EngineLimit["driver"] = "claude"): EngineLimit => ({ ...claude(10), engine, name: engine, driver, ...(email ? { email } : {}) });
+
+  it("finds another AI of the same kind with the same address, ignoring case", () => {
+    const all = [at("nana", "A@example.com"), at("affan", "a@example.com"), at("work", "w@example.com")];
+    expect(limits.sameAccountAs(all[0]!, all)?.engine).toBe("affan");
+    expect(limits.sameAccountAs(all[2]!, all)).toBeUndefined();
+  });
+
+  it("finds nothing without an address, or across kinds of AI", () => {
+    const all = [at("nana"), at("affan"), at("codex", "a@example.com", "codex"), at("other", "a@example.com")];
+    expect(limits.sameAccountAs(all[0]!, all)).toBeUndefined();
+    expect(limits.sameAccountAs(all[3]!, all)).toBeUndefined();
+  });
+});
+
 describe("the AI the sidebar ring shows", () => {
   const ai = (engine: string, used: number, resetsAt: number | null = RESET, blocked = false): EngineLimit => ({ ...claude(used, blocked), engine, name: engine, resetsAt });
 

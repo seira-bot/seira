@@ -44,6 +44,22 @@ describe("window preferences", () => {
     expect(values).not.toHaveProperty("general.openAtLogin");
   });
 
+  it("AC-10 sets the text size through the desktop bridge, reads it back, and refuses a value that is not a step", async () => {
+    let step = 1;
+    const set = vi.fn(async (next: number) => { step = next; return step; });
+    vi.stubGlobal("window", { ogb: { textSize: { get: async () => step, set, onChange: () => () => {} } } });
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: 1.75 });
+    expect(set).toHaveBeenCalledWith(1.75);
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: 1.3 });
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: "1.5" });
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(await windowPrefValues()).toMatchObject({ "appearance.textSize": 1.75 });
+  });
+
+  it("leaves the text size out where the desktop bridge is absent", async () => {
+    expect(await windowPrefValues()).not.toHaveProperty("appearance.textSize");
+  });
+
   it("reads and switches a remote route through the companion bridge on this computer's page", async () => {
     const routes = { wifi: { on: false, since: null }, relay: { on: true, since: 1 } };
     const setRoute = vi.fn(async (route: "wifi" | "relay", on: boolean) => { routes[route].on = on; return { routes } as never; });

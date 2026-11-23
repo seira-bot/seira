@@ -19,6 +19,8 @@ export const instanceSettingsSchema = z.object({
   configDir: configDir.optional(),
   tools: z.boolean().optional(),
   hidden: z.boolean().optional(),
+  /** With hidden: hide although bots or conversations still use the provider. Admins only; a running bot still blocks it. */
+  force: z.boolean().optional(),
   /** null goes back to the server's default wait. */
   replyWaitMinutes: z.number().int().min(1).max(60).nullable().optional(),
   /** An added OpenAI-compatible server's model IDs; [] goes back to its /models list. */
@@ -27,7 +29,8 @@ export const instanceSettingsSchema = z.object({
   url: addEndpointSchema.shape.url.optional(),
   /** Its new API key; omitted keeps the saved one, unless the URL's host changes. */
   apiKey: addEndpointSchema.shape.key.optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, "No settings supplied");
+}).strict().refine((value) => Object.keys(value).length > 0, "No settings supplied")
+  .refine((value) => value.force === undefined || value.hidden === true, "force goes with hidden");
 
 function rawConfig(entry: InstanceConfig): Record<string, unknown> {
   return entry.config && typeof entry.config === "object" && !Array.isArray(entry.config)

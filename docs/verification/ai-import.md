@@ -51,3 +51,37 @@ read the state through the page's own `fetch` of `/api/bots`, `/api/routines` an
 - Undo of an item the person changed after the import ("kept because you changed them") was not run.
 - The report lists the Hermes secrets only as names of keys. The check did not search the server log for values.
 - The Paste step, Claude.ai and the Grok Bot row were not run.
+
+## Hermes export file
+
+What it covers: the **Hermes on another computer** row. Hermes follows the copied steps and makes one ZIP with
+`seira-import.json`; the person drops that ZIP here.
+
+Checked on 2026-11-23 on `feat/hermes-export-file` (7e855be6a) with `control-seira ui launch`. The fake engine runs
+the fixture. The data folder and the ports are temporary.
+
+### Inputs
+
+- A valid export, built with `buildZip`: two agents (`hermes` with a persona, 2 About you entries, 3 memories, one
+  skill, a cron routine, an `in 30m` routine and `telegram`; `research-desk` with one memory), `timeZone`
+  `Asia/Jakarta`, a fixed `instance`.
+- The same ZIP plus `agents/hermes/skills/daily-brief/.env`.
+- Each ZIP went in through the guide's file input (`change`), as in the checks above.
+
+### Results
+
+| AC | Step | Result | Screenshot (file name) |
+|----|------|--------|------|
+| AC-01 | Open Import & export. | The hub lists "Hermes on another computer" with its line, above ChatGPT. | `10-hermes-guide.png` |
+| AC-12 | Choose it, press **Copy**. | Three steps show. The button reads Copied. The clipboard holds the 8,243-character skill text with the manifest name and the private-chat rule. | `11-hermes-copied.png` |
+| AC-02, AC-05 | Drop the ZIP with `.env`. | "Nothing was imported" and "This file holds a password or key file, so Seira did not open it. Make the export again and leave that file out." No bot came in. The server log has no `API_KEY`. | `12-secret-file.png` |
+| AC-01, AC-09 | Drop the valid ZIP. | Review: Hermes with Memories 5, Skills 1, Routines 1, Channels 1; Research desk with Memories 1; "1 items could not be read". | `13-review-export.png` |
+| AC-08 | Press **Import**. | "Partly brought in": Brought in 8, Not brought in 1; connect again telegram; resume Morning brief. Bots: Research desk, Hermes added. The routine is paused, cron `30 7 * * 1-5` in `Asia/Jakarta`. | `14-report-export.png` |
+| AC-11 | Drop the same ZIP again. | The review picks Hermes and Research desk as the targets, not a new bot. | `15-reimport-review.png` |
+
+### Not proven
+
+- The headless browser has no real clipboard. The check replaced `navigator.clipboard.writeText` in the page and
+  read what the hub wrote.
+- No real Hermes ran the steps. The ZIPs were built by hand to the format the skill text gives.
+- The nested archive and broken manifest paths are proven by `server/ai-import/hermes-export.test.ts`, not on screen.

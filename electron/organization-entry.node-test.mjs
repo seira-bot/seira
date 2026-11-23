@@ -7,6 +7,7 @@ import environments from "./environments.cjs";
 import localOrigin from "./local-origin.cjs";
 import restart from "./relaunch-after-exit.cjs";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
+import { installPowerIpc } from "./power-ipc.mjs";
 
 const remote = { id: "old", name: "Old cloud", origin: "https://old.example" };
 const companion = { endpoint: "https://c-old.seira.bot", serverName: "Old computer", deviceId: "device-a" };
@@ -49,7 +50,7 @@ test("consuming a launch action prevents it replaying on a later restart without
 
 test("desktop relaunch accepts every platform once, guards its sender, and preserves consumed arguments and normal shutdown", () => {
   const main = readFileSync(new URL("./main.mjs", import.meta.url), "utf8");
-  const source = main.slice(main.indexOf('ipcMain.handle("desktop:relaunch"'), main.indexOf("const talk = installTalk("))
+  const source = main.slice(main.indexOf("installPowerIpc({"), main.indexOf("const talk = installTalk("))
     + main.slice(main.indexOf("function requireMainWindowSender("), main.indexOf('ipcMain.handle("desktop-remote:state"'));
   const argv = ["/fixture/Seira", "--fixture", "seira://organization", "seira://organization?ignored"];
   takeOrganizationDeepLink(argv);
@@ -60,7 +61,7 @@ test("desktop relaunch accepts every platform once, guards its sender, and prese
     const frame = { url: `${origin}/` }, contents = { mainFrame: frame, getURL: () => `${origin}/` };
     const mainWindow = { webContents: contents, isDestroyed: () => false };
     runInNewContext(source, {
-      localOnly: localOrigin.localOnly, mainWindow, desktopShutdownStarted: false,
+      localOnly: localOrigin.localOnly, mainWindow, desktopShutdownStarted: false, installPowerIpc,
       ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
       BrowserWindow: { fromWebContents: sender => sender === contents ? mainWindow : null },
       process: { platform, argv },

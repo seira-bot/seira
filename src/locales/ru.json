@@ -6914,6 +6914,7 @@
   "settings.runCard.line": "Показывает команды оболочки для текущего запроса.",
   "settings.chatWidth.line": "Насколько широкими могут быть пузыри сообщений на этом устройстве.",
   "settings.font.line": "Заменяет шрифт темы на этом устройстве.",
+  "settings.textSize.title": "Размер текста",
   "accounts.manage": "Аккаунт и выход",
   "connectedWorkspaces.localTitle": "Окружения на этом компьютере",
   "connectedWorkspaces.newEnvironment": "Новое окружение",

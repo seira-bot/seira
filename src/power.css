@@ -1,0 +1,576 @@
+:root {
+  --power-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --power-ease-lid: cubic-bezier(0.65, 0, 0.35, 1);
+  --power-hold: 800ms;
+  --power-slide: -40px;
+}
+:root[dir="rtl"] {
+  --power-slide: 40px;
+}
+
+.power-light {
+  position: absolute;
+  inset-inline-start: 50%;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  margin-inline-start: -2px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-success) 70%, transparent);
+  transition: background-color 300ms ease-out, box-shadow 300ms ease-out;
+}
+.power-light[data-power-light="paused"] {
+  background: var(--color-ink);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-ink) 40%, transparent);
+  animation: power-sleep 4.5s ease-in-out infinite;
+}
+.power-dot {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+.power-pill {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: var(--power-open, 308px);
+  height: 46px;
+  padding: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-menu);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--menu-shadow);
+  animation: power-pill-open 300ms var(--power-ease) both;
+}
+.power-pill[data-open="false"] {
+  animation: power-pill-close 260ms var(--power-ease) both;
+  pointer-events: none;
+}
+.power-pill:focus {
+  outline: none;
+}
+
+.power-action {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-ink-secondary);
+  background: var(--color-menu);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.power-action[data-slot="0"] {
+  z-index: 3;
+}
+.power-action[data-slot="1"] {
+  z-index: 2;
+}
+.power-action:not([data-slot="0"]) {
+  animation: power-action-in 280ms var(--power-ease) both;
+  animation-delay: calc(var(--i) * 40ms);
+}
+.power-pill[data-open="false"] .power-action:not([data-slot="0"]) {
+  animation: power-action-out 220ms var(--power-ease) both;
+  animation-delay: 0ms;
+}
+.power-action:hover,
+.power-action:focus-visible {
+  background: color-mix(in srgb, var(--color-ink) 7%, var(--color-menu));
+  color: var(--color-ink);
+  outline: none;
+}
+.power-action:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-focus);
+}
+.power-action > svg:not(.power-ring) {
+  grid-area: 1 / 1;
+  width: 18px;
+  height: 18px;
+  transition: transform 220ms var(--power-ease), opacity 180ms ease-out, color 120ms;
+}
+.power-action[data-power-action="restart"]:hover:not([data-state]) > svg:not(.power-ring) {
+  transform: rotate(-24deg);
+}
+.power-action[data-power-action="pause"]:active > svg:not(.power-ring) {
+  transform: scale(0.86);
+}
+.power-action .power-play {
+  opacity: 0;
+  transform: scale(0.6) rotate(-90deg);
+}
+.power-action[data-paused="true"] .power-pause {
+  opacity: 0;
+  transform: scale(0.6) rotate(90deg);
+}
+.power-action[data-paused="true"] .power-play {
+  opacity: 1;
+  transform: none;
+}
+.power-action .power-dot {
+  top: 5px;
+  box-shadow: 0 0 0 2px var(--color-menu);
+}
+
+.power-ring {
+  position: absolute;
+  inset: -2px;
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+  pointer-events: none;
+  transform: rotate(-90deg);
+}
+.power-ring circle {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 119.4;
+  stroke-dashoffset: 119.4;
+  transition: stroke-dashoffset 240ms ease-out, opacity 200ms ease-out;
+}
+.power-action[data-power-action="shutdown"] .power-ring circle {
+  stroke: var(--color-danger);
+}
+.power-action[data-state="holding"] {
+  background: color-mix(in srgb, var(--color-ink) 11%, var(--color-menu));
+  color: var(--color-ink);
+}
+.power-action[data-state="holding"] .power-ring circle {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--power-hold) linear;
+}
+.power-action[data-power-action="restart"][data-state="holding"] > svg:not(.power-ring) {
+  transform: rotate(270deg);
+  transition: transform var(--power-hold) cubic-bezier(0.4, 0, 0.2, 1);
+}
+.power-action[data-power-action="shutdown"][data-state="holding"] > svg:not(.power-ring) {
+  transform: scale(0.84);
+  color: var(--color-danger);
+  transition: transform var(--power-hold) ease-in, color var(--power-hold) ease-in;
+}
+.power-action[data-state="done"] {
+  animation: power-done 300ms var(--power-ease);
+}
+.power-action[data-state="done"] .power-ring circle {
+  stroke-dashoffset: 0;
+  opacity: 0;
+  transition: opacity 300ms ease-out 100ms;
+}
+.power-action[data-power-action="restart"][data-state="done"] > svg:not(.power-ring) {
+  transform: rotate(360deg);
+  transition: transform 300ms var(--power-ease);
+}
+.power-action[data-power-action="shutdown"][data-state="done"] > svg:not(.power-ring) {
+  color: var(--color-danger);
+}
+
+.power-label {
+  flex-shrink: 0;
+  width: 172px;
+  margin-inline-start: 6px;
+  padding-inline-end: 12px;
+  animation: power-label-in 200ms ease-out 120ms both;
+}
+.power-pill[data-open="false"] .power-label {
+  animation: power-label-out 120ms ease-out both;
+}
+.power-label-swap {
+  animation: power-label-swap 200ms var(--power-ease);
+}
+.power-label-1 {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.power-label-2 {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-ink-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.power-toast {
+  position: fixed;
+  inset-inline-start: 50%;
+  bottom: 96px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 12px;
+  color: var(--color-ink);
+  background: var(--color-menu);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--menu-shadow);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  animation: power-toast-in 200ms var(--power-ease) both;
+}
+:root[dir="rtl"] .power-toast {
+  transform: translateX(50%);
+}
+.power-toast[data-quiet] {
+  padding-inline-end: 14px;
+}
+.power-toast-text {
+  font-variant-numeric: tabular-nums;
+}
+.power-toast-mark {
+  display: grid;
+  color: var(--color-ink-secondary);
+}
+.power-toast-mark[data-ok] {
+  color: var(--color-success);
+}
+.power-toast-mark svg[data-spin] {
+  animation: power-spin 900ms linear infinite;
+}
+.power-toast-button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 500;
+  color: var(--color-ink);
+  background: var(--color-control);
+  cursor: pointer;
+  transition: background-color 120ms;
+}
+.power-toast-button:hover {
+  background: color-mix(in srgb, var(--color-control) 88%, var(--color-ink));
+}
+.power-toast-button[data-quiet] {
+  color: var(--color-ink-secondary);
+  background: transparent;
+}
+.power-toast-button[data-quiet]:hover {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+.power-toast-button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.power-visor {
+  --power-eye: #ff2a57;
+  --power-pupil: #5c0619;
+  --power-glint: #ffffff;
+  --power-visor: #0b0c0f;
+  --power-visor-ink: #f5f5f5;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  outline: none;
+  transition: backdrop-filter 300ms ease-in;
+}
+.power-visor.v-closed {
+  backdrop-filter: blur(6px) brightness(0.72);
+}
+.power-visor.v-instant,
+.power-visor.v-instant * {
+  transition: none !important;
+}
+.power-lid {
+  position: absolute;
+  inset-inline: -12%;
+  height: 56%;
+  background: var(--power-visor);
+  transition: transform 300ms var(--power-ease-lid);
+}
+.power-lid-top {
+  top: 0;
+  transform: translateY(-104%);
+  border-radius: 0 0 50% 50% / 0 0 140px 140px;
+}
+.power-lid-bottom {
+  bottom: 0;
+  transform: translateY(104%);
+  border-radius: 50% 50% 0 0 / 140px 140px 0 0;
+}
+.v-closed .power-lid {
+  transform: none;
+}
+.v-opening .power-lid {
+  transition: transform 300ms var(--power-ease);
+}
+.power-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--power-visor);
+  opacity: 0;
+}
+.v-closed .power-fill {
+  opacity: 1;
+  transition: opacity 80ms linear 300ms;
+}
+.v-reduced .power-fill {
+  transition: none;
+}
+.power-visor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(60% 45% at 50% 46%, rgb(255 42 87 / 0.1), transparent 70%);
+  transition: opacity 300ms ease-out;
+}
+.v-eyes::after {
+  opacity: 1;
+}
+.power-seam {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  opacity: 0;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, transparent, var(--power-eye) 28%, #ffd3dd 50%, var(--power-eye) 72%, transparent);
+  box-shadow: 0 0 22px 3px rgb(255 42 87 / 0.45);
+}
+.v-glint .power-seam {
+  animation: power-glint 300ms ease-out forwards;
+}
+.power-eyes {
+  position: absolute;
+  inset-inline-start: 50%;
+  top: 50%;
+  width: 230px;
+  overflow: visible;
+  opacity: 0;
+  transform: translate(-50%, -64%) scale(0.96);
+  transition: opacity 240ms ease-out, transform 240ms var(--power-ease);
+  filter: drop-shadow(0 0 10px rgb(255 42 87 / 0.55)) drop-shadow(0 0 28px rgb(255 42 87 / 0.25));
+}
+.v-eyes .power-eyes {
+  opacity: 1;
+  transform: translate(-50%, -64%);
+}
+.v-opening .power-eyes {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.power-eye-white {
+  fill: var(--power-eye);
+}
+.power-eye-pupil {
+  fill: var(--power-pupil);
+}
+.power-eye-glint {
+  fill: var(--power-glint);
+}
+.power-eye-brow,
+.power-smile {
+  fill: none;
+  stroke: var(--power-eye);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.power-eye-brow {
+  stroke-width: 2.6;
+}
+.power-smile {
+  stroke-width: 2.4;
+  transition: opacity 200ms ease-out;
+}
+.power-core {
+  fill: var(--power-eye);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 160ms ease-out 140ms, transform 300ms ease-in;
+}
+.power-eye {
+  transform-box: fill-box;
+  transform-origin: 50% 55%;
+  transition: transform 150ms cubic-bezier(0.5, 0, 0.5, 1);
+}
+.v-shut .power-eye {
+  transform: scaleY(0.12);
+}
+.v-wide .power-eye {
+  transform: scaleY(1.08);
+  transition-duration: 170ms;
+}
+.v-shut .power-smile {
+  opacity: 0;
+}
+.v-breathing .power-eyes > g {
+  animation: power-breathe 1.8s ease-in-out infinite;
+}
+.v-merge .power-eye {
+  transition: transform 300ms ease-in;
+}
+.v-merge .power-eye-l {
+  transform: translateX(25px) scale(0.06, 0.12);
+}
+.v-merge .power-eye-r {
+  transform: translateX(-25px) scale(0.06, 0.12);
+}
+.v-merge .power-core {
+  opacity: 1;
+}
+.v-out .power-core {
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 300ms ease-in, transform 300ms ease-in;
+}
+.v-out .power-eyes {
+  filter: none;
+  transition: filter 300ms ease-in;
+}
+
+.power-visor-text {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% + 34px);
+  text-align: center;
+  color: color-mix(in srgb, var(--power-visor-ink) 66%, transparent);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+  pointer-events: none;
+}
+.v-text .power-visor-text {
+  opacity: 1;
+}
+.power-visor-line-1 {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.power-visor-line-2 {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--power-visor-ink) 50%, transparent);
+}
+
+.power-visor.v-reduced {
+  animation: power-fade-in 200ms ease-out;
+}
+.power-visor.v-reduced.v-leaving {
+  animation: power-fade-out 200ms ease-out forwards;
+}
+.v-reduced .power-lid,
+.v-reduced .power-eyes,
+.v-reduced .power-eye,
+.v-reduced .power-core {
+  transition: none;
+}
+.v-reduced.v-breathing .power-eyes > g {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .power-pill,
+  .power-action,
+  .power-label,
+  .power-label-swap,
+  .power-toast {
+    animation: none !important;
+  }
+  .power-action > svg:not(.power-ring) {
+    transition: none !important;
+    transform: none !important;
+  }
+  .power-light {
+    animation: none !important;
+  }
+}
+:root[data-reduced-motion="true"] .power-pill,
+:root[data-reduced-motion="true"] .power-action,
+:root[data-reduced-motion="true"] .power-label,
+:root[data-reduced-motion="true"] .power-label-swap,
+:root[data-reduced-motion="true"] .power-toast {
+  animation: none !important;
+}
+:root[data-reduced-motion="true"] .power-action > svg:not(.power-ring) {
+  transition: none !important;
+  transform: none !important;
+}
+:root[data-reduced-motion="true"] .power-light {
+  animation: none !important;
+}
+
+@keyframes power-pill-open {
+  from { width: 46px; }
+}
+@keyframes power-pill-close {
+  to { width: 46px; }
+}
+@keyframes power-action-in {
+  from { opacity: 0; transform: translateX(calc(var(--i) * var(--power-slide))); }
+}
+@keyframes power-action-out {
+  to { opacity: 0; transform: translateX(calc(var(--i) * var(--power-slide))); }
+}
+@keyframes power-label-in {
+  from { opacity: 0; transform: translateX(-8px); }
+}
+@keyframes power-label-out {
+  to { opacity: 0; }
+}
+@keyframes power-label-swap {
+  from { opacity: 0; transform: translateY(3px); }
+}
+@keyframes power-done {
+  45% { transform: scale(1.08); }
+}
+@keyframes power-toast-in {
+  from { opacity: 0; transform: translateX(-50%) scale(0.96); }
+}
+@keyframes power-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes power-sleep {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+@keyframes power-glint {
+  0% { opacity: 1; transform: scaleX(0); }
+  45% { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+@keyframes power-breathe {
+  50% { opacity: 0.45; }
+}
+@keyframes power-fade-in {
+  from { opacity: 0; }
+}
+@keyframes power-fade-out {
+  to { opacity: 0; }
+}
+
+/* Headless captures do not advance time; ?still=1 on the preview page stops every motion. */
+.power-still *,
+.power-still *::before,
+.power-still *::after {
+  transition: none !important;
+  animation: none !important;
+}

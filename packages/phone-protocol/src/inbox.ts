@@ -65,6 +65,19 @@ export interface InboxRow {
   signIn?: SignInRequestCardData;
   /** An app the bot asked the person to connect, answered with the chat's own card for it. */
   connector?: ConnectorCardData;
+  /** The news asks the person to decide something, as judged by a model; the person can clear it. */
+  decision?: true;
+}
+
+/** A written summary of news rows, as one card at the top of the inbox. */
+export interface InboxSummary {
+  id: string;
+  at: number;
+  /** The bot that wrote it. */
+  by: { botId: string; name: string };
+  /** The ids of the news rows it covers. */
+  covers: string[];
+  items: Array<{ botId: string; threadId: string; title: string; text: string; important: boolean; rowIds: string[] }>;
 }
 
 /** A person's inbox: where its lines live (none yet before the first arrives), and the line the inbox's card in that
@@ -75,4 +88,8 @@ export interface InboxView {
   threadId: string | null;
   rows: InboxRow[];
   anchor: string | null;
+  /** The summary of the news, for the owner of a place; absent when there is none. */
+  summary?: InboxSummary;
+  /** The bot that writes summaries: `botId` null means off; absent means this server writes no summary. */
+  summarizer?: { botId: string | null };
 }

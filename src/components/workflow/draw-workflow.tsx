@@ -5,6 +5,7 @@ import { WORKFLOW_LIMITS } from "../../../shared/workflows";
 import { ACTION_ICON, type MessageMenuItem } from "@/components/MessageActions";
 import { createWorkflowOnce } from "@/components/workflow/useCreateWorkflow";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { ApiError, type Action, type Message } from "@/state/store";
 import { loadWorkflows, workflowApi } from "@/state/workflows";
 
@@ -52,6 +53,7 @@ export async function drawWorkflow(target: { threadId: string; messageId: string
 export function drawWorkflowItem(draw: { threadId: string; reply: Message; dispatch: Dispatch<Action> }): MessageMenuItem {
   return {
     key: "draw-workflow",
+    ui: ui("message.draw-workflow"),
     icon: <WorkflowIcon {...ACTION_ICON} />,
     label: t("workflow.draw.action"),
     idleOnly: true,

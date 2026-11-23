@@ -254,6 +254,20 @@ describe("who writes a small job", () => {
     expect(all.jobs.text("representative", "claude")?.via, "an engine's one-off text call has no tools").toBe("engine");
   });
 
+  it("writes the Inbox summary on the engine's one-off text call, never on the agent-process call, and gives it to the helper when the engine has none", async () => {
+    const all = setup();
+    const summary = all.jobs.text("inbox-summary", "claude");
+    expect(summary?.via).toBe("engine");
+    expect(await summary!.generateText("summary prompt")).toBe("claude wrote this");
+    expect(all.claude.calls.map((call) => call.prompt)).toEqual(["summary prompt"]);
+    expect(all.state.booked, "the call is booked like other background text").toHaveLength(1);
+    const own = all.jobs.text("inbox-summary", "codex");
+    expect(own?.via, "codex has only the agent-process call").toBe("helper");
+    await own!.generateText("codex prompt");
+    expect(all.codex.calls, "generateMemoryText is never used").toEqual([]);
+    expect(setup({ helper: null }).jobs.text("inbox-summary", "codex")).toBeNull();
+  });
+
   it.each(["grok", "codex"] as const)("gives %s the helper for the compaction summary only: its own background call keeps memory upkeep and the skill review", async (botId) => {
     const all = setup();
     const { jobs, claude } = all;

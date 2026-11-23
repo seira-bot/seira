@@ -538,14 +538,15 @@ function localTimeZone(): string {
   }
 }
 
-export function routineSchedule(schedule: string, now: number): RoutineScheduleInput | null {
+/** `timeZone` is the zone a cron line came from; without it, the zone of this computer. */
+export function routineSchedule(schedule: string, now: number, timeZone?: string): RoutineScheduleInput | null {
   const value = schedule.trim();
   const every = /^every\s*(\d{1,6})\s*([mhd])$/i.exec(value);
   if (every) {
     const minutes = Number(every[1]) * ({ m: 1, h: 60, d: 1440 } as const)[every[2]!.toLowerCase() as "m" | "h" | "d"];
     return minutes > 0 ? { type: "interval", everyMinutes: minutes, anchorAt: now } : null;
   }
-  if (/^\S+(?:\s+\S+){4}$/.test(value)) return { type: "cron", expression: value, timeZone: localTimeZone() };
+  if (/^\S+(?:\s+\S+){4}$/.test(value)) return { type: "cron", expression: value, timeZone: timeZone || localTimeZone() };
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
     const at = Date.parse(value);
     return Number.isFinite(at) ? { type: "once", at } : null;
@@ -559,7 +560,7 @@ function applyRoutines(ctx: ApplyContext, agent: ImportAgent, botId: string, lef
   for (const routine of agent.routines) {
     const itemKey = `${agent.ref}/routine/${routine.ref}`;
     if (ctx.db.receipt(ctx.jobId, itemKey)) continue;
-    const schedule = routineSchedule(routine.schedule, ctx.now());
+    const schedule = routineSchedule(routine.schedule, ctx.now(), routine.timeZone);
     const prompt = redact(routine.prompt);
     const name = routine.name.replace(/\s+/g, " ").trim().slice(0, 120) || `Routine from ${ctx.label}`;
     if (!schedule || !prompt) {
@@ -572,7 +573,7 @@ function applyRoutines(ctx: ApplyContext, agent: ImportAgent, botId: string, lef
       kind: "routine",
       name,
       botId,
-      contentHash: hashOf({ name, prompt, schedule: routine.schedule }),
+      contentHash: hashOf({ name, prompt, schedule: routine.schedule, timeZone: routine.timeZone }),
       add: () => {
         try {
           return { target: { botId, routineId: ctx.ports.routines.create({ botId, name, prompt, schedule }) } };

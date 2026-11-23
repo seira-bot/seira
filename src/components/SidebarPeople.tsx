@@ -9,6 +9,7 @@ import { openAsksOf } from "@/lib/bot-unread";
 import { cn } from "@/lib/cn";
 import { leadComposerDraft } from "@/lib/drafts";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { openBot, openThread, useStore, type AppState, type Bot } from "@/state/store";
 import { openInbox } from "@/state/inbox";
@@ -95,7 +96,7 @@ export function SidebarPeople({ compact, onOpened }: { compact: boolean; onOpene
   };
   const face = compact ? 22 : 26;
   return (
-    <section aria-label={t("sidebar.people.title")} data-sidebar-people className={cn(compact ? "px-1" : "px-2 pb-1.5 pt-0.5")}>
+    <section aria-label={t("sidebar.people.title")} data-sidebar-people data-ui={ui("sidebar.people")} className={cn(compact ? "px-1" : "px-2 pb-1.5 pt-0.5")}>
       <ul className={cn("flex items-center gap-1", compact ? "flex-col" : "flex-wrap")}>
         {people.map((person) => {
           const label = !person.you ? teammateLabel(person, presence)
@@ -119,7 +120,7 @@ export function SidebarPeople({ compact, onOpened }: { compact: boolean; onOpene
         })}
         {invite && (
           <li>
-            <a href={invite} target="_blank" rel="noreferrer" aria-label={t("sidebar.people.invite")} title={t("sidebar.people.invite")} data-people-invite
+            <a href={invite} target="_blank" rel="noreferrer" aria-label={t("sidebar.people.invite")} title={t("sidebar.people.invite")} data-people-invite data-ui={ui("sidebar.people-invite")}
               className="flex items-center justify-center rounded-full p-1 text-ink-secondary hover:bg-raised/60 hover:text-ink">
               <span className="flex items-center justify-center rounded-full border border-dashed border-hairline" style={{ width: face, height: face }}>
                 <UserPlus aria-hidden="true" size={compact ? 13 : 14} strokeWidth={1.75} className="shrink-0" />

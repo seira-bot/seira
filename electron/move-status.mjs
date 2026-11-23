@@ -19,6 +19,8 @@ export const MOVE_STATUS_HEARTBEAT_MS = 15 * 60_000;
 export const MOVE_STATUS_SETTLE_MS = 5_000;
 /** At most one report a minute, whatever changes. */
 export const MOVE_STATUS_GAP_MS = 60_000;
+/** A send that fails (the network, the Cloud) waits a minute, then twice as long each time it fails again, up to the heartbeat. */
+export const MOVE_STATUS_FAILED_MAX_MS = MOVE_STATUS_HEARTBEAT_MS;
 /** An Admin that doesn't take reports yet (404) is asked again after this long. */
 export const MOVE_STATUS_OFF_MS = 6 * 3_600_000;
 
@@ -116,11 +118,12 @@ export function moveStatus({ journal, state, kept, facts = { noted: null, waitin
 /**
  * Sends `status()` to the Admin with `send` (true once recorded, false when the Admin doesn't take reports yet) for the
  * sign-in `signIn()` names: a moment after it changes, at most once a minute, and every 15 minutes while it doesn't.
- * Fire and forget: a report that fails is only logged, and nothing about the move waits for it or changes with it.
+ * Fire and forget: a report that fails is logged and tried again later, less often each time it fails in a row, and nothing
+ * about the move waits for it or changes with it.
  */
 export function createMoveStatusReport({ status, send, signIn, now = Date.now, log = () => {},
   timers = { set: (work, ms) => { const timer = setTimeout(work, ms); timer.unref?.(); return timer; }, clear: (timer) => clearTimeout(timer) } }) {
-  let timer = null, dueAt = Infinity, sent = null, triedAt = -Infinity, offUntil = -Infinity, busy = false, again = false, closed = false;
+  let timer = null, dueAt = Infinity, sent = null, triedAt = -Infinity, offUntil = -Infinity, failures = 0, busy = false, again = false, closed = false;
   const plan = (ms) => {
     if (closed) return;
     if (timer) timers.clear(timer);
@@ -141,9 +144,15 @@ export function createMoveStatusReport({ status, send, signIn, now = Date.now, l
       if (wait > 0) return plan(wait);
       triedAt = at;
       try {
-        if (await send(body)) sent = { key, who, at };
+        const taken = await send(body);
+        failures = 0;
+        if (taken) sent = { key, who, at };
         else offUntil = at + MOVE_STATUS_OFF_MS;
-      } catch (error) { log(`one home: the Admin hears where the move stands later (${error?.message ?? error})`); }
+      } catch (error) {
+        failures += 1;
+        offUntil = at + Math.min(MOVE_STATUS_GAP_MS * 2 ** (failures - 1), MOVE_STATUS_FAILED_MAX_MS);
+        log(`one home: the Admin hears where the move stands later (${error?.message ?? error})`);
+      }
       plan(MOVE_STATUS_HEARTBEAT_MS);
     } finally {
       busy = false;

@@ -54,7 +54,21 @@ where they belong instead of adding new places.
   the behaviour automatic with a good default. An optional field on something
   the person sets up is fine. One approved exception (2026-11-22): the
   **Send crash reports** switch in Settings → General → Privacy. It is on by
-  default and has no dialog and no nag.
+  default and has no dialog and no nag. A second one (2026-11-23): the
+  **Glance** check item in the desktop app's View menu (and in the Glance tray
+  menu on Linux Wayland). It is on by default and is the only control of
+  Glance.
+- **Glance is the one place outside the window** (2026-11-23). It is a small
+  visor at the top centre of the screen in the desktop app (a tray icon on
+  Linux Wayland, where an app cannot place a window). It shows only bots that
+  work, need the person, failed or just finished: one avatar each, at most
+  four, with a status ring and never a count. It opens by itself only for an
+  approval or a question the chat already shows, never takes keyboard focus,
+  and answers through the chat card's own path. It offers Allow only while
+  the whole text of what the approval covers, as the Inbox shows it, is in
+  view without scrolling. It is not
+  a new ask: it shows the same card. Don't add other surfaces outside the
+  window.
 - **No new asks.** No new permission asks, approval cards, confirm dialogs,
   nags or waits that interrupt the person, and no default below Full access.
   A bot gets on with the work; a change that needs undoing gets **Undo**.

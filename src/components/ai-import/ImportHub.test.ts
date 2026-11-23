@@ -4,12 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const f = vi.hoisted(() => ({ state: {} as Record<string, unknown>, api: vi.fn() }));
+const f = vi.hoisted(() => ({ state: {} as Record<string, unknown>, api: vi.fn(), copy: vi.fn(async (_text: string) => "copied" as const) }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: vi.fn() }), api: f.api }));
+vi.mock("@/lib/copy-text", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/copy-text")>()), copyText: f.copy }));
 
 import type { AiImportClient } from "@/lib/ai-import";
 import { setLocale } from "@/lib/i18n";
 import { ImportSettings } from "../ImportSettings";
+import { HERMES_EXPORT_SKILL } from "../../../shared/ai-import/hermes-export";
 import { emptyCounts, type ImportErrorCode, type ImportJobView, type LocalSourceView } from "../../../shared/ai-import/api";
 import { limitMessage } from "./copy";
 import { GuideView, HubView, ImportHubSection, resumableJob, type HubViewProps } from "./ImportHub";
@@ -67,6 +69,24 @@ describe("the hub on the Import page", () => {
     expect(only).not.toContain("data-ai-import-instructions");
     expect(text(hub())).toContain("Use your instructions as");
     expect(hub({ instructions: "about-you" })).toContain('<option value="about-you" selected="">About you</option>');
+  });
+
+  it("offers Hermes on another computer for a local and a remote server", () => {
+    for (const local of [true, false]) {
+      const markup = hub({ local });
+      expect(markup).toContain('data-ai-import-source="hermes-file"');
+      expect(text(markup)).toContain("Hermes on another computer");
+    }
+  });
+
+  it("guides the Hermes file with three steps and a Copy button", () => {
+    const guide = (copied: boolean) => renderToStaticMarkup(createElement(GuideView, { source: "hermes", sending: null, copied, onCopy: vi.fn(), onFiles: vi.fn(), onBack: vi.fn() }));
+    const markup = guide(false);
+    expect(text(markup)).toContain("Export from Hermes");
+    expect(markup.match(/<li/g)).toHaveLength(3);
+    expect(markup).toContain("data-ai-import-copy");
+    expect(text(markup)).toContain("Copy");
+    expect(text(guide(true))).toContain("Copied");
   });
 
   it("remote server hides local sources", () => {
@@ -143,7 +163,7 @@ describe("a read that stopped", () => {
   });
 
   it("limit message copy: plain words, no file path or internal code", () => {
-    const codes: ImportErrorCode[] = ["upload-too-large", "too-much-data", "too-many-files", "unsafe-archive", "worker-failed", "unknown-source"];
+    const codes: ImportErrorCode[] = ["upload-too-large", "too-much-data", "too-many-files", "unsafe-archive", "worker-failed", "unknown-source", "secret-file", "bad-export"];
     for (const code of codes) {
       const shown = view(code);
       expect(shown, code).toContain("Nothing was imported");
@@ -152,6 +172,17 @@ describe("a read that stopped", () => {
     expect(limitMessage("upload-too-large")).toBe("This is larger than 8 GB, the most Seira can read at once.");
     expect(limitMessage("too-much-data")).toBe("This holds more than 16 GB of data once unpacked.");
     expect(limitMessage("too-many-files")).toBe("This holds more than 200,000 files.");
+  });
+});
+
+describe("a Hermes export that Seira refused", () => {
+  it("says what to do in plain words, without file names or codes", () => {
+    for (const [code, sentence] of [["secret-file", "This file holds a password or key file"], ["bad-export", "This export file has a mistake in it"]] as const) {
+      const shown = text(renderToStaticMarkup(createElement(ReportView, { job: job({ state: "failed", error: code }), onUndo: vi.fn(), onDone: vi.fn(), onRetry: vi.fn() })));
+      expect(shown, code).toContain(sentence);
+      expect(shown, code).toContain("Nothing was imported");
+      expect(shown, code).not.toMatch(/\.env|json|manifest|secret-file|bad-export/i);
+    }
   });
 });
 
@@ -193,6 +224,17 @@ describe("the hub, in use", () => {
     await click("[data-grok-move-open]");
     await vi.waitFor(() => expect(host.querySelector("[data-grok-move]")).not.toBeNull());
     expect(row.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("copies the Hermes steps and shows Copied", async () => {
+    const { client } = fakeClient();
+    f.copy.mockClear();
+    await act(async () => root.render(createElement(ImportHubSection, { client, local: false })));
+    await click('[data-ai-import-source="hermes-file"]');
+    expect(host.textContent).not.toContain("Copied");
+    await click("[data-ai-import-copy]");
+    expect(f.copy).toHaveBeenCalledWith(HERMES_EXPORT_SKILL);
+    await vi.waitFor(() => expect(host.textContent).toContain("Copied"));
   });
 
   it("goes from paste to review to the report, and Undo asks nothing first", async () => {
