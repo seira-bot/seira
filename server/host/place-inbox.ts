@@ -294,7 +294,8 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
       const line = lines.find((one) => one.id === lineId && lineFor(auth, one));
       if (!line) return false;
       line.decision = false;
-      notDecisions = [...notDecisions, clip(line.text, NOT_DECISION_MAX)].slice(-NOT_DECISIONS_KEPT);
+      // Security: only the owner's own corrections teach the sort; a guest's text never reaches the model.
+      if (deps.viewer(auth).kind === "owner" && line.guest === undefined) notDecisions = [...notDecisions, clip(line.text, NOT_DECISION_MAX)].slice(-NOT_DECISIONS_KEPT);
       save();
       return true;
     },

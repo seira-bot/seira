@@ -168,7 +168,7 @@ describe("grouped news in the panel", () => {
     };
     expect(row().querySelector("[data-inbox-decision-label]")!.textContent).toBe("Looks like it needs your decision");
     expect(row().querySelector("[data-inbox-not-decision]")!.textContent).toBe("Not a decision");
-    expect([...row().querySelectorAll("[data-inbox-action]")].map((one) => (one as HTMLElement).dataset.inboxAction)).toEqual(expect.arrayContaining(["reply", "done", "open"]));
+    expect([...row().querySelectorAll("[data-inbox-action]")].map((one) => (one as HTMLElement).dataset.inboxAction)).toEqual(["done", "open"]);
     expect(sectionOf()).toBe("Needs your decision");
     expect(document.querySelector(`[data-inbox-row="${reportRow.id}"] [data-inbox-not-decision]`)).toBeNull();
     await click(`[data-inbox-row="${messageRow.id}"] [data-inbox-not-decision]`);
