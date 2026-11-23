@@ -1,6 +1,7 @@
 import { BookmarkPlus, Code, Copy, Eye, Pencil, Pin, PinOff, RefreshCw, Reply, Square, Volume2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useContext, type Dispatch } from "react";
 import type { Action, ConfigStatus, Group, Message, useStore } from "@/state/store";
 import { ACTION_ICON, type MessageMenuItem } from "@/components/MessageActions";
@@ -105,7 +106,7 @@ export function useBotMessageMenu({
       onSelect: onToggleRaw,
     });
   }
-  if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate });
+  if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate, ui: ui("message.regenerate") });
   if (draw && !workflowsOff && finishedReply(draw.reply)) items.push(drawWorkflowItem(draw));
   items.push(...teamMemory, ...pinItem(pin), idItem(messageId));
   return items;

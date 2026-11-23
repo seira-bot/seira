@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CircleAlert, RefreshCw } from "lucide-react";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 
 /** A turn whose reply came back but a step it ran failed or wasn't allowed: done in part, not broken. The step's
  * own row still shows its error; the cause stays one click away. */
@@ -16,7 +17,7 @@ export function PartlyDoneRow({ cause, onRetry, review }: { cause: string; onRet
         {(onRetry || review) && (
           <div className="flex flex-wrap items-center gap-1.5">
             {onRetry && (
-              <button onClick={onRetry} className="ui-button ui-button-md mt-1.5 rounded-full border-warning/30 bg-transparent text-warning hover:bg-warning/15">
+              <button data-ui={ui("message.retry")} onClick={onRetry} className="ui-button ui-button-md mt-1.5 rounded-full border-warning/30 bg-transparent text-warning hover:bg-warning/15">
                 <RefreshCw size={12} /> {t("chat.retry")}
               </button>
             )}

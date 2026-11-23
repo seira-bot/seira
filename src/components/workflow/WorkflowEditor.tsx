@@ -4,6 +4,7 @@ import { ArrowLeft, Trash2, Workflow as WorkflowIcon } from "lucide-react";
 import type { Workflow, WorkflowStepKind } from "../../../shared/workflows";
 import { listOf } from "@/lib/cloud-send";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { Routine } from "@/lib/routines";
 import { freeSpot, newId, newStep, removalOf, STEP_HEIGHT, STEP_WIDTH, type Removal } from "@/lib/workflow-canvas";
 import { problemText, readingOrder, runnableProblem, stepById, stepTitle, type ClientProblem } from "@/lib/workflow-graph";
@@ -134,7 +135,7 @@ export function WorkflowEditor({ workflow, usedBy, onBack, onGone, onDelete, onU
   return (
     <div ref={shell} className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline/35 px-4 py-2.5">
-        <button type="button" onClick={onBack} className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] text-ink-secondary outline-none hover:bg-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-focus">
+        <button type="button" data-ui={ui("workflow.all")} onClick={onBack} className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] text-ink-secondary outline-none hover:bg-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-focus">
           <ArrowLeft size={15} aria-hidden />{t("workflow.all")}
         </button>
         <WorkflowIcon size={16} aria-hidden className="shrink-0 text-ink-tertiary" />
@@ -142,10 +143,10 @@ export function WorkflowEditor({ workflow, usedBy, onBack, onGone, onDelete, onU
           className="h-8 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[15px] font-semibold text-ink outline-none hover:border-hairline/50 focus-visible:border-hairline focus-visible:ring-2 focus-visible:ring-focus" />
         <SaveLine status={status} botName={botName} graph={draft} onRetry={retry} onReload={reload} />
         {onUseInRoutine && (
-          <button type="button" onClick={() => onUseInRoutine(workflow)} className="ui-button ui-button-primary">{t("workflow.useInRoutine")}</button>
+          <button type="button" data-ui={ui("workflow.use-in-routine")} onClick={() => onUseInRoutine(workflow)} className="ui-button ui-button-primary">{t("workflow.useInRoutine")}</button>
         )}
         <div className="flex flex-col items-end">
-          <button type="button" aria-disabled={usedBy.length > 0 || undefined} aria-describedby={usedBy.length > 0 ? reasonId : undefined} onClick={() => void deleteWorkflow()}
+          <button type="button" data-ui={ui("workflow.delete")} aria-disabled={usedBy.length > 0 || undefined} aria-describedby={usedBy.length > 0 ? reasonId : undefined} onClick={() => void deleteWorkflow()}
             className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-danger outline-none hover:bg-danger/10 focus-visible:ring-2 focus-visible:ring-focus aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent">
             <Trash2 size={15} aria-hidden />{t("workflow.delete")}
           </button>
@@ -159,7 +160,7 @@ export function WorkflowEditor({ workflow, usedBy, onBack, onGone, onDelete, onU
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="relative flex min-h-[320px] min-w-0 flex-1 flex-col">
+        <div data-ui={ui("workflow.canvas")} className="relative flex min-h-[320px] min-w-0 flex-1 flex-col">
           <WorkflowCanvas graph={draft} botName={botName} selectedId={selected?.id ?? null} onSelect={setSelectedId} label={t("workflow.region")}
             centerRef={center} onDropStep={(kind, at) => place(kind, at)}
             edit={{ dispatch, problems: stepProblems, onRemove: removeStep, onAnnounce: setAnnouncement }} />

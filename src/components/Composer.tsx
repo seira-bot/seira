@@ -13,6 +13,7 @@ import { ELEVATED_CARD, ELEVATED_FLOAT } from "./elevated";
 import { uploadDraftImage } from "@/lib/composer-uploads";
 import { intakeFilesWithNotice } from "@/lib/attach-notice";
 import { activeLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { imeComposing, sendKeyLabel, sendsMessage, useSendKey } from "@/lib/send-key";
 import { alternateSend, alternateSendLabel, useFollowUpDefault } from "@/lib/follow-up"; import { followUpChoices, resolveFollowUp, type FollowUp } from "../../shared/follow-up";
@@ -714,6 +715,7 @@ export function Composer({
       {simpleDock && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} goal={goal} teach={canLearn ? teachTask : undefined} />}
       {advanced && <button
         type="button"
+        data-ui={ui("composer.attach")}
         onClick={() => fileInput.current?.click()}
         aria-label={t("composer.attach")}
         title={t("composer.attach")}

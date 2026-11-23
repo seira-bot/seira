@@ -13,6 +13,7 @@ import {
 } from "@/lib/export-transcript";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { localizedTaskTitle } from "@/lib/task-title";
 import { useContextAction } from "./ContextWarning";
 import { ELEVATED_CONTROL, ELEVATED_HOVER, ELEVATED_OPEN } from "./elevated";
@@ -89,6 +90,7 @@ export function useChatMoreItems(profile: Bot, phoneHeader = false): { items: Si
     ...phoneItems,
     {
       key: "find",
+      ui: ui("chat.find"),
       label: t("chat.find"),
       icon: <Search size={16} />,
       active: findOpen,
@@ -98,6 +100,7 @@ export function useChatMoreItems(profile: Bot, phoneHeader = false): { items: Si
     ...phoneScreen,
     ...(showThreads || side === "team" ? [] : [{
       key: "new-thread",
+      ui: ui("chat.new-thread"),
       heading: t("task.list"),
       separatorBefore: true,
       label: t("task.newShort"),
@@ -107,6 +110,7 @@ export function useChatMoreItems(profile: Bot, phoneHeader = false): { items: Si
     // With one thread there is nothing to switch to.
     ...(threads.length < 2 ? [] : [{
       key: "threads",
+      ui: ui("chat.all-threads"),
       ...(side === "team" ? { heading: t("task.list"), separatorBefore: true } : {}),
       label: t("task.switch"),
       icon: <MessagesSquare size={16} />,
@@ -121,6 +125,7 @@ export function useChatMoreItems(profile: Bot, phoneHeader = false): { items: Si
     } satisfies SidebarMenuItem]),
     {
       key: "start-fresh",
+      ui: ui("chat.start-fresh"),
       label: t("chat.startFresh"),
       icon: <RotateCcw size={16} />,
       disabled: bot.busy || contextAction.pending || !hasMessages || atFreshStart,
@@ -185,6 +190,7 @@ function RoundChatMoreMenu({ bot, phoneHeader }: { bot: Bot; phoneHeader: boolea
       triggerTitle={t("chat.more")}
       renderTrigger={({ open }) => (
         <span
+          data-ui={ui("chat.more")}
           data-testid="chat-more"
           className={cn(
             "flex size-8 items-center justify-center rounded-full",
@@ -267,6 +273,7 @@ export function ChatHeaderMenu({ bot, onRename }: { bot: Bot; onRename?: () => v
       placement="below"
       renderTrigger={({ open }) => (
         <span
+          data-ui={ui("chat.more")}
           data-testid="chat-more"
           className={cn(
             "flex size-8 items-center justify-center rounded-full transition-colors hover:bg-ink/[0.06]",

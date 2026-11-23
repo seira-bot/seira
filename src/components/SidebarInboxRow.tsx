@@ -3,6 +3,7 @@
 import { Inbox } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { closeInbox, openInbox, useInboxPanel, useInboxSupport, useInboxView } from "@/state/inbox";
 import { useTeamPeople } from "@/state/team-people";
 import { SIMPLE_NAV_ROW } from "./SidebarSimpleNav";
@@ -29,7 +30,7 @@ export function SidebarInboxRow({ icons, large, running, onOpened }: {
   const dot = running && <span data-inbox-running="" aria-hidden="true" className={cn("absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-panel bg-success", icons ? "size-3" : "size-2.5")} />;
   if (icons) {
     return (
-      <button type="button" data-sidebar-inbox={count} aria-label={label} title={label} aria-pressed={open} onClick={toggle}
+      <button type="button" data-sidebar-inbox={count} data-ui={ui("sidebar.inbox")} aria-label={label} title={label} aria-pressed={open} onClick={toggle}
         className={cn("relative mx-auto mb-1 flex size-[46px] shrink-0 items-center justify-center rounded-xl text-ink-secondary hover:bg-raised hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus", open && "bg-raised text-ink")}>
         <Inbox size={20} strokeWidth={1.5} aria-hidden="true" />
         {count > 0 && <span aria-hidden="true" data-inbox-count className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-warning px-0.5 text-[10px] font-semibold leading-4 text-panel">{shown}</span>}
@@ -40,7 +41,7 @@ export function SidebarInboxRow({ icons, large, running, onOpened }: {
   if (large) {
     return (
       <div className="px-3 pb-1">
-        <button type="button" data-sidebar-inbox={count} aria-label={label} title={label} aria-pressed={open} aria-current={open || undefined} onClick={toggle} className={SIMPLE_NAV_ROW}>
+        <button type="button" data-sidebar-inbox={count} data-ui={ui("sidebar.inbox")} aria-label={label} title={label} aria-pressed={open} aria-current={open || undefined} onClick={toggle} className={SIMPLE_NAV_ROW}>
           <Inbox size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t("inbox.panel.title")}</span>
           {running && <span aria-hidden="true" data-inbox-running="" className="size-[7px] shrink-0 rounded-full bg-success" />}
@@ -51,7 +52,7 @@ export function SidebarInboxRow({ icons, large, running, onOpened }: {
   }
   return (
     <div className="px-3 pb-1">
-      <button type="button" data-sidebar-inbox={count} aria-label={label} title={label} aria-pressed={open} onClick={toggle}
+      <button type="button" data-sidebar-inbox={count} data-ui={ui("sidebar.inbox")} aria-label={label} title={label} aria-pressed={open} onClick={toggle}
         className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-raised/60 focus-visible:ring-2 focus-visible:ring-accent/60")}>
         <span className={cn("relative grid shrink-0 place-items-center rounded-full", open ? "bg-ink/[0.16] text-ink" : "bg-raised text-ink-secondary", "size-8")}>
           <Inbox size={16} strokeWidth={1.75} aria-hidden="true" />

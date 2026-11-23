@@ -2,12 +2,13 @@
 // link's far place, what that place may reach here, and on the side that issued it only the sha256 of its credential.
 // Invites are kept the same way, as a hash, and each is good once for INVITE_TTL_MS.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
 import { placeSchema, type Place } from "../bot-link/protocol.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 
 export const GUEST_TOKEN_PREFIX = "lsk_";
 export const INVITE_TTL_MS = 15 * 60_000;
@@ -31,17 +32,17 @@ export const botIdSchema = z.string().regex(/^[\w-]{1,128}$/u);
 const linkSchema = z.object({
   id: z.string().regex(LINK_ID),
   role: z.enum(["inviter", "joiner"]),
-  place: placeSchema,
+  place: z.object(placeSchema.shape),
   exposed: z.array(botIdSchema).max(500),
   cap: z.enum(APPROVAL_CAPS),
   tokenHash: hex64.optional(),
   createdAt: z.number(),
-}).strict().refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
-const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() }).strict();
+}).refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
+const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() });
 /** A link that ended while work its peer started here could still run: by its peer's key, with the cap it had then. */
-const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number() }).strict();
+const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number() });
 const fileSchema = z.object({ v: z.literal(1), links: z.array(linkSchema).max(LINKS_MAX), invites: z.array(inviteSchema).max(INVITES_MAX),
-  ended: z.array(endedSchema).max(ENDED_MAX).optional() }).strict();
+  ended: z.array(endedSchema).max(ENDED_MAX).optional() });
 
 export type StoredLink = z.infer<typeof linkSchema>;
 export type LinksFile = z.infer<typeof fileSchema>;
@@ -68,7 +69,7 @@ export function readLinks(dataDir: string, log: (line: string) => void = () => {
 }
 
 export function writeLinks(dataDir: string, file: LinksFile): void {
-  mkdirSync(join(dataDir, DIR), { recursive: true, mode: 0o700 });
+  ensurePrivateDir(join(dataDir, DIR));
   writeFileAtomic(join(dataDir, DIR, FILE), JSON.stringify(file), { mode: 0o600 });
 }
 

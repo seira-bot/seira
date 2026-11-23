@@ -445,10 +445,12 @@ export class RoutineManager {
   takeTurnedBackOn(): Routine[] { return this.turnedBackOn.splice(0).map(cloneRoutine); }
   /** Each routine with the next run it will really make: one whose runs are spaced out is not due for the occurrences it skips. */
   private planned(routines: readonly Routine[]): Routine[] { return routines.map((routine) => routine.checks || runsOnce(routine.schedule) ? routine : afterRunSpacing(routine, this.runs, this.now(), nextOccurrence)); }
-  wakeHold(horizonMs = WAKE_HORIZON_MS) { return wakeHoldOf(this.planned(this.routines), this.runs, this.now(), horizonMs); }
+  /** Routines whose target is gone never run, so they never need the computer. */
+  private reachable(routines: readonly Routine[]): Routine[] { return routines.filter((routine) => this.targetState(routine) !== "missing"); }
+  wakeHold(horizonMs = WAKE_HORIZON_MS) { return wakeHoldOf(this.planned(this.reachable(this.routines)), this.runs, this.now(), horizonMs, { waitingHolds: false }); }
   /** A Cloud home's sleep check (server/routine-due.ts). */
   hasActiveRuns(): boolean { return activeRunsOf(this.runs, this.now()); }
-  nextDueAt(): number | null { return nextDueOf(this.planned(this.routines.filter((routine) => routine.target === "room-goal" || !this.options.pausedText?.(routine.botId))), this.runs, this.now()); }
+  nextDueAt(): number | null { return nextDueOf(this.planned(this.reachable(this.routines).filter((routine) => routine.target === "room-goal" || !this.options.pausedText?.(routine.botId))), this.runs, this.now()); }
 
   listRuns(from?: number, to?: number): RoutineRun[] {
     return this.runs

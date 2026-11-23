@@ -12,7 +12,7 @@ import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { ThemeTool } from "../themes/tool.ts";
 import { cardElsewhere, cardNotInRoom, cardShownStatus, SETTINGS_CARDS } from "./cards.ts";
 import type { TakenPicture } from "./picture-file.ts";
-import { findPlaces, placePath, placesList } from "./places.ts";
+import { findPlaces, findUiPlaces, placePath, placesList } from "./places.ts";
 import { findSettings, personOnly, type SettingEntry, type WritableEntry } from "./registry.ts";
 
 export const TOOL = "app_settings";
@@ -204,13 +204,13 @@ export function createAppSettings(deps: AppSettingsDeps) {
         const query = typeof body.query === "string" ? body.query : "";
         const hits = findSettings(entries, query, FIND_LIMIT).map(describe);
         if (hits.length) return reply(200, { text: JSON.stringify(hits) });
-        const places = findPlaces(query);
+        const places = [...findPlaces(query), ...findUiPlaces(query, 3)];
         return reply(200, { text: `No setting you can change matches ${JSON.stringify(query)}.${places.length ? ` Where the person finds it in the app: ${places.join("; ")}.` : " Try other words, or use action places."}` });
       }
       if (body.action === "places") {
         const query = typeof body.query === "string" ? body.query.trim() : "";
-        const places = query ? findPlaces(query) : [];
-        return reply(200, { text: query ? (places.length ? places.join("\n") : `No place in the app matches ${JSON.stringify(query)}. Here is every place:\n${placesList()}`) : placesList() });
+        const places = query ? [...findPlaces(query), ...findUiPlaces(query)] : [];
+        return reply(200, { text: query ? (places.length ? places.join("\n") : `No place in the app matches ${JSON.stringify(query)}. Say you do not know where it is, or try other words; do not name a menu or button you were not given.`) : `${placesList()}\nThe rest of the app (sidebar, chat header, message box, messages, Automations, Board, People, Inbox, Files, Apps) is searched with words: pass query, for example "automations calendar".` });
       }
       if (body.action === "features") {
         const query = typeof body.query === "string" ? body.query.trim() : "";

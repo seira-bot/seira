@@ -3,6 +3,7 @@ import { Settings, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import type { Bot, BotSettingsSection } from "@/state/store";
 import { ChatShareMenu } from "@/components/ChatMoreMenu";
@@ -116,6 +117,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
         <button
           type="button"
           data-panel-gear
+          data-ui={ui("panel.settings")}
           aria-label={t("botPanel.page.settings")}
           title={t("botPanel.page.settings")}
           aria-current={page === "settings" ? "page" : undefined}

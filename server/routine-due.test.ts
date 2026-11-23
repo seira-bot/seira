@@ -48,7 +48,29 @@ describe("wakeHoldOf: the desktop", () => {
   it("is held only for a meeting prep, never for the hourly check", () => {
     const horizon = 2 * CHECK_WAKE_MS;
     expect(wakeHoldOf([watch({ checkedAt: NOW - 2 * CHECK_WAKE_MS })], [], NOW, horizon)).toEqual({ hold: false });
-    expect(wakeHoldOf([watch({ checkedAt: NOW, wakeAt: NOW + 25 * MINUTE })], [], NOW, horizon)).toEqual({ hold: true, reason: "due", at: NOW + 25 * MINUTE });
+    expect(wakeHoldOf([watch({ checkedAt: NOW, wakeAt: NOW + 25 * MINUTE })], [], NOW, horizon)).toMatchObject({ hold: true, reason: "due", at: NOW + 25 * MINUTE });
+  });
+});
+
+describe("wakeHoldOf: runs and the routine they name", () => {
+  const run = (fields: Record<string, unknown>) => ({ status: "running", ...fields }) as Parameters<typeof wakeHoldOf>[1][number];
+
+  it("a run that waits for a person holds only when asked to", () => {
+    const waiting = [run({ status: "waiting", routineId: "r1" })];
+    expect(wakeHoldOf([], waiting, NOW, 60 * MINUTE, { waitingHolds: false })).toEqual({ hold: false });
+    expect(wakeHoldOf([], waiting, NOW, 60 * MINUTE)).toEqual({ hold: true, reason: "running", routineId: "r1" });
+  });
+
+  it("a running run names its routine", () => {
+    expect(wakeHoldOf([], [run({ routineId: "r2" })], NOW, 60 * MINUTE, { waitingHolds: false })).toEqual({ hold: true, reason: "running", routineId: "r2" });
+  });
+
+  it("a due result names the routine due first, or the routine of a queued retry", () => {
+    const later = watch({ checks: undefined, id: "late", nextRunAt: NOW + 30 * MINUTE });
+    const sooner = watch({ checks: undefined, id: "soon", nextRunAt: NOW + 10 * MINUTE });
+    expect(wakeHoldOf([later, sooner], [], NOW, 60 * MINUTE)).toEqual({ hold: true, reason: "due", at: NOW + 10 * MINUTE, routineId: "soon" });
+    const retry = run({ status: "queued", retryAt: NOW + 5 * MINUTE, routineId: "again" });
+    expect(wakeHoldOf([sooner], [retry], NOW, 60 * MINUTE)).toEqual({ hold: true, reason: "due", at: NOW + 5 * MINUTE, routineId: "again" });
   });
 });
 

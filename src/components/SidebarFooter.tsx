@@ -13,6 +13,7 @@ import { CloudUsageCard } from "./CloudUsageMeter";
 import { endCloudHowTo, useWorkspacePlace, type WorkspacePlace } from "./DesktopWorkspaceSwitcher";
 import { SidebarConnectApps } from "./SidebarConnectApps";
 import { SidebarBottomButtons, SidebarFooterNav } from "./SidebarFooterNav";
+import { PowerButton } from "./power/PowerButton";
 import { phoneSettingsAction, SidebarPhoneButton } from "./SidebarPhoneButton";
 import { SidebarProfileMenu, useSimpleAccount, type ArchivedBots } from "./SidebarProfileMenu";
 import { SidebarUsageRing } from "./EngineUsage";
@@ -56,6 +57,7 @@ function SimpleSidebarFooter({ owner, archived }: { owner: string | null; archiv
           className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink motion-reduce:transition-none touch:size-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus">
           <Settings size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
+        <PowerButton className="size-8" />
       </div>
     </div>
   );
@@ -82,6 +84,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
             <SidebarUsageRing simple={false} shape="column" />
             <UpdateIndicator />
             <SidebarProfileMenu iconOnly />
+            <PowerButton />
           </div>
         </>
       ) : (
@@ -94,6 +97,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
             </div>
             <SidebarUsageRing simple={false} />
             <SidebarBottomButtons />
+            <PowerButton className="size-8" />
           </div>
         </>
       )}

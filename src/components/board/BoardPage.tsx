@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { BoardCard, BoardColumn as BoardColumnId } from "../../../shared/board";
 import { viewersDefaultBot } from "../../../shared/default-bot";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useViewerEmail } from "@/lib/default-bot";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { loadBoard, setBoardFilter, useBoardFilter, useBoardView } from "@/state/board";
@@ -55,7 +56,7 @@ export function BoardPage() {
   const counts = Object.fromEntries(COLUMNS.map((column) => [column.id, cardsIn(cards, column.id).length])) as Record<BoardColumnId, number>;
   const empty = board.loaded && cards.length === 0;
   const newTaskButton = (
-    <button type="button" aria-expanded={adding} onClick={() => setAdding(true)}
+    <button type="button" data-ui={ui("board.new-task")} aria-expanded={adding} onClick={() => setAdding(true)}
       className="flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink transition-colors duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none">
       <Plus size={14} strokeWidth={1.75} aria-hidden="true" />{t("board.newTask")}
     </button>
@@ -88,9 +89,9 @@ export function BoardPage() {
   return (
     <ToolPage label={t("board.title")}>
       <ToolPageHeader backLabel={t("automations.back")} onBack={() => dispatch({ type: "showChat" })}>
-        <h1 className={TOOL_PAGE_TITLE}>{t("board.title")}</h1>
+        <h1 data-ui={ui("board.page")} className={TOOL_PAGE_TITLE}>{t("board.title")}</h1>
         <ToolPageActions>
-          <BotMenu label={t("board.filter.label")} bots={state.bots} value={filter} onChange={setBoardFilter} allLabel={t("board.filter.all")}
+          <BotMenu ui={ui("board.filter")} label={t("board.filter.label")} bots={state.bots} value={filter} onChange={setBoardFilter} allLabel={t("board.filter.all")}
             summary={<span className="min-w-0 truncate">{filterBot?.name ?? t("board.filter.all")}</span>} />
           {!empty && newTaskButton}
         </ToolPageActions>

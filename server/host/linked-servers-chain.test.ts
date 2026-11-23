@@ -14,6 +14,7 @@ import type { BotRecord } from "../store.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { createBotLinkHost, type BotLinkHostDeps } from "./bot-link-host.ts";
 import { CHAINED, type ApprovalCap } from "./linked-servers.ts";
+import { ADMIT } from "./linked-servers-admit.ts";
 
 type Bot = { id: string; name: string };
 type Answer = { status: number; body: Record<string, unknown> };
@@ -46,6 +47,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
   const messages: Array<{ threadId: string; message: Record<string, unknown> }> = [];
   const rows: Array<Omit<AdminActionRow, "at">> = [];
   const runs: HandoffView[] = [];
+  const logs: string[] = [];
   /** `stuck`: the coordinator the link host sees stops nothing, as when work cannot be stopped at once. */
   const knobs: { run(node: HandoffView, signal: AbortSignal): Promise<HostTurnResult>; stuck: boolean } = {
     run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }), stuck: false };
@@ -79,7 +81,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
     files: { carried: () => [], crossed: () => {}, sentWith: () => ({}), returnedWith: () => ({}), drop: () => {} },
     storeFile: async () => { throw new Error("no files here"); },
     serverName: () => label, publicOrigin: () => `http://127.0.0.1:${port}`, audit: (row) => { rows.push(row); }, actor: () => ({ kind: "loopback" }),
-    log: () => {},
+    log: (line) => { logs.push(line); },
   });
   const inner: CoordinatorHost = {
     validate: () => undefined, busy: () => false, report: () => {}, changed: () => {}, park: () => {},
@@ -104,7 +106,8 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
       if (!res.headersSent) json(res, typeof status === "number" ? status : 500, { error: "The request failed." });
     }
   }
-  const http = createServer((req, res) => { void handle(req, res); });
+  const answered: number[] = [];
+  const http = createServer((req, res) => { res.on("finish", () => answered.push(res.statusCode)); void handle(req, res); });
   await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
   port = (http.address() as AddressInfo).port;
   const ticker = setInterval(tick, 15);
@@ -119,21 +122,22 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
 
   type At = { generation: string; parentId?: string; address: { botId: string; threadId: string } };
   return {
-    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, knobs,
+    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, logs, knobs, answered,
     get made() { return made; },
     get linked() { return made.linked; },
     get coordinator() { return coordinator; },
     /** The server stops and starts again over the same data. */
     restart() {
       made.close();
+      http.closeAllConnections();
       coordinator?.close();
       made = build();
       coordinator = createCoordinator({ dataDir, host: made.link.host(inner), log: () => {} });
       made.start();
     },
-    /** A turn the person starts with one of this server's bots. */
-    begin(bot: Bot, text: string): At {
-      const id = `${label}-turn-${++turns}`, address = { botId: bot.id, threadId: `${bot.id}-chat` };
+    /** A turn the person starts with one of this server's bots, in its own chat or in `threadId`. */
+    begin(bot: Bot, text: string, threadId = `${bot.id}-chat`): At {
+      const id = `${label}-turn-${++turns}`, address = { botId: bot.id, threadId };
       coordinator!.beginTurn({ id, address, brief: text, level: "full", origin: { kind: "user", request: text } });
       return { generation: id, address };
     },
@@ -211,6 +215,7 @@ describe("work from a linked server", () => {
     expect(await head.coordinate(WRITER, at, ["Helper"], "Ask by name")).toEqual(refusal("Helper"));
     for (const target of [HELPER, clerk!]) {
       expect(() => head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: target, threadId: `${target}:direct` }, "Straight to the coordinator")).toThrow(CHAINED);
+      expect(() => head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: target, threadId: "room-thread", groupId: "room-1" }, "In a room")).toThrow(CHAINED);
     }
 
     const mixed = await head.coordinate(WRITER, at, [HELPER, "analyst"], "Check the numbers");
@@ -358,4 +363,71 @@ describe("when a link ends", () => {
     await until(() => head.runs.filter((node) => node.botId === "keeper").length > ran, "the keeper runs again");
     await rules();
   }, 60_000);
+});
+
+describe("an honest pair of servers", () => {
+  it("carries a minute of full work both ways, the hand-offs, their cancels and their results, with nothing held back or refused", async () => {
+    const head = await server("head", [WRITER, ANALYST]), branch = await server("branch", [SCOUT, CLERK]);
+    const ids = await link(head, branch);
+    const [writer] = await offer(head, ids.inviterLink, branch, ids.joinerLink, ["writer"]);
+    const [clerk] = await offer(branch, ids.joinerLink, head, ids.inviterLink, ["clerk"]);
+    for (const [side, worker] of [[head, "writer"], [branch, "clerk"]] as const) {
+      side.knobs.run = (node, signal) => (node.botId !== worker ? Promise.resolve({ ok: true, text: "Handed on." })
+        : new Promise((resolve) => { signal.addEventListener("abort", () => resolve({ ok: false, text: "stopped" }), { once: true }); }));
+    }
+    const running = (at: Server, botId: string) => at.runs.filter((node) => node.botId === botId).length;
+    const back = (at: Server) => at.rows.filter((row) => row.action === "linked-server.handoff" && (row.after as { direction?: unknown } | undefined)?.direction === "result-received").length;
+
+    /** A minute of work from `sender` to `address`, in waves of as many hand-offs as may be open; each wave is stopped once it all runs. */
+    async function minute(from: Server, sender: Bot, address: string, to: Server, worker: string) {
+      for (let sent = 0; sent < ADMIT.perWindow; sent += ADMIT.open) {
+        const size = Math.min(ADMIT.open, ADMIT.perWindow - sent), turns: string[] = [];
+        for (let index = sent; index < sent + size; index++) {
+          const at = from.begin(sender, `Task ${index}`, `${sender.id}-task-${index}`);
+          expect((await from.coordinate(sender, at, [address], `Task ${index}`)).status).toBe(200);
+          from.coordinator!.endTurn(at.generation, { ok: true, text: "Handed on." });
+          turns.push(at.generation);
+        }
+        await until(() => running(to, worker) >= sent + size, `${to.label} runs ${sent + size}`);
+        for (const generation of turns) from.coordinator!.cancelUnder(generation, "Stopped");
+        await until(() => back(from) >= sent + size, `${from.label} has ${sent + size} results back`);
+      }
+    }
+    await Promise.all([minute(branch, SCOUT, writer!, head, "writer"), minute(head, ANALYST, clerk!, branch, "clerk")]);
+
+    expect([running(head, "writer"), running(branch, "clerk"), back(head), back(branch)]).toEqual(Array.from({ length: 4 }, () => ADMIT.perWindow));
+    for (const side of [head, branch]) {
+      expect(side.logs.filter((line) => line.includes("the rest waits"))).toEqual([]);
+      expect(side.rows.filter((row) => row.action === "linked-server.refused")).toEqual([]);
+    }
+  }, 60_000);
+
+  it("keeps within each other's limits when either one restarts", async () => {
+    const head = await server("head", [WRITER, ANALYST]), branch = await server("branch", [SCOUT, CLERK]);
+    const ids = await link(head, branch);
+    const [writer] = await offer(head, ids.inviterLink, branch, ids.joinerLink, ["writer"]);
+    const [clerk] = await offer(branch, ids.joinerLink, head, ids.inviterLink, ["clerk"]);
+    const back = (at: Server) => at.rows.filter((row) => row.action === "linked-server.handoff" && (row.after as { direction?: unknown } | undefined)?.direction === "result-received").length;
+    let round = 0;
+    const both = async () => {
+      round += 1;
+      const asked = branch.begin(SCOUT, `Task ${round}`, `scout-task-${round}`), checked = head.begin(ANALYST, `Check ${round}`, `analyst-task-${round}`);
+      expect((await branch.coordinate(SCOUT, asked, [writer!], `Task ${round}`)).status).toBe(200);
+      expect((await head.coordinate(ANALYST, checked, [clerk!], `Check ${round}`)).status).toBe(200);
+      branch.coordinator!.endTurn(asked.generation, { ok: true, text: "Handed on." });
+      head.coordinator!.endTurn(checked.generation, { ok: true, text: "Handed on." });
+      await until(() => back(branch) >= round && back(head) >= round, `round ${round} is back on both sides`, 45_000);
+    };
+    await both();
+    head.restart();
+    await both();
+    branch.restart();
+    await both();
+    for (const side of [head, branch]) {
+      expect(side.answered.filter((status) => status === 429)).toEqual([]);
+      expect(side.logs.filter((line) => line.includes("the rest waits"))).toEqual([]);
+      expect(side.rows.filter((row) => row.action === "linked-server.refused")).toEqual([]);
+    }
+    expect([head.runs.filter((node) => node.botId === "writer").length, branch.runs.filter((node) => node.botId === "clerk").length]).toEqual([3, 3]);
+  }, 150_000);
 });

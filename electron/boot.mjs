@@ -6,7 +6,12 @@ import { LEGACY_APP_NAME } from "./legacy-names.mjs";
 import { OLD_KEY_READER, runOldKeyReader } from "./old-key.mjs";
 import { chooseSettingsFolder } from "./settings-folder.mjs";
 
-if (process.argv.some(entry => entry.startsWith(`${OLD_KEY_READER}=`))) {
+if (process.argv.some(entry => entry.startsWith("--seira-glance-visor="))) {
+  const { runGlanceVisorHost } = await import("./glance-visor-host.mjs");
+  const { BrowserWindow, ipcMain, screen } = await import("electron");
+  // Electron 43: "ready" waits until the ESM entry, top-level await included, has run, so awaiting the host here never ends.
+  void runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen });
+} else if (process.argv.some(entry => entry.startsWith(`${OLD_KEY_READER}=`))) {
   runOldKeyReader({ app, safeStorage });
 } else {
   const choice = chooseSettingsFolder({ appData: app.getPath("appData"), name: app.getName(), log: line => console.warn(`[desktop] ${line}`) });
