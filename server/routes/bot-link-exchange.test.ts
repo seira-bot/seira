@@ -105,8 +105,9 @@ describe("a guest link's exchange bytes", () => {
     let reads = 0, received = 0;
     const counted: typeof readBody = (req, cap) => { reads += 1; return readBody(req, cap); };
     const { base } = await listen(linkOf({ receive: () => { received += 1; } }), {
-      bytes: { max, spend: (bytes) => { charged.push(bytes); if (budget.left("peer") < bytes) return false; budget.spend("peer", bytes); return true; } } }, counted);
-    return { base, charged, counts: () => [reads, received] };
+      bytes: { max, spend: (bytes) => { charged.push(bytes); if (budget.left("peer") < bytes) return false; budget.spend("peer", bytes); return true; },
+        left: () => budget.left("peer"), giveBack: (bytes) => budget.giveBack("peer", bytes) } }, counted);
+    return { base, charged, budget: () => budget.left("peer"), counts: () => [reads, received] };
   }
   const sized = (bytes: number) => {
     const body = { ...SYNC_BODY, frames: [{ t: "cancel", id: "" }] };
@@ -133,16 +134,75 @@ describe("a guest link's exchange bytes", () => {
     expect(counts()).toEqual([3, 3]);
   });
 
-  it("charges a request that does not say its size the most one request may carry, and one that says more than that the same", async () => {
+  it("charges a request that does not say its size what it carries, and one that says more than the most one request may carry the most", async () => {
     let now = 0;
-    const { base, charged, counts } = await limited(3_000, 2_000, () => now);
+    const { base, charged, budget, counts } = await limited(3_000, 2_000, () => now);
     expect(await chunked(base, sized(100))).toBe(200);
-    expect(await chunked(base, sized(100))).toBe(429);
+    expect(budget()).toBe(2_900);
+    expect((await postSync(base, sized(2_500))).status).toBe(413);
     expect((await postSync(base, sized(2_500))).status).toBe(429);
-    expect([charged, counts()]).toEqual([[2_000, 2_000, 2_000], [1, 1]]);
+    expect([charged, counts()]).toEqual([[2_000, 2_000, 2_000], [2, 1]]);
     now = ADMIT.windowMs;
     expect((await postSync(base, sized(2_500))).status).toBe(413);
-    expect(counts()).toEqual([2, 1]);
+    expect(counts()).toEqual([3, 1]);
+  });
+
+  it("lets 60 requests that do not say their size, of 1,000 bytes each, through one window, and leaves the rest of the budget", async () => {
+    const now = 0;
+    const { base, budget } = await limited(ADMIT.bytes, 5_500_000, () => now);
+    const one = sized(1_000);
+    for (let index = 0; index < 60; index += 1) expect(await chunked(base, one)).toBe(200);
+    expect(budget()).toBe(ADMIT.bytes - 60 * 1_000);
+  });
+
+  it("answers a chunked request larger than the room with the over-limit status and leaves no room", async () => {
+    const now = 0;
+    const { base, budget, counts } = await limited(3_000, 2_000, () => now);
+    expect(await chunked(base, sized(2_500))).toBe(413);
+    expect(budget()).toBe(1_000);
+    const { base: tight, budget: tightBudget } = await limited(1_500, 2_000, () => now);
+    expect(await chunked(tight, sized(2_500))).toBe(413);
+    expect(tightBudget()).toBe(0);
+    expect(counts()).toEqual([1, 0]);
+  });
+
+  it("gives back the room a chunked request did not use when its read fails", async () => {
+    const now = 0;
+    const { base, budget } = await limited(3_000, 2_000, () => now);
+    const sent = await new Promise<number>((resolve, reject) => {
+      const out = request(`${base}${SYNC_PATH}`, { method: "POST", headers: { "content-type": "application/json" } }, (answer) => { answer.resume(); resolve(answer.statusCode ?? 0); });
+      out.on("error", reject);
+      out.write("{");
+      out.end();
+    });
+    expect([sent, budget()]).toEqual([400, 2_999]);
+  });
+
+  it("lets two open chunked requests read no more than the budget together", async () => {
+    const now = 0;
+    const { base, budget } = await limited(3_000, 2_000, () => now);
+    const open = () => {
+      const out = request(`${base}${SYNC_PATH}`, { method: "POST", headers: { "content-type": "application/json" } });
+      const answer = new Promise<number>((resolve, reject) => { out.on("response", (res) => { res.resume(); resolve(res.statusCode ?? 0); }); out.on("error", reject); });
+      return { out, answer };
+    };
+    const first = open(), second = open(), third = open();
+    first.out.write(" ");
+    second.out.write(" ");
+    third.out.write(" ");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(budget()).toBe(0);
+    for (const one of [first, second, third]) one.out.end(JSON.stringify({ ...SYNC_BODY, frames: [] }));
+    expect(await Promise.all([first.answer, second.answer, third.answer])).toEqual([200, 200, 429]);
+    expect(budget()).toBe(3_000 - 2 * Buffer.byteLength(` ${JSON.stringify({ ...SYNC_BODY, frames: [] })}`));
+  });
+
+  it("answers 429 and reads nothing when a chunked request finds no room", async () => {
+    const now = 0;
+    const { base, counts } = await limited(1_000, 2_000, () => now);
+    expect(await chunked(base, sized(1_000))).toBe(200);
+    expect(await chunked(base, sized(100))).toBe(429);
+    expect(counts()).toEqual([1, 1]);
   });
 
   it("answers only what its pace lets go, and learns from the next acknowledgment how much of the work the peer took", async () => {
@@ -155,5 +215,56 @@ describe("a guest link's exchange bytes", () => {
     expect(await ask(0)).toEqual([1, 2]);
     expect(await ask(2)).toEqual([3]);
     expect(told).toEqual([[1, 0], [1, 1]]);
+  });
+});
+
+describe("a guest link's answer", () => {
+  const waiting = [{ seq: 1, frame: { t: "cancel", id: "c1" } }];
+  /** A link that counts its calls of `outgoing` and `hasOutgoing`; `ready` says whether frames wait. */
+  const counting = (state: { ready: boolean }) => {
+    const calls = { outgoing: 0, has: 0 };
+    let listener: ((peer: string) => void) | undefined;
+    const link = linkOf({
+      outgoing: () => { calls.outgoing += 1; return state.ready ? waiting : []; },
+      hasOutgoing: () => { calls.has += 1; return state.ready; },
+      onOutgoing: (fn: (peer: string) => void) => { listener = fn; return () => { listener = undefined; }; },
+    });
+    return { link, calls, wake: () => listener?.("peer") };
+  };
+  const pace = { next: (frames: readonly unknown[]) => ({ count: frames.length, waitMs: 0 }), sent: () => {}, took: () => {} };
+  const ask = (base: string, wait: number) => postSync(base, { fresh: false, ack: 0, frames: [], wait });
+
+  it("with a send pace, reads what waits once for a request with frames ready and for one that does not wait", async () => {
+    const ready = counting({ ready: true });
+    const { base } = await listen(ready.link, { sends: pace });
+    expect(((await (await ask(base, 5_000)).json()) as { frames: unknown[] }).frames).toHaveLength(1);
+    expect(ready.calls).toEqual({ outgoing: 1, has: 0 });
+
+    const idle = counting({ ready: false });
+    const { base: other } = await listen(idle.link, { sends: pace });
+    expect(((await (await ask(other, 0)).json()) as { frames: unknown[] }).frames).toEqual([]);
+    expect(idle.calls).toEqual({ outgoing: 1, has: 0 });
+  });
+
+  it("with a send pace, reads what waits once before a hold, once for each wake and once after it", async () => {
+    const state = { ready: false };
+    const held = counting(state);
+    const { base } = await listen(held.link, { sends: pace });
+    const answer = ask(base, 10_000);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(held.calls.outgoing).toBe(1);
+    held.wake();
+    expect(held.calls.outgoing).toBe(2);
+    state.ready = true;
+    held.wake();
+    expect(((await (await answer).json()) as { frames: unknown[] }).frames).toHaveLength(1);
+    expect(held.calls).toEqual({ outgoing: 4, has: 0 });
+  });
+
+  it("without a send pace, checks with hasOutgoing and reads what waits once", async () => {
+    const own = counting({ ready: true });
+    const { base } = await listen(own.link);
+    expect(((await (await ask(base, 5_000)).json()) as { frames: unknown[] }).frames).toHaveLength(1);
+    expect(own.calls).toEqual({ outgoing: 1, has: 1 });
   });
 });

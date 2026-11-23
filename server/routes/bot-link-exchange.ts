@@ -31,8 +31,10 @@ export interface LinkExchangeOptions {
   /** A guest link's limits on its peer's exchanges and on the new sessions among them: false answers 429. */
   pace?: { exchange(): boolean; session(): boolean };
   /** A guest link's limit on the bytes of its peer's exchanges: `max` is the most one request may carry, and `spend` takes
-   * the bytes a request says it carries, up to `max`, or `max` when it does not say, before it is read; false answers 429. */
-  bytes?: { max: number; spend(bytes: number): boolean };
+   * bytes before a request is read; false answers 429. A request that says its length spends that length, up to `max`.
+   * One that does not say it spends what `left` has, up to `max`, reads no more than that, and after the read, also a
+   * failed one, `giveBack` returns what did not arrive. When `left` is 0 it answers 429 without a read. */
+  bytes?: { max: number; spend(bytes: number): boolean; left(): number; giveBack(bytes: number): void };
   /** A guest link's pace for its answers. */
   sends?: SendPace;
   /** A guest link's own form of a file name its peer gives, the same as the one its frames get. */
@@ -129,8 +131,19 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
     if (pace && !pace.exchange()) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
     const declared = Number(req.headers["content-length"] ?? Number.NaN);
-    if (bytes && !bytes.spend(Number.isSafeInteger(declared) && declared >= 0 ? Math.min(declared, bytes.max) : bytes.max)) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
-    const body = syncRequest.safeParse(await readBody(req, bytes?.max ?? 4 * 1024 * 1024).catch((error: unknown) => { throw new BodyRefused(error); }));
+    const says = Number.isSafeInteger(declared) && declared >= 0;
+    const unsaid = bytes && !says ? Math.min(bytes.max, bytes.left()) : 0;
+    if (bytes && ((!says && unsaid <= 0) || !bytes.spend(says ? Math.min(declared, bytes.max) : unsaid))) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
+    let arrived = 0;
+    const count = (chunk: Buffer | string) => { arrived += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length; };
+    if (bytes && !says) req.on("data", count);
+    let read: unknown;
+    try {
+      read = await readBody(req, bytes && !says ? unsaid : bytes?.max ?? 4 * 1024 * 1024).catch((error: unknown) => { throw new BodyRefused(error); });
+    } finally {
+      if (bytes && !says) { req.off("data", count); bytes.giveBack(Math.max(0, unsaid - arrived)); }
+    }
+    const body = syncRequest.safeParse(read);
     if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
     if (body.data.fresh && pace && !pace.session()) return json(res, 429, { error: "too many new sessions; try again later" });
     const power = powerOf();
@@ -155,13 +168,20 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     }
     if (!stillLinked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
     const { ack, wait } = body.data;
-    const ready = sends ? () => sends.next(link.outgoing(peer, ack)).count > 0 : () => link.hasOutgoing(peer, ack);
-    if (wait > 0 && !ready()) await hold(res, peer, ready, sends ? Math.min(wait, sends.next(link.outgoing(peer, ack)).waitMs || wait) : wait, power?.sleepSignal());
+    let waiting: Numbered[] | undefined;
+    if (sends) {
+      waiting = link.outgoing(peer, ack);
+      const now = sends.next(waiting);
+      if (wait > 0 && now.count === 0) {
+        await hold(res, peer, () => sends.next(link.outgoing(peer, ack)).count > 0, Math.min(wait, now.waitMs || wait), power?.sleepSignal());
+        waiting = link.outgoing(peer, ack);
+      }
+    } else if (wait > 0 && !link.hasOutgoing(peer, ack)) await hold(res, peer, () => link.hasOutgoing(peer, ack), wait, power?.sleepSignal());
     if (power?.sleeping()) return answerAsleep(res, json);
     if (res.writableEnded || res.destroyed) return;
     if (!stillLinked()) return json(res, 403, { error: "This link is off. Turn it on again in the app." });
     seen(peer);
-    return json(res, 200, { session, frames: answer(peer, link.outgoing(peer, ack)) });
+    return json(res, 200, { session, frames: answer(peer, waiting ?? link.outgoing(peer, ack)) });
   }
 
   /** What of `waiting` the answer carries: all of it, or with `sends`, what may go now. */

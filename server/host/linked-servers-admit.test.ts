@@ -19,6 +19,22 @@ describe("a frame budget", () => {
     expect([budget.left("a"), budget.waitFor("a", 2), budget.waitFor("a", 5), budget.waitFor("a", 9), budget.waitFor("a", 11)]).toEqual([2, 0, W - 20_000, W - 10_000, W]);
     expect(budget.waitFor("b", 10)).toBe(0);
   });
+
+  it("gives back part of what was spent, from the newest spending first, and never more than was spent", () => {
+    let now = 0;
+    const budget = createFrameBudget(() => now, 10);
+    budget.spend("a", 4);
+    now = 10_000;
+    budget.spend("a", 3);
+    budget.giveBack("a", 5);
+    expect(budget.left("a")).toBe(8);
+    now = W;
+    expect(budget.left("a")).toBe(9);
+    budget.giveBack("a", 100);
+    expect(budget.left("a")).toBe(10);
+    budget.giveBack("b", 3);
+    expect(budget.left("b")).toBe(10);
+  });
 });
 
 describe("the pace of what a side sends a link", () => {

@@ -18,9 +18,9 @@
 //   frames for the other side wait. The rest is not acknowledged, so the other side sends it again later. Of the hellos
 //   taken, only the last of a batch is kept, and at most ADMIT.hellos are read in ADMIT.windowMs.
 // - Each side reads at most GUEST_EXCHANGE_MAX bytes in one request or answer, and ADMIT.bytes in ADMIT.windowMs. The
-//   inviter answers a request past that 429 before it reads it; the joiner waits before its next exchange. Each frame
-//   is parsed once, and priced and cleaned from what parsed. Each side sends at most ADMIT.sendBytes in ADMIT.windowMs,
-//   so an honest pair stays within both. Each link writes at most 20 log lines a minute.
+//   inviter answers a request past that 429 before it reads it; the joiner waits before its next exchange. A frame
+//   is priced and cleaned from what parsed. Each side sends at most ADMIT.sendBytes in ADMIT.windowMs of work frames
+//   (a hello and the other frames without work are outside it), so an honest pair stays within both. Each link writes at most 20 log lines a minute.
 // - What a peer says (its place and bots, a hand-off's sender, words and file names, a result's words and file names)
 //   loses its invisible and control characters before this server takes it (farFrame).
 // - A frame whose file is larger than FILE_MAX_BYTES is dropped. The files of a link waiting here, put by the other side
@@ -339,7 +339,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       exchange: record.role === "inviter"
         ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
           pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) },
-          bytes: { max: GUEST_EXCHANGE_MAX, spend: (bytes) => { if (bytesIn.left(id) < bytes) return false; bytesIn.spend(id, bytes); return true; } }, sends: sendsOf(id),
+          bytes: { max: GUEST_EXCHANGE_MAX, spend: (bytes) => { if (bytesIn.left(id) < bytes) return false; bytesIn.spend(id, bytes); return true; }, left: () => bytesIn.left(id), giveBack: (bytes) => bytesIn.giveBack(id, bytes) }, sends: sendsOf(id),
           fileName: farFileName, log: linkLog, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };

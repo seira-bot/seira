@@ -5,7 +5,7 @@
  * `chars`: the characters of the frames a link may hand this side to clean in `windowMs`: the cleaning costs time in
  * proportion to them. `bytes`: the bytes of a link's requests or answers this side reads in `windowMs`: reading and
  * parsing them costs time in proportion to them. `sendBytes`: the bytes of the frames this side sends a link in
- * `windowMs`, half of `bytes`, so an honest side stays within the other side's. `exchanges` and `sessions`: the
+ * `windowMs`, half of `bytes`, so an honest side's work frames stay within the other side's. `exchanges` and `sessions`: the
  * exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
 export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, chars: 300_000, bytes: 6_000_000, sendBytes: 3_000_000,
   exchanges: 120, sessions: 10 } as const;
@@ -51,6 +51,17 @@ export function createFrameBudget(now: () => number = Date.now, limit: number = 
       const entry = { at, frames };
       recent(linkId).push(entry);
       return () => { const kept = spent.get(linkId) ?? [], index = kept.indexOf(entry); if (index >= 0) kept.splice(index, 1); };
+    },
+    /** Takes `frames` back from what the link spent, the newest spending first. */
+    giveBack(linkId: string, frames: number): void {
+      let rest = frames;
+      const kept = recent(linkId);
+      for (let i = kept.length - 1; i >= 0 && rest > 0; i--) {
+        const one = kept[i]!, take = Math.min(one.frames, rest);
+        one.frames -= take;
+        rest -= take;
+        if (one.frames <= 0) kept.splice(i, 1);
+      }
     },
     /** How long until `need` fits: 0 when it fits now, a whole window when it never does. */
     waitFor(linkId: string, need: number): number {
@@ -140,7 +151,7 @@ export function createIntake(now: () => number = Date.now, limits: { frames?: nu
 }
 
 /** How this side paces what it sends a link, so an honest side never meets the other side's limits. The bytes of the
- * batches sent in `windowMs` stay within `bytes`. After a batch whose work frames the other side took none of, no work
+ * work frames sent in `windowMs` stay within `bytes`; a hello and the other frames without work are outside it. After a batch whose work frames the other side took none of, no work
  * frame goes for a pause that starts at `pauseMs` and doubles at each such batch up to `pauseMax`. The frames before the
  * first work frame that must wait always go, so a batch is always the start of what waits. One work frame larger than
  * `bytes` goes alone, in an empty window. */
