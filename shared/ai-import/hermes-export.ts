@@ -145,8 +145,8 @@ file holds a key, so follow the format below exactly.
 8. **Tell the user**, only after the rename: the path of the file, the number of bots, and what you left out.
    Server tools (MCP) and their keys stay in Hermes. Tell the user to open Seira, go to
    **Settings → Import & export → Bring things in → Move from another AI**, and drop the file there.
-   When the user talks to you in a chat that only the user can read, offer to send the file there. Never send it
-   to a group or a channel that other people read.
+   When the user talks to you in a chat that only the user can read, offer to send the file there.
+   Never send it to a group or a channel that other people read.
 
 ## Format
 
