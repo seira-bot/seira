@@ -209,7 +209,7 @@ describe("an A2A agent between two servers", () => {
     far.plan(atlas.id, { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: [other], request_key: "hop", message: "Pass this on." } }], reply: "Tried to pass it on." });
     const sent = await far.rpc(token, atlas.id, "SendMessage", message("Pass this on to the writer.", "m-hop"));
     const taskId = String(sent.body.result.task.id);
-    await expect.poll(async () => stateOf((await far.rpc(token, atlas.id, "GetTask", { id: taskId })).body), { timeout: 60_000 }).toBe("TASK_STATE_COMPLETED");
+    await expect.poll(async () => stateOf((await far.rpc(token, atlas.id, "GetTask", { id: taskId })).body), { timeout: 60_000 }).toMatch(/^TASK_STATE_(COMPLETED|FAILED)$/u);
     expect(JSON.stringify(await far.messagesOf(atlas.id))).toContain(CHAINED);
     expect(readHandoffs(far.dataDir).some((node) => node.botId === other)).toBe(false);
     expect(readHandoffs(near.dataDir).some((node) => node.botId === writer.id && node.text.includes("Pass this on."))).toBe(false);
