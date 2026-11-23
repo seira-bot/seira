@@ -27,7 +27,7 @@ export function fetchOverSession(session: () => Promise<E2ESession<never>>): typ
       const headers: Record<string, string> = { ...Object.fromEntries(new Headers(init.headers)), host: url.host, connection: "close" };
       if (typeof body === "string") headers["content-length"] = String(Buffer.byteLength(body));
       else if (body) headers["content-length"] = String(body.size);
-      const req = request({ method, path: `${url.pathname}${url.search}`, headers, agent: false, createConnection: () => stream });
+      const req = request({ method, path: `${url.pathname}${url.search}`, headers, createConnection: () => stream });
 
       const onAbort = (): void => {
         const reason: unknown = signal?.reason;
