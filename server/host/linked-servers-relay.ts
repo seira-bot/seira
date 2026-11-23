@@ -117,11 +117,9 @@ export interface RelayLinkFetch {
 }
 
 export interface RelayLinkFetchOptions extends RelayDialOptions {
-  /** The far server dropped this link: its session ended with "removed", or it did not accept the credential. Called once. */
+  /** Security: the far server said inside the session that it dropped this link. Called once. A close code alone never
+   * ends a link, because the relay can write any close code: 4404 also means that the far server is off. */
   removed(): void;
-  /** Every node answers 4404 both when the far server is off and when it dropped the link. `removed` fires on that answer
-   * only after it has lasted this long. The default never fires on it. */
-  refusedForMs?: number;
 }
 
 /** The `fetch` of one relay link: it dials on the first call, keeps one session, dials again once that session closed, and
@@ -131,7 +129,6 @@ export function createRelayLinkFetch(route: RelayRoute, credential: () => string
   let dialing: Promise<E2ESession<never>> | null = null;
   let shut = false;
   let dropped = false;
-  let refusedSince: number | null = null;
 
   const drop = (): void => {
     if (dropped) return;
@@ -148,7 +145,6 @@ export function createRelayLinkFetch(route: RelayRoute, credential: () => string
     const secret = credential();
     if (!secret) return Promise.reject(new Error("this link has no credential"));
     const attempt = openRelaySession(route, secret, options).then((opened) => {
-      refusedSince = null;
       if (shut || dropped) {
         opened.shutdown();
         throw new Error("this link is closed");
@@ -159,13 +155,6 @@ export function createRelayLinkFetch(route: RelayRoute, credential: () => string
         if (opened.removed) drop();
       });
       return opened;
-    }, (error: unknown) => {
-      if (error instanceof SessionClosed && error.code === 4001) drop();
-      else if (error instanceof SessionClosed && error.code === 4404) {
-        refusedSince ??= Date.now();
-        if (options.refusedForMs !== undefined && Date.now() - refusedSince >= options.refusedForMs) drop();
-      } else refusedSince = null;
-      throw error;
     });
     const settled = attempt.finally(() => { if (dialing === settled) dialing = null; });
     dialing = settled;

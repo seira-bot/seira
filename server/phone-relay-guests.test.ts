@@ -308,6 +308,21 @@ describe("guests of the phone relay", () => {
     expect(`${LINK_DEVICE_PREFIX}${link.id}`).toMatch(/^link:[0-9a-f]{16}$/);
   });
 
+  it("answers as an unknown path to a session of a link that is a link no more, before the handler runs", async () => {
+    const server = await startServer();
+    const link = server.guests.addLink();
+    server.guests.host!.changed();
+    await waitFor(() => admitted(server).has(adm(server, link.token)));
+    const session = await open(server, link.token);
+    server.guests.links = [];
+    server.seen.length = 0;
+    for (const [method, path] of [["POST", EXCHANGE], ["GET", "/api/health"], ["GET", "/api/auth/session"]] as const) {
+      const answer = await http(session, method, path, method === "POST" ? { token: link.token, body: "{}", headers: asJson } : {});
+      expect([method, path, answer.status, json(answer)]).toEqual([method, path, 404, { error: "not found" }]);
+    }
+    expect(server.seen).toEqual([]);
+  });
+
   it("keeps phones and links together at twenty, and the admission set under what the relay takes (AC-16, AC-17)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "seira-phone-relay-guests-full-"));
     cleanup.push(() => removeTempDir(dir));

@@ -198,29 +198,26 @@ describe("createRelayLinkFetch", () => {
       urls.push(options.url);
       return urls.length === 1 ? Promise.reject(new SessionClosed(4404)) : realDial({ ...options, url: `${f.relay.url}/v1/phone` });
     }) as typeof dial;
-    const link = createRelayLinkFetch(nodeRoute(f.route, ["relay2.seira.bot", "relay1.seira.bot"]), () => f.token, { app: "test/1", removed, refusedForMs: 0, dial: first });
+    const link = createRelayLinkFetch(nodeRoute(f.route, ["relay2.seira.bot", "relay1.seira.bot"]), () => f.token, { app: "test/1", removed, dial: first });
     cleanup.push(() => link.close());
     expect((await link.fetch(`${placeholder(f.route)}/a`)).status).toBe(200);
     expect(urls).toEqual(["wss://relay2.seira.bot/v1/phone", "wss://relay1.seira.bot/v1/phone"]);
     expect(removed).not.toHaveBeenCalled();
   });
 
-  it("calls removed() once when every node answers 4404 for as long as the caller waits, then rejects without a dial (AC-08)", async () => {
+  it("does not call removed() when a dial ends with 4001, because the relay can write that code", async () => {
     const f = await far();
     const removed = vi.fn();
-    const dials = vi.fn((_options: Parameters<typeof dial>[0]) => Promise.reject(new SessionClosed(4404)));
-    const link = createRelayLinkFetch(f.route, () => f.token, { app: "test/1", removed, refusedForMs: 0, dial: dials as unknown as typeof dial });
+    const dials = vi.fn((_options: Parameters<typeof dial>[0]) => Promise.reject(new SessionClosed(4001)));
+    const link = createRelayLinkFetch(f.route, () => f.token, { app: "test/1", removed, dial: dials as unknown as typeof dial });
     cleanup.push(() => link.close());
-    await expect(link.fetch(`${placeholder(f.route)}/a`)).rejects.toEqual(new SessionClosed(4404));
-    expect(removed).toHaveBeenCalledTimes(1);
-    expect(dials).toHaveBeenCalledTimes(1);
-    await expect(link.fetch(`${placeholder(f.route)}/a`)).rejects.toThrow(/removed this link/);
-    await expect(link.fetch(`${placeholder(f.route)}/a`)).rejects.toThrow(/removed this link/);
-    expect(removed).toHaveBeenCalledTimes(1);
-    expect(dials).toHaveBeenCalledTimes(1);
+    await expect(link.fetch(`${placeholder(f.route)}/a`)).rejects.toEqual(new SessionClosed(4001));
+    await expect(link.fetch(`${placeholder(f.route)}/a`)).rejects.toEqual(new SessionClosed(4001));
+    expect(removed).not.toHaveBeenCalled();
+    expect(dials).toHaveBeenCalledTimes(2);
   });
 
-  it("does not call removed() on 4404 by default, so a far server that is off can come back", async () => {
+  it("does not call removed() on 4404, so a far server that is off can come back", async () => {
     const f = await far();
     const removed = vi.fn();
     const dials = vi.fn((_options: Parameters<typeof dial>[0]) => Promise.reject(new SessionClosed(4404)));

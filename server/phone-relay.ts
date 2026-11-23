@@ -362,6 +362,7 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
     if (guest && !guests!.allows(guest, method, path)) return reply(res, 404, { error: "not found" });
+    if (!guest && peer.kind === "device" && peer.id.startsWith(LINK_DEVICE_PREFIX)) return reply(res, 404, { error: "not found" });
     if (method === "POST" && path === "/api/auth/pair") return reply(res, 404, { error: "pair a phone with its QR code" });
     if (peer.kind === "pairing" && !guest) {
       if (!PAIRING_SESSION_ROUTES.has(`${method} ${path}`)) return reply(res, 401, { error: "pair this phone first" });
