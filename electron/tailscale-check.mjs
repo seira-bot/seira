@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { isTailnetName, readTailscaleStatusJson, tailnetInterfaceAddresses } from "./tailnet.mjs";
+import { isTailnetName, readMagicDnsEnabled, readTailscaleStatusJson, tailnetInterfaceAddresses } from "./tailnet.mjs";
 
 /** Tailscale's command-line tool where its installers put it, then PATH. */
 export const TAILSCALE_CLI_PATHS = Object.freeze([
@@ -91,4 +91,18 @@ export async function checkTailscale({ run = runStatus, install = () => tailscal
     break;
   }
   return last;
+}
+
+/** Whether this computer's tailnet has MagicDNS on, from the first command-line tool that answers; null when none does or it does not say. */
+export async function magicDnsEnabled({ run = runStatus, candidates = TAILSCALE_CLI_PATHS } = {}) {
+  try {
+    for (const cli of candidates) {
+      const result = await run(cli);
+      if (result.missing) continue;
+      return readMagicDnsEnabled(result.stdout);
+    }
+  } catch {
+    // Tailscale did not answer: the caller keeps its general sentence.
+  }
+  return null;
 }

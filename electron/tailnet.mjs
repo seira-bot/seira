@@ -73,6 +73,18 @@ export function readTailscaleStatusJson(stdout) {
   return { state, name: isTailnetName(dns) ? dns : null, addresses: addresses.sort((a, b) => Number(a.includes(":")) - Number(b.includes(":"))), https: Boolean(certDomains || capability) };
 }
 
+/** Whether the signed-in tailnet has MagicDNS on (`CurrentTailnet.MagicDNSEnabled`); null when the status does not say. */
+export function readMagicDnsEnabled(stdout) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(stdout ?? ""));
+  } catch {
+    return null;
+  }
+  const flag = parsed && typeof parsed === "object" ? parsed.CurrentTailnet?.MagicDNSEnabled : undefined;
+  return typeof flag === "boolean" ? flag : null;
+}
+
 const authority = (host, port) => (host.includes(":") ? `[${host}]` : host) + (port ? `:${port}` : "");
 
 /** The address another computer opens: `https://<name>` when `tailscale serve` fronts this one with HTTPS, else

@@ -10053,6 +10053,7 @@
   "native.connect.localNetwork": "Can't reach {host}. On a Mac, turn on Seira in System Settings → Privacy & Security → Local Network, then try again. Also check that the server is running on this network.",
   "native.connect.tailscaleOff": "{host} is on a Tailscale network, and Tailscale isn't connected on this computer. Open Tailscale here, sign in to the same tailnet, then try again.",
   "native.connect.otherTailnet": "{host} isn't on this computer's tailnet. Sign in to Tailscale here with the account that computer uses, keep MagicDNS on, then try again.",
+  "native.connect.magicDnsOff": "{host} can't be found because MagicDNS is off for your tailnet. Turn on MagicDNS in the Tailscale admin console, or use the computer's Tailscale IP address (it starts with 100.), then try again.",
   "native.connect.tailnetBlocked": "macOS blocked the connection to {host}. Allow Seira in System Settings → Privacy & Security → Local Network (Tailscale addresses count as local), then try again. If it's on already, turn it off and on again.",
   "native.connect.tailnetSilent": "{host} is on your tailnet but didn't answer. Check that the computer is awake with Tailscale connected, and that Seira is shared on Tailscale there: in its Settings → Phone & devices, or with seira serve --tailscale.",
   "native.dialog.mic.allow": "Allow",
