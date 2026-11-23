@@ -57,6 +57,8 @@ The other side holds a credential, but this side does not trust what it sends.
   invisible characters before a bot or a person reads them. A name becomes one
   short line.
 - A frame whose id holds anything but letters, digits, `_` and `-` is dropped.
+- A frame is cleaned only after it passes the size limits. A frame with no
+  room in the character limit waits at the sender and is not lost.
 - An error inside this server gives the other side a fixed answer. The cause
   goes to the log of this side only.
 
@@ -68,6 +70,7 @@ The other side holds a credential, but this side does not trust what it sends.
 | Open hand-offs per link | 8 |
 | New hand-offs per link | 30 in 60 seconds |
 | Work frames per link | 150 in a minute |
+| Characters of frames per link | 300,000 in 60 seconds |
 | Unacknowledged frames per link | 2,000 |
 | Records per link | 1,000 |
 | File size | 100 MB |
