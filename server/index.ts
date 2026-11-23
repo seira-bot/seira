@@ -532,7 +532,7 @@ import {
   requestSource,
   resolveLoopbackTrust,
   resolveRequestAuth,
-  presentedSessionCookie,
+  presentedSessionCookie, requestIsHttps,
   sessionCookieHeaders,
   sessionCookieName, ownerOrAdmin, acceptLegacyOrigins,
 } from "./request-auth.ts";
@@ -12210,7 +12210,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       if (CLOUD_TEAM) teamHost.met(result.session);
       const environment = environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED, emailSignIn: !CLOUD_HOME && emailSignIn.enabled(), sharedComputers: lendingEnabled(), cloudHome: Boolean(CLOUD_HOME), cloudTeam: CLOUD_TEAM !== null, ownHome: ownHome.takesMove() });
       if (wantsCookie) {
-        const previous = browser ? sessions.authenticate(presentedSessionCookie(req.headers.cookie, SESSION_COOKIE)) : null;
+        const previous = browser ? sessions.authenticate(presentedSessionCookie(req.headers.cookie, SESSION_COOKIE, requestIsHttps(req))) : null;
         if (previous && previous.id !== result.session.id) sessions.revoke(previous.id);
         const secure = requestOrigin(req)?.startsWith("https://") === true;
         res.setHeader("set-cookie", sessionCookieHeaders(SESSION_COOKIE, result.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(result.session) }));
@@ -12259,7 +12259,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     });
     // The session term slides on use, so re-issue the cookie on every cookie request; handlers that clear it later overwrite this header.
     if (gate.auth?.kind === "session" && gate.auth.via === "cookie") {
-      const presented = presentedSessionCookie(req.headers.cookie, SESSION_COOKIE);
+      const presented = presentedSessionCookie(req.headers.cookie, SESSION_COOKIE, requestIsHttps(req));
       if (presented) {
         const secure = HOSTED_WORKSPACE || requestOrigin(req)?.startsWith("https://") === true;
         res.setHeader("set-cookie", sessionCookieHeaders(SESSION_COOKIE, presented, { secure, maxAgeSeconds: cookieMaxAgeSeconds(gate.auth.session) }));
