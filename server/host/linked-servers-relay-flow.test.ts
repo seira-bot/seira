@@ -349,7 +349,7 @@ describe("linked servers through Seira Relay", () => {
     const where = await world();
     const inviter = await node("head", [WRITER], where), joiner = await node("branch", [SCOUT], where);
     inviter.serveRelay();
-    const ids = await linkUp(inviter, joiner);
+    await linkUp(inviter, joiner);
     const token = lskIn(joiner.dataDir);
     expect(token).not.toBeNull();
     const ecdh = createECDH("prime256v1");
