@@ -217,7 +217,7 @@ async function node(label: string, bots: Bot[], where: World) {
 type Node = Awaited<ReturnType<typeof node>>;
 
 /** The inviter makes an invite once its relay is up; the joiner uses it. */
-async function linkUp(inviter: Node, joiner: Node) {
+async function linkUp(inviter: Node, joiner: Node, where?: World) {
   let invite: { invite: string; expiresAt: number; route: "https" | "relay" } | null = null;
   await until(() => {
     const made = inviter.linked.invite(ADMIN);
@@ -225,6 +225,8 @@ async function linkUp(inviter: Node, joiner: Node) {
     invite = made;
     return true;
   }, `${inviter.label} makes an invite`);
+  const waiting = decodeAnyInvite(invite!.invite);
+  if (where && waiting?.v === 2) await until(() => where.relay.admitted(inviter.hostId).has(admissionOf(waiting.code, inviter)), "the relay admits the invite");
   const joined = await joiner.linked.join(invite!.invite, ADMIN);
   const there = () => inviter.linked.list().find((one) => one.kind === "seira" && one.name === joiner.label);
   const here = () => joiner.linked.list().find((one) => one.id === joined.id);
@@ -433,7 +435,7 @@ describe("linked servers through Seira Relay", () => {
     const inviter = await node("head", [WRITER], where);
     inviter.serveRelay();
     const first = await node("branch0", [SCOUT], where), second = await node("branch1", [SCOUT], where), third = await node("branch2", [SCOUT], where);
-    for (const one of [first, second, third]) await linkUp(inviter, one);
+    for (const one of [first, second, third]) await linkUp(inviter, one, where);
     expect(inviter.relayFile().hosted).toHaveLength(3);
 
     const made: string[] = [];
@@ -457,8 +459,8 @@ describe("linked servers through Seira Relay", () => {
     const where = await world();
     const inviter = await node("head", [WRITER], where), joiner = await node("branch", [SCOUT], where), other = await node("shop", [SCOUT], where);
     inviter.serveRelay();
-    const first = await linkUp(inviter, joiner);
-    const second = await linkUp(inviter, other);
+    const first = await linkUp(inviter, joiner, where);
+    const second = await linkUp(inviter, other, where);
     const firstHash = admissionOf(lskIn(joiner.dataDir)!, inviter), secondHash = admissionOf(lskIn(other.dataDir)!, inviter);
     await until(() => sessionsOf(where, inviter, firstHash) > 0 && sessionsOf(where, inviter, secondHash) > 0, "both links hold a relay session");
     const hosted = () => inviter.linked.relayGuests.records().map((one) => one.id).sort();
@@ -467,13 +469,13 @@ describe("linked servers through Seira Relay", () => {
     expect(await inviter.linked.remove(first.inviterLink, ADMIN)).toBe(true);
     expect(hosted()).toEqual([second.inviterLink]);
     await until(() => sessionsOf(where, inviter, firstHash) === 0, "the relay session of the removed link is closed", 60_000);
-    expect(where.relay.admitted(inviter.hostId).has(firstHash)).toBe(false);
+    await until(() => !where.relay.admitted(inviter.hostId).has(firstHash), "the relay no longer admits the removed link", 60_000);
     expect(sessionsOf(where, inviter, secondHash)).toBeGreaterThan(0);
 
     expect(await other.linked.remove(second.joinerLink, ADMIN)).toBe(true);
     await until(() => sessionsOf(where, inviter, secondHash) === 0, "the relay session of the second link is closed", 60_000);
     expect(hosted()).toEqual([]);
-    expect(where.relay.admitted(inviter.hostId).has(secondHash)).toBe(false);
+    await until(() => !where.relay.admitted(inviter.hostId).has(secondHash), "the relay no longer admits the second link", 60_000);
   }, 120_000);
 
   it("opens one relay session with the invite code and then uses the link credential", async () => {
@@ -486,7 +488,7 @@ describe("linked servers through Seira Relay", () => {
     const add = sessions.add.bind(sessions);
     sessions.add = (one) => { seen.push(one.admHash); return add(one); };
 
-    const ids = await linkUp(inviter, joiner);
+    const ids = await linkUp(inviter, joiner, where);
     const decoded = decodeAnyInvite(ids.invite) as Extract<NonNullable<ReturnType<typeof decodeAnyInvite>>, { v: 2 }>;
     const byCode = admissionOf(decoded.code, inviter), byLink = admissionOf(lskIn(joiner.dataDir)!, inviter);
     expect(byCode).not.toBe(byLink);
