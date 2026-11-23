@@ -219,18 +219,18 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     return task ? success(id, { task }) : failure(id, ERR.INTERNAL);
   }
 
-  function getTask(id: RpcId, raw: unknown): Answer {
+  function getTask(id: RpcId, raw: unknown, botId: string): Answer {
     const parsed = getTaskParams.safeParse(raw);
     if (!parsed.success) return failure(id, ERR.INVALID_PARAMS);
-    const task = view(parsed.data.id);
+    const task = inTask(parsed.data.id)?.bot === botId ? view(parsed.data.id) : null;
     return task ? success(id, task) : failure(id, ERR.TASK_NOT_FOUND);
   }
 
-  async function cancelTask(id: RpcId, raw: unknown, res: ServerResponse): Promise<Answer> {
+  async function cancelTask(id: RpcId, raw: unknown, botId: string, res: ServerResponse): Promise<Answer> {
     const parsed = cancelTaskParams.safeParse(raw);
     if (!parsed.success) return failure(id, ERR.INVALID_PARAMS);
     const entry = inTask(parsed.data.id);
-    if (!entry) return failure(id, ERR.TASK_NOT_FOUND);
+    if (!entry || entry.bot !== botId) return failure(id, ERR.TASK_NOT_FOUND);
     if (isTerminal(entry.state)) return failure(id, ERR.TASK_NOT_CANCELABLE);
     if (deps.frames.left() < 1) return throttled(id);
     deps.frames.spend(1);
@@ -254,8 +254,8 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     const { id, method, params } = parsed.request;
     if (!versionOk(req.headers["a2a-version"])) return failure(id, ERR.VERSION_NOT_SUPPORTED);
     if (method === "SendMessage") return sendMessage(id, params, botId, res);
-    if (method === "GetTask") return getTask(id, params);
-    if (method === "CancelTask") return cancelTask(id, params, res);
+    if (method === "GetTask") return getTask(id, params, botId);
+    if (method === "CancelTask") return cancelTask(id, params, botId, res);
     if (PUSH_METHODS.test(method)) return failure(id, ERR.PUSH_NOT_SUPPORTED);
     if (UNSUPPORTED_METHODS.has(method)) return failure(id, ERR.UNSUPPORTED_OPERATION);
     return failure(id, ERR.METHOD_NOT_FOUND);
