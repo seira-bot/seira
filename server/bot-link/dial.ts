@@ -19,9 +19,9 @@ const MAX_RETRY_MS = 60_000;
 /** What the Cloud marks a held answer with while it goes to sleep (server/cloud-power.ts). */
 const POWER_HEADER = "x-omb-cloud-power";
 const BACKGROUND_HEADER = "x-seira-background";
-/** One file may take this long to cross, and its bytes may stop for this long. */
+/** One file may take this long to cross; on a guest link its bytes may stop for no longer than FILE_IDLE_MS. */
 const FILE_MS = 10 * 60_000;
-const FILE_IDLE_MS = 60_000;
+export const FILE_IDLE_MS = 60_000;
 const FAR_REFUSED = "the other side did not take or give the file";
 const PROBE_MAX = 4_096;
 
@@ -64,8 +64,9 @@ export interface DialerOptions {
   /** false: an error never carries the other side's own words, as for a server of another owner. */
   farText?: boolean;
   /** The frames of one answer this side takes: `count` of them from the first, and the ones to act on. The rest are
-   * not acknowledged, so the other side sends them again. Absent: all of them. */
-  takes?(frames: readonly unknown[]): { count: number; frames: readonly unknown[] };
+   * not acknowledged, so the other side sends them again. Absent: all of them. `undo` gives back what the choice spent,
+   * when the frames could not be taken after all. */
+  takes?(frames: readonly unknown[]): { count: number; frames: readonly unknown[]; undo?(): void };
   /** What is left of the other side's budget of work frames from this side, as this side counts what it took. */
   budget?: { left(): number; spend(frames: number): void };
   /** Room for a file this side gets, as for one the other side puts (server/routes/bot-link-exchange.ts). */
@@ -74,11 +75,12 @@ export interface DialerOptions {
   answerMax?: number;
   /** The least time from one answer that came at once to the next exchange, and between two new sessions. Absent: none. */
   pace?: { gapMs: number; freshMs: number };
+  /** How long a file's bytes may stop before the file is given up. Absent: only the time limit of the whole file. */
   fileIdleMs?: number;
 }
 
 export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH }, farText = true,
-  takes, budget, room, answerMax, pace, fileIdleMs = FILE_IDLE_MS }: DialerOptions) {
+  takes, budget, room, answerMax, pace, fileIdleMs }: DialerOptions) {
   let running = false, stopped = true, asleep = false, needsPairing = false;
   let lastStart = 0, lastEnd = 0, lastFresh = Number.NEGATIVE_INFINITY;
   let session = "", ack = 0, fresh = true, retryMs = firstRetryMs, slowMs = firstRetryMs, narrow = Number.POSITIVE_INFINITY;
@@ -132,7 +134,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
       if (!release) throw new Error("there is no room for it here now");
       const idle = new AbortController(), signal = AbortSignal.any([AbortSignal.timeout(FILE_MS), idle.signal]);
       let quiet: NodeJS.Timeout | undefined;
-      const stir = () => { clearTimeout(quiet); quiet = setTimeout(() => idle.abort(new Error("the file stopped coming")), fileIdleMs); quiet.unref?.(); };
+      const stir = () => { if (fileIdleMs === undefined) return; clearTimeout(quiet); quiet = setTimeout(() => idle.abort(new Error("the file stopped coming")), fileIdleMs); quiet.unref?.(); };
       try {
         mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
         stir();
@@ -195,7 +197,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     }
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status === 429 && budget) { if (workIn(sending) > 0) narrow = Math.max(1, Math.floor(Math.min(narrow, workIn(sending)) / 2)); return true; }
+      if (response.status === 429 && budget) { link.setOnline(peer, false); if (workIn(sending) > 0) narrow = Math.max(1, Math.floor(Math.min(narrow, workIn(sending)) / 2)); return true; }
       throw new Error(`the Cloud answered ${response.status}`);
     }
     const answer = syncAnswer.safeParse(await readJson(response, answerMax));
@@ -214,9 +216,9 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     link.setOnline(peer, true);
     link.setLevel(peer, levelOf(response.headers.get(LEVEL_HEADER)));
     const news = answer.data.frames.filter((entry) => entry.seq > ack);
-    const intake = takes ? takes(news.map((entry) => entry.frame)) : { count: news.length, frames: news.map((entry) => entry.frame) };
+    const intake: ReturnType<NonNullable<DialerOptions["takes"]>> = takes ? takes(news.map((entry) => entry.frame)) : { count: news.length, frames: news.map((entry) => entry.frame) };
     const count = Math.min(intake.count, news.length);
-    link.receive(peer, intake.frames);
+    try { link.receive(peer, intake.frames); } catch (error) { intake.undo?.(); throw error; }
     ack = Math.max(ack, ...news.slice(0, count).map((entry) => entry.seq));
     return taken < sending.length || count < news.length;
   }

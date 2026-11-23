@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { removeTempDir } from "../testing/cleanup.ts";
 
-import { createDialer } from "./dial.ts";
+import { FILE_IDLE_MS, createDialer } from "./dial.ts";
 import type { BotLink, FileTransfer } from "./link.ts";
 import { FILE_PATH, SYNC_PATH, TAKEN_HEADER, type Numbered } from "./protocol.ts";
 
@@ -201,6 +201,58 @@ describe("a dialer that keeps to the other side's limits", () => {
     expect(failure?.gone).toBeUndefined();
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(existsSync(to)).toBe(false);
+  });
+
+  it("keeps a file whose bytes stop for longer than a guest link allows, when it is given no limit for that", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { link, transfer } = fakeLink();
+    const to = join(tempDir(), "spool", "a.txt");
+    const paused = () => new ReadableStream<Uint8Array>({ start(controller) {
+      controller.enqueue(new Uint8Array([120]));
+      setTimeout(() => { controller.enqueue(new Uint8Array([120, 120, 120, 120])); controller.close(); }, FILE_IDLE_MS + 1_000);
+    } });
+    const dialer = createDialer({ link, holdMs: 50, farText: false, room: () => () => {}, fetch: (async () => new Response(paused(), { status: 200 })) as typeof fetch });
+    const pulled = transfer().pull("id", "sent", 0, { ...FILE, bytes: 5 }, to).then(() => "kept", (error: unknown) => String(error));
+    await vi.advanceTimersByTimeAsync(FILE_IDLE_MS + 1_000);
+    const outcome = await pulled;
+    dialer.close();
+    expect(outcome).toBe("kept");
+    expect(readFileSync(to, "utf8")).toBe("xxxxx");
+  });
+
+  it("gives back what it took of an answer whose frames could not be taken", async () => {
+    const { link } = fakeLink();
+    let undone = 0, calls = 0, finish!: () => void;
+    const finished = new Promise<void>((resolve) => { finish = resolve; });
+    Object.assign(link, { receive: () => { throw new Error("the disk is full"); } });
+    const dialer = createDialer({ link, holdMs: 50, firstRetryMs: 5, takes: (frames) => ({ count: frames.length, frames, undo: () => { undone += 1; } }),
+      fetch: (async () => {
+        if (++calls === 2) finish();
+        return new Response(JSON.stringify({ session: "s1", frames: [{ seq: 1, frame: { t: "cancel", id: "c1" } }] }), { status: 200 });
+      }) as typeof fetch });
+    dialer.start();
+    await finished;
+    await dialer.stop();
+    dialer.close();
+    expect(undone).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows the link as not online while a guest link's other side answers 429", async () => {
+    const { link } = outboxLink([{ seq: 1, frame: { t: "cancel" as const, id: "c1" } }]);
+    const online: boolean[] = [];
+    let calls = 0, finish!: () => void;
+    const finished = new Promise<void>((resolve) => { finish = resolve; });
+    Object.assign(link, { setOnline: (_peer: string, value: boolean) => { online.push(value); } });
+    const dialer = createDialer({ link, holdMs: 50, firstRetryMs: 5, budget: { left: () => 150, spend: () => {} },
+      fetch: (async () => {
+        if (++calls === 3) finish();
+        return calls === 1 ? new Response(JSON.stringify({ session: "s1", frames: [] }), { status: 200, headers: { [TAKEN_HEADER]: "0" } }) : new Response(null, { status: 429 });
+      }) as typeof fetch });
+    dialer.start();
+    await finished;
+    await dialer.stop();
+    dialer.close();
+    expect(online.slice(0, 2)).toEqual([true, false]);
   });
 });
 
