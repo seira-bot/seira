@@ -1,6 +1,6 @@
 // What this desktop keeps whatever page its window shows, whichever port its own page is served on: the notices someone
 // closed, its usage-analytics switch, the app's language, its answer to the product-updates email question, whether
-// the person hid the window's rail of places and whether they turned the window's frame off.
+// the person hid the window's rail of places, whether they turned Glance off and whether they turned the window's frame off.
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -71,6 +71,7 @@ function parse(raw) {
     ...(typeof record.talkShortcut === "boolean" ? { talkShortcut: record.talkShortcut } : {}),
     ...(isTalkKey(record.talkKey) ? { talkKey: record.talkKey } : {}),
     ...(typeof record.railHidden === "boolean" ? { railHidden: record.railHidden } : {}),
+    ...(typeof record.glanceHidden === "boolean" ? { glanceHidden: record.glanceHidden } : {}),
     ...(typeof record.windowFrame === "boolean" ? { windowFrame: record.windowFrame } : {}),
     ...(Object.keys(quickAsks).length ? { quickAsks } : {}) };
 }
@@ -159,6 +160,12 @@ export function createDesktopPrefs({ read, write }) {
     setRailHidden(hidden) {
       const railHidden = hidden === true;
       if ((current().railHidden === true) !== railHidden) save({ ...current(), railHidden });
+    },
+    /** Glance (the visor or tray icon that shows what bots do) is shown until the person turns it off. */
+    glanceHidden: () => current().glanceHidden === true,
+    setGlanceHidden(hidden) {
+      const glanceHidden = hidden === true;
+      if ((current().glanceHidden === true) !== glanceHidden) save({ ...current(), glanceHidden });
     },
     /** The window draws its own frame until the person turns it off. */
     windowFrame: () => current().windowFrame !== false,

@@ -491,3 +491,16 @@ test("AC-08, AC-10: the crash report choice is saved with the other choices and 
   prefs.setCrashReports("x");
   assert.equal(saved.crashReports, false, "only true turns it on");
 });
+
+test("AC-12: Glance is on until the person turns it off, and the choice survives a restart", () => {
+  let saved = { seen: [POPUP] };
+  const prefs = createDesktopPrefs({ read: () => saved, write: (value) => { saved = structuredClone(value); } });
+  assert.equal(prefs.glanceHidden(), false);
+  prefs.setGlanceHidden(true);
+  assert.equal(saved.glanceHidden, true);
+  assert.deepEqual(saved.seen, [POPUP], "the other choices stay");
+  assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).glanceHidden(), true);
+  prefs.setGlanceHidden(false);
+  assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).glanceHidden(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ glanceHidden: "yes" }), write() {} }).glanceHidden(), false, "a value that is not a boolean is ignored");
+});

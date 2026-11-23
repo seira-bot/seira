@@ -90,7 +90,7 @@ function railKeepsItsSize() {
 if (typeof window !== "undefined") {
   for (const type of ["resize", "DOMContentLoaded"]) window.addEventListener(type, () => { leaveRailRoom(); railKeepsItsSize(); });
 }
-const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
+const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "glance", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
 /** My Cloud's own page once it is the person's home (main checks the sender again): it is this app's page then. */
 const HOME_PAGE = ["home", "onChatLink", "onPackageInstall", "exportDiagnostics", "openLogsFolder", "openAtLogin", "callActive"];
 function updaterOffered() {
@@ -815,6 +815,21 @@ const bridge = {
         cb(target);
       }
       return () => notificationOpenListeners.delete(cb);
+    },
+  },
+  // Glance, the visor at the top of the screen: the page tells main what its bots do and answers what the person picks there.
+  glance: {
+    feed: (feed) => { try { ipcRenderer.send("glance:feed", feed); } catch {} },
+    onAct: (handler) => {
+      const listener = async (_event, message) => {
+        const id = message && typeof message.id === "string" ? message.id : null;
+        if (!id) return;
+        let ok = false;
+        try { ok = (await handler(message.act)) === true; } catch { ok = false; }
+        ipcRenderer.send("glance:acted", { id, ok });
+      };
+      ipcRenderer.on("glance:act", listener);
+      return () => { ipcRenderer.removeListener("glance:act", listener); };
     },
   },
   desktopAnalytics: {

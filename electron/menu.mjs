@@ -6,7 +6,7 @@ const role = (t, name, key, params) => ({ role: name, label: t(key, params) });
 
 // Electron 43's role labels are English only (lib/browser/api/menu-item-roles.ts), so each role menu is written out
 // with Electron's own items and order, and a label on every item.
-function roleMenus(t, isMac) {
+function roleMenus(t, isMac, glance) {
   const file = { role: "fileMenu", label: t("native.role.file"), submenu: [isMac ? role(t, "close", "native.role.closeWindow") : role(t, "quit", process.platform === "win32" ? "native.role.exit" : "native.role.quit")] };
   const edit = {
     role: "editMenu",
@@ -49,6 +49,7 @@ function roleMenus(t, isMac) {
       role(t, "zoomOut", "native.role.zoomOut"),
       { type: "separator" },
       role(t, "togglefullscreen", "native.role.toggleFullScreen"),
+      ...(glance ? [{ type: "separator" }, { id: "glance", label: t("native.menu.glance"), type: "checkbox", checked: glance.checked, click: () => glance.onToggle(!glance.checked) }] : []),
     ],
   };
   const window = {
@@ -79,10 +80,12 @@ const whereItLives = (environment) => (environment.kind === "local" ? environmen
  * @param {{ origin: string, onBack: () => void } | null} [input.home] My Cloud once the person's bots moved there: the
  *   menu lists only the other saved servers, with Back to My Cloud, and is absent without any.
  * @param {(key: string, params?: Record<string, string | number>) => string} [input.t]
+ * @param {{ checked: boolean, onToggle: (on: boolean) => void } | null} [input.glance] Glance, in the View menu: on until the
+ *   person turns it off.
  * @param {{ checked: boolean, onToggle: (on: boolean) => void } | null} [input.openAtLogin] Open at Login, in the app
  *   menu on macOS and the File menu elsewhere; absent when this build cannot add a login item.
  */
-export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, t = nativeText.englishText.t }) {
+export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, glance = null, t = nativeText.englishText.t }) {
   const isMac = process.platform === "darwin";
   const active = environments.find((e) => e.id === activeId) ?? null;
   const others = home ? environments.filter((e) => e.origin !== home.origin && e.kind !== "local") : [];
@@ -121,7 +124,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     ],
   };
   const atLogin = openAtLogin ? [{ id: "open-at-login", label: t("native.menu.openAtLogin"), type: "checkbox", checked: openAtLogin.checked, click: () => openAtLogin.onToggle(!openAtLogin.checked) }] : [];
-  const roles = roleMenus(t, isMac);
+  const roles = roleMenus(t, isMac, glance);
   const settings = { id: "open-settings", label: t("native.menu.settings"), accelerator: "CmdOrCtrl+,", click: () => onOpenSettings() };
   const about = role(t, "about", "native.role.about", { app: app.name });
   const appMenu = {
