@@ -20,7 +20,7 @@ const POWER_HEADER = "x-omb-cloud-power";
 const BACKGROUND_HEADER = "x-seira-background";
 /** One file may take this long to cross. */
 const FILE_MS = 10 * 60_000;
-const FAR_REFUSED = "the other server did not take or give the file";
+const FAR_REFUSED = "the other side did not take or give the file";
 
 export interface DialerOptions {
   link: BotLink;

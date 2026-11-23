@@ -3,7 +3,7 @@
 /** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`, whatever becomes of them. `outbox`:
  * while this many frames for it wait unacknowledged, a link's work frames are not taken. */
 export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000 } as const;
-export const BUSY_TEXT = "The other server is busy now, so try again later.";
+export const BUSY_TEXT = "The other side is busy now, so try again later.";
 
 /** Refuses a hand-off while `open` of the link's hand-offs are at work here, or when the link already had
  * `perWindow` admitted in the last `windowMs`. Only admitted hand-offs count toward the window. */

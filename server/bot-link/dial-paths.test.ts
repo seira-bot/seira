@@ -84,9 +84,9 @@ describe("a refused file", () => {
   });
 
   it("carries only a fixed text when the other side's words must not reach this server", async () => {
-    expect(await refusal(404, { farText: false })).toEqual({ message: "the other server did not take or give the file", gone: true });
+    expect(await refusal(404, { farText: false })).toEqual({ message: "the other side did not take or give the file", gone: true });
     const denied = await refusal(403, { farText: false });
-    expect(denied).toEqual({ message: "the other server did not take or give the file", gone: false });
+    expect(denied).toEqual({ message: "the other side did not take or give the file", gone: false });
     expect(denied.message).not.toContain("far side");
   });
 });

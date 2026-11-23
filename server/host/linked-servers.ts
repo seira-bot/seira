@@ -55,19 +55,19 @@ export { GUEST_TOKEN_PREFIX, INVITE_TTL_MS, LINKS_MAX, type ApprovalCap } from "
 
 export const ACCEPT_PATH = "/api/linked-servers/accept";
 export const GUEST_PATHS = { sync: "/api/linked-servers/sync", file: "/api/linked-servers/file" } as const;
-export const CHAINED = "Work from a linked server cannot go to another server.";
+export const CHAINED = "Work from another Seira cannot go on to a third one.";
 
-const WORDS = { handedTo: "Handed to another server.", otherSide: "another server" };
-const FAIL_TEXT = "The work could not be done on the other server.";
-const REMOVED = "This work stopped because the link to another server was removed.";
-const ENDED_THERE = "This work stopped because the other server ended the link.";
+const WORDS = { handedTo: "Handed to another Seira.", otherSide: "another Seira" };
+const FAIL_TEXT = "The work could not be done on the other side.";
+const REMOVED = "This work stopped because the link to another Seira was removed.";
+const ENDED_THERE = "This work stopped because the other side ended the link.";
 const LINK_OFF = "This link is not in use any more.";
 const TOO_MANY = "Too many tries. Wait a minute and try again.";
-const ONLY_LINK = "This sign-in works only for the link between two servers.";
+const ONLY_LINK = "This sign-in works only for a link between two Seiras.";
 const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
-const FULL_HERE = "This server already has as many linked servers as it can keep. Remove one first.";
-const FALLBACK_NAME = "Linked server";
-const SELF_FALLBACK = "Seira server";
+const FULL_HERE = "This Seira already has as many links as it can keep. Remove one first.";
+const FALLBACK_NAME = "Another Seira";
+const SELF_FALLBACK = "Seira";
 const ANSWER_MAX = 64 * 1024;
 const JOIN_MS = 10_000;
 const TIDY_MS = 60 * 60_000;
@@ -352,7 +352,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     pruneInvites(file, at);
     const invite = body.success ? liveInvite(file, body.data.code, at) : undefined;
     if (!body.success || !invite) { deps.attemptFailed?.(source); return json(res, 403, { error: NOT_VALID }); }
-    if (file.links.length >= LINKS_MAX) return json(res, 409, { error: "This server cannot take another link now." });
+    if (file.links.length >= LINKS_MAX) return json(res, 409, { error: "This Seira cannot take another link now." });
     let id: string;
     try { id = freshId(); } catch { return json(res, 500, { error: "The link could not be made. Try again." }); }
     invite.usedAt = at;
@@ -407,7 +407,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   /** Security invariant: no part of the other server's answer but a parsed token and place leaves this function. */
   async function askToJoin(origin: string, code: string, self: Place): Promise<z.infer<typeof acceptAnswer>> {
-    const unreachable = new LinkedServerError("The other server could not be reached. Try again later.", 502);
+    const unreachable = new LinkedServerError("The other side could not be reached. Try again later.", 502);
     let response: Response;
     try {
       response = await (deps.fetch ?? fetch)(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
@@ -419,7 +419,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
       if (response.status === 403) throw new LinkedServerError(NOT_VALID, 409);
-      if (response.status === 409) throw new LinkedServerError("The other server cannot take another link now.", 409);
+      if (response.status === 409) throw new LinkedServerError("The other side cannot take another link now.", 409);
       if (response.status === 429) throw new LinkedServerError(TOO_MANY, 429);
       throw unreachable;
     }

@@ -285,7 +285,7 @@ describe("the linked servers manager", () => {
     for (const [method, path] of [["GET", "/api/bots"], ["POST", "/api/bot-link/sync"], ["GET", "/api/linked-servers"], ["DELETE", "/api/linked-servers/0123456789abcdef"]] as const) {
       const response = await fetch(`${origin}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
       expect(response.status, path).toBe(403);
-      expect(await response.json()).toEqual({ error: "This sign-in works only for the link between two servers." });
+      expect(await response.json()).toEqual({ error: "This sign-in works only for a link between two Seiras." });
     }
     expect((await fetch(`${origin}/api/bots`)).status).toBe(404);
     expect((await fetch(`${origin}/api/bots`, { headers: { authorization: "Bearer other-token" } })).status).toBe(404);
@@ -341,12 +341,12 @@ describe("the linked servers manager", () => {
     expect(await failure("seira-link:not-an-invite")).toMatchObject({ status: 400 });
     expect(asked).toEqual([]);
 
-    expect((await failure(invite("https://head.example"))).message).toBe("The other server could not be reached. Try again later.");
+    expect((await failure(invite("https://head.example"))).message).toBe("The other side could not be reached. Try again later.");
     expect(asked).toEqual(["https://head.example/api/linked-servers/accept"]);
     answer = () => new Response(JSON.stringify({ error: "remote secret words" }), { status: 403 });
     expect((await failure(invite("https://head.example"))).message).toBe("That invite is not valid any more. Ask for a new one.");
     answer = () => new Response(JSON.stringify({ token: `lsk_${"D".repeat(43)}`, place: { id: "head", name: "x".repeat(70_000) } }), { status: 200 });
-    expect((await failure(invite("https://head.example"))).message).toBe("The other server could not be reached. Try again later.");
+    expect((await failure(invite("https://head.example"))).message).toBe("The other side could not be reached. Try again later.");
     answer = () => new Response(JSON.stringify({ token: "remote secret words", place: { id: "head", name: "Head" } }), { status: 200 });
     expect((await failure(invite("https://head.example"))).status).toBe(502);
     expect(JSON.stringify([...logs, ...rows])).not.toContain("remote secret words");

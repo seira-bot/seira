@@ -286,14 +286,14 @@ describe("linked servers", () => {
     const rows = readAdminActivityRange(dir, { from: new Date(now - 60_000), to: new Date(now + 60_000) });
     const linked = activityEntries([], rows, { what: "linked-server" });
     expect(linked.map((entry) => entry.type === "admin" && entry.action).sort()).toEqual(["linked-server.accept", "linked-server.handoff"]);
-    expect(linked.every((entry) => entry.who === "Branch office (linked server)")).toBe(true);
+    expect(linked.every((entry) => entry.who === "Branch office (another Seira)")).toBe(true);
     expect(activityEntries([], rows, { what: "all", who: "branch" })).toHaveLength(2);
     expect(parseActivityWhat("linked-server")).toBe("linked-server");
   });
 
   it("labels a linked server without a name plainly", () => {
     const row: AdminActionRow = { at: "2026-09-21T09:00:00.000Z", category: "linked-server", action: "linked-server.remove", actor: { ...PEER, name: "" } };
-    expect(activityEntries([], [row], { what: "all" })[0]!.who).toBe("Linked server");
+    expect(activityEntries([], [row], { what: "all" })[0]!.who).toBe("Another Seira");
   });
 
   it("hides a credential-named value that reaches a link row", async () => {
