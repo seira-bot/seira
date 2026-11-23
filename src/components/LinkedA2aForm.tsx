@@ -25,7 +25,7 @@ export interface A2aAddress { bot: string; url: string }
 /** What the person must copy now: the token shows once. */
 export interface A2aIssued { name: string; token?: string; urls: A2aAddress[] }
 
-export const isA2a = (link: { kind?: string }): link is A2aLink => link.kind === "a2a";
+export const isA2a = (link: A2aLink | { kind?: undefined }): link is A2aLink => link.kind === "a2a";
 
 const messageOf = (cause: unknown): string => (cause instanceof Error && cause.message ? cause.message : t("linked.error.generic"));
 
