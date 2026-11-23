@@ -112,6 +112,33 @@ describe("contexts of inbound work", () => {
     expect(admit("c-new", "t-new")).toBe(false);
     expect(admit("c0", "t-again")).toBe(true);
   });
+
+  it("counts distinct inbound threads, not tasks and not outbound work", () => {
+    const { open } = fixture();
+    const index = open();
+    index.put(entry("a", { context: "c1", thread: threadKey("bot-1", "c1") }));
+    index.put(entry("b", { context: "c1", thread: threadKey("bot-1", "c1") }));
+    index.put(entry("c", { context: "c1", bot: "bot-2", thread: threadKey("bot-2", "c1") }));
+    index.put(entry("d", { dir: "out", thread: threadKey("bot-1", "c9") }));
+    expect(index.threadCount()).toBe(2);
+    expect(index.hasThread(threadKey("bot-2", "c1"))).toBe(true);
+    expect(index.hasThread(threadKey("bot-1", "c9"))).toBe(false);
+  });
+});
+
+describe("removing a task", () => {
+  it("drops it from memory and from the file, and ignores an unknown id", () => {
+    const { open, file } = fixture();
+    const index = open();
+    index.put(entry("a"));
+    index.put(entry("b"));
+    index.remove("a");
+    index.remove("unknown");
+    expect(index.get("a")).toBeNull();
+    expect(index.get("b")).not.toBeNull();
+    expect((JSON.parse(readFileSync(file, "utf8")) as { tasks: TaskEntry[] }).tasks.map((task) => task.id)).toEqual(["b"]);
+    expect(open().get("a")).toBeNull();
+  });
 });
 
 describe("far context of outbound work", () => {

@@ -41,9 +41,14 @@ export interface TaskIndex {
   get(id: string): TaskEntry | null;
   /** Adds the task or replaces the task with the same id. The note is cut to its limit. */
   put(entry: TaskEntry): void;
+  /** Drops one task, so a request that started nothing leaves no record. */
+  remove(id: string): void;
   /** How many distinct contexts the inbound tasks use. */
   contextCount(): number;
   hasContext(context: string): boolean;
+  /** How many distinct threads the inbound tasks use: one for each pair of bot and context. */
+  threadCount(): number;
+  hasThread(thread: string): boolean;
   /** The far context stored for a thread of outbound work. */
   outOf(thread: string): FarContext | null;
   setContext(thread: string, far: string, inputTask?: string): void;
@@ -120,8 +125,15 @@ export function createTaskIndex(dir: string, now: () => number, log: (line: stri
       trim();
       persist();
     },
+    remove(id) {
+      const before = state.tasks.length;
+      state.tasks = state.tasks.filter((task) => task.id !== id);
+      if (state.tasks.length !== before) persist();
+    },
     contextCount: () => new Set(state.tasks.filter((task) => task.dir === "in").map((task) => task.context)).size,
     hasContext: (context) => state.tasks.some((task) => task.dir === "in" && task.context === context),
+    threadCount: () => new Set(state.tasks.filter((task) => task.dir === "in").map((task) => task.thread)).size,
+    hasThread: (thread) => state.tasks.some((task) => task.dir === "in" && task.thread === thread),
     outOf(thread) {
       const context = state.contexts.get(thread);
       if (!context) return null;
