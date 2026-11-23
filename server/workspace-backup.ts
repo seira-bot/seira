@@ -325,9 +325,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   const key = await passwordKey(options.password, salt);
   const job = newJob(dataDir, jobId);
   const snapshot = join(job.directory, "snapshot");
-  const problems: string[] = [];
   const entries: Entry[] = [];
-  const foldedPaths = new Map<string, string>();
+  const foldedPaths = new Map<string, string>(); const problems: string[] = [];
   const warnings = ["Stop external editors and managed desktops before exporting; files written outside this server cannot be frozen by the backup gate.", "Conversation text and user files are not redacted and may contain secrets you pasted. Keep the encrypted backup private.", RESTORE_WARNING];
   let bytes = 0;
   let skippedLinks = 0;
@@ -391,14 +390,12 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           try { target = realpathSync(source); } catch { problems.push(`Cannot back up dangling symbolic link: ${path}`); continue; }
           const rel = relative(root, target);
           if (rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rel)) {
-            problems.push(`Cannot back up symbolic link outside the workspace: ${path}`);
-            continue;
+            problems.push(`Cannot back up symbolic link outside the workspace: ${path}`); continue;
           }
           const portableRel = rel.replaceAll("\\", "/");
           const workspace = /^workspaces\/[^/]+\//.exec(path)?.[0];
           if (!workspace || !portableRel.startsWith(workspace)) {
-            problems.push(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`);
-            continue;
+            problems.push(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`); continue;
           }
           if (chain.some((folder) => folder === target || folder.startsWith(`${target}${sep}`))) {
             throw userErrorThrown("serverError.backup.recursiveLink", { path });
@@ -437,8 +434,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
         } else problems.push(`Cannot back up special or live runtime file: ${path}`);
       }
     };
-    walk(root);
-    if (problems.length) throw backupProblemsError(problems);
+    walk(root); if (problems.length) throw backupProblemsError(problems);
     if (skippedLinks) warnings.push(`${skippedLinks} managed skill discovery link(s) were omitted and are recreated by the app.`);
     if (skippedDependencies) warnings.push(`${skippedDependencies} installed dependency folder(s) (node_modules) were omitted; reinstall them in the project after restoring.`);
     if (copiedLinks) warnings.push(`${copiedLinks} symbolic link(s) inside a workspace were saved as copies of what they point to; restoring creates regular files and folders there.`);
