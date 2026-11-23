@@ -352,6 +352,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Settings → General → Privacy (the switch is in the desktop app only)",
     does: "On by default. When Seira stops working, the desktop app sends the app version, system type and where its code failed. Never messages, files or names. It is a different switch from Usage analytics.",
   },
+  {
+    id: "glance",
+    name: "Glance",
+    place: "The top centre of the screen while a bot works (a tray icon on Linux Wayland); turn it on or off with View → Glance in the desktop app",
+    does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
+  },
 ];
 
 const FILLER = new Set(["seira", "the", "and", "for", "how", "what", "where", "does", "do", "is", "are", "my", "in", "of", "to", "me", "can", "you", "about", "mean", "meant"]);
