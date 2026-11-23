@@ -10,7 +10,7 @@ const bot = (id, extra = {}) => ({ botId: id, threadId: `t-${id}`, name: id, ava
 const approval = { kind: "approval", requestId: "r1", title: "Run", detail: "ls", choices: [], canAlways: true };
 const feed = (...bots) => ({ version: 1, lang: "en", bots, labels: LABELS });
 
-function world({ wayland = false, hidden = false, focused = false } = {}) {
+function world({ wayland = false, hidden = false, focused = false, x11 = false } = {}) {
   const log = [], timers = [], handlers = { on: {}, handle: {} };
   const mainFrame = { url: `${ORIGIN}/` };
   const contents = Object.assign(new EventEmitter(), { mainFrame, isLoadingMainFrame: () => false, getURL: () => `${ORIGIN}/x`, send: (channel, payload) => log.push({ channel, payload }) });
@@ -21,17 +21,18 @@ function world({ wayland = false, hidden = false, focused = false } = {}) {
     render(p) { fakeVisor.renders.push(p); fakeVisor.shown = true; }, hide() { fakeVisor.hides++; fakeVisor.shown = false; }, close() { fakeVisor.closed++; }, setSize(s) { fakeVisor.sizes.push(s); return true; } };
   const fakeTray = { updates: [], destroyed: 0, update(v) { fakeTray.updates.push(v); }, destroy() { fakeTray.destroyed++; }, relabel() {} };
   const prefs = { glanceHidden: () => hidden, setGlanceHidden: (v) => { hidden = v; saved.push(v); } };
-  const reveals = [];
+  const reveals = [], helpers = [];
   const glance = installGlance({
     ipcMain: { on: (c, f) => { handlers.on[c] = f; }, handle: (c, f) => { handlers.handle[c] = f; } },
     screen: {}, BrowserWindow: class {}, Tray: class {}, Menu: {}, nativeImage: {}, fetch: async () => ({ ok: false }),
     getMainWindow: () => win, prefs, t: (k) => k, revealChat: (target) => reveals.push(target), isWayland: wayland, platform: "linux",
     setTimer: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; }, clearTimer: () => {},
     createVisor: () => { visors.push(fakeVisor); return fakeVisor; }, createTray: () => { trays.push(fakeTray); return fakeTray; },
+    x11Available: x11, createHelperVisor: (hooks) => { const h = { ...fakeVisor, hooks, closed: 0, renders: [], hides: 0, shown: false, contents: () => null, visible: () => h.shown, render(p) { h.renders.push(p); h.shown = true; }, hide() { h.hides++; h.shown = false; }, close() { h.closed++; } }; helpers.push(h); return h; },
   });
   const page = { sender: contents, senderFrame: mainFrame };
   const send = (raw, event = page) => handlers.on["glance:feed"](event, raw);
-  return { glance, handlers, log, timers, fakeVisor, fakeTray, visors, trays, saved, reveals, page, contents, mainFrame, win, send, visorEvent: { sender: visorContents, senderFrame: visorContents.mainFrame } };
+  return { helpers, glance, handlers, log, timers, fakeVisor, fakeTray, visors, trays, saved, reveals, page, contents, mainFrame, win, send, visorEvent: { sender: visorContents, senderFrame: visorContents.mainFrame } };
 }
 
 test("AC-15 a feed from a subframe, another page or the wrong origin is ignored", () => {
@@ -194,4 +195,73 @@ test("AC-01 AC-05 the visor window is a frameless panel that never takes focus a
   }
   assert.deepEqual(glanceBounds(display, "darwin", { width: 200, height: 40 }), { x: 860, y: 0, width: 200, height: 40 });
   assert.deepEqual(glanceBounds(display, "win32", { width: 200, height: 40 }), { x: 860, y: 38, width: 200, height: 40 });
+});
+
+test("AC-01 on Wayland with an X11 display the visor shows from the helper and the tray stays away", () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a")));
+  assert.equal(w.helpers.length, 1);
+  assert.equal(w.helpers[0].renders.at(-1).entries[0].botId, "a");
+  assert.equal(w.trays.length, 0);
+  assert.equal(w.visors.length, 0);
+});
+
+test("AC-03 on Wayland without an X11 display the tray shows and the helper never starts", () => {
+  const w = world({ wayland: true, x11: false });
+  w.send(feed(bot("a")));
+  assert.equal(w.helpers.length, 0);
+  assert.equal(w.trays.length, 1);
+});
+
+test("AC-04 after three helper failures the tray shows for the rest of the run", () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a")));
+  w.helpers[0].hooks.onFail();
+  assert.equal(w.helpers.length, 2);
+  assert.equal(w.trays.length, 0);
+  w.helpers[1].hooks.onFail();
+  assert.equal(w.helpers.length, 3);
+  w.helpers[2].hooks.onFail();
+  assert.equal(w.helpers.length, 3);
+  assert.equal(w.trays.length, 1);
+  assert.equal(w.fakeTray.updates.length >= 1, true);
+});
+
+test("AC-05 an act from the helper gets the same checks as an act from the local visor", async () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a", { state: "needs", ask: { ...approval, detail: "" } })));
+  const act = w.helpers[0].hooks.onAct;
+  const once = { kind: "approval", botId: "a", threadId: "t-a", requestId: "r1", choice: "once" };
+  assert.equal(await act(once), false);
+  assert.equal(await act({ ...once, choice: "always" }), false);
+  assert.equal(await act({ ...once, requestId: "old", choice: "deny" }), false);
+  assert.equal(await act("junk"), false);
+  assert.equal(w.log.filter((e) => e.channel === "glance:act").length, 0);
+  const w2 = world({ wayland: true, x11: true });
+  w2.send(feed(bot("a", { state: "needs", ask: approval })));
+  const answer = w2.helpers[0].hooks.onAct(once);
+  const sent = w2.log.find((e) => e.channel === "glance:act");
+  assert.deepEqual(sent.payload.act, once);
+  w2.handlers.on["glance:acted"](w2.page, { id: sent.payload.id, ok: true });
+  assert.equal(await answer, true);
+  assert.equal(await w2.helpers[0].hooks.onAct({ kind: "open", botId: "a", threadId: "t-a" }), true);
+  assert.deepEqual(w2.reveals, [{ botId: "a", threadId: "t-a" }]);
+});
+
+test("a page that stands in for the helper through the visor channel is refused", async () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a")));
+  assert.equal(await w.handlers.handle["glance-visor:act"](w.visorEvent, { kind: "open", botId: "a", threadId: "t-a" }), false);
+  assert.equal(await w.handlers.handle["glance-visor:size"](w.visorEvent, { width: 10, height: 10 }), false);
+});
+
+test("AC-08 turning Glance off or leaving closes the helper", () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a")));
+  w.glance.setHidden(true);
+  assert.equal(w.helpers[0].closed, 1);
+  const w2 = world({ wayland: true, x11: true });
+  w2.send(feed(bot("a")));
+  w2.glance.destroy();
+  assert.equal(w2.helpers[0].closed, 1);
 });

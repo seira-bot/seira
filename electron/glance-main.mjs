@@ -4,6 +4,8 @@ import { createGlanceWindow } from "./glance-window.mjs";
 
 /** The page answers an act within this time, or the answer counts as not sent. */
 export const ACT_WAIT_MS = 10_000;
+/** After this many helper failures in one run, Glance stays in the tray. */
+const HELPER_FAILURES = 3;
 const AVATAR_PX = 64, AVATAR_CACHE = 32, AVATAR_WAIT_MS = 1_500;
 
 const originOf = (url) => { try { return new URL(url).origin; } catch { return null; } };
@@ -23,9 +25,9 @@ export function isWaylandSession({ platform, env, switches = {} }) {
  * `getMainWindow`: the main window, if any. `revealChat({ botId, threadId })`: raises the main window on that chat.
  * `prefs`: glanceHidden() and setGlanceHidden(). `onHiddenChange()`: the View menu follows the choice.
  */
-export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch, getMainWindow, prefs, t, revealChat, onHiddenChange = () => {}, platform = process.platform, isWayland = false, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, createVisor = createGlanceWindow, createTray = createGlanceTray }) {
+export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch, getMainWindow, prefs, t, revealChat, onHiddenChange = () => {}, platform = process.platform, isWayland = false, x11Available = false, createHelperVisor = null, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, createVisor = createGlanceWindow, createTray = createGlanceTray }) {
   let model = initialState(), feed = null, view = null, pageOrigin = null, hidden = prefs.glanceHidden() === true;
-  let visor = null, tray = null, timer = null, openToken = null, nextAct = 1, drawn = null;
+  let visor = null, helper = false, failures = 0, helperOff = false, tray = null, timer = null, openToken = null, nextAct = 1, drawn = null;
   const watched = new WeakSet(), waiting = new Map(), avatars = new Map(), loading = new Set();
 
   const page = () => { const win = getMainWindow(); return win && !win.isDestroyed() ? win : null; };
@@ -85,14 +87,18 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
   function draw() {
     if (!view) return;
     if (hidden) { visor?.close(); visor = null; drawn = null; tray?.destroy(); tray = null; return; }
-    if (isWayland) {
+    const useHelper = isWayland && x11Available && Boolean(createHelperVisor) && !helperOff;
+    if (isWayland && !useHelper) {
       if (!view.active) { tray?.destroy(); return; }
       tray ??= createTray({ Tray, Menu, nativeImage, t, onOpen: (target) => revealChat(target), onHide: () => setHidden(true) });
       tray.update(view);
       return;
     }
     if (!view.active) { visor?.hide(); drawn = null; return; }
-    visor ??= createVisor({ BrowserWindow, screen, platform });
+    if (visor && helper !== useHelper) { visor.close(); visor = null; drawn = null; }
+    if (tray && useHelper) { tray.destroy(); tray = null; }
+    visor ??= useHelper ? createHelperVisor({ onAct: act, onFail: helperFailed }) : createVisor({ BrowserWindow, screen, platform });
+    helper = useHelper;
     const next = payloadOf(), mark = JSON.stringify(next);
     if (mark === drawn && visor.visible()) return;
     drawn = mark;
@@ -161,16 +167,26 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
     found.resolve(answer.ok === true);
   });
 
-  ipcMain.handle("glance-visor:act", async (event, raw) => {
-    if (!fromVisor(event) || !view) return false;
-    const act = cleanAct(raw);
-    if (!act || !actAllowed({ bots: view.entries }, act)) return false;
-    if (act.kind === "open") {
-      revealChat({ botId: act.botId, threadId: act.threadId });
+  async function act(raw) {
+    if (!view) return false;
+    const clean = cleanAct(raw);
+    if (!clean || !actAllowed({ bots: view.entries }, clean)) return false;
+    if (clean.kind === "open") {
+      revealChat({ botId: clean.botId, threadId: clean.threadId });
       return true;
     }
-    return relay(act);
-  });
+    return relay(clean);
+  }
+
+  function helperFailed() {
+    failures++;
+    visor = null;
+    drawn = null;
+    if (failures >= HELPER_FAILURES) helperOff = true;
+    run();
+  }
+
+  ipcMain.handle("glance-visor:act", (event, raw) => (fromVisor(event) ? act(raw) : false));
 
   ipcMain.handle("glance-visor:size", (event, size) => fromVisor(event) && visor?.setSize(size) === true);
 
