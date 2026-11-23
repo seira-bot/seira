@@ -24,7 +24,7 @@ export interface CatalogProfile {
   team?: boolean;
   /** The person's Seira with a Chief's powers: its notification tools are mounted. */
   seira?: boolean;
-  /** A direct chat whose bot may pick where it works (Works on is not Off and no team computer is its own): select_computer
+  /** A direct chat whose bot may pick where it works (Works on is not Off): select_computer
    * is mounted, and the harness refuses a pick on any turn but a person's own message. */
   computerSelection?: boolean;
   /** This server can give a bot a Local VM: a supported container runtime is installed on the host.
