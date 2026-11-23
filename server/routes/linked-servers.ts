@@ -67,7 +67,7 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
       if (!("error" in made)) return json(res, 200, made);
       return json(res, 409, { error: made.error === "full"
         ? "This Seira already has as many links as it can keep. Remove one first."
-        : "Another Seira cannot reach this one. Give it a secure public address first." });
+        : "The other Seira needs to reach this one, and this one has no secure public address. Only the side that makes the invite needs one. Start this server with --tunnel, --public-url, --domain or --tailscale, then make the invite again." });
     }
 
     try {

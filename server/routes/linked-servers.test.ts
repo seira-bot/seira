@@ -338,7 +338,10 @@ describe("the admin routes", () => {
       const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/linked-servers/invites`, { method: "POST" });
       return { status: response.status, body: await response.json() as Record<string, unknown> };
     };
-    expect(await ask()).toEqual({ status: 409, body: { error: "Another Seira cannot reach this one. Give it a secure public address first." } });
+    const refused = await ask();
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toContain("Only the side that makes the invite needs one");
+    for (const way of ["--tunnel", "--public-url", "--domain", "--tailscale"]) expect(refused.body.error).toContain(way);
     made = { error: "full" };
     expect(await ask()).toEqual({ status: 409, body: { error: "This Seira already has as many links as it can keep. Remove one first." } });
   });
