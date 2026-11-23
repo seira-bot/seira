@@ -123,11 +123,8 @@ export function PowerPill({ open, place, actions, update, working, paused, waiti
     onClick: (event: { preventDefault: () => void }) => event.preventDefault(),
   });
 
-  const style = {
-    top: place.top,
-    ...(place.rtl ? { right: place.left } : { left: place.left }),
-    "--power-open": `${188 + 40 * actions.length}px`,
-  } as CSSProperties;
+  const style: CSSProperties = { top: place.top, ...(place.rtl ? { right: place.left } : { left: place.left }) };
+  Object.assign(style, { "--power-open": `${188 + 40 * actions.length}px` });
 
   return createPortal(
     <div
