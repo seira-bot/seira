@@ -50,7 +50,7 @@ test("one assertion is taken while a hold is warranted and released when it is n
     pollMs: 60_000,
   });
 
-  assert.deepEqual(await hold.poll(), { hold: true, reason: "due", at: 42, keepAwake: true, onBattery: false });
+  assert.deepEqual(await hold.poll(), { hold: true, reason: "due", at: 42, routineId: null, keepAwake: true, onBattery: false });
   assert.equal(hold.holding(), true);
   await hold.poll();
   assert.deepEqual(calls, [["start", "prevent-app-suspension", 1]]);
@@ -90,6 +90,7 @@ test("the first poll of a started hold that ends after stop does not start a hol
     pollMs: 60_000,
   });
   hold.start();
+  await new Promise((resolve) => setImmediate(resolve));
   hold.stop();
   answer({ hold: true, reason: "running", routineId: "r1" });
   await new Promise((resolve) => setImmediate(resolve));
