@@ -113,7 +113,7 @@ describe("Settings full backups", () => {
     change(view.nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
     fixture.api.mockResolvedValueOnce({ id: "upload-id", chunkBytes: 1024 }).mockResolvedValueOnce({ received: file.size }).mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
     submit(formOf("backup-import")); await flush();
-    expect(fixture.api.mock.calls.slice(1, 4).map(([path]) => path)).toEqual(["/api/workspace-backup/upload/start", "/api/workspace-backup/upload/upload-id/chunk?offset=0", "/api/workspace-backup/upload/upload-id/finish"]);
+    expect(fixture.api.mock.calls.slice(1, 4).map(([path]) => path)).toEqual(["/api/workspace-backup/upload/start", "/api/workspace-backup/upload/upload-id/chunk?offset=0&bytes=17", "/api/workspace-backup/upload/upload-id/finish"]);
     expect(fixture.api.mock.calls[2][1]).toMatchObject({ method: "POST", headers: { "content-type": "application/octet-stream" } });
     expect(JSON.parse(fixture.api.mock.calls[4][1].body)).toEqual({ id: "upload-id", password: "correct horse battery" });
     view = render();
