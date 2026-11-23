@@ -39,7 +39,7 @@
 // - A sender that fails too many tries is refused, also when it shares its address with a linked server.
 // - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
 //   does not see the work that routine starts later.
-import { mkdirSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -50,6 +50,7 @@ import { FILE_IDLE_MS, createDialer, readCapped } from "../bot-link/dial.ts";
 import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
 import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 import { json, readBody } from "../harness/http.ts";
 import { bearerToken, requestSource, type RequestAuth } from "../request-auth.ts";
 import { createLinkExchange } from "../routes/bot-link-exchange.ts";
@@ -59,7 +60,7 @@ import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
 import { FULL_HERE, LinkedServerError, a2aKey, createLinkedA2a, type A2aInput, type A2aPatch, type A2aPeerView, type CardUrl } from "./linked-a2a.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
-import { farFileName, farFrame } from "./linked-servers-text.ts";
+import { farCost, farFileName, takeFarFrame } from "./linked-servers-text.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
@@ -83,6 +84,7 @@ const ONLY_LINK = "This sign-in works only for a link between two Seiras.";
 const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
 const ONLY_A2A = "This sign-in works only for the calls of an A2A agent.";
 const SEIRA_ONLY = "Only an A2A agent has an address, a token or a name to change here.";
+const NOT_NOW = "The link could not be made now. Try again later.";
 const FALLBACK_NAME = "Another Seira";
 const SELF_FALLBACK = "Seira";
 const ANSWER_MAX = 64 * 1024;
@@ -157,9 +159,9 @@ export interface LinkedServersDeps extends InstanceDeps {
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
   timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
-  /** Smaller limits for tests: a link's files waiting here, its work frames and hellos in a window, its frames
+  /** Smaller limits for tests: a link's files waiting here, its work frames, hellos and characters to clean in a window, its frames
    * waiting here, and its joiner's exchanges and new sessions in a window. */
-  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; exchanges?: number; sessions?: number };
+  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; chars?: number; exchanges?: number; sessions?: number };
   /** Links to A2A agents. `allowLoopback`: tests only, an agent on this machine's loopback at http. `origin`: the address
    * those agents reach this server at, when it is not `publicOrigin`. `holdMs`: a shorter hold of a call, for tests. */
   a2a?: { allowLoopback?: boolean; origin?(): string | null; egress?: EgressDeps; holdMs?: number };
@@ -184,7 +186,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const instances = new Map<string, Instance>();
   const admission = createAdmission(now);
   const refusals = createRefusalRecord(now);
-  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos });
+  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos, chars: deps.limits?.chars }, farCost);
   const sent = createFrameBudget(now, deps.limits?.frames);
   const heldBack = createRefusalRecord(now);
   const pace = createPace(now, { exchanges: deps.limits?.exchanges, sessions: deps.limits?.sessions });
@@ -320,7 +322,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   function open(record: StoredLink): Instance {
     const { id } = record, key = keyOf(id), dataDir = instanceDir(deps.dataDir, id);
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dataDir);
     const policy: LinkPolicy = {
       key,
       exposed: (botId) => recordOf(id)?.exposed.includes(botId) === true,
@@ -331,7 +333,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     };
     const cap = () => recordOf(id)?.cap ?? "ask";
     const link = guestLink(dataDir, policy, cap, files);
-    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(farFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(takeFarFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
     const takes = (frames: readonly unknown[], ack: number) => intakeOf(id, frames, link.backlog(key, ack) >= outboxMax);
     const entry: Instance = {
       id, key, link, cap,
@@ -376,7 +378,16 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return { ...base, state: entry.link.online(entry.key) ? "online" : "offline", bots };
   }
 
+  /** Every error that accepting an invite does not answer itself gets one fixed answer, so a cause (a path in the data
+   * folder) never reaches the joiner. */
   async function accept(ctx: GuestRequest): Promise<void> {
+    try { await acceptOf(ctx); } catch (error) {
+      log(`linked servers: an invite could not be taken (${error instanceof Error ? error.message : String(error)})`);
+      if (ctx.res.headersSent || ctx.res.destroyed) ctx.res.destroy(); else json(ctx.res, 503, { error: NOT_NOW });
+    }
+  }
+
+  async function acceptOf(ctx: GuestRequest): Promise<void> {
     const { req, res } = ctx;
     res.setHeader("cache-control", "no-store");
     const source = `linked-server:${requestSource(req)}`;
@@ -391,16 +402,26 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     if (full()) return json(res, 409, { error: "This Seira cannot take another link now." });
     let id: string;
     try { id = freshId(); } catch { return json(res, 500, { error: "The link could not be made. Try again." }); }
-    invite.usedAt = at;
-    pruneInvites(file, at);
     const token = newToken();
     const record: StoredLink = { id, role: "inviter", place: cleanPlace(body.data.place, FALLBACK_NAME), exposed: [], cap: "ask", tokenHash: hashSecret(token), createdAt: at };
-    file.links.push(record);
-    save();
-    const self = selfPlace();
-    open(record).link.pair({ self, sessionId: id, computer: record.place });
-    deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
-    return json(res, 200, { token, place: self });
+    invite.usedAt = at;
+    pruneInvites(file, at);
+    try {
+      file.links.push(record);
+      save();
+      const self = selfPlace();
+      open(record).link.pair({ self, sessionId: id, computer: record.place });
+      deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
+      return json(res, 200, { token, place: self });
+    } catch (error) {
+      file.links = file.links.filter((one) => one !== record);
+      const entry = instances.get(id);
+      if (entry) { instances.delete(id); try { shut(entry); } catch { /* closing anyway */ } }
+      delete invite.usedAt;
+      file.invites.push(invite);
+      try { save(); } catch { /* the stored file still has the invite */ }
+      throw error;
+    }
   }
 
   /** The instance whose credential this is. Every stored hash is compared, in constant time each. */

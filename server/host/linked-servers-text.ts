@@ -1,4 +1,5 @@
 // The text a server of another owner sends over a link, as this server takes it in.
+import { guestFrameSchema } from "../bot-link/protocol.ts";
 import { clean, defuse } from "../records-block.ts";
 
 const FAR_BOT = "Teammate";
@@ -51,3 +52,15 @@ export function farFrame(raw: unknown): unknown {
       return raw;
   }
 }
+
+/** What cleaning `raw` costs, in characters: none for a frame that does not parse or has no words to clean, else the
+ * size of the frame. The schema checks a length without reading the text. */
+export function farCost(raw: unknown): number {
+  if (!guestFrameSchema.safeParse(raw).success) return 0;
+  const { t } = raw as { t: string };
+  return t === "done" || t === "cancel" || t === "bye" ? 0 : JSON.stringify(raw).length;
+}
+
+/** A frame as this side takes it in: cleaned only once it parses, so no text longer than the schema allows is read. A
+ * frame that does not parse becomes `null`, which the link drops. */
+export const takeFarFrame = (raw: unknown): unknown => (guestFrameSchema.safeParse(raw).success ? farFrame(raw) : null);

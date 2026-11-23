@@ -19,6 +19,7 @@ import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEngineP
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
+import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
 import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
@@ -317,16 +318,15 @@ export async function createWorkspaceBackup(dataDir: string, options: CreateWork
   }
 }
 
-export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string): Promise<CreatedWorkspaceBackup> {
+export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string, deps: { statfs?: FreeSpace } = {}): Promise<CreatedWorkspaceBackup> {
   if (Object.hasOwn(options, "credentials")) throw new Error("Workspace backups do not transfer credentials.");
   assertLocalAuthOutsideSnapshot(dataDir);
   const salt = randomBytes(16);
   const key = await passwordKey(options.password, salt);
   const job = newJob(dataDir, jobId);
   const snapshot = join(job.directory, "snapshot");
-  folder(join(snapshot, "data"));
   const entries: Entry[] = [];
-  const foldedPaths = new Map<string, string>();
+  const foldedPaths = new Map<string, string>(); const problems: string[] = [];
   const warnings = ["Stop external editors and managed desktops before exporting; files written outside this server cannot be frozen by the backup gate.", "Conversation text and user files are not redacted and may contain secrets you pasted. Keep the encrypted backup private.", RESTORE_WARNING];
   let bytes = 0;
   let skippedLinks = 0;
@@ -335,6 +335,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   let copiedLinks = 0;
   try {
     const root = realpathSync(dataDir);
+    assertBackupSpace(job.directory, root, deps.statfs);
+    folder(join(snapshot, "data"));
     for (const [name, snapshotName] of Object.entries(SNAPSHOT_DATABASES)) {
       const sourceDb = join(root, name);
       if (!existsSync(sourceDb)) continue;
@@ -360,8 +362,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
         if (excludedWorkspaceAuthPath(path) || ephemeralWorkspaceTokenPath(path) || redownloadedOrgLibraryPath(path) || liveDataEnginePath(path)) continue;
         if (privacy && omittedAsTeamPrivate(path, privacy)) continue;
         // Reject noncanonical spellings: a case-sensitive host must not export auth paths active on Windows/Mac.
-        if (forbiddenArchivePath(path)) throw new Error("A workspace filename conflicts with a protected authentication or runtime path.");
-        if (!validRelative(path)) throw new Error(`Cannot back up a name that cannot be restored on every supported platform, such as one with ":" or "\\", a trailing dot or space, or a Windows device name like CON or AUX; rename it first: ${path}`);
+        if (forbiddenArchivePath(path)) { problems.push(`A workspace filename conflicts with a protected authentication or runtime path: ${path}`); continue; }
+        if (!validRelative(path)) { problems.push(`Cannot back up a name that cannot be restored on every supported platform, such as one with ":" or "\\", a trailing dot or space, or a Windows device name like CON or AUX; rename it first: ${path}`); continue; }
         let source = join(directory, name);
         let stat = lstatSync(source);
         if (name === "node_modules" && (stat.isDirectory() || stat.isSymbolicLink())) {
@@ -385,15 +387,15 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
         }
         if (stat.isSymbolicLink()) {
           let target: string;
-          try { target = realpathSync(source); } catch { throw new Error(`Cannot back up dangling symbolic link: ${path}`); }
+          try { target = realpathSync(source); } catch { problems.push(`Cannot back up dangling symbolic link: ${path}`); continue; }
           const rel = relative(root, target);
           if (rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(rel)) {
-            throw new Error(`Cannot back up symbolic link outside the workspace: ${path}`);
+            problems.push(`Cannot back up symbolic link outside the workspace: ${path}`); continue;
           }
           const portableRel = rel.replaceAll("\\", "/");
           const workspace = /^workspaces\/[^/]+\//.exec(path)?.[0];
           if (!workspace || !portableRel.startsWith(workspace)) {
-            throw new Error(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`);
+            problems.push(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`); continue;
           }
           if (chain.some((folder) => folder === target || folder.startsWith(`${target}${sep}`))) {
             throw userErrorThrown("serverError.backup.recursiveLink", { path });
@@ -404,7 +406,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
         }
         if (entries.length >= MAX_WORKSPACE_BACKUP_FILES) throw new Error("The workspace exceeds the 100,000-entry backup limit.");
         const caseTwin = foldedPaths.get(path.toLowerCase());
-        if (caseTwin) throw new Error(`Cannot back up names that differ only by letter case, which collide on Windows and macOS; rename one first: ${caseTwin} and ${path}`);
+        if (caseTwin) { problems.push(`Cannot back up names that differ only by letter case, which collide on Windows and macOS; rename one first: ${caseTwin} and ${path}`); continue; }
         foldedPaths.set(path.toLowerCase(), path);
         const destination = join(snapshot, "data", path);
         if (stat.isDirectory()) {
@@ -429,10 +431,10 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           bytes += copied.size;
           if (bytes > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("The workspace exceeds the 10 GB backup limit.");
           entries.push({ path, type: "file", ...copied });
-        } else throw new Error(`Cannot back up special or live runtime file: ${path}`);
+        } else problems.push(`Cannot back up special or live runtime file: ${path}`);
       }
     };
-    walk(root);
+    walk(root); if (problems.length) throw backupProblemsError(problems);
     if (skippedLinks) warnings.push(`${skippedLinks} managed skill discovery link(s) were omitted and are recreated by the app.`);
     if (skippedDependencies) warnings.push(`${skippedDependencies} installed dependency folder(s) (node_modules) were omitted; reinstall them in the project after restoring.`);
     if (copiedLinks) warnings.push(`${copiedLinks} symbolic link(s) inside a workspace were saved as copies of what they point to; restoring creates regular files and folders there.`);
