@@ -437,6 +437,7 @@ describe("changing an A2A agent (AC-02)", () => {
     expect(lastRow(head, "linked-server.update")).toMatchObject({ changed: ["exposed", "cap"], before: { exposed: ["writer"], cap: "ask" }, after: { exposed: ["analyst"], cap: "edits" } });
     expect((await head.call(cardPath("writer"), token)).status).toBe(404);
     expect((await head.call(cardPath("analyst"), token)).status).toBe(200);
+    expect((await head.api("PATCH", `/api/linked-servers/${calleeId}`, { exposed: ["writer"] })).body.server).toMatchObject({ exposed: ["writer"], cap: "edits" });
 
     expect(await head.api("PATCH", `/api/linked-servers/${calleeId}`, { inbound: false })).toEqual({ status: 400, body: { error: NO_WAY } });
     expect((await branch.api("PATCH", `/api/linked-servers/${callerId}`, { inbound: false })).status).toBe(200);
