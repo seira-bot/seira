@@ -13,8 +13,8 @@ a packaged build, exactly as below.
 ## Floor: automated checks
 
 ```sh
-node --test electron/glance-*.node-test.mjs electron/preload-contract.node-test.mjs electron/desktop-prefs.node-test.mjs electron/menu.node-test.mjs
-pnpm exec vitest run src/state/glance-feed.test.ts shared/app-features.test.ts --maxWorkers=4
+node --test electron/glance-*.node-test.mjs electron/preload-contract.node-test.mjs electron/desktop-prefs.node-test.mjs
+pnpm exec vitest run src/state/glance-feed.test.ts src/state/use-glance.test.ts electron/menu.test.mjs shared/app-features.test.ts --maxWorkers=4
 pnpm typecheck && pnpm lint && pnpm i18n:check
 ```
 
