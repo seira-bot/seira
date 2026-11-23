@@ -687,6 +687,20 @@ describe("encrypted full workspace backups", () => {
     expect(exported.summary.warnings.some((warning) => warning.includes("1 managed skill"))).toBe(true);
   });
 
+  it("skips the app's skill links in a workspace when they dangle or point outside it, and still refuses other dangling links", async () => {
+    const root = directory();
+    const outside = directory();
+    const native = join(root, "workspaces", "bot", ".agents", "skills");
+    mkdirSync(native, { recursive: true });
+    const kind = process.platform === "win32" ? "junction" : "dir";
+    symlinkSync(join(outside, "missing"), join(native, "demo"), kind);
+    symlinkSync(outside, join(native, "away"), kind);
+    const exported = await createWorkspaceBackup(root, { password: PASSWORD });
+    expect(exported.summary.warnings.some((warning) => warning.includes("2 managed skill"))).toBe(true);
+    symlinkSync(join(outside, "missing"), join(root, "workspaces", "bot", "dangling"));
+    await expect(createWorkspaceBackup(root, { password: PASSWORD })).rejects.toThrow(/dangling symbolic link/);
+  });
+
   it("saves links inside one workspace as copies of what they point to, and refuses loops and links to other workspaces", async () => {
     const root = directory();
     const project = join(root, "workspaces", "ws", "project");

@@ -47,6 +47,7 @@ export declare const MOVE_BUSY: readonly ("bot" | "room" | "sign-in" | "other")[
 export declare const MOVE_STATUS_HEARTBEAT_MS: number;
 export declare const MOVE_STATUS_SETTLE_MS: number;
 export declare const MOVE_STATUS_GAP_MS: number;
+export declare const MOVE_STATUS_FAILED_MAX_MS: number;
 export declare const MOVE_STATUS_OFF_MS: number;
 
 export function moveStatus(input: {

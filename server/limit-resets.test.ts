@@ -59,6 +59,52 @@ describe("a Claude account's usage", () => {
   });
 });
 
+describe("two accounts of one provider", () => {
+  const named = (id: string, windows: PlanProviderRow) => ({ ...windows, id, name: id });
+  const accounts = planAccountsFromInstances({
+    nana: { driver: "claudeAgent", displayName: "nana", config: { configDir: "/accounts/nana" } },
+    affan: { driver: "claudeAgent", displayName: "affan", config: { configDir: "/accounts/affan" } },
+  });
+  const both = report(
+    named("nana", claude([1, NOW + 2 * HOUR], [99, NOW + 50 * HOUR])),
+    named("affan", claude([60, NOW + 4 * HOUR], [10, NOW + 90 * HOUR])),
+  );
+
+  it("keeps each account's own windows and resets", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW });
+    instance.noteUsage(both);
+    const [nana, affan] = instance.report().engines;
+    expect(nana).toMatchObject({ engine: "nana", name: "nana", usedPercent: 99, resetsAt: NOW + 50 * HOUR });
+    expect(affan).toMatchObject({ engine: "affan", name: "affan", usedPercent: 60, resetsAt: NOW + 4 * HOUR });
+    expect(nana!.windows!.map((entry) => entry.resetsAt)).toEqual([NOW + 2 * HOUR, NOW + 50 * HOUR]);
+    expect(affan!.windows!.map((entry) => entry.resetsAt)).toEqual([NOW + 4 * HOUR, NOW + 90 * HOUR]);
+  });
+
+  it("holds only the account a refusal came from", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW });
+    instance.noteUsage(both);
+    instance.noteRefusal("nana", NOW + 3 * HOUR);
+    expect(instance.blockedUntil("nana")).toBe(NOW + 3 * HOUR);
+    expect(instance.blockedUntil("affan")).toBeNull();
+    expect(instance.report().engines.find((limit) => limit.engine === "affan")).toMatchObject({ blocked: false, usedPercent: 60 });
+  });
+
+  it("names the address each account is signed in with, and none for an account that gives none", () => {
+    const emails: Record<string, string> = { nana: "nana@example.com" };
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW, email: (engine) => emails[engine] });
+    instance.noteUsage(both);
+    const [nana, affan] = instance.report().engines;
+    expect(nana!.email).toBe("nana@example.com");
+    expect(affan).not.toHaveProperty("email");
+  });
+
+  it("names the address of an account a refusal holds before its usage was read", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW, email: () => "affan@example.com" });
+    instance.noteRefusal("affan", NOW + HOUR);
+    expect(instance.report().engines[0]).toMatchObject({ engine: "affan", email: "affan@example.com", blocked: true });
+  });
+});
+
 describe("engineLimitFromUsage", () => {
   it("takes Claude's fullest window and its reset when nothing is at the limit", () => {
     expect(engineLimitFromUsage(claude([92, NOW + 2 * HOUR], [40, NOW + 50 * HOUR]))).toEqual({

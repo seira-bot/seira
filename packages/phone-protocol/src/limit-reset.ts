@@ -43,6 +43,8 @@ export interface EngineLimit {
   /** The engine's display name ("Claude", "Codex", or the instance's own name). */
   name: string;
   driver: "claude" | "codex" | "grok" | "opencode";
+  /** The address the account is signed in with, when its own sign-in says one. */
+  email?: string;
   /** The window that decides the reset: the fullest, or the one refusing work. */
   window: LimitWindowName | null;
   /** 0–100, or null when the engine reported no window. */
