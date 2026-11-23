@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
-import type { InboxItem, InboxRow, InboxView } from "../../shared/inbox.ts";
+import type { InboxItem, InboxRow, InboxSummary, InboxView } from "../../shared/inbox.ts";
 import type { Notification } from "../../shared/notification.ts";
 import { overtakenQuestions, personWait, type PersonWait } from "../../shared/person-wait.ts";
 import type { OptionCardData } from "../../shared/wire.ts";
@@ -18,6 +18,7 @@ import { writeFileAtomic } from "../atomic.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 import type { Message, Store, StoreChange } from "../store.ts";
+import { buildSummary, needsSummary, parseSummary, summaryCandidates, summaryPrompt, SUMMARY_MIN_FORCED, SUMMARY_TIMEOUT_MS } from "./inbox-summary.ts";
 import { clip, oneLine } from "./text-clip.ts";
 
 export const PLACE_INBOX_FILE = "place-inbox.json";
@@ -46,9 +47,16 @@ const lineSchema = z.object({
   untilReply: z.boolean().optional(),
   decision: z.boolean().optional(),
 });
+const summarySchema = z.object({
+  id, at: z.number(), by: z.object({ botId: id, name: z.string().max(200) }), covers: z.array(id).max(MAX_LINES),
+  items: z.array(z.object({ botId: id, threadId: id, title: z.string().max(1_000), text: z.string().max(1_000), important: z.boolean(), rowIds: z.array(id).max(MAX_LINES) })).max(MAX_LINES),
+  /** The person hid it: it stays on file so the same news is not summarized again. */
+  hidden: z.boolean().optional(),
+});
 const fileSchema = z.object({
   version: z.literal(1), lines: z.array(lineSchema).max(MAX_LINES), seenAsks: z.array(id).max(MAX_SEEN_ASKS),
   notDecisions: z.array(z.string().max(NOT_DECISION_MAX)).max(NOT_DECISIONS_KEPT).optional(),
+  summary: summarySchema.optional(), summarizer: z.object({ botId: id.nullable() }).optional(), wrongSummaries: z.number().int().nonnegative().optional(),
 });
 type Line = z.infer<typeof lineSchema>;
 
@@ -68,7 +76,7 @@ export function placeInboxViewer(auth: RequestAuth, cloud: { personal: boolean; 
 
 export interface PlaceInboxDeps {
   dataDir: string;
-  store: Pick<Store, "bot" | "botByThread" | "taskByThread" | "groupByThread" | "appendMessage" | "patchTask" | "patchGroup" | "messagesFor" | "activePath" | "onChange">;
+  store: Pick<Store, "bots" | "bot" | "botByThread" | "taskByThread" | "groupByThread" | "appendMessage" | "patchTask" | "patchGroup" | "messagesFor" | "activePath" | "onChange">;
   openCards(): OpenCardRow[];
   /** A running turn waits on this card's answer. */
   live(threadId: string, requestId: string): boolean;
@@ -89,6 +97,10 @@ export interface PlaceInboxDeps {
   waiting?(): Array<PersonWait & { threadId: string }>;
   /** Tells whether a message a bot sent the person asks them to decide; null when it cannot say. Never waited on. */
   sort?(input: { from: string; text: string; notDecisions: readonly string[] }): Promise<"decision" | "news" | null>;
+  /** Writes the summary of the owner's news on this bot's engine, with no tools; null when it cannot. */
+  summarize?(botId: string, prompt: string): Promise<string | null>;
+  /** Whether this viewer may see this bot, so the owner picks only bots they can see. */
+  seesBot?(auth: RequestAuth, botId: string): boolean;
   now?: () => number;
 }
 
@@ -100,10 +112,13 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
   let lines: Line[] = [];
   let seenAsks = new Set<string>();
   let notDecisions: string[] = [];
+  let summary: (InboxSummary & { hidden?: boolean }) | undefined;
+  let summarizer: { botId: string | null } | undefined;
+  let wrongSummaries = 0;
   try {
     const parsed = fileSchema.safeParse(JSON.parse(readFileSync(file, "utf8")));
     // A hand-off result filed before hand-offs stopped filing lines (its job is the asking conversation, not its own) goes.
-    if (parsed.success) { lines = parsed.data.lines.filter((line) => !(line.kind === "result" && line.workingFor && line.job && line.job !== line.threadId)); seenAsks = new Set(parsed.data.seenAsks); notDecisions = parsed.data.notDecisions ?? []; }
+    if (parsed.success) { lines = parsed.data.lines.filter((line) => !(line.kind === "result" && line.workingFor && line.job && line.job !== line.threadId)); seenAsks = new Set(parsed.data.seenAsks); notDecisions = parsed.data.notDecisions ?? []; summary = parsed.data.summary; summarizer = parsed.data.summarizer; wrongSummaries = parsed.data.wrongSummaries ?? 0; }
     else console.warn(`place inbox: ${file} is not an inbox file; starting fresh`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`place inbox: ${file} is unreadable; starting fresh`);
@@ -111,7 +126,8 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
   const save = () => {
     lines = lines.filter((line) => now() - line.at < KEEP_MS).slice(-MAX_LINES);
     try {
-      writeFileAtomic(file, `${JSON.stringify({ version: 1, lines, seenAsks: [...seenAsks].slice(-MAX_SEEN_ASKS), ...(notDecisions.length ? { notDecisions } : {}) })}\n`, { mode: 0o600 });
+      writeFileAtomic(file, `${JSON.stringify({ version: 1, lines, seenAsks: [...seenAsks].slice(-MAX_SEEN_ASKS), ...(notDecisions.length ? { notDecisions } : {}),
+        ...(summary ? { summary } : {}), ...(summarizer ? { summarizer } : {}), ...(wrongSummaries ? { wrongSummaries } : {}) })}\n`, { mode: 0o600 });
     } catch (error) {
       console.warn(`place inbox: could not save ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -200,9 +216,15 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     ...(line.decision ? { decision: true as const } : {}),
   });
 
+  const summarizerOf = (): string | null => (summarizer ? summarizer.botId : store.bots.find((bot) => bot.defaultBot)?.id ?? null);
+
   function view(auth: RequestAuth): InboxView {
     const rows = [...askRows(auth), ...lines.filter((line) => lineFor(auth, line)).map(lineRow)].sort((a, b) => b.at - a.at).slice(0, VIEW_ROWS);
-    return { botId: null, threadId: null, rows, anchor: null };
+    const owner = deps.summarize && deps.viewer(auth).kind === "owner";
+    const covers = summary && !summary.hidden ? new Set(summary.covers) : null;
+    const card = owner && summary && covers && lines.some((line) => covers.has(line.id) && lineTab(line) === "info" && lineFor(auth, line))
+      ? { id: summary.id, at: summary.at, by: summary.by, covers: summary.covers, items: summary.items } : null;
+    return { botId: null, threadId: null, rows, anchor: null, ...(card ? { summary: card } : {}), ...(owner ? { summarizer: { botId: summarizerOf() } } : {}) };
   }
 
   function addLine(line: Line): Line {
@@ -210,6 +232,32 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     lines.push(line);
     save();
     return line;
+  }
+
+  let writing: Promise<void> | null = null;
+
+  /** Writes one summary of the owner's open news; whatever goes wrong leaves the inbox and the old summary as they were. */
+  async function write(auth: RequestAuth, force: boolean): Promise<void> {
+    const summarize = deps.summarize;
+    const botId = summarizerOf();
+    const bot = botId ? store.bot(botId) : undefined;
+    if (!summarize || !bot) return;
+    const rows = view(auth).rows;
+    const candidates = summaryCandidates(rows);
+    if (force ? candidates.length < SUMMARY_MIN_FORCED : !needsSummary(rows, summary)) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const raw = await Promise.race([
+        summarize(bot.id, summaryPrompt(candidates)),
+        new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), SUMMARY_TIMEOUT_MS + 5_000); }),
+      ]);
+      const parsed = raw ? parseSummary(raw, candidates) : null;
+      if (!parsed) return;
+      summary = buildSummary(parsed, candidates, { botId: bot.id, name: bot.name }, now(), crypto.randomUUID());
+      const asked = new Set(parsed.decisions);
+      for (const line of lines) if (asked.has(line.id) && line.decision === undefined && !line.done && lineFor(auth, line)) line.decision = true;
+      save();
+    } catch { /* the inbox stays as it was */ } finally { clearTimeout(timer); }
   }
 
   const sent = new Map<string, number[]>();
@@ -287,6 +335,32 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     /** What waits on this viewer: every open ask, every open decision, and news they have not read. */
     count(auth: RequestAuth): number {
       return view(auth).rows.filter((row) => row.tab === "needs-you" || (row.tab === "info" && (row.unread || row.decision))).length;
+    },
+    /** The owner asks for the summary of their news: written when enough is unread (or at once with `force`), one at a
+     * time, and joined by a second ask that arrives meanwhile. Anyone else gets the inbox back unchanged. */
+    async summarize(auth: RequestAuth, { force = false }: { force?: boolean } = {}): Promise<InboxView> {
+      if (deps.summarize && deps.viewer(auth).kind === "owner") {
+        writing ??= write(auth, force).finally(() => { writing = null; });
+        await writing;
+      }
+      return view(auth);
+    },
+    /** The owner hides the summary; `wrong` counts it as not useful. */
+    hideSummary(auth: RequestAuth, wrong: boolean): InboxView {
+      if (summary && deps.viewer(auth).kind === "owner") {
+        summary = { ...summary, hidden: true };
+        if (wrong) wrongSummaries++;
+        save();
+      }
+      return view(auth);
+    },
+    /** The owner picks who writes the summary, or `null` for no summary. */
+    setSummarizer(auth: RequestAuth, botId: string | null): "ok" | "unknown" | "refused" {
+      if (deps.viewer(auth).kind !== "owner") return "refused";
+      if (botId !== null && (!store.bot(botId) || deps.seesBot?.(auth, botId) === false)) return "unknown";
+      summarizer = { botId };
+      save();
+      return "ok";
     },
     /** The person says this line is no decision: its mark goes, and its text teaches the next sort. False when this viewer
      * has no such line. */

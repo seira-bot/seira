@@ -130,6 +130,7 @@ it("clears a line's decision mark through not-decision: 200 with the inbox, 404 
   const route = createInboxRoutes({
     view: () => view, count: () => 0, markDone: () => "done", markDoneMany: () => 0, markRead: () => true, markAllRead: () => 0,
     notDecision: (_auth, id) => { asked.push(id); return outcomes.shift() ?? null; },
+    summarize: async () => null, hideSummary: () => null, setSummarizer: () => null,
   });
   const call = async (method: string, path: string) => {
     const sent: { status?: number; body?: any } = {};
@@ -153,4 +154,74 @@ it("has no not-decision for someone on a team, whose inbox is not sorted", async
   f.team.pass("scout", "cleo-private", "Ben", "The launch moved to Friday.");
   const [row] = (await call("GET", "/api/inbox")).body.rows;
   expect(await call("POST", `/api/inbox/${row.id}/not-decision`)).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+});
+
+function summaryRoutes(outcomes: Array<"ok" | "unknown" | "refused" | null> = ["ok"]) {
+  const view = { botId: null, threadId: null, rows: [], anchor: null };
+  const seen: Array<[string, unknown]> = [];
+  const route = createInboxRoutes({
+    view: () => view, count: () => 0, markDone: () => "done", markDoneMany: () => 0, markRead: () => true, markAllRead: () => 0, notDecision: () => true,
+    summarize: async (_auth, options) => { seen.push(["summarize", options]); return view; },
+    hideSummary: (_auth, wrong) => { seen.push(["hide", wrong]); return view; },
+    setSummarizer: (_auth, botId) => { seen.push(["summarizer", botId]); return outcomes.shift() ?? null; },
+  });
+  const call = async (method: string, path: string, body: unknown = {}) => {
+    const sent: { status?: number; body?: any } = {};
+    await route({
+      req: {} as IncomingMessage, res: {} as ServerResponse, url: new URL(path, "http://127.0.0.1"), path, method, auth: session(BEN.email),
+      readBody: (async () => body) as RouteContext["readBody"],
+      json: ((_res: ServerResponse, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as RouteContext["json"],
+    });
+    return sent;
+  };
+  return { view, seen, call };
+}
+
+it("writes the summary on request, waiting for it: 200 with the inbox, 400 for a force that is not true or false, 405 for another method", async () => {
+  const { view, seen, call } = summaryRoutes();
+  expect(await call("POST", "/api/inbox/summary")).toMatchObject({ status: 200, body: view });
+  expect(await call("POST", "/api/inbox/summary", { force: true })).toMatchObject({ status: 200 });
+  expect(await call("POST", "/api/inbox/summary", { force: false })).toMatchObject({ status: 200 });
+  expect(seen).toEqual([["summarize", { force: false }], ["summarize", { force: true }], ["summarize", { force: false }]]);
+  for (const body of [{ force: "yes" }, { force: 1 }, [], "text"]) {
+    expect(await call("POST", "/api/inbox/summary", body), JSON.stringify(body)).toMatchObject({ status: 400, body: { errorKey: "serverError.inbox.badSummary" } });
+  }
+  expect(seen, "a refused request asked for nothing").toHaveLength(3);
+  expect(await call("GET", "/api/inbox/summary")).toMatchObject({ status: 405 });
+  expect(requiredScope("POST", "/api/inbox/summary")).toBe("client");
+});
+
+it("hides the summary: 200 with the inbox, 400 for a wrong that is not true or false, 405 for another method", async () => {
+  const { view, seen, call } = summaryRoutes();
+  expect(await call("POST", "/api/inbox/summary/hide")).toMatchObject({ status: 200, body: view });
+  expect(await call("POST", "/api/inbox/summary/hide", { wrong: true })).toMatchObject({ status: 200 });
+  expect(seen).toEqual([["hide", false], ["hide", true]]);
+  expect(await call("POST", "/api/inbox/summary/hide", { wrong: "no" })).toMatchObject({ status: 400, body: { errorKey: "serverError.inbox.badSummary" } });
+  expect(await call("GET", "/api/inbox/summary/hide")).toMatchObject({ status: 405 });
+  expect(requiredScope("POST", "/api/inbox/summary/hide")).toBe("client");
+});
+
+it("picks who writes the summary: 200, 400 for a bad body or an unknown bot, 403 for someone who is not the owner, 404 with no inbox, 405 for another method", async () => {
+  const { view, seen, call } = summaryRoutes(["ok", "ok", "unknown", "refused", null]);
+  expect(await call("POST", "/api/inbox/summarizer", { botId: "mira" })).toMatchObject({ status: 200, body: view });
+  expect(await call("POST", "/api/inbox/summarizer", { botId: null })).toMatchObject({ status: 200 });
+  expect(await call("POST", "/api/inbox/summarizer", { botId: "ghost" })).toMatchObject({ status: 400, body: { errorKey: "serverError.inbox.badSummarizer", error: "That bot cannot write your Inbox summary." } });
+  expect(await call("POST", "/api/inbox/summarizer", { botId: "mira" })).toMatchObject({ status: 403, body: { errorKey: "serverError.inbox.summaryOwnerOnly" } });
+  expect(await call("POST", "/api/inbox/summarizer", { botId: "mira" })).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+  const asked = seen.length;
+  for (const body of [{}, { botId: 5 }, { botId: "" }, { botId: "x".repeat(513) }, [], "mira", null]) {
+    expect(await call("POST", "/api/inbox/summarizer", body), JSON.stringify(body)).toMatchObject({ status: 400, body: { errorKey: "serverError.inbox.badSummarizer" } });
+  }
+  expect(seen, "a bad body asked for nothing").toHaveLength(asked);
+  expect(await call("GET", "/api/inbox/summarizer")).toMatchObject({ status: 405 });
+  expect(requiredScope("POST", "/api/inbox/summarizer")).toBe("client");
+});
+
+it("has no summary for someone on a team, or with no inbox", async () => {
+  for (const options of [{}, { team: false }]) {
+    const { call } = setup(options);
+    for (const path of ["/api/inbox/summary", "/api/inbox/summary/hide", "/api/inbox/summarizer"]) {
+      expect(await call("POST", path, session(BEN.email), { botId: "scout" }), `${JSON.stringify(options)} ${path}`).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+    }
+  }
 });

@@ -199,10 +199,67 @@ const panel = store<InboxPanelState>({ open: false, reading: null });
 export const useInboxPanel = (): InboxPanelState => useSyncExternalStore(panel.subscribe, panel.get, panel.get);
 export const currentInboxPanel = panel.get;
 
+const summarizing = store(false);
+export const useInboxSummarizing = (): boolean => useSyncExternalStore(summarizing.subscribe, summarizing.get, summarizing.get);
+export const currentInboxSummarizing = summarizing.get;
+
+/** Unread news that the summary on hand does not cover. */
+const SUMMARY_MIN_UNREAD = 5;
+const unsummarizedNews = (view: InboxView): number => {
+  const covered = new Set(view.summary?.covers);
+  return view.rows.filter((row) => isNews(row) && row.unread && !covered.has(row.id)).length;
+};
+
+/** Asks for a summary of the news and shows the inbox it comes back in; `force` writes one even when little is unread. If
+ * the ask fails, only the waiting note goes. */
+export async function requestInboxSummary(force = false): Promise<void> {
+  if (summarizing.get()) return;
+  const seq = ++sent;
+  summarizing.set(true);
+  const view = await api<InboxView>("/api/inbox/summary", { method: "POST", background: true, body: JSON.stringify({ force }) }).catch(() => null);
+  summarizing.set(false);
+  if (!view || !Array.isArray(view.rows)) return;
+  if (seq < shown) void refreshInbox();
+  else show(seq, view);
+}
+
+const withoutSummary = (view: InboxView): InboxView => ({ botId: view.botId, threadId: view.threadId, rows: view.rows, anchor: view.anchor, ...(view.summarizer ? { summarizer: view.summarizer } : {}) });
+
+/** The person hides the summary: it goes at once; if the server can't be told, the list is read again. */
+export async function hideInboxSummary(wrong: boolean): Promise<void> {
+  const view = list.get();
+  if (view?.summary) { shown = ++sent; list.set(withoutSummary(view)); }
+  const seq = ++sent;
+  const next = await api<InboxView>("/api/inbox/summary/hide", { method: "POST", background: true, body: JSON.stringify({ wrong }) }).catch(() => null);
+  if (next && Array.isArray(next.rows)) return show(seq, next);
+  void refreshInbox();
+}
+
+/** The person picks who writes the summary, or none: the choice shows at once; if the server can't be told, the list is read
+ * again. */
+export async function setInboxSummarizer(botId: string | null): Promise<void> {
+  const view = list.get();
+  if (view?.summarizer) { shown = ++sent; list.set({ ...view, summarizer: { botId } }); }
+  const seq = ++sent;
+  const next = await api<InboxView>("/api/inbox/summarizer", { method: "POST", background: true, body: JSON.stringify({ botId }) }).catch(() => null);
+  if (next && Array.isArray(next.rows)) return show(seq, next);
+  void refreshInbox();
+}
+
+let summaryAsked = false;
+/** Once each time the panel opens, with a summarizer chosen and enough unread news outside the summary. */
+function askSummaryOnce(): void {
+  const view = list.get();
+  if (summaryAsked || !panel.get().open || !view?.summarizer?.botId || unsummarizedNews(view) < SUMMARY_MIN_UNREAD) return;
+  summaryAsked = true;
+  void requestInboxSummary();
+}
+
 /** Opens the inbox in the right panel: its list, or straight on one line. */
 export function openInbox(at: { reading?: string } = {}): void {
+  if (!panel.get().open) summaryAsked = false;
   panel.set({ ...panel.get(), open: true, reading: at.reading ?? null });
-  void refreshInbox();
+  void refreshInbox().then(askSummaryOnce);
 }
 export const closeInbox = (): void => panel.set({ ...panel.get(), open: false, reading: null });
 export const readInboxLine = (id: string | null): void => panel.set({ ...panel.get(), reading: id });

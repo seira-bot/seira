@@ -6,9 +6,11 @@ import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { t } from "@/lib/i18n";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
-import { closeInbox, doneAllInboxNews, markAllInboxRead, readInboxLine, readInboxRow, useInboxMarkingAll, useInboxPanel, useInboxView, widenInbox } from "@/state/inbox";
+import { closeInbox, doneAllInboxNews, markAllInboxRead, readInboxLine, readInboxRow, useInboxMarkingAll, useInboxPanel, useInboxSummarizing, useInboxView, widenInbox } from "@/state/inbox";
 import { InboxActive } from "./InboxActive";
 import { InboxGroup } from "./InboxGroup";
+import { InboxMenu } from "./InboxMenu";
+import { InboxSummaryCard } from "./InboxSummaryCard";
 import { InboxReading } from "./InboxReading";
 import { InboxRowItem } from "./InboxRow";
 import { matchesSearch, nextAfter } from "./inbox-answer";
@@ -22,6 +24,7 @@ export function InboxPanel() {
   const view = useInboxView();
   const panel = useInboxPanel();
   const markingAll = useInboxMarkingAll();
+  const summarizing = useInboxSummarizing();
   const phone = useMediaQuery(PHONE_LAYOUT);
   const simple = !useAdvancedMode();
   const { run } = useInboxActions(view);
@@ -85,6 +88,7 @@ export function InboxPanel() {
             {t("inbox.doneAllNews")}
           </button>
         )}
+        {view && <InboxMenu view={view} />}
         {!phone && (
           <button type="button" onClick={() => widenInbox(!panel.wide)} aria-pressed={Boolean(panel.wide)} aria-label={t(panel.wide ? "inbox.action.narrow" : "inbox.action.widen")}
             title={t(panel.wide ? "inbox.action.narrow" : "inbox.action.widen")} className={roundButtonCls}>
@@ -106,6 +110,8 @@ export function InboxPanel() {
                 <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("inbox.search")} aria-label={t("inbox.search")}
                   className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-tertiary [&::-webkit-search-cancel-button]:hidden" />
               </label>}
+              {!query.trim() && view?.summary && <InboxSummaryCard view={view} onOpen={open} />}
+              {!query.trim() && !view?.summary && summarizing && <p data-inbox-summary-working role="status" className="px-4 pb-2 text-[12px] text-ink-tertiary">{t("inbox.summary.working")}</p>}
               <div role="list" data-inbox-list aria-label={t("inbox.panel.title")} className="space-y-2 px-3 pb-2">
                 {rows.length === 0
                   ? query.trim() && listedRows(view).length

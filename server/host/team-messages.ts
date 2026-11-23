@@ -391,6 +391,18 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
     notDecision(auth: RequestAuth, id: string): boolean | null {
       return !team && deps.place ? deps.place.notDecision(auth, id) : null;
     },
+    /** The owner's summary, written now if enough news waits (or at once with `force`); null for someone on a team. */
+    async summarize(auth: RequestAuth, options?: { force?: boolean }): Promise<InboxView | null> {
+      return !team && deps.place ? deps.place.summarize(auth, options) : null;
+    },
+    /** The owner hides the summary; null for someone on a team. */
+    hideSummary(auth: RequestAuth, wrong: boolean): InboxView | null {
+      return !team && deps.place ? deps.place.hideSummary(auth, wrong) : null;
+    },
+    /** The owner picks who writes the summary, or `null` for none; null for someone on a team. */
+    setSummarizer(auth: RequestAuth, botId: string | null): ReturnType<PlaceInbox["setSummarizer"]> | null {
+      return !team && deps.place ? deps.place.setSummarizer(auth, botId) : null;
+    },
     /** The viewer is done with the named lines of news, or with no ids all their news; null for someone without an inbox. */
     markDoneMany(auth: RequestAuth, ids?: readonly string[]): number | null {
       if (!team && deps.place) return deps.place.markDoneMany(auth, ids);
