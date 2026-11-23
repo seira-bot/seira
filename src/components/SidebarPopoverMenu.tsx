@@ -34,6 +34,7 @@ export interface SidebarMenuItem {
   title?: string;
   onSelect: () => void;
   tourId?: string;
+  ui?: string;
 }
 
 const OPEN_DELAY_MS = 80;
@@ -123,6 +124,7 @@ function MenuRows({
             role={item.checked === undefined ? "menuitem" : "menuitemradio"}
             aria-checked={item.checked}
             data-tour={item.tourId}
+            data-ui={item.ui}
             data-menu-key={item.key}
             title={item.title}
             disabled={item.disabled}

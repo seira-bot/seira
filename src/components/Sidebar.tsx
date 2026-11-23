@@ -17,7 +17,7 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
-import { activeLocale, t } from "@/lib/i18n"; import { isBotHeld } from "@/lib/bot-pause";
+import { activeLocale, t } from "@/lib/i18n"; import { ui } from "@/lib/ui-anchor"; import { isBotHeld } from "@/lib/bot-pause";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -176,6 +176,7 @@ export const GroupListItem = memo(function GroupListItem({
     <div className={cn("group relative", railTile && "mx-auto w-[54px]")}>
     <button
       data-sidebar-group-row={group.id}
+      data-ui={ui("sidebar.group")}
       aria-current={selected && !expanded ? "page" : undefined}
       onClick={() => dispatch({ type: "select", id: group.id })}
       onContextMenu={(e) => {
@@ -863,7 +864,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         }
         aria-busy={deleting || undefined} aria-keyshortcuts={drag ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
         aria-current={selected && !expanded && !renaming ? "page" : undefined}
-        data-sidebar-bot-row={bot.id} data-look="sidebar-bot"
+        data-sidebar-bot-row={bot.id} data-ui={ui("sidebar.bots")} data-look="sidebar-bot"
         title={renaming ? undefined : tooltip}
         onClick={onSelect}
         onKeyDown={(event) => {
@@ -1140,6 +1141,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     <div ref={plusMenuRef} className="contents">
     <button
       ref={importReturnRef}
+      data-ui={ui("sidebar.new")}
       onClick={() => setPlusOpen((o) => !o)}
       aria-label={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
       className={phone ? PHONE_TOP_BUTTON : deskLook ? SIMPLE_NEW_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : cn(
@@ -1162,6 +1164,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               setPlusOpen(false);
               setNewChatOpen(true);
             }}
+            data-ui={ui("sidebar.new-chat")}
             role="menuitem"
             className={plusItem}
           >
@@ -1171,6 +1174,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           {!advanced && plusBot && <><button role="menuitem" className={plusItem} onClick={() => { setPlusOpen(false); dispatch({ type: "newTask", botId: plusBot.id }); }}><SquarePen size={16} className="shrink-0 text-ink-secondary" /><span className="min-w-0 truncate" title={plusBot.name}>{t("sidebar.newConversationWith", { name: plusBot.name })}</span></button><div role="separator" className={MENU_ITEM_SEPARATOR} /></>}
           {(teamSettingsAllowed !== false || state.config?.team) && <button
             onClick={() => { setPlusOpen(false); dispatch({ type: "newBot" }); }}
+            data-ui={ui("sidebar.new-bot")}
             role="menuitem"
             className={plusItem}
           >
@@ -1183,17 +1187,19 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               setPlusOpen(false);
               setNewRoom(true);
             }}
+            data-ui={ui("sidebar.new-group")}
             role="menuitem"
             className={plusItem}
           >
             <Users size={16} className="text-ink-secondary" />{t("sidebar.newChannel.title")}
           </button>
-          {!remoteClient && teamSettingsAllowed !== false && <button onClick={() => { setPlusOpen(false); setNewTeam(true); }} role="menuitem" className={plusItem}>
+          {!remoteClient && teamSettingsAllowed !== false && <button onClick={() => { setPlusOpen(false); setNewTeam(true); }} data-ui={ui("sidebar.add-department")} role="menuitem" className={plusItem}>
             <FolderPlus size={16} className="text-ink-secondary" />{t("sidebar.addDepartment")}
           </button>}
           {!remoteClient && <>
           {teamSettingsAllowed !== false && <button
             onClick={() => { setPlusOpen(false); setTeamLibraryOpen(true); }}
+            data-ui={ui("sidebar.templates")}
             role="menuitem"
             className={plusItem}
           >

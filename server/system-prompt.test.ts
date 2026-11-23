@@ -336,6 +336,8 @@ describe("shared sentences", () => {
 
   it("configuration prompts follow actual applied or pending results without elevating another bot", () => {
     expect(PROFILE_PROMPT).toContain("propose_profile");
+    expect(PROFILE_PROMPT).toContain("action=places for where something is");
+    expect(PROFILE_PROMPT).toContain("name only what it returns");
     for (const prompt of [PROFILE_PROMPT, LEARN_PROMPT]) {
       expect(prompt).toContain("continue the requested work without asking for another confirmation");
       expect(prompt).toContain("Never claim success before an applied result");

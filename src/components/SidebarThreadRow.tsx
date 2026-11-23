@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { MENU_SHEET } from "./menu-recipe";
 import { useHeldMenuMotion } from "./MenuMotion";
 import { intlLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { nextRename } from "@/lib/rename";
 import { imeComposing } from "@/lib/send-key";
 import { isTickable, opensRowMenuFromKey } from "@/lib/bulk-select";
@@ -347,7 +348,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow({ task, ownerId, 
         onFocus={(event) => event.currentTarget.select()} onChange={(event) => setDraft(event.target.value)} onBlur={() => finishRename(true)}
         onKeyDown={(event) => { if (imeComposing(event.nativeEvent)) { event.stopPropagation(); return; } if (event.key === "Enter") { event.preventDefault(); finishRename(true); } else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finishRename(false); } }}
         dir="auto" className="m-1 min-w-0 flex-1 rounded border border-accent/50 bg-inset px-2 py-1 text-[13px] text-ink outline-none" /> : <button
-        type="button" data-sidebar-thread-row={task.threadId} aria-current={current ? "page" : undefined} data-look="sidebar-thread"
+        type="button" data-sidebar-thread-row={task.threadId} aria-current={current ? "page" : undefined} data-look="sidebar-thread" data-ui={ui("sidebar.thread")}
         title={[displayTitle, updatedStamp, status, closed ? t("task.closed") : null, archived ? t("task.archived") : null, snoozed ? t("task.snoozed") : null, task.unread ? t("task.unread") : null].filter(Boolean).join(" · ")}
         {...(selectMode ? { role: "checkbox", "aria-checked": checked, "aria-disabled": !tickable, "aria-label": t("task.bulk.rowCheck", { title: displayTitle }) } : {})}
         onClick={choose} onDoubleClick={selectMode ? undefined : startRename} onContextMenu={contextMenu}
