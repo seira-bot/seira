@@ -329,6 +329,7 @@ describe("the linked servers manager", () => {
     if ("error" in answer) throw new Error(answer.error);
     expect(decodeInvite(answer.invite)).toEqual({ origin: "https://head.example", name: "Head office", code: codeOf(answer.invite) });
     expect(answer.expiresAt - Date.now()).toBeLessThanOrEqual(INVITE_TTL_MS);
+    expect(answer.route).toBe("https");
     expect(readFileSync(join(dataDir, "linked-servers", "links.json"), "utf8")).not.toContain(codeOf(answer.invite));
     expect(rows.map((row) => row.action)).toEqual(["linked-server.invite"]);
     expect(JSON.stringify(rows)).not.toContain(codeOf(answer.invite));

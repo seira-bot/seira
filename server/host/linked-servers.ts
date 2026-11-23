@@ -621,7 +621,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   for (const record of file.links) open(record);
 
   /** An invite for a server with no address of its own, when it runs Seira Relay: it names the relay identity instead. */
-  function relayInvite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
+  function relayInvite(actor: AdminActor): { invite: string; expiresAt: number; route: "https" | "relay" } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
     if (!relayHost) return { error: "no_address" };
     const route = relayHost.descriptor();
     if (!route?.h || !route.r?.length) return { error: "relay_waiting" };
@@ -644,7 +644,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     relayHost.changed();
     scheduleSweep();
     deps.audit({ category: "linked-server", action: "linked-server.invite", target: { kind: "linked-server-invite" }, after: { expiresAt: new Date(expiresAt).toISOString(), route: "relay" }, actor });
-    return { invite: encodeInvite({ name: selfPlace().name, code, e2e: route }), expiresAt };
+    return { invite: encodeInvite({ name: selfPlace().name, code, e2e: route }), expiresAt, route: "relay" };
   }
 
   /** Uses an invite of a server that has no address: one relay session with the invite code takes the accept request, and the
@@ -699,7 +699,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
     list(): LinkedServerView[] { return [...file.links.map(view), ...a2a.list()]; },
 
-    invite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
+    invite(actor: AdminActor): { invite: string; expiresAt: number; route: "https" | "relay" } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
       const address = deps.publicOrigin();
       const origin = address ? guestOrigin(address) : null;
       if (!origin) return relayInvite(actor);
@@ -707,7 +707,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       const { code, expiresAt } = addInvite(file, now());
       save();
       deps.audit({ category: "linked-server", action: "linked-server.invite", target: { kind: "linked-server-invite" }, after: { expiresAt: new Date(expiresAt).toISOString() }, actor });
-      return { invite: encodeInvite({ origin, name: selfPlace().name, code }), expiresAt };
+      return { invite: encodeInvite({ origin, name: selfPlace().name, code }), expiresAt, route: "https" };
     },
 
     /** Uses another server's invite. Throws a LinkedServerError whose message the person can read. */

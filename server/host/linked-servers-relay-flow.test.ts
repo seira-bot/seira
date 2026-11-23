@@ -218,7 +218,7 @@ type Node = Awaited<ReturnType<typeof node>>;
 
 /** The inviter makes an invite once its relay is up; the joiner uses it. */
 async function linkUp(inviter: Node, joiner: Node) {
-  let invite: { invite: string; expiresAt: number } | null = null;
+  let invite: { invite: string; expiresAt: number; route: "https" | "relay" } | null = null;
   await until(() => {
     const made = inviter.linked.invite(ADMIN);
     if ("error" in made) return false;
@@ -229,7 +229,7 @@ async function linkUp(inviter: Node, joiner: Node) {
   const there = () => inviter.linked.list().find((one) => one.kind === "seira" && one.name === joiner.label);
   const here = () => joiner.linked.list().find((one) => one.id === joined.id);
   await until(() => there()?.state === "online" && here()?.state === "online", `${inviter.label} and ${joiner.label} are online`);
-  return { invite: invite!.invite, inviterLink: there()!.id, joinerLink: joined.id };
+  return { invite: invite!.invite, route: invite!.route, inviterLink: there()!.id, joinerLink: joined.id };
 }
 
 async function expose(from: Node, fromLink: string, to: Node, toLink: string, bots: string[]) {
@@ -240,6 +240,9 @@ async function expose(from: Node, fromLink: string, to: Node, toLink: string, bo
 }
 
 const admittedCount = (where: World, inviter: Node) => where.relay.admitted(inviter.hostId).size;
+/** What the relay keeps of one party: the admission hash of the credential it dials with. */
+const admissionOf = (credential: string, inviter: Node) => admissionHash(admission(credentialHash(credential), fromB64u(inviter.hostId)!));
+const sessionsOf = (where: World, inviter: Node, hash: string) => [...(where.relay.hosts.get(inviter.hostId)?.sessions ?? [])].filter((one) => one.admHash === hash).length;
 
 describe("linked servers through Seira Relay", () => {
   it("answers no_address and relay_waiting before the relay is ready, and stores no invite (AC-09)", async () => {
@@ -262,6 +265,7 @@ describe("linked servers through Seira Relay", () => {
 
     const decoded = decodeAnyInvite(ids.invite);
     expect(decoded).toMatchObject({ v: 2, name: "head" });
+    expect(ids.route).toBe("relay");
     // AC-15: the invite is used, so its admission is gone and a second dial fails.
     expect(inviter.relayFile().invites).toEqual([]);
     expect(inviter.relayFile().hosted).toEqual([ids.inviterLink]);
@@ -423,4 +427,72 @@ describe("linked servers through Seira Relay", () => {
     expect(existsSync(join(other.dataDir, "linked-servers", second.joinerLink))).toBe(false);
     expect(fetchCalls).toEqual([]);
   }, 120_000);
+
+  it("refuses the accept when the links through the relay are full", async () => {
+    const where = await world();
+    const inviter = await node("head", [WRITER], where);
+    inviter.serveRelay();
+    const first = await node("branch0", [SCOUT], where), second = await node("branch1", [SCOUT], where), third = await node("branch2", [SCOUT], where);
+    for (const one of [first, second, third]) await linkUp(inviter, one);
+    expect(inviter.relayFile().hosted).toHaveLength(3);
+
+    const made: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const one = inviter.linked.invite(ADMIN);
+      if ("error" in one) throw new Error(one.error);
+      made.push(one.invite);
+    }
+    const late = await node("late", [SCOUT], where), last = await node("last", [SCOUT], where);
+    await late.linked.join(made[0]!, ADMIN);
+    await until(() => inviter.relayFile().hosted.length === 4, "four relay links are hosted");
+
+    await expect(last.linked.join(made[1]!, ADMIN)).rejects.toBeInstanceOf(Error);
+    expect(inviter.linked.list().filter((one) => one.kind === "seira")).toHaveLength(4);
+    expect(inviter.relayFile().hosted).toHaveLength(4);
+    expect(last.linked.list()).toEqual([]);
+    expect(last.relayFile().joined).toEqual({});
+  }, 120_000);
+
+  it("drops the admission and closes the relay session when either side removes the link", async () => {
+    const where = await world();
+    const inviter = await node("head", [WRITER], where), joiner = await node("branch", [SCOUT], where), other = await node("shop", [SCOUT], where);
+    inviter.serveRelay();
+    const first = await linkUp(inviter, joiner);
+    const second = await linkUp(inviter, other);
+    const firstHash = admissionOf(lskIn(joiner.dataDir)!, inviter), secondHash = admissionOf(lskIn(other.dataDir)!, inviter);
+    await until(() => sessionsOf(where, inviter, firstHash) > 0 && sessionsOf(where, inviter, secondHash) > 0, "both links hold a relay session");
+    const hosted = () => inviter.linked.relayGuests.records().map((one) => one.id).sort();
+    expect(hosted()).toEqual([first.inviterLink, second.inviterLink].sort());
+
+    expect(await inviter.linked.remove(first.inviterLink, ADMIN)).toBe(true);
+    expect(hosted()).toEqual([second.inviterLink]);
+    await until(() => sessionsOf(where, inviter, firstHash) === 0, "the relay session of the removed link is closed", 60_000);
+    expect(where.relay.admitted(inviter.hostId).has(firstHash)).toBe(false);
+    expect(sessionsOf(where, inviter, secondHash)).toBeGreaterThan(0);
+
+    expect(await other.linked.remove(second.joinerLink, ADMIN)).toBe(true);
+    await until(() => sessionsOf(where, inviter, secondHash) === 0, "the relay session of the second link is closed", 60_000);
+    expect(hosted()).toEqual([]);
+    expect(where.relay.admitted(inviter.hostId).has(secondHash)).toBe(false);
+  }, 120_000);
+
+  it("opens one relay session with the invite code and then uses the link credential", async () => {
+    const where = await world();
+    const inviter = await node("head", [WRITER], where), joiner = await node("branch", [SCOUT], where);
+    inviter.serveRelay();
+    await until(() => where.relay.hosts.has(inviter.hostId), "the inviting server is on the relay");
+    const seen: string[] = [];
+    const sessions = where.relay.hosts.get(inviter.hostId)!.sessions;
+    const add = sessions.add.bind(sessions);
+    sessions.add = (one) => { seen.push(one.admHash); return add(one); };
+
+    const ids = await linkUp(inviter, joiner);
+    const decoded = decodeAnyInvite(ids.invite) as Extract<NonNullable<ReturnType<typeof decodeAnyInvite>>, { v: 2 }>;
+    const byCode = admissionOf(decoded.code, inviter), byLink = admissionOf(lskIn(joiner.dataDir)!, inviter);
+    expect(byCode).not.toBe(byLink);
+    await until(() => seen.includes(byLink), "the link opens a session with its own credential");
+    expect(seen.filter((hash) => hash === byCode)).toHaveLength(1);
+    expect(seen.every((hash) => hash === byCode || hash === byLink)).toBe(true);
+    expect(seen.indexOf(byCode)).toBeLessThan(seen.indexOf(byLink));
+  }, 60_000);
 });
