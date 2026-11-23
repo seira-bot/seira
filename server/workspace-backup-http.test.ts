@@ -253,10 +253,12 @@ it("stores ordered parts and hands the joined file to validation", async () => {
   const finished = await send(`${BASE}/${started.id}/finish`);
   expect(await finished.json()).toEqual({ id: started.id });
   expect((await send(`${BASE}/${started.id}/finish`)).status).toBe(200);
+  let joined = "";
+  archive.stage.mockImplementationOnce(async (_dataDir: string, file: string) => { joined = readFileSync(file, "utf8"); return fakeArchive(); });
   const preview = await post("/api/workspace-backup/preview", { id: started.id, password: PASSWORD });
   expect(preview.status).toBe(200);
   expect(archive.stage).toHaveBeenCalledWith(dataDir, uploadFile(started.id), expect.anything());
-  expect(readFileSync(archive.stage.mock.calls[0][1], "utf8")).toBe("abcdefghij");
+  expect(joined).toBe("abcdefghij");
 });
 
 it("refuses a part whose offset is not the stored byte count", async () => {

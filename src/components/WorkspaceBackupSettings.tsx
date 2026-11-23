@@ -101,7 +101,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
   const [more, setMore] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
-  const unfinishedUpload = useRef<string | null>(null);
+  const [unfinishedUpload, setUnfinishedUpload] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
@@ -155,16 +155,16 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
     if (!id) {
       try {
         id = await uploadBackupInChunks(file, {
-          api, resumeId: unfinishedUpload.current,
-          onStarted: (started) => { unfinishedUpload.current = started; },
+          api, resumeId: unfinishedUpload,
+          onStarted: (started) => { if (alive.current) setUnfinishedUpload(started); },
           onProgress: (percent) => { if (alive.current) setUploadPercent(percent); },
         });
       } catch (cause) {
-        if (cause instanceof Error && "status" in cause && cause.status === 404) unfinishedUpload.current = null;
+        if (cause instanceof Error && "status" in cause && cause.status === 404) setUnfinishedUpload(null);
         if (alive.current) { setUploadPercent(null); setUploadFailed(true); }
         throw cause;
       }
-      unfinishedUpload.current = null;
+      setUnfinishedUpload(null);
       if (alive.current) { setUploadPercent(null); setUploadedId(id); }
     }
     const result: { id: string; summary: WorkspaceBackupSummary } = await api("/api/workspace-backup/preview", {
@@ -197,7 +197,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
 
   const disabled = busy !== null || !status || status.busy || Boolean(status.pendingRestore);
   const closeExport = () => { setExporting(false); setExportPassword(""); setConfirmPassword(""); };
-  const closeImport = () => { setImporting(false); setFile(null); setUploadedId(null); unfinishedUpload.current = null; setUploadFailed(false); setUploadPercent(null); setPreview(null); setConfirmation(""); setImportPassword(""); };
+  const closeImport = () => { setImporting(false); setFile(null); setUploadedId(null); setUnfinishedUpload(null); setUploadFailed(false); setUploadPercent(null); setPreview(null); setConfirmation(""); setImportPassword(""); };
   if (status?.pendingRestore) {
     return layout({ exportRow: null, importRow: <div className="px-4 py-3"><WorkspaceBackupRestartNotice serverRestarts={status.restarts === true} /></div> });
   }
@@ -243,7 +243,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
           <SettingsField label={t("backup.file")}>
             <span className="flex items-center gap-3">
               <input ref={fileInput} type="file" accept=".seirabackup,.ombbackup" className="sr-only" tabIndex={-1} disabled={disabled}
-                onChange={(event) => { setFile(event.target.files?.[0] ?? null); setUploadedId(null); unfinishedUpload.current = null; setUploadFailed(false); setPreview(null); setConfirmation(""); setImportPassword(""); setError(null); }} />
+                onChange={(event) => { setFile(event.target.files?.[0] ?? null); setUploadedId(null); setUnfinishedUpload(null); setUploadFailed(false); setPreview(null); setConfirmation(""); setImportPassword(""); setError(null); }} />
               <button type="button" className="ui-button shrink-0" disabled={disabled} onClick={() => fileInput.current?.click()}>{t("backup.chooseFile")}</button>
               <span className="min-w-0 truncate text-[13px] leading-5 text-ink-secondary">{file?.name ?? t("backup.noFile")}</span>
             </span>
