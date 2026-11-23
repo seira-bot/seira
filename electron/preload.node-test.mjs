@@ -80,6 +80,13 @@ test("browser control forwards a separate per-device capability, not the cloud g
   ]);
 });
 
+test("the workspace switch forwards one phone and one choice", async () => {
+  const before = invocations.length;
+  await exposed.api.companion.workspaceAccess("phone-1", false);
+  await exposed.api.companion.workspaceAccess(7, "yes");
+  assert.deepEqual(invocations.slice(before), [["companion:workspace-access", "phone-1", false], ["companion:workspace-access", "7", false]]);
+});
+
 test("the talk bridge asks main over its own channels with only what it understands", async () => {
   const before = invocations.length;
   await exposed.api.talkShortcut.state();
