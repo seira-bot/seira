@@ -17,12 +17,13 @@ export interface LinkedServer {
   kind?: "seira";
   name: string;
   state: "online" | "offline" | "ended";
+  route?: "https" | "relay";
   exposed: string[];
   cap: ApprovalCap;
   bots: Array<{ id: string; name: string }>;
 }
 
-interface Invite { text: string; expiresAt: number }
+interface Invite { text: string; expiresAt: number; route?: "https" | "relay" }
 
 const messageOf = (cause: unknown): string => (cause instanceof Error && cause.message ? cause.message : t("linked.error.generic"));
 
@@ -43,6 +44,7 @@ function InviteBox({ invite, onDone }: { invite: Invite; onDone: () => void }) {
         </button>
       </div>
       <p className="text-[12px] leading-4 text-ink-secondary">{t("linked.invite.hint", { minutes: String(inviteMinutes(invite.expiresAt)) })}</p>
+      {invite.route === "relay" && <p data-linked-invite-relay="" className="text-[12px] leading-4 text-ink-secondary">{t("linked.invite.relay")} {t("linked.invite.relayVersion")}</p>}
       <div><button type="button" onClick={onDone} className="ui-button">{t("common.done")}</button></div>
     </div>
   );
@@ -192,7 +194,7 @@ export function LinkedServersSection() {
     setAddingA2a(false);
     try {
       const made = await api("/api/linked-servers/invites", { method: "POST", body: "{}" });
-      setInvite({ text: String(made.invite), expiresAt: Number(made.expiresAt) });
+      setInvite({ text: String(made.invite), expiresAt: Number(made.expiresAt), ...(made.route === "relay" ? { route: "relay" as const } : {}) });
     } catch (cause) {
       setInvite(null);
       setInviteError(messageOf(cause));
@@ -202,7 +204,11 @@ export function LinkedServersSection() {
   };
 
   const nameOf = (id: string) => mine.find((bot) => bot.id === id)?.name ?? id;
-  const stateLine = (link: LinkedServer | A2aLink) => t((isA2a(link) ? `linked.a2a.state.${link.state}` : `linked.state.${link.state}`) as LocaleKey);
+  const stateLine = (link: LinkedServer | A2aLink) => {
+    if (isA2a(link)) return t(`linked.a2a.state.${link.state}` as LocaleKey);
+    const relay = link.route === "relay" && link.state !== "ended";
+    return t((relay ? `linked.state.${link.state}.relay` : `linked.state.${link.state}`) as LocaleKey);
+  };
   const exposedLine = (link: LinkedServer | A2aLink) => {
     const names = link.exposed.map((id) => mine.find((bot) => bot.id === id)?.name).filter((name): name is string => Boolean(name));
     const a2a = isA2a(link);

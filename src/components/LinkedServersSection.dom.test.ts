@@ -125,6 +125,28 @@ describe("the list of links", () => {
     expect(button("Change")!.title).toContain("ended this link");
   });
 
+  it("names Seira Relay for a link that goes through it, and keeps the plain texts for any other", async () => {
+    let shown = 0;
+    const show = async (one: LinkedServer) => {
+      fixture.links = [one];
+      await act(async () => { root.render(createElement(LinkedServersSection, { key: ++shown })); });
+      await settle();
+    };
+    await show(link({ route: "relay" }));
+    expect(text()).toContain("Connected through Seira Relay");
+    await show(link({ route: "relay", state: "offline" }));
+    expect(text()).toContain("The other side can’t be reached right now. It may be off, or it may have removed this link.");
+    await show(link({ route: "relay", state: "ended" }));
+    expect(text()).toContain("The other side ended this link. Remove it to make a new one.");
+    expect(text()).not.toContain("Seira Relay");
+    await show(link({ route: "https", state: "offline" }));
+    expect(text()).toContain("The other side can’t be reached right now");
+    expect(text()).not.toContain("It may be off");
+    await show(link({ route: "https" }));
+    expect(text()).toContain("Connected");
+    expect(text()).not.toContain("Seira Relay");
+  });
+
   it("shows the reason and a retry when the list does not load", async () => {
     fixture.loadFails = true;
     await open();
@@ -153,6 +175,27 @@ describe("making an invite", () => {
     await click(button("Make an invite"));
     expect(host.querySelector("[role=alert]")!.textContent).toBe("Give this place a secure public address first.");
     expect(host.querySelector("[data-linked-invite]")).toBeNull();
+  });
+
+  it("adds a note when the invite goes through Seira Relay, and only then", async () => {
+    fixture.answers.set("POST /api/linked-servers/invites", { invite: "seira-link:abc123", expiresAt: Date.now() + 15 * 60_000, route: "relay" });
+    await open([]);
+    await click(button("Make an invite"));
+    const note = host.querySelector("[data-linked-invite-relay]")!;
+    expect(note.textContent).toBe("This invite goes through Seira Relay. The relay can’t read the work, the results or the files. It can see when the two sides talk and how much. The other Seira needs the newest version to use this invite.");
+    await click(button("Done"));
+
+    fixture.answers.set("POST /api/linked-servers/invites", { invite: "seira-link:abc123", expiresAt: Date.now() + 15 * 60_000, route: "https" });
+    await click(button("Make an invite"));
+    expect(host.querySelector("[data-linked-invite]")).not.toBeNull();
+    expect(host.querySelector("[data-linked-invite-relay]")).toBeNull();
+    await click(button("Done"));
+
+    fixture.answers.delete("POST /api/linked-servers/invites");
+    await click(button("Make an invite"));
+    expect(host.querySelector("[data-linked-invite]")).not.toBeNull();
+    expect(host.querySelector("[data-linked-invite-relay]")).toBeNull();
+    expect(text()).not.toContain("Seira Relay");
   });
 
   it("counts the minutes left, at least one", () => {
