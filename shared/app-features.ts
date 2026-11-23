@@ -166,7 +166,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The person can spread work across several AIs. Each Claude account keeps its own approvals. The Flatpak app finds engines the host installs.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu"],
+    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
   },
   {
     id: "models",
@@ -308,6 +308,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Your inbox under People in the sidebar",
     does: "Where a bot leaves news for the person, or a message for a teammate. Repeated updates group into one card, Done all news keeps questions, and a summary card covers unread news. The Inbox options menu picks who writes it.",
     tools: ["message_person", "list_unread_notifications", "mark_notifications_read"],
+    releaseNotes: ["inboxFirst"],
   },
   {
     id: "bug-reports",

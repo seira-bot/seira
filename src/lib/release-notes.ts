@@ -1,4 +1,4 @@
-import { Activity, AppWindow, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
+import { Activity, AppWindow, Inbox, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,10 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.190", items: [
+    { id: "inboxFirst", icon: Inbox },
+    { id: "providerInUse", icon: EyeOff },
+  ] },
   { version: "0.1.189", items: [
     { id: "windowRecovers", icon: AppWindow },
     { id: "updateCheckHonest", icon: RefreshCw },
