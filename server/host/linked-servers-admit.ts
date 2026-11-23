@@ -22,17 +22,18 @@ export function createAdmission(now: () => number = Date.now) {
   };
 }
 
-/** A refusal for the limits comes in bursts: each link gets at most one such row in `windowMs`, which counts the
+/** Refusals for the limits come in bursts: each link gets at most one row for them in `windowMs`, which counts the
  * refusals since the row before it. Every other refusal is one row. */
-export function createRefusalRecord(write: (linkId: string, reason: LinkRefusal, count: number) => void, now: () => number = Date.now) {
+export function createRefusalRecord(now: () => number = Date.now) {
   const last = new Map<string, { at: number; held: number }>();
   return {
-    refused(linkId: string, reason: LinkRefusal): void {
-      if (reason !== "limit") { write(linkId, reason, 1); return; }
+    /** The count the row for this refusal carries, or null when no row is written for it now. */
+    count(linkId: string, reason: LinkRefusal): number | null {
+      if (reason !== "limit") return 1;
       const at = now(), previous = last.get(linkId);
-      if (previous && at - previous.at < ADMIT.windowMs) { previous.held += 1; return; }
-      write(linkId, reason, (previous?.held ?? 0) + 1);
+      if (previous && at - previous.at < ADMIT.windowMs) { previous.held += 1; return null; }
       last.set(linkId, { at, held: 0 });
+      return (previous?.held ?? 0) + 1;
     },
     forget(linkId: string): void { last.delete(linkId); },
   };

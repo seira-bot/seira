@@ -1,0 +1,456 @@
+// Links between this server and servers of other owners, so a bot here can hand work to a bot there and back. Each link
+// is one guest bot link (server/bot-link/link.ts with a policy) with its own folder under <data>/linked-servers.
+//
+// Security invariants:
+// - Only an admin makes a link: by making an invite here, or by pasting the other server's invite here. An invite is a
+//   random code, good once and for INVITE_TTL_MS; only its sha256 is kept.
+// - Accepting an invite gives the joining server one credential (GUEST_TOKEN_PREFIX + 32 random bytes). Only its sha256
+//   is kept here; the joiner keeps it in that link's own mode-600 state. It reaches the link's exchange and file paths
+//   here and nothing else: any other request that carries it is refused.
+// - A peer sees only the bots an admin exposed to it, as id, name, title and description, read again at each hand-off.
+//   Its work runs here as outside work, at no more than the link's approval cap.
+// - A link takes at most ADMIT.open open hand-offs, and ADMIT.perWindow in each ADMIT.windowMs. At most LINKS_MAX links.
+// - Another server is asked only at https or at this machine's loopback, never through a redirect. Its answers and
+//   its error texts never reach an error, a log line or an activity row here.
+// Open risks:
+// - The names a peer gives itself and its bots reach the bot lists here, cleaned to one short line each.
+// - A peer whose hand-off files never come keeps the open slots of those hand-offs.
+// - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
+//   does not see the work that routine starts later.
+import { mkdirSync, rmSync } from "node:fs";
+import { z } from "zod";
+
+import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
+import { createDialer } from "../bot-link/dial.ts";
+import { createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
+import { peerKey, type Place } from "../bot-link/protocol.ts";
+import { json, readBody } from "../harness/http.ts";
+import { bearerToken, requestSource, type RequestAuth } from "../request-auth.ts";
+import { createLinkExchange } from "../routes/bot-link-exchange.ts";
+import type { RouteContext } from "../routes/table.ts";
+import type { Outcome } from "../runtime/types.ts";
+import type { ApprovalMode } from "../../shared/approval-mode.ts";
+import { createAdmission, createRefusalRecord } from "./linked-servers-admit.ts";
+import {
+  GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
+  newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
+} from "./linked-servers-store.ts";
+
+export { ADMIT } from "./linked-servers-admit.ts";
+export { GUEST_TOKEN_PREFIX, INVITE_TTL_MS, LINKS_MAX, type ApprovalCap } from "./linked-servers-store.ts";
+
+export const ACCEPT_PATH = "/api/linked-servers/accept";
+export const GUEST_PATHS = { sync: "/api/linked-servers/sync", file: "/api/linked-servers/file" } as const;
+
+const WORDS = { handedTo: "Handed to another server.", otherSide: "another server" };
+const FAIL_TEXT = "The work could not be done on the other server.";
+const REMOVED = "This work stopped because the link to another server was removed.";
+const ENDED_THERE = "This work stopped because the other server ended the link.";
+const LINK_OFF = "This link is not in use any more.";
+const ONLY_LINK = "This sign-in works only for the link between two servers.";
+const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
+const FULL_HERE = "This server already has as many linked servers as it can keep. Remove one first.";
+const FALLBACK_NAME = "Linked server";
+const SELF_FALLBACK = "Seira server";
+const ANSWER_MAX = 64 * 1024;
+const JOIN_MS = 10_000;
+const TIDY_MS = 60 * 60_000;
+const GUEST_BEARER = /\bbearer\s+lsk_/iu;
+const OUTCOMES: ReadonlySet<string> = new Set<Outcome>(["done", "needs_input", "cap_continued", "stalled", "interrupted", "budget", "provider_error", "denied", "expired", "stopped", "refused", "duplicate"]);
+/** The exchange reads no auth: the peer was identified here, by its credential. */
+const NO_AUTH: RequestAuth = { kind: "loopback", scopes: [] };
+
+const farPlace = z.object({ id: z.string().min(1).max(200), name: z.string().max(1_000) }).strict();
+const acceptBody = z.object({ code: z.string().max(100), place: farPlace }).strict();
+const acceptAnswer = z.object({ token: z.string().regex(/^lsk_[A-Za-z0-9_-]{43}$/u), place: farPlace });
+
+const CAP_RANK: Record<ApprovalCap, number> = { ask: 0, edits: 1, auto: 2 };
+/** The approval mode work from a linked server runs at: the bot's own, but never above the link's cap. */
+export function capMode(mode: ApprovalMode, cap: ApprovalCap): ApprovalMode {
+  return mode === "custom" || mode === "full" || CAP_RANK[mode] > CAP_RANK[cap] ? cap : mode;
+}
+
+/** A join that did not happen, with a message the person can read. */
+export class LinkedServerError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "LinkedServerError";
+    this.status = status;
+  }
+}
+
+export interface LinkedServerView {
+  id: string;
+  /** The name the other server gives itself. */
+  name: string;
+  /** `inviter`: this server made the invite. `joiner`: this server used the other server's invite. */
+  role: "inviter" | "joiner";
+  /** `ended`: the other server ended the link, so it carries nothing until it is removed and made again. */
+  state: "online" | "offline" | "ended";
+  /** This server's bots the other server can see and hand work to. */
+  exposed: string[];
+  cap: ApprovalCap;
+  /** The other server's bots this server can hand work to, each by its address here. */
+  bots: Array<{ id: string; name: string; title?: string; description?: string }>;
+  createdAt: number;
+}
+
+/** A request before sign-in: the link's own paths take no other sign-in. */
+export type GuestRequest = Pick<RouteContext, "req" | "res" | "url" | "path" | "method">;
+
+type InstanceDeps = Pick<BotLinkDeps, "coordinator" | "bots" | "bot" | "refusal" | "model" | "level" | "openThread" | "hasThread" | "personName" | "sentRow" | "resultRow" | "kick" | "directoryChanged">;
+
+export interface LinkedServersDeps extends InstanceDeps {
+  dataDir: string;
+  /** Files that cross with hand-offs, as for the person's own link. Absent: files do not cross. */
+  files?: Omit<NonNullable<BotLinkDeps["files"]>, "discard">;
+  /** Removes stored files that no hand-off carries and no message names. A refused hand-off's files go here. */
+  dropFiles?(paths: readonly string[]): void;
+  serverName(): string;
+  /** This server's own identity, as the other server knows it. */
+  selfId(): string;
+  /** The address other servers reach this one at, or null when it has none. */
+  publicOrigin(): string | null;
+  audit(row: Omit<AdminActionRow, "at">): void;
+  /** Whether this caller may try an invite code now. */
+  attemptAllowed(key: string): boolean;
+  /** A wrong invite code came from this caller. */
+  attemptFailed?(key: string): void;
+  /** The person's own link already uses this peer key. */
+  ownPeer?(key: string): boolean;
+  power?(): { sleeping(): boolean; sleepSignal(): AbortSignal } | null | undefined;
+  fetch?: typeof fetch;
+  now?: () => number;
+  log?(line: string): void;
+  /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
+  timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number };
+}
+
+type Instance = {
+  id: string;
+  key: string;
+  link: BotLink;
+  dialer: ReturnType<typeof createDialer> | null;
+  exchange: ReturnType<typeof createLinkExchange> | null;
+};
+
+export type LinkedServers = ReturnType<typeof createLinkedServers>;
+
+export function createLinkedServers(deps: LinkedServersDeps) {
+  const now = deps.now ?? Date.now;
+  const log = deps.log ?? (() => {});
+  const timing = deps.timing ?? {};
+  const file = readLinks(deps.dataDir, log);
+  const instances = new Map<string, Instance>();
+  const admission = createAdmission(now);
+  const refusals = createRefusalRecord(now);
+  let upkeep: NodeJS.Timeout | undefined;
+
+  const save = () => writeLinks(deps.dataDir, file);
+  const recordOf = (id: string) => file.links.find((one) => one.id === id);
+  const keyOf = (id: string) => peerKey(`guest:${id}`);
+  const selfPlace = (): Place => ({ id: deps.selfId(), name: cleanName(deps.serverName()) || SELF_FALLBACK });
+  const live = (entry: Instance | undefined): entry is Instance => Boolean(entry?.link.has(entry.key));
+  const nameOf = (record: StoredLink) => {
+    const entry = instances.get(record.id);
+    return (live(entry) ? cleanName(entry.link.placeName(entry.key)) : "") || record.place.name;
+  };
+  const targetOf = (record: StoredLink) => ({ kind: "linked-server", id: record.id, name: nameOf(record) });
+  const peerActor = (record: StoredLink): LinkedServerActor => ({ kind: "linked-server", linkId: record.id, name: nameOf(record) });
+  const files = ((): BotLinkDeps["files"] => {
+    const drop = deps.dropFiles;
+    if (!deps.files || !drop) return deps.files;
+    return { ...deps.files, discard: (passed) => drop(passed.map((one) => one.path)) };
+  })();
+
+  /** A new link id whose peer key no other link here uses. */
+  function freshId(): string {
+    for (let tries = 0; tries < 8; tries++) {
+      const id = newLinkId(), key = keyOf(id);
+      if (!file.links.some((one) => one.id === id || keyOf(one.id) === key) && !deps.ownPeer?.(key)) return id;
+    }
+    throw new LinkedServerError("The link could not be made. Try again.", 500);
+  }
+
+  /** One crossing for the activity record: who and which hand-off, never its words. */
+  function recordEvent(id: string, event: LinkEvent): void {
+    const record = recordOf(id);
+    if (!record) return;
+    const base = { category: "linked-server" as const, target: targetOf(record) };
+    if (event.kind === "refused") {
+      const count = refusals.count(id, event.reason);
+      if (count === null) return;
+      deps.audit({ ...base, action: "linked-server.refused", actor: peerActor(record),
+        after: { reason: event.reason, bot: event.bot, farBot: event.far, handoff: event.id, ...(event.reason === "limit" ? { count } : {}) } });
+      return;
+    }
+    const fromPeer = event.kind === "received" || event.kind === "result-received";
+    const state = event.kind === "sent" || event.kind === "received" ? "started" : event.ok ? "done" : "failed";
+    const outcome = "outcome" in event && event.outcome && OUTCOMES.has(event.outcome) ? event.outcome : undefined;
+    deps.audit({ ...base, action: "linked-server.handoff", actor: fromPeer ? peerActor(record) : { kind: "worker" },
+      after: { direction: event.kind, bot: event.bot, farBot: event.far, handoff: event.id, state, ...(outcome ? { outcome } : {}) } });
+  }
+
+  /** The other server answered the joiner's exchange with "not linked": the link is over on both sides. */
+  function endedThere(id: string): void {
+    const entry = instances.get(id);
+    if (!entry?.link.on()) return;
+    void entry.dialer?.stop();
+    entry.link.stopInbound(ENDED_THERE);
+    entry.link.turnOff(true);
+    log("linked servers: the other server ended a link");
+  }
+
+  function dialerFor(id: string, link: BotLink) {
+    const ask = deps.fetch ?? fetch;
+    const watched = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const response = await ask(input, init);
+      const url = input instanceof Request ? input.url : String(input);
+      if ((response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
+      return response;
+    }) as typeof fetch;
+    return createDialer({ link, fetch: watched, paths: GUEST_PATHS, log: () => log("linked servers: the other server could not be reached; trying again"),
+      ...(timing.holdMs ? { holdMs: timing.holdMs } : {}), ...(timing.firstRetryMs ? { firstRetryMs: timing.firstRetryMs } : {}) });
+  }
+
+  function open(record: StoredLink): Instance {
+    const { id } = record, key = keyOf(id), dataDir = instanceDir(deps.dataDir, id);
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    const policy: LinkPolicy = {
+      key,
+      exposed: (botId) => recordOf(id)?.exposed.includes(botId) === true,
+      admit: (_peer, openCount) => admission.admit(id, openCount),
+      failText: () => FAIL_TEXT,
+      words: WORDS,
+      record: (event) => recordEvent(id, event),
+    };
+    const link = createBotLink({
+      dataDir, policy, now, log,
+      coordinator: deps.coordinator, bots: deps.bots, bot: deps.bot,
+      level: (bot) => capMode(deps.level(bot), recordOf(id)?.cap ?? "ask"),
+      openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
+      refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
+    });
+    const entry: Instance = {
+      id, key, link,
+      dialer: record.role === "joiner" ? dialerFor(id, link) : null,
+      exchange: record.role === "inviter"
+        ? createLinkExchange({ link, paths: GUEST_PATHS, power: deps.power ?? (() => null), ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+        : null,
+    };
+    instances.set(id, entry);
+    return entry;
+  }
+
+  function shut(entry: Instance): void {
+    entry.dialer?.close();
+    entry.link.close();
+  }
+
+  function view(record: StoredLink): LinkedServerView {
+    const entry = instances.get(record.id);
+    const base = { id: record.id, name: nameOf(record), role: record.role, exposed: [...record.exposed], cap: record.cap, createdAt: record.createdAt };
+    if (!live(entry) || entry.dialer?.state().needsPairing) return { ...base, state: "ended", bots: [] };
+    const bots = entry.link.linked().filter((one) => one.peer === entry.key).map(({ id, bot }) => {
+      const title = cleanName(bot.title ?? "", 200), description = cleanName(bot.description ?? "", 400);
+      return { id, name: cleanName(bot.name) || bot.id, ...(title ? { title } : {}), ...(description ? { description } : {}) };
+    });
+    return { ...base, state: entry.link.online(entry.key) ? "online" : "offline", bots };
+  }
+
+  async function accept(ctx: GuestRequest): Promise<void> {
+    const { req, res } = ctx;
+    res.setHeader("cache-control", "no-store");
+    const source = `linked-server:${requestSource(req)}`;
+    if (!deps.attemptAllowed(source)) { req.resume(); return json(res, 429, { error: "Too many tries. Wait a minute and try again." }); }
+    let raw: unknown;
+    try { raw = await readBody(req, 16 * 1024); } catch { raw = null; }
+    const body = acceptBody.safeParse(raw);
+    const at = now();
+    pruneInvites(file, at);
+    const invite = body.success ? liveInvite(file, body.data.code, at) : undefined;
+    if (!body.success || !invite) { deps.attemptFailed?.(source); return json(res, 403, { error: NOT_VALID }); }
+    if (file.links.length >= LINKS_MAX) return json(res, 409, { error: "This server cannot take another link now." });
+    let id: string;
+    try { id = freshId(); } catch { return json(res, 500, { error: "The link could not be made. Try again." }); }
+    invite.usedAt = at;
+    pruneInvites(file, at);
+    const token = newToken();
+    const record: StoredLink = { id, role: "inviter", place: cleanPlace(body.data.place, FALLBACK_NAME), exposed: [], cap: "ask", tokenHash: hashSecret(token), createdAt: at };
+    file.links.push(record);
+    save();
+    const self = selfPlace();
+    open(record).link.pair({ self, sessionId: id, computer: record.place });
+    deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
+    return json(res, 200, { token, place: self });
+  }
+
+  /** The instance whose credential this is. Every stored hash is compared, in constant time each. */
+  function byToken(token: string): Instance | undefined {
+    const hash = hashSecret(token);
+    let found: string | undefined;
+    for (const record of file.links) if (record.tokenHash && sameHash(record.tokenHash, hash)) found = record.id;
+    return found ? instances.get(found) : undefined;
+  }
+
+  async function exchange(ctx: GuestRequest): Promise<void> {
+    const { req, res } = ctx;
+    res.setHeader("cache-control", "no-store");
+    const token = bearerToken(req.headers.authorization);
+    const entry = token?.startsWith(GUEST_TOKEN_PREFIX) ? byToken(token) : undefined;
+    if (!entry?.exchange) { req.resume(); return json(res, 401, { error: LINK_OFF }); }
+    const stillLinked = () => instances.get(entry.id) === entry && entry.link.has(entry.key);
+    if (!stillLinked()) { req.resume(); return json(res, 401, { error: LINK_OFF }); }
+    return entry.exchange.serve({ ...ctx, auth: NO_AUTH, json, readBody }, entry.key, stillLinked);
+  }
+
+  async function readCapped(response: Response): Promise<string | null> {
+    if (!response.body) return null;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > ANSWER_MAX) { await reader.cancel().catch(() => {}); return null; }
+        chunks.push(value);
+      }
+    } catch { return null; }
+    return Buffer.concat(chunks).toString("utf8");
+  }
+
+  /** Security invariant: no part of the other server's answer but a parsed token and place leaves this function. */
+  async function askToJoin(origin: string, code: string, self: Place): Promise<z.infer<typeof acceptAnswer>> {
+    const unreachable = new LinkedServerError("The other server could not be reached. Try again later.", 502);
+    let response: Response;
+    try {
+      response = await (deps.fetch ?? fetch)(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
+        headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ code, place: self }) });
+    } catch {
+      log("linked servers: the other server could not be reached to join it");
+      throw unreachable;
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      if (response.status === 403) throw new LinkedServerError(NOT_VALID, 409);
+      if (response.status === 409) throw new LinkedServerError("The other server cannot take another link now.", 409);
+      if (response.status === 429) throw new LinkedServerError("Too many tries. Wait a minute and try again.", 429);
+      throw unreachable;
+    }
+    const body = await readCapped(response);
+    try {
+      const parsed = acceptAnswer.safeParse(JSON.parse(body ?? ""));
+      if (parsed.success) return parsed.data;
+    } catch { /* answered below */ }
+    log("linked servers: the other server's answer to a join did not parse");
+    throw unreachable;
+  }
+
+  for (const record of file.links) open(record);
+
+  return {
+    list(): LinkedServerView[] { return file.links.map(view); },
+
+    invite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" } | { error: "full" } {
+      const address = deps.publicOrigin();
+      const origin = address ? guestOrigin(address) : null;
+      if (!origin) return { error: "no_address" };
+      if (file.links.length >= LINKS_MAX) return { error: "full" };
+      const { code, expiresAt } = addInvite(file, now());
+      save();
+      deps.audit({ category: "linked-server", action: "linked-server.invite", target: { kind: "linked-server-invite" }, after: { expiresAt: new Date(expiresAt).toISOString() }, actor });
+      return { invite: encodeInvite({ origin, name: selfPlace().name, code }), expiresAt };
+    },
+
+    /** Uses another server's invite. Throws a LinkedServerError whose message the person can read. */
+    async join(text: string, actor: AdminActor): Promise<LinkedServerView> {
+      const invite = decodeInvite(text);
+      if (!invite) throw new LinkedServerError("That invite is not valid. Copy the whole invite and try again.", 400);
+      const origin = guestOrigin(invite.origin);
+      if (!origin) throw new LinkedServerError("That invite points to an address that is not secure, so it was not used.", 400);
+      if (file.links.length >= LINKS_MAX) throw new LinkedServerError(FULL_HERE, 409);
+      const self = selfPlace();
+      const answer = await askToJoin(origin, invite.code, self);
+      if (file.links.length >= LINKS_MAX) throw new LinkedServerError(FULL_HERE, 409);
+      const record: StoredLink = { id: freshId(), role: "joiner", place: cleanPlace(answer.place, FALLBACK_NAME), exposed: [], cap: "ask", createdAt: now() };
+      file.links.push(record);
+      save();
+      const entry = open(record);
+      entry.link.turnOn({ self, origin, token: answer.token, peer: record.place });
+      entry.dialer?.start();
+      deps.audit({ category: "linked-server", action: "linked-server.join", target: targetOf(record), actor });
+      return view(record);
+    },
+
+    update(id: string, patch: { exposed?: string[]; cap?: ApprovalCap }, actor: AdminActor): LinkedServerView | null {
+      const record = recordOf(id), entry = instances.get(id);
+      if (!record || !entry) return null;
+      const changed: string[] = [], before: Record<string, unknown> = {}, after: Record<string, unknown> = {};
+      if (patch.exposed) {
+        const next = [...new Set(patch.exposed.filter((one) => botIdSchema.safeParse(one).success))].slice(0, 500);
+        if (JSON.stringify(next) !== JSON.stringify(record.exposed)) { changed.push("exposed"); before.exposed = record.exposed; after.exposed = next; record.exposed = next; }
+      }
+      if (patch.cap && patch.cap !== record.cap) { changed.push("cap"); before.cap = record.cap; after.cap = patch.cap; record.cap = patch.cap; }
+      if (changed.length === 0) return view(record);
+      save();
+      entry.link.botsChanged();
+      deps.audit({ category: "linked-server", action: "linked-server.update", target: targetOf(record), changed, before, after, actor });
+      return view(record);
+    },
+
+    async remove(id: string, actor: AdminActor): Promise<boolean> {
+      const record = recordOf(id);
+      if (!record) return false;
+      const target = targetOf(record);
+      const entry = instances.get(id);
+      entry?.link.stopInbound(REMOVED);
+      const told = entry?.dialer && record.role === "joiner" ? entry.dialer.stop({ bye: true }) : Promise.resolve(true);
+      entry?.link.turnOff(true);
+      file.links = file.links.filter((one) => one.id !== id);
+      save();
+      instances.delete(id);
+      await told.catch(() => false);
+      if (entry) shut(entry);
+      admission.forget(id);
+      refusals.forget(id);
+      rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true });
+      deps.audit({ category: "linked-server", action: "linked-server.remove", target, actor });
+      return true;
+    },
+
+    /** Requests before sign-in: an invite's acceptance, and a linked server's exchange and files. A request elsewhere
+     * that carries a link's credential is refused. False: not this module's request. */
+    async serve(ctx: GuestRequest): Promise<boolean> {
+      const { req, res, path, method } = ctx;
+      if (path === ACCEPT_PATH && method === "POST") { await accept(ctx); return true; }
+      if ((path === GUEST_PATHS.sync && method === "POST") || (path === GUEST_PATHS.file && (method === "GET" || method === "PUT"))) { await exchange(ctx); return true; }
+      if (!GUEST_BEARER.test(req.headers.authorization ?? "")) return false;
+      req.resume();
+      res.setHeader("cache-control", "no-store");
+      json(res, 403, { error: ONLY_LINK });
+      return true;
+    },
+
+    instances(): ReadonlyArray<{ id: string; link: BotLink }> { return [...instances.values()].map(({ id, link }) => ({ id, link })); },
+
+    start(): void {
+      for (const entry of instances.values()) {
+        entry.link.tidy();
+        if (entry.dialer && entry.link.role() === "dialer") entry.dialer.start({ gentle: true });
+      }
+      if (upkeep) return;
+      upkeep = setInterval(() => { for (const entry of instances.values()) entry.link.tidy(); }, TIDY_MS);
+      upkeep.unref?.();
+    },
+
+    close(): void {
+      if (upkeep) clearInterval(upkeep);
+      upkeep = undefined;
+      for (const entry of instances.values()) shut(entry);
+      instances.clear();
+    },
+  };
+}

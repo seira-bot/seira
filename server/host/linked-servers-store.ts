@@ -126,9 +126,15 @@ export function guestOrigin(value: string): string | null {
 
 const UNSAFE = /[\p{Cc}‎‏‪-‮⁦-⁩  ]+/gu;
 
-/** A name another server chose, as one line without control or direction characters, at most `max` characters. */
+/** A name another server chose, as one line without control or direction characters, at most `max` UTF-16 units (the
+ * unit the link's own place schema counts), never cut inside a character. */
 export function cleanName(raw: string, max = 120): string {
-  return Array.from(raw.replace(UNSAFE, " ").replace(/\s+/gu, " ").trim()).slice(0, max).join("").trim();
+  let out = "";
+  for (const point of raw.replace(UNSAFE, " ").replace(/\s+/gu, " ").trim()) {
+    if (out.length + point.length > max) break;
+    out += point;
+  }
+  return out.trim();
 }
 
 /** A far place as this server keeps it: its id as sent, its name cleaned. */
