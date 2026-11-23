@@ -7,7 +7,6 @@ export function isRemoteScreenshotContention(error: { status: number; message: s
     "this bot's cloud computer is being changed — wait for it to finish",
     "the VPS is being prepared — try again shortly",
     "VPS connection settings are being updated — wait for them to finish",
-    "Boat account settings are being updated — wait for them to finish",
   ].includes(error.message);
 }
 

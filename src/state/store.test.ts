@@ -1087,11 +1087,9 @@ describe("config status frames", () => {
   it("keeps every saved key's hint through a live config update, so a masked key never empties", () => {
     const status = configStatusFromFrame({
       openai: { configured: true, last4: "a1b2" },
-      box: { configured: true, last4: "c3d4" },
       savedKeys: { ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } },
     } as ConfigStatusFrame);
     expect(status.openai).toEqual({ configured: true, last4: "a1b2" });
-    expect(status.box).toEqual({ configured: true, last4: "c3d4" });
     expect(status.savedKeys).toEqual({ ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } });
   });
 
@@ -1100,7 +1098,6 @@ describe("config status frames", () => {
       configStatusFromFrame({
         xai: { configured: true },
         composio: { configured: true, mode: "managed" },
-        box: { configured: false },
         vps: { configured: true, sshAlias: "homelab" },
         rooms: { turnTimeoutMinutes: 20 },
         mcp: { callTimeoutMinutes: 30 },
@@ -1114,7 +1111,6 @@ describe("config status frames", () => {
     ).toEqual({
       xai: { configured: true },
       composio: { configured: true, mode: "managed" },
-      box: { configured: false },
       vps: { configured: true, sshAlias: "homelab" },
       rooms: { turnTimeoutMinutes: 20 },
       mcp: { callTimeoutMinutes: 30 },
@@ -1193,7 +1189,6 @@ describe("task rename", () => {
 describe("config status", () => {
   const config = configStatusFromFrame({
     composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 5 },
     mcp: { callTimeoutMinutes: 10 },
@@ -2618,7 +2613,6 @@ describe("activity panel", () => {
 describe("live config frames", () => {
   const baseFrame: ConfigStatusFrame = {
     composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 10 },
     mcp: { callTimeoutMinutes: 10 },

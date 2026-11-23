@@ -48,7 +48,7 @@ function world(overrides: Partial<CloudHealthDeps> = {}) {
 }
 
 const incidents = (w: ReturnType<typeof world>, after?: string) => w.health.report(after).incidents.map(({ kind, code, engine, count }) => ({ kind, code, engine, count }));
-const place = (state: PlaceRow["state"]): PlaceRow => ({ state, params: { bot: "Tallyspoon Ops", cause: "Boat said: quota exceeded for ada@example.test." }, source: "works-on" });
+const place = (state: PlaceRow["state"]): PlaceRow => ({ state, params: { bot: "Tallyspoon Ops", cause: "Provider said: quota exceeded for ada@example.test." }, source: "works-on" });
 
 describe("a Cloud home's memory pressure in its health report", () => {
   it("carries the last day's counts where the home watches memory, and null where it does not", () => {
@@ -245,7 +245,7 @@ describe("the ledger", () => {
 describe("the report", () => {
   it("never carries a failure's words, a name, a title, a prompt, an address, a URL or an engine's account", async () => {
     const planted = ["Tallyspoon Ops", "Secret Merger Plans", "ada.lovelace@example.test", "Quarterly numbers for ACME", "https://intranet.acme.test/q3",
-      "Draft the ACME layoffs memo", "owner@example.test", "Ada Org", "acct-7f3a-secret", "sk-ant-api03-planted", "Boat said: quota exceeded"];
+      "Draft the ACME layoffs memo", "owner@example.test", "Ada Org", "acct-7f3a-secret", "sk-ant-api03-planted", "Provider said: quota exceeded"];
     const w = world({
       engines: () => [{ instanceId: "claude", driverKind: "claudeAgent",
         snapshot: { state: "available", authenticated: false, version: "2.1.300", reason: "Quarterly numbers for ACME", account: { email: "owner@example.test", organization: "Ada Org", method: "login" } } }],
@@ -257,7 +257,7 @@ describe("the report", () => {
     w.emit(task.threadId, { type: "turn.started" });
     w.fail("Quarterly numbers for ACME failed for ada.lovelace@example.test at https://intranet.acme.test/q3 (sk-ant-api03-planted)", {}, task.threadId);
     w.emit(task.threadId, { type: "turn.completed", ok: false, stopReason: "Quarterly numbers for ACME" });
-    w.fail("Boat said: quota exceeded", { place: place("cc-provider") }, task.threadId);
+    w.fail("Provider said: quota exceeded", { place: place("cc-provider") }, task.threadId);
     w.health.report(null);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const body = JSON.stringify(w.health.report(null));

@@ -17,7 +17,7 @@ vi.mock("@/state/store", () => ({
   useStore: () => ({ state: { config: fixture.config }, dispatch: fixture.dispatch }),
 }));
 
-const base = { rooms: { turnTimeoutMinutes: 5 }, composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" } };
+const base = { rooms: { turnTimeoutMinutes: 5 }, composio: { configured: false }, vps: { configured: false, sshAlias: "" } };
 const memory = (over: Record<string, unknown> = {}) => ({ gb: null, autoGb: 12, machineGb: 16, protection: "slice", envGb: null, ...over });
 
 let host: HTMLDivElement;

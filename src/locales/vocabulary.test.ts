@@ -51,18 +51,7 @@ const isSource = (name: string) => /\.(?:ts|tsx|mjs|cjs|js)$/.test(name) && !/\.
 
 /** No snippet keeps the word file-wide; otherwise only literals containing the snippet. */
 const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = [
-  // What the Boat server code still says. It is unreachable for a person without a Boat key and goes with that code.
-  { file: "server/boat.ts", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/boat-delete-journal.ts", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/cloud-backend.ts", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/routes/config.ts", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/routes/computers.ts", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/index.ts", snippet: "Boat account", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/index.ts", snippet: "boat.dev", why: "the Boat server code, which is removed in the next change" },
-  { file: "src/lib/remote-desktop.ts", snippet: "Boat account settings", why: "matches the server's own line, which goes with the Boat server code" },
-  { file: "packages/phone-protocol/src/credential-request.ts", why: "the card that asks for a person's own Boat key; goes with the Boat server code" },
   { file: "server/boat-retirement.ts", why: "the one-time move off Boat names it in its own log lines" },
-  { file: "server/boat-create-idempotency.ts", snippet: "unnamed Boat", why: "own-key repair: boat.dev's own name for a machine" },
   { file: "electron/legacy-names.mjs", why: "reads files that earlier versions wrote" },
   { file: "packages/phone-protocol/src/wire-names.ts", why: "the released phone apps know these names" },
   { file: "electron/phone-wire-names.mjs", why: "the released phone apps know these names" },

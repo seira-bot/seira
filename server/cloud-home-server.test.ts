@@ -21,7 +21,7 @@ const gateway = {
   SEIRA_HOSTED_MODEL_TOKEN: token,
   SEIRA_HOSTED_MODELS: JSON.stringify({ anthropic: [], openai: ["gpt-fixture"], openrouter: ["anthropic/claude-fixture"] }),
 };
-// Cloud Pro's included Boat computers, voice and decisions.
+// Cloud Pro's included voice and decisions, and a cloud computer token that no service reads.
 const included = {
   SEIRA_CLOUD_BOAT_URL: "https://cloud.example.test/api/cloud/services/boat/api/box/v1",
   SEIRA_CLOUD_BOAT_TOKEN: `box_seira_${randomBytes(24).toString("base64url")}`,
@@ -158,10 +158,10 @@ it.skipIf(process.platform === "win32")("rewrites the data folder of the compute
   expect(JSON.parse(readFileSync(join(dataDir, ".backups", "last-restore.json"), "utf8")).pathsRewritten).toBe(true);
 });
 
-it("offers the included computers, voice and decisions with no key, and never shows or saves their tokens", async () => {
+it("offers the included voice and decisions with no key, shows no cloud computer key, and never shows or saves the tokens", async () => {
   const status = await api("GET", "/api/config");
   expect(status.status).toBe(200);
-  expect(status.body.box).toEqual({ configured: true, included: true });
+  expect(status.body).not.toHaveProperty("box");
   expect(status.body.tts).toMatchObject({ configured: true, ready: true, provider: "elevenlabs", voice: "preset0voice0id", included: true });
   expect(status.body.decider).toEqual({ provider: "jev", configured: true, included: true, enabled: true, jobs: { roomRouting: true } });
   const saved = readFileSync(join(home, ".seira", "config.json"), "utf8");

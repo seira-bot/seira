@@ -215,7 +215,7 @@ it("naming his Seira in a request's body is naming no bot", async () => {
 
 const LISTS = ["/api/bots", "/api/bots?messages=1", "/api/groups", "/api/routines", "/api/notifications", "/api/inbox", "/api/needs-you", "/api/today", "/api/team-map",
   "/api/team-memory", "/api/files", "/api/attachment-storage", "/api/webhooks", "/api/calendar-calls", "/api/sidebar-sections", "/api/config", "/api/team/people",
-  "/api/team/phones", "/api/team/my-connections", "/api/mcp/servers", "/api/connectors/connected", "/api/team-computers", "/api/computers/boxes", "/api/limit-resets",
+  "/api/team/phones", "/api/team/my-connections", "/api/mcp/servers", "/api/connectors/connected", "/api/limit-resets",
   "/api/sync/folders", "/api/app-triggers", "/api/browser-sites", "/api/auth/session", "/api/auth/sessions", "/api/section-context", "/api/bot-defaults",
   "/api/admin-activity", "/api/admin-activity.csv", "/api/decisions", "/api/decisions.csv", "/api/usage/traces", `/api/search?q=${MARK}`, "/api/search?q=Salary",
   "/api/search?q=Seira", "/api/plan-usage", "/api/shared-computers", "/api/profile/learned", "/api/vault", "/api/logins"];

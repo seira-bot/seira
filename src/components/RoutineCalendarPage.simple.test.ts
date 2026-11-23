@@ -450,7 +450,7 @@ describe("a new routine's audience on a team's Cloud", () => {
   const other = { ...bot, id: "other", name: "Other", threadId: "other-main", mainThreadId: "other-main", tasks: [{ threadId: "other-main", title: "Shared chat", createdAt: 1, sharedChat: true }] } as Bot;
   /** The form as opened with this bot's chat on screen; what it shows, and what Save sends. */
   function opened(onScreen: Bot, state: Partial<AppState> = {}) {
-    fixture.state = { ...initialState, bots: [onScreen, other], selectedId: onScreen.id, activeView: "chat", config: { box: { configured: false }, team: { id: "t1", name: "Acme" } } as AppState["config"], ...state };
+    fixture.state = { ...initialState, bots: [onScreen, other], selectedId: onScreen.id, activeView: "chat", config: { team: { id: "t1", name: "Acme" } } as AppState["config"], ...state };
     fixture.values = [];
     fixture.api.mockClear();
     const props = { seed: { kind: "routine" as const, at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [onScreen.id], name: "Salary check", description: "Check the bands" },

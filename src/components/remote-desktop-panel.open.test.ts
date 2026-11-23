@@ -75,7 +75,7 @@ it.each([
   document.body.append(container);
   root = createRoot(container);
   flushSync(() => root!.render(createElement(BotEditorStore, { value: {
-    state: { ...initialState, instances: [engine], config: { box: { configured: true } } as AppState["config"] } as AppState,
+    state: { ...initialState, instances: [engine], config: {} as AppState["config"] } as AppState,
     dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {},
   }, children: createElement(RemoteDesktopPanel, { bot: vps ? { ...bot, cloudBackend: "vps" } : bot }) })));
   const take = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Take control");
@@ -99,7 +99,7 @@ it("a client whose host runs the bot on its Local VM takes and opens that deskto
   document.body.append(container);
   root = createRoot(container);
   flushSync(() => root!.render(createElement(BotEditorStore, { value: {
-    state: { ...initialState, instances: [engine], config: { box: { configured: true } } as AppState["config"] } as AppState,
+    state: { ...initialState, instances: [engine], config: {} as AppState["config"] } as AppState,
     dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {},
   }, children: createElement(RemoteDesktopPanel, { bot: { ...bot, computer: "vm" } }) })));
   expect(document.body.textContent).toContain("Private desktop");
@@ -121,7 +121,7 @@ it("a client whose host's Local VM is already held in another view is told so, a
   document.body.append(container);
   root = createRoot(container);
   flushSync(() => root!.render(createElement(BotEditorStore, { value: {
-    state: { ...initialState, instances: [engine], config: { box: { configured: true } } as AppState["config"] } as AppState,
+    state: { ...initialState, instances: [engine], config: {} as AppState["config"] } as AppState,
     dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {},
   }, children: createElement(RemoteDesktopPanel, { bot: { ...bot, computer: "vm" } }) })));
   const take = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Take control");

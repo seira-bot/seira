@@ -19,14 +19,14 @@ const LABELS: Array<[CloudComputerCount, string]> = [
 export function createCloudComputerCounters(now: () => number = Date.now) {
   const rows = new Map<string, Row>();
 
-  function count(boxId: string, what: CloudComputerCount, waitedMs = 0): void {
-    let row = rows.get(boxId);
+  function count(computerId: string, what: CloudComputerCount, waitedMs = 0): void {
+    let row = rows.get(computerId);
     if (!row) {
       if (rows.size >= MAX_COMPUTERS) {
         const oldest = [...rows].sort(([, a], [, b]) => a.lastAt - b.lastAt)[0];
         if (oldest) rows.delete(oldest[0]);
       }
-      rows.set(boxId, row = {
+      rows.set(computerId, row = {
         counts: { wakes: 0, restoreWaits: 0, unanswered: 0, resent: 0, lostAnswers: 0, restarts: 0 },
         waited: { wakes: 0, restoreWaits: 0, restarts: 0 }, lastAt: now(),
       });
@@ -38,15 +38,15 @@ export function createCloudComputerCounters(now: () => number = Date.now) {
 
   return {
     count,
-    snapshot: (boxId: string): Row["counts"] | null => rows.get(boxId)?.counts ?? null,
+    snapshot: (computerId: string): Row["counts"] | null => rows.get(computerId)?.counts ?? null,
     /** One line per computer, most recent first. */
     lines(): string[] {
-      return [...rows].sort(([, a], [, b]) => b.lastAt - a.lastAt).map(([boxId, row]) => {
+      return [...rows].sort(([, a], [, b]) => b.lastAt - a.lastAt).map(([computerId, row]) => {
         const parts = LABELS.filter(([key]) => row.counts[key] > 0).map(([key, label]) => {
           const waited = key in row.waited ? row.waited[key as keyof Row["waited"]] : 0;
           return `${row.counts[key]} ${label}${waited ? ` (${Math.round(waited / 1_000)}s in all)` : ""}`;
         });
-        return `${boxId}: ${parts.join(", ")}; last ${new Date(row.lastAt).toISOString()}`;
+        return `${computerId}: ${parts.join(", ")}; last ${new Date(row.lastAt).toISOString()}`;
       });
     },
     clear: () => rows.clear(),

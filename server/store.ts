@@ -7,7 +7,6 @@ import { parseToolScope, toolScopeWidens } from "../shared/tool-scope.ts"; impor
 import { reorderInPlace } from "../shared/bot-order.ts"; import { trimOutboundPolicy } from "../shared/outbound.ts";
 import { botOwner, chiefConflict, chiefScope, ownerEmail } from "../shared/bot-owner.ts"; import { reshowWhenMoved } from "../shared/default-bot.ts";
 import { ensureSections, readSections, changeEmptySection } from "./section-context.ts"; import { grantNewDepartments } from "./department-grants.ts";
-import type { TeamComputers } from "./team-computers.ts";
 import { removeBotFolder, soulFile, soulHash, writeSoulMirror } from "./bot-folder.ts";
 import type { BotProfilePatch } from "./bot-profile.ts";
 import { DATA_DIR, EVENTS_DIR, NATIVE_DIR, loadBrowserProfileIdAliases } from "./config.ts";
@@ -667,12 +666,12 @@ export class Store {
     }
   }
 
-  renameSection(name: string, nextName: string, computers?: TeamComputers): string | undefined {
+  renameSection(name: string, nextName: string): string | undefined {
     if (!name || !this.sections.includes(name)) return "No such department";
     nextName = nextName.trim();
     if (!nextName || nextName.length > 60 || [...nextName].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return "Department name must be 1 to 60 characters without control characters";
     if (name === nextName) return undefined;
-    if (this.sections.includes(nextName) || computers?.forSection(nextName)) return "A department with that name already exists";
+    if (this.sections.includes(nextName)) return "A department with that name already exists";
     const members = this.bots.filter(bot => sectionKey(bot.section) === name);
     const rooms = this.groups.filter(group => sectionKey(group.section) === name);
     const affected = this.bots.filter(bot => members.includes(bot) || bot.managedSections?.some(section => sectionKey(section) === name));
@@ -680,23 +679,20 @@ export class Store {
       return "Stop this department's active work before renaming it";
     }
     // Removing an empty identity revokes its old grants, so recreating it cannot restore access.
-    if (!members.length && !rooms.length && !computers?.forSection(name)) return this.changeEmptySection(name, nextName);
+    if (!members.length && !rooms.length) return this.changeEmptySection(name, nextName);
     const nextBots = this.bots.map(bot => ({ ...bot,
       ...(members.includes(bot) ? { section: nextName } : {}),
       ...(bot.managedSections ? { managedSections: [...new Set(bot.managedSections.map(section => sectionKey(section) === name ? nextName : section))] } : {}),
     }));
     const nextGroups = this.groups.map(group => rooms.includes(group) ? { ...group, section: nextName } : group);
-    let computerChanged = false;
     try {
       // Register the new name only after saving, or the registry's duplicate-name check rejects this rename.
       this.saveBots(nextBots, false);
       this.saveGroups(nextGroups, false);
-      computerChanged = computers?.renameSection(name, nextName) ?? false;
       changeEmptySection(name, nextName);
     } catch (error) {
       this.saveBots(this.bots, false);
       this.saveGroups(this.groups, false);
-      if (computerChanged) computers!.renameSection(nextName, name);
       throw error;
     }
     // Mutate in place: schedulers and other consumers hold these objects.

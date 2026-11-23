@@ -1,5 +1,4 @@
 // One relay URL + token pair per included service:
-//   SEIRA_CLOUD_BOAT_URL    + SEIRA_CLOUD_BOAT_TOKEN     the Boat relay, ending in /api/box/v1
 //   SEIRA_CLOUD_VOICE_URL   + SEIRA_CLOUD_VOICE_TOKEN    the ElevenLabs relay, ending in /v1
 //   SEIRA_CLOUD_DECIDER_URL + SEIRA_CLOUD_DECIDER_TOKEN  the Jev relay, a Jev base URL
 //   SEIRA_CLOUD_AI_URL      + SEIRA_CLOUD_AI_TOKEN       the trial's Claude credit, an OpenAI-compatible base URL
@@ -9,9 +8,8 @@
 // written to config.json or reported to a client.
 import { JEV_DEFAULT_BASE_URL } from "./decider/jev.ts";
 
-export const BOAT_API_DEFAULT = "https://boat.dev/api/v1";
 export const ELEVENLABS_API_DEFAULT = "https://api.elevenlabs.io/v1";
-/** Must also be on WORKSPACE_CREDENTIAL_ENV. */
+/** Must also be on WORKSPACE_CREDENTIAL_ENV. SEIRA_CLOUD_BOAT_TOKEN has no service, but a Cloud home may still set it, so it is dropped too. */
 export const INCLUDED_TOKEN_ENV = ["SEIRA_CLOUD_BOAT_TOKEN", "SEIRA_CLOUD_VOICE_TOKEN", "SEIRA_CLOUD_DECIDER_TOKEN", "SEIRA_CLOUD_AI_TOKEN", "SEIRA_CLOUD_X_TOKEN", "SEIRA_CLOUD_HOSTING_TOKEN"] as const;
 
 export interface ServiceCredential {
@@ -22,7 +20,6 @@ export interface ServiceCredential {
 }
 
 interface Included {
-  boat: ServiceCredential | null;
   voice: ServiceCredential | null;
   decider: ServiceCredential | null;
   ai: ServiceCredential | null;
@@ -37,7 +34,6 @@ function includedService(url: string | undefined, token: string | undefined): Se
 }
 
 const includedFrom = (env: NodeJS.ProcessEnv): Included => ({
-  boat: includedService(env.SEIRA_CLOUD_BOAT_URL, env.SEIRA_CLOUD_BOAT_TOKEN),
   voice: includedService(env.SEIRA_CLOUD_VOICE_URL, env.SEIRA_CLOUD_VOICE_TOKEN),
   decider: includedService(env.SEIRA_CLOUD_DECIDER_URL, env.SEIRA_CLOUD_DECIDER_TOKEN),
   ai: trialCreditService(env.SEIRA_CLOUD_AI_URL, env.SEIRA_CLOUD_AI_TOKEN),
@@ -81,13 +77,8 @@ function resolve(own: string | undefined, providerApi: string, included: Service
   return included;
 }
 
-export const boatProviderApi = (env: NodeJS.ProcessEnv = process.env): string => env.SEIRA_BOAT_API || BOAT_API_DEFAULT;
 export const elevenLabsProviderApi = (env: NodeJS.ProcessEnv = process.env): string =>
   env.SEIRA_ELEVENLABS_API || ELEVENLABS_API_DEFAULT;
-
-export function boatCredential(own: string | undefined, env: NodeJS.ProcessEnv = process.env): ServiceCredential | null {
-  return resolve(own, boatProviderApi(env), (held ?? includedFrom(env)).boat);
-}
 
 export function voiceCredential(own: string | undefined, env: NodeJS.ProcessEnv = process.env): ServiceCredential | null {
   return resolve(own, elevenLabsProviderApi(env), (held ?? includedFrom(env)).voice);

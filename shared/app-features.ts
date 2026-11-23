@@ -208,7 +208,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Computers",
     place: "the Computer tab of a bot's panel",
     does: "Where a bot works with a screen, a browser or files: this computer, a Cloud desktop, a shared desktop or its own Local VM.",
-    tools: ["select_computer", "list_shared_computers", "shared_computer", "vm_exec", "ask_for_computer", "reset_cloud_computer"],
+    tools: ["select_computer", "list_shared_computers", "shared_computer", "vm_exec", "ask_for_computer"],
     releaseNotes: ["boatGone"],
   },
   {

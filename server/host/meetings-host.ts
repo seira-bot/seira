@@ -1,10 +1,8 @@
-// Meeting notes on this server: the meetings, their tools' routes, the Leave button and the computer they keep awake.
+// Meeting notes on this server: the meetings, their tools' routes and the Leave button. No computer here can join a meeting.
 import { MEETING_ROUTINE } from "../../shared/meetings.ts";
 import type { WidgetAction } from "../../shared/widget.ts";
-import * as boat from "../boat.ts";
 import { saveBotAttachment } from "../bot-attachment.ts";
 import { createAgentCard } from "../chat-widgets.ts";
-import { startInBackground } from "../cloud-computer-background.ts";
 import type { AppConfig } from "../config.ts";
 import { createBotEngine, type MeetingComputer } from "../meetings/engine.ts";
 import { END_LINE, LEAVE_ACTION, liveCard } from "../meetings/cards.ts";
@@ -17,9 +15,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 import type { BotRecord, Store } from "../store.ts";
-import type { TurnOwner } from "../turn-resources.ts";
 
-const START_BUDGET_MS = 150_000;
 const BUSY_WAIT_MS = 15 * 60_000;
 
 export interface MeetingsHostDeps {
@@ -28,11 +24,6 @@ export interface MeetingsHostDeps {
   store: Store;
   startTurn(botId: string, text: string, opts: { threadId: string; unattended: true; cardContinuation: true; origin: WorkOrigin }): Promise<unknown>;
   threadBusy(botId: string, threadId: string): boolean;
-  power(): {
-    start(bot: BotRecord, turn: TurnOwner, opts: { budgetMs: number }): Promise<{ id?: unknown } | null>;
-    used(owner: string): void;
-  };
-  computerOwner(bot: BotRecord): string;
   routines(): Pick<RoutineManager, "create" | "listRoutines"> | null;
   log(line: string): void;
 }
@@ -47,16 +38,10 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
     return bot ? { id: bot.id, name: bot.name, color: bot.color } : null;
   };
 
-  const computer = (boxId: string): MeetingComputer => ({
-    async run(command, timeoutMs) {
-      const result = await boat.runCommand(cfg, boxId, boat.isolatedRemoteCommand(command), { timeoutMs });
-      return { ok: result.ok, stdout: result.stdout, stderr: result.stderr };
-    },
-    async start(command) {
-      const started = await startInBackground(cfg, boxId, command, AbortSignal.timeout(60_000));
-      return started.isError ? { ok: false, error: started.content.map((part) => ("text" in part ? part.text : "")).join(" ") } : { ok: true };
-    },
-  });
+  const noComputer: MeetingComputer = {
+    run: async () => ({ ok: false, stdout: "", stderr: MEETINGS_NEED_CLOUD_COMPUTER }),
+    start: async () => ({ ok: false, error: MEETINGS_NEED_CLOUD_COMPUTER }),
+  };
 
   async function followUp(record: MeetingRecord, prompt: string): Promise<void> {
     const until = Date.now() + BUSY_WAIT_MS;
@@ -73,18 +58,10 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
     engine,
     speech: (record) => speechSource(cfg, { local: record.local === true }),
     async computerFor(record) {
-      const bot = store.bot(record.botId);
-      if (!bot) return { error: "The bot is gone." };
-      if (!boat.boatConfigured(cfg)) return { error: "Meeting notes need a cloud computer, and none is set up here." };
-      const machine = record.owner === bot.id
-        ? await deps.power().start(bot, { threadId: `meeting:${record.id}`, generation: record.id }, { budgetMs: START_BUDGET_MS })
-        : await boat.readyBoat(cfg, record.owner, START_BUDGET_MS);
-      if (!machine || typeof machine.id !== "string") return { error: "The cloud computer didn't start in time." };
-      deps.power().used(record.owner);
-      return { boxId: machine.id };
+      return store.bot(record.botId) ? { error: MEETINGS_NEED_CLOUD_COMPUTER } : { error: "The bot is gone." };
     },
-    computer,
-    touch: (owner) => deps.power().used(owner),
+    computer: () => noComputer,
+    touch: () => undefined,
     card: {
       show(record) {
         const bot = speaker(record);
@@ -116,12 +93,7 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
     sendsFreely: (botId, threadId) => routeDeps().sendsFreely(botId, threadId),
     markOutside: (threadId) => routeDeps().markOutside(threadId),
     meetings: () => meetings,
-    computerOwner(botId) {
-      const bot = store.bot(botId);
-      if (!bot) return { error: "The bot is gone." };
-      if (!boat.boatConfigured(cfg)) return { error: MEETINGS_NEED_CLOUD_COMPUTER };
-      return deps.computerOwner(bot);
-    },
+    computerOwner: (botId) => store.bot(botId) ? { error: MEETINGS_NEED_CLOUD_COMPUTER } : { error: "The bot is gone." },
     createRoutine(botId, threadId) {
       const manager = deps.routines();
       if (!manager) return "Routines are not available here right now.";
@@ -149,7 +121,6 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
 
   return {
     internal: (ctx: MeetingRouteContext) => routes.internal(ctx),
-    keepsAwake: (owner: string) => meetings.keepsAwake(owner),
     /** The live card's Leave button, handled here without a turn. */
     serverPress(bot: Pick<BotRecord, "id">, threadId: string, messageId: string, action: WidgetAction, _auth: RequestAuth): "handled" | null {
       if (action.type !== LEAVE_ACTION || !action.payload || typeof action.payload !== "object" || Array.isArray(action.payload)) return null;

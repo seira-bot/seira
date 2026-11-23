@@ -41,7 +41,7 @@ export interface ConnectionListing {
   installationId?: string;
 }
 
-/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, Boat, X
+/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, X
  * research, the decider) are not listed, since the person's own key would replace what it includes. An Anthropic key
  * goes for "Claude (API key)" alone: there it never takes over Claude bots that sign in with a Claude account. */
 interface Provider { id: string; label: string; for: string[]; config(cfg: AppConfig): Partial<AppConfig> | null }

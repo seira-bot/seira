@@ -6,14 +6,8 @@ import { useShowThreads } from "@/lib/thread-preferences";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { teamMapStatus, type TeamMapSection } from "@/lib/team-map";
-import { COMPUTER_DRAG_TYPE, fitTeams, layoutTeams, orderBots, parseBotOrders, parsePositions, reorderBot, teamSize, zoomAt, type Point, type View } from "@/lib/team-canvas";
-import { bestColumns, polylinePath, teamGeometry, type TeamGeometry } from "@/lib/team-canvas-computers";
-import { teamComputersFor, type ShownFrame } from "@/lib/map-computers";
-import { activityPreview, botEngine } from "@/lib/failed-turn";
-import { computerStepLine } from "@/lib/computer-step";
-import type { MapComputer, MapComputerState } from "../../shared/map-computer";
+import { fitTeams, layoutTeams, orderBots, parseBotOrders, parsePositions, reorderBot, zoomAt, type Point, type View } from "@/lib/team-canvas";
 import { BotAvatar } from "./Avatar";
-import { ComputerNode } from "./ComputerNode";
 import { InstanceProviderMark, ProviderMark } from "./ProviderIcons";
 import { openBotSettings } from "./bot-panel/panel-link";
 
@@ -85,18 +79,7 @@ function BotCard({ bot, selected, moving, connected, tagged = false, sent, onCom
   </article>;
 }
 
-const NO_COMPUTERS: MapComputer[] = [];
-
-/** What the bot is doing right now, in one line: its newest tool step in the open thread, else the working thread's title. */
-function currentActivity(bot: Bot | undefined, instances: ReturnType<typeof useStore>["state"]["instances"]): string | undefined {
-  if (!bot?.busy) return undefined;
-  const open = bot.tasks?.find((task) => task.threadId === bot.threadId);
-  const last = !open || open.busy ? bot.messages.findLast((message) => message.kind === "activity" && message.tool) : undefined;
-  if (last?.tool) return computerStepLine(last.tool) ?? activityPreview(last.tool, botEngine(bot, instances), last.dataResult);
-  return bot.tasks?.find((task) => task.busy && task.threadId !== bot.threadId && task.title.trim())?.title;
-}
-
-export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemory, onFolders, onEditTeam, onDeleteTeam, onComputer, onComputerDrop, onTeamComputer, teamComputers = {}, connectedBotIds = [], computers = NO_COMPUTERS, computerFrames = {}, onOpenComputer, taggedBotIds = [], sent, bottomInset = 0 }: {
+export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemory, onFolders, onEditTeam, onDeleteTeam, onComputer, connectedBotIds = [], taggedBotIds = [], sent, bottomInset = 0 }: {
   sections: TeamMapSection<Bot>[];
   canManage: boolean;
   onMove: (bot: Bot, destination: string) => Promise<boolean | void>;
@@ -107,14 +90,7 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
   onDeleteTeam: (section: string) => void;
   isEmpty: (section: string) => boolean;
   onComputer?: (bot: Bot) => void;
-  onComputerDrop?: (resourceId: string, sectionKey: string) => void;
-  onTeamComputer?: (sectionKey: string) => void;
-  teamComputers?: Record<string, { name: string; state?: string }>;
   connectedBotIds?: string[];
-  /** Computers drawn beside their bots; empty hides them and keeps the usual layout. */
-  computers?: MapComputer[];
-  computerFrames?: Record<string, ShownFrame>;
-  onOpenComputer?: (computer: MapComputer) => void;
   /** Bots a message being typed on the map will go to. */
   taggedBotIds?: string[];
   /** Bots a message from the map just went to; `key` changes with every send. */
@@ -133,26 +109,12 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
   const [view, setView] = useState<View>({ x: 40, y: 40, scale: 1 });
   const [dragged, setDragged] = useState<{ bot: Bot; point: Point } | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
-  const [computerDropKey, setComputerDropKey] = useState<string | null>(null);
   const [insertion, setInsertion] = useState<{ botId: string; after: boolean } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [layoutLoaded, setLayoutLoaded] = useState(false);
   const [menuAbove, setMenuAbove] = useState<string | null>(null);
-  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const geometries = useMemo<Array<TeamGeometry | null>>(() => sections.map((section) => {
-    if (!computers.length) return null;
-    const order = Object.hasOwn(botOrders, section.key) ? botOrders[section.key] : [];
-    const chiefs = orderBots(section.chiefs, order), members = orderBots(section.members, order);
-    return teamGeometry({ chiefs, members }, teamComputersFor(section.key, [...chiefs, ...members].map((bot) => bot.id), computers));
-  }), [sections, computers, botOrders]);
-  const columnsFor = useMemo(() => {
-    if (!geometries.some(Boolean)) return undefined;
-    const sizes = geometries.map((geometry, index) => geometry ?? teamSize(sections[index]));
-    // Rounded so a small window resize never reshuffles the teams.
-    return { sizes, columns: bestColumns(sizes, { width: Math.round(viewportSize.width / 200) * 200, height: Math.round(viewportSize.height / 200) * 200 }) };
-  }, [geometries, sections, viewportSize]);
-  const tiles = useMemo(() => layoutTeams(sections, positions, columnsFor), [sections, positions, columnsFor]);
+  const tiles = useMemo(() => layoutTeams(sections, positions), [sections, positions]);
   const current = useRef({ view, positions, tiles, selectedId: state.selectedId, settingsOpen: state.settingsOpen, bottomInset });
   current.current = { view, positions, tiles, selectedId: state.selectedId, settingsOpen: state.settingsOpen, bottomInset };
 
@@ -208,7 +170,6 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
     let previousSize: { width: number; height: number } | null = null;
     const observer = new ResizeObserver(() => {
       const bounds = element.getBoundingClientRect();
-      setViewportSize({ width: bounds.width, height: bounds.height });
       if (!previousSize) fit();
       else {
         const card = current.current.settingsOpen ? [...element.querySelectorAll<HTMLElement>("[data-bot-id]")]
@@ -342,17 +303,8 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
     const bounds = viewport.current?.getBoundingClientRect();
     if (bounds) setView(zoomAt(view, Math.max(0.3, Math.min(1.5, view.scale * factor)), { x: bounds.width / 2, y: bounds.height / 2 }));
   };
-  const botById = new Map(sections.flatMap((section) => [...section.chiefs, ...section.members]).map((bot) => [bot.id, bot] as const));
-  const computerById = new Map(computers.map((computer) => [computer.id, computer] as const));
-  const shownState = (computer: MapComputer): MapComputerState => {
-    const users = computer.botIds.flatMap((id) => botById.get(id) ?? []);
-    if (computer.state === "idle" && users.some((bot) => bot.busy)) return "working";
-    if (computer.state !== "working" && users.some((bot) => state.computerStarts[bot.id])) return "starting";
-    return computer.state;
-  };
   const dropSection = sections.find((section) => section.key === dropKey);
-  const dropHint = computerDropKey !== null ? t("canvas.assignComputer", { team: sections.find((section) => section.key === computerDropKey)?.name ?? computerDropKey })
-    : dragged && dropSection ? (dragged.bot.section?.trim() ?? "") === dropSection.key
+  const dropHint = dragged && dropSection ? (dragged.bot.section?.trim() ?? "") === dropSection.key
       ? t("canvas.arrangeBot", { name: dragged.bot.name, team: dropSection.name }) : t("canvas.moveBot", { name: dragged.bot.name, team: dropSection.name })
       : null;
 
@@ -360,27 +312,6 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
     className="relative min-h-0 flex-1 touch-none overflow-clip outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
     style={{ backgroundImage: "radial-gradient(circle, color-mix(in srgb, var(--color-ink-secondary) 18%, transparent) 1px, transparent 1px)", backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
     onPointerDown={start} onPointerMove={move} onPointerUp={(event) => finish(event)} onPointerCancel={(event) => finish(event, true)}
-    onDragOver={(event) => {
-      if (!canManage || !onComputerDrop || !event.dataTransfer.types.includes(COMPUTER_DRAG_TYPE)) return;
-      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-team-key]");
-      const key = target && event.currentTarget.contains(target) ? target.dataset.teamKey ?? null : null;
-      setComputerDropKey(key);
-      if (key !== null) { event.preventDefault(); event.dataTransfer.dropEffect = "link"; }
-    }}
-    onDragLeave={(event) => {
-      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setComputerDropKey(null);
-    }}
-    onDrop={(event) => {
-      setComputerDropKey(null);
-      if (!canManage || !onComputerDrop || !event.dataTransfer.types.includes(COMPUTER_DRAG_TYPE)) return;
-      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-team-key]");
-      const key = target && event.currentTarget.contains(target) ? target.dataset.teamKey : undefined;
-      const resourceId = event.dataTransfer.getData(COMPUTER_DRAG_TYPE);
-      if (key === undefined || !sections.some((section) => section.key === key) || !resourceId) return;
-      event.preventDefault();
-      onComputerDrop(resourceId, key);
-    }}
-    onDragEnd={() => setComputerDropKey(null)}
     onPointerDownCapture={(event) => {
       keyboardFocus.current = false;
       if (!(event.target as HTMLElement).closest("details")) event.currentTarget.querySelectorAll("details[open]").forEach((element) => element.removeAttribute("open"));
@@ -412,17 +343,15 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
     <div data-canvas-world className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
       {sections.map((section, index) => {
         const tile = tiles[index];
-        const geometry = geometries[index];
         const hierarchy = section.chiefs.length > 0 && section.members.length > 0;
-        const dropping = computerDropKey === section.key || (dragged && dropKey === section.key && (dragged.bot.section?.trim() ?? "") !== section.key);
-        const computer = Object.hasOwn(teamComputers, section.key) ? teamComputers[section.key] : undefined;
+        const dropping = dragged && dropKey === section.key && (dragged.bot.section?.trim() ?? "") !== section.key;
         const renderBot = (bot: Bot) => <div key={bot.id} className="relative">
           {insertion?.botId === bot.id && <div className={cn("pointer-events-none absolute inset-x-1 h-0.5 rounded bg-accent", insertion.after ? "-bottom-[9px]" : "-top-[9px]")} />}
           <BotCard bot={bot} selected={state.selectedId === bot.id && state.settingsOpen} moving={dragged?.bot.id === bot.id || moving === bot.id}
             connected={connectedBotIds.includes(bot.id)} tagged={taggedBotIds.includes(bot.id)} sent={sent?.botIds.includes(bot.id) ? sent.key : undefined} onComputer={onComputer} onArrange={layoutLoaded ? arrangeBot : undefined} />
         </div>;
         return <section key={section.key} data-team-key={section.key} aria-label={t("canvas.teamRegion", { name: section.name })}
-          className={cn("absolute rounded-2xl border bg-panel/90 shadow-sm has-[details[open]]:z-20 data-[computer-dropping=true]:border-accent data-[computer-dropping=true]:ring-2 data-[computer-dropping=true]:ring-accent/25", dropping ? "border-accent ring-2 ring-accent/25" : "border-hairline/50")}
+          className={cn("absolute rounded-2xl border bg-panel/90 shadow-sm has-[details[open]]:z-20", dropping ? "border-accent ring-2 ring-accent/25" : "border-hairline/50")}
           style={{ left: tile.x, top: tile.y, width: tile.width, height: tile.height }}>
           <header className="flex h-16 items-center gap-2 px-5">
             <button data-arrange-team={section.key} disabled={!layoutLoaded} aria-label={t("canvas.arrange", { name: section.name })}
@@ -436,11 +365,6 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
               }}>
               <h2 className="truncate text-[13px] font-semibold tracking-tight">{section.name}</h2>
             </button>
-            {computer && <button aria-label={t("canvas.teamComputer", { team: section.name, name: computer.name })} title={`${computer.name}${computer.state ? ` · ${computer.state}` : ""}`}
-              disabled={!onTeamComputer} onClick={() => onTeamComputer?.(section.key)}
-              className="flex min-w-0 max-w-[120px] shrink items-center gap-1.5 rounded-md px-1.5 py-2 text-[10px] text-ink-secondary hover:bg-control hover:text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none">
-              <Monitor size={12} className="shrink-0" /><span className="truncate">{computer.name}</span>
-            </button>}
             <span className="text-[11px] tabular-nums text-ink-secondary">{section.chiefs.length + section.members.length}</span>
             {canManage && <details className="relative" onToggle={(event) => {
               if (event.currentTarget.open) {
@@ -465,35 +389,12 @@ export function TeamCanvas({ sections, canManage, onMove, onInstructions, onMemo
             </details>}
           </header>
           {dropping && <div className="pointer-events-none absolute -top-7 left-2 z-30 max-w-[calc(100%-16px)] truncate rounded-md bg-accent px-2 py-1 text-[10px] text-white shadow-sm">{dropHint}</div>}
-          {geometry ? <>
-            <svg aria-hidden className="pointer-events-none absolute inset-0 overflow-visible" width={tile.width} height={tile.height}>
-              {geometry.tree.map((line, lineIndex) => <path key={`tree-${lineIndex}`} d={polylinePath(line)} fill="none" strokeWidth={1.5} className="stroke-ink-secondary/25" />)}
-              {geometry.links.map((link) => {
-                const active = botById.get(link.botId)?.busy === true;
-                return <path key={`${link.botId}:${link.computerId}`} d={polylinePath(link.points)} fill="none" strokeLinecap="round" strokeLinejoin="round"
-                  strokeWidth={active ? 2.25 : 1.5} strokeDasharray={active ? "7 5" : undefined}
-                  className={active ? "animate-link-flow stroke-success/80" : "stroke-ink-secondary/35"} />;
-              })}
-            </svg>
-            {geometry.cards.map((card) => {
-              const bot = botById.get(card.botId);
-              return bot ? <div key={bot.id} className="absolute" style={{ left: card.x, top: card.y }}>{renderBot(bot)}</div> : null;
-            })}
-            {geometry.monitors.map((monitor) => {
-              const computer = computerById.get(monitor.id);
-              if (!computer) return null;
-              const users = computer.botIds.flatMap((id) => botById.get(id) ?? []);
-              return <ComputerNode key={computer.id} computer={computer} bots={users} x={monitor.x} y={monitor.y}
-                frameUrl={Object.hasOwn(computerFrames, computer.id) ? computerFrames[computer.id].url : undefined}
-                state={shownState(computer)} activity={currentActivity(users.find((bot) => bot.busy), state.instances)}
-                onOpen={onOpenComputer ? () => onOpenComputer(computer) : undefined} />;
-            })}
-          </> : <div className="flex items-center px-5 pb-5">
+          <div className="flex items-center px-5 pb-5">
             {section.chiefs.length > 0 && <div className="flex flex-col gap-4">{orderBots(section.chiefs, personalOrder(section.key)).map(renderBot)}</div>}
             {hierarchy && <div className="flex w-10 shrink-0 justify-center text-ink-secondary/35" aria-hidden="true"><ArrowRight size={22} strokeWidth={1} /></div>}
             {section.members.length > 0 && <div className="flex flex-col gap-4">{orderBots(section.members, personalOrder(section.key)).map(renderBot)}</div>}
             {section.chiefs.length + section.members.length === 0 && <p className="flex h-[126px] w-[236px] items-center justify-center rounded-xl border border-dashed border-hairline/70 px-6 text-center text-[12px] leading-relaxed text-ink-secondary">{t("canvas.dropHere")}</p>}
-          </div>}
+          </div>
         </section>;
       })}
     </div>

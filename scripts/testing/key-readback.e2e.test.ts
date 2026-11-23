@@ -1,5 +1,5 @@
 // Every credential on the keys page, saved through a real server the way its row saves it, read back from GET
-// /api/config and shown masked. The services that check a key before it is kept (Boat, Composio, ElevenLabs, Fish Audio
+// /api/config and shown masked. The services that check a key before it is kept (Composio, ElevenLabs, Fish Audio
 // and the decision models) answer from one loopback stand-in, so nothing leaves this machine.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -66,7 +66,6 @@ beforeAll(async () => {
     const raw = bytes.toString("utf8");
     stubCalls.push(`${req.method} ${url.split("?")[0]}`);
     const reply = (status: number, body: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
-    if (url.startsWith("/sandboxes")) return reply(200, { ok: true, sandboxes: [], pageInfo: { nextCursor: null } });
     if (url.startsWith("/composio/tool_router/session")) {
       return reply(201, { session_id: "trs_readback", mcp: { type: "http", url: "https://app.composio.dev/tool_router/v3/trs_readback/mcp" }, config: { user_id: "seira_readback" } });
     }
@@ -110,7 +109,7 @@ beforeAll(async () => {
   writeFileSync(configFile, JSON.stringify({ ...JSON.parse(readFileSync(configFile, "utf8")), decider }));
   const env = {
     ...verificationServerEnvironment({}, fixture.info.dataDir, Number(new URL(fixture.info.url).port)),
-    SEIRA_BOAT_API: origin, SEIRA_COMPOSIO_API: `${origin}/composio`, SEIRA_COMPOSIO_TOOLKITS_API: `${origin}/composio`,
+    SEIRA_COMPOSIO_API: `${origin}/composio`, SEIRA_COMPOSIO_TOOLKITS_API: `${origin}/composio`,
     SEIRA_GEMINI_TTS_API: `${origin}/gemini`, SEIRA_DEEPSEEK_SPEECH_API: `${origin}/deepseek`,
     SEIRA_ELEVENLABS_API: `${origin}/eleven`, SEIRA_FISH_AUDIO_API: `${origin}/fish`,
   };

@@ -17,7 +17,7 @@ export interface MeetingRecord {
   botId: string;
   botName: string;
   threadId: string;
-  /** The computer's owner key (a bot id, or a team computer's) and its Boat, once known. */
+  /** The computer's owner key (a bot id, or a team computer's) and the computer's id, once known. */
   owner: string;
   boxId?: string;
   platform: MeetingPlatform;
@@ -52,7 +52,7 @@ export interface MeetingDeps {
   speech(record: MeetingRecord): SpeechSource;
   /** The computer for a meeting being started: woken or created for it. Null with a plain reason when it has none. */
   computerFor(record: MeetingRecord): Promise<{ boxId: string } | { error: string }>;
-  /** The computer of a meeting already started, by its Boat. */
+  /** The computer of a meeting already started, by its id. */
   computer(boxId: string): MeetingComputer;
   /** Keeps the computer's idle window open while the meeting runs. */
   touch(owner: string): void;

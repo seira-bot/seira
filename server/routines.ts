@@ -48,7 +48,7 @@ export { intervalHasRestrictions } from "./routine-intervals.ts";
 export { nextOccurrence, RoutineScheduleError } from "./routine-schedules.ts";
 export type { RoutineIntervalSchedule, RoutineIntervalScheduleInput, RoutineSchedule, RoutineScheduleInput } from "./routine-schedules.ts";
 
-/** `cloud` runs the agent inside the bot's Boat VM; `seira` runs the bot's own provider and borrows only its computer tools. */
+/** `cloud` asks for the bot's cloud desktop, and the server refuses such a run; `seira` runs the bot's own provider and borrows only its computer tools. */
 export type RoutineRunOn = "seira" | "cloud";
 export type RoutineTarget = "bot" | "room-goal";
 export type RoutineGoalStatus = Exclude<GroupGoalRunStatus, "working">;

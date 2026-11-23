@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { RUN_COMPUTER_LINES } from "../shared/cloud-computer-recovery.ts";
 import { NO_START_FIRST_SPACING_MS, NO_START_SPACING_MS, SWITCHED_OFF_WITHIN_MS, afterSpacing, failedToStartComputer, noStartAlert, noStartSpacing, switchedOffByNoStarts, turnBackOn } from "./routine-no-start.ts";
 
 const NO_START = "Seira's cloud desktop didn't start. Change where this routine runs.";
+const NOT_READY = [
+  "The cloud computer did not wake, so this run did not start. The next scheduled run tries again.",
+  "The cloud computer did not answer in time, so this run did not start. The next scheduled run tries again.",
+];
 const failed = (id: string, at: number, error = NO_START, routineId = "r") => ({ id, routineId, status: "failed", error, createdAt: at, finishedAt: at + 50 });
 const completed = (id: string, at: number, routineId = "r") => ({ id, routineId, status: "completed", createdAt: at, finishedAt: at + 50 });
 
@@ -15,8 +18,8 @@ describe("a routine whose cloud computer does not start", () => {
   });
 
   it("does not take a run that never started, because its computer was not ready, for that failure: the next scheduled run tries again", () => {
-    for (const line of Object.values(RUN_COMPUTER_LINES)) expect(failedToStartComputer(failed("a", 1, line)), line).toBe(false);
-    const notReady = [1, 2, 3, 4].map((at) => failed(`run-${at}`, at * 100, RUN_COMPUTER_LINES.noAnswer));
+    for (const line of NOT_READY) expect(failedToStartComputer(failed("a", 1, line)), line).toBe(false);
+    const notReady = [1, 2, 3, 4].map((at) => failed(`run-${at}`, at * 100, NOT_READY[1]));
     expect(noStartSpacing({ id: "r", updatedAt: 0 }, notReady)).toBeNull();
     expect(noStartAlert({ id: "r", updatedAt: 0 }, notReady.slice(0, 3), notReady[2]!)).toBeUndefined();
   });

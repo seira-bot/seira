@@ -156,7 +156,7 @@ describe("local computer UI eligibility", () => {
 });
 
 describe("what the person reads about using this computer", () => {
-  const JARGON = /DevTools|CDP|profile[- ]access|grant\b|bind to|attach|endpoint|driver|\bCUA\b|Cua\b|Boat key|ACP|provider|Wayland|descriptor/i;
+  const JARGON = /DevTools|CDP|profile[- ]access|grant\b|bind to|attach|endpoint|driver|\bCUA\b|Cua\b|ACP|provider|Wayland|descriptor/i;
   const host = (platform: DesktopCapabilities["host"]["platform"], label = "Desktop") => ({ platform, label }) as DesktopCapabilities["host"];
   const reasons = [
     localComputerDisabledReason({ capabilities: { host: host("darwin"), localComputer: { available: false } } as DesktopCapabilities, providerSupportsLocal: false }),
@@ -179,7 +179,7 @@ describe("what the person reads about using this computer", () => {
     const shown = Object.entries(en as Record<string, string>).filter(([key]) =>
       key.startsWith("approval.yourComputer.") || key.startsWith("computer.problem.local") || key.startsWith("place.view.") || key.startsWith("place.action."));
     expect(shown.length).toBeGreaterThan(40);
-    for (const [key, text] of shown) expect(text, key).not.toMatch(/DevTools|profile[- ]access|grant\b|bind to|\bCUA\b|Cua Driver|Boat key/i);
+    for (const [key, text] of shown) expect(text, key).not.toMatch(/DevTools|profile[- ]access|grant\b|bind to|\bCUA\b|Cua Driver/i);
     expect((en as Record<string, string>)["place.view.ccNeedsKey.line"]).toBeUndefined();
   });
 });

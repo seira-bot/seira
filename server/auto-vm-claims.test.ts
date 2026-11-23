@@ -173,7 +173,7 @@ describe("startAutoVmClaim", () => {
   it("knows a network failure through the wrapper that rewords it", () => {
     expect(transientClaimFailure(new DOMException("The operation was aborted due to timeout", "TimeoutError"))).toBe(true);
     expect(transientClaimFailure(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } }))).toBe(true);
-    expect(transientClaimFailure(Object.assign(new Error("boat.dev rejected your Boat API key"), { status: 401 }))).toBe(false);
+    expect(transientClaimFailure(Object.assign(new Error("the provider rejected your API key"), { status: 401 }))).toBe(false);
     expect(transientClaimFailure(new Error("the cloud computer didn't start in time"))).toBe(false);
     const shown = keepTransient(Object.assign(new Error("unreachable"), { transient: true }), new Error("Pepper's cloud computer isn't available right now."));
     expect(transientClaimFailure(shown)).toBe(true);
@@ -196,19 +196,19 @@ describe("startAutoVmClaim", () => {
 });
 
 describe("lazyClaimFailedText", () => {
-  const boat = { label: "the cloud computer", startsComputer: true as const, failure: "Miso's cloud desktop didn't start. This conversation is back on Auto. Send your message again." };
+  const cloud = { label: "the cloud computer", startsComputer: true as const, failure: "Miso's cloud desktop didn't start. This conversation is back on Auto. Send your message again." };
 
   it("gives the bot the computer's own reason, and says the conversation is back on Auto only when it is", () => {
-    expect(lazyClaimFailedText({ ...boat, cause: "the cloud computer could not be created or reached", backOnAuto: true })).toBe(
+    expect(lazyClaimFailedText({ ...cloud, cause: "the cloud computer could not be created or reached", backOnAuto: true })).toBe(
       "The cloud computer could not be started: the cloud computer could not be created or reached. This call was not performed. " +
       "This conversation is back on Auto. Do not retry computer work in this turn; tell the person what you could not do.");
-    expect(lazyClaimFailedText({ ...boat, cause: "the cloud computer didn't start in time." })).toBe(
+    expect(lazyClaimFailedText({ ...cloud, cause: "the cloud computer didn't start in time." })).toBe(
       "The cloud computer could not be started: the cloud computer didn't start in time. This call was not performed. " +
       "Do not retry computer work in this turn; tell the person what you could not do.");
   });
 
   it("names the plan's limit in its own sentence when the Admin turned the computer away", () => {
-    expect(lazyClaimFailedText({ ...boat, cause: "Your Pro free trial's 20 cloud computer hours are used up.",
+    expect(lazyClaimFailedText({ ...cloud, cause: "Your Pro free trial's 20 cloud computer hours are used up.",
       limit: "This Cloud's free trial cloud computer hours are used up; they come back on 14 Nov.", backOnAuto: true })).toBe(
       "The cloud computer could not be started. This Cloud's free trial cloud computer hours are used up; they come back on 14 Nov. " +
       "This call was not performed. This conversation is back on Auto. Do not retry computer work in this turn; tell the person what you could not do.");
