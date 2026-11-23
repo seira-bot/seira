@@ -59,8 +59,10 @@ where they belong instead of adding new places.
   menu on Linux Wayland). It is on by default and is the only control of
   Glance.
 - **Glance is the one place outside the window** (2026-11-23). It is a small
-  visor at the top centre of the screen in the desktop app (a tray icon on
-  Linux Wayland, where an app cannot place a window). It shows only bots that
+  visor at the top centre of the screen in the desktop app. On Linux Wayland
+  the visor shows through a small X11 (XWayland) helper process, because a
+  Wayland app cannot place a window; a tray icon shows only when no X11
+  display is available or the helper fails. It shows only bots that
   work, need the person, failed or just finished: one avatar each, at most
   four, with a status ring and never a count. It opens by itself only for an
   approval or a question the chat already shows, never takes keyboard focus,
