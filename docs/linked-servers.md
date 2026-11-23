@@ -71,6 +71,9 @@ The other side holds a credential, but this side does not trust what it sends.
 | New hand-offs per link | 30 in 60 seconds |
 | Work frames per link | 150 in a minute |
 | Characters of frames per link | 300,000 in 60 seconds |
+| Bytes of exchange bodies per link | 6,000,000 in 60 seconds, each direction; one request at most 5,500,000 |
+| Bytes of work frames a side sends per link | 3,000,000 in 60 seconds |
+| Log lines per link | 20 in a minute |
 | Unacknowledged frames per link | 2,000 |
 | Records per link | 1,000 |
 | File size | 100 MB |
@@ -80,8 +83,9 @@ The other side holds a credential, but this side does not trust what it sends.
 | File download | 10 minutes in total, and 60 seconds with no bytes |
 
 The joining side keeps at least 1 second between exchanges and 10 seconds
-between new sessions. An honest pair stays below these limits, also after a
-restart of either side.
+between new sessions. A sending side holds its work frames for 5 to 10 seconds
+after the other side took none of a batch. An honest pair stays below these
+limits, also after a restart of either side.
 
 ## Who may change a link
 
@@ -137,6 +141,16 @@ not a paired client.
   file name longer than 255 UTF-16 units does not cross a link.
 - The address in an invite must be https. An https address that points to a
   private network is accepted.
+- A link carries at most 300,000 characters of frames a minute in each
+  direction. That is about one and a half results of the largest size. The
+  other frames wait at the sender; none are lost.
+- A hostile side can use about 2 to 2.5 seconds of this server's time in each
+  minute for each link, and about 4 to 5 seconds in one minute that spans two
+  windows.
+- A side that fills its 20 log lines a minute also hides this server's own
+  log lines about that link.
+- When the clock of the computer jumps back, the limits of a link stop its
+  traffic for the size of the jump and one minute more.
 
 ## Where the code is
 
