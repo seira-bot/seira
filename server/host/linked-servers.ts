@@ -14,6 +14,9 @@
 //   its error texts never reach an error, a log line or an activity row here.
 // - Work a linked server started here goes to no bot of another server, and its turns run at no more than that link's
 //   cap: the lowest cap when the work of several links meets in one thread.
+// - When a link ends (an admin removes it, the other server ends it or refuses its credential), all work its peer
+//   started here stops, also what bots here took on from that work. Work that still runs keeps the rules above, also
+//   after a restart: an ended link stays in the record, with its cap, while such work is open.
 // Open risks:
 // - The names a peer gives itself and its bots reach the bot lists here, cleaned to one short line each.
 // - A peer whose hand-off files never come keeps the open slots of those hand-offs.
@@ -25,7 +28,7 @@ import { z } from "zod";
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import { createDialer } from "../bot-link/dial.ts";
 import { createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
-import { LINK_PREFIX, isLinkedId, peerKey, type Place } from "../bot-link/protocol.ts";
+import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
 import { json, readBody } from "../harness/http.ts";
 import { bearerToken, requestSource, type RequestAuth } from "../request-auth.ts";
@@ -35,7 +38,7 @@ import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { createAdmission, createRefusalRecord } from "./linked-servers-admit.ts";
 import {
-  GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
+  ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
 } from "./linked-servers-store.ts";
 
@@ -173,7 +176,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   function freshId(): string {
     for (let tries = 0; tries < 8; tries++) {
       const id = newLinkId(), key = keyOf(id);
-      if (!file.links.some((one) => one.id === id || keyOf(one.id) === key) && !deps.ownPeer?.(key)) return id;
+      if (!file.links.some((one) => one.id === id || keyOf(one.id) === key) && !file.ended?.some((one) => one.key === key) && !deps.ownPeer?.(key)) return id;
     }
     throw new LinkedServerError("The link could not be made. Try again.", 500);
   }
@@ -197,12 +200,46 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       after: { direction: event.kind, bot: event.bot, farBot: event.far, handoff: event.id, state, ...(outcome ? { outcome } : {}) } });
   }
 
+  /** The key of the link whose peer started the work under this root: the root's turn is asked by that peer's bot. */
+  function starterKey(rootId: string): string | undefined {
+    if (!rootId.startsWith(LINK_PREFIX)) return undefined;
+    const root = deps.coordinator().node(rootId);
+    return root && !root.parentId && isLinkedId(root.botId) ? parseLinked(root.botId)?.peer : undefined;
+  }
+
+  /** The roots of the open work each link's peer started here, by the link's key. */
+  function openRoots(): Map<string, string[]> {
+    const roots = new Map<string, string[]>();
+    for (const rootId of new Set(deps.coordinator().active().map((node) => node.rootId))) {
+      const key = starterKey(rootId);
+      if (key) roots.set(key, [...(roots.get(key) ?? []), rootId]);
+    }
+    return roots;
+  }
+
+  /** The link ended: the work its peer started here stops, with all that bots here took on from it. */
+  function stopWork(link: BotLink, key: string, reason: string): void {
+    link.stopInbound(reason);
+    for (const rootId of openRoots().get(key) ?? []) deps.coordinator().cancelUnder(rootId, reason);
+  }
+
+  /** Work of an ended link that is still open is stopped again. An ended link with no open work is forgotten. */
+  function settleEnded(): void {
+    if (!file.ended?.length) return;
+    const roots = openRoots();
+    for (const one of file.ended) for (const rootId of roots.get(one.key) ?? []) deps.coordinator().cancelUnder(rootId, REMOVED);
+    const kept = file.ended.filter((one) => roots.has(one.key));
+    if (kept.length === file.ended.length) return;
+    file.ended = kept;
+    save();
+  }
+
   /** The other server answered the joiner's exchange with "not linked": the link is over on both sides. */
   function endedThere(id: string): void {
     const entry = instances.get(id);
     if (!entry?.link.on()) return;
     void entry.dialer?.stop();
-    entry.link.stopInbound(ENDED_THERE);
+    stopWork(entry.link, entry.key, ENDED_THERE);
     entry.link.turnOff(true);
     log("linked servers: the other server ended a link");
   }
@@ -237,7 +274,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
       refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
     });
-    const endsOnBye: BotLink = { ...link, receive: (peer, frames) => { if (frames.some(isBye)) link.stopInbound(ENDED_THERE); link.receive(peer, frames); } };
+    const endsOnBye: BotLink = { ...link, receive: (peer, frames) => { if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
     const entry: Instance = {
       id, key, link,
       dialer: record.role === "joiner" ? dialerFor(id, endsOnBye) : null,
@@ -249,12 +286,13 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return entry;
   }
 
-  /** The links whose peer started the work under this root. A root stays its starter's after the link forgets the work. */
-  function startersOf(rootId: string): Instance[] {
-    if (instances.size === 0 || !rootId.startsWith(LINK_PREFIX)) return [];
-    const root = deps.coordinator().node(rootId);
-    const starter = root && !root.parentId ? root.botId : undefined;
-    return [...instances.values()].filter((entry) => entry.link.ownsRoot(rootId) || entry.link.claims(starter));
+  /** The caps of the links whose peer started the work under this root: a link here now, or one that ended while that
+   * work could still run. A root stays its starter's after the link forgets the work. */
+  function startersOf(rootId: string): ApprovalCap[] {
+    if ((instances.size === 0 && !file.ended?.length) || !rootId.startsWith(LINK_PREFIX)) return [];
+    const key = starterKey(rootId);
+    return [...[...instances.values()].filter((entry) => entry.link.ownsRoot(rootId) || entry.key === key).map(capOf),
+      ...(file.ended ?? []).filter((one) => one.key === key).map((one) => one.cap)];
   }
 
   function chained(node: Pick<HandoffView, "parentId" | "botId" | "rootId">): string | undefined {
@@ -425,11 +463,13 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       const record = recordOf(id);
       if (!record) return false;
       const target = targetOf(record);
-      const entry = instances.get(id);
-      entry?.link.stopInbound(REMOVED);
+      const entry = instances.get(id), key = keyOf(id);
+      if (entry) stopWork(entry.link, key, REMOVED);
       const told = entry?.dialer && record.role === "joiner" ? entry.dialer.stop({ bye: true }) : Promise.resolve(true);
       entry?.link.turnOff(true);
       file.links = file.links.filter((one) => one.id !== id);
+      const ended = (file.ended ?? []).filter((one) => one.key !== key);
+      file.ended = openRoots().has(key) ? [...ended, { key, cap: record.cap, at: now() }].slice(-ENDED_MAX) : ended;
       save();
       instances.delete(id);
       await told.catch(() => false);
@@ -476,10 +516,10 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     /** The approval mode of a turn in this thread: no more than the cap of each link whose work runs in it, or that
      * opened it. */
     capFor(threadId: string, mode: ApprovalMode): ApprovalMode {
-      if (instances.size === 0) return mode;
+      if (instances.size === 0 && !file.ended?.length) return mode;
       const caps = new Set<ApprovalCap>();
       for (const entry of instances.values()) if (entry.link.openedThread(threadId)) caps.add(capOf(entry));
-      for (const node of deps.coordinator().inThread(threadId, { open: true })) for (const entry of startersOf(node.rootId)) caps.add(capOf(entry));
+      for (const node of deps.coordinator().inThread(threadId, { open: true })) for (const cap of startersOf(node.rootId)) caps.add(cap);
       return [...caps].reduce(capMode, mode);
     },
 
@@ -488,8 +528,9 @@ export function createLinkedServers(deps: LinkedServersDeps) {
         entry.link.tidy();
         if (entry.dialer && entry.link.role() === "dialer") entry.dialer.start({ gentle: true });
       }
+      settleEnded();
       if (upkeep) return;
-      upkeep = setInterval(() => { for (const entry of instances.values()) entry.link.tidy(); }, TIDY_MS);
+      upkeep = setInterval(() => { for (const entry of instances.values()) entry.link.tidy(); settleEnded(); }, TIDY_MS);
       upkeep.unref?.();
     },
 

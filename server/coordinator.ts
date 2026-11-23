@@ -222,6 +222,8 @@ export interface Coordinator {
   sharedRequest(node: HandoffView): { id: string; botIds: string[] };
   cancelRoom(groupId: string, threadId?: string, reason?: string, status?: "failed" | "cancelled"): void;
   cancelDirect(threadId: string, reason?: string): void;
+  /** Every unfinished assignment under this root ends, with all it handed on, in whatever thread it runs. */
+  cancelUnder(rootId: string, reason: string): void;
   activeDirect(threadId: string): boolean;
   assignerOf(threadId: string): HandoffView | undefined;
   outstandingDirect(threadId: string): HandoffView[];

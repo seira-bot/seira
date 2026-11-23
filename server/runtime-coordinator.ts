@@ -457,6 +457,11 @@ export class RuntimeCoordinator implements Coordinator {
     this.stopFor(reason, () => { for (const n of this.live()) if (this.direct(n, threadId)) this.runtime.cancel(n.id, reason, "stopped"); });
   }
 
+  cancelUnder(rootId: string, reason: string): void {
+    this.ready();
+    this.stopFor(reason, () => { for (const n of this.live()) if (n.rootId === rootId && !isTerminal(this.store.get(n.id) ?? n)) this.runtime.cancel(n.id, reason, "stopped"); });
+  }
+
   /** With no reason given, the stop is the person's, unless it is part of a stop already under way: see stopFor. */
   stopAwaitingDirect(threadId: string, reason?: string): void {
     this.ready();
