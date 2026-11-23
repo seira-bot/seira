@@ -25,9 +25,9 @@ export const FILE_IDLE_MS = 60_000;
 const FAR_REFUSED = "the other side did not take or give the file";
 const PROBE_MAX = 4_096;
 
-/** The body of `response` as text, or null when it is longer than `max` bytes or breaks off. */
-export async function readCapped(response: Response, max: number): Promise<string | null> {
-  if (!response.body) return null;
+/** The body of `response` as text, or null when it is longer than `max` bytes (`over`) or breaks off; and the bytes read. */
+async function readUpTo(response: Response, max: number): Promise<{ text: string | null; bytes: number; over: boolean }> {
+  if (!response.body) return { text: null, bytes: 0, over: false };
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let bytes = 0;
@@ -36,20 +36,31 @@ export async function readCapped(response: Response, max: number): Promise<strin
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > max) { await reader.cancel().catch(() => {}); return null; }
+      if (bytes > max) { await reader.cancel().catch(() => {}); return { text: null, bytes, over: true }; }
       chunks.push(value);
     }
-  } catch { return null; }
-  return Buffer.concat(chunks).toString("utf8");
+  } catch { return { text: null, bytes, over: false }; }
+  return { text: Buffer.concat(chunks).toString("utf8"), bytes, over: false };
 }
+/** The body of `response` as text, or null when it is longer than `max` bytes or breaks off. */
+export const readCapped = async (response: Response, max: number): Promise<string | null> => (await readUpTo(response, max)).text;
 const readJson = async (response: Response, max: number | undefined): Promise<unknown> => {
   if (max === undefined) return response.json();
   const text = await readCapped(response, max);
   if (text === null) throw new Error("the answer was too large or did not arrive whole");
   return JSON.parse(text);
 };
-const isWorkFrame = (frame: Frame) => frame.t === "handoff" || frame.t === "result" || frame.t === "cancel";
+export const isWorkFrame = (frame: Frame) => frame.t === "handoff" || frame.t === "result" || frame.t === "cancel";
 const workIn = (frames: readonly Numbered[]) => frames.filter(({ frame }) => isWorkFrame(frame)).length;
+
+/** How one side of a guest link paces what it sends the other. */
+export interface SendPace {
+  /** How many of `frames`, from the first, go now, and when some must wait, in how many milliseconds more may go. */
+  next(frames: readonly Numbered[]): { count: number; waitMs: number };
+  sent(frames: readonly Numbered[]): void;
+  /** The other side took `taken` of the `work` work frames of the last batch. */
+  took(work: number, taken: number): void;
+}
 
 export interface DialerOptions {
   link: BotLink;
@@ -73,6 +84,11 @@ export interface DialerOptions {
   room?(to: string, bytes: number): (() => void) | null;
   /** The largest answer read, in bytes. Absent: any. */
   answerMax?: number;
+  /** A guest link's budget of answer bytes read in a window, with `answerMax`: an answer is read only up to what is left.
+   * One that is longer is not taken, and the next exchange waits until a whole `answerMax` fits. */
+  reads?: { left(): number; spend(bytes: number): void; waitFor(bytes: number): number };
+  /** A guest link's pace for what this side sends. */
+  sends?: SendPace;
   /** The least time from one answer that came at once to the next exchange, and between two new sessions. Absent: none. */
   pace?: { gapMs: number; freshMs: number };
   /** How long a file's bytes may stop before the file is given up. Absent: only the time limit of the whole file. */
@@ -80,9 +96,9 @@ export interface DialerOptions {
 }
 
 export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH }, farText = true,
-  takes, budget, room, answerMax, pace, fileIdleMs }: DialerOptions) {
+  takes, budget, room, answerMax, reads, sends, pace, fileIdleMs }: DialerOptions) {
   let running = false, stopped = true, asleep = false, needsPairing = false;
-  let lastStart = 0, lastEnd = 0, lastFresh = Number.NEGATIVE_INFINITY;
+  let lastStart = 0, lastEnd = 0, lastFresh = Number.NEGATIVE_INFINITY, roomAt = 0, paceWait = 0;
   let session = "", ack = 0, fresh = true, retryMs = firstRetryMs, slowMs = firstRetryMs, narrow = Number.POSITIVE_INFINITY;
   let held: AbortController | null = null;
   let wakeUp: (() => void) | null = null;
@@ -91,9 +107,11 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     timer.unref?.();
     wakeUp = () => { clearTimeout(timer); wakeUp = null; resolve(); };
   });
-  /** What waits to go, cut before the first work frame the other side's budget, or a batch it refused, has no room for. */
+  /** What waits to go, cut before the first work frame the other side's budget, or a batch it refused, has no room for,
+   * or that the pace holds back. */
   const toSend = (peer: string): Numbered[] => {
     const all = link.outgoing(peer, 0);
+    paceWait = 0;
     if (!budget) return all;
     let room = Math.min(budget.left(), narrow), end = 0;
     for (; end < all.length; end += 1) {
@@ -101,7 +119,10 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
       if (room <= 0) break;
       room -= 1;
     }
-    return all.slice(0, end);
+    if (!sends) return all.slice(0, end);
+    const next = sends.next(all.slice(0, end));
+    paceWait = next.count < end ? next.waitMs : 0;
+    return all.slice(0, next.count);
   };
 
   /** A file's bytes, over requests of this computer's: put before the frame that names it, got after one that does. An
@@ -157,15 +178,40 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
   const stopListening = link.onOutgoing(() => { held?.abort(); });
   const stopWanted = link.onWanted(() => { if (stopped) return; asleep = false; retryMs = firstRetryMs; wakeUp?.(); });
 
-  /** One exchange. True when the other side took less than was sent, or this side took less than it was sent: the next
-   * exchange waits, so a spent budget is not asked again at once. */
+  /** How many frames of `sending` the other side took, as its answer says. */
+  function sent(peer: string, sending: readonly Numbered[], response: Response): number {
+    const said = Number(response.headers.get(TAKEN_HEADER) ?? Number.NaN);
+    const taken = Number.isSafeInteger(said) && said >= 0 ? Math.min(said, sending.length) : budget ? 0 : sending.length;
+    link.outgoing(peer, sending[taken - 1]?.seq ?? 0);
+    budget?.spend(workIn(sending.slice(0, taken)));
+    sends?.sent(sending);
+    sends?.took(workIn(sending), workIn(sending.slice(0, taken)));
+    if (taken === sending.length) narrow *= 2;
+    return taken;
+  }
+
+  /** The answer's body, read up to what `reads` has left. Undefined when it is longer than that: then nothing of it is
+   * taken, and the next exchange waits for room. */
+  async function answerOf(response: Response): Promise<unknown> {
+    if (answerMax === undefined) return response.json();
+    const room = reads ? Math.min(answerMax, reads.left()) : answerMax;
+    const read = await readUpTo(response, room);
+    reads?.spend(Math.min(read.bytes, room));
+    if (read.over && reads && room < answerMax) { roomAt = Date.now() + reads.waitFor(answerMax); return undefined; }
+    if (read.text === null) throw new Error("the answer was too large or did not arrive whole");
+    return JSON.parse(read.text);
+  }
+
+  /** One exchange. True when the other side answered 429, or without `sends`, when the other side took less than was
+   * sent or this side took less than it was sent: the next exchange waits, so a spent budget is not asked again at once.
+   * With `sends`, its pause does that. */
   async function exchange(target: { origin: string; token: string }, peer: string): Promise<boolean> {
     if (fresh) { lastFresh = Date.now(); link.sessionStarted(peer); }
     const sending = toSend(peer);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), holdMs + 15_000);
     timeout.unref?.();
-    const wait = sending.length > 0 || fresh ? 0 : holdMs;
+    const wait = sending.length > 0 || fresh ? 0 : paceWait > 0 ? Math.min(holdMs, Math.ceil(paceWait)) : holdMs;
     if (wait > 0) held = controller;
     let response: Response;
     try {
@@ -200,13 +246,11 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
       if (response.status === 429 && budget) { link.setOnline(peer, false); if (workIn(sending) > 0) narrow = Math.max(1, Math.floor(Math.min(narrow, workIn(sending)) / 2)); return true; }
       throw new Error(`the Cloud answered ${response.status}`);
     }
-    const answer = syncAnswer.safeParse(await readJson(response, answerMax));
+    const body = await answerOf(response);
+    if (body === undefined) { sent(peer, sending, response); return false; }
+    const answer = syncAnswer.safeParse(body);
     if (!answer.success) throw new Error("the Cloud's answer did not parse");
-    const said = Number(response.headers.get(TAKEN_HEADER) ?? Number.NaN);
-    const taken = Number.isSafeInteger(said) && said >= 0 ? Math.min(said, sending.length) : budget ? 0 : sending.length;
-    link.outgoing(peer, sending[taken - 1]?.seq ?? 0);
-    budget?.spend(workIn(sending.slice(0, taken)));
-    if (taken === sending.length) narrow *= 2;
+    const taken = sent(peer, sending, response);
     if (answer.data.session !== session) {
       const restarted = session !== "";
       session = answer.data.session; ack = 0;
@@ -220,7 +264,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     const count = Math.min(intake.count, news.length);
     try { link.receive(peer, intake.frames); } catch (error) { intake.undo?.(); throw error; }
     ack = Math.max(ack, ...news.slice(0, count).map((entry) => entry.seq));
-    return taken < sending.length || count < news.length;
+    return !sends && (taken < sending.length || count < news.length);
   }
 
   async function loop(): Promise<void> {
@@ -231,7 +275,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
         const target = link.dial(), peer = link.cloudPeer();
         if (!target || !peer || needsPairing) break;
         if (asleep) { await pause(24 * 60 * 60_000); continue; }
-        const due = pace ? Math.max(fresh ? lastFresh + pace.freshMs : 0, lastEnd - lastStart < pace.gapMs ? lastEnd + pace.gapMs : 0) - Date.now() : 0;
+        const due = Math.max(pace ? Math.max(fresh ? lastFresh + pace.freshMs : 0, lastEnd - lastStart < pace.gapMs ? lastEnd + pace.gapMs : 0) : 0, roomAt) - Date.now();
         if (due > 0) { await pause(due); continue; }
         try {
           lastStart = Date.now();

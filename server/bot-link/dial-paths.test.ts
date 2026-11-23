@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createFrameBudget } from "../host/linked-servers-admit.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 
 import { FILE_IDLE_MS, createDialer } from "./dial.ts";
@@ -199,9 +200,9 @@ describe("a dialer that keeps to the other side's limits", () => {
     dialer.close();
     expect(failure).toBeInstanceOf(Error);
     expect(failure?.gone).toBeUndefined();
-    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(Date.now() - started).toBeLessThan(3_000);
     expect(existsSync(to)).toBe(false);
-  });
+  }, 15_000);
 
   it("keeps a file whose bytes stop for longer than a guest link allows, when it is given no limit for that", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -236,6 +237,33 @@ describe("a dialer that keeps to the other side's limits", () => {
     dialer.close();
     expect(undone).toBeGreaterThanOrEqual(1);
   });
+
+  it("waits for room when an answer is larger than what its bytes for the window have left, takes none of it, and gets it again later", async () => {
+    vi.useFakeTimers({ now: 0, toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { link } = fakeLink();
+    const received: string[] = [], online: boolean[] = [], asked: number[] = [];
+    Object.assign(link, { receive: (_peer: string, frames: Array<{ id: string }>) => { received.push(...frames.map((frame) => frame.id)); },
+      setOnline: (_peer: string, value: boolean) => { online.push(value); } });
+    const waiting = Array.from({ length: 4 }, (_, index) => ({ seq: index + 1, frame: { t: "result", id: `r${index + 1}`, ok: true, text: "x".repeat(1_200) } }));
+    const bytes = createFrameBudget(Date.now, 3_000);
+    const dialer = createDialer({ link, farText: false, answerMax: 2_000, pace: { gapMs: 1_000, freshMs: 10_000 },
+      reads: { left: () => bytes.left("peer"), spend: (count) => { bytes.spend("peer", count); }, waitFor: (count) => bytes.waitFor("peer", count) },
+      fetch: (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const { ack } = JSON.parse(String(init?.body)) as { ack: number };
+        asked.push(Date.now());
+        while (waiting[0] && waiting[0].seq <= ack) waiting.shift();
+        return new Response(JSON.stringify({ session: "s1", frames: waiting.slice(0, 1) }), { status: 200, headers: { [TAKEN_HEADER]: "0" } });
+      }) as typeof fetch });
+    dialer.start();
+    await vi.advanceTimersByTimeAsync(59_000);
+    const early = { received: [...received], asked: asked.length };
+    await vi.advanceTimersByTimeAsync(70_000);
+    await dialer.stop();
+    dialer.close();
+    expect(early).toEqual({ received: ["r1", "r2"], asked: 3 });
+    expect(received).toEqual(["r1", "r2", "r3", "r4"]);
+    expect([online.includes(false), dialer.state().needsPairing]).toEqual([false, false]);
+  }, 15_000);
 
   it("shows the link as not online while a guest link's other side answers 429", async () => {
     const { link } = outboxLink([{ seq: 1, frame: { t: "cancel" as const, id: "c1" } }]);

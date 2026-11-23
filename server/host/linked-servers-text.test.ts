@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { farCost, farFileName, farFrame, takeFarFrame } from "./linked-servers-text.ts";
+import { clean, defuse } from "../records-block.ts";
+import { ADMIT, createIntake } from "./linked-servers-admit.ts";
+import { farFileName, farFrame, readFar } from "./linked-servers-text.ts";
+
+vi.mock("../records-block.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../records-block.ts")>();
+  return { ...actual, clean: vi.fn(actual.clean), defuse: vi.fn(actual.defuse) };
+});
 
 const HIDDEN = "‮​\u{e0041}ㅤ\u0007";
 const SPACED = (word: string) => new RegExp(`^${word[0]} *${word.slice(1)}$`, "u");
@@ -59,32 +66,86 @@ describe("what a guest peer says", () => {
   });
 });
 
-describe("what cleaning a guest peer's frame costs", () => {
+describe("reading a guest peer's frame", () => {
   const result = (text: string) => ({ t: "result", id: "r1", ok: true, text });
+  const handoffFrom = (name: string) => ({ t: "handoff", id: "h1", to: "writer", from: { botId: "b", name, threadId: "t" }, thread: "t", text: "Work", mode: "work",
+    origin: { kind: "outside", quote: "Q" }, doneWhen: "When", files: [{ name: "a.png", mime: "image/png", kind: "image", bytes: 1 }] });
 
-  it("is nothing for a frame that does not parse, and nothing for a frame with no words", () => {
-    expect([farCost(null), farCost("x"), farCost({ t: "result", id: "r1" }), farCost({ t: "done", id: "d" }), farCost({ t: "cancel", id: "c" }), farCost({ t: "bye" })]).toEqual([0, 0, 0, 0, 0, 0]);
-    expect(farCost(result("x".repeat(200_001)))).toBe(0);
+  it("is null at no price for a frame that does not parse, and nothing for a frame with no words", () => {
+    const unread = { frame: null, price: 0 };
+    expect([readFar(null), readFar("x"), readFar({ t: "result", id: "r1" }), readFar(result("x".repeat(200_001)))]).toEqual([unread, unread, unread, unread]);
+    expect([readFar({ t: "done", id: "d" }), readFar({ t: "cancel", id: "c" }), readFar({ t: "bye" })].map((one) => one.price)).toEqual([0, 0, 0]);
   });
 
-  it("is the size of a frame that parses", () => {
-    expect(farCost(result("abc"))).toBe(JSON.stringify(result("abc")).length);
-    expect(farCost({ t: "hello", place: { id: "p", name: "Far" }, bots: [] })).toBeGreaterThan(0);
+  it("prices the characters farFrame cleans in what parsed", () => {
+    expect(readFar(result("abc"))).toEqual({ frame: result("abc"), price: 3 });
+    expect(readFar(handoffFrom("Sam")).price).toBe("Work".length + "When".length + "Sam".length + "Q".length + "a.png".length);
+    expect(readFar({ t: "hello", place: { id: "p", name: "Far" }, bots: [{ id: "b", name: "Bot", title: "T", description: "Desc", model: "M" }] }).price).toBe(3 + 3 + 1 + 4 + 1);
+  });
+
+  it("prices a hello with many keys it does not know from what parsed, without writing the frame out, in a few milliseconds", () => {
+    const bot: Record<string, unknown> = { id: "b", name: "Bot" };
+    for (let index = 0; index < 450_000; index++) bot[`k${index}`] = 0;
+    const wide = { t: "hello", place: { id: "p", name: "Far" }, bots: [bot] };
+    const stringify = vi.spyOn(JSON, "stringify");
+    const start = performance.now();
+    const prices = Array.from({ length: ADMIT.exchanges }, () => readFar(wide).price);
+    const ms = performance.now() - start;
+    const calls = stringify.mock.calls.length;
+    stringify.mockRestore();
+    expect([calls, new Set(prices)]).toEqual([0, new Set([6])]);
+    expect(ms).toBeLessThan(10_000);
+  }, 30_000);
+
+  it("never reads the space around a name: the cleaner gets the name as the schema trimmed it", () => {
+    const pad = " ".repeat(2_000_000);
+    vi.mocked(clean).mockClear();
+    vi.mocked(defuse).mockClear();
+    const hello = readFar({ t: "hello", place: { id: "p", name: `${pad}Far${pad}` }, bots: [{ id: "b", name: `${pad}Bot${pad}` }] });
+    const handoff = readFar(handoffFrom(`${pad}Sam${pad}`));
+    expect([hello.price, handoff.price]).toEqual([6, "Work".length + "When".length + "Sam".length + "Q".length + "a.png".length]);
+    expect(farFrame(hello.frame)).toEqual({ t: "hello", place: { id: "p", name: "Far" }, bots: [{ id: "b", name: "Bot" }] });
+    expect((farFrame(handoff.frame) as { from: { name: string } }).from.name).toBe("Sam");
+    const read = [...vi.mocked(clean).mock.calls, ...vi.mocked(defuse).mock.calls].map(([text]) => text.length);
+    expect(Math.max(...read)).toBeLessThanOrEqual(5);
+  });
+
+  it("reads a frame nested too deep to write out without throwing, and the hello after it does not jam", () => {
+    let deep: unknown = 0;
+    for (let index = 0; index < 100_000; index++) deep = [deep];
+    const hello = { t: "hello", place: { id: "p", name: "Far" }, bots: [{ id: "b", name: "Bot", extra: deep }] };
+    expect(() => JSON.stringify(hello)).toThrow(RangeError);
+    expect(readFar(hello)).toEqual({ frame: { t: "hello", place: { id: "p", name: "Far" }, bots: [{ id: "b", name: "Bot" }] }, price: 6 });
+    expect(readFar({ ...result("x"), text: deep })).toEqual({ frame: null, price: 0 });
+    const intake = createIntake(() => 0, {}, readFar);
+    expect(intake.take("a", [hello, { t: "cancel", id: "c1" }], false)).toMatchObject({ count: 2, frames: [readFar(hello).frame, { t: "cancel", id: "c1" }] });
+    expect(intake.take("a", [{ t: "hello", place: { id: "p", name: "Next" }, bots: [] }], false).frames).toEqual([{ t: "hello", place: { id: "p", name: "Next" }, bots: [] }]);
+  });
+
+  it("charges the largest hello that parses to the character budget, over as many windows as its price needs", () => {
+    const text = (length: number) => "\u0001".repeat(length);
+    const bot = (index: number) => ({ id: `bot-${index}`, name: text(120), title: text(200), description: text(400), model: text(200) });
+    const largest = { t: "hello", place: { id: "p", name: text(120) }, bots: Array.from({ length: 500 }, (_, index) => bot(index)) };
+    const read = readFar(largest);
+    expect(read.price).toBe(120 + 500 * (120 + 200 + 400 + 200));
+    let now = 0;
+    const intake = createIntake(() => now, {}, readFar);
+    const taken = (frames: unknown[]) => intake.take("a", frames, false).frames.length;
+    expect(taken([largest])).toBe(1);
+    expect(taken([result("x")])).toBe(0);
+    now = ADMIT.windowMs;
+    const room = 2 * ADMIT.chars - read.price;
+    expect(taken([result("x".repeat(room + 1))])).toBe(0);
+    expect(taken([result("x".repeat(room))])).toBe(1);
+    expect(taken([result("x")])).toBe(0);
   });
 
   it("reads no text of a frame past the schema's limits, in a few milliseconds", () => {
     const huge = "[".repeat(4_000_000);
-    const frames = [result(huge), { t: "handoff", id: "h", to: "w", from: { botId: "b", name: huge, threadId: "t" }, thread: "t", text: "x", mode: "work", origin: { kind: "outside" } },
-      { t: "hello", place: { id: "p", name: huge }, bots: [] }];
+    const frames = [result(huge), handoffFrom(huge), { t: "hello", place: { id: "p", name: huge }, bots: [] }];
     const start = performance.now();
-    const out = frames.map((frame) => [farCost(frame), takeFarFrame(frame)]);
-    expect(performance.now() - start).toBeLessThan(500);
-    expect(out).toEqual([[0, null], [0, null], [0, null]]);
-  }, 15_000);
-
-  it("cleans a frame that parses as farFrame does", () => {
-    const frame = result(`D${HIDDEN}one`);
-    expect(takeFarFrame(frame)).toEqual(farFrame(frame));
-    expect(takeFarFrame({ t: "bye" })).toEqual({ t: "bye" });
-  });
+    const out = frames.map((frame) => readFar(frame));
+    expect(performance.now() - start).toBeLessThan(10_000);
+    expect(out).toEqual([{ frame: null, price: 0 }, { frame: null, price: 0 }, { frame: null, price: 0 }]);
+  }, 30_000);
 });

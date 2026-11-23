@@ -34,6 +34,9 @@ export const SEEN_MS = HOLD_MS + 20_000;
 export const LINK_EXPIRES_MS = 30 * 24 * 60 * 60_000;
 /** One exchange carries about this much; what is left goes with the next. */
 export const EXCHANGE_BYTES = 1_500_000;
+/** The largest request or answer a guest link reads, in bytes: a full exchange of characters that take three bytes each,
+ * or the largest frame that parses with each character escaped to six bytes. */
+export const GUEST_EXCHANGE_MAX = 5_500_000;
 /** Computers one Cloud links at a time. */
 export const PEERS_MAX = 10;
 export const BRIEF_MAX = 12_000;

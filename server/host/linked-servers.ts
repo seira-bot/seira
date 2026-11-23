@@ -14,9 +14,13 @@
 //   ADMIT.windowMs; more get 429. The joiner waits JOINER_PACE between them, so it stays well below both.
 // - Both sides are guests to each other, so the inviter and the joiner each apply these limits to the frames the other
 //   sends: of one exchange or answer, a side takes the frames up to the first work frame (hand-off, cancel, result)
-//   past ADMIT.frames in ADMIT.windowMs, and no work frame while ADMIT.outbox frames for the other side wait. The rest
-//   is not acknowledged, so the other side sends it again later. Of the hellos taken, only the last of a batch is
-//   applied, and at most ADMIT.hellos in ADMIT.windowMs.
+//   past ADMIT.frames in ADMIT.windowMs, or past ADMIT.chars characters to clean, and no work frame while ADMIT.outbox
+//   frames for the other side wait. The rest is not acknowledged, so the other side sends it again later. Of the hellos
+//   taken, only the last of a batch is kept, and at most ADMIT.hellos are read in ADMIT.windowMs.
+// - Each side reads at most GUEST_EXCHANGE_MAX bytes in one request or answer, and ADMIT.bytes in ADMIT.windowMs. The
+//   inviter answers a request past that 429 before it reads it; the joiner waits before its next exchange. A frame
+//   is priced and cleaned from what parsed. Each side sends at most ADMIT.sendBytes in ADMIT.windowMs of work frames
+//   (a hello and the other frames without work are outside it), so an honest pair stays within both. Each link writes at most 20 log lines a minute.
 // - What a peer says (its place and bots, a hand-off's sender, words and file names, a result's words and file names)
 //   loses its invisible and control characters before this server takes it (farFrame).
 // - A frame whose file is larger than FILE_MAX_BYTES is dropped. The files of a link waiting here, put by the other side
@@ -46,9 +50,9 @@ import { z } from "zod";
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import type { EgressDeps } from "../a2a/egress.ts";
 import { serveA2a } from "../a2a/inbound.ts";
-import { FILE_IDLE_MS, createDialer, readCapped } from "../bot-link/dial.ts";
+import { FILE_IDLE_MS, createDialer, readCapped, type SendPace } from "../bot-link/dial.ts";
 import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
-import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
+import { GUEST_EXCHANGE_MAX, LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
 import { json, readBody } from "../harness/http.ts";
@@ -57,10 +61,10 @@ import { createLinkExchange } from "../routes/bot-link-exchange.ts";
 import type { RouteContext } from "../routes/table.ts";
 import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
-import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
+import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, createSendPace, kindOf, limitLog } from "./linked-servers-admit.ts";
 import { FULL_HERE, LinkedServerError, a2aKey, createLinkedA2a, type A2aInput, type A2aPatch, type A2aPeerView, type CardUrl } from "./linked-a2a.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
-import { farCost, farFileName, takeFarFrame } from "./linked-servers-text.ts";
+import { farFileName, farFrame, readFar } from "./linked-servers-text.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
@@ -88,8 +92,6 @@ const NOT_NOW = "The link could not be made now. Try again later.";
 const FALLBACK_NAME = "Another Seira";
 const SELF_FALLBACK = "Seira";
 const ANSWER_MAX = 64 * 1024;
-/** The largest exchange answer a joiner reads: a full exchange, in characters that take up to three bytes each. */
-const EXCHANGE_ANSWER_MAX = 8 * 1024 * 1024;
 const JOIN_MS = 10_000;
 /** At most 60 exchanges and 6 new sessions a minute: half of ADMIT.exchanges and ADMIT.sessions, so restarts fit too. */
 const JOINER_PACE = { gapMs: 1_000, freshMs: 10_000 };
@@ -160,8 +162,9 @@ export interface LinkedServersDeps extends InstanceDeps {
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
   timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
   /** Smaller limits for tests: a link's files waiting here, its work frames, hellos and characters to clean in a window, its frames
-   * waiting here, and its joiner's exchanges and new sessions in a window. */
-  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; chars?: number; exchanges?: number; sessions?: number };
+   * waiting here, its joiner's exchanges and new sessions in a window, and the bytes this side reads from it and sends it in
+   * a window. */
+  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; chars?: number; exchanges?: number; sessions?: number; bytes?: number; sendBytes?: number };
   /** Links to A2A agents. `allowLoopback`: tests only, an agent on this machine's loopback at http. `origin`: the address
    * those agents reach this server at, when it is not `publicOrigin`. `holdMs`: a shorter hold of a call, for tests. */
   a2a?: { allowLoopback?: boolean; origin?(): string | null; egress?: EgressDeps; holdMs?: number; cleanChars?: number };
@@ -186,8 +189,10 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const instances = new Map<string, Instance>();
   const admission = createAdmission(now);
   const refusals = createRefusalRecord(now);
-  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos, chars: deps.limits?.chars }, farCost);
+  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos, chars: deps.limits?.chars }, readFar);
   const sent = createFrameBudget(now, deps.limits?.frames);
+  const bytesIn = createFrameBudget(now, deps.limits?.bytes ?? ADMIT.bytes);
+  const sendPace = createSendPace(now, { bytes: deps.limits?.sendBytes });
   const heldBack = createRefusalRecord(now);
   const pace = createPace(now, { exchanges: deps.limits?.exchanges, sessions: deps.limits?.sessions });
   const outboxMax = deps.limits?.outbox ?? ADMIT.outbox;
@@ -294,7 +299,14 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return taken;
   }
 
-  function dialerFor(id: string, key: string, dataDir: string, link: BotLink) {
+  /** What this side sends the link, paced. */
+  const sendsOf = (id: string): SendPace => ({
+    next: (frames) => sendPace.next(id, frames),
+    sent: (frames) => sendPace.sent(id, frames),
+    took: (work, taken) => sendPace.took(id, work, taken),
+  });
+
+  function dialerFor(id: string, key: string, dataDir: string, link: BotLink, linkLog: (line: string) => void) {
     const ask = deps.fetch ?? fetch;
     const watched = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const response = await ask(input, init);
@@ -302,17 +314,18 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if ((response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
       return response;
     }) as typeof fetch;
-    return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => log("linked servers: the other server could not be reached; trying again"),
+    return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => linkLog("linked servers: the other server could not be reached; trying again"),
       takes: (frames) => intakeOf(id, frames, link.backlog(key, 0) >= outboxMax),
       budget: { left: () => sent.left(id), spend: (frames) => sent.spend(id, frames) },
-      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: EXCHANGE_ANSWER_MAX, pace: timing.pace ?? JOINER_PACE, fileIdleMs: FILE_IDLE_MS,
+      reads: { left: () => bytesIn.left(id), spend: (bytes) => { bytesIn.spend(id, bytes); }, waitFor: (bytes) => bytesIn.waitFor(id, bytes) }, sends: sendsOf(id),
+      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: GUEST_EXCHANGE_MAX, pace: timing.pace ?? JOINER_PACE, fileIdleMs: FILE_IDLE_MS,
       ...(timing.holdMs ? { holdMs: timing.holdMs } : {}), ...(timing.firstRetryMs ? { firstRetryMs: timing.firstRetryMs } : {}) });
   }
 
   /** A guest link in `dataDir`: its peer's turns here run at no more than `cap`. */
-  function guestLink(dataDir: string, policy: LinkPolicy, cap: () => ApprovalCap, linkFiles?: BotLinkDeps["files"]): BotLink {
+  function guestLink(dataDir: string, policy: LinkPolicy, cap: () => ApprovalCap, linkLog: (line: string) => void, linkFiles?: BotLinkDeps["files"]): BotLink {
     return createBotLink({
-      dataDir, policy, now, log,
+      dataDir, policy, now, log: linkLog,
       coordinator: deps.coordinator, bots: deps.bots, bot: deps.bot,
       level: (bot) => capMode(deps.level(bot), cap()),
       openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
@@ -321,7 +334,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   }
 
   function open(record: StoredLink): Instance {
-    const { id } = record, key = keyOf(id), dataDir = instanceDir(deps.dataDir, id);
+    const { id } = record, key = keyOf(id), dataDir = instanceDir(deps.dataDir, id), linkLog = limitLog(log, now);
     ensurePrivateDir(dataDir);
     const policy: LinkPolicy = {
       key,
@@ -332,15 +345,17 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       record: (event) => { const known = recordOf(id); if (known) recordEvent(id, { target: targetOf(known), actor: peerActor(known) }, event); },
     };
     const cap = () => recordOf(id)?.cap ?? "ask";
-    const link = guestLink(dataDir, policy, cap, files);
-    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(takeFarFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const link = guestLink(dataDir, policy, cap, linkLog, files);
+    const endsOnBye: BotLink = { ...link, receive: (peer, read) => { const frames = read.map(farFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
     const takes = (frames: readonly unknown[], ack: number) => intakeOf(id, frames, link.backlog(key, ack) >= outboxMax);
     const entry: Instance = {
       id, key, link, cap,
-      dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye) : null,
+      dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye, linkLog) : null,
       exchange: record.role === "inviter"
         ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
-          pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) }, fileName: farFileName, log, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+          pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) },
+          bytes: { max: GUEST_EXCHANGE_MAX, spend: (bytes) => { if (bytesIn.left(id) < bytes) return false; bytesIn.spend(id, bytes); return true; }, left: () => bytesIn.left(id), giveBack: (bytes) => bytesIn.giveBack(id, bytes) }, sends: sendsOf(id),
+          fileName: farFileName, log: linkLog, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };
     instances.set(id, entry);
@@ -417,9 +432,10 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       file.links = file.links.filter((one) => one !== record);
       const entry = instances.get(id);
       if (entry) { instances.delete(id); try { shut(entry); } catch { /* closing anyway */ } }
+      try { rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true }); } catch { /* a folder no link names is never read */ }
       delete invite.usedAt;
       file.invites.push(invite);
-      try { save(); } catch { /* the stored file still has the invite */ }
+      try { save(); } catch { /* a link kept on disk is of no use: its credential was never sent */ }
       throw error;
     }
   }
@@ -478,7 +494,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   const a2a = createLinkedA2a({
     dataDir: deps.dataDir, now, log, audit: deps.audit, coordinator: deps.coordinator, bot: deps.bot,
-    link: (dataDir, policy, cap) => guestLink(dataDir, policy, cap),
+    link: (dataDir, policy, cap) => guestLink(dataDir, policy, cap, limitLog(log, now)),
     register: (id, key, link, cap) => { instances.set(id, { id, key, link, cap, dialer: null, exchange: null }); },
     unregister: (id) => { instances.delete(id); },
     admit: (id, openCount) => admission.admit(id, openCount),
@@ -580,6 +596,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       refusals.forget(id);
       intake.forget(id);
       sent.forget(id);
+      bytesIn.forget(id);
+      sendPace.forget(id);
       heldBack.forget(id);
       pace.forget(id);
       rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true });
