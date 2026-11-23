@@ -67,6 +67,8 @@ export interface CliOptions {
   relay?: boolean;
   /** `serve --lan`: every private address of this machine, plain http, each connection held to private ends. */
   lan?: boolean;
+  /** `serve --access-log`: the server writes one line for each request it answers. */
+  accessLog?: boolean;
   client: boolean;
   pair: boolean;
   revoke?: string;
@@ -146,6 +148,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       else if (arg === "--public-url") options.publicUrl = value().replace(/\/+$/, "");
       else if (arg === "--tailscale") options.tailscale = true;
       else if (arg === "--lan") options.lan = true;
+      else if (arg === "--access-log") options.accessLog = true;
       else if (arg === "--domain") {
         const domain = normalizeDomainOption(value());
         if (typeof domain !== "string") return domain;
@@ -698,6 +701,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   if (lanRefusal) log(lanRefusal);
   if (options.lan && !lanRefusal) env.SEIRA_LAN = "1";
   else delete env.SEIRA_LAN;
+  if (options.accessLog) env.SEIRA_ACCESS_LOG = "1";
   let logPath: string | undefined;
   let logFd: number | undefined;
   let tailscaleShare: { origin: string; stop(): Promise<void> } | null = null;

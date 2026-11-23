@@ -216,6 +216,18 @@ describe("CLI startup lifecycle", () => {
     expect(running.stop).toHaveBeenCalledOnce();
   });
 
+  it("sets SEIRA_ACCESS_LOG for the server child only with --access-log (FR-373)", async () => {
+    mocks.tunnelAccess.mockReturnValue(null);
+    const envOf = async (extra: object) => {
+      let started: NodeJS.ProcessEnv = {};
+      mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
+      await expect(runServe({ ...options, ...extra }, vi.fn())).rejects.toThrow("Fixture spawn failure");
+      return started;
+    };
+    expect((await envOf({ accessLog: true })).SEIRA_ACCESS_LOG).toBe("1");
+    expect((await envOf({})).SEIRA_ACCESS_LOG).toBeUndefined();
+  });
+
   it("serves on the LAN without a tunnel when a signed-in machine gets no address (FR-221)", async () => {
     const reason = "Secure HTTPS links are temporarily full. Try again in 10 minutes, or pair on this Wi-Fi or with Tailscale.";
     const service = { retry: vi.fn(async () => ({ status: "error", message: reason })), restore: vi.fn(), dispose: vi.fn() };
