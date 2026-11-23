@@ -319,11 +319,17 @@ describe("the session cookie name", () => {
     expect(prefixed).toMatch(/^__Host-n=; .*Max-Age=0; Secure$/);
   });
 
-  it("reads the __Host- cookie first and the old name only when it is absent", () => {
-    expect(presentedSessionCookie("n=old; __Host-n=new", "n")).toBe("new");
-    expect(presentedSessionCookie("__Host-n=new; n=junk", "n")).toBe("new");
-    expect(presentedSessionCookie("n=old", "n")).toBe("old");
-    expect(presentedSessionCookie(undefined, "n")).toBeUndefined();
+  it("reads only the __Host- cookie on https", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", true)).toBe("new");
+    expect(presentedSessionCookie("__Host-n=new; n=junk", "n", true)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", true)).toBeUndefined();
+    expect(presentedSessionCookie(undefined, "n", true)).toBeUndefined();
+  });
+
+  it("reads the __Host- cookie first and the unprefixed name when it is absent on http", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", false)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", false)).toBe("old");
+    expect(presentedSessionCookie(undefined, "n", false)).toBeUndefined();
   });
 });
 
@@ -364,7 +370,21 @@ describe("resolveRequestAuth", () => {
     expect(preview(pairedSession().token).auth?.kind).toBe("session");
   });
 
-  it("still accepts a session that has only the old cookie name", () => {
+  it("does not accept a valid session that has only the old cookie name on https", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}` }).auth).toBeNull();
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}; __Host-${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("accepts the __Host- cookie on https, and ignores a same-name cookie without the prefix", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `__Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+    expect(resolve({ ...https, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+  });
+
+  it("accepts the unprefixed cookie name on plain http", () => {
     const { token } = pairedSession();
     const old = resolve({ host: "bots.example.com", origin: "http://bots.example.com", cookie: `${cookieName}=${token}` });
     expect(old.auth?.kind).toBe("session");
