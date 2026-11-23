@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { emptyAgent, type ImportAgent, type ImportEvent, type ImportLeftover } from "../../shared/ai-import/bundle.ts";
+import { isHermesExport, readHermesExport } from "./hermes-export.ts";
 import { collectSkills, everySchedule, routineFrom, textSchedule, toolFromConfig } from "./local-agent.ts";
 import { databaseConversations, openDatabaseCopy } from "./local-chats.ts";
 import { isFile, isRecord, readText, sourceId, splitEntries } from "./local-fs.ts";
@@ -20,7 +21,10 @@ function hermesSchedule(value: unknown): string | null {
 }
 
 async function* readHermes(input: ImportInput, ctx: ReaderContext): AsyncGenerator<ImportEvent> {
-  if (input.from !== "local") throw new Error("The Hermes reader needs a local folder");
+  if (input.from === "files") {
+    yield* readHermesExport(input.files, ctx);
+    return;
+  }
   const { source } = input;
   const home = source.path;
   const ref = source.profile ?? "default";
@@ -104,6 +108,6 @@ async function* readHermes(input: ImportInput, ctx: ReaderContext): AsyncGenerat
 
 export const hermesReader: SourceReader = {
   kind: "hermes",
-  sniff: async () => false,
+  sniff: isHermesExport,
   read: readHermes,
 };

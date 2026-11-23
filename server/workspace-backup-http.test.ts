@@ -1,6 +1,6 @@
 // Archive work is mocked so revocation can be held at a deterministic boundary.
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -232,4 +232,119 @@ it("clears an old upload leftover that an earlier version named, and keeps a rec
   expect(existsSync(old)).toBe(false);
   expect(existsSync(current)).toBe(false);
   expect(existsSync(recent)).toBe(true);
+});
+
+const BASE = "/api/workspace-backup/upload";
+const MIB = 1024 ** 2;
+const send = (path: string, init: { method?: string; body?: Buffer | string; token?: string } = {}) =>
+  fetch(`${url}${path}`, { method: init.method ?? "POST", headers: { authorization: `Bearer ${init.token ?? admin.token}` }, body: init.body });
+const startUpload = async (bytes: number) => await send(`${BASE}/start`, { body: JSON.stringify({ bytes }) }).then((response) => response.json()) as { id: string; chunkBytes: number };
+const uploadFile = (id: string) => join(dataDir, ".backups", "uploads", `${id}.seirabackup`);
+const received = async (id: string) => (await send(`${BASE}/${id}`, { method: "GET" }).then((response) => response.json()) as { received: number }).received;
+
+it("stores ordered parts and hands the joined file to validation", async () => {
+  const started = await startUpload(10);
+  expect(started.chunkBytes).toBe(32 * MIB);
+  for (const [offset, part] of [[0, "abcd"], [4, "efgh"], [8, "ij"]] as const) {
+    const response = await send(`${BASE}/${started.id}/chunk?offset=${offset}`, { body: part });
+    expect(await response.json()).toEqual({ received: offset + part.length });
+  }
+  expect(await received(started.id)).toBe(10);
+  const finished = await send(`${BASE}/${started.id}/finish`);
+  expect(await finished.json()).toEqual({ id: started.id });
+  expect((await send(`${BASE}/${started.id}/finish`)).status).toBe(200);
+  let joined = "";
+  archive.stage.mockImplementationOnce(async (_dataDir: string, file: string) => { joined = readFileSync(file, "utf8"); return fakeArchive(); });
+  const preview = await post("/api/workspace-backup/preview", { id: started.id, password: PASSWORD });
+  expect(preview.status).toBe(200);
+  expect(archive.stage).toHaveBeenCalledWith(dataDir, uploadFile(started.id), expect.anything());
+  expect(joined).toBe("abcdefghij");
+});
+
+it("refuses a part whose offset is not the stored byte count", async () => {
+  const started = await startUpload(10);
+  await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "zzzz" })).status).toBe(409);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=6`, { body: "zzzz" })).status).toBe(409);
+  expect(readFileSync(uploadFile(started.id), "utf8")).toBe("abcd");
+  expect(await received(started.id)).toBe(4);
+});
+
+it("refuses a part above 32 MiB, a part past the announced size, and a bad total", async () => {
+  const started = await startUpload(40 * MIB);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0`, { body: Buffer.alloc(32 * MIB + 1) })).status).toBe(413);
+  expect(await received(started.id)).toBe(0);
+  const small = await startUpload(3);
+  expect((await send(`${BASE}/${small.id}/chunk?offset=0`, { body: "abcd" })).status).toBe(413);
+  for (const bytes of [0, 11 * 1024 ** 3]) expect((await send(`${BASE}/start`, { body: JSON.stringify({ bytes }) })).status).toBe(413);
+});
+
+it("drops the bytes of a part that ends early so the count stays valid", async () => {
+  const started = await startUpload(20);
+  await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
+  await new Promise<void>((resolve) => {
+    const part = request(`${url}${BASE}/${started.id}/chunk?offset=4`, { method: "POST", headers: { authorization: `Bearer ${admin.token}`, "content-length": "10" } });
+    part.on("error", () => resolve());
+    part.write("xyz", () => setTimeout(() => part.destroy(), 50));
+  });
+  await vi.waitFor(() => expect(statSync(uploadFile(started.id)).size).toBe(4));
+  expect(await received(started.id)).toBe(4);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=4`, { body: "efgh" })).status).toBe(200);
+});
+
+it("refuses to finish a short upload and an unknown id", async () => {
+  const started = await startUpload(10);
+  await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
+  expect((await send(`${BASE}/${started.id}/finish`)).status).toBe(400);
+  expect((await post("/api/workspace-backup/preview", { id: started.id, password: PASSWORD })).status).toBe(404);
+  expect((await send(`${BASE}/${randomUUID()}`, { method: "GET" })).status).toBe(404);
+  expect((await send(`${BASE}/${randomUUID()}/chunk?offset=0`, { body: "a" })).status).toBe(404);
+  expect((await send(`${BASE}/${randomUUID()}/finish`)).status).toBe(404);
+});
+
+it("removes an unfinished upload when a new one starts or when it sits idle for an hour", async () => {
+  const first = await startUpload(10);
+  await send(`${BASE}/${first.id}/chunk?offset=0`, { body: "abcd" });
+  const second = await startUpload(10);
+  expect(existsSync(uploadFile(first.id))).toBe(false);
+  expect(existsSync(uploadFile(second.id))).toBe(true);
+  const later = Date.now() + 61 * 60_000;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(later);
+  try { expect((await send(`${BASE}/${second.id}`, { method: "GET" })).status).toBe(404); }
+  finally { clock.mockRestore(); }
+  expect(existsSync(uploadFile(second.id))).toBe(false);
+});
+
+it("refuses every upload route to a caller without admin access", async () => {
+  const member = sessions.issue({ label: "Fixture member", scopes: ["client"] });
+  const started = await startUpload(10);
+  for (const [path, method] of [[`${BASE}/start`, "POST"], [`${BASE}/${started.id}/chunk?offset=0`, "POST"], [`${BASE}/${started.id}`, "GET"], [`${BASE}/${started.id}/finish`, "POST"]]) {
+    expect((await send(path, { method, body: method === "POST" ? "{}" : undefined, token: member.token })).status).toBe(403);
+  }
+});
+
+function chunkedPart(path: string, parts: string[]) {
+  return new Promise<number>((resolve, reject) => {
+    const part = request(`${url}${path}`, { method: "POST", headers: { authorization: `Bearer ${admin.token}`, "transfer-encoding": "chunked" }, signal: AbortSignal.timeout(5000) }, (response) => { response.resume(); resolve(response.statusCode!); });
+    part.on("error", reject);
+    for (const piece of parts) part.write(piece);
+    part.end();
+  });
+}
+
+it("takes the part size from the URL when a proxy sends the body without Content-Length", async () => {
+  const started = await startUpload(10);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=0&bytes=4`, ["ab", "cd"])).toBe(200);
+  expect(await received(started.id)).toBe(4);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4&bytes=3`, ["efgh"])).toBe(413);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4&bytes=5`, ["ef"])).toBe(400);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4`, ["ef"])).toBe(411);
+  expect(readFileSync(uploadFile(started.id), "utf8")).toBe("abcd");
+  expect(await received(started.id)).toBe(4);
+});
+
+it("refuses a part whose Content-Length and bytes differ", async () => {
+  const started = await startUpload(10);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=3`, { body: "abcd" })).status).toBe(400);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=4`, { body: "abcd" })).status).toBe(200);
 });

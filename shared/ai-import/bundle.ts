@@ -47,12 +47,14 @@ export interface ImportTool {
   needsKey: string[];
 }
 
-/** `schedule`: a 5-field cron line, "every <n><m|h|d>", or an ISO date for a single run. */
+/** `schedule`: a 5-field cron line, "every <n><m|h|d>", or an ISO date for a single run.
+ * `timeZone`: the IANA zone a cron line runs in; without it, the zone of the computer that runs Seira. */
 export interface ImportRoutine {
   ref: string;
   name: string;
   schedule: string;
   prompt: string;
+  timeZone?: string;
 }
 
 export interface ImportChannel {
