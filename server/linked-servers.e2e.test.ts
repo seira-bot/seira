@@ -68,6 +68,7 @@ describe("a guest link between two servers", () => {
   let head: ReturnType<typeof place>, branch: ReturnType<typeof place>;
   let atlas: Bot, writer: Bot;
   let token = "";
+  let atlasAddress = "";
 
   beforeAll(async () => {
     fixtures = [await launchVerificationServer({ SEIRA_PUBLIC_URL: "https://head.example" }, undefined, undefined, undefined, undefined, { scripted: true }),
@@ -109,12 +110,13 @@ describe("a guest link between two servers", () => {
     const changed = (await head.api("PATCH", `/api/linked-servers/${mine!.id}`, { exposed: [atlas.id] })).server as LinkRow;
     expect(changed.exposed).toEqual([atlas.id]);
     await expect.poll(async () => (await branch.links())[0]!.bots, { timeout: 20_000 }).toEqual([{ id: expect.stringMatching(new RegExp(`^link-[0-9a-f]{8}-${atlas.id}$`, "u")), name: "Atlas" }]);
+    atlasAddress = (await branch.links())[0]!.bots[0]!.id;
   }, hostTimeout(60_000));
 
   it("hands work to the exposed bot as outside work and returns its result to the asking thread", async () => {
     head.plan(atlas.id, { reply: "Atlas counted 42 orders." });
     branch.plan(writer.id,
-      { steps: [{ tool: "list_bots", arguments: {} }, { tool: "coordinate_bots", arguments: { bot_ids: ["Atlas"], request_key: "count", message: "Count this week's orders." } }], reply: "Asked Atlas." },
+      { steps: [{ tool: "list_bots", arguments: {} }, { tool: "coordinate_bots", arguments: { bot_ids: [atlasAddress], request_key: "count", message: "Count this week's orders." } }], reply: "Asked Atlas." },
       { reply: "Atlas says 42." });
     await branch.cli("send", "--bot", writer.id, "--task", writer.activeTaskId, "--text", "Ask Atlas for this week's order count.");
     await expect.poll(() => head.providerTurns().find((turn) => turn.botId === atlas.id), { timeout: 30_000 }).toBeTruthy();
@@ -133,7 +135,7 @@ describe("a guest link between two servers", () => {
   it("asks for approval on the working server, at the link's level and not the bot's own", async () => {
     head.plan(atlas.id, { approve: { tool_name: "Bash", input: { command: "git push origin export" } }, reply: "Atlas pushed.", replyIfDenied: "Atlas did not push." });
     branch.plan(writer.id,
-      { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: ["Atlas"], request_key: "push", message: "Push the export branch." } }], reply: "Asked Atlas to push." },
+      { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: [atlasAddress], request_key: "push", message: "Push the export branch." } }], reply: "Asked Atlas to push." },
       { reply: "Atlas pushed it." });
     await branch.cli("send", "--bot", writer.id, "--task", writer.activeTaskId, "--text", "Ask Atlas to push the export branch.");
     await expect.poll(async () => (await head.openApprovals(atlas.id)).length, { timeout: 30_000 }).toBe(1);
