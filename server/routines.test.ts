@@ -815,14 +815,29 @@ describe("cron routines use the existing persistent scheduler", () => {
     h.setNow(routine.nextRunAt! - 61 * 60_000);
     expect(h.manager.wakeHold()).toEqual({ hold: false });
     h.setNow(routine.nextRunAt! - 59 * 60_000);
-    expect(h.manager.wakeHold()).toEqual({ hold: true, reason: "due", at: routine.nextRunAt });
+    expect(h.manager.wakeHold()).toEqual({ hold: true, reason: "due", at: routine.nextRunAt, routineId: routine.id });
     h.manager.update(routine.id, { enabled: false });
     expect(h.manager.wakeHold()).toEqual({ hold: false });
     h.manager.update(routine.id, { enabled: true });
     h.setNow(h.manager.listRoutines()[0].nextRunAt!);
     await h.manager.tick(); await h.manager.tick();
     expect(h.manager.listRuns()[0]).toMatchObject({ status: "running" });
-    expect(h.manager.wakeHold()).toEqual({ hold: true, reason: "running" });
+    expect(h.manager.wakeHold()).toEqual({ hold: true, reason: "running", routineId: routine.id });
+  });
+
+  it("leaves a routine whose target is missing out of the wake hold and the next due time, and holds again once the target is back", async () => {
+    const h = harness(start);
+    const routine = h.manager.create(input({ ...monthly, expression: "0 9 * * *" }));
+    h.setBot("missing");
+    for (const hours of [24, 72]) {
+      h.setNow(routine.nextRunAt! + hours * 3_600_000);
+      await h.manager.tick();
+      expect(h.manager.wakeHold()).toEqual({ hold: false });
+      expect(h.manager.nextDueAt()).toBeNull();
+    }
+    h.setBot("ready");
+    expect(h.manager.wakeHold()).toMatchObject({ hold: true, reason: "due", routineId: routine.id });
+    expect(h.manager.nextDueAt()).not.toBeNull();
   });
 
   it.each([8, 20])("catches up once with the newest slot after %i hours and counts the missed minute slots on one row", async (hours) => {

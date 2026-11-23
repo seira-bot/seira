@@ -105,6 +105,8 @@ const __APP_VERSION__: string;
     reason: string;
     /** the due routine's time, when the hold is for a due routine */
     at: number | null;
+    /** the routine the hold is for, when known */
+    routineId: string | null;
     onBattery: boolean;
   }
   /** Use this computer as an always-on home, as main reads it now. `available`: a packaged app, where Open at login works.

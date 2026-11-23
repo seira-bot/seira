@@ -37926,6 +37926,8 @@
       "shortcuts.zoom-in": "f76d9e7e12547bf53d91ea3dc92cfc2022583df6261b72cb7bf2b53731356686",
       "shortcuts.zoom-out": "8d94f5c1cfa0b05b4603f16b8d43129e588231662b83fea097469561bb506d68",
       "shortcuts.actual-size": "a38da576bd44df8ebde9f3e5b742e024660969cc74170940247b97bbb54f4103",
+      "automations.wakeRunning": "ffb673328b2728695bd170139972c7986a01c1dd8405b8c4c5f204f6e20f0057",
+      "automations.wakeUntil": "d64f17c6a8c7a327e3d015e2bf5828eeff3e150f32dd38c6800a566354a299b3",
       "aiImport.drop.backup": "ed9ad239c8e8552237ab7db26c296a8f8b32212d9eea0bb47fab1e22d7811207"
     },
     "zh": {

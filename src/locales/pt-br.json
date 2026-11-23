@@ -5301,6 +5301,8 @@
   "automations.list": "Lista",
   "automations.calendar": "Calendário",
   "automations.wake": "Manter este computador acordado para automações agendadas",
+  "automations.wakeRunning": "Mantém este computador acordado enquanto {name} trabalha.",
+  "automations.wakeUntil": "Mantém este computador acordado até {time} para {name}.",
   "automations.wakeBattery": "Ligue na tomada para mantê-lo acordado.",
   "automations.allBots": "Todos os bots",
   "automations.allDepartments": "Todas as equipes",
