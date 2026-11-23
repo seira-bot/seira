@@ -29,9 +29,11 @@ export interface DialerOptions {
   firstRetryMs?: number;
   /** What this computer says its version reads; a test stands in for an older app with it. */
   level?: number;
+  /** The paths of the exchange and of the file crossing on the other side. */
+  paths?: { sync: string; file: string };
 }
 
-export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL }: DialerOptions) {
+export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH } }: DialerOptions) {
   let running = false, stopped = true, asleep = false, needsPairing = false;
   let session = "", ack = 0, fresh = true, retryMs = firstRetryMs;
   let held: AbortController | null = null;
@@ -45,7 +47,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
 
   /** A file's bytes, over requests of this computer's: put before the frame that names it, got after one that does. An
    * answer in the 400s says the Cloud will not take or does not have it (`gone`); anything else is tried again. */
-  const fileUrl = (origin: string, id: string, way: FileWay, index: number, name: string, more: Record<string, string> = {}) => `${origin}${FILE_PATH}?${new URLSearchParams({ id, way, index: String(index), name, ...more })}`;
+  const fileUrl = (origin: string, id: string, way: FileWay, index: number, name: string, more: Record<string, string> = {}) => `${origin}${paths.file}?${new URLSearchParams({ id, way, index: String(index), name, ...more })}`;
   const refusedFile = async (response: Response) => {
     const told = await response.json().then((answer) => { const error = (answer as { error?: unknown } | null)?.error; return typeof error === "string" ? error : ""; }, () => "");
     return Object.assign(new Error(told || `the Cloud answered ${response.status}`), { gone: response.status >= 400 && response.status < 500 && ![401, 403, 408, 429].includes(response.status) });
@@ -95,7 +97,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     if (wait > 0) held = controller;
     let response: Response;
     try {
-      response = await fetchImpl(`${target.origin}${SYNC_PATH}`, {
+      response = await fetchImpl(`${target.origin}${paths.sync}`, {
         method: "POST", redirect: "error", cache: "no-store", signal: controller.signal,
         headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${target.token}`, origin: target.origin, [LEVEL_HEADER]: String(level),
           ...(carriesWork(sending) ? {} : { [BACKGROUND_HEADER]: "1" }) },
@@ -161,7 +163,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
   /** One request that says the link is over. True when the Cloud took it, or no longer knows the link. */
   async function bye(ended: Pick<EndedLink, "origin" | "token">): Promise<boolean> {
     try {
-      const response = await fetchImpl(`${ended.origin}${SYNC_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(5_000),
+      const response = await fetchImpl(`${ended.origin}${paths.sync}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(5_000),
         headers: { "content-type": "application/json", authorization: `Bearer ${ended.token}`, origin: ended.origin, [BACKGROUND_HEADER]: "1" },
         body: JSON.stringify({ ack: 0, frames: [{ t: "bye" } satisfies Frame], wait: 0 }) });
       await response.body?.cancel();

@@ -1,0 +1,105 @@
+// The standing exchange and the file crossing of a link, for one authenticated peer: the long poll that carries frames both
+// ways, and the file probe, get and put. The caller has already checked who the peer is; this module owns the rest.
+import { createReadStream, createWriteStream, rmSync, statSync } from "node:fs";
+import type { ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+
+import type { BotLink } from "../bot-link/link.ts";
+import { LEVEL_HEADER, PROTOCOL_LEVEL, SEEN_MS, fileWay, levelOf, syncRequest } from "../bot-link/protocol.ts";
+import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
+import { answerAsleep } from "../cloud-power.ts";
+import type { RouteContext } from "./table.ts";
+
+export interface LinkExchangeOptions {
+  link: BotLink;
+  paths: { sync: string; file: string };
+  power(): { sleeping(): boolean; sleepSignal(): AbortSignal } | null | undefined;
+  seenMs?: number;
+  /** What this place says its version reads; a test stands in for an older Cloud with it. */
+  level?: number;
+}
+
+export function createLinkExchange({ link, paths, power: powerOf, seenMs, level }: LinkExchangeOptions) {
+  const session = randomUUID();
+  const held = new Map<string, () => void>();
+  const gone = new Map<string, NodeJS.Timeout>();
+  const seen = (peer: string) => {
+    link.setOnline(peer, true);
+    clearTimeout(gone.get(peer));
+    const timer = setTimeout(() => { gone.delete(peer); link.setOnline(peer, false); }, seenMs ?? SEEN_MS);
+    timer.unref?.();
+    gone.set(peer, timer);
+  };
+  /** Until the link has something to send, the wait ends, the computer hangs up or asks again, or the Cloud goes to sleep. */
+  const hold = (res: ServerResponse, peer: string, ack: number, wait: number, sleep: AbortSignal | undefined) => new Promise<void>((resolve) => {
+    held.get(peer)?.();
+    const done = () => { clearTimeout(timer); stop(); res.off("close", done); sleep?.removeEventListener("abort", done); if (held.get(peer) === done) held.delete(peer); resolve(); };
+    const timer = setTimeout(done, wait);
+    const stop = link.onOutgoing((changed) => { if (changed === peer && (!link.has(peer) || link.hasOutgoing(peer, ack))) done(); });
+    res.on("close", done);
+    sleep?.addEventListener("abort", done, { once: true });
+    held.set(peer, done);
+  });
+
+  async function file({ req, res, url, method, json }: RouteContext, peer: string): Promise<void> {
+    const id = url.searchParams.get("id") ?? "", way = fileWay.safeParse(url.searchParams.get("way")), index = Number(url.searchParams.get("index")), fileName = url.searchParams.get("name") ?? "";
+    if (!id || id.length > 200 || !way.success || !Number.isInteger(index) || !fileName || fileName.length > 255) { req.resume(); return json(res, 400, { error: "send id, way, index and name" }); }
+    if (powerOf()?.sleeping()) { req.resume(); return answerAsleep(res, json); }
+    seen(peer);
+    if (method === "GET" && url.searchParams.has("probe")) return json(res, 200, { have: link.holds(peer, id, way.data, index, fileName, Number(url.searchParams.get("bytes"))) });
+    if (method === "GET") {
+      const kept = link.outgoingFile(peer, id, way.data, index);
+      let bytes = -1;
+      try { if (kept) bytes = statSync(kept.path).size; } catch { /* no longer kept */ }
+      if (!kept || bytes < 0) return json(res, 404, { error: "that file is no longer kept" });
+      res.writeHead(200, { "content-type": "application/octet-stream", "content-length": String(bytes) });
+      await pipeline(createReadStream(kept.path), res).catch(() => {});
+      return;
+    }
+    if (method !== "PUT") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
+    const to = link.incoming(peer, id, way.data, index, fileName);
+    if (!to) { req.resume(); return json(res, 409, { error: "that file is not wanted here any more" }); }
+    let taken = 0;
+    const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; done(taken > FILE_MAX_BYTES ? new Error("too large") : null, chunk); } });
+    try {
+      await pipeline(req, capped, createWriteStream(to, { mode: 0o600 }));
+    } catch {
+      rmSync(to, { force: true });
+      if (res.destroyed) return;
+      return json(res, taken > FILE_MAX_BYTES ? 413 : 400, { error: taken > FILE_MAX_BYTES ? `a file may be at most ${Math.round(FILE_MAX_BYTES / (1024 * 1024))} MB` : "the file did not arrive whole" });
+    }
+    return json(res, 200, { ok: true });
+  }
+
+  async function sync({ req, res, method, json, readBody }: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
+    if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
+    const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024));
+    if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
+    const power = powerOf();
+    if (power?.sleeping()) return answerAsleep(res, json);
+    seen(peer);
+    // Each side says what its version reads; a computer on the first version says nothing and is sent only what that reads.
+    link.setLevel(peer, levelOf(req.headers[LEVEL_HEADER]));
+    if ((level ?? PROTOCOL_LEVEL) > 1) res.setHeader(LEVEL_HEADER, String(level ?? PROTOCOL_LEVEL));
+    if (body.data.fresh) link.sessionStarted(peer);
+    link.receive(peer, body.data.frames);
+    if (!stillLinked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
+    if (body.data.wait > 0 && !link.hasOutgoing(peer, body.data.ack)) await hold(res, peer, body.data.ack, body.data.wait, power?.sleepSignal());
+    if (power?.sleeping()) return answerAsleep(res, json);
+    if (res.writableEnded || res.destroyed) return;
+    if (!stillLinked()) return json(res, 403, { error: "This link is off. Turn it on again in the app." });
+    seen(peer);
+    return json(res, 200, { session, frames: link.outgoing(peer, body.data.ack) });
+  }
+
+  return {
+    /** Answers a request on one of `paths`, from a peer the caller has already identified. `stillLinked` says whether that peer's link is still the one in use. */
+    serve(ctx: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
+      return ctx.path === paths.file ? file(ctx, peer) : sync(ctx, peer, stillLinked);
+    },
+    /** Ends the peer's held wait, so its next request starts at once. */
+    release(peer: string): void { held.get(peer)?.(); },
+  };
+}
