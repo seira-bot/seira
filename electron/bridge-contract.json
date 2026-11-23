@@ -198,6 +198,7 @@
   "permStatus",
   "pickFolder",
   "platform",
+  "quit",
   "rail",
   "rail.drawsFrame",
   "rail.expand",

@@ -13,6 +13,7 @@ import { createAndroidDeviceController } from "./android-device.mjs";
 import { finishSpeech, speechBusy, startSpeech, stopSpeech } from "./speech.mjs";
 import { installTalk, isTalkPanel } from "./talk-main.mjs";
 import { openBlankTerminal } from "./terminal-launch.mjs";
+import { installPowerIpc } from "./power-ipc.mjs";
 import { linuxDisablesGpu, SOFTWARE_RENDERING_ARG } from "./linux-gpu.mjs";
 import { applyWindowsAppId } from "./app-identity.mjs"; import { loadDevUi } from "./dev-ui-wait.mjs";
 import { contextMenuTemplate, createMediaDownloads } from "./context-menu.mjs";
@@ -2341,6 +2342,7 @@ ipcMain.handle("desktop:relaunch", localOnly("desktop:relaunch", (event) => {
   relaunchAfterDesktopRemoteChange();
   return true;
 }));
+installPowerIpc({ ipcMain, localOnly, requireMainWindowSender, quit: () => app.quit() });
 
 const talk = installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, appleSpeech: nativeActions.appleSpeech,
   speech: { start: startSpeech, stop: stopSpeech, finish: finishSpeech, busy: speechBusy }, packaged: app.isPackaged, devUrl: DEV_URL, nativeImage, iconPath: APP_ICON, openLink: queueChatLink, reveal: revealForLink, log: slog, t: nativeT });

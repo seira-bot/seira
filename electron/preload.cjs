@@ -409,6 +409,7 @@ const bridge = {
   permRequestMic: () => ipcRenderer.invoke("perm:request-mic"),
   permOpenSettings: (pane) => ipcRenderer.invoke("perm:open-settings", pane),
   relaunch: () => ipcRenderer.invoke("desktop:relaunch"),
+  quit: () => ipcRenderer.invoke("desktop:quit"),
 
   openInstallTerminal: (command) => ipcRenderer.invoke("engine:open-terminal", command),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),

@@ -35,6 +35,7 @@ import { NotificationRail, NotificationsPanel } from "@/components/Notifications
 import { useNotificationFeed } from "@/lib/notification-preferences";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { AppNotices } from "@/components/AppNotices";
+import { PowerHost } from "@/components/power/PowerHost";
 import { AppGrantHost, AppGrantNotice } from "@/components/AppGrantPrompt";
 import { BotLimitPopup } from "@/components/BotLimitPopup";
 import { CloudAsleepStrip } from "@/components/CloudAsleepStrip";
@@ -347,6 +348,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     <div data-look="app" className={cn("flex h-full flex-col", framed && "bg-frame")} onClickCapture={drawerOpen ? noteDrawerAction : undefined} onKeyDownCapture={drawerOpen ? noteDrawerAction : undefined}>
       <WindowFrameBar notifications={notificationTray} />
       <BotLimitPopup />
+      <PowerHost />
       <ConversationShareDialogs />
       {!framed && strips}
       <div className="relative flex min-h-0 flex-1">
