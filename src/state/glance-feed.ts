@@ -31,6 +31,8 @@ export interface GlanceAskInput {
   title: string;
   choices: string[];
   canAlways: boolean;
+  /** What the approval runs, whole; empty when it cannot be shown whole. */
+  detail: string;
   at: number;
 }
 
@@ -71,6 +73,7 @@ function glanceAsk(ask: GlanceAskInput): GlanceAsk {
     title: clip(ask.title, GLANCE_LIMITS.title),
     choices: one ? ask.choices.map((label, index) => ({ id: String(index), label: clip(label, GLANCE_LIMITS.choiceLabel) })) : [],
     canAlways: ask.kind === "approval" && ask.canAlways,
+    detail: ask.kind === "approval" ? ask.detail : "",
   };
 }
 
@@ -118,6 +121,12 @@ export function glanceBotInputs(bots: readonly Bot[], queued: AppState["pendingQ
   });
 }
 
+/** Security: a clipped command could hide its tail, so a text that is empty, too long or not a plain tool approval is never sent. */
+export function approvalDetail(row: InboxRow): string {
+  const text = row.card?.tool ? textOf(row) : "";
+  return text.length > 0 && text.length <= GLANCE_LIMITS.detail ? text : "";
+}
+
 const rowBotId = (row: InboxRow): string | undefined => row.origin?.botId ?? row.from.botId;
 
 export function glanceAskInputs(view: InboxView | null, bots: readonly Bot[]): GlanceAskInput[] {
@@ -135,6 +144,7 @@ export function glanceAskInputs(view: InboxView | null, bots: readonly Bot[]): G
       title: kind === "approval" ? t("approval.card.namedWantsTo", { name: bot.name, action: toolLabel(card.tool) }) : textOf(row),
       choices: kind === "question" ? choicesOf(row) : [],
       canAlways: kind === "approval" && Boolean(card.allowKey || card.allowSession),
+      detail: kind === "approval" ? approvalDetail(row) : "",
       at: row.at,
     });
   }
@@ -178,6 +188,8 @@ export function glanceActHandler(deps: GlanceActDeps): (act: GlanceAct) => Promi
         const response = choiceResponse(row, label);
         sent = await send({ threadId, requestId: act.requestId, behavior: response.behavior, ...(response.message ? { message: response.message } : {}) });
       } else if (askOf(row) !== "approval") {
+        return false;
+      } else if (act.choice !== "deny" && !approvalDetail(row)) {
         return false;
       } else if (act.choice === "deny") {
         sent = await send({ threadId, requestId: act.requestId, behavior: "deny", message: "Denied by the user." });

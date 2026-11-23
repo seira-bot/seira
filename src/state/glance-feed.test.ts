@@ -11,7 +11,7 @@ const idle = { waiting: false, working: false, failed: false };
 const bot = (over: Partial<GlanceBotInput> = {}): GlanceBotInput => ({ botId: "b1", threadId: "t1", name: "Felix", status: { ...idle, working: true }, line: null, ...over });
 const build = (bots: GlanceBotInput[], asks: Parameters<typeof buildGlanceFeed>[0]["asks"] = []) => buildGlanceFeed({ bots, asks, labels, lang: "en" });
 const ask = (over: Partial<Parameters<typeof buildGlanceFeed>[0]["asks"][number]> = {}) =>
-  ({ botId: "b1", threadId: "t9", kind: "approval" as const, requestId: "r1", title: "Felix wants to run a command", choices: [], canAlways: true, at: 1, ...over });
+  ({ botId: "b1", threadId: "t9", kind: "approval" as const, requestId: "r1", title: "Felix wants to run a command", choices: [], canAlways: true, detail: "ls -la", at: 1, ...over });
 
 describe("buildGlanceFeed", () => {
   it("leaves idle bots out", () => {
@@ -92,7 +92,31 @@ describe("glance inputs from the store", () => {
     expect(approval).toMatchObject({ botId: "reporter", requestId: "req-approval", threadId: "rep-main", canAlways: false });
     expect(approval.title).toContain("Reporter");
     expect(approval.title).not.toMatch(/rm -rf/);
+    expect(approval.detail).toBe("Run: rm -rf ./build");
     expect(asks.find((one) => one.kind === "question")).toMatchObject({ requestId: "req-question", choices: ["Home", "Pricing"] });
+  });
+});
+
+describe("approval detail", () => {
+  const rowWith = (card: Partial<NonNullable<typeof approvalRow.card>>, text = "Run: ls") => ({ ...approvalRow, text, card: { ...approvalRow.card!, ...card } });
+  const detailOf = (row: typeof approvalRow) => glanceAskInputs(inboxView([row]), [felix])[0]!.detail;
+
+  it("is the whole text the inbox row shows for a plain tool approval", () => {
+    expect(detailOf(rowWith({}))).toBe("Run: ls");
+  });
+
+  it("is empty over 400 characters, never clipped", () => {
+    expect(detailOf(rowWith({}, "x".repeat(GLANCE_LIMITS.detail + 1)))).toBe("");
+    expect(detailOf(rowWith({}, "x".repeat(GLANCE_LIMITS.detail)))).toHaveLength(GLANCE_LIMITS.detail);
+  });
+
+  it("is empty without a tool or without text", () => {
+    expect(detailOf(rowWith({ tool: undefined }))).toBe("");
+    expect(detailOf(rowWith({}, ""))).toBe("");
+  });
+
+  it("is empty for a question", () => {
+    expect(buildGlanceFeed({ bots: [bot()], asks: [ask({ kind: "question", choices: ["A"] })], labels, lang: "en" }).bots[0]!.ask!.detail).toBe("");
   });
 });
 
@@ -121,6 +145,17 @@ describe("glanceActHandler", () => {
       expect(await handler(approval(choice))).toBe(true);
       expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "decideRequest", threadId: "inbox", requestId: "req-approval", ...expected }));
     }
+  });
+
+  it("refuses once and always when the command cannot be shown whole, and still sends deny", async () => {
+    const hidden = { ...view(), rows: view().rows.map((row) => (row.id === approvalRow.id ? { ...row, text: "x".repeat(GLANCE_LIMITS.detail + 1) } : row)) };
+    const dispatch = vi.fn((action: { onSent?: () => void }) => action.onSent?.());
+    const handler = glanceActHandler({ dispatch: dispatch as never, getState: () => initialState as AppState, getInbox: () => hidden, showThreads: () => false });
+    expect(await handler(approval("once"))).toBe(false);
+    expect(await handler(approval("always"))).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(await handler(approval("deny"))).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ behavior: "deny" }));
   });
 
   it("sends the chosen question option as an answer", async () => {
