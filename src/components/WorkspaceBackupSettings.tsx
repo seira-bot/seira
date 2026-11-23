@@ -208,7 +208,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
           {more && <span data-backup-more="" className="flex flex-col gap-1"><span>{t("backup.scope")}</span><span>{t("backup.excluded")}</span><span>{t("backup.privacy")}</span></span>}
           {download && <a href={download.url} download={download.filename} className="break-all text-accent-text hover:underline">{t("backup.downloadAgain", { filename: download.filename })}</a>}
           {(!status || status.busy) && <span role="status">{status?.busy ? t("backup.serverBusy") : t("backup.checkStatus")}{" "}<button type="button" onClick={() => void refresh()} className="cursor-pointer text-accent-text hover:underline">{t("connectors.action.retry")}</button></span>}
-          {error && <span role="alert" className="block break-words text-danger">{error}</span>}
+          {error && <span role="alert" className="block whitespace-pre-line break-words text-danger">{error}</span>}
         </>}>
         <button type="button" className="ui-button" disabled={disabled} data-backup-export="" onClick={() => setExporting(true)}>{t("backup.exportAction")}</button>
       </SettingRow>,
@@ -226,7 +226,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
           <SettingsField label={t("backup.confirmPassword")}>
             <input type="password" autoComplete="new-password" minLength={12} maxLength={1024} required disabled={disabled} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className={SETTINGS_INPUT} />
           </SettingsField>
-          {error && <p role="alert" className="break-words text-[12px] leading-4 text-danger">{error}</p>}
+          {error && <p role="alert" className="whitespace-pre-line break-words text-[12px] leading-4 text-danger">{error}</p>}
           <div className="flex items-center justify-end gap-2">
             <button type="button" className="ui-button" onClick={closeExport}>{t("common.cancel")}</button>
             <button type="submit" className="ui-button ui-button-primary gap-1.5" disabled={disabled || !validPassword(exportPassword) || exportPassword !== confirmPassword}>
