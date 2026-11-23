@@ -320,6 +320,37 @@ describe.skipIf(!posix)("deploy/update-runner.sh", { timeout: hostTimeout(60_000
     expect(box.calls().filter((call) => call.startsWith("pull")).length).toBe(before);
   });
 
+  it("writes release=unknown before the server has ever started, then follows the image the server runs", () => {
+    const box = install({ running: { ...OLD, label: "main" } });
+    const state = box.fakeState();
+    state.containers.seira = null;
+    writeFileSync(join(box.fake, "state.json"), JSON.stringify(state));
+    rmSync(join(box.state, "status", "runner"));
+    const tools = rootTools(box.root);
+    const sbin = join(box.root, "sbin");
+    mkdirSync(join(box.root, "systemd"));
+    const env = {
+      PATH: `${tools.fakes}:${join(box.root, "bin")}:/usr/bin:/bin:/usr/sbin:/sbin`, HOME: box.root, FAKE_DOCKER_DIR: box.fake, SEIRA_SBIN_DIR: sbin,
+      SEIRA_SYSTEMD_DIR: join(box.root, "systemd"), SEIRA_UPDATE_STATE_DIR: box.state, SEIRA_UPDATE_POLICY: box.policy,
+    };
+    const installed = spawnSync("sh", [RUNNER, "--install", "--dir", box.deploy, "--user", "1000:1000", "--no-restart", "--trust-folder-owner"], { encoding: "utf8", env, timeout: 30_000 });
+    expect(installed.status, installed.stdout + installed.stderr).toBe(0);
+    expect(readFileSync(join(box.state, "status", "runner"), "utf8")).toContain("release=unknown\n");
+    expect(box.runnerInfo()?.release).toBe(true);
+    box.ask();
+    expect(box.last()).toMatchObject({ result: "unreleased" });
+    const started = box.fakeState();
+    started.containers.seira = { id: "seira-9", image: OLD.id, status: "running", restarts: 0, started: "start-9" };
+    writeFileSync(join(box.fake, "state.json"), JSON.stringify(started));
+    box.run();
+    expect(box.runnerInfo()?.release).toBe(false);
+    const labelled = box.fakeState();
+    labelled.images = labelled.images.map((image: Image) => (image.id === OLD.id ? { ...image, label: undefined } : image));
+    writeFileSync(join(box.fake, "state.json"), JSON.stringify(labelled));
+    box.run();
+    expect(box.runnerInfo()?.release).toBe(true);
+  });
+
   it("says a build of main is not one the app updates, and runs nothing", () => {
     const box = install({ running: { ...OLD, label: "main" } });
     box.ask();

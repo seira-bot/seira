@@ -53,6 +53,19 @@ describe("doctor on a shared server, without a session", () => {
   });
 });
 
+describe("doctor as the administrator account", () => {
+  it.each([[0, true], [1000, false]])("euid %i warns: %s", async (euid, warns) => {
+    const spy = vi.spyOn(process, "geteuid").mockReturnValue(euid);
+    try {
+      const { out } = await sharedServer(1)(["doctor", "--json"]);
+      const warnings: string[] = JSON.parse(out.at(-1)!).warnings;
+      expect(warnings.some((line) => line.includes("can't use Full access") && line.includes("Choose Ask for approval or Approve for me"))).toBe(warns);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe("doctor --data", () => {
   async function local(argv: string[], dataDir?: string) {
     const out: string[] = [], err: string[] = [];

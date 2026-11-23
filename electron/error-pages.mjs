@@ -67,3 +67,14 @@ export function desktopViewerErrorPage(message, retryUrl, text = nativeText.engl
       </body></html>`)
   );
 }
+
+/** The page the main window shows when its own page keeps ending. The link opens `retryUrl` in the same window. */
+export function rendererRecoveryPage({ retryUrl, iconPath = APP_ICON }, text = nativeText.englishText) {
+  return (
+    "data:text/html;charset=utf-8," +
+    encodeURIComponent(`<!doctype html><html lang="${escapeText(text.intlTag())}"><meta name="color-scheme" content="dark"><title>${escapeText(text.t("native.rendererRecovery.title"))}</title>
+      <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#121212;color:#fcfcfc;font:15px -apple-system,system-ui"><main style="text-align:center;max-width:360px">${iconImage(iconPath)}<h2 style="font-weight:600;margin:12px 0 6px">${escapeText(text.t("native.rendererRecovery.title"))}</h2>
+      <p style="color:#fcfcfc99;line-height:1.5;margin:0 0 20px">${escapeText(text.t("native.rendererRecovery.body"))}</p>
+      <a href="${escapeText(retryUrl)}" style="display:inline-block;border-radius:9px;background:#fff;color:#111;padding:9px 14px;text-decoration:none;font-weight:600">${escapeText(text.t("native.rendererRecovery.reload"))}</a></main></body></html>`)
+  );
+}

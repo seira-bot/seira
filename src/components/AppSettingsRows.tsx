@@ -6,7 +6,9 @@ import { activeLocale, activePackComplete, t } from "@/lib/i18n";
 import { withTourReset } from "@/lib/guided-tour";
 import { completionPatch } from "@/lib/onboarding";
 import { updaterMessage, useUpdaterState } from "@/lib/updater";
+import { openExternalLink } from "@/lib/app-links";
 import { productName } from "../lib/brand";
+import { DESKTOP_DOWNLOAD_URL } from "../../shared/computer-ask";
 import { BrowserProfilesManager } from "./BrowserProfilesManager";
 import { UsbPhoneTakeoverSettings } from "./UsbPhoneTakeoverSettings";
 import { MoreText, SettingRow, SettingsGroup, SettingsRows, Switch } from "./SettingsPrimitives";
@@ -51,7 +53,22 @@ export function UpdatesRow({ title = t("settings.updates.title") }: { title?: st
                 ? t("settings.updates.handedOff")
                 : s.status === "error"
                   ? t("settings.updates.failed", { message: updaterMessage(s) ?? t("settings.updates.unknownError") })
-                  : t("settings.updates.latest");
+                  : s.downloadOnly
+                    ? t("settings.updates.downloadOnly", { app: productName() })
+                    : s.checkFailedAt !== undefined && s.checkFailedAt > (s.upToDateAt ?? 0)
+                      ? t("settings.updates.checkFailed")
+                      : s.upToDateAt === undefined
+                        ? t("settings.updates.notChecked")
+                        : t("settings.updates.latest");
+  if (s.downloadOnly && s.status === "idle") {
+    return (
+      <SettingRow title={title} subtitle={label}>
+        <button onClick={() => void openExternalLink(DESKTOP_DOWNLOAD_URL)} className="ui-button">
+          {t("serverUpdate.downloadApp")}
+        </button>
+      </SettingRow>
+    );
+  }
   return (
     <SettingRow title={title} subtitle={label}>
       <button

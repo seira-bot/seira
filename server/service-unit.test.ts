@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LEGACY_SENTINEL_LAUNCHD_LABEL, LEGACY_SENTINEL_SYSTEMD_NAME } from "../electron/legacy-names.mjs";
 import {
   checkSentinelInstall, earlierSentinelSchedule, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
-  sentinelUnitCommand, serviceCommand, servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning, type ServiceSpec,
+  sentinelUnitCommand, serviceCommand, servicePath, servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning, type ServiceSpec,
 } from "./service-unit.ts";
 
 const spec: ServiceSpec = {
@@ -14,6 +14,7 @@ const spec: ServiceSpec = {
   user: "seira",
   home: "/home/seira",
   bindsLowPorts: true,
+  path: "/usr/bin:/opt/engines/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin",
   label: "agentada",
 };
 
@@ -35,6 +36,23 @@ describe("service units", () => {
     const local = systemdUnit({ ...spec, bindsLowPorts: false, serveArgs: ["--port", "8799", "--data-dir", "/home/seira/.seira"] });
     expect(local).not.toContain("CAP_NET_BIND_SERVICE");
     expect(systemdUnit({ ...spec, dataDir: "/home/seira/My Data", serveArgs: ["--data-dir", "/home/seira/My Data"] })).toContain('ExecStart=/usr/bin/node /usr/lib/node_modules/seira/cli.js serve --data-dir "/home/seira/My Data"');
+  });
+
+  it("builds the service PATH: node's folder, the install PATH, then systemd's default, absolute and without repeats", () => {
+    expect(servicePath("/home/alice/.nvm/versions/node/v22.1.0/bin/node", "/opt/engines/bin:/usr/bin::bin:./x:/opt/engines/bin:/home/alice/.local/bin"))
+      .toBe("/home/alice/.nvm/versions/node/v22.1.0/bin:/opt/engines/bin:/usr/bin:/home/alice/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin");
+    expect(servicePath("/usr/bin/node", undefined)).toBe("/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin");
+    expect(servicePath("/usr/local/bin/node", undefined, "darwin")).toBe("/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin");
+  });
+
+  it("writes that PATH into the systemd unit, quoted for systemd", () => {
+    expect(systemdUnit(spec)).toContain(`Environment="PATH=${spec.path}"`);
+    expect(systemdUnit({ ...spec, path: "/opt/my engines/100%/bin:/usr/bin" })).toContain('Environment="PATH=/opt/my engines/100%%/bin:/usr/bin"');
+  });
+
+  it("writes the same PATH into the launchd plist", () => {
+    expect(launchdPlist(spec)).toContain(`<key>PATH</key>\n\t\t<string>${spec.path}</string>`);
+    expect(launchdPlist({ ...spec, path: "/a&b:/usr/bin" })).toContain("<string>/a&amp;b:/usr/bin</string>");
   });
 
   it("renders a launchd agent that keeps the server alive and logs under the data dir", () => {

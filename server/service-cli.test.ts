@@ -50,6 +50,26 @@ describe("seira service", () => {
     expect(installs).toEqual([join(dir, "x", "app", "latest"), join(dir, "x", "app", "latest")]);
   });
 
+  it("carries the install PATH into the unit and says to install again after a Node upgrade", () => {
+    const base = { action: "install" as const, dataDir: dir, port: 8799, script: "/usr/lib/node_modules/seira/cli.js", node: "/home/alice/.nvm/versions/node/v22.1.0/bin/node", platform: "linux" as const, home: "/home/alice", user: "alice", euid: 1000 };
+    expect(runServiceCommand({ ...base, pathEnv: "/opt/engines/bin:/usr/bin:relative" }, io)).toBe(0);
+    expect(readFileSync(join(dir, "seira.service"), "utf8"))
+      .toContain('Environment="PATH=/home/alice/.nvm/versions/node/v22.1.0/bin:/opt/engines/bin:/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin"');
+    expect(out.join("\n")).toContain("After you upgrade Node, run");
+    expect(err.join("\n")).not.toContain("root");
+  });
+
+  it("warns when the service would run as root, says how to use a normal user, and creates none", () => {
+    const base = { action: "install" as const, dataDir: dir, port: 8799, script: "/usr/lib/node_modules/seira/cli.js", node: "/usr/bin/node", platform: "linux" as const, home: "/root", user: "root", euid: 0 };
+    expect(runServiceCommand(base, io)).toBe(0);
+    const warning = err.join("\n");
+    expect(warning).toContain("runs as root");
+    expect(warning).toContain("Full access");
+    expect(warning).toContain("sudo adduser seira");
+    expect(warning).toContain("service install");
+    expect(existsSync(join(dir, "seira.service"))).toBe(true);
+  });
+
   it("writes a launchd agent on macOS and explains uninstall on both", () => {
     expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, tunnel: true, script: "/opt/homebrew/lib/node_modules/seira/cli.js", node: "/opt/homebrew/bin/node", platform: "darwin", home: "/Users/seira", env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
     expect(readFileSync(join(dir, "com.seira.serve.plist"), "utf8")).toContain("<string>--tunnel</string>");

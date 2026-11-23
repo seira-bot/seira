@@ -134,6 +134,22 @@ export function tailnetListenFallback(failure: TailscaleFailure, status: Tailsca
   };
 }
 
+const FALLBACK_HTTPS_PORT = 8443;
+
+/** Port 443 unless another program listens there and 8443 is free; with both taken it stays 443 and Tailscale reports the clash. */
+export function pickTailscaleHttpsPort(listening: Iterable<number>): { port: number; line: string | null } {
+  const taken = new Set(listening);
+  if (!taken.has(443) || taken.has(FALLBACK_HTTPS_PORT)) return { port: 443, line: null };
+  return { port: FALLBACK_HTTPS_PORT, line: `tailscale: port 443 is in use by another program, so the tailnet address uses port ${FALLBACK_HTTPS_PORT}.` };
+}
+
+/** Why Tailscale cannot give phones an HTTPS address now, or null when it can. */
+export async function tailscaleHttpsProblem(probe: typeof tailscaleStatus = tailscaleStatus): Promise<string | null> {
+  const result = await probe();
+  if ("failure" in result) return explainTailscaleFailure(result.failure);
+  return result.status.httpsEnabled ? null : explainTailscaleFailure("https-not-enabled");
+}
+
 /** Where a run that shares over Tailscale notes it, so the next start can turn off a share a crash left behind. */
 export const tailscaleMarker = (dataDir: string) => join(dataDir, "tailscale-serve.marker");
 

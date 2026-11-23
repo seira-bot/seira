@@ -691,12 +691,16 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     const button = first.calls.findIndex((call) => call === `update-runner --install --dir ${first.install} --user ${ids} --no-restart`);
     expect(button).toBeGreaterThan(-1);
     expect(button).toBeLessThan(first.calls.indexOf("docker compose up -d --remove-orphans"));
+    const up = first.calls.indexOf("docker compose up -d --remove-orphans");
+    const refresh = first.calls.indexOf(`update-runner --dir ${first.install}`);
+    expect(refresh).toBeGreaterThan(up);
     expect(first.stdout).toContain("  note  The app can update this server: Settings, Updates, Update server.");
     const compose = readFileSync(join(first.install, "compose.yaml"), "utf8");
     expect(compose).toContain("      - /var/lib/seira-update/request:/run/seira-update/request\n      - /var/lib/seira-update/status:/run/seira-update/status:ro\n");
     const refused = run(["--domain", "seira.example.com"], { env: { FAKE_RUNNER: "1" } });
     expect(refused.status).toBe(0);
     expect(refused.stdout).toContain(`Update it with: sudo ${refused.install}/update.sh`);
+    expect(refused.calls.some((call) => call === `update-runner --dir ${refused.install}`)).toBe(false);
     const removed = run(["--uninstall"], {}, { dir: first.dir });
     expect(removed.calls).toContain(`update-runner --remove --dir ${first.install}`);
   });

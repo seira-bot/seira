@@ -34,7 +34,7 @@ const REASONS: readonly ServerUpdateReason[] = ["busy", "refused", "older", "hel
 export type HostResult = "updated" | "rolled-back" | "rollback-failed" | ServerUpdateReason;
 const RESULTS: readonly HostResult[] = ["updated", "rolled-back", "rollback-failed", ...REASONS];
 
-/** `release`: the running image is labelled with a released version (false for a build of main). */
+/** `release`: the running image is labelled with a released version (false for a build of main); true too while no container has run yet (`unknown`). */
 export interface HostRunner { layout: "installer" | "compose"; dir: string; held: boolean; release: boolean }
 export interface HostRun { run: number; state: "running" | "done"; result?: HostResult; at: number; version?: string; detail?: string }
 export interface HostFacts {

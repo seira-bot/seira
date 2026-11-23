@@ -11,6 +11,8 @@ export interface PhoneSetupDependencies {
   /** May read saved tunnel credentials, but must not sign in or start a tunnel. */
   accountReady?(options: CliOptions): boolean | Promise<boolean>;
   login(options: CliOptions, io: SetupIo): Promise<number>;
+  /** Why the tailnet cannot give this computer an HTTPS address, or null when it can. */
+  tailscaleProblem?(): string | null | Promise<string | null>;
 }
 
 /** An HTTPS origin, not proof a phone can reach it; never a pasted invitation, password, query token, localhost or unspecified bind. */
@@ -65,6 +67,8 @@ export async function runPhoneSetup(
     const phone: PhoneKind = device === 1 ? "ios" : "android";
     if (options.tunnel) return await signIn() ? selected(phone) : skip();
     if (options.tailscale) {
+      const problem = await deps.tailscaleProblem?.();
+      if (problem) io.log(`Tailscale: ${problem}`);
       io.log("Keep Tailscale connected on both this computer and your phone, on the same tailnet.");
       return selected(phone);
     }
@@ -94,6 +98,11 @@ export async function runPhoneSetup(
       }
       if (route === 1) {
         io.log("Tailscale must already be installed and signed in on this computer and phone, with HTTPS certificates enabled for the tailnet.");
+        const problem = await deps.tailscaleProblem?.();
+        if (problem) {
+          io.log(`Tailscale is not ready for a phone yet: ${problem}`);
+          continue;
+        }
         if (!await io.confirm("Allow Seira to serve HTTPS to your tailnet while it runs?", false)) continue;
         return selected(phone, { tailscale: true, tunnel: false, publicUrl: undefined });
       }
@@ -109,6 +118,15 @@ export async function runPhoneSetup(
       return selected(phone, { publicUrl: origin, tunnel: false, tailscale: false });
     }
   }
+}
+
+/** What `pair` prints when the phone address does not answer; `why` is the reason Tailscale gave, when there is one. */
+export function phoneNotReadyLines(why: string | null, command: string): string[] {
+  return [
+    "Phone access is not reachable yet. Seira is ready on this computer; no phone pairing code was created.",
+    ...(why ? [`Tailscale: ${why}`] : []),
+    `${why ? "Fix that and start Seira again" : "Check the HTTPS connection"}, then run ${command} again with the same --data-dir and --port.`,
+  ];
 }
 
 /** The URL is an origin, never the invitation carrying its one-time credential. */

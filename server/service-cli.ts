@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 
 import {
   currentUser, earlierSentinelSchedule, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
-  servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
+  servicePath, servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
 import { cliCommand } from "./cli-invocation.ts";
@@ -37,6 +37,10 @@ export interface ServiceInstallInput {
   platform?: NodeJS.Platform;
   home?: string;
   user?: string;
+  /** The PATH to carry into the service; defaults to this process's. */
+  pathEnv?: string;
+  /** Defaults to this process's effective user id. */
+  euid?: number | null;
 }
 
 export interface ServiceIo {
@@ -93,6 +97,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     user: input.user ?? currentUser(),
     home,
     bindsLowPorts: Boolean(input.domain),
+    path: servicePath(input.node, input.pathEnv ?? process.env.PATH, platform),
     ...(input.label ? { label: input.label } : {}),
     ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };
@@ -105,6 +110,13 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   if (input.domain && platform === "linux") io.log("the unit grants Caddy the capability for ports 80 and 443, so no setcap is needed under the service");
+  io.log(`the service searches this PATH for engines: ${spec.path}. After you upgrade Node, run \`${cliCommand("service install")}\` again.`);
+  const euid = "euid" in input ? input.euid : process.geteuid?.();
+  if (euid === 0) {
+    io.error("");
+    io.error("warning: this service runs as root. Claude Code refuses Full access for a root process, so bots that use it cannot run with Full access.");
+    io.error(`run the server as a normal user instead: create one (for example \`sudo adduser seira\`), sign in as that user, and run \`${cliCommand("service install")}\` there.`);
+  }
   io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u seira -f"}`);
   io.log(`change options later by running \`${cliCommand("service install")}\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart seira"}`);
   return 0;

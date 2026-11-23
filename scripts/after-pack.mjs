@@ -143,6 +143,10 @@ export default async function afterPack(context) {
       ? path.join(context.appOutDir, "Seira.app", "Contents", "Resources")
       : path.join(context.appOutDir, "resources")
   );
+  // electron-builder 26.x writes app-update.yml before this hook runs and signs after it, so the seal stays valid.
+  if (context.electronPlatformName === "darwin" && process.env.SEIRA_NO_UPDATE_FEED === "1") {
+    await rm(path.join(resources, "app-update.yml"), { force: true });
+  }
   await assertNoSourceMaps(resources);
   await validateCloudflared(resources, context.electronPlatformName, Boolean(context.packager));
   const browserRoot = path.join(resources, "browser-engine");

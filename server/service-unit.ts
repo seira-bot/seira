@@ -14,9 +14,20 @@ export interface ServiceSpec {
   user: string;
   home: string;
   bindsLowPorts: boolean;
+  /** The PATH the service runs with; build it with `servicePath`. */
+  path: string;
   label?: string;
   /** How the person runs the CLI by hand, when it isn't `seira` (a copy installed for the service). */
   cliPrefix?: string;
+}
+
+const SYSTEMD_DEFAULT_PATH = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+const LAUNCHD_DEFAULT_PATH = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+
+/** systemd and launchd start a service with only a short default PATH, so node's folder and the install PATH come first. */
+export function servicePath(node: string, installPath: string | undefined, platform: NodeJS.Platform = "linux"): string {
+  const folders = [dirname(node), ...(installPath ?? "").split(":"), ...(platform === "darwin" ? LAUNCHD_DEFAULT_PATH : SYSTEMD_DEFAULT_PATH)];
+  return [...new Set(folders.filter((folder) => posix.isAbsolute(folder) && !/[\r\n\0]/.test(folder)))].join(":");
 }
 
 export const SYSTEMD_UNIT_NAME = "seira.service";
@@ -49,6 +60,7 @@ export function systemdUnit(spec: ServiceSpec): string {
     `WorkingDirectory=${spec.home}`,
     `Environment=HOME=${spec.home}`,
     `Environment=SEIRA_DATA_DIR=${spec.dataDir}`,
+    `Environment=${systemdQuoted(`PATH=${spec.path}`)}`,
     ...(spec.cliPrefix ? [`Environment=${quoteSystemd(`SEIRA_CLI_PREFIX=${spec.cliPrefix}`)}`] : []),
     `ExecStart=${serviceCommand(spec).map(quoteSystemd).join(" ")}`,
     "Restart=always",
@@ -90,7 +102,7 @@ export function launchdPlist(spec: ServiceSpec): string {
     `\t\t<string>${xml(spec.dataDir)}</string>`,
     ...(spec.cliPrefix ? ["\t\t<key>SEIRA_CLI_PREFIX</key>", `\t\t<string>${xml(spec.cliPrefix)}</string>`] : []),
     "\t\t<key>PATH</key>",
-    "\t\t<string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>",
+    `\t\t<string>${xml(spec.path)}</string>`,
     "\t</dict>",
     "\t<key>WorkingDirectory</key>",
     `\t<string>${xml(spec.home)}</string>`,

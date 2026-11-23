@@ -118,7 +118,9 @@ Ways in (pick one; --lan can join any):
 --tailscale  serve over your tailnet: Tailscale terminates HTTPS and the
              link uses this machine's MagicDNS name (needs Tailscale signed in
              and HTTPS certificates enabled for the tailnet); the share ends
-             when serve stops
+             when serve stops. If another program uses port 443, the link
+             uses port 8443. On a laptop with no address for this server,
+             serve prints an ssh -L line, then sign in once with pair.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is
              downloaded once and run alongside the server, and gets the
              certificate itself. Point the domain's DNS at this machine and

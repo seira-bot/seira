@@ -121,8 +121,15 @@ const settle = async () => {
   for (let index = 0; index < 10; index += 1) await Promise.resolve();
 };
 
+const FEED = "provider: github\nowner: seira-bot\nrepo: seira\n";
+let feedFolder = "";
+const resourcesBeforeTest = process.resourcesPath;
+
 beforeEach(() => {
   fixture.home = mkdtempSync(join(tmpdir(), "seira-updater-home-"));
+  feedFolder = mkdtempSync(join(tmpdir(), "seira-updater-feed-"));
+  writeFileSync(join(feedFolder, "app-update.yml"), FEED);
+  process.resourcesPath = feedFolder;
   localOriginModule.setLocalOrigin(LOCAL);
   vi.useFakeTimers();
 });
@@ -130,6 +137,9 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   rmSync(fixture.home, { recursive: true, force: true });
+  rmSync(feedFolder, { recursive: true, force: true });
+  if (resourcesBeforeTest === undefined) delete process.resourcesPath;
+  else process.resourcesPath = resourcesBeforeTest;
 });
 
 function bridgeFor(origin, { clicked = false, rule = null } = {}) {
@@ -236,6 +246,7 @@ it("a downloaded update installs when the app quits, except a system package, wh
       Object.defineProperty(process, "platform", { ...platform, value: os });
       process.resourcesPath = resources;
       rmSync(join(resources, "package-type"), { force: true });
+      writeFileSync(join(resources, "app-update.yml"), FEED);
       if (marker) writeFileSync(join(resources, "package-type"), marker);
       if (image) process.env.APPIMAGE = image;
       else delete process.env.APPIMAGE;
@@ -270,6 +281,7 @@ it("a downloaded update installs by itself at a quiet moment on macOS and Window
       Object.defineProperty(process, "platform", { ...platform, value: os });
       process.resourcesPath = resources;
       rmSync(join(resources, "package-type"), { force: true });
+      writeFileSync(join(resources, "app-update.yml"), FEED);
       if (marker) writeFileSync(join(resources, "package-type"), marker);
       if (image) process.env.APPIMAGE = image;
       else delete process.env.APPIMAGE;
@@ -564,4 +576,68 @@ it("records when a check found nothing newer, and forgets it once an update is f
   await handlers.get("update:check")(local.event);
   await settle();
   expect(handlers.get("update:get-state")(local.event).upToDateAt).toBeUndefined();
+});
+
+it("a copy without the update feed file never checks, and tells the window to send people to the website", async () => {
+  rmSync(join(feedFolder, "app-update.yml"));
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+
+  await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+  await settle();
+  await handlers.get("update:check")(local.event);
+  await handlers.get("update:install")(local.event);
+
+  expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+  expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+  expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", downloadOnly: true });
+  expect(updater.appUpdateWay()).toBe("download");
+  expect(updater.unattendedUpdates()).toBe("none");
+});
+
+it("a failed check forgets the up-to-date time and records the failure, until a later check finishes", async () => {
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  const check = (outcome) => {
+    autoUpdater.checkForUpdates = vi.fn(async () => {
+      autoUpdater.emit("checking-for-update");
+      if (outcome === "fail") {
+        const error = Object.assign(new Error("HTTP 404"), { statusCode: 404 });
+        autoUpdater.emit("error", error);
+        throw error;
+      }
+      autoUpdater.emit(outcome === "current" ? "update-not-available" : "update-available", { version: "2.0.0" });
+      return { isUpdateAvailable: outcome === "newer" };
+    });
+    return Promise.resolve(handlers.get("update:check")(local.event)).catch(() => {}).then(settle);
+  };
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+  const read = () => handlers.get("update:get-state")(local.event);
+
+  vi.setSystemTime(new Date("2026-11-23T10:00:00Z"));
+  await check("current");
+  expect(read()).toMatchObject({ upToDateAt: Date.parse("2026-11-23T10:00:00Z") });
+  expect(read().checkFailedAt).toBeUndefined();
+
+  vi.setSystemTime(new Date("2026-11-23T11:00:00Z"));
+  await check("fail");
+  expect(read().upToDateAt).toBeUndefined();
+  expect(read().checkFailedAt).toBe(Date.parse("2026-11-23T11:00:00Z"));
+
+  await check("current");
+  expect(read().checkFailedAt).toBeUndefined();
+  expect(read().upToDateAt).toBeDefined();
+
+  await check("fail");
+  await check("newer");
+  expect(read().checkFailedAt).toBeUndefined();
+  expect(read().upToDateAt).toBeUndefined();
 });

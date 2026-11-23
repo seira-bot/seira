@@ -54,6 +54,7 @@ describe("what the host's runner wrote", () => {
   it("reads only the fields it knows, in the shapes it expects", () => {
     expect(parseRunner("layout=installer\ndir=/opt/seira\nheld=no\nrelease=yes\n")).toEqual({ layout: "installer", dir: "/opt/seira", held: false, release: true });
     expect(parseRunner("layout=compose\ndir=/srv/Seira/deploy\nheld=yes\nrelease=no\n")).toEqual({ layout: "compose", dir: "/srv/Seira/deploy", held: true, release: false });
+    expect(parseRunner("layout=installer\ndir=/opt/seira\nheld=no\nrelease=unknown\n")).toMatchObject({ release: true });
     for (const bad of [null, "", "layout=podman\ndir=/opt/x", "layout=installer\ndir=relative", "layout=installer\ndir=/opt/x; rm -rf /"]) expect(parseRunner(bad), String(bad)).toBeNull();
     expect(parseRun("run=4\nstate=running\nat=1700000000\nran=1700000000\n")).toEqual({ run: 4, state: "running", at: 1_700_000_000_000 });
     expect(parseRun("run=4\nstate=done\nresult=rolled-back\nat=1700000000\n")).toEqual({ run: 4, state: "done", result: "rolled-back", at: 1_700_000_000_000 });

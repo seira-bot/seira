@@ -130,7 +130,7 @@ const exitCodeText = (value) => (Number.isSafeInteger(value) ? String(value) : "
 
 function describeProcess(report, type) {
   // No text of its own: the tags (kind, process, reason, exit_code) already say what happened.
-  if (report.kind === "native" || report.kind === "hang") return { type: "Error", value: null };
+  if (report.kind === "native" || report.kind === "hang" || report.kind === "renderer-stuck") return { type: "Error", value: null };
   if (report.kind === "server-exit" && report.exitCode !== undefined && report.stack === undefined) return { type: "Error", value: null };
   return { type, value: null };
 }
@@ -138,6 +138,7 @@ function describeProcess(report, type) {
 /** The key two reports share when they describe one failure: error type and the top three frames, or the fixed words for a failure with no stack. */
 export function crashSignature(report, frames, type) {
   if (report.kind === "native") return `native:${report.process}:${known(report.reason, PROCESS_GONE_REASONS)}`;
+  if (report.kind === "renderer-stuck") return `renderer-stuck:${known(report.reason, PROCESS_GONE_REASONS)}`;
   if (report.kind === "hang") return `hang:${report.page}`;
   if (report.kind === "server-exit" && report.exitCode !== undefined && report.stack === undefined) return `server-exit:${exitCodeText(report.exitCode)}`;
   const top = frames.slice(0, 3).map((frame) => `${frame.function ?? ""}@${frame.filename}:${frame.lineno}`);

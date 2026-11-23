@@ -120,6 +120,7 @@ export const CHAT_NOTICE = {
   "chat.notice.teammateNeedsInput": "{name} needs your input: {question}",
   "chat.notice.relayCouldNotContinue": "this conversation could not carry on — {error}",
   "chat.notice.engineSignedOut": "{name} is signed out.",
+  "chat.notice.engineRootFullAccess": "Claude can't use Full access while Seira runs as the administrator account. Choose Ask for approval or Approve for me for this bot, or run Seira as a normal user.",
   "chat.notice.failoverSignedInAgain": "{engine} is signed in again, so this conversation is back on {engine}.",
   "chat.notice.failoverSignedOut": "{from} is signed out, so {to} took over.",
   "chat.notice.backupCardWaiting": "switched to {name}. Your request waits on a card above and continues on {name} once you act on it.",

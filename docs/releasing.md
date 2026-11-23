@@ -397,7 +397,8 @@ When the `release` environment has none of the Apple secrets, the workflow
 still builds and runs every gate that needs no Apple account. The apps then
 have an ad-hoc signature and no notarization, and the artifact is named
 `seira-<version>-macos-NOT-FOR-RELEASE`. It holds the four packages and
-`NOT-FOR-RELEASE.txt`, with no update feed and no block maps.
+`NOT-FOR-RELEASE.txt`, with no update feed and no block maps. The apps carry no update
+feed file, so a gate checks that it is absent, and they never check for updates.
 
 - Use it only to test the build. macOS blocks these apps when they come from
   a download.

@@ -731,3 +731,18 @@ test("dispose removes every listener and timer", (t) => {
   assert.equal(w.app.listenerCount("child-process-gone"), 0);
   assert.deepEqual(w.liveTimers(), []);
 });
+
+test("AC-08: a stopped recovery is one renderer-stuck report for each reason, and none with the switch off", async (t) => {
+  const w = world(t, {});
+  w.reports.recoveryStopped({ reason: "launch-failed", exitCode: -36861, next: "dialog" });
+  w.reports.recoveryStopped({ reason: "launch-failed", exitCode: 18, next: "dialog" });
+  w.reports.recoveryStopped({ reason: "killed", exitCode: 1, next: "page" });
+  await settle(w);
+  const events = w.events();
+  assert.deepEqual(events.map((event) => [event.tags.kind, event.tags.reason, event.tags.process]), [["renderer-stuck", "launch-failed", "renderer"], ["renderer-stuck", "killed", "renderer"]]);
+  assert.equal(events[0].tags.exit_code, "-36861");
+  const off = world(t, { on: false });
+  off.reports.recoveryStopped({ reason: "crashed", exitCode: 1, next: "page" });
+  await settle(off);
+  assert.deepEqual(off.waiting(), []);
+});

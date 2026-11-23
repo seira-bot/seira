@@ -309,6 +309,7 @@ export function startedSleeps(started: CloudStarted, offer: CloudOffer | null | 
 export type CloudAddView =
   | { kind: "checking" }
   | { kind: "unreachable" }
+  | { kind: "no-plans" }
   | { kind: "error"; reason: "failed" | "rate-limited" }
   | { kind: "offer"; offer: CloudOffer; signedOut: boolean; notice: "code-expired" | "signin-ended" | "preparing" | "terms" | null }
   | { kind: "sign-in"; phase: CloudSignInPhase }
@@ -331,8 +332,13 @@ function teamCloudView(team: ReturnType<typeof planTeam>): CloudAddView {
 
 /** The one state → view function of the buying sheet: every Cloud state is one message and one next step. */
 export function cloudAddView(account: CloudAccountState | null | undefined, offer: CloudOffer | null | undefined,
-  { now, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
-    now: number; error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
+  { now, sells = true, unreachable = false, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
+    now: number;
+    /** Whether this build sells a Cloud: when it does not, signed in with no Cloud there is nothing to choose, so Settings is the next step. */
+    sells?: boolean;
+    /** The offer could not be read; with a null offer, Seira Cloud answered but lists no plan. */
+    unreachable?: boolean;
+    error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
     /** Signed in here to an account whose own terms differ from those shown: Choose says so. */
     terms?: boolean;
     /** Signed in from this sheet just now: a ready Cloud is theirs to open, not a second one to ask for. */
@@ -360,8 +366,9 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
     }
     case "signed-out": case "free": {
       if (error) return { kind: "error", reason: error };
+      if (!sells) return { kind: "settings" };
       if (offer === undefined) return { kind: "checking" };
-      if (offer === null) return { kind: "unreachable" };
+      if (offer === null) return { kind: unreachable ? "unreachable" : "no-plans" };
       const opened = account?.checkout ?? null;
       if (signIn && !opened && (view.kind === "signed-out" || signIn.step === "done")) return { kind: "sign-in", phase: signIn };
       const open = offer.checkout && offer.checkout.openUntil > now ? offer.checkout : null;

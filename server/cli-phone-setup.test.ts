@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CliOptions } from "./cli.ts";
 import { SetupCancelled, type SetupIo } from "./cli-prompts.ts";
-import { normalizePhoneOrigin, phonePairingInstructions, runPhoneSetup, type PhoneSetupDependencies } from "./cli-phone-setup.ts";
+import { normalizePhoneOrigin, phoneNotReadyLines, phonePairingInstructions, runPhoneSetup, type PhoneSetupDependencies } from "./cli-phone-setup.ts";
 
 const options: CliOptions = {
   command: "start", port: 18799, dataDir: "/fixture/phone-home", tailscale: false,
@@ -147,6 +147,31 @@ describe("optional phone setup", () => {
     expect(deps.login).not.toHaveBeenCalled();
     expect(ui.lines.join("\n")).toContain("already be installed");
     ui.consumed();
+  });
+
+  it("says the tailnet has no HTTPS certificates before any phone step, and goes back to the choices", async () => {
+    const deps = { ...dependencies(), tailscaleProblem: vi.fn(async () => "HTTPS certificates are off for this tailnet: enable them at https://login.tailscale.com/admin/dns (HTTPS Certificates), then try again") };
+    const ui = prompts({ choices: [2, 1, 4] });
+    expect(await runPhoneSetup(options, ui.io, deps)).toEqual({ options });
+    expect(ui.lines.join("\n")).toContain("login.tailscale.com/admin/dns");
+    expect(ui.io.confirm).not.toHaveBeenCalled();
+    ui.consumed();
+  });
+
+  it("warns about missing certificates on a Tailscale route chosen by a flag, and still selects it", async () => {
+    const deps = { ...dependencies(), tailscaleProblem: vi.fn(async () => "HTTPS certificates are off for this tailnet") };
+    const ui = prompts({ choices: [1] });
+    const result = await runPhoneSetup({ ...options, tailscale: true }, ui.io, deps);
+    expect(result.phone).toBe("ios");
+    expect(ui.lines.join("\n")).toContain("Tailscale: HTTPS certificates are off");
+  });
+
+  it("carries the Tailscale reason into the pairing message, with how to turn certificates on", () => {
+    const why = "HTTPS certificates are off for this tailnet: enable them at https://login.tailscale.com/admin/dns (HTTPS Certificates), then try again";
+    const lines = phoneNotReadyLines(why, "seira pair");
+    expect(lines.join("\n")).toContain("login.tailscale.com/admin/dns");
+    expect(lines.join("\n")).not.toContain("Check the HTTPS connection");
+    expect(phoneNotReadyLines(null, "seira pair").join("\n")).toContain("Check the HTTPS connection");
   });
 
   it("rejects a pasted secret without echoing it, then accepts an advanced HTTPS origin", async () => {

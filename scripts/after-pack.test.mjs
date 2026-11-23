@@ -186,3 +186,43 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
       .rejects.toThrow(/Unsupported macOS package architecture/);
   });
 });
+
+describe("update feed file of a macOS package", () => {
+  function macFixture() {
+    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-feed-"));
+    temporaryDirectories.push(appOutDir);
+    const resources = path.join(appOutDir, "Seira.app", "Contents", "Resources");
+    fs.mkdirSync(resources, { recursive: true });
+    fs.writeFileSync(path.join(resources, "app-update.yml"), "provider: github\n");
+    return { appOutDir, feed: path.join(resources, "app-update.yml") };
+  }
+  const withFlag = async (value, run) => {
+    const before = process.env.SEIRA_NO_UPDATE_FEED;
+    if (value === undefined) delete process.env.SEIRA_NO_UPDATE_FEED;
+    else process.env.SEIRA_NO_UPDATE_FEED = value;
+    try {
+      await run();
+    } finally {
+      if (before === undefined) delete process.env.SEIRA_NO_UPDATE_FEED;
+      else process.env.SEIRA_NO_UPDATE_FEED = before;
+    }
+  };
+
+  it("removes the file when the build asks for no update feed", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag("1", () => afterPack({ electronPlatformName: "darwin", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(false);
+  });
+
+  it("keeps the file otherwise", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag(undefined, () => afterPack({ electronPlatformName: "darwin", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(true);
+  });
+
+  it("leaves a Windows package alone even with the flag", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag("1", () => afterPack({ electronPlatformName: "win32", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(true);
+  });
+});

@@ -201,17 +201,27 @@ export function attachUpdaterWindow(mainWindow) {
   win = mainWindow;
 }
 
+// electron-updater reads its feed from this file in the resources folder (electron-builder writes it when the build has a publish target).
+function hasUpdateFeed() {
+  return typeof process.resourcesPath === "string" && existsSync(join(process.resourcesPath, "app-update.yml"));
+}
+
 /** `signals` (quietSignals): what tells a quiet moment; without them a downloaded update installs only on Restart or quit. */
 export function startUpdater(signals = null) {
   if (!app.isPackaged) {
     updaterCoordinator = null;
-    setState({ status: "idle" });
+    setState({ status: "idle", downloadOnly: true });
     return;
   }
   const packageType = windowsPackageType() ?? linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });
   if (managedByStore(packageType)) {
     updaterCoordinator = null;
     setState({ status: "idle", managedByStore: true });
+    return;
+  }
+  if (!hasUpdateFeed()) {
+    updaterCoordinator = null;
+    setState({ status: "idle", downloadOnly: true });
     return;
   }
   try {
@@ -225,8 +235,9 @@ export function startUpdater(signals = null) {
   autoUpdater.autoDownload = false;
   autoUpdater.logger = updaterLogger();
   // Registered before the coordinator's own listeners, so the time rides on the state the coordinator then sends.
-  autoUpdater.on("update-not-available", () => { state = { ...state, upToDateAt: Date.now() }; });
-  autoUpdater.on("update-available", () => { const { upToDateAt: _seen, ...kept } = state; state = kept; });
+  autoUpdater.on("update-not-available", () => { const { checkFailedAt: _failed, ...kept } = state; state = { ...kept, upToDateAt: Date.now() }; });
+  autoUpdater.on("update-available", () => { const { upToDateAt: _seen, checkFailedAt: _failed, ...kept } = state; state = kept; });
+  autoUpdater.on("error", () => { const { upToDateAt: _seen, ...kept } = state; state = { ...kept, checkFailedAt: Date.now() }; });
 
   // Broadcast the install flavour before the first check so the banner never offers a restart it cannot deliver.
   const handOff = HAND_OFF_TYPES.has(packageType);

@@ -4127,5 +4127,10 @@
   "settings.crashReports.title": "Надсилати звіти про збої",
   "settings.crashReports.aria": "Надсилати звіти про збої",
   "settings.crashReports.subtitle": "Коли Seira перестає працювати, вона надсилає версію застосунку, тип системи та місце в коді, де сталася помилка. Ніколи ваші повідомлення, файли чи імена.",
-  "settings.crashReports.link": "Що входить до звіту"
+  "settings.crashReports.link": "Що входить до звіту",
+  "serverUpdate.downloadApp": "Завантажити",
+  "settings.updates.notChecked": "Ще не перевірялося.",
+  "settings.updates.downloadOnly": "Ця копія {app} не оновлюється сама. Нові версії можна завантажити на сайті.",
+  "settings.updates.checkFailed": "Не вдалося перевірити оновлення. Спробуйте ще раз або завантажте найновішу версію на сайті.",
+  "sidebar.update.downloadOnly": "Отримати найновішу версію"
 }

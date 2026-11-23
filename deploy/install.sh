@@ -1070,6 +1070,7 @@ data_owner() { # the data folder's user and group, as numbers: the server's cont
 
 # The Update server button: update-runner.sh (deploy/update-runner.sh) has systemd run update.sh when the server asks,
 # and nothing else. Without it, or without systemd, the app shows the command to run here instead.
+BUTTON_PLACED=no
 place_button() {
   [ -f "$INSTALL_DIR/update.sh" ] || return 0
   if ! from_repository fetch_runner; then
@@ -1078,6 +1079,7 @@ place_button() {
   fi
   button_log=$(mktemp)
   if sh "$INSTALL_DIR/update-runner.sh" --install --dir "$INSTALL_DIR" --user "$(data_owner)" --no-restart >"$button_log" 2>&1; then
+    BUTTON_PLACED=yes
     note "The app can update this server: Settings, Updates, Update server."
   else
     reason=$(tail -n 1 "$button_log")
@@ -1363,6 +1365,7 @@ install_server() {
   step health
   wait_healthy || fail "Seira started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs seira --tail 50"
   check_sandbox_runs
+  if [ "$BUTTON_PLACED" = yes ]; then sh "$INSTALL_DIR/update-runner.sh" --dir "$INSTALL_DIR" >/dev/null 2>&1 || true; fi
   if [ "$TUNNEL" = yes ]; then
     step_done
     step tunnel

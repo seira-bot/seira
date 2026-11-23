@@ -4037,5 +4037,10 @@
   "settings.crashReports.title": "Absturzberichte senden",
   "settings.crashReports.aria": "Absturzberichte senden",
   "settings.crashReports.subtitle": "Wenn Seira nicht mehr funktioniert, sendet es die App-Version, den Systemtyp und die Stelle im Code, an der es fehlgeschlagen ist, nie deine Nachrichten, Dateien oder Namen.",
-  "settings.crashReports.link": "Was ein Bericht enthält"
+  "settings.crashReports.link": "Was ein Bericht enthält",
+  "serverUpdate.downloadApp": "Herunterladen",
+  "settings.updates.notChecked": "Noch nicht geprüft.",
+  "settings.updates.downloadOnly": "Diese Kopie von {app} aktualisiert sich nicht selbst. Neue Versionen gibt es auf der Website.",
+  "settings.updates.checkFailed": "Die Suche nach Updates ist fehlgeschlagen. Versuche es erneut oder lade die neueste Version von der Website.",
+  "sidebar.update.downloadOnly": "Neueste Version holen"
 }

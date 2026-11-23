@@ -7892,5 +7892,10 @@
   "settings.crashReports.title": "クラッシュレポートを送信",
   "settings.crashReports.aria": "クラッシュレポートを送信",
   "settings.crashReports.subtitle": "Seira が動作しなくなったとき、アプリのバージョン、システムの種類、コードのどこで失敗したかを送信します。メッセージ、ファイル、名前は送信しません。",
-  "settings.crashReports.link": "レポートの内容"
+  "settings.crashReports.link": "レポートの内容",
+  "serverUpdate.downloadApp": "ダウンロード",
+  "settings.updates.notChecked": "まだ確認していません。",
+  "settings.updates.downloadOnly": "この {app} は自動更新されません。新しいバージョンはウェブサイトから入手してください。",
+  "settings.updates.checkFailed": "アップデートを確認できませんでした。もう一度試すか、ウェブサイトから最新バージョンを入手してください。",
+  "sidebar.update.downloadOnly": "最新バージョンを入手"
 }

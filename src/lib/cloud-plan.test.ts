@@ -333,8 +333,22 @@ describe("the buying sheet, one view per state", () => {
     expect(cloudAddView({ status: "signed-out" }, undefined, at)).toEqual({ kind: "checking" });
     expect(cloudAddView({ status: "signed-out" }, OFFER, at)).toEqual({ kind: "offer", offer: OFFER, signedOut: true, notice: null });
     expect(cloudAddView(connected(), noTrial(OFFER), at)).toEqual({ kind: "offer", offer: noTrial(OFFER), signedOut: false, notice: null });
-    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "unreachable" });
+    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "no-plans" });
+    expect(cloudAddView({ status: "signed-out" }, null, { ...at, unreachable: true })).toEqual({ kind: "unreachable" });
     expect(cloudAddView(connected(), OFFER, { ...at, error: "rate-limited" })).toEqual({ kind: "error", reason: "rate-limited" });
+  });
+
+  it("sends someone with no Cloud to Settings when this build sells none, but still signs a signed-out person in", () => {
+    const none = { ...at, sells: false };
+    const plain: CloudSignInPhase = { step: "email", intent: false, problem: null };
+    const done: CloudSignInPhase = { step: "done", intent: false };
+    for (const offer of [undefined, null, OFFER]) {
+      expect(cloudAddView(connected(), offer, { ...none, signIn: done })).toEqual({ kind: "settings" });
+      expect(cloudAddView(connected(), offer, none)).toEqual({ kind: "settings" });
+      expect(cloudAddView({ status: "signed-out" }, offer, none)).toEqual({ kind: "settings" });
+      expect(cloudAddView({ status: "signed-out" }, offer, { ...none, signIn: plain })).toEqual({ kind: "sign-in", phase: plain });
+    }
+    expect(cloudAddView(connected(), OFFER, { ...none, error: "failed" })).toEqual({ kind: "error", reason: "failed" });
   });
 
   it("follows the sign-in and the checkout in the browser by its own session, never by the return", () => {
@@ -404,7 +418,7 @@ describe("the buying sheet, one view per state", () => {
       expect(cloudAddView({ status: "signed-out" }, offer, { ...at, signIn: plain }), "signed out, whatever the offer").toEqual({ kind: "sign-in", phase: plain });
     }
     expect(cloudAddView(removed, OFFER, at)).toEqual({ kind: "settings" });
-    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "unreachable" });
+    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "no-plans" });
     expect(cloudAddView({ status: "signed-out" }, OFFER, { ...at, signIn: plain, error: "failed" })).toEqual({ kind: "error", reason: "failed" });
   });
 

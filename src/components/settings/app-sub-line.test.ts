@@ -24,6 +24,14 @@ describe("the This app line in the Settings nav", () => {
     expect(line({ status: "idle", managedByStore: true, upToDateAt: NOW - HOUR })).toBe("0.1.184");
   });
 
+  it("shows only the version after a failed check, in a download-only copy, and in an error", () => {
+    expect(line({ status: "idle", upToDateAt: NOW - 2 * HOUR, checkFailedAt: NOW - HOUR })).toBe("0.1.184");
+    expect(line({ status: "idle", checkFailedAt: NOW - HOUR })).toBe("0.1.184");
+    expect(line({ status: "idle", downloadOnly: true, upToDateAt: NOW - HOUR })).toBe("0.1.184");
+    expect(line({ status: "error", upToDateAt: NOW - HOUR })).toBe("0.1.184");
+    expect(line({ status: "idle", upToDateAt: NOW - HOUR, checkFailedAt: NOW - 2 * HOUR })).toBe("0.1.184 · Up to date");
+  });
+
   it("says an update is ready once it is downloaded", () => {
     expect(line({ status: "downloaded", version: "0.1.185", upToDateAt: NOW - HOUR })).toBe("0.1.184 · Update ready");
   });

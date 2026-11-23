@@ -35,6 +35,8 @@ export interface HostProbe {
   arch: string;
   kernel: string;
   cpus: number;
+  /** The effective user id, or null where the system has none. */
+  euid: number | null;
   memoryBytes: number;
   /** A file's text, or null when it is missing or unreadable. */
   read(path: string): string | null;
@@ -73,6 +75,12 @@ function systemCheck(probe: HostProbe): HostCheck {
   const tested = (os.ID === "ubuntu" && ["22.04", "24.04"].includes(os.VERSION_ID ?? "")) || (os.ID === "debian" && os.VERSION_ID === "12");
   const line = `${name}, kernel ${probe.kernel}`;
   return tested ? ok("system", line) : warn("system", `${line}: not a system we test (Ubuntu 24.04 or 22.04, or Debian 12)`);
+}
+
+function userCheck(probe: HostProbe): HostCheck {
+  if (probe.euid !== 0) return ok("user", "Runs as a normal user");
+  return warn("user", "Running as root: Claude Code refuses Full access for a root process, so bots that use it cannot run with Full access",
+    "create a normal user (sudo adduser seira), sign in as that user, and run the server there");
 }
 
 function archCheck(probe: HostProbe): HostCheck {
@@ -225,7 +233,7 @@ async function portChecks(probe: HostProbe, options: HostOptions): Promise<HostC
   if (ours) return [server, warn("web-ports", `${which} in use: by this server's Caddy if it serves --domain, else by another program`, named)];
   return [server, options.domain
     ? fail("web-ports", `${which} taken, and --domain ${options.domain} needs 80 and 443`, `stop that program (${named}), or use --tunnel instead`)
-    : warn("web-ports", `${which} taken: serving on your own domain needs 80 and 443 (a tunnel or Tailscale does not)`, named)];
+    : warn("web-ports", `${which} taken: serving on your own domain needs 80 and 443 (a tunnel does not)${web.includes(443) ? "; `tailscale serve` needs 443 as well" : ""}`, named)];
 }
 
 async function clockCheck(probe: HostProbe): Promise<HostCheck> {
@@ -248,7 +256,7 @@ export async function checkHost(probe: HostProbe, options: HostOptions): Promise
     return [fail("platform", `doctor --host checks a Linux server, and this is ${name}`, "run it on the Linux server that will host Seira")];
   }
   const [containers, ports, clock, connector] = await Promise.all([containerCheck(probe), portChecks(probe, options), clockCheck(probe), connectorReport(probe)]);
-  return [systemCheck(probe), archCheck(probe), containers, userNamespaceCheck(probe, connector), seccompCheck(probe), cgroupCheck(probe),
+  return [systemCheck(probe), archCheck(probe), userCheck(probe), containers, userNamespaceCheck(probe, connector), seccompCheck(probe), cgroupCheck(probe),
     diskCheck(probe, options.dataDir), encryptedCheck(probe, options.dataDir), sizeCheck(probe), ...ports, clock, ...connectorChecks(connector)];
 }
 
@@ -277,7 +285,7 @@ function run(command: string, args: string[]): Promise<CommandResult> {
 export function systemProbe(): HostProbe {
   const read = (path: string) => { try { return readFileSync(path, "utf8"); } catch { return null; } };
   return {
-    platform: process.platform, arch: arch(), kernel: release(), cpus: cpus().length, memoryBytes: totalmem(),
+    platform: process.platform, arch: arch(), kernel: release(), cpus: cpus().length, euid: process.geteuid?.() ?? null, memoryBytes: totalmem(),
     read,
     list: (path) => { try { return readdirSync(path); } catch { return []; } },
     run,
