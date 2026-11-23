@@ -87,7 +87,7 @@ const TOO_MANY = "Too many tries. Wait a minute and try again.";
 const ONLY_LINK = "This sign-in works only for a link between two Seiras.";
 const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
 const ONLY_A2A = "This sign-in works only for the calls of an A2A agent.";
-const SEIRA_ONLY = "Only an A2A agent has an address, a token or a name to change here.";
+const PEER_ONLY = "Only an A2A agent has an address, a token or a name to change here.";
 const NOT_NOW = "The link could not be made now. Try again later.";
 const FALLBACK_NAME = "Another Seira";
 const SELF_FALLBACK = "Seira";
@@ -555,7 +555,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if (a2a.has(id)) return a2a.change(id, patch, actor);
       const record = recordOf(id), entry = instances.get(id);
       if (!record || !entry) return null;
-      if (patch.name !== undefined || patch.url !== undefined || patch.token !== undefined || patch.inbound !== undefined) throw new LinkedServerError(SEIRA_ONLY, 400);
+      if (patch.name !== undefined || patch.url !== undefined || patch.token !== undefined || patch.inbound !== undefined) throw new LinkedServerError(PEER_ONLY, 400);
       const changed: string[] = [], before: Record<string, unknown> = {}, after: Record<string, unknown> = {};
       if (patch.exposed) {
         const next = [...new Set(patch.exposed.filter((one) => botIdSchema.safeParse(one).success))].slice(0, 500);

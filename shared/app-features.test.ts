@@ -71,6 +71,12 @@ describe("app feature catalog", () => {
     }
   });
 
+  it("names the Settings page of linked places and says it takes an admin", () => {
+    const linked = APP_FEATURES.find((feature) => feature.id === "linked-servers")!;
+    expect(linked.place).toBe("Settings → Linked places (Advanced mode, admins only)");
+    expect(linked.does).toMatch(/one-time invite/);
+  });
+
   it("tells a workflow from a routine", () => {
     const workflows = APP_FEATURES.find((feature) => feature.id === "workflows")!;
     expect(workflows.place).toBe("Automations → Workflows");

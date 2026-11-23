@@ -49,13 +49,13 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); setLocale("en"); });
 
 const render = (section: AppSettingsSection = fixture.section) => { fixture.section = section; return renderToStaticMarkup(createElement(SettingsModal)); };
-const navPages = (html: string) => [...html.matchAll(/data-settings-page="([a-z]+)"/g)].map((match) => match[1]);
+const navPages = (html: string) => [...html.matchAll(/data-settings-page="([a-z-]+)"/g)].map((match) => match[1]);
 
 describe("the Settings window", () => {
   it("opens with the place, Your account and This app, each headed by an identity row", () => {
     fixture.advanced = true;
     const html = render();
-    expect(navPages(html)).toEqual(["overview", "phone", "ai", "bots", "desktops", "vault", "usage", "transfer", "data", "account", "app", "general", "appearance"]);
+    expect(navPages(html)).toEqual(["overview", "phone", "ai", "bots", "desktops", "linked-servers", "vault", "usage", "transfer", "data", "account", "app", "general", "appearance"]);
     expect(html).toContain("This computer");
     expect(html).toContain("Your account");
     expect(html).toContain("This app");
@@ -91,7 +91,7 @@ describe("the Settings window", () => {
     expect(navPages(render("overview"))).toEqual(SIMPLE_NAV);
     fixture.advanced = true;
     const advanced = navPages(render("overview"));
-    for (const page of ["bots", "desktops", "usage", "data", "general"]) expect(advanced).toContain(page);
+    for (const page of ["bots", "desktops", "linked-servers", "usage", "data", "general"]) expect(advanced).toContain(page);
   });
 
   it("keeps the rows a Simple person needs: language and notifications on This app", () => {

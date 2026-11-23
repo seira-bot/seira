@@ -2,6 +2,7 @@ import type { SettingsPageId } from "../settings-index";
 import { AccountPage, PlanPage } from "./AccountPages";
 import { AppPage, AppearancePage, GeneralPage } from "./AppPages";
 import { DataPage, ImportExportPage, InstallationsPage, PeoplePage, SpendingPage, VaultPage } from "./DataPages";
+import { LinkedServersPage } from "./LinkedServersPage";
 import { PhonePage } from "./PhonePage";
 import { AiPage, BotsPage, DesktopsPage, OverviewPage } from "./PlacePages";
 
@@ -11,6 +12,7 @@ const PAGES: Record<SettingsPageId, () => React.ReactNode> = {
   ai: AiPage,
   bots: BotsPage,
   desktops: DesktopsPage,
+  "linked-servers": LinkedServersPage,
   vault: VaultPage,
   usage: SpendingPage,
   transfer: ImportExportPage,

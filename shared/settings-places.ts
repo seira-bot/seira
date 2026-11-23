@@ -19,6 +19,7 @@ export const SETTINGS_PLACES = [
   {"id":"page:ai","path":"Settings → AI","words":["ai","models","model providers","providers","engines","api keys","keys","key","claude","codex","openai","anthropic","ollama","lm studio","local model"]},
   {"id":"page:bots","path":"Settings → You and your bots","words":["all bots","bots","about you","about me","profile","new bots","defaults","effort","limits","rules"],"advanced":true},
   {"id":"page:desktops","path":"Settings → Desktops & browser","words":["bot desktops","computer","desktop","desktops","browser","built-in browser","proxy","socks5","private desktop","sandbox","docker","podman","container","vps","own server","cloud desktops"],"advanced":true},
+  {"id":"page:linked-servers","path":"Settings → Linked places","words":["linked places","linked servers","link","links","another seira","other seira","invite","join","share bots","hand off","hand-off","work for another","connect two"],"advanced":true},
   {"id":"page:vault","path":"Settings → Vault","words":["vault","password","passwords","login","logins","secrets","1password","2fa"]},
   {"id":"page:usage","path":"Settings → Spending","words":["spending","usage","cost","costs","tokens","money","runs","export csv"],"advanced":true},
   {"id":"page:transfer","path":"Settings → Import & export","words":["import","export","backup","backups","restore","grok","grok bot","move from","bring"]},

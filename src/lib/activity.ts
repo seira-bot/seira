@@ -2,7 +2,7 @@ import { t, tFromServer } from "./i18n";
 import { namesLocale } from "./clock-time";
 import { en, type LocaleKey } from "@/locales";
 
-export const ACTIVITY_WHATS = ["all", "approvals", "decisions", "config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility"] as const;
+export const ACTIVITY_WHATS = ["all", "approvals", "decisions", "config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility", "linked-server"] as const;
 export type ActivityWhat = typeof ACTIVITY_WHATS[number];
 
 export type ActivityEntry =
@@ -53,6 +53,12 @@ export function whoLabel(who: string): string {
   if (who === "This computer") return t("activity.actor.loopback");
   if (who === "Local service") return t("activity.actor.worker");
   if (who === "Command line") return t("activity.actor.cli");
+  if (who === "Another Seira") return t("activity.actor.linkedServerUnnamed");
+  if (who === "An A2A agent") return t("activity.actor.linkedA2aUnnamed");
+  const agent = /^(.+) \(A2A agent\)$/u.exec(who);
+  if (agent) return t("activity.actor.linkedA2a", { name: agent[1]! });
+  const linked = /^(.+) \(another Seira\)$/u.exec(who);
+  if (linked) return t("activity.actor.linkedServer", { name: linked[1]! });
   return who || "—";
 }
 

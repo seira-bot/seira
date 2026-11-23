@@ -118,6 +118,7 @@ Use only mapped, tested commands:
 - [Memory: recall, upkeep and the tidy-up](memory-layer.md)
 - [Spend cap and sell prices](spend-cap.md)
 - [Moving from another AI: the import hub](ai-import.md)
+- [Linked places: two servers, one link](linked-servers.md)
 
 `control-seira ui` ([Chat UI, driven headlessly](chat-ui.md)) drives the real
 renderer in a headless Chrome by accessible name, so composer sends, transcript
