@@ -47,10 +47,12 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
+import { parseDescriptor } from "../../companion/src/e2e/descriptor.ts";
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import type { EgressDeps } from "../a2a/egress.ts";
 import { serveA2a } from "../a2a/inbound.ts";
 import { FILE_IDLE_MS, createDialer, readCapped, type SendPace } from "../bot-link/dial.ts";
+import { fetchOverSession } from "../bot-link/relay-fetch.ts";
 import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
 import { GUEST_EXCHANGE_MAX, LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
@@ -63,11 +65,15 @@ import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, createSendPace, kindOf, limitLog } from "./linked-servers-admit.ts";
 import { FULL_HERE, LinkedServerError, a2aKey, createLinkedA2a, type A2aInput, type A2aPatch, type A2aPeerView, type CardUrl } from "./linked-a2a.ts";
+import {
+  RELAY_INVITES_MAX, RELAY_LINKS_MAX, RELAY_SLOTS_MAX, createRelayLinkFetch, openRelaySession, placeholderOrigin, readRelayLinks, writeRelayLinks,
+  type LinkRelayGuests, type LinkRelayHost, type RelayDialOptions, type RelayLinkFetch, type RelayLinksFile, type RelayRoute,
+} from "./linked-servers-relay.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
 import { farFileName, farFrame, readFar } from "./linked-servers-text.ts";
 import {
-  ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
-  newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
+  ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeAnyInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
+  newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type DecodedInvite, type StoredLink,
 } from "./linked-servers-store.ts";
 
 export { ADMIT } from "./linked-servers-admit.ts";
@@ -89,6 +95,12 @@ const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
 const ONLY_A2A = "This sign-in works only for the calls of an A2A agent.";
 const PEER_ONLY = "Only an A2A agent has an address, a token or a name to change here.";
 const NOT_NOW = "The link could not be made now. Try again later.";
+const NEWER_INVITE = "This invite needs a newer Seira. Update this Seira, then try again.";
+const UNREACHABLE = "The other side could not be reached. Try again later.";
+/** The address that stands in for the far server of a link through Seira Relay: nothing resolves or dials it. */
+const PLACEHOLDER = /^https:\/\/h-[0-9a-f]{32}\.e2e\.invalid$/u;
+const NO_ROUTE: typeof fetch = () => Promise.reject(new Error("this link has no relay route"));
+const ENDED_NOTICE_DELAY_MS = 300;
 const FALLBACK_NAME = "Another Seira";
 const SELF_FALLBACK = "Seira";
 const ANSWER_MAX = 64 * 1024;
@@ -122,6 +134,8 @@ export interface SeiraLinkView {
   role: "inviter" | "joiner";
   /** `ended`: the other server ended the link, so it carries nothing until it is removed and made again. */
   state: "online" | "offline" | "ended";
+  /** `relay`: the link runs through Seira Relay, as this server has no address of its own or the other one has none. */
+  route: "https" | "relay";
   /** This server's bots the other server can see and hand work to. */
   exposed: string[];
   cap: ApprovalCap;
@@ -157,10 +171,12 @@ export interface LinkedServersDeps extends InstanceDeps {
   ownPeer?(key: string): boolean;
   power?(): { sleeping(): boolean; sleepSignal(): AbortSignal } | null | undefined;
   fetch?: typeof fetch;
+  /** How this server dials Seira Relay to reach a server that has no address. Absent: the defaults of a plain server. */
+  relay?: RelayDialOptions;
   now?: () => number;
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
-  timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
+  timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; sweepMs?: number; pace?: { gapMs: number; freshMs: number } };
   /** Smaller limits for tests: a link's files waiting here, its work frames, hellos and characters to clean in a window, its frames
    * waiting here, its joiner's exchanges and new sessions in a window, and the bytes this side reads from it and sends it in
    * a window. */
@@ -177,6 +193,8 @@ type Instance = {
   cap(): ApprovalCap;
   dialer: ReturnType<typeof createDialer> | null;
   exchange: ReturnType<typeof createLinkExchange> | null;
+  /** The joiner's way to a far server through Seira Relay. */
+  relay: RelayLinkFetch | null;
 };
 
 export type LinkedServers = ReturnType<typeof createLinkedServers>;
@@ -186,6 +204,9 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const log = deps.log ?? (() => {});
   const timing = deps.timing ?? {};
   const file = readLinks(deps.dataDir, log);
+  const relayFile = keptRelayLinks();
+  let relayHost: LinkRelayHost | null = null;
+  let sweep: NodeJS.Timeout | undefined;
   const instances = new Map<string, Instance>();
   const admission = createAdmission(now);
   const refusals = createRefusalRecord(now);
@@ -199,6 +220,65 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   let upkeep: NodeJS.Timeout | undefined;
 
   const save = () => writeLinks(deps.dataDir, file);
+  const saveRelay = () => writeRelayLinks(deps.dataDir, relayFile);
+  const relayDial = (): RelayDialOptions => deps.relay ?? { app: "seira-server" };
+
+  /** What links.json still backs: a relay record of a link or an invite that is gone is dropped. */
+  function keptRelayLinks(): RelayLinksFile {
+    const stored = readRelayLinks(deps.dataDir, log);
+    const idsOf = (role: StoredLink["role"]) => new Set(file.links.filter((one) => one.role === role).map((one) => one.id));
+    const inviters = idsOf("inviter"), joiners = idsOf("joiner");
+    const liveHashes = new Set(file.invites.filter((one) => one.usedAt === undefined && one.expiresAt > now()).map((one) => one.hash));
+    const kept: RelayLinksFile = { v: 1, invites: stored.invites.filter((hash) => liveHashes.has(hash)), hosted: stored.hosted.filter((id) => inviters.has(id)),
+      joined: Object.fromEntries(Object.entries(stored.joined).filter(([id]) => joiners.has(id))) };
+    if (JSON.stringify(kept) !== JSON.stringify(stored)) { try { writeRelayLinks(deps.dataDir, kept); } catch { /* read again, and tidied again, at the next start */ } }
+    return kept;
+  }
+
+  /** The relay invites that can still be used. */
+  const liveRelayInvites = (): string[] => {
+    const at = now();
+    return relayFile.invites.filter((hash) => file.invites.some((one) => one.hash === hash && one.usedAt === undefined && one.expiresAt > at));
+  };
+
+  /** Drops the relay invites that were used or expired. True when any went. */
+  function pruneRelayInvites(): boolean {
+    const kept = liveRelayInvites();
+    if (kept.length === relayFile.invites.length) return false;
+    relayFile.invites = kept;
+    return true;
+  }
+
+  /** An invite that expires stops being admitted at the relay at once, not at the next request. */
+  function scheduleSweep(): void {
+    if (sweep || relayFile.invites.length === 0) return;
+    sweep = setTimeout(() => {
+      sweep = undefined;
+      if (pruneRelayInvites()) { try { saveRelay(); } catch { /* the record is read again at the next start */ } relayHost?.changed(); }
+      scheduleSweep();
+    }, timing.sweepMs ?? 5_000);
+    sweep.unref?.();
+  }
+
+  const relayRoom = (): boolean => {
+    const room = relayHost?.room() ?? { devices: 0, links: 0 };
+    return relayFile.hosted.length < RELAY_LINKS_MAX && room.devices + Math.max(room.links, relayFile.hosted.length) < RELAY_SLOTS_MAX;
+  };
+
+  /** A hosted relay link is over: the relay stops admitting it, and its session closes once the answer to the request that ended it is out. */
+  function hostedGone(id: string, delayMs = 0): void {
+    if (!relayFile.hosted.includes(id)) return;
+    relayFile.hosted = relayFile.hosted.filter((one) => one !== id);
+    try { saveRelay(); } catch { /* the record is read again at the next start */ }
+    const close = () => { relayHost?.closeLink(id); relayHost?.changed(); };
+    if (delayMs > 0) setTimeout(close, delayMs).unref?.(); else close();
+  }
+
+  const joinedRoute = (id: string): RelayRoute | null => {
+    const stored = relayFile.joined[id];
+    const parsed = stored ? parseDescriptor(stored) : null;
+    return parsed?.outcome === "ok" && parsed.hostId ? { e2e: parsed.descriptor, transportKey: parsed.transportKey, hostId: parsed.hostId } : null;
+  };
   const recordOf = (id: string) => file.links.find((one) => one.id === id);
   const keyOf = (id: string) => peerKey(`guest:${id}`);
   const selfPlace = (): Place => ({ id: deps.selfId(), name: cleanName(deps.serverName()) || SELF_FALLBACK });
@@ -306,12 +386,13 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     took: (work, taken) => sendPace.took(id, work, taken),
   });
 
-  function dialerFor(id: string, key: string, dataDir: string, link: BotLink, linkLog: (line: string) => void) {
-    const ask = deps.fetch ?? fetch;
+  /** `via`: how to reach the other server when it is not at an address (the relay's `fetch`). A link through the relay ends only when the other side says so inside its session. */
+  function dialerFor(id: string, key: string, dataDir: string, link: BotLink, linkLog: (line: string) => void, via?: typeof fetch) {
+    const ask = via ?? deps.fetch ?? fetch;
     const watched = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const response = await ask(input, init);
       const url = input instanceof Request ? input.url : String(input);
-      if ((response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
+      if (!via && (response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
       return response;
     }) as typeof fetch;
     return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => linkLog("linked servers: the other server could not be reached; trying again"),
@@ -346,11 +427,19 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     };
     const cap = () => recordOf(id)?.cap ?? "ask";
     const link = guestLink(dataDir, policy, cap, linkLog, files);
-    const endsOnBye: BotLink = { ...link, receive: (peer, read) => { const frames = read.map(farFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const endsOnBye: BotLink = { ...link, receive: (peer, read) => {
+      const frames = read.map(farFrame);
+      if (frames.some(isBye)) { stopWork(link, key, ENDED_THERE); hostedGone(id, ENDED_NOTICE_DELAY_MS); }
+      link.receive(peer, frames);
+    } };
+    const route = record.role === "joiner" ? joinedRoute(id) : null;
+    const relay = route ? createRelayLinkFetch(route, () => link.dial()?.token ?? null, { ...relayDial(), removed: () => { setTimeout(() => endedThere(id), 0); } }) : null;
+    const origin = record.role === "joiner" ? link.dial()?.origin : undefined;
+    const via = relay?.fetch ?? (origin && PLACEHOLDER.test(origin) ? NO_ROUTE : undefined);
     const takes = (frames: readonly unknown[], ack: number) => intakeOf(id, frames, link.backlog(key, ack) >= outboxMax);
     const entry: Instance = {
-      id, key, link, cap,
-      dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye, linkLog) : null,
+      id, key, link, cap, relay,
+      dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye, linkLog, via) : null,
       exchange: record.role === "inviter"
         ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
           pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) },
@@ -378,13 +467,15 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const capOf = (entry: Instance): ApprovalCap => entry.cap();
 
   function shut(entry: Instance): void {
+    entry.relay?.close();
     entry.dialer?.close();
     entry.link.close();
   }
 
   function view(record: StoredLink): SeiraLinkView {
     const entry = instances.get(record.id);
-    const base = { id: record.id, kind: "seira" as const, name: nameOf(record), role: record.role, exposed: [...record.exposed], cap: record.cap, createdAt: record.createdAt };
+    const route = relayFile.hosted.includes(record.id) || record.id in relayFile.joined ? "relay" as const : "https" as const;
+    const base = { id: record.id, kind: "seira" as const, name: nameOf(record), role: record.role, route, exposed: [...record.exposed], cap: record.cap, createdAt: record.createdAt };
     if (!live(entry) || entry.dialer?.state().needsPairing) return { ...base, state: "ended", bots: [] };
     const bots = entry.link.linked().filter((one) => one.peer === entry.key).map(({ id, bot }) => {
       const title = cleanName(bot.title ?? "", 200), description = cleanName(bot.description ?? "", 400);
@@ -414,7 +505,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     pruneInvites(file, at);
     const invite = body.success ? liveInvite(file, body.data.code, at) : undefined;
     if (!body.success || !invite) { deps.attemptFailed?.(source); return json(res, 403, { error: NOT_VALID }); }
-    if (full()) return json(res, 409, { error: "This Seira cannot take another link now." });
+    const overRelay = relayFile.invites.includes(invite.hash);
+    if (full() || (overRelay && !relayRoom())) return json(res, 409, { error: "This Seira cannot take another link now." });
     let id: string;
     try { id = freshId(); } catch { return json(res, 500, { error: "The link could not be made. Try again." }); }
     const token = newToken();
@@ -422,13 +514,25 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     invite.usedAt = at;
     pruneInvites(file, at);
     try {
+      if (overRelay) {
+        relayFile.invites = relayFile.invites.filter((hash) => hash !== invite.hash);
+        relayFile.hosted = [...relayFile.hosted, id];
+        saveRelay();
+      }
       file.links.push(record);
       save();
       const self = selfPlace();
       open(record).link.pair({ self, sessionId: id, computer: record.place });
       deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
+      if (overRelay) relayHost?.changed();
       return json(res, 200, { token, place: self });
     } catch (error) {
+      if (overRelay) {
+        relayFile.hosted = relayFile.hosted.filter((one) => one !== id);
+        if (!relayFile.invites.includes(invite.hash)) relayFile.invites = [...relayFile.invites, invite.hash];
+        try { saveRelay(); } catch { /* the record is read again at the next start */ }
+        relayHost?.changed();
+      }
       file.links = file.links.filter((one) => one !== record);
       const entry = instances.get(id);
       if (entry) { instances.delete(id); try { shut(entry); } catch { /* closing anyway */ } }
@@ -466,11 +570,11 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   }
 
   /** Security invariant: no part of the other server's answer but a parsed token and place leaves this function. */
-  async function askToJoin(origin: string, code: string, self: Place): Promise<z.infer<typeof acceptAnswer>> {
-    const unreachable = new LinkedServerError("The other side could not be reached. Try again later.", 502);
+  async function askToJoin(origin: string, code: string, self: Place, ask?: typeof fetch): Promise<z.infer<typeof acceptAnswer>> {
+    const unreachable = new LinkedServerError(UNREACHABLE, 502);
     let response: Response;
     try {
-      response = await (deps.fetch ?? fetch)(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
+      response = await (ask ?? deps.fetch ?? fetch)(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
         headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ code, place: self }) });
     } catch {
       log("linked servers: the other server could not be reached to join it");
@@ -495,7 +599,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const a2a = createLinkedA2a({
     dataDir: deps.dataDir, now, log, audit: deps.audit, coordinator: deps.coordinator, bot: deps.bot,
     link: (dataDir, policy, cap, linkLog) => guestLink(dataDir, policy, cap, linkLog),
-    register: (id, key, link, cap) => { instances.set(id, { id, key, link, cap, dialer: null, exchange: null }); },
+    register: (id, key, link, cap) => { instances.set(id, { id, key, link, cap, dialer: null, exchange: null, relay: null }); },
     unregister: (id) => { instances.delete(id); },
     admit: (id, openCount) => admission.admit(id, openCount),
     record: recordEvent,
@@ -516,13 +620,86 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   for (const record of file.links) open(record);
 
+  /** An invite for a server with no address of its own, when it runs Seira Relay: it names the relay identity instead. */
+  function relayInvite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
+    if (!relayHost) return { error: "no_address" };
+    const route = relayHost.descriptor();
+    if (!route?.h || !route.r?.length) return { error: "relay_waiting" };
+    if (full()) return { error: "full" };
+    const at = now();
+    pruneInvites(file, at);
+    pruneRelayInvites();
+    if (relayFile.invites.length >= RELAY_INVITES_MAX || !relayRoom()) return { error: "relay_full" };
+    const before = { links: file.invites, relay: relayFile.invites };
+    const { code, expiresAt } = addInvite(file, at);
+    try {
+      relayFile.invites = [...relayFile.invites, hashSecret(code)];
+      saveRelay();
+      save();
+    } catch (error) {
+      file.invites = before.links;
+      relayFile.invites = before.relay;
+      throw error;
+    }
+    relayHost.changed();
+    scheduleSweep();
+    deps.audit({ category: "linked-server", action: "linked-server.invite", target: { kind: "linked-server-invite" }, after: { expiresAt: new Date(expiresAt).toISOString(), route: "relay" }, actor });
+    return { invite: encodeInvite({ name: selfPlace().name, code, e2e: route }), expiresAt };
+  }
+
+  /** Uses an invite of a server that has no address: one relay session with the invite code takes the accept request, and the
+   * link's own sessions then use the link's credential. */
+  async function joinOverRelay(invite: Extract<DecodedInvite, { v: 2 }>, actor: AdminActor): Promise<SeiraLinkView> {
+    if (full()) throw new LinkedServerError(FULL_HERE, 409);
+    const route: RelayRoute = { e2e: invite.e2e, transportKey: invite.transportKey, hostId: invite.hostId };
+    const origin = placeholderOrigin(invite.hostId);
+    const self = selfPlace();
+    let session: Awaited<ReturnType<typeof openRelaySession>>;
+    try {
+      session = await openRelaySession(route, invite.code, relayDial());
+    } catch {
+      log("linked servers: the other server could not be reached through Seira Relay to join it");
+      throw new LinkedServerError(UNREACHABLE, 502);
+    }
+    let answer: z.infer<typeof acceptAnswer>;
+    try { answer = await askToJoin(origin, invite.code, self, fetchOverSession(async () => session)); } finally { session.shutdown(); }
+    if (full()) throw new LinkedServerError(FULL_HERE, 409);
+    const record: StoredLink = { id: freshId(), role: "joiner", place: cleanPlace(answer.place, FALLBACK_NAME), exposed: [], cap: "ask", createdAt: now() };
+    relayFile.joined[record.id] = invite.e2e;
+    try { saveRelay(); file.links.push(record); save(); } catch (error) {
+      delete relayFile.joined[record.id];
+      file.links = file.links.filter((one) => one !== record);
+      throw error;
+    }
+    const entry = open(record);
+    entry.link.turnOn({ self, origin, token: answer.token, peer: record.place });
+    entry.dialer?.start();
+    deps.audit({ category: "linked-server", action: "linked-server.join", target: targetOf(record), after: { route: "relay" }, actor });
+    return view(record);
+  }
+
+  const relayGuests: LinkRelayGuests = {
+    attach(host) {
+      relayHost = host;
+      if (host) scheduleSweep();
+    },
+    records: () => relayFile.hosted.flatMap((id) => { const tokenHash = recordOf(id)?.tokenHash; return tokenHash ? [{ id, tokenHash }] : []; }),
+    windows: () => liveRelayInvites().slice(0, RELAY_INVITES_MAX).map((tokenHash) => ({ tokenHash })),
+    allows: (kind, method, path) => kind === "link"
+      ? (method === "POST" && path === GUEST_PATHS.sync) || (path === GUEST_PATHS.file && (method === "GET" || method === "PUT"))
+      : method === "POST" && path === ACCEPT_PATH,
+  };
+
   return {
+    /** What the phone relay asks of the manager: who may reach this server through Seira Relay, and by which requests. */
+    relayGuests,
+
     list(): LinkedServerView[] { return [...file.links.map(view), ...a2a.list()]; },
 
-    invite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" } | { error: "full" } {
+    invite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" | "full" | "relay_waiting" | "relay_full" } {
       const address = deps.publicOrigin();
       const origin = address ? guestOrigin(address) : null;
-      if (!origin) return { error: "no_address" };
+      if (!origin) return relayInvite(actor);
       if (full()) return { error: "full" };
       const { code, expiresAt } = addInvite(file, now());
       save();
@@ -532,8 +709,10 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
     /** Uses another server's invite. Throws a LinkedServerError whose message the person can read. */
     async join(text: string, actor: AdminActor): Promise<SeiraLinkView> {
-      const invite = decodeInvite(text);
+      const invite = decodeAnyInvite(text);
       if (!invite) throw new LinkedServerError("That invite is not valid. Copy the whole invite and try again.", 400);
+      if (invite.v === "newer") throw new LinkedServerError(NEWER_INVITE, 400);
+      if (invite.v === 2) return joinOverRelay(invite, actor);
       const origin = guestOrigin(invite.origin);
       if (!origin) throw new LinkedServerError("That invite points to an address that is not secure, so it was not used.", 400);
       if (full()) throw new LinkedServerError(FULL_HERE, 409);
@@ -585,10 +764,18 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if (entry) stopWork(entry.link, key, REMOVED);
       const told = entry?.dialer && record.role === "joiner" ? entry.dialer.stop({ bye: true }) : Promise.resolve(true);
       entry?.link.turnOff(true);
+      const hosted = relayFile.hosted.includes(id);
+      if (hosted || id in relayFile.joined) {
+        relayFile.hosted = relayFile.hosted.filter((one) => one !== id);
+        delete relayFile.joined[id];
+        saveRelay();
+        if (hosted) relayHost?.closeLink(id);
+      }
       file.links = file.links.filter((one) => one.id !== id);
       const ended = (file.ended ?? []).filter((one) => one.key !== key);
       file.ended = openRoots().has(key) ? [...ended, { key, cap: record.cap, at: now() }].slice(-ENDED_MAX) : ended;
       save();
+      if (hosted) relayHost?.changed();
       instances.delete(id);
       await told.catch(() => false);
       if (entry) shut(entry);
@@ -665,6 +852,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     close(): void {
       if (upkeep) clearInterval(upkeep);
       upkeep = undefined;
+      if (sweep) clearTimeout(sweep);
+      sweep = undefined;
       a2a.close();
       for (const entry of instances.values()) shut(entry);
       instances.clear();

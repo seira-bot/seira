@@ -341,7 +341,12 @@ describe("the admin routes", () => {
     const refused = await ask();
     expect(refused.status).toBe(409);
     expect(refused.body.error).toContain("Only the side that makes the invite needs one");
-    for (const way of ["--tunnel", "--public-url", "--domain", "--tailscale"]) expect(refused.body.error).toContain(way);
+    expect(refused.body.error).toContain("Give this Seira a tunnel, a domain name or a Tailscale address, or turn on Seira Relay.");
+    expect(refused.body.error).not.toMatch(/--|relay\.json|descriptor/u);
+    made = { error: "relay_waiting" };
+    expect(await ask()).toEqual({ status: 409, body: { error: "Seira Relay is not connected yet. Wait a moment, then make the invite again." } });
+    made = { error: "relay_full" };
+    expect(await ask()).toEqual({ status: 409, body: { error: "This Seira already has as many links through Seira Relay as it can keep. Remove one first." } });
     made = { error: "full" };
     expect(await ask()).toEqual({ status: 409, body: { error: "This Seira already has as many links as it can keep. Remove one first." } });
   });

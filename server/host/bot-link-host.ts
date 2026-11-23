@@ -5,6 +5,7 @@
 import type { IncomingMessage } from "node:http";
 
 import type { AdminActionRow, AdminActor } from "../admin-activity.ts";
+import { relayBaseUrlOverride } from "../../companion/src/e2e/config.ts";
 import { createDialer } from "../bot-link/dial.ts";
 import { createBotLink, type CoordinateContext } from "../bot-link/link.ts";
 import { isLinkedId } from "../bot-link/protocol.ts";
@@ -109,6 +110,7 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
     serverName: deps.serverName, selfId: () => deps.environmentId, publicOrigin: deps.publicOrigin, audit: deps.audit,
     attemptAllowed: (source) => deps.sessions.attemptAllowed(source).ok, attemptFailed: (source) => { deps.sessions.noteFailure(source); },
     ownPeer: (key) => link.has(key),
+    relay: { app: "seira-server/link", baseUrl: relayBaseUrlOverride(process.env.SEIRA_PHONE_RELAY_URL)?.("") ?? null },
     a2a: { allowLoopback: loopback, egress: { allowLoopback: loopback }, ...(deps.a2a?.cleanChars ? { cleanChars: deps.a2a.cleanChars } : {}),
       origin: () => deps.publicOrigin() ?? (loopback && testPort ? `http://127.0.0.1:${testPort}` : null) },
   });

@@ -24,6 +24,12 @@ const TOKEN = /^\/api\/linked-servers\/([0-9a-f]{16})\/token$/u;
 const ADMIN_ONLY = "Only an admin can manage links to another Seira.";
 const NOT_HERE = "That link is not here.";
 const NOT_A_BOT = "One of those bots is not here.";
+const INVITE_REFUSALS = {
+  full: "This Seira already has as many links as it can keep. Remove one first.",
+  no_address: "This Seira has no secure public address, so another Seira cannot reach it. Only the side that makes the invite needs one. Give this Seira a tunnel, a domain name or a Tailscale address, or turn on Seira Relay. Then make the invite again.",
+  relay_waiting: "Seira Relay is not connected yet. Wait a moment, then make the invite again.",
+  relay_full: "This Seira already has as many links through Seira Relay as it can keep. Remove one first.",
+} as const;
 
 const joinBody = z.object({ invite: z.string().min(1).max(4_096) }).strict();
 const exposed = z.array(botIdSchema).max(500);
@@ -65,9 +71,7 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
       req.resume();
       const made = manager.invite(actor);
       if (!("error" in made)) return json(res, 200, made);
-      return json(res, 409, { error: made.error === "full"
-        ? "This Seira already has as many links as it can keep. Remove one first."
-        : "The other Seira needs to reach this one, and this one has no secure public address. Only the side that makes the invite needs one. Start this server with --tunnel, --public-url, --domain or --tailscale, then make the invite again." });
+      return json(res, 409, { error: INVITE_REFUSALS[made.error] });
     }
 
     try {

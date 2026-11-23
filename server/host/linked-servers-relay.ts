@@ -20,6 +20,8 @@ import { LINK_ID, linkedServersDir } from "./linked-servers-store.ts";
 export const RELAY_LINKS_MAX = 4;
 /** Invites for a relay link that wait to be used at one time. */
 export const RELAY_INVITES_MAX = 2;
+/** Phones and links through the relay share this many slots on one server. */
+export const RELAY_SLOTS_MAX = 20;
 /** The start of the device id under which the relay admits a link. */
 export const LINK_DEVICE_PREFIX = "link:";
 

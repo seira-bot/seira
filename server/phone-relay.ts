@@ -24,7 +24,7 @@ import { isLoopbackHost } from "../electron/server-address.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import { LEVEL_HEADER } from "./bot-link/protocol.ts";
 import { reportableServerVersion } from "./environment.ts";
-import { guestKind, LINK_DEADLINES, LINK_DEVICE_PREFIX, RELAY_INVITES_MAX, RELAY_LINKS_MAX, type LinkRelayGuests } from "./host/linked-servers-relay.ts";
+import { guestKind, LINK_DEADLINES, LINK_DEVICE_PREFIX, RELAY_INVITES_MAX, RELAY_LINKS_MAX, RELAY_SLOTS_MAX, type LinkRelayGuests } from "./host/linked-servers-relay.ts";
 import { bearerToken, PROXY_HEADERS } from "./request-auth.ts";
 import { isPairingCredential, type SessionRegistry } from "./sessions.ts";
 import { describeTunnelAccount, FLEET_CREDENTIAL_ENV, fleetCredential, openTunnelCredentials } from "./tunnel.ts";
@@ -36,7 +36,7 @@ export const SERVES_TUNNEL_ENV = "SEIRA_SERVES_TUNNEL";
 export const PHONE_RELAY_KEY_FILE = "phone-relay-key.json";
 export const PHONE_RELAY_PHONES_FILE = "phone-relay-phones.json";
 /** The relay admits 32 per host; 20 phones, 2 pairing windows and the live pairing sessions stay under it. */
-export const MAX_RELAY_PHONES = 20;
+export const MAX_RELAY_PHONES = RELAY_SLOTS_MAX;
 const MAX_PAIRING_WINDOWS = 2;
 /** A removed phone hears GoAway(3) inside its session before the relay drops it from the admission set. */
 const ADMISSION_SETTLE_MS = 300;
