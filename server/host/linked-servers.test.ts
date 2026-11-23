@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -421,6 +421,28 @@ describe("the linked servers manager", () => {
     expect(rows.map((row) => row.action)).toEqual(["linked-server.invite", "linked-server.accept", "linked-server.update", "linked-server.remove"]);
 
     expect(manager("again", { dataDir }).made.list()).toEqual([]);
+  });
+
+  it("answers a fixed text, and keeps the invite, when the link cannot be saved", async () => {
+    const { made, logs, dataDir } = manager("head");
+    const origin = await serving(made);
+    const answer = made.invite({ kind: "cli" });
+    if ("error" in answer) throw new Error(answer.error);
+    const stored = join(dataDir, "linked-servers", "links.json");
+    rmSync(stored);
+    mkdirSync(stored);
+    const place = { id: "branch-environment", name: "Branch" };
+    const failed = await fetch(`${origin}/api/linked-servers/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: codeOf(answer.invite), place }) });
+    const text = await failed.text();
+    expect([failed.status, JSON.parse(text)]).toEqual([503, { error: "The link could not be made now. Try again later." }]);
+    expect(text).not.toContain(dataDir);
+    expect(logs.some((line) => line.includes(dataDir))).toBe(true);
+    expect(made.list()).toEqual([]);
+    expect(made.instances()).toEqual([]);
+
+    rmdirSync(stored);
+    expect((await post(`${origin}/api/linked-servers/accept`, { code: codeOf(answer.invite), place })).status).toBe(200);
+    expect(made.list()).toHaveLength(1);
   });
 
   it("joins only an invite at a secure address, and says nothing the other server answered", async () => {

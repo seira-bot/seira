@@ -77,6 +77,7 @@ const LINK_OFF = "This link is not in use any more.";
 const TOO_MANY = "Too many tries. Wait a minute and try again.";
 const ONLY_LINK = "This sign-in works only for a link between two Seiras.";
 const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
+const NOT_NOW = "The link could not be made now. Try again later.";
 const FULL_HERE = "This Seira already has as many links as it can keep. Remove one first.";
 const FALLBACK_NAME = "Another Seira";
 const SELF_FALLBACK = "Seira";
@@ -362,7 +363,16 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return { ...base, state: entry.link.online(entry.key) ? "online" : "offline", bots };
   }
 
+  /** Every error that accepting an invite does not answer itself gets one fixed answer, so a cause (a path in the data
+   * folder) never reaches the joiner. */
   async function accept(ctx: GuestRequest): Promise<void> {
+    try { await acceptOf(ctx); } catch (error) {
+      log(`linked servers: an invite could not be taken (${error instanceof Error ? error.message : String(error)})`);
+      if (ctx.res.headersSent || ctx.res.destroyed) ctx.res.destroy(); else json(ctx.res, 503, { error: NOT_NOW });
+    }
+  }
+
+  async function acceptOf(ctx: GuestRequest): Promise<void> {
     const { req, res } = ctx;
     res.setHeader("cache-control", "no-store");
     const source = `linked-server:${requestSource(req)}`;
@@ -377,16 +387,26 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     if (file.links.length >= LINKS_MAX) return json(res, 409, { error: "This Seira cannot take another link now." });
     let id: string;
     try { id = freshId(); } catch { return json(res, 500, { error: "The link could not be made. Try again." }); }
-    invite.usedAt = at;
-    pruneInvites(file, at);
     const token = newToken();
     const record: StoredLink = { id, role: "inviter", place: cleanPlace(body.data.place, FALLBACK_NAME), exposed: [], cap: "ask", tokenHash: hashSecret(token), createdAt: at };
-    file.links.push(record);
-    save();
-    const self = selfPlace();
-    open(record).link.pair({ self, sessionId: id, computer: record.place });
-    deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
-    return json(res, 200, { token, place: self });
+    invite.usedAt = at;
+    pruneInvites(file, at);
+    try {
+      file.links.push(record);
+      save();
+      const self = selfPlace();
+      open(record).link.pair({ self, sessionId: id, computer: record.place });
+      deps.audit({ category: "linked-server", action: "linked-server.accept", target: targetOf(record), actor: peerActor(record) });
+      return json(res, 200, { token, place: self });
+    } catch (error) {
+      file.links = file.links.filter((one) => one !== record);
+      const entry = instances.get(id);
+      if (entry) { instances.delete(id); try { shut(entry); } catch { /* closing anyway */ } }
+      delete invite.usedAt;
+      file.invites.push(invite);
+      try { save(); } catch { /* the stored file still has the invite */ }
+      throw error;
+    }
   }
 
   /** The instance whose credential this is. Every stored hash is compared, in constant time each. */
