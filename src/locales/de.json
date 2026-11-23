@@ -3749,6 +3749,7 @@
   "settings.runCard.line": "Zeigt die Shell-Befehle für deine aktuelle Anfrage.",
   "settings.chatWidth.line": "Wie breit Nachrichtenblasen auf diesem Gerät werden können.",
   "settings.font.line": "Ersetzt die Schrift des Themes auf diesem Gerät.",
+  "settings.textSize.title": "Textgröße",
   "accounts.manage": "Konto und Abmelden",
   "accounts.signOut": "Abmelden",
   "cloudSetup.myCloud": "Meine Cloud",

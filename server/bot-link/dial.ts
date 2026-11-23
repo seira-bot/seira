@@ -6,7 +6,8 @@
 // the other has not acknowledged. The Cloud's answer that it sleeps stops the asking until this computer has work for it
 // or the app says the Cloud is awake (`start`), since any request would start a sleeping Cloud; the app looks every
 // minute and never asks the Cloud itself to find out.
-import { createWriteStream, openAsBlob, rmSync } from "node:fs";
+import { createWriteStream, mkdirSync, openAsBlob, rmSync } from "node:fs";
+import { dirname } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
@@ -18,8 +19,9 @@ const MAX_RETRY_MS = 60_000;
 /** What the Cloud marks a held answer with while it goes to sleep (server/cloud-power.ts). */
 const POWER_HEADER = "x-omb-cloud-power";
 const BACKGROUND_HEADER = "x-seira-background";
-/** One file may take this long to cross. */
+/** One file may take this long to cross; on a guest link its bytes may stop for no longer than FILE_IDLE_MS. */
 const FILE_MS = 10 * 60_000;
+export const FILE_IDLE_MS = 60_000;
 const FAR_REFUSED = "the other side did not take or give the file";
 const PROBE_MAX = 4_096;
 
@@ -62,19 +64,25 @@ export interface DialerOptions {
   /** false: an error never carries the other side's own words, as for a server of another owner. */
   farText?: boolean;
   /** The frames of one answer this side takes: `count` of them from the first, and the ones to act on. The rest are
-   * not acknowledged, so the other side sends them again. Absent: all of them. */
-  takes?(frames: readonly unknown[]): { count: number; frames: readonly unknown[] };
+   * not acknowledged, so the other side sends them again. Absent: all of them. `undo` gives back what the choice spent,
+   * when the frames could not be taken after all. */
+  takes?(frames: readonly unknown[]): { count: number; frames: readonly unknown[]; undo?(): void };
   /** What is left of the other side's budget of work frames from this side, as this side counts what it took. */
   budget?: { left(): number; spend(frames: number): void };
   /** Room for a file this side gets, as for one the other side puts (server/routes/bot-link-exchange.ts). */
   room?(to: string, bytes: number): (() => void) | null;
   /** The largest answer read, in bytes. Absent: any. */
   answerMax?: number;
+  /** The least time from one answer that came at once to the next exchange, and between two new sessions. Absent: none. */
+  pace?: { gapMs: number; freshMs: number };
+  /** How long a file's bytes may stop before the file is given up. Absent: only the time limit of the whole file. */
+  fileIdleMs?: number;
 }
 
 export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH }, farText = true,
-  takes, budget, room, answerMax }: DialerOptions) {
+  takes, budget, room, answerMax, pace, fileIdleMs }: DialerOptions) {
   let running = false, stopped = true, asleep = false, needsPairing = false;
+  let lastStart = 0, lastEnd = 0, lastFresh = Number.NEGATIVE_INFINITY;
   let session = "", ack = 0, fresh = true, retryMs = firstRetryMs, slowMs = firstRetryMs, narrow = Number.POSITIVE_INFINITY;
   let held: AbortController | null = null;
   let wakeUp: (() => void) | null = null;
@@ -124,20 +132,25 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
       const target = cloud();
       const release = room ? room(to, meta.bytes) : () => {};
       if (!release) throw new Error("there is no room for it here now");
+      const idle = new AbortController(), signal = AbortSignal.any([AbortSignal.timeout(FILE_MS), idle.signal]);
+      let quiet: NodeJS.Timeout | undefined;
+      const stir = () => { if (fileIdleMs === undefined) return; clearTimeout(quiet); quiet = setTimeout(() => idle.abort(new Error("the file stopped coming")), fileIdleMs); quiet.unref?.(); };
       try {
-        const response = await fetchImpl(fileUrl(target.origin, id, way, index, meta.name), { redirect: "error", signal: AbortSignal.timeout(FILE_MS), headers: target.headers });
+        mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+        stir();
+        const response = await fetchImpl(fileUrl(target.origin, id, way, index, meta.name), { redirect: "error", signal, headers: target.headers });
         if (!response.ok || !response.body) throw await refusedFile(response);
         // No more than the frame said: a file that turns out larger is not kept.
         let taken = 0, over = false;
-        const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; over = taken > meta.bytes; done(over ? new Error("too large") : null, chunk); } });
+        const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { stir(); taken += chunk.length; over = taken > meta.bytes; done(over ? new Error("too large") : null, chunk); } });
         try {
-          await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream), capped, createWriteStream(to, { mode: 0o600 }));
+          await pipeline(Readable.fromWeb(response.body as import("node:stream/web").ReadableStream), capped, createWriteStream(to, { mode: 0o600 }), { signal });
         } catch (error) {
           rmSync(to, { force: true });
           throw over ? Object.assign(new Error(`${meta.name} is larger than it was said to be`), { gone: true }) : error;
         }
         if (taken !== meta.bytes) { rmSync(to, { force: true }); throw new Error(`${meta.name} did not arrive whole`); }
-      } finally { release(); }
+      } finally { clearTimeout(quiet); release(); }
     },
   };
   link.setTransfer(transfer);
@@ -147,7 +160,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
   /** One exchange. True when the other side took less than was sent, or this side took less than it was sent: the next
    * exchange waits, so a spent budget is not asked again at once. */
   async function exchange(target: { origin: string; token: string }, peer: string): Promise<boolean> {
-    if (fresh) link.sessionStarted(peer);
+    if (fresh) { lastFresh = Date.now(); link.sessionStarted(peer); }
     const sending = toSend(peer);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), holdMs + 15_000);
@@ -184,13 +197,13 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     }
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status === 429 && budget) narrow = Math.max(1, Math.floor(Math.min(narrow, workIn(sending)) / 2));
+      if (response.status === 429 && budget) { link.setOnline(peer, false); if (workIn(sending) > 0) narrow = Math.max(1, Math.floor(Math.min(narrow, workIn(sending)) / 2)); return true; }
       throw new Error(`the Cloud answered ${response.status}`);
     }
     const answer = syncAnswer.safeParse(await readJson(response, answerMax));
     if (!answer.success) throw new Error("the Cloud's answer did not parse");
     const said = Number(response.headers.get(TAKEN_HEADER) ?? Number.NaN);
-    const taken = Number.isSafeInteger(said) && said >= 0 ? Math.min(said, sending.length) : sending.length;
+    const taken = Number.isSafeInteger(said) && said >= 0 ? Math.min(said, sending.length) : budget ? 0 : sending.length;
     link.outgoing(peer, sending[taken - 1]?.seq ?? 0);
     budget?.spend(workIn(sending.slice(0, taken)));
     if (taken === sending.length) narrow *= 2;
@@ -203,9 +216,9 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
     link.setOnline(peer, true);
     link.setLevel(peer, levelOf(response.headers.get(LEVEL_HEADER)));
     const news = answer.data.frames.filter((entry) => entry.seq > ack);
-    const intake = takes ? takes(news.map((entry) => entry.frame)) : { count: news.length, frames: news.map((entry) => entry.frame) };
+    const intake: ReturnType<NonNullable<DialerOptions["takes"]>> = takes ? takes(news.map((entry) => entry.frame)) : { count: news.length, frames: news.map((entry) => entry.frame) };
     const count = Math.min(intake.count, news.length);
-    link.receive(peer, intake.frames);
+    try { link.receive(peer, intake.frames); } catch (error) { intake.undo?.(); throw error; }
     ack = Math.max(ack, ...news.slice(0, count).map((entry) => entry.seq));
     return taken < sending.length || count < news.length;
   }
@@ -218,8 +231,12 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
         const target = link.dial(), peer = link.cloudPeer();
         if (!target || !peer || needsPairing) break;
         if (asleep) { await pause(24 * 60 * 60_000); continue; }
+        const due = pace ? Math.max(fresh ? lastFresh + pace.freshMs : 0, lastEnd - lastStart < pace.gapMs ? lastEnd + pace.gapMs : 0) - Date.now() : 0;
+        if (due > 0) { await pause(due); continue; }
         try {
-          if (!await exchange(target, peer)) { slowMs = firstRetryMs; continue; }
+          lastStart = Date.now();
+          const slow = await exchange(target, peer).finally(() => { lastEnd = Date.now(); });
+          if (!slow) { slowMs = firstRetryMs; continue; }
           await pause(slowMs * (0.75 + Math.random() / 2));
           slowMs = Math.min(slowMs * 2, holdMs);
         } catch (error) {

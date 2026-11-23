@@ -95,6 +95,7 @@ export const SETTINGS_PLACES = [
   {"id":"light-dark","path":"Settings → Appearance → Light or dark","words":["dark mode","night mode","light mode","dark","light","system"]},
   {"id":"theme","path":"Settings → Appearance → Theme","words":["skin","looks","themes"]},
   {"id":"bubbles","path":"Settings → Appearance → Use the bot's color for my messages","words":["message color","my messages","bubbles"]},
+  {"id":"text-size","path":"Settings → Appearance → Text size","words":["text size","font size","zoom","bigger text","larger text","smaller text"],"only":"the desktop app"},
   {"id":"tool-calls","path":"Settings → Appearance → Chat","words":["tool calls","this run","chat width","font","typeface"]},
   {"id":"layout","path":"Settings → Appearance → Layout","words":["show your computers","rail","window frame","title bar","threads","tools layout","pinned","circles","universal pins","pinned panels"],"advanced":true},
   {"id":"apps","path":"the Apps panel (Connect apps, at the bottom of the sidebar)","words":["apps","gmail","slack","calendar","notion","connect app","integrations","treg","twitter","x twitter"]},

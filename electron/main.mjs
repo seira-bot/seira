@@ -13,6 +13,7 @@ import { createAndroidDeviceController } from "./android-device.mjs";
 import { finishSpeech, speechBusy, startSpeech, stopSpeech } from "./speech.mjs";
 import { installTalk, isTalkPanel } from "./talk-main.mjs";
 import { openBlankTerminal } from "./terminal-launch.mjs";
+import { installPowerIpc } from "./power-ipc.mjs";
 import { linuxDisablesGpu, SOFTWARE_RENDERING_ARG } from "./linux-gpu.mjs";
 import { applyWindowsAppId } from "./app-identity.mjs"; import { loadDevUi } from "./dev-ui-wait.mjs";
 import { contextMenuTemplate, createMediaDownloads } from "./context-menu.mjs";
@@ -34,7 +35,7 @@ import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
 import { postToServer } from "./server-message.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
-import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs";
+import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
 import { windowBackground, windowChromeOptions } from "./window-chrome.mjs";
 import { createAllWindowsClosedQuit } from "./window-all-closed.mjs";
@@ -92,7 +93,7 @@ import capabilitiesModule from "./capabilities.cjs";
 import environmentsModule from "./environments.cjs";
 import { pairingPageUrl, vouchForPlainHttpServers } from "./server-address.mjs"; import { createServerConnect } from "./server-probe.mjs"; import { createTailnetShare, remotePolicyAllows } from "./tailnet-share.mjs"; import { checkTailscale } from "./tailscale-check.mjs"; import { onTailnet } from "./tailnet.mjs"; import { checkServer, createServerStatus, installServerStatus } from "./server-status.mjs";
 import localOriginModule from "./local-origin.cjs";
-import { buildApplicationMenu } from "./menu.mjs";
+import { buildApplicationMenu } from "./menu.mjs"; import { createMainTextSize } from "./text-size.mjs";
 import { createComputerSharing, isHomeFolder, validateSharedFolders } from "./computer-sharing.mjs"; import { installServerLending } from "./server-lending.mjs"; import { ownEnvironmentIds } from "./lent-mcp.mjs";
 import { createHostScreenLease } from "./host-screen-lease.mjs";
 import { acquireDataDirLease } from "./data-dir-lease.mjs";
@@ -1451,7 +1452,7 @@ function reconnectCloud(origin) {
 const loginItem = createOpenAtLogin({ app, file: path.join(app.getPath("userData"), "open-at-login.json"), home: os.homedir() });
 loginItem.migrateLegacy();
 installOpenAtLogin({ ipcMain, guard: localOrHome, loginItem, changed: refreshApplicationMenu }); const alwaysOnHome = installAlwaysOnHome({ ipcMain, guard: localOnly, loginItem, changed: refreshApplicationMenu, file: path.join(app.getPath("userData"), "always-on-home.json"), blocker: powerSaveBlocker, isOnBattery: () => powerMonitor.isOnBatteryPower(), updates: unattendedUpdates, lending: () => computerSharing?.lendingSomewhere() === true, log: slog });
-let hiddenStart = false;
+let hiddenStart = false; let glanceControl = null; const textSize = createMainTextSize({ prefs: () => desktopPrefs, window: () => mainWindow });
 
 async function openCloudSettings() {
   if (!app.isPackaged || desktopRemoteAccess || !serverReady) return;
@@ -1505,6 +1506,7 @@ function refreshApplicationMenu() {
       onOrganizationSignIn: () => queueOrganizationEntry("seira://organization"),
       onForget: (id) => void workspaceMenuAction(() => forgetEnvironment(id)),
       onOpenSettings: () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("app:open-settings"); },
+      zoom: textSize, glance: glanceControl ? { checked: !glanceControl.hidden(), onToggle: on => glanceControl.setHidden(!on) } : null,
       openAtLogin: loginItem.available() ? { checked: loginItem.chosen(), onToggle: on => { loginItem.choose(on); refreshApplicationMenu(); } } : null,
       ...cloudMenuOptions(),
       home: homeWindow.cloudOrigin() ? { origin: homeWindow.cloudOrigin(), onBack: () => void showHome({ place: "cloud" }) } : null, t: nativeT,
@@ -1522,7 +1524,7 @@ function persistEnvironments(next) {
   try { railChanged(); } catch {}
 }
 
-function applyNativeLanguage() { relabelDesktop({ menu: refreshApplicationMenu, trays: [desktopTray, lendingTray], window: mainWindow, title: mainWindowTitle, badge: applyUnreadBadge }); }
+function applyNativeLanguage() { relabelDesktop({ menu: refreshApplicationMenu, trays: [desktopTray, lendingTray, glanceControl], window: mainWindow, title: mainWindowTitle, badge: applyUnreadBadge }); }
 
 async function workspaceMenuAction(action) {
   try { await action(); } catch (error) {
@@ -1947,7 +1949,7 @@ function createWindow({ deferNavigation = false } = {}) {
         ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`, ...(crashReports.available ? [CRASH_REPORTS_ARG] : []), ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : [])],
     },
   });
-  mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win);
+  mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win); textSize.attach(win.webContents);
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {
@@ -2336,11 +2338,7 @@ ipcMain.handle("perm:request-mic", localOnly("perm:request-mic", () => askForMic
 const privacySettings = pane => openPrivacySettings(pane, { available: nativeActions.applePrivacySettings, openExternal: url => shell.openExternal(url) });
 ipcMain.handle("perm:open-settings", localOnly("perm:open-settings", (_event, pane) => privacySettings(pane)));
 
-ipcMain.handle("desktop:relaunch", localOnly("desktop:relaunch", (event) => {
-  requireMainWindowSender(event);
-  relaunchAfterDesktopRemoteChange();
-  return true;
-}));
+installPowerIpc({ ipcMain, localOnly, requireMainWindowSender, relaunch: relaunchAfterDesktopRemoteChange, quit: () => app.quit() });
 
 const talk = installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, appleSpeech: nativeActions.appleSpeech,
   speech: { start: startSpeech, stop: stopSpeech, finish: finishSpeech, busy: speechBusy }, packaged: app.isPackaged, devUrl: DEV_URL, nativeImage, iconPath: APP_ICON, openLink: queueChatLink, reveal: revealForLink, log: slog, t: nativeT });
@@ -2616,6 +2614,8 @@ const rail = installCloudRail({ t: nativeT, ipcMain, clipboard, openCloud: openO
     probe: serverConnect.probe, run: (choice, link, code) => (choice === "link" ? (link ? (code === null ? connectHostedWorkspace(link) : serverConnect.connect(link, code)) : addServerFromClipboard()) : choice === "address" ? showConnectSheet() : homeWindow.cloudOrigin() ? undefined : openCloudAdd("app_menu")) } });
 const announceAddedCloud = createAddedCloudNotice({ t: nativeT, Notification, focused: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()), sheetOpen: rail.sheetOpen,
   open: id => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); void openOwnCloud(id); }, shown: () => cloudAccount?.addDone() }); const desktopNotifications = installDesktopNotifications({ ipcMain, Notification, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), window: () => mainWindow, mayNotify: (contents, url) => appPermissions?.check(contents, "notifications", url, { isMainFrame: true }) === true, reveal: revealForLink, openPlace: origin => (origin === homeWindow.cloudOrigin() ? showHome({ place: "cloud" }) : workspaceMenuAction(() => switchEnvironment(origin === rendererOrigin() ? LOCAL_ID : environmentsState.environments.find(entry => entry.origin === origin)?.id))) });
+glanceControl = installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), getMainWindow: () => mainWindow, prefs: nativeText.prefs, t: nativeT, onHiddenChange: refreshApplicationMenu,
+  revealChat: target => { revealForLink(); mainWindow?.webContents.send("desktop-notifications:open", target); }, isWayland: isWaylandSession({ platform: process.platform, env: process.env, switches: Object.fromEntries(["ozone-platform", "ozone-platform-hint"].map(name => [name, app.commandLine.getSwitchValue(name)])) }) });
 // A place's colour (place-look.mjs): the Admin's for a Cloud, this app's for This computer and a server connected by
 // hand; changed on the place's own page or from the window's rail, whatever that server runs.
 installPlaceLook({ ipcMain, guard: workspaceOnly, place: () => savedPlace(environmentsState), session: () => ({ clouds: desktopRemoteAccess ? null : cloudAccount?.state().clouds ?? null, homeOrigin: myCloud() }),
@@ -2932,7 +2932,7 @@ app.whenReady().then(async () => {
   registerUpdaterIpc({ pageAllowed: updaterPageAllowed, serverPage: event => activePageOrigin(event), confirmRestart: async (version, server) => Boolean(mainWindow && !mainWindow.isDestroyed()) && (await dialog.showMessageBox(mainWindow, { type: "question", message: nativeT("native.update.forServer", { version, server }), detail: nativeT("native.update.forServerDetail"), buttons: [nativeT("native.update.restartNow"), nativeT("native.update.notNow")], defaultId: 0, cancelId: 1, noLink: true })).response === 0 });
   desktopPrefs = nativeText.prefs;
   updatesConsent = registerDesktopPrefs({ ipcMain, cloudAccount: () => cloudAccount, prefs: desktopPrefs, localConfig: jsonFile(path.join(desktopDataDir(), "config.json")).read, cloudOffered: () => cloudAccountRestored().then(cloudOffersReady),
-    frame: { made: () => windowFrameMade, restarts: process.platform === "win32", changed: () => void broadcastDesktopCapabilities() },
+    textSize, frame: { made: () => windowFrameMade, restarts: process.platform === "win32", changed: () => void broadcastDesktopCapabilities() },
     languageChanged: (language, sender) => {
       for (const win of appWindows()) if (!win.isDestroyed() && win.webContents !== sender) win.webContents.send("desktop-language:changed", language);
       chromeRail.send("desktop-language:changed", language);

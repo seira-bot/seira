@@ -154,6 +154,8 @@ const __APP_VERSION__: string;
       home?: import("../../electron/home-window.mjs").HomeBridge;
       desktopNotices?: import("../../electron/desktop-prefs.mjs").DesktopNoticesBridge;
       desktopNotifications?: import("../../electron/desktop-notifications.mjs").DesktopNotificationsBridge;
+      /** Desktop app only: the feed Glance shows, and the answers the person gives there. Resolve true only when an answer was sent. */
+      glance?: { feed(feed: import("../../shared/glance").GlanceFeed): void; onAct(handler: (act: import("../../shared/glance").GlanceAct) => Promise<boolean>): () => void };
       /** This computer's own page only: the account's full name, for a first run's profile (system-name.mjs). */
       desktopProfile?: { systemName(): Promise<string | null> };
       desktopAnalytics?: import("../../electron/desktop-prefs.mjs").DesktopAnalyticsBridge;
@@ -396,6 +398,7 @@ const __APP_VERSION__: string;
       permOpenSettings(pane: "mic" | "screen" | "speech" | "accessibility"): Promise<void>;
       /** Relaunch the local desktop app through its normal shutdown cleanup. */
       relaunch?(): Promise<boolean>;
+      quit?(): Promise<boolean>;
       /** Copies an engine install command and opens a blank terminal. False
        * when no terminal could be launched; the clipboard still has it. */
       openInstallTerminal?(command: string): Promise<boolean>;
@@ -414,6 +417,14 @@ const __APP_VERSION__: string;
         state(): Promise<import("../../electron/desktop-prefs.mjs").WindowFrameState>;
         /** From the person's click on another server's page. */
         set(on: boolean): Promise<import("../../electron/desktop-prefs.mjs").WindowFrameState>;
+      };
+      /** The window's text size, this desktop's choice (Settings → Appearance). Absent on an older app. */
+      textSize?: {
+        get(): Promise<number>;
+        /** From the person's click on another server's page. Resolves with the step now in use. */
+        set(step: number): Promise<number>;
+        /** Also fires for the View menu and the zoom shortcuts. Returns the way to stop listening. */
+        onChange(callback: (step: number) => void): () => void;
       };
       /** The renderer-drawn Windows caption buttons; absent outside the
        * frameless Windows shell (macOS/Linux/browser keep native chrome). */

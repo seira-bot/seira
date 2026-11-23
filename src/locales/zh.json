@@ -8478,6 +8478,7 @@
   "settings.runCard.line": "显示你当前请求的 shell 命令。",
   "settings.chatWidth.line": "消息气泡在这台设备上最多能有多宽。",
   "settings.font.line": "在这台设备上替换主题字体。",
+  "settings.textSize.title": "文字大小",
   "accounts.manage": "账号与退出",
   "accounts.title": "你的账号",
   "accounts.close": "关闭",

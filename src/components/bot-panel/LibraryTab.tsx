@@ -2,6 +2,7 @@ import { AppWindow, Brain, FileText, Folder, Globe, Zap } from "lucide-react";
 import { useMemo } from "react";
 
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { usePageOpener } from "@/lib/page-open";
 import { shortPath } from "@/lib/short-path";
 import { SIDEBAR_INLINE, useMediaQuery } from "@/lib/use-media-query";
@@ -66,7 +67,7 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
   const memoryText = memoryValue(bot, memory.docs, memory.error);
   const keeps = (
     <Card anchor="keeps">
-      <NavRow data-panel-page="memory" icon={Brain} title={t("botPanel.memoryRow")} value={memoryText}onClick={() => onOpen("memory")} />
+      <NavRow data-panel-page="memory" data-ui={ui("panel.memory")} icon={Brain} title={t("botPanel.memoryRow")} value={memoryText}onClick={() => onOpen("memory")} />
       <NavRow
         data-panel-page="skills"
         icon={Zap}

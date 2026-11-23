@@ -3864,6 +3864,7 @@
   "settings.runCard.line": "Показує команди оболонки для поточного запиту.",
   "settings.chatWidth.line": "Наскільки широкими можуть бути бульбашки повідомлень на цьому пристрої.",
   "settings.font.line": "Замінює шрифт теми на цьому пристрої.",
+  "settings.textSize.title": "Розмір тексту",
   "accounts.manage": "Акаунт і вихід",
   "accounts.signOut": "Вийти",
   "cloudSetup.myCloud": "Моя хмара",

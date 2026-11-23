@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createCoordinator, type BeginTurnRequest, type CoordinateBotsCall, type Coordinator, type CoordinatorHost, type HandoffView, type HostTurnResult } from "../coordinator.ts";
 import type { PassedFile } from "../host/handoff-files.ts";
@@ -9,6 +9,16 @@ import { removeTempDir } from "../testing/cleanup.ts";
 import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { createBotLink, type FileTransfer, type LinkEvent, type LinkPolicy } from "./link.ts";
 import { linkedId, peerKey, type Frame, type HandoffFrame, type ResultFrame } from "./protocol.ts";
+
+/** The writes of each link's record, and a disk that refuses them. */
+const disk = vi.hoisted(() => ({ writes: 0, full: false }));
+vi.mock("../atomic.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../atomic.ts")>();
+  return { ...real, writeFileAtomic: (...args: Parameters<typeof real.writeFileAtomic>) => {
+    if (String(args[0]).endsWith("bot-link.json")) { if (disk.full) throw new Error("the disk is full"); disk.writes += 1; }
+    return real.writeFileAtomic(...args);
+  } };
+});
 
 const FAIL = "The work failed on the linked server.";
 const WORDS = { handedTo: "Handed to the linked server.", otherSide: "the linked server" };
@@ -45,20 +55,21 @@ const nodeOf = (botId: string) => ({ botId, threadId: "t", id: "n" }) as Handoff
 const open: Array<{ close(): void }> = [];
 afterEach(() => { for (const one of open.splice(0).reverse()) one.close(); });
 
-function server(label: string, bots: Bot[], guest: { key: string; exposed: string[] } | null) {
-  const dir = mkdtempSync(join(tmpdir(), `guest-link-${label}-`));
+/** `given`: the data folder of a server that stopped, to start again over it. */
+function server(label: string, bots: Bot[], guest: { key: string; exposed: string[] } | null, given?: string) {
+  const dir = given ?? mkdtempSync(join(tmpdir(), `guest-link-${label}-`));
   const threads = new Set<string>();
   const runs: Array<{ botId: string; text: string; origin: unknown; composed: string }> = [];
   const begun: BeginTurnRequest[] = [], enqueued: string[] = [], events: LinkEvent[] = [], admitted: Array<[string, number]> = [], failed: string[] = [];
   const results: Array<{ name: string; status: string; result: string }> = [];
-  const pulls: string[] = [], stored: string[] = [], discarded: string[] = [];
+  const pulls: string[] = [], landed: string[] = [], stored: string[] = [], discarded: string[] = [];
   const exposed = new Set(guest?.exposed ?? []);
   const knobs: { limit: string | null; refusal: string | null; notMine(botId: string): boolean; run: Run; pull: Promise<void> } = {
     limit: null, refusal: null, notMine: () => false, run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }), pull: Promise.resolve(),
   };
   const transfer: FileTransfer = {
     holds: async () => false, push: async () => {},
-    pull: async (id, _way, _index, meta, to) => { pulls.push(id); await knobs.pull; writeFileSync(to, "x".repeat(meta.bytes)); },
+    pull: async (id, _way, _index, meta, to) => { pulls.push(id); await knobs.pull; mkdirSync(dirname(to), { recursive: true }); writeFileSync(to, "x".repeat(meta.bytes)); landed.push(id); },
   };
   const policy: LinkPolicy | undefined = guest ? {
     key: guest.key, exposed: (botId) => exposed.has(botId), words: WORDS,
@@ -99,12 +110,13 @@ function server(label: string, bots: Bot[], guest: { key: string; exposed: strin
   };
   real = createCoordinator({ dataDir: dir, host: link.host(inner), log: () => {} });
   const ticker = setInterval(() => real.tick(), 15);
-  open.push({ close: () => { clearInterval(ticker); link.close(); try { real.close(); } catch { /* closed */ } removeTempDir(dir); } });
+  const stop = () => { clearInterval(ticker); link.close(); try { real.close(); } catch { /* closed */ } };
+  open.push({ close: () => { stop(); removeTempDir(dir); } });
 
   const frames = (peer: string): Frame[] => link.outgoing(peer, 0).map((entry) => entry.frame);
   const self = { id: `${label}-environment`, name: label };
   return {
-    link, runs, begun, enqueued, events, admitted, failed, results, exposed, knobs, pulls, stored, discarded,
+    link, dir, stop, runs, begun, enqueued, events, admitted, failed, results, exposed, knobs, pulls, landed, stored, discarded,
     get coordinator() { return real; },
     accept: (computer = FAR) => link.pair({ self, sessionId: `${label}-session`, computer })!.peer,
     dial: (peer = { id: "cloud-environment", name: "Far Cloud" }) => { link.turnOn({ self, origin: "https://inviter.example", token: "lsk_test", peer }); link.setTransfer(transfer); return link.cloudPeer()!; },
@@ -242,6 +254,20 @@ describe("a guest link", () => {
     expect(JSON.stringify([...joiner.events, ...inviter.events])).not.toMatch(/Draft|launch|did:/u);
   });
 
+  it("sends no cancel for a hand-off whose result came back", async () => {
+    const inviter = server("inviter", [writer], { key: KEY_1, exposed: ["writer"] });
+    const joiner = server("joiner", [scout], { key: KEY_2, exposed: [] });
+    inviter.link.pair({ self: { id: "inviter-environment", name: "Inviter" }, sessionId: "s-1", computer: { id: "joiner-environment", name: "Joiner" } });
+    joiner.link.turnOn({ self: { id: "joiner-environment", name: "Joiner" }, origin: "https://inviter.example", token: "lsk_test", peer: { id: "inviter-environment", name: "Inviter" } });
+    const wire = connect(inviter, KEY_1, joiner, KEY_2);
+    await until(() => joiner.link.linked().length === 1, "the joiner sees the writer");
+    await joiner.handOff("scout", call([linkedId(KEY_2, "writer")], "Draft the launch post"));
+    await until(() => joiner.results.length === 1, "the result is back");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(joiner.results[0]).toMatchObject({ status: "completed" });
+    expect(wire.filter((frame) => frame.t === "cancel")).toEqual([]);
+  });
+
   it("asks the policy before each hand-off with the peer's work still open, and refuses with its text", async () => {
     const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
     const peer = here.accept();
@@ -291,7 +317,7 @@ describe("a guest link", () => {
     expect(here.events.filter((event) => event.kind === "refused")).toHaveLength(1);
   });
 
-  it("removes the files a hand-off stored when a cancel for it came while they were on the way", async () => {
+  it("stores no file of a hand-off when a cancel for it came while the files were on the way", async () => {
     const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
     const peer = here.dial();
     let release!: () => void;
@@ -301,11 +327,27 @@ describe("a guest link", () => {
     here.link.receive(peer, [{ t: "cancel", id: "h1" }]);
     expect(here.result(peer, "h1")).toMatchObject({ ok: false, outcome: "stopped" });
     release();
-    await until(() => here.discarded.length === 1, "the stored file is removed");
-    expect([here.stored, here.discarded, here.runs]).toEqual([["brief.txt"], ["brief.txt"], []]);
+    await until(() => here.landed.length === 1, "the file came");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect([here.stored, here.discarded, here.runs]).toEqual([[], [], []]);
 
     here.link.receive(peer, [handoff("h2")]);
     expect(here.admitted).toEqual([[peer, 0], [peer, 0]]);
+  });
+
+  it("asks for no more files of a hand-off once a cancel for it came while one was on the way", async () => {
+    const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    let release!: () => void;
+    here.knobs.pull = new Promise<void>((resolve) => { release = resolve; });
+    const two = [{ name: "brief.txt", mime: "text/plain", kind: "file" as const, bytes: 5 }, { name: "notes.txt", mime: "text/plain", kind: "file" as const, bytes: 5 }];
+    here.link.receive(peer, [withFile("h1", { files: two })]);
+    await until(() => here.pulls.length === 1, "h1's first file is on the way");
+    here.link.receive(peer, [{ t: "cancel", id: "h1" }]);
+    release();
+    await until(() => here.landed.length === 1, "the first file came");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect([here.pulls, here.stored, here.runs]).toEqual([["h1"], [], []]);
   });
 
   it("forgets a hand-off whose files never came when a cancel for it comes in the same batch", async () => {
@@ -480,6 +522,64 @@ describe("a guest link", () => {
     await until(() => here.results.length === 1, "the requester hears");
     expect(here.results[0]!.result).toContain(WORDS.otherSide);
     expect(here.results[0]!.result).not.toContain("other place");
+  });
+
+  it("writes its record once for all the frames of a batch, as the side that invited and as the side that joined", async () => {
+    for (const [label, key] of [["inviter", KEY_1], ["joiner", KEY_2]] as const) {
+      const here = server(label, [writer], { key, exposed: ["writer"] });
+      const peer = label === "inviter" ? here.accept() : here.dial();
+      const written = () => { const before = disk.writes; return () => disk.writes - before; };
+      let since = written();
+      here.link.receive(peer, [handoff("h1"), handoff("h2"), handoff("h3", { to: "ghost" }), { t: "cancel", id: "h4" }, handoff("h5", { mode: "notify" })]);
+      expect(since()).toBe(1);
+      expect(here.work("h3")).toMatchObject({ done: { ok: false, outcome: "refused" } });
+      await until(() => ["h1", "h2"].every((id) => here.result(peer, id) !== undefined), `${label}: h1 and h2 are done`);
+      since = written();
+      here.link.receive(peer, [{ t: "done", id: "h1" }, { t: "done", id: "h2" }, { t: "done", id: "h3" }]);
+      expect(since()).toBe(1);
+      since = written();
+      here.link.receive(peer, [{ t: "done", id: "h1" }, { t: "cancel", id: "unknown" }]);
+      expect(since()).toBe(0);
+    }
+  });
+
+  it("acknowledges no frame of a batch whose record could not be written, and takes up its work after a restart without running it twice", async () => {
+    const first = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
+    const peer = first.accept();
+    disk.full = true;
+    try {
+      expect(() => first.link.receive(peer, [handoff("h1"), handoff("h2")])).toThrow("the disk is full");
+    } finally { disk.full = false; }
+    first.stop();
+    expect(first.work("h1")).toBeUndefined();
+    expect(first.runs).toEqual([]);
+
+    const again = server("here", [writer], { key: KEY_1, exposed: ["writer"] }, first.dir);
+    await until(() => again.runs.length === 2, "the queued work runs once after the restart");
+    again.link.receive(peer, [handoff("h1")]);
+    await until(() => again.result(peer, "h1") !== undefined, "h1's result is found");
+    expect(again.result(peer, "h1")).toMatchObject({ ok: true, text: "writer did: Do h1" });
+    again.link.receive(peer, [handoff("h2"), handoff("h1")]);
+    await until(() => again.result(peer, "h2") !== undefined, "h2's result is found");
+    expect(again.result(peer, "h2")).toMatchObject({ ok: true, text: "writer did: Do h2" });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect([first.runs.length + again.runs.length, again.begun, again.enqueued]).toEqual([2, [], []]);
+    expect(again.frames(peer).filter((frame) => frame.t === "result").map((frame) => frame.t === "result" && frame.id)).toEqual(["h1", "h2"]);
+    expect(again.events.filter((event) => event.kind === "refused")).toEqual([]);
+    expect(again.work("h1")).toMatchObject({ done: { ok: true } });
+  });
+
+  it("writes its record when the same frames come again after a write failed", () => {
+    const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
+    const peer = here.accept();
+    disk.full = true;
+    try {
+      expect(() => here.link.receive(peer, [handoff("h1")])).toThrow("the disk is full");
+    } finally { disk.full = false; }
+    const before = disk.writes;
+    here.link.receive(peer, [handoff("h1")]);
+    expect(disk.writes).toBe(before + 1);
+    expect(here.work("h1")).toBeDefined();
   });
 });
 

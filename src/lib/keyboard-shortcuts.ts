@@ -60,6 +60,24 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
         macKeys: ["⌘", "F"],
         winKeys: ["Ctrl", "F"],
       },
+      {
+        id: "zoom-in",
+        description: "Make text and controls larger (desktop app)",
+        macKeys: ["⌘", "+"],
+        winKeys: ["Ctrl", "+"],
+      },
+      {
+        id: "zoom-out",
+        description: "Make text and controls smaller (desktop app)",
+        macKeys: ["⌘", "−"],
+        winKeys: ["Ctrl", "−"],
+      },
+      {
+        id: "actual-size",
+        description: "Back to the normal text size (desktop app)",
+        macKeys: ["⌘", "0"],
+        winKeys: ["Ctrl", "0"],
+      },
     ],
   },
   {

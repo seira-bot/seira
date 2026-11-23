@@ -4,6 +4,7 @@ import { popoverClosesOnKey, usePopoverDismiss } from "@/hooks/use-popover-dismi
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { MENU_ITEM, MENU_SHEET } from "./menu-recipe";
 import { StreamingReplyContext } from "@/state/live-reply";
 
@@ -21,6 +22,7 @@ export type MessageMenuItem = {
   disabled?: boolean;
   /** Offered only while the chat's turn is not running. */
   idleOnly?: boolean;
+  ui?: string;
 };
 
 /** Whether the chat's turn is running, apart from the row values every message reads: a turn starting or ending
@@ -215,6 +217,7 @@ export function MessageActions({
         <button
           ref={moreRef}
           type="button"
+          data-ui={ui("message.actions")}
           onClick={() => {
             setPointAt(null);
             setMenuOpen((value) => !value);
@@ -248,6 +251,7 @@ export function MessageActions({
               key={item.key}
               type="button"
               role="menuitem"
+              data-ui={item.ui}
               disabled={item.disabled}
               title={item.title}
               onClick={() => {
@@ -269,7 +273,7 @@ export function MessageActions({
 
 export function ReplyAction({ onReply }: { onReply: () => void }) {
   return (
-    <button type="button" onClick={onReply} aria-label={t("chat.replyToMessage")} title={t("chat.reply")} className={messageActionClass}>
+    <button type="button" data-ui={ui("message.reply")} onClick={onReply} aria-label={t("chat.replyToMessage")} title={t("chat.reply")} className={messageActionClass}>
       <Reply {...ACTION_ICON} aria-hidden="true" />
     </button>
   );
@@ -280,6 +284,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
   const label = t(state === "copied" ? "chat.copyMessageDone" : state === "failed" ? "chat.copyMessageFailed" : "chat.copyMessage");
   return (
     <button
+      data-ui={ui("message.copy")}
       onClick={copy}
       aria-label={label}
       title={label}

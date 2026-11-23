@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { AdminActionRow } from "../admin-activity.ts";
-import { linkedId, peerKey } from "../bot-link/protocol.ts";
+import { linkedId, peerKey, type FileWay } from "../bot-link/protocol.ts";
 import { createCoordinator, type Coordinator, type CoordinatorHost, type HandoffView, type HostTurnResult } from "../coordinator.ts";
 import { json, readBody } from "../harness/http.ts";
+import type { PassedFile } from "../host/handoff-files.ts";
 import { createLinkedServers, type LinkedServerView, type LinkedServers } from "../host/linked-servers.ts";
 import { INVITE_TTL_MS, decodeInvite, encodeInvite, hashSecret } from "../host/linked-servers-store.ts";
 import type { RequestAuth } from "../request-auth.ts";
@@ -33,7 +34,7 @@ const until = async (what: () => boolean, label: string, ms = 15_000) => {
 };
 
 /** One server: the manager, the admin routes, a coordinator over its links, and a stand-in for every other route. */
-async function side(label: string, bots: Bot[], now?: () => number) {
+async function side(label: string, bots: Bot[], now?: () => number, more: Partial<Parameters<typeof createLinkedServers>[0]> = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), `linked-servers-${label}-`));
   const rows: Array<Omit<AdminActionRow, "at">> = [], runs: string[] = [], reached: string[] = [];
   const results: Array<{ name: string; status: string; result: string }> = [];
@@ -57,8 +58,8 @@ async function side(label: string, bots: Bot[], now?: () => number) {
     kick: () => { queueMicrotask(tick); },
     serverName: () => label, selfId: () => `${label}-environment`, publicOrigin: () => `http://127.0.0.1:${port}`,
     audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask,
-    timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000 },
-    ...(now ? { now } : {}),
+    timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000, pace: { gapMs: 20, freshMs: 20 } },
+    ...(now ? { now } : {}), ...more,
   });
   const inner: CoordinatorHost = {
     validate: () => undefined, busy: () => false, report: () => {}, changed: () => {}, park: () => {},
@@ -187,6 +188,39 @@ describe("two linked servers", () => {
     const recorded = JSON.stringify(rows);
     for (const secret of [invite, code, hashSecret(code), token, hashSecret(token), "lsk_", "seira-link:"]) expect(recorded).not.toContain(secret);
     expect(recorded).not.toMatch(/Draft|launch|numbers|did:/u);
+  }, 30_000);
+
+  it("take in a far bot's name, a hand-off's words and a result's words without an invisible or control character", async () => {
+    const hidden = ["\u202e", "\u200b", "\u{e0041}", "\u3164", "\u0007"], all = hidden.join("");
+    const a = await side("head", [{ id: "writer", name: `Wri${all}ter` }]), b = await side("branch", [SCOUT]);
+    await link(a, b);
+    await expose(a, b, ["writer"]);
+    const briefs: string[] = [];
+    a.knobs.run = async (node) => { briefs.push(node.text); return { ok: true, text: `Done${all} here` }; };
+    const writer = b.view()!.bots[0]!;
+    expect((await b.handOff(SCOUT, writer.id, `Draft${all} the post`)).status).toBe(200);
+    await until(() => b.results.length === 1, "the result is back");
+    const taken = [writer.name, ...briefs, b.results[0]!.result];
+    expect(taken.map((text) => hidden.filter((one) => text.includes(one)))).toEqual([[], [], []]);
+    expect(taken).toEqual(["Wri ter", expect.stringMatching(/Draft +the post/u), expect.stringMatching(/Done +here/u)]);
+  }, 30_000);
+
+  it("give a far image's name no control or zero width character, and still find its bytes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "linked-servers-image-"));
+    cleanups.push(() => removeTempDir(dir));
+    writeFileSync(join(dir, "photo.png"), "x".repeat(5));
+    const image: PassedFile = { kind: "image", path: join(dir, "photo.png"), name: "pho\u0007to\u200b.png", mime: "image/png", bytes: 5 };
+    const stored: string[] = [];
+    const files = (sent: PassedFile[]) => ({ files: {
+      carried: (_id: string, way: FileWay) => (way === "sent" ? sent : []), crossed: () => {},
+      store: async (got: ReadonlyArray<{ path: string; name: string }>) => got.map((one): PassedFile => { stored.push(one.name); return { ...image, path: one.path, name: one.name }; }),
+    } });
+    const a = await side("head", [WRITER], undefined, files([])), b = await side("branch", [SCOUT], undefined, files([image]));
+    await link(a, b);
+    await expose(a, b, ["writer"]);
+    expect((await b.handOff(SCOUT, b.view()!.bots[0]!.id, "Look at the photo")).status).toBe(200);
+    await until(() => b.results.length === 1, "the result is back");
+    expect([stored, b.results[0]!.status]).toEqual([["pho to.png"], "completed"]);
   }, 30_000);
 
   it("refuse the thirty-first hand-off in a minute, with one activity row for the refusals", async () => {

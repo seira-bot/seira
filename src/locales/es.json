@@ -6221,6 +6221,7 @@
   "settings.runCard.line": "Muestra los comandos de shell de tu petición actual.",
   "settings.chatWidth.line": "Lo anchas que pueden ser las burbujas de mensaje en este dispositivo.",
   "settings.font.line": "Sustituye la fuente del tema en este dispositivo.",
+  "settings.textSize.title": "Tamaño del texto",
   "accounts.manage": "Cuenta y cerrar sesión",
   "common.ok": "Aceptar",
   "connectedWorkspaces.localTitle": "Entornos en este ordenador",

@@ -108,6 +108,7 @@ import { LiveCallBar } from "./LiveCallBar";
 import { effectivePlace, toolPlace, type EffectivePlace } from "@/lib/place";
 import { cn } from "@/lib/cn";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { COMPACT_BUBBLE } from "@/lib/compact-chip";
 import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, workedLabel } from "@/lib/activity-runs";
 import { StatusActivityRow } from "@/components/StatusActivityRow";
@@ -232,6 +233,7 @@ export function ErrorRow({
         ) : (
           onRetry && (
             <button
+              data-ui={ui("message.retry")}
               onClick={onRetry}
               className="ui-button ui-button-md mt-1.5 rounded-full border-danger/30 bg-transparent text-danger hover:bg-danger/15"
             >

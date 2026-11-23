@@ -9,6 +9,7 @@ import { endCall, startCall, useOnCall } from "@/lib/call";
 import { CALL_MODES, callModeHint, effectiveCallMode, setCallMode, useCallMode, type CallMode } from "@/lib/call-mode";
 import { dismissStartPrompt, hangUpLiveCall, isLiveCallRunning, startLiveCall, useLiveMedia } from "@/lib/live-call-media";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { localSystemVoiceActive } from "@/lib/local-voice";
 import { navigateThreadMenu } from "./BotProjects";
 import { LiveKeyNeeded } from "./LiveKeyNeeded";
@@ -244,6 +245,7 @@ export function CallTargetButton({
         aria-label={label}
         title={label}
         data-call-button={placement}
+        data-ui={composer ? ui("composer.call") : undefined}
         style={fill && !active ? { backgroundColor: fill, color: ink } : undefined}
         className={cn(
           "relative flex shrink-0 items-center justify-center disabled:opacity-60",

@@ -106,7 +106,8 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
       if (!res.headersSent) json(res, typeof status === "number" ? status : 500, { error: "The request failed." });
     }
   }
-  const http = createServer((req, res) => { void handle(req, res); });
+  const answered: number[] = [];
+  const http = createServer((req, res) => { res.on("finish", () => answered.push(res.statusCode)); void handle(req, res); });
   await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
   port = (http.address() as AddressInfo).port;
   const ticker = setInterval(tick, 15);
@@ -121,13 +122,14 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
 
   type At = { generation: string; parentId?: string; address: { botId: string; threadId: string } };
   return {
-    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, logs, knobs,
+    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, logs, knobs, answered,
     get made() { return made; },
     get linked() { return made.linked; },
     get coordinator() { return coordinator; },
     /** The server stops and starts again over the same data. */
     restart() {
       made.close();
+      http.closeAllConnections();
       coordinator?.close();
       made = build();
       coordinator = createCoordinator({ dataDir, host: made.link.host(inner), log: () => {} });
@@ -213,6 +215,7 @@ describe("work from a linked server", () => {
     expect(await head.coordinate(WRITER, at, ["Helper"], "Ask by name")).toEqual(refusal("Helper"));
     for (const target of [HELPER, clerk!]) {
       expect(() => head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: target, threadId: `${target}:direct` }, "Straight to the coordinator")).toThrow(CHAINED);
+      expect(() => head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: target, threadId: "room-thread", groupId: "room-1" }, "In a room")).toThrow(CHAINED);
     }
 
     const mixed = await head.coordinate(WRITER, at, [HELPER, "analyst"], "Check the numbers");
@@ -398,4 +401,33 @@ describe("an honest pair of servers", () => {
       expect(side.rows.filter((row) => row.action === "linked-server.refused")).toEqual([]);
     }
   }, 60_000);
+
+  it("keeps within each other's limits when either one restarts", async () => {
+    const head = await server("head", [WRITER, ANALYST]), branch = await server("branch", [SCOUT, CLERK]);
+    const ids = await link(head, branch);
+    const [writer] = await offer(head, ids.inviterLink, branch, ids.joinerLink, ["writer"]);
+    const [clerk] = await offer(branch, ids.joinerLink, head, ids.inviterLink, ["clerk"]);
+    const back = (at: Server) => at.rows.filter((row) => row.action === "linked-server.handoff" && (row.after as { direction?: unknown } | undefined)?.direction === "result-received").length;
+    let round = 0;
+    const both = async () => {
+      round += 1;
+      const asked = branch.begin(SCOUT, `Task ${round}`, `scout-task-${round}`), checked = head.begin(ANALYST, `Check ${round}`, `analyst-task-${round}`);
+      expect((await branch.coordinate(SCOUT, asked, [writer!], `Task ${round}`)).status).toBe(200);
+      expect((await head.coordinate(ANALYST, checked, [clerk!], `Check ${round}`)).status).toBe(200);
+      branch.coordinator!.endTurn(asked.generation, { ok: true, text: "Handed on." });
+      head.coordinator!.endTurn(checked.generation, { ok: true, text: "Handed on." });
+      await until(() => back(branch) >= round && back(head) >= round, `round ${round} is back on both sides`, 45_000);
+    };
+    await both();
+    head.restart();
+    await both();
+    branch.restart();
+    await both();
+    for (const side of [head, branch]) {
+      expect(side.answered.filter((status) => status === 429)).toEqual([]);
+      expect(side.logs.filter((line) => line.includes("the rest waits"))).toEqual([]);
+      expect(side.rows.filter((row) => row.action === "linked-server.refused")).toEqual([]);
+    }
+    expect([head.runs.filter((node) => node.botId === "writer").length, branch.runs.filter((node) => node.botId === "clerk").length]).toEqual([3, 3]);
+  }, 150_000);
 });

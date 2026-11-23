@@ -1,8 +1,9 @@
 // How much work one linked server may hand this one, and how refusals reach the activity record.
 
 /** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`. `outbox`: while this many frames for
- * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`. */
-export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10 } as const;
+ * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`.
+ * `exchanges` and `sessions`: the exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
+export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, exchanges: 120, sessions: 10 } as const;
 export const BUSY_TEXT = "The other side is busy now, so try again later.";
 
 const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
@@ -37,8 +38,26 @@ export function createFrameBudget(now: () => number = Date.now, limit: number = 
   };
   return {
     left(linkId: string): number { return Math.max(0, limit - recent(linkId).reduce((sum, one) => sum + one.frames, 0)); },
-    spend(linkId: string, frames: number): void { if (frames > 0) recent(linkId).push({ at: now(), frames }); },
+    /** Returns what gives the same frames back. */
+    spend(linkId: string, frames: number): () => void {
+      if (frames <= 0) return () => {};
+      const entry = { at: now(), frames };
+      recent(linkId).push(entry);
+      return () => { const kept = spent.get(linkId) ?? [], at = kept.indexOf(entry); if (at >= 0) kept.splice(at, 1); };
+    },
     forget(linkId: string): void { spent.delete(linkId); },
+  };
+}
+
+/** The exchanges and new sessions of each link's joiner: each call takes one, or says false once the window has none. */
+export function createPace(now: () => number = Date.now, limits: { exchanges?: number | undefined; sessions?: number | undefined } = {}) {
+  const exchanges = createFrameBudget(now, limits.exchanges ?? ADMIT.exchanges);
+  const sessions = createFrameBudget(now, limits.sessions ?? ADMIT.sessions);
+  const one = (budget: ReturnType<typeof createFrameBudget>, linkId: string) => { if (budget.left(linkId) < 1) return false; budget.spend(linkId, 1); return true; };
+  return {
+    exchange: (linkId: string) => one(exchanges, linkId),
+    session: (linkId: string) => one(sessions, linkId),
+    forget(linkId: string): void { exchanges.forget(linkId); sessions.forget(linkId); },
   };
 }
 
@@ -50,7 +69,7 @@ export function createIntake(now: () => number = Date.now, limits: { frames?: nu
   const hellos = createFrameBudget(now, limits.hellos ?? ADMIT.hellos);
   const waiting = new Map<string, unknown>();
   return {
-    take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[] } {
+    take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[]; undo(): void } {
       let room = full ? 0 : work.left(linkId), count = 0, spent = 0;
       const taken: unknown[] = [];
       for (const frame of frames) {
@@ -63,14 +82,14 @@ export function createIntake(now: () => number = Date.now, limits: { frames?: nu
         if (kindOf(frame) === "hello") waiting.set(linkId, frame);
         else taken.push(frame);
       }
-      work.spend(linkId, spent);
+      const undo = work.spend(linkId, spent);
       const hello = waiting.get(linkId);
       if (hello !== undefined && hellos.left(linkId) > 0) {
         hellos.spend(linkId, 1);
         waiting.delete(linkId);
         taken.unshift(hello);
       }
-      return { count, frames: taken };
+      return { count, frames: taken, undo };
     },
     forget(linkId: string): void { work.forget(linkId); hellos.forget(linkId); waiting.delete(linkId); },
   };

@@ -18,6 +18,7 @@ import {
 import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";
 import { activeLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { LocaleKey } from "@/locales";
 import { updateMcpServers } from "@/lib/mcp-servers";
 import { reserveConnectionPage } from "@/lib/connector-oauth";
@@ -618,6 +619,7 @@ export function McpServersPanel({ embedded = false, hostedCards, hideHosted = fa
               type="button"
               disabled={busy !== null || (restricted && !policy?.mcp.allowlist.length)}
               title={restricted && policy ? t("policy.managedBy", { organization: policy.organizationName }) : undefined}
+              data-ui={ui("apps.mcp-add")}
               onClick={() => openEditor("new")}
               className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"
             >
