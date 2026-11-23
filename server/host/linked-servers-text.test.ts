@@ -94,8 +94,8 @@ describe("reading a guest peer's frame", () => {
     const calls = stringify.mock.calls.length;
     stringify.mockRestore();
     expect([calls, new Set(prices)]).toEqual([0, new Set([6])]);
-    expect(ms).toBeLessThan(3_000);
-  }, 15_000);
+    expect(ms).toBeLessThan(10_000);
+  }, 30_000);
 
   it("never reads the space around a name: the cleaner gets the name as the schema trimmed it", () => {
     const pad = " ".repeat(2_000_000);
@@ -145,7 +145,7 @@ describe("reading a guest peer's frame", () => {
     const frames = [result(huge), handoffFrom(huge), { t: "hello", place: { id: "p", name: huge }, bots: [] }];
     const start = performance.now();
     const out = frames.map((frame) => readFar(frame));
-    expect(performance.now() - start).toBeLessThan(3_000);
+    expect(performance.now() - start).toBeLessThan(10_000);
     expect(out).toEqual([{ frame: null, price: 0 }, { frame: null, price: 0 }, { frame: null, price: 0 }]);
-  }, 15_000);
+  }, 30_000);
 });

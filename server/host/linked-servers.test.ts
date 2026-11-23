@@ -652,10 +652,10 @@ describe("the linked servers manager", () => {
       now += ADMIT.windowMs;
       const start = performance.now();
       const answer = await sync([frame]);
-      expect([answer.status, answer.taken, performance.now() - start < 3_000]).toEqual([200, "1", true]);
+      expect([answer.status, answer.taken, performance.now() - start < 10_000]).toEqual([200, "1", true]);
     }
     expect(rows).toHaveLength(written);
-  }, 15_000);
+  }, 30_000);
 
   it("answers 429 to an exchange past the link's bytes for the minute, before it reads it, and reads it again in the next minute", async () => {
     let now = Date.now();

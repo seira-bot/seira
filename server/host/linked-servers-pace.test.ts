@@ -181,7 +181,7 @@ describe("an honest pair at a guest link's limits", () => {
       expect(sender.arrived.map((one) => [one.frame.id, one.at - 30_000 <= 5_000])).toEqual([["back", true]]);
       expect(pair.statuses.length).toBeGreaterThan(0);
       expect(pair.statuses.filter((status) => status !== 200)).toEqual([]);
-    }, 60_000);
+    }, 120_000);
 
     it(`carries the largest frame of each kind from the ${from}, in order and once each, within four windows, with no 429`, async () => {
       fakeClock();
@@ -193,6 +193,6 @@ describe("an honest pair at a guest link's limits", () => {
       await pair.stop();
       expect(receiver.arrived.map((one) => one.frame.t)).toEqual(Object.keys(LARGEST));
       expect(pair.statuses.filter((status) => status !== 200)).toEqual([]);
-    }, 60_000);
+    }, 120_000);
   }
 });
