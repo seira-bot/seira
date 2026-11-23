@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { BotLink } from "../bot-link/link.ts";
 import { frameSchema, type HandoffFrame, type LinkedBot } from "../bot-link/protocol.ts";
 import { ADMIT, createFrameBudget } from "../host/linked-servers-admit.ts";
+import { defuse } from "../records-block.ts";
 import { A2aEgressError, a2aRequest, type EgressDeps, type EgressOptions, type EgressResult } from "./egress.ts";
 import {
   CARD_BODY_MAX, ERR, NOTE_MAX, RESULT_TEXT_MAX, RPC_BODY_MAX, farCard, farSendResult, farTask, isTerminal, jsonRpcInterface,
@@ -104,12 +105,12 @@ type RpcAnswer = { kind: "result"; result: unknown } | { kind: "error"; code: nu
 type TextPart = { text?: string | undefined };
 
 const SEND_BUDGET = "send";
+/** The far states of a hand-off whose result the link has not had. The link also sends a cancel for a hand-off whose
+ * result it took, and a far task that waits for input must live on after that cancel. */
+const UNANSWERED: ReadonlySet<TaskState> = new Set(["TASK_STATE_SUBMITTED", "TASK_STATE_WORKING"]);
 const rpcAnswer = z.object({ result: z.unknown().optional(), error: z.object({ code: z.number(), message: z.string() }).optional() });
-const LINE_CONTROLS = /[\p{Cc}\p{Cf}]/gu;
-const TEXT_CONTROLS = /(?![\n\t])\p{Cc}|[‪-‮⁦-⁩]/gu;
 const cut = (text: string, max: number) => text.slice(0, max).replace(/[\uD800-\uDBFF]$/u, "");
-const oneLine = (text: string) => text.replace(LINE_CONTROLS, " ").replace(/\s+/gu, " ").trim();
-const plain = (text: string) => text.replace(TEXT_CONTROLS, "");
+const oneLine = (text: string) => defuse(text).replace(/\s+/gu, " ").trim();
 
 /** The description of the teammate: the card's description and its skill names. */
 export function teammateDescription(card: FarCard): string | undefined {
@@ -133,12 +134,12 @@ function joined(parts: readonly TextPart[]): string {
   const texts = parts.flatMap((part) => (typeof part.text === "string" ? [part.text] : []));
   const left = parts.length - texts.length;
   const note = left === 0 ? "" : `\n\n(${left} ${left === 1 ? "part that is" : "parts that are"} not text ${left === 1 ? "was" : "were"} left out.)`;
-  const text = plain(texts.join("\n")).trim();
+  const text = defuse(texts.join("\n")).trim();
   return text || note ? `${cut(text || RESULT_TEXT.empty, RESULT_TEXT_MAX - note.length)}${note}` : RESULT_TEXT.empty;
 }
 const outputOf = (task: FarTask): readonly TextPart[] => (task.artifacts?.length ? task.artifacts.flatMap((artifact) => artifact.parts) : task.status.message?.parts ?? []);
 const farNote = (task: FarTask): string | undefined => {
-  const text = plain((task.status.message?.parts ?? []).flatMap((part) => (typeof part.text === "string" ? [part.text] : [])).join("\n")).trim();
+  const text = defuse((task.status.message?.parts ?? []).flatMap((part) => (typeof part.text === "string" ? [part.text] : [])).join("\n")).trim();
   return text ? cut(text, NOTE_MAX) : undefined;
 };
 
@@ -314,7 +315,7 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
       return;
     }
     if (answer.kind === "error") {
-      const said = cut(plain(answer.message).trim(), NOTE_MAX);
+      const said = cut(defuse(answer.message).trim(), NOTE_MAX);
       finish(run, { ok: false, text: said ? `${RESULT_TEXT.refused} It said: ${said}` : RESULT_TEXT.refused }, "TASK_STATE_REJECTED");
       return;
     }
@@ -418,7 +419,7 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
         return;
       }
       const known = outEntry(id);
-      if (known?.farTask && !isTerminal(known.state)) {
+      if (known?.farTask && UNANSWERED.has(known.state)) {
         cancelFar(known.farTask);
         deps.tasks.put({ ...known, state: "TASK_STATE_CANCELED", at: now() });
       }

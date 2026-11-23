@@ -12,6 +12,7 @@ import { guestFrameSchema, linkRoot, type ResultFrame } from "../bot-link/protoc
 import type { Coordinator } from "../coordinator.ts";
 import { json, readBody } from "../harness/http.ts";
 import { ADMIT, BUSY_TEXT, createFrameBudget } from "../host/linked-servers-admit.ts";
+import { defuse } from "../records-block.ts";
 import { bearerToken, requestSource } from "../request-auth.ts";
 import {
   A2A_PREFIX, CONTEXTS_MAX, ERR, HOLD_MS, INBOUND_BODY_MAX, NOTE_MAX, RESULT_TEXT_MAX, RPC_HTTP_STATUS, agentCard, cancelTaskParams, getTaskParams,
@@ -188,7 +189,8 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     if (message.taskId !== undefined) return failure(id, inTask(message.taskId) ? ERR.UNSUPPORTED_OPERATION : ERR.TASK_NOT_FOUND);
     const text = textOfParts(message.parts);
     if (text.kind === "unsupported") return failure(id, ERR.CONTENT_TYPE_NOT_SUPPORTED);
-    if (text.kind === "tooLong" || text.text.trim() === "") return failure(id, ERR.INVALID_PARAMS);
+    const brief = text.kind === "text" ? defuse(text.text) : "";
+    if (text.kind === "tooLong" || brief.trim() === "") return failure(id, ERR.INVALID_PARAMS);
     const taskId = frameId(deps.key, message.messageId);
     const wait = configuration?.returnImmediately === true ? 0 : holdMs;
     if (inTask(taskId)) {
@@ -199,7 +201,7 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     const thread = threadKey(botId, context);
     if (message.contextId !== undefined && !deps.tasks.hasThread(thread) && deps.tasks.threadCount() >= CONTEXTS_MAX) return failure(id, ERR.UNSUPPORTED_OPERATION);
     const frame = guestFrameSchema.safeParse({
-      t: "handoff", id: taskId, to: botId, from: { botId: CALLER_ID, name: callerName(), threadId: thread }, thread, text: text.text, mode: "work", origin: { kind: "outside" },
+      t: "handoff", id: taskId, to: botId, from: { botId: CALLER_ID, name: callerName(), threadId: thread }, thread, text: brief, mode: "work", origin: { kind: "outside" },
     });
     if (!frame.success) return failure(id, ERR.INVALID_PARAMS);
     if (deps.frames.left() < 1) return throttled(id);

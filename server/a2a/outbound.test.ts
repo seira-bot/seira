@@ -30,6 +30,8 @@ const CARD = {
   skills: [{ id: "plan", name: "Plan trips" }, { id: "book", name: "Book hotels" }],
 };
 const STOPPED = { t: "result", ok: false, text: RESULT_TEXT.stopped, outcome: "stopped" };
+const UNSEEN_TEXT = "a‮b​c\u{e0041}dㅤe\u0007f \u{1f469}‍\u{1f4bb}\nline two\tend";
+const SEEN_TEXT = "a bcde f \u{1f469}\u{1f4bb}\nline two\tend";
 
 const json = (value: unknown, status = 200): EgressResult => ({ status, body: JSON.stringify(value), sent: true });
 const raw = (body: string, status = 200): Answer => () => ({ status, body, sent: true });
@@ -224,7 +226,7 @@ describe("the A2A outbound side", () => {
     });
 
     it.each([
-      ["COMPLETED from its artifacts, with the parts that are not text counted", task("COMPLETED", { artifacts: [{ parts: [{ text: "Line 1" }, { text: "Line\u0007 2" }, { raw: "AAAA", mediaType: "image/png" }] }] }),
+      ["COMPLETED from its artifacts, with the parts that are not text counted", task("COMPLETED", { artifacts: [{ parts: [{ text: "Line 1" }, { text: "Line\u00072" }, { raw: "AAAA", mediaType: "image/png" }] }] }),
         { ok: true, text: "Line 1\nLine 2\n\n(1 part that is not text was left out.)" }],
       ["COMPLETED from its status message when it has no artifacts", task("COMPLETED", { status: { state: "TASK_STATE_COMPLETED", message: message("Short answer") } }),
         { ok: true, text: "Short answer" }],
@@ -232,8 +234,8 @@ describe("the A2A outbound side", () => {
       ["INPUT_REQUIRED with the question", task("INPUT_REQUIRED", { status: { state: "TASK_STATE_INPUT_REQUIRED", message: message("Which city?") } }),
         { ok: true, text: `${RESULT_TEXT.asks}\n\nWhich city?` }],
       ["AUTH_REQUIRED", task("AUTH_REQUIRED"), { ok: false, text: RESULT_TEXT.signIn }],
-      ["FAILED with the far note", task("FAILED", { status: { state: "TASK_STATE_FAILED", message: message(`Out of credit\u0000${"x".repeat(NOTE_MAX)}`) } }),
-        { ok: false, text: `Out of credit${"x".repeat(NOTE_MAX - 13)}` }],
+      ["FAILED with the far note", task("FAILED", { status: { state: "TASK_STATE_FAILED", message: message(`Out of\u0000credit ${"x".repeat(NOTE_MAX)}`) } }),
+        { ok: false, text: `Out of credit ${"x".repeat(NOTE_MAX - 14)}` }],
       ["FAILED with no note", task("FAILED"), { ok: false, text: RESULT_TEXT.failed }],
       ["REJECTED", task("REJECTED"), { ok: false, text: RESULT_TEXT.refused, outcome: "refused" }],
       ["CANCELED", task("CANCELED"), { ok: false, text: RESULT_TEXT.stoppedThere, outcome: "stopped" }],
@@ -271,7 +273,7 @@ describe("the A2A outbound side", () => {
 
     it("takes a message answer as the result and keeps its context (AC-34)", async () => {
       const { outbound, far, resultOf, tasks } = fixture();
-      far.on("SendMessage", result({ message: { ...message("Hi\u0007 there"), contextId: "ctx-9" } }), sent("COMPLETED"));
+      far.on("SendMessage", result({ message: { ...message("Hi\u0007there"), contextId: "ctx-9" } }), sent("COMPLETED"));
       outbound.send(handoff("h1"));
       await flush();
       expect(resultOf("h1")).toEqual({ t: "result", id: "h1", ok: true, text: "Hi there" });
@@ -281,9 +283,22 @@ describe("the A2A outbound side", () => {
       expect(far.rpc("SendMessage")[1]!.body!.params.message.contextId).toBe("ctx-9");
     });
 
+    it("drops unseen characters from the far words in a result, a note, a refusal and the card, emoji joiners too", async () => {
+      const { outbound, far, resultOf, hellos } = fixture();
+      far.card.answer = () => json({ ...CARD, description: UNSEEN_TEXT, skills: [] });
+      far.on("SendMessage",
+        sent("COMPLETED", { artifacts: [{ parts: [{ text: UNSEEN_TEXT }] }] }),
+        sent("FAILED", { status: { state: "TASK_STATE_FAILED", message: message(UNSEEN_TEXT) } }),
+        rpcError(ERR.INVALID_PARAMS, UNSEEN_TEXT));
+      await outbound.connect();
+      for (const id of ["h1", "h2", "h3"]) { outbound.send(handoff(id)); await flush(); }
+      expect(["h1", "h2", "h3"].map((id) => resultOf(id)?.text)).toEqual([SEEN_TEXT, SEEN_TEXT, `${RESULT_TEXT.refused} It said: ${SEEN_TEXT}`]);
+      expect(hellos()[0]?.bots[0]?.description).toBe(SEEN_TEXT.replace(/\s+/gu, " "));
+    });
+
     it("ends as refused on a JSON-RPC error, with the far words cleaned and cut (AC-34)", async () => {
       const { outbound, far, resultOf, tasks } = fixture();
-      far.on("SendMessage", rpcError(ERR.INVALID_PARAMS, `No\u0000 way${"x".repeat(3_000)}`));
+      far.on("SendMessage", rpcError(ERR.INVALID_PARAMS, `No\u0000way${"x".repeat(3_000)}`));
       outbound.send(handoff("h1"));
       await flush();
       const text = resultOf("h1")!.text;
@@ -388,6 +403,21 @@ describe("the A2A outbound side", () => {
       expect(tasks.get("h1")).toMatchObject({ state: "TASK_STATE_CANCELED", farTask: "far-1" });
       await step(600_000);
       expect(far.rpc("GetTask")).toHaveLength(1);
+    });
+
+    it("after the result of an input request leaves the far task waiting, and the next hand-off answers in it", async () => {
+      const { outbound, far, results, tasks } = fixture();
+      far.on("SendMessage", sent("INPUT_REQUIRED", { status: { state: "TASK_STATE_INPUT_REQUIRED", message: message("Which city?") } }), sent("COMPLETED"));
+      outbound.send(handoff("h1"));
+      await flush();
+      outbound.cancel("h1");
+      await flush();
+      expect(far.rpc("CancelTask")).toEqual([]);
+      expect(tasks.get("h1")).toMatchObject({ state: "TASK_STATE_INPUT_REQUIRED", farTask: "far-1" });
+      expect(results().map((frame) => frame.id)).toEqual(["h1", "h1"]);
+      outbound.send(handoff("h2"));
+      await flush();
+      expect(far.rpc("SendMessage")[1]!.body!.params.message).toMatchObject({ contextId: "ctx-1", taskId: "far-1" });
     });
 
     it("for a hand-off it does not run still ends it on the link as stopped, so the link keeps nothing to send again (AC-36)", async () => {
@@ -568,23 +598,26 @@ describe("the A2A outbound side on a real guest link", () => {
     return { key, link, far, outbound, transport, routed, rows, handOff, coordinator: () => real };
   }
 
-  it("lists the admin's name, carries a hand-off out and its result back, and a cancel leaves nothing for a new session (AC-36, AC-38)", async () => {
+  it("lists the admin's name, carries a hand-off out and its result back, keeps a far input request open, and a cancel leaves nothing for a new session (AC-36, AC-38)", async () => {
     const { key, link, far, outbound, transport, routed, rows, handOff, coordinator } = await linked();
     await outbound.connect();
     expect(link.agents()).toEqual([expect.objectContaining({ id: linkedId(key, AGENT_ID), name: PLACE.name })]);
 
-    far.on("SendMessage", sent("COMPLETED", { artifacts: [{ parts: [{ text: "Plan ready" }] }] }), hangs);
+    far.on("SendMessage", sent("INPUT_REQUIRED", { status: { state: "TASK_STATE_INPUT_REQUIRED", message: message("Which city?") } }), hangs);
     await handOff("Plan the trip", "writer-first");
-    await until(() => rows.some((row) => row.status === "completed" && row.result.includes("Plan ready")), "the result reaches the requester");
+    await until(() => rows.some((row) => row.status === "completed" && row.result.includes("Which city?")), "the result reaches the requester");
     expect(JSON.stringify(far.rpc("SendMessage")[0]!.body)).not.toContain("Dana");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(far.rpc("CancelTask")).toEqual([]);
 
     await handOff("Plan another trip", "writer-second");
     await until(() => far.rpc("SendMessage").length === 2, "the second hand-off goes out");
     coordinator().cancelDirect("writer-second");
-    await until(() => routed.cancelled.length > 0, "the cancel reaches the outbound side");
+    await until(() => routed.cancelled.includes(routed.sent[1]!), "the cancel reaches the outbound side");
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(far.rpc("SendMessage")[1]!.signal?.aborted).toBe(true);
-    expect([...new Set(routed.cancelled)]).toEqual([routed.sent[1]]);
+    expect(routed.cancelled).toContain(routed.sent[1]);
+    expect(far.rpc("CancelTask")).toEqual([]);
 
     const before = [routed.sent.length, routed.cancelled.length];
     transport.start();

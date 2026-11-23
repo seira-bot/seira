@@ -21,6 +21,8 @@ const WORDS = { handedTo: "Handed to the A2A agent.", otherSide: "the A2A agent"
 const HERE = { id: "here-environment", name: "Here" };
 const NO_AGENT = { error: "There is no such agent here." };
 const NOT_VALID = { error: "The token is not valid." };
+const UNSEEN_TEXT = "a‮b​c\u{e0041}dㅤe\u0007f \u{1f469}‍\u{1f4bb}\nline two\tend";
+const SEEN_TEXT = "a bcde f \u{1f469}\u{1f4bb}\nline two\tend";
 
 type Bot = { id: string; name: string; title?: string; description?: string; hidden?: boolean; movedTo?: string };
 type Run = (node: HandoffView, signal: AbortSignal) => Promise<HostTurnResult>;
@@ -282,6 +284,16 @@ describe("SendMessage (AC-14 to AC-20, AC-25 to AC-27)", () => {
     const work = (JSON.parse(readFileSync(join(peer.dataDir, "bot-link.json"), "utf8")) as { work: Json }).work[id];
     expect(work).toMatchObject({ from: "Partner agent", to: "writer", by: CALLER_ID });
     expect(work).not.toHaveProperty("person");
+  });
+
+  it("hands the bot the text without unseen characters, and refuses a text with nothing to see", async () => {
+    const w = await world([{ label: "one" }]);
+    const [peer] = w.peers as [Peer];
+    await rpc(w, peer, sendMessage("m1", { text: UNSEEN_TEXT, blocking: true }));
+    expect(w.runs.map((run) => run.text)).toEqual([SEEN_TEXT]);
+    const blank = await rpc(w, peer, sendMessage("m2", { text: "​\u{e0041}ㅤ⁦" }));
+    expect(blank.body.error.code).toBe(-32602);
+    expect(w.begun).toHaveLength(1);
   });
 
   it("answers the same messageId again with the same task and starts nothing new (AC-15)", async () => {
