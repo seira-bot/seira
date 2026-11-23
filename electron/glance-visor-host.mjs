@@ -8,7 +8,7 @@ export const HOST_LINE_LIMIT = 4 * 1024 * 1024;
 /**
  * Runs in the helper process that the main process starts with `--ozone-platform=x11`.
  * It reads one JSON command per line from `input` and writes one JSON event per line to `output`.
- * The main process owns the settings folder that the flag names and removes it after this process exits.
+ * The main process chooses the settings folder that the flag names, and every helper start reuses it.
  * It opens no port and loads only the page of `createGlanceWindow`. Every check of an action stays in the main process.
  */
 export function runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen, input = process.stdin, output = process.stdout, argv = process.argv, createVisor = createGlanceWindow, setTimer = setTimeout, clearTimer = clearTimeout }) {

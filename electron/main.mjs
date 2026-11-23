@@ -2617,7 +2617,7 @@ const announceAddedCloud = createAddedCloudNotice({ t: nativeT, Notification, fo
 glanceControl = installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), getMainWindow: () => mainWindow, prefs: nativeText.prefs, t: nativeT, onHiddenChange: refreshApplicationMenu,
   revealChat: target => { revealForLink(); mainWindow?.webContents.send("desktop-notifications:open", target); }, isWayland: isWaylandSession({ platform: process.platform, env: process.env, switches: Object.fromEntries(["ozone-platform", "ozone-platform-hint"].map(name => [name, app.commandLine.getSwitchValue(name)])),
   }), x11Available: Boolean(process.env.DISPLAY),
-  createHelperVisor: hooks => createRemoteVisor({ spawn, execPath: process.execPath, appArgs: process.defaultApp ? [app.getAppPath()] : [], switches: app.commandLine.hasSwitch("no-sandbox") ? ["--no-sandbox"] : [], env: process.env, ...hooks }) });
+  createHelperVisor: hooks => createRemoteVisor({ spawn, execPath: process.execPath, appArgs: process.defaultApp ? [app.getAppPath()] : [], switches: app.commandLine.hasSwitch("no-sandbox") ? ["--no-sandbox"] : [], env: process.env, folder: path.join(app.getPath("userData"), "glance-helper"), ...hooks }) });
 // A place's colour (place-look.mjs): the Admin's for a Cloud, this app's for This computer and a server connected by
 // hand; changed on the place's own page or from the window's rail, whatever that server runs.
 installPlaceLook({ ipcMain, guard: workspaceOnly, place: () => savedPlace(environmentsState), session: () => ({ clouds: desktopRemoteAccess ? null : cloudAccount?.state().clouds ?? null, homeOrigin: myCloud() }),

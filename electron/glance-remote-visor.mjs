@@ -1,6 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 
 export const REMOTE_READY_MS = 10_000;
 export const REMOTE_LINE_LIMIT = 64 * 1024;
@@ -11,7 +9,7 @@ export const REMOTE_KILL_GRACE_MS = 2_000;
  * The visor of the main process when Glance runs in a helper process (Linux Wayland with an X11 display).
  * It has the same shape as `createGlanceWindow`, and it asks `onAct` for every action the helper reports.
  */
-export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = [], env = process.env, onAct, onFail, setTimer = setTimeout, clearTimer = clearTimeout, readyMs = REMOTE_READY_MS, makeFolder = () => mkdtempSync(join(tmpdir(), "seira-glance-")), removeFolder = (folder) => rmSync(folder, { recursive: true, force: true }) }) {
+export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = [], env = process.env, onAct, onFail, setTimer = setTimeout, clearTimer = clearTimeout, readyMs = REMOTE_READY_MS, folder, makeFolder = (path) => mkdirSync(path, { recursive: true, mode: 0o700 }) }) {
   let child = null, ready = false, closed = false, failed = false, shown = false, pending = null, waitReady = null, buffer = "";
 
   const write = (message) => {
@@ -61,19 +59,15 @@ export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = []
   function start() {
     const clean = { ...env };
     delete clean.ELECTRON_RUN_AS_NODE;
-    let folder;
-    try { folder = makeFolder(); } catch { fail(); return; }
-    const cleanup = () => { try { removeFolder(folder); } catch {} };
+    try { makeFolder(folder); } catch { fail(); return; }
     let target;
     try {
       target = spawn(execPath, [...appArgs, `--seira-glance-visor=${folder}`, "--ozone-platform=x11", ...switches], { stdio: ["pipe", "pipe", "ignore"], env: clean });
     } catch {
-      cleanup();
       fail();
       return;
     }
     child = target;
-    target.on("exit", cleanup);
     target.stdin?.on?.("error", () => {});
     target.stdout?.setEncoding?.("utf8");
     target.stdout?.on?.("data", (chunk) => {
@@ -86,7 +80,7 @@ export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = []
       }
       if (buffer.length > REMOTE_LINE_LIMIT) buffer = "";
     });
-    target.on("error", () => { cleanup(); if (child === target) fail(); });
+    target.on("error", () => { if (child === target) fail(); });
     target.on("exit", () => { if (child === target) fail(); });
     waitReady = setTimer(() => { waitReady = null; if (child === target && !ready) fail(); }, readyMs);
     waitReady?.unref?.();
