@@ -328,6 +328,50 @@ describe("hiding a provider", () => {
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
   });
 
+  it("names what still uses the provider when it refuses to hide it", async () => {
+    const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };
+    const bots = [
+      { id: "pen", name: "Pen", modelSelection: { instanceId: "b", model: "m" }, fallback: [{ instanceId: "a", model: "m" }] },
+      { id: "ink", name: "Ink", modelSelection: { instanceId: "b", model: "m" } },
+      { id: "wax", name: "Wax", modelSelection: { instanceId: "a", model: "m" } },
+    ];
+    const tasks: Record<string, Array<{ threadId: string; title: string; modelSelection?: { instanceId: string; model: string } }>> = {
+      ink: [
+        { threadId: "t1", title: "Private plan", modelSelection: { instanceId: "a", model: "m" } },
+        { threadId: "t2", title: "Other", modelSelection: { instanceId: "a", model: "m" } },
+        { threadId: "t3", title: "Elsewhere", modelSelection: { instanceId: "b", model: "m" } },
+      ],
+    };
+    const { base } = await serve({
+      cfg: cfg as unknown as AppConfig,
+      store: { bots, tasks: (botId: string) => tasks[botId] ?? [] } as never,
+    });
+    const refused = await fetch(`${base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+    expect(refused.status).toBe(409);
+    const body = await refused.json() as { error: string; usedBy: unknown[] };
+    expect(body.error).toMatch(/before hiding it/);
+    expect(body.usedBy).toEqual([
+      { kind: "default" },
+      { kind: "model", bot: "Wax" },
+      { kind: "backup", bot: "Pen" },
+      { kind: "thread", bot: "Ink", count: 2 },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("Private plan");
+  });
+
+  it("names the bot whose turn is still running on the provider", async () => {
+    const bots = [{ id: "ink", name: "Ink", modelSelection: { instanceId: "b", model: "m" } }];
+    const { base } = await serve({
+      cfg: { instances: { a: { driver: "fake" }, b: { driver: "fake" } } } as unknown as AppConfig,
+      store: { bots, tasks: () => [{ threadId: "t1", title: "Plan" }] } as never,
+      threadBusy: () => true,
+      botForThread: () => ({ modelSelection: { instanceId: "a", model: "m" } }) as never,
+    });
+    const refused = await fetch(`${base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+    expect(refused.status).toBe(409);
+    expect((await refused.json() as { usedBy: unknown[] }).usedBy).toEqual([{ kind: "running", bot: "Ink" }]);
+  });
+
   describe("a provider the new-bot default points at", () => {
     const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>, bots: unknown[] = []) => {
       const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };

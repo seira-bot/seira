@@ -26,7 +26,7 @@ async function serve(options: {
   const refreshed: string[] = [];
   let busy = false;
   const bots = options.botInstance
-    ? [{ id: "b1", busy: Boolean(options.botBusy), modelSelection: { instanceId: options.botInstance, model: "m" } }]
+    ? [{ id: "b1", name: "Pen", busy: Boolean(options.botBusy), modelSelection: { instanceId: options.botInstance, model: "m" } }]
     : [];
   const deps = {
     store: { bots, tasks: () => [] },
@@ -117,7 +117,9 @@ describe("added OpenAI-compatible servers", () => {
 
     const used = await serve({ botInstance: "openai-compat-used" });
     used.cfg.instances = { ...used.cfg.instances, "openai-compat-used": { driver: "openai-compat", displayName: "Used", config: { key: SECRET, url: "https://example.com/v1" } } };
-    expect((await used.call("DELETE", "/api/instances/openai-compat-used")).status).toBe(409);
+    const refused = await used.call("DELETE", "/api/instances/openai-compat-used");
+    expect(refused.status).toBe(409);
+    expect(refused.body.usedBy).toEqual([{ kind: "model", bot: "Pen" }]);
     expect(used.cfg.instances).toHaveProperty("openai-compat-used");
   });
 
