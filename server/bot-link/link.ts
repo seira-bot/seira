@@ -24,7 +24,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
 import { mascotAccessories } from "../../shared/mascot-accessories.ts";
@@ -32,8 +31,11 @@ import type { CoordinateBotsCall, Coordinator, CoordinatorHost, HandoffView, Hos
 import type { PassedFile } from "../host/handoff-files.ts";
 import type { PeerDeliveryReceipt } from "../peer-delivery.ts";
 import type { Level } from "../runtime/types.ts";
-import { BRIEF_MAX, EXCHANGE_BYTES, FILES_MAX, LINK_EXPIRES_MS, PEERS_MAX, frameSchema, handoffOfRoot, isLinkedId, linkRoot, linkedBotSchema, linkedId, parseLinked, peerKey, placeSchema,
+import { endedSchema, stateSchema, type EndedLink, type LinkState, type Work } from "./link-state.ts";
+import { BRIEF_MAX, EXCHANGE_BYTES, FILES_MAX, LINK_EXPIRES_MS, PEERS_MAX, frameSchema, handoffOfRoot, isLinkedId, linkRoot, linkedId, parseLinked, peerKey,
   type FileMeta, type FileWay, type Frame, type HandoffFrame, type LinkedBot, type Numbered, type Place, type ResultFrame } from "./protocol.ts";
+
+export type { EndedLink, LinkState } from "./link-state.ts";
 
 const FILE = "bot-link.json";
 const ENDED_FILE = "bot-link-ended.json";
@@ -76,45 +78,6 @@ const isGone = (error: unknown) => Boolean((error as { gone?: unknown } | null)?
 const said = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const metaOf = (files: readonly PassedFile[]): FileMeta[] => files.slice(0, FILES_MAX).map(({ name, mime, kind, bytes }) => ({ name: name.slice(0, 255), mime: mime.slice(0, 200), kind, bytes }));
 const GONE = "The result is no longer kept.";
-
-const workSchema = z.object({
-  /** The place it came from: its result goes there and nowhere else. */
-  peer: z.string(),
-  root: z.string(), from: z.string(), person: z.string().optional(), at: z.number(),
-  /** The assignment here that does the work; its words are read from the runtime's own row. */
-  child: z.string().optional(),
-  done: z.object({ ok: z.boolean(), outcome: z.string().optional(), /** Kept only when no assignment here ran. */ text: z.string().optional() }).optional(),
-  /** When the requester said it has the result. */
-  ackedAt: z.number().optional(),
-  /** On a guest link: the bot here it was for, and the peer's bot that asked. */
-  to: z.string().optional(), by: z.string().optional(),
-});
-const peerSchema = z.object({
-  place: placeSchema, bots: z.array(linkedBotSchema),
-  /** On the Cloud: the one session that may use this computer's link. */
-  sessionId: z.string().optional(),
-  seenAt: z.number(),
-});
-const stateSchema = z.object({
-  v: z.literal(2),
-  /** `dialer`: a computer, which asks. `acceptor`: the Cloud, which answers. */
-  role: z.enum(["dialer", "acceptor"]),
-  self: placeSchema,
-  /** dialer: the Cloud's address, this link's sign-in there, and the account it was made for. */
-  origin: z.string().optional(), token: z.string().optional(), account: z.string().optional(),
-  /** dialer: the Cloud is on a plan that sleeps, so it is asked only when it is known awake or there is work for it. */
-  sleeps: z.boolean().optional(),
-  peers: z.record(z.string(), peerSchema),
-  /** Another place's thread names, each with the thread here its work runs in. */
-  threads: z.record(z.string(), z.object({ threadId: z.string(), at: z.number() })),
-  /** Hand-offs taken from another place, by assignment id. */
-  work: z.record(z.string(), workSchema),
-});
-export type LinkState = z.infer<typeof stateSchema>;
-type Work = z.infer<typeof workSchema>;
-const endedSchema = z.array(z.object({ origin: z.string(), token: z.string(), at: z.number() })).max(10);
-/** A link that was turned off while its Cloud could not be told: the Cloud is told when it can next be reached. */
-export type EndedLink = z.infer<typeof endedSchema>[number];
 
 interface LocalBot { id: string; name: string; color?: string; hidden?: boolean; title?: string; description?: string; movedTo?: unknown;
   mascotBody?: string | null; mascotFaceColor?: string | null; mascotAccessories?: readonly string[] | null; chiefOfStaff?: boolean; threadId?: string }
