@@ -46,6 +46,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Power button",
     place: "The power button at the bottom of the sidebar, in the desktop app",
     does: "Hold Shut down or Restart for a moment to quit or restart the app. Restart to update installs a ready update. Pause every bot stops all bot work at once, with Undo. Bots that are working finish their step first.",
+    releaseNotes: ["powerButton"],
   },
   {
     id: "automations",
@@ -165,7 +166,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the menu under the person's name at the bottom of the sidebar",
     does: "Appearance, language, defaults for new bots, AI engines and keys. A bot reads and changes safe settings itself; the person changes the rest.",
     tools: ["app_settings"],
-    releaseNotes: ["updateCheckHonest"],
+    releaseNotes: ["updateCheckHonest", "uiMap"],
   },
   {
     id: "ai-engines",
@@ -329,14 +330,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Move from another AI",
     place: "Settings → Import & export → Bring things in → Move from another AI",
     does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. Hermes on another computer makes one file from copied steps. The person reviews it first.",
-    releaseNotes: ["aiImport"],
+    releaseNotes: ["aiImport", "hermesExport"],
   },
   {
     id: "backups",
     name: "Backups",
     place: "Settings → Import & export → Take things out → Export full backup",
     does: "A full backup of chats, bots and settings. Backup files end in .seirabackup, and older backup files still open.",
-    releaseNotes: ["backupName"],
+    releaseNotes: ["backupName", "backupParts"],
   },
   {
     id: "whats-new",
@@ -363,6 +364,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Glance",
     place: "The top centre of the screen while a bot works (a tray icon on Linux Wayland); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
+    releaseNotes: ["glance"],
   },
 ];
 
