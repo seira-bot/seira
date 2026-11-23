@@ -1,10 +1,13 @@
 # Seira for macOS: the Apple silicon (arm64) and Intel (x64) apps, built on a GitHub-hosted macOS runner (docs/releasing.md).
 #
-# This workflow only builds. It cannot publish:
-# - only a person with write access can start it (`workflow_dispatch`), so a fork pull request never runs it;
-# - the token can only read the repository;
-# - it uses no dependency cache, so no other run can change what the packages contain;
-# - it uploads the packages as a workflow artifact. A maintainer attaches the artifact to the release by hand.
+# It never creates a tag, never creates a release and never publishes one. Two things start it:
+# - a person with write access starts it by hand (`workflow_dispatch`). It builds and uploads a workflow artifact, and a maintainer attaches the artifact to the release by hand;
+# - a release is created (`release: created`, drafts included), by someone with write access. Then, only when all five Apple secrets are set:
+#   it builds the signed apps and the `attach` job puts the twelve files on that same release, through scripts/release-assets.mjs.
+#   When no Apple secret is set, it skips the build and says so in the run summary. The run does not fail, and no unsigned file is ever attached.
+# - a fork pull request never runs it;
+# - only the `attach` job has a write token, and only for `contents`. It reads no secret and runs no package script;
+# - it uses no dependency cache, so no other run can change what the packages contain.
 # A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
 # A maintainer's run does not wait.
 # The `package` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
@@ -18,10 +21,12 @@
 name: Package macOS
 
 on:
+  release:
+    types: [created]
   workflow_dispatch:
     inputs:
       ref:
-        description: Tag, branch, or commit to build. A v* tag must match the version in package.json.
+        description: Tag, branch, or commit to build. A v* tag must match the version in package.json. A release event builds the tag of the release.
         required: true
         default: main
         type: string
@@ -41,7 +46,7 @@ jobs:
         id: sha
         shell: bash
         env:
-          REF: ${{ inputs.ref }}
+          REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -80,6 +85,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 120
     environment: release
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+      artifact: ${{ steps.version.outputs.artifact }}
     defaults:
       run:
         shell: bash
@@ -87,6 +95,7 @@ jobs:
       - name: Choose a signed or an unsigned build
         id: mode
         env:
+          EVENT: ${{ github.event_name }}
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -98,7 +107,18 @@ jobs:
           for name in MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
             if [ -n "${!name}" ]; then set_names="$set_names $name"; else missing="$missing $name"; fi
           done
-          if [ -z "$set_names" ]; then
+          if [ -z "$set_names" ] && [ "$EVENT" = release ]; then
+            # A release gets signed apps or nothing. Skipping is not a failure, so the release and the other workflows stay as they are.
+            echo "::notice::No Apple secret is set, so this release gets no macOS build. Nothing was built or attached."
+            {
+              echo "### macOS build skipped"
+              echo
+              echo "No Apple signing secret is set in the \`release\` environment, so this release has no macOS assets."
+              echo "Set all five secrets (docs/releasing.md, macOS signing secrets), then run **Package macOS** by hand with this tag and attach the files."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$set_names" ]; then
             echo "::warning::No Apple secret is set. The apps are ad-hoc signed and not notarized. They are NOT FOR RELEASE."
             echo "signed=false" >> "$GITHUB_OUTPUT"
           elif [ -z "$missing" ]; then
@@ -109,20 +129,24 @@ jobs:
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.mode.outputs.skip != 'true'
         with:
           ref: ${{ needs.commit.outputs.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+        if: steps.mode.outputs.skip != 'true'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.mode.outputs.skip != 'true'
         with:
           node-version: 24
           # A release package must not read a dependency cache that another run wrote.
           package-manager-cache: false
 
       - name: Check the version
+        if: steps.mode.outputs.skip != 'true'
         id: version
         env:
-          REF: ${{ inputs.ref }}
+          REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}
           SIGNED: ${{ steps.mode.outputs.signed }}
         run: |
           version=$(node -p "require('./package.json').version")
@@ -140,7 +164,9 @@ jobs:
           echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
 
       - run: pnpm install --frozen-lockfile
+        if: steps.mode.outputs.skip != 'true'
       - name: Clean generated output
+        if: steps.mode.outputs.skip != 'true'
         # The package copies these folders as they are, so stale files would ship and break the signature seal.
         run: rm -rf dist dist-server dist-companion dist-native release
 
@@ -165,6 +191,7 @@ jobs:
             echo "::error::MAC_CERT_P12_BASE64 holds no Developer ID Application identity"; exit 1; }
 
       - name: Package both architectures
+        if: steps.mode.outputs.skip != 'true'
         env:
           # macos-15 runners have 7 GB. Node's default heap stops near 2 GB, and the server type check needs more.
           NODE_OPTIONS: --max-old-space-size=4096
@@ -182,6 +209,7 @@ jobs:
           fi
 
       - name: "Gate: the update feed file matches the signing mode"
+        if: steps.mode.outputs.skip != 'true'
         env:
           SIGNED: ${{ steps.mode.outputs.signed }}
         run: |
@@ -198,6 +226,7 @@ jobs:
           done
 
       - name: "Gate: both apps carry every helper for their own CPU"
+        if: steps.mode.outputs.skip != 'true'
         run: |
           pinned=$(node --input-type=module -e "import { CLOUDFLARED_VERSION } from './scripts/prepare-cloudflared.mjs'; console.log(CLOUDFLARED_VERSION)")
           for app in release/mac-arm64/Seira.app release/mac/Seira.app; do
@@ -226,6 +255,7 @@ jobs:
           done
 
       - name: "Gate: the signature verifies before notarization"
+        if: steps.mode.outputs.skip != 'true'
         env:
           SIGNED: ${{ steps.mode.outputs.signed }}
         run: |
@@ -251,6 +281,7 @@ jobs:
           done
 
       - name: "Gate: the bundled browser works with an empty home"
+        if: steps.mode.outputs.skip != 'true'
         run: |
           case "$(node -p process.arch)" in
             arm64) resources="$GITHUB_WORKSPACE/release/mac-arm64/Seira.app/Contents/Resources" ;;
@@ -261,6 +292,7 @@ jobs:
           SEIRA_SMOKE_DIST="$resources/server" node scripts/smoke-packaged-server.mjs --browser-bundle "$resources/browser-engine"
 
       - name: "Gate: both packaged servers start and every helper path resolves"
+        if: steps.mode.outputs.skip != 'true'
         run: |
           for app in release/mac-arm64/Seira.app release/mac/Seira.app; do
             res="$app/Contents/Resources"
@@ -357,6 +389,7 @@ jobs:
           done
 
       - name: Stage and verify the files to upload
+        if: steps.mode.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
           SIGNED: ${{ steps.mode.outputs.signed }}
@@ -423,6 +456,7 @@ jobs:
           EOF
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.mode.outputs.skip != 'true'
         with:
           name: ${{ steps.version.outputs.artifact }}
           path: ${{ runner.temp }}/seira-macos/
@@ -432,3 +466,46 @@ jobs:
       - name: Delete the temporary keychain
         if: always() && steps.mode.outputs.signed == 'true'
         run: security delete-keychain "$RUNNER_TEMP/seira-signing.keychain-db" || true
+
+  attach:
+    name: attach the signed files to the release
+    needs: [commit, approval, package]
+    # Only a release event, and only a signed build. An ad-hoc build and a skipped build never reach this job.
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) && github.event_name == 'release' && needs.package.result == 'success' && needs.package.outputs.signed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      # The scripts come from the commit that was built, and a v* tag can only be made by an organization admin.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commit.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: ${{ runner.temp }}/seira-macos
+      - name: Upload the twelve files, update feed last
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          STAGE: ${{ runner.temp }}/seira-macos
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::The release tag must look like v1.2.3."; exit 1; }
+          version="${TAG#v}"
+          files=(
+            "Seira-$version-arm64.dmg" "Seira-$version-x64.dmg" "Seira-$version-arm64.zip" "Seira-$version-x64.zip"
+            "Seira-$version-arm64.dmg.blockmap" "Seira-$version-x64.dmg.blockmap"
+            "Seira-$version-arm64.zip.blockmap" "Seira-$version-x64.zip.blockmap"
+            latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
+          )
+          # The build already checked this set. Check it again here: nothing else may reach the release.
+          [ "$(ls -A "$STAGE" | LC_ALL=C sort)" = "$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)" ] || {
+            echo "::error::The artifact does not hold exactly the twelve macOS files."; exit 1; }
+          cd "$STAGE"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
+          echo "The twelve macOS files are on release $TAG. The release was not published." >> "$GITHUB_STEP_SUMMARY"
