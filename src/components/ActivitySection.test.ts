@@ -35,7 +35,7 @@ describe("activity helpers", () => {
 });
 
 const handoff: ActivityEntry = {
-  type: "admin", at: "2026-09-22T10:00:00.000Z", who: "Studio Seira (linked server)", what: "linked-server", action: "linked-server.handoff",
+  type: "admin", at: "2026-09-22T10:00:00.000Z", who: "Studio Seira (another Seira)", what: "linked-server", action: "linked-server.handoff",
   target: { kind: "linked-server", id: "0123456789abcdef", name: "Studio Seira" }, after: { direction: "received", state: "done" },
 };
 
@@ -57,7 +57,8 @@ describe("linked places in the activity list", () => {
   });
 
   it("names the other side as the actor of its own hand-offs", () => {
-    expect(whoLabel("Studio Seira (linked server)")).toBe("Studio Seira (another Seira)");
+    expect(whoLabel("Studio Seira (another Seira)")).toBe("Studio Seira (another Seira)");
+    expect(whoLabel("Another Seira")).toBe("Another Seira");
     expect(whoLabel("boss@example.test")).toBe("boss@example.test");
   });
 

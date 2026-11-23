@@ -8371,6 +8371,7 @@
   "activity.action.linked-server.handoff": "Passed work over a link",
   "activity.action.linked-server.refused": "Refused work from a link",
   "activity.actor.linkedServer": "{name} (another Seira)",
+  "activity.actor.linkedServerUnnamed": "Another Seira",
   "botApi.localOnly": "This address works only on this computer.",
   "botApi.call.replied": "Replied",
   "botApi.call.accepted": "Taken, reply not ready",

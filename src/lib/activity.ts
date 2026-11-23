@@ -53,7 +53,8 @@ export function whoLabel(who: string): string {
   if (who === "This computer") return t("activity.actor.loopback");
   if (who === "Local service") return t("activity.actor.worker");
   if (who === "Command line") return t("activity.actor.cli");
-  const linked = /^(.+) \(linked server\)$/u.exec(who);
+  if (who === "Another Seira") return t("activity.actor.linkedServerUnnamed");
+  const linked = /^(.+) \(another Seira\)$/u.exec(who);
   if (linked) return t("activity.actor.linkedServer", { name: linked[1]! });
   return who || "—";
 }

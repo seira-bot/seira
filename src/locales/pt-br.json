@@ -8326,6 +8326,7 @@
   "activity.action.linked-server.handoff": "Passou trabalho por um vínculo",
   "activity.action.linked-server.refused": "Recusou trabalho de um vínculo",
   "activity.actor.linkedServer": "{name} (outro Seira)",
+  "activity.actor.linkedServerUnnamed": "Outro Seira",
   "botApi.localOnly": "Este endereço só funciona neste computador.",
   "botApi.call.replied": "Respondida",
   "botApi.call.accepted": "Aceita, aguardando resposta",
