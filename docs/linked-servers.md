@@ -35,6 +35,31 @@ If a server has no address, give it one of these, then make the invite again:
 
 See [self-hosting](self-hosting.md) for the details of each way.
 
+A server with no address can also run Seira Relay (`seira serve --relay`). Its
+invite then goes through the relay. See
+[Links through Seira Relay](#links-through-seira-relay) and
+[phone relay](phone-relay-server.md).
+
+## Links through Seira Relay
+
+A server uses this way when it has no secure public address and runs Seira
+Relay. Its invite then names the relay identity of the server and not an
+address.
+
+- The joining side needs no relay sign-in and no address. It dials the relay
+  with the invite, and the relay passes the connection to the inviting server.
+- The first relay session uses the invite code to take the accept request. Later
+  sessions of the link use the link credential.
+- The relay passes sealed bytes. It cannot read work, results or files. It can
+  see when the two sides talk and how much.
+- The inviting server admits the link at the relay for as long as the link
+  exists. Removing the link on either side drops the admission and closes the
+  relay session.
+- The page shows "Connected through Seira Relay" for such a link.
+
+The limits of this way are in the table below. A server with an https address
+keeps the https way and makes no relay invite.
+
 ## What each side chooses
 
 A new link exposes no bot. An admin of each side does two things for that
@@ -83,6 +108,10 @@ The other side holds a credential, but this side does not trust what it sends.
 | Limit | Value |
 |-------|-------|
 | Links per server | 20 |
+| Links through Seira Relay on the inviting server | 4 |
+| Relay invites that wait at one time | 2 |
+| Phones and relay links together | 20 |
+| Relay sessions for one link | 2 |
 | Open hand-offs per link | 8 |
 | New hand-offs per link | 30 in 60 seconds |
 | Work frames per link | 150 in a minute |
@@ -130,7 +159,16 @@ not a paired client.
 
 - Only the side that makes the invite needs an https address. The joining
   side calls the inviter at that address, so the joining side needs no public
-  address. A place with no https address cannot make an invite.
+  address. A place with no https address can make an invite when it runs Seira
+  Relay. A place with neither cannot make an invite.
+- A relay link that the other side removed while this side was off shows as not
+  reachable, not as ended. Only the other server itself can end a link, and it
+  does so inside an open relay session.
+- A server that loses its relay identity breaks its relay links. A new
+  installation or a lost key file does this. Make the links again.
+- An older Seira says that a relay invite is not valid.
+- Large files of a relay link use the same relay connection as the phones of
+  that server. They can be slow.
 - A bot that works for the other side can make a routine. That routine later
   starts work that the link rules do not see. The approval caps `ask` and
   `edits` still ask a person here for the tool that the routine uses.
@@ -172,6 +210,10 @@ not a paired client.
 ## Where the code is
 
 - `server/host/linked-servers.ts` keeps the links and the exchange.
+- `server/host/linked-servers-relay.ts` holds the relay links and their limits.
+- `server/bot-link/relay-fetch.ts` sends the requests of a relay link through a
+  relay session.
+- `server/phone-relay.ts` admits the relay links.
 - `server/host/linked-servers-admit.ts` holds the intake limits.
 - `server/host/linked-servers-text.ts` cleans what the other side sends.
 - `server/routes/bot-link-exchange.ts` holds the exchange and the file route.

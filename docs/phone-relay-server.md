@@ -55,7 +55,15 @@ docker compose exec seira seira pair --phone
 ```
 
 A phone code is chat and approvals only (`pair --phone`), as on every other way
-in. Up to 20 phones pair through the relay per server.
+in. Up to 20 phones pair through the relay per server. Links to another Seira
+share those 20 places (see below).
+
+## Links to another Seira
+
+The same relay connection also carries links to another Seira. A server with no
+address makes an invite that goes through the relay, and the other Seira joins
+with it. Phones and those links share the 20 places. Phones that paired first
+keep their places. See [Linked places](linked-servers.md).
 
 ## What the phone talks to
 

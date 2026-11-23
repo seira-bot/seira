@@ -25,6 +25,27 @@ The test passes when every case passes. The fixtures have no secure public
 address, so the test points the invite at the loopback address of the inviter
 before it joins.
 
+## Links through Seira Relay
+
+Three tests check a link that goes through Seira Relay:
+
+- `server/host/linked-servers-relay-flow.test.ts` runs two managers in one
+  process with a fake relay. It checks the invite, the join, the limits, a
+  restart of each side, and the removal of a link.
+- `server/linked-servers-relay.e2e.test.ts` runs two servers and links them
+  through a relay.
+- `server/phone-relay-guests.test.ts` checks how the relay admits link guests
+  next to phones.
+
+```sh
+pnpm exec vitest run server/host/linked-servers-relay-flow.test.ts
+pnpm exec vitest run server/linked-servers-relay.e2e.test.ts
+pnpm exec vitest run server/phone-relay-guests.test.ts
+```
+
+Each test passes when every case passes. These tests do not prove a real
+hosted relay: they use a fake relay in the same process or on loopback.
+
 ## The Settings page
 
 The page has a component test and a settings test:
