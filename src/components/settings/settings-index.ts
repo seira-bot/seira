@@ -85,7 +85,7 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "general", owner: "app", labelKey: "settings.section.general", icon: SlidersHorizontal, when: advancedOnly(() => true),
     synonyms: ["general", "language", "typing", "send", "enter", "notifications", "sounds", "startup", "login", "analytics", "privacy", "talk"] },
   { id: "appearance", owner: "app", labelKey: "settings.section.appearance", icon: Palette, when: () => true,
-    synonyms: ["appearance", "theme", "skin", "looks", "dark mode", "light mode", "font", "text size", "zoom", "chat width", "layout", "threads", "pins"] },
+    synonyms: ["appearance", "theme", "skin", "looks", "dark mode", "light mode", "font", "chat width", "layout", "threads", "pins"] },
 ];
 
 export const OWNERS: readonly SettingsOwner[] = ["place", "account", "app"];
