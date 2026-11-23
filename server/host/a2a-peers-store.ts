@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
 import { isPublicDomainAddress } from "../custom-domain.ts";
-import { APPROVAL_CAPS, LINKS_MAX, LINK_ID, botIdSchema, cleanName, hashSecret, linkedServersDir, sameHash } from "./linked-servers-store.ts";
+import { APPROVAL_CAPS, ENDED_MAX, LINKS_MAX, LINK_ID, botIdSchema, cleanName, hashSecret, linkedServersDir, sameHash } from "./linked-servers-store.ts";
 
 export const A2A_TOKEN_PREFIX = "lsa_";
 export const URL_MAX = 2_048;
@@ -58,18 +58,24 @@ export const a2aPeerSchema = z.object({
   .refine((peer) => peer.endpoint === undefined || (peer.url !== undefined && new URL(peer.endpoint).origin === new URL(peer.url).origin));
 
 export type A2aPeer = z.infer<typeof a2aPeerSchema>;
-export interface A2aPeersFile { v: 1; peers: A2aPeer[] }
 
-const fileShape = z.object({ v: z.literal(1), peers: z.array(z.unknown()) });
+/** A removed peer whose work here may still run: its key and its cap stay until that work ends. */
+const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number().finite() }).strict();
+export type EndedPeer = z.infer<typeof endedSchema>;
+
+export interface A2aPeersFile { v: 1; peers: A2aPeer[]; ended?: EndedPeer[] }
+
+const fileShape = z.object({ v: z.literal(1), peers: z.array(z.unknown()), ended: z.array(z.unknown()).optional() });
 
 export function readA2aPeers(dataDir: string, log: (line: string) => void = () => {}): A2aPeersFile {
   let text: string;
   try { text = readFileSync(join(linkedServersDir(dataDir), FILE), "utf8"); } catch { return { v: 1, peers: [] }; }
-  let raw: unknown[];
-  try { raw = fileShape.parse(JSON.parse(text)).peers; } catch {
+  let raw: unknown[], rawEnded: unknown[];
+  try { ({ peers: raw, ended: rawEnded = [] } = fileShape.parse(JSON.parse(text))); } catch {
     log("a2a peers: their record did not parse, so no A2A peer is in use");
     return { v: 1, peers: [] };
   }
+  const ended = rawEnded.flatMap((one) => { const parsed = endedSchema.safeParse(one); return parsed.success ? [parsed.data] : []; }).slice(-ENDED_MAX);
   const peers: A2aPeer[] = [];
   let dropped = 0;
   for (const one of raw) {
@@ -78,14 +84,15 @@ export function readA2aPeers(dataDir: string, log: (line: string) => void = () =
     peers.push(parsed.data);
   }
   if (dropped > 0) log(`a2a peers: ${dropped} entries did not parse or were over the limit, so they are not in use`);
-  return { v: 1, peers };
+  return { v: 1, peers, ...(ended.length ? { ended } : {}) };
 }
 
 export function writeA2aPeers(dataDir: string, file: A2aPeersFile): void {
   const peers = file.peers.map((peer) => a2aPeerSchema.parse(peer));
   if (peers.length > LINKS_MAX) throw new Error("too many A2A peers");
+  const ended = (file.ended ?? []).map((one) => endedSchema.parse(one)).slice(-ENDED_MAX);
   mkdirSync(linkedServersDir(dataDir), { recursive: true, mode: 0o700 });
-  writeFileAtomic(join(linkedServersDir(dataDir), FILE), JSON.stringify({ v: 1, peers }), { mode: 0o600 });
+  writeFileAtomic(join(linkedServersDir(dataDir), FILE), JSON.stringify({ v: 1, peers, ...(ended.length ? { ended } : {}) }), { mode: 0o600 });
 }
 
 /** A new inbound token. Only the hash goes into the record; the token is shown once. */
