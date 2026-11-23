@@ -4,7 +4,7 @@
  * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`.
  * `chars`: the characters of the frames a link may hand this side to clean in `windowMs`: the cleaning costs time in
  * proportion to them. `exchanges` and `sessions`: the exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
-export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, chars: 600_000, exchanges: 120, sessions: 10 } as const;
+export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, chars: 300_000, exchanges: 120, sessions: 10 } as const;
 export const BUSY_TEXT = "The other side is busy now, so try again later.";
 
 const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
