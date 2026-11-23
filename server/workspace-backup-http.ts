@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync, statSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { Transform } from "node:stream";
@@ -18,11 +18,17 @@ import { userErrorFields } from "./user-errors.ts";
 
 const PREFIX = "/api/workspace-backup";
 const MAX_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_UPLOAD_BYTES;
+/** One part of a resumable upload; far under the 100 MB that the Cloudflare edge accepts in one request body. */
+const MAX_CHUNK_BYTES = 32 * 1024 ** 2;
 const MAX_CLIENT_STATE_BYTES = 2 * 1024 ** 2;
 const EXPIRES_MS = 60 * 60_000;
 const passwordSchema = z.string().min(12, "Use a password of at least 12 characters.").max(1024);
 const failure = (message: string, status = 400) => Object.assign(new Error(message), { status });
-type Artifact = { owner: string; kind: "download" | "upload" | "staged"; path?: string; expires: number; summary?: WorkspaceBackupSummary };
+type Artifact = {
+  owner: string; kind: "download" | "upload" | "uploading" | "staged"; path?: string; expires: number; summary?: WorkspaceBackupSummary;
+  /** `uploading` only: the announced size, the bytes stored, and whether a part is being written. */
+  total?: number; received?: number; writing?: boolean;
+};
 type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string> };
 
 export function isWorkspaceBackupSessionControl(method: string, path: string): boolean {
@@ -56,7 +62,7 @@ export function createWorkspaceBackupRoutes(options: {
   };
   function remove(id: string, artifact: Artifact) {
     if (artifact.path) { try { unlinkSync(artifact.path); } catch {} }
-    if (artifact.kind !== "upload") { try { removeWorkspaceBackupJob(options.dataDir, id); } catch {} }
+    if (artifact.kind === "download" || artifact.kind === "staged") { try { removeWorkspaceBackupJob(options.dataDir, id); } catch {} }
     artifacts.delete(id);
   }
   // Reclaim only old app-named jobs, never safety copies or pending/committed recovery state.
@@ -95,6 +101,15 @@ export function createWorkspaceBackupRoutes(options: {
     }
     return artifact;
   };
+  function uploadDirectory() {
+    const root = join(options.dataDir, ".backups");
+    mkdirSync(root, { recursive: true, mode: 0o700 });
+    if (lstatSync(root).isSymbolicLink()) throw failure("Backup storage must not be a symbolic link.");
+    const directory = join(root, "uploads");
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (lstatSync(directory).isSymbolicLink()) throw failure("Backup storage must not be a symbolic link.");
+    return directory;
+  }
   async function operate<T>(work: () => Promise<T>): Promise<T> {
     if (operating) throw failure("Another backup operation is in progress. Wait for it to finish.", 409);
     operating = true;
@@ -154,14 +169,9 @@ export function createWorkspaceBackupRoutes(options: {
         await operate(async () => {
           const length = Number(req.headers["content-length"]);
           if (!Number.isSafeInteger(length) || length <= 0 || length > MAX_UPLOAD_BYTES) throw failure("Select a backup containing no more than 10 GB of workspace data.", 413);
-          replacePrevious(auth, ["upload", "staged"]);
+          replacePrevious(auth, ["upload", "uploading", "staged"]);
           if (artifacts.size >= 4) throw failure("There are already four backup files in progress. Restart or wait an hour before uploading another.", 409);
-          const root = join(options.dataDir, ".backups");
-          mkdirSync(root, { recursive: true, mode: 0o700 });
-          if (lstatSync(root).isSymbolicLink()) throw failure("Backup storage must not be a symbolic link.");
-          const directory = join(root, "uploads");
-          mkdirSync(directory, { recursive: true, mode: 0o700 });
-          if (lstatSync(directory).isSymbolicLink()) throw failure("Backup storage must not be a symbolic link.");
+          const directory = uploadDirectory();
           const id = randomUUID();
           const file = join(directory, `${id}.seirabackup`);
           let bytes = 0;
@@ -178,6 +188,73 @@ export function createWorkspaceBackupRoutes(options: {
           } catch (error) { try { unlinkSync(file); } catch {} throw error; }
         });
         return true;
+      }
+      if (method === "POST" && path === `${PREFIX}/upload/start`) {
+        const body = z.object({ bytes: z.number().int() }).parse(await options.readBody(req));
+        if (body.bytes <= 0 || body.bytes > MAX_UPLOAD_BYTES) throw failure("Select a backup containing no more than 10 GB of workspace data.", 413);
+        await operate(async () => {
+          replacePrevious(auth, ["upload", "uploading", "staged"]);
+          if (artifacts.size >= 4) throw failure("There are already four backup files in progress. Restart or wait an hour before uploading another.", 409);
+          const id = randomUUID();
+          const file = join(uploadDirectory(), `${id}.seirabackup`);
+          writeFileSync(file, "", { flag: "wx", mode: 0o600 });
+          artifacts.set(id, { owner: owner(auth), kind: "uploading", path: file, total: body.bytes, received: 0, expires: Date.now() + EXPIRES_MS });
+          json(res, 200, { id, chunkBytes: MAX_CHUNK_BYTES });
+        });
+        return true;
+      }
+      const resumable = /^\/api\/workspace-backup\/upload\/([\w-]+)(?:\/(chunk|finish))?$/.exec(path);
+      if (resumable) {
+        const [, id, action] = resumable;
+        if (method === "GET" && !action) {
+          const artifact = get(id, auth, "uploading");
+          json(res, 200, { received: artifact.received, total: artifact.total });
+          return true;
+        }
+        if (method === "POST" && action === "finish") {
+          const done = artifacts.get(id)?.kind === "upload";
+          const artifact = get(id, auth, done ? "upload" : "uploading");
+          if (!done) {
+            if (artifact.writing) throw failure("This upload is still receiving data. Try again in a moment.", 409);
+            if (artifact.received !== artifact.total || statSync(artifact.path!).size !== artifact.total) throw failure("The upload was incomplete. Select the file again.");
+            artifact.kind = "upload";
+            artifact.expires = Date.now() + EXPIRES_MS;
+          }
+          json(res, 200, { id });
+          return true;
+        }
+        if (method === "POST" && action === "chunk") {
+          const artifact = get(id, auth, "uploading");
+          if (artifact.writing) throw failure("This upload is still receiving data. Try again in a moment.", 409);
+          const query = new URL(req.url ?? "", "http://localhost").searchParams;
+          const offset = Number(query.get("offset"));
+          // A proxy may forward the body as Transfer-Encoding: chunked without Content-Length, so the URL carries the size too.
+          const declared = [req.headers["content-length"], query.get("bytes")].filter((value): value is string => typeof value === "string").map(Number);
+          if (declared.length === 0) throw failure("The size of this part of the backup is missing.", 411);
+          if (declared.some((value) => value !== declared[0])) throw failure("The size of this part of the backup does not match.");
+          const length = declared[0];
+          if (!Number.isSafeInteger(length) || length <= 0 || length > MAX_CHUNK_BYTES) throw failure("This part of the backup is too large.", 413);
+          if (!Number.isSafeInteger(offset) || offset !== artifact.received) throw failure("The upload is out of step. Resume it.", 409);
+          if (offset + length > artifact.total!) throw failure("The upload is larger than its announced size.", 413);
+          artifact.writing = true;
+          try {
+            let bytes = 0;
+            const limit = new Transform({ transform(chunk, _encoding, callback) {
+              bytes += chunk.length;
+              callback(bytes > length ? failure("The part is larger than announced.", 413) : null, chunk);
+            } });
+            await pipeline(req.iterator({ destroyOnReturn: false }), limit, createWriteStream(artifact.path!, { flags: "a", mode: 0o600 }));
+            if (bytes !== length) throw failure("The upload was incomplete. Resume it.");
+            check(req, auth);
+            artifact.received = offset + length;
+            artifact.expires = Date.now() + EXPIRES_MS;
+            json(res, 200, { received: artifact.received });
+          } catch (error) {
+            try { truncateSync(artifact.path!, artifact.received!); } catch {}
+            throw error;
+          } finally { artifact.writing = false; }
+          return true;
+        }
       }
       if (method === "POST" && path === `${PREFIX}/preview`) {
         const body = z.object({ id: z.string().uuid(), password: passwordSchema }).parse(await options.readBody(req));

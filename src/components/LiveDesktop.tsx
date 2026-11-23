@@ -84,7 +84,7 @@ export function LiveDesktop({ target, threadId, name, poster, expanded, onExpand
       data-live-desktop
       data-state={connection}
       data-expanded={expanded ? "true" : undefined}
-      className={cn(expanded ? "fixed inset-0 z-[65] flex flex-col bg-app" : "relative h-full w-full")}
+      className={cn(expanded ? "fixed inset-y-0 right-0 left-[var(--rail-beside,0px)] z-[65] flex flex-col bg-app" : "relative h-full w-full")}
       onKeyDown={(event) => {
         if (expanded && event.key === "Escape" && !(event.target instanceof HTMLCanvasElement)) onExpandedChange(false);
       }}

@@ -363,7 +363,7 @@ export function PageFullScreen(props: PageToolsProps & {
   return createPortal(
     <div {...(pane ? { role: "region", "data-page-pane": props.doc.messageId } : { role: "dialog", "aria-modal": true })}
       aria-label={props.title} data-page-fullscreen={props.doc.messageId}
-      className={cn(pane ? "absolute inset-x-0 top-0 z-[1] bottom-[var(--page-pane-bottom,0px)] pt-[var(--glass-top,0px)]" : "fixed inset-0 z-50",
+      className={cn(pane ? "absolute inset-x-0 top-0 z-[1] bottom-[var(--page-pane-bottom,0px)] pt-[var(--glass-top,0px)]" : "fixed inset-y-0 right-0 left-[var(--rail-beside,0px)] z-50",
         "flex flex-col bg-panel")}>
       <div ref={closer} className="flex flex-col gap-2 border-b border-hairline/40 px-4 pb-3 pt-3">
         <div className="truncate text-[15px] font-semibold text-ink" title={props.title}><bdi dir="auto">{props.title}</bdi></div>
