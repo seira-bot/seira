@@ -106,6 +106,7 @@ test("AC-08 open raises the main window on that chat", async () => {
   const ok = await w.handlers.handle["glance-visor:act"](w.visorEvent, { kind: "open", botId: "a", threadId: "t-a" });
   assert.equal(ok, true);
   assert.deepEqual(w.reveals, [{ botId: "a", threadId: "t-a" }]);
+  assert.equal(w.log.filter((e) => e.channel === "glance:act").length, 0);
 });
 
 test("a visor size request comes only from the visor", async () => {

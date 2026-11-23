@@ -167,7 +167,6 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
     if (!act || !actAllowed({ bots: view.entries }, act)) return false;
     if (act.kind === "open") {
       revealChat({ botId: act.botId, threadId: act.threadId });
-      void relay(act);
       return true;
     }
     return relay(act);
