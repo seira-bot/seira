@@ -388,6 +388,33 @@ describe("plan usage fetcher", () => {
     expect(JSON.stringify(report)).not.toContain(defaultToken);
   });
 
+  it("reads each Claude account with its own folder's login, and reports each one's own windows", async () => {
+    const dirA = normalize(join(tmpdir(), "seira-plan-usage-nana")), dirB = normalize(join(tmpdir(), "seira-plan-usage-affan"));
+    const logins = new Map([[join(dirA, ".credentials.json"), "token-nana"], [join(dirB, ".credentials.json"), "token-affan"]]);
+    const used: Record<string, [number, string]> = { "token-nana": [1, "2026-09-26T12:00:00.000Z"], "token-affan": [60, "2026-09-26T16:00:00.000Z"] };
+    const fetchImpl = vi.fn<PlanFetch>(async (_url, init) => {
+      const [utilization, resets_at] = used[init.headers.Authorization!.replace("Bearer ", "")]!;
+      return jsonResponse({ five_hour: { utilization, resets_at }, seven_day: { utilization: utilization / 2, resets_at } });
+    });
+    const accounts = [account("claude", { id: "nana", name: "nana", configDir: dirA }), account("claude", { id: "affan", name: "affan", configDir: dirB })];
+    const report = await fetchPlanUsage(accounts, {
+      fetch: fetchImpl,
+      now: () => NOW,
+      credentials: fileCredentialReader({
+        now: () => NOW,
+        env: { HOME: tmpdir(), USERPROFILE: tmpdir() },
+        readText: (path) => {
+          const token = logins.get(path);
+          return token ? JSON.stringify({ claudeAiOauth: { accessToken: token, expiresAt: NOW + 3_600_000 } }) : null;
+        },
+      }),
+    });
+    expect(report.providers.map((row) => [row.id, row.fiveHour.usedPercent, row.fiveHour.resetsAt])).toEqual([
+      ["nana", 1, "2026-09-26T12:00:00.000Z"],
+      ["affan", 60, "2026-09-26T16:00:00.000Z"],
+    ]);
+  });
+
   it("turns a 401 into ok:false without throwing and still returns the other provider", async () => {
     const fetchImpl = vi.fn<PlanFetch>(async (url) => {
       if (url.includes("anthropic.com")) return jsonResponse(SECRET, 401);

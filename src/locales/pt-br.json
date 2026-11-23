@@ -8230,6 +8230,7 @@
   "limits.tryAgainNow": "Tentar agora",
   "limits.cardTitle": "Uso do {engine}",
   "limits.checked": "verificado {when}",
+  "limits.sameAccount": "Conectada com a mesma conta de {name}, então as duas mostram os mesmos limites.",
   "botAccess.share": "Compartilhar",
   "botAccess.title": "Compartilhar {bot}",
   "botAccess.addPlaceholder": "Adicionar pessoas por nome ou e-mail",
