@@ -3,7 +3,9 @@
 Glance shows the bots of the place in the main window that work, need the
 person, failed, or just finished. On macOS, Windows and Linux X11 it is a small
 never-focused visor at the top centre of the primary display. On Linux Wayland
-an app cannot place or pin a window, so Glance is a tray icon there.
+an app cannot place or pin a window, so the visor runs in a small helper
+process under X11 (XWayland). The main window stays native Wayland. The tray
+icon shows only when no X11 display is available or the helper fails.
 
 Window placement, always-on-top over full-screen apps, focus, and the tray of
 each desktop are operating-system behaviour: the control surface cannot drive
@@ -88,5 +90,6 @@ tray on each Linux desktop.
 | Open chat | Click Open chat. | The Seira window comes to the front on that bot's chat. |
 | Close | Open a card without an ask, then move the pointer away for 1 s, or click Close. | The visor goes back to compact. A card with an ask stays open. |
 | Turn off | View → Glance, then restart the app. | Glance stays off until it is turned on again. |
-| Wayland | Run the same steps in a Linux Wayland session. | No visor. A Glance tray icon shows while a bot is active, with one row per bot; a row opens that chat. |
+| Wayland | Run the same steps in a Linux Wayland session with XWayland. | The visor shows at the top centre above other windows. The main window stays sharp (native Wayland). No tray icon shows. |
+| Wayland without X11 | Start the app with no `DISPLAY` set in a Wayland session. | No visor. A Glance tray icon shows while a bot is active, with one row per bot; a row opens that chat. |
 | Reduced motion | Turn on reduced motion in the system, then repeat "Shows while a bot works". | Nothing moves. |

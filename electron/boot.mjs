@@ -6,7 +6,11 @@ import { LEGACY_APP_NAME } from "./legacy-names.mjs";
 import { OLD_KEY_READER, runOldKeyReader } from "./old-key.mjs";
 import { chooseSettingsFolder } from "./settings-folder.mjs";
 
-if (process.argv.some(entry => entry.startsWith(`${OLD_KEY_READER}=`))) {
+if (process.argv.includes("--seira-glance-visor")) {
+  const { runGlanceVisorHost } = await import("./glance-visor-host.mjs");
+  const { BrowserWindow, ipcMain, screen } = await import("electron");
+  await runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen });
+} else if (process.argv.some(entry => entry.startsWith(`${OLD_KEY_READER}=`))) {
   runOldKeyReader({ app, safeStorage });
 } else {
   const choice = chooseSettingsFolder({ appData: app.getPath("appData"), name: app.getName(), log: line => console.warn(`[desktop] ${line}`) });
