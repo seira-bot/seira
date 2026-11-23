@@ -141,7 +141,7 @@ describe("an Azure Live call", () => {
     // A published page lives on another origin, and an inline one is sandboxed (`Origin: null`).
     const riding = (origin: string) => {
       const token = sessions.issue({ label: "Admin", scopes: ["admin", "client"] }).token;
-      return { ...REMOTE, cookie: `${COOKIE}=${token}`, origin };
+      return { ...REMOTE, cookie: `__Host-${COOKIE}=${token}`, origin };
     };
     it("is refused, though the browser holds an admin's cookie", () => {
       expect(verdict(riding("https://abc.example.page"))).toBe("sign-in gate 403: forbidden: cross-origin request");
