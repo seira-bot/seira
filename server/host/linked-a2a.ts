@@ -29,7 +29,7 @@ import { guestFrameSchema, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { Coordinator } from "../coordinator.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
 import { PEER_NAME_MAX, newA2aToken, outboundUrl, peerByToken, readA2aPeers, writeA2aPeers, type A2aPeer, type EndedPeer } from "./a2a-peers-store.ts";
-import { ADMIT, createFrameBudget } from "./linked-servers-admit.ts";
+import { ADMIT, createFrameBudget, limitLog } from "./linked-servers-admit.ts";
 import { ENDED_MAX, LINKS_MAX, botIdSchema, cleanName, guestOrigin, instanceDir, type ApprovalCap } from "./linked-servers-store.ts";
 
 const WORDS = { handedTo: "Handed to the A2A agent.", otherSide: "the A2A agent" };
@@ -91,8 +91,8 @@ export interface LinkedA2aDeps {
   audit(row: Omit<AdminActionRow, "at">): void;
   coordinator(): Pick<Coordinator, "children">;
   bot(id: string): InboundBot | null | undefined;
-  /** A guest link in `dataDir` under `policy`, whose turns run at no more than `cap`. Files do not cross it. */
-  link(dataDir: string, policy: LinkPolicy, cap: () => ApprovalCap): BotLink;
+  /** A guest link in `dataDir` under `policy`, whose turns run at no more than `cap`, writing to `log`. Files do not cross it. */
+  link(dataDir: string, policy: LinkPolicy, cap: () => ApprovalCap, log: (line: string) => void): BotLink;
   /** The link counts with the other links here, for their bots, the chain rule and the caps, until `unregister`. */
   register(id: string, key: string, link: BotLink, cap: () => ApprovalCap): void;
   unregister(id: string): void;
@@ -123,7 +123,7 @@ export interface LinkedA2aDeps {
   cleanChars?: number;
 }
 
-type Sides = { id: string; key: string; link: BotLink; place: Place; tasks: TaskIndex };
+type Sides = { id: string; key: string; link: BotLink; place: Place; tasks: TaskIndex; log: (line: string) => void };
 type Runtime = Sides & { inbound: A2aInbound; outbound: A2aOutbound; transport: A2aTransport; gone: boolean };
 
 export const a2aKey = (id: string): string => peerKey(`a2a:${id}`);
@@ -202,7 +202,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
       link: taking(rt.link), key: rt.key, place: rt.place,
       url: () => { const peer = recordOf(rt.id); return peer ? urlOf(peer) : null; },
       token: () => rt.link.dial()?.token ?? null,
-      tasks: rt.tasks, cleaning: cleaningOf(rt.key), egress, now, log,
+      tasks: rt.tasks, cleaning: cleaningOf(rt.key), egress, now, log: rt.log,
     });
   }
 
@@ -210,19 +210,20 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   function open(peer: A2aPeer): Runtime {
     const { id } = peer, key = a2aKey(id), dir = instanceDir(deps.dataDir, id);
     ensurePrivateDir(dir);
-    const link = deps.link(dir, policyOf(id, key), () => capOf(id));
-    const index = createTaskIndex(dir, now, log);
+    const peerLog = limitLog(log, now);
+    const link = deps.link(dir, policyOf(id, key), () => capOf(id), peerLog);
+    const index = createTaskIndex(dir, now, peerLog);
     const tasks: TaskIndex = {
       ...index,
       put: (entry) => { if (!rt.gone) index.put(entry); },
       remove: (taskId) => { if (!rt.gone) index.remove(taskId); },
       setContext: (thread, far, inputTask) => { if (!rt.gone) index.setContext(thread, far, inputTask); },
     };
-    const sides: Sides = { id, key, link, place: { id: originOf(id), name: peer.name }, tasks };
+    const sides: Sides = { id, key, link, place: { id: originOf(id), name: peer.name }, tasks, log: peerLog };
     const rt: Runtime = {
       ...sides, inbound: inboundOf(sides), outbound: outboundOf(sides), gone: false,
       transport: createA2aTransport({
-        link, key, log,
+        link, key, log: peerLog,
         inbound: { settled: (taskId, frame) => { rt.inbound.settled(taskId, frame); }, close: () => { rt.inbound.close(); } },
         outbound: { send: (frame) => { rt.outbound.send(frame); }, cancel: (taskId) => { rt.outbound.cancel(taskId); }, close: () => { rt.outbound.close(); } },
       }),
