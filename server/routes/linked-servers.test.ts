@@ -57,7 +57,7 @@ async function side(label: string, bots: Bot[], now?: () => number) {
     kick: () => { queueMicrotask(tick); },
     serverName: () => label, selfId: () => `${label}-environment`, publicOrigin: () => `http://127.0.0.1:${port}`,
     audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask,
-    timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000 },
+    timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000, pace: { gapMs: 20, freshMs: 20 } },
     ...(now ? { now } : {}),
   });
   const inner: CoordinatorHost = {
