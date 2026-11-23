@@ -86,7 +86,7 @@ description: Export the user's Hermes Agent profiles into one .zip file that Sei
 
 # Export Hermes profiles for Seira
 
-Make one \`.zip\` file. The user drops it in Seira at **Settings → Import & export → Move from another AI**.
+Make one \`.zip\` file. The user drops it in Seira at **Settings → Import & export → Bring things in → Move from another AI**.
 Each Hermes profile becomes one Seira bot. Seira refuses the whole file when the manifest is wrong or when the
 file holds a key, so follow the format below exactly.
 
@@ -143,9 +143,10 @@ file holds a key, so follow the format below exactly.
    \`${HERMES_EXPORT.filePrefix}-<YYYY-MM-DD>.zip\` in the same folder. Then delete the temporary folder.
 
 8. **Tell the user**, only after the rename: the path of the file, the number of bots, and what you left out.
-   Server tools (MCP) and their keys stay in Hermes. Tell the user to open Seira, go to **Settings → Import &
-   export → Move from another AI**, and drop the file there. When the user talks to you in a chat that only the
-   user can read, offer to send the file there. Never send it to a group or a channel that other people read.
+   Server tools (MCP) and their keys stay in Hermes. Tell the user to open Seira, go to
+   **Settings → Import & export → Bring things in → Move from another AI**, and drop the file there.
+   When the user talks to you in a chat that only the user can read, offer to send the file there. Never send it
+   to a group or a channel that other people read.
 
 ## Format
 

@@ -285,7 +285,7 @@ describe("Hermes export file", () => {
 
     expect(HERMES_EXPORT_SKILL).toContain("<removed: ask the user>");
     expect(HERMES_EXPORT_SKILL).toContain("Do not open `.env`, `auth.json`, `state.db`, `sessions/`, `mcp-tokens/`");
-    expect(HERMES_EXPORT_SKILL).toContain("a chat that only the\n   user can read");
+    expect(HERMES_EXPORT_SKILL).toContain("a chat that only the user can read");
     expect(HERMES_EXPORT_SKILL).toContain("Never send it to a group");
   });
 });
