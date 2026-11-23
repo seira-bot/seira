@@ -157,6 +157,8 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
     windowPref("appearance.skin", "Skin", "The window's built-in look; \"system\" follows the computer's light or dark mode. A custom look (any colours, fonts, CSS, pictures) is a theme: use action theme.", "theme", ["theme", "dark mode", "light mode", "colors", "look"], enumOf(WINDOW_PREFS["appearance.skin"].options)),
     windowPref("appearance.advanced", "Advanced mode", "Advanced shows every setting and tool; Simple keeps the everyday ones.", "advanced-mode", ["simple mode", "advanced mode", "interface mode"], "true or false"),
     windowPref("appearance.font", "Font", "The app's typeface.", "tool-calls", ["typeface", "typography"], enumOf(WINDOW_PREFS["appearance.font"].options)),
+    windowPref("appearance.textSize", "Text size", "How large text and controls are on this device (desktop app).", "text-size", ["font size", "zoom", "bigger text", "larger text"], "0.9, 1, 1.1, 1.25, 1.5, 1.75 or 2 (1 is 100 %)",
+      { says: (step: number) => `Set the text size to ${Math.round(step * 100)} %` }),
     windowPref("appearance.chatWidth", "Chat width", "How wide the chat column is.", "tool-calls", ["layout", "column", "wide"], enumOf(WINDOW_PREFS["appearance.chatWidth"].options)),
     windowPref("general.sendKey", "Send key", "Which key sends a message in the composer.", "send-key", ["enter", "typing", "keyboard", "shortcut"], enumOf(WINDOW_PREFS["general.sendKey"].options)),
     windowPref("general.notificationSounds", "Notification sounds", "Play a sound when a bot needs you or finishes.", "notifications", ["sound", "sounds", "mute", "alerts", "notifications"], "true or false"),

@@ -6,7 +6,7 @@ const role = (t, name, key, params) => ({ role: name, label: t(key, params) });
 
 // Electron 43's role labels are English only (lib/browser/api/menu-item-roles.ts), so each role menu is written out
 // with Electron's own items and order, and a label on every item.
-function roleMenus(t, isMac, glance) {
+function roleMenus(t, isMac, glance, zoom) {
   const file = { role: "fileMenu", label: t("native.role.file"), submenu: [isMac ? role(t, "close", "native.role.closeWindow") : role(t, "quit", process.platform === "win32" ? "native.role.exit" : "native.role.quit")] };
   const edit = {
     role: "editMenu",
@@ -44,9 +44,10 @@ function roleMenus(t, isMac, glance) {
       role(t, "forceReload", "native.role.forceReload"),
       role(t, "toggleDevTools", "native.role.toggleDevTools"),
       { type: "separator" },
-      role(t, "resetZoom", "native.role.actualSize"),
-      role(t, "zoomIn", "native.role.zoomIn"),
-      role(t, "zoomOut", "native.role.zoomOut"),
+      { id: "actual-size", label: t("native.role.actualSize"), accelerator: "CmdOrCtrl+0", click: () => zoom?.reset() },
+      { id: "zoom-in", label: t("native.role.zoomIn"), accelerator: "CmdOrCtrl+Plus", click: () => zoom?.zoomIn() },
+      { id: "zoom-in-equals", label: t("native.role.zoomIn"), accelerator: "CmdOrCtrl+=", visible: false, acceleratorWorksWhenHidden: true, click: () => zoom?.zoomIn() },
+      { id: "zoom-out", label: t("native.role.zoomOut"), accelerator: "CmdOrCtrl+-", click: () => zoom?.zoomOut() },
       { type: "separator" },
       role(t, "togglefullscreen", "native.role.toggleFullScreen"),
       ...(glance ? [{ type: "separator" }, { id: "glance", label: t("native.menu.glance"), type: "checkbox", checked: glance.checked, click: () => glance.onToggle(!glance.checked) }] : []),
@@ -82,10 +83,12 @@ const whereItLives = (environment) => (environment.kind === "local" ? environmen
  * @param {(key: string, params?: Record<string, string | number>) => string} [input.t]
  * @param {{ checked: boolean, onToggle: (on: boolean) => void } | null} [input.glance] Glance, in the View menu: on until the
  *   person turns it off.
+ * @param {{ zoomIn: () => void, zoomOut: () => void, reset: () => void } | null} [input.zoom] The View menu's text size
+ *   items and their shortcuts.
  * @param {{ checked: boolean, onToggle: (on: boolean) => void } | null} [input.openAtLogin] Open at Login, in the app
  *   menu on macOS and the File menu elsewhere; absent when this build cannot add a login item.
  */
-export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, glance = null, t = nativeText.englishText.t }) {
+export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFromClipboard, onConnect, onForget, onOpenSettings, onOrganizationSignIn, onAddCloud, sublabels = {}, home = null, openAtLogin = null, glance = null, zoom = null, t = nativeText.englishText.t }) {
   const isMac = process.platform === "darwin";
   const active = environments.find((e) => e.id === activeId) ?? null;
   const others = home ? environments.filter((e) => e.origin !== home.origin && e.kind !== "local") : [];
@@ -124,7 +127,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     ],
   };
   const atLogin = openAtLogin ? [{ id: "open-at-login", label: t("native.menu.openAtLogin"), type: "checkbox", checked: openAtLogin.checked, click: () => openAtLogin.onToggle(!openAtLogin.checked) }] : [];
-  const roles = roleMenus(t, isMac, glance);
+  const roles = roleMenus(t, isMac, glance, zoom);
   const settings = { id: "open-settings", label: t("native.menu.settings"), accelerator: "CmdOrCtrl+,", click: () => onOpenSettings() };
   const about = role(t, "about", "native.role.about", { app: app.name });
   const appMenu = {

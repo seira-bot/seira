@@ -66,6 +66,10 @@ export interface DesktopPrefs {
   /** True until the person turns the window's frame off. */
   windowFrame(): boolean;
   setWindowFrame(on: boolean): void;
+  /** The text size of this desktop's window: 1 (100 %) or one of the steps in text-size.mjs. */
+  textSize(): number;
+  /** False, and nothing kept, for a value that is not a step. */
+  setTextSize(step: number): boolean;
 }
 /** The window's frame, this desktop's choice, as Settings reads and changes it. */
 export interface WindowFrameState {
