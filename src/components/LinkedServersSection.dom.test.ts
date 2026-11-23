@@ -317,7 +317,7 @@ describe("adding an A2A agent", () => {
     await fill("Planner Agent");
     await type(inputs()[2]!, "https://agent.example.test/a2a");
     await click(inputs()[1]);
-    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    await click(inputs()[2]);
     fixture.answers.set("POST /api/linked-servers/a2a", { server: agent(), token: "t0ken", urls: [] });
     await click(button("Add agent"));
     expect(writes()).toEqual([{ path: "/api/linked-servers/a2a", method: "POST", body: { name: "Planner Agent", inbound: true } }]);
@@ -328,7 +328,7 @@ describe("adding an A2A agent", () => {
     await click(button("Add an A2A agent"));
     await fill("Planner Agent");
     await click(inputs()[1]);
-    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    await click(inputs()[2]);
     fixture.answers.set("POST /api/linked-servers/a2a", { server: agent(), token: "t0ken-value", urls: [{ bot: "ops", url: "https://seira.example.test/a2a/ops" }] });
     await click(button("Add agent"));
     const box = host.querySelector("[data-linked-a2a-issued]")!;
@@ -347,7 +347,7 @@ describe("adding an A2A agent", () => {
     await click(button("Add an A2A agent"));
     await fill("Planner Agent");
     await click(inputs()[1]);
-    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    await click(inputs()[2]);
     fixture.answers.set("POST /api/linked-servers/a2a", { server: agent({ exposed: [], inbound: { urls: [] } }), token: "t0ken", urls: [] });
     await click(button("Add agent"));
     expect(host.querySelector("[data-linked-a2a-issued]")!.textContent).toContain("Choose the bots that the agent may use. Each chosen bot then shows its address here.");

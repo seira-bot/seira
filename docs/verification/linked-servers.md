@@ -61,6 +61,25 @@ Open the same server in a browser. Open Settings, then Data, then Activity, and 
 Each step above has a row. A row names the other side. No row holds an invite or
 a token.
 
+## A2A agents
+
+`server/a2a.e2e.test.ts` starts two servers. One plays the agent. The test adds
+the agent in both directions, makes a new token, hands work across, and removes
+the agent.
+
+```sh
+pnpm exec vitest run server/a2a.e2e.test.ts
+```
+
+To check the page, open Settings, then Linked places, and choose Add an A2A
+agent.
+
+1. Leave the name empty. The button stays off and says why.
+2. Enter a name, turn on The agent calls this Seira, and add. The page shows a
+   token once, with one address for each exposed bot.
+3. Choose Done. The token is gone and cannot be shown again.
+4. Choose New token on the agent and confirm. The old token stops working.
+
 ## Not proven here
 
 - A real second owner on a separate network. The fixtures share one machine.

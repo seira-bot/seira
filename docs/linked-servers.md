@@ -160,4 +160,44 @@ not a paired client.
 - `server/routes/bot-link-exchange.ts` holds the exchange and the file route.
 - `server/routes/linked-servers.ts` holds the admin routes.
 - `src/components/LinkedServersSection.tsx` is the page.
+- `src/components/LinkedA2aForm.tsx` holds the A2A agent form and its token box.
 - `docs/verification/linked-servers.md` tells how to check all of it.
+
+## Links to A2A agents
+
+An A2A agent is an agent of another product that speaks the open A2A protocol.
+An admin links it from the same page with Add an A2A agent. The link can run in
+two directions. Each direction is a choice of the admin.
+
+- This Seira calls the agent. The admin gives the address of the agent, and a
+  token when the agent wants one. The agent then shows as a teammate here.
+- The agent calls this Seira. This Seira makes a token and shows it once. After
+  the admin chooses the bots that the agent may use, each chosen bot shows one
+  address. The agent uses that address and the token.
+
+What the agent can and cannot do:
+
+- The agent can use only the bots that the admin exposes on the link.
+- The approval cap of the link applies to its work, as for a link to another
+  Seira.
+- Work that the agent started here cannot go on to another A2A agent.
+- A token opens the A2A addresses of its own agent and nothing else.
+
+New token makes a new token for an agent that calls in. The old token stops
+working at once. Removing the link stops the work of the agent.
+
+Limits that differ from a link to another Seira:
+
+- An agent that calls in can make 600 requests in each minute. It can hold 8
+  requests open at one time. A request is held for 55 seconds at most.
+- A request body of the agent is at most 64 KiB.
+- An agent that calls in can keep 50 conversations here.
+- This Seira can have 8 open hand-offs to one agent, and 30 new hand-offs in
+  each minute. This Seira stops waiting for a hand-off after 6 hours.
+- A result text is cut at 200,000 characters. A status note is cut at 2,000
+  characters.
+- This Seira waits 10 seconds for the card of an agent and 60 seconds for the
+  answer to a call.
+
+The Activity page has a row when an agent is added and when a new token is
+made. A row names the agent and never holds a token.
