@@ -11678,6 +11678,7 @@
   "aiImport.drop.folder": "Choose folder",
   "aiImport.drop.sending": "Sending file {done} of {total}…",
   "aiImport.drop.failed": "Could not send the file. Try again.",
+  "aiImport.drop.backup": "This is a Seira backup, not an AI export. To restore it, use Import backup under Settings → Import & export → Bring things in.",
   "aiImport.guide.title": "Export from {source}",
   "aiImport.guide.chatgpt.1": "Open ChatGPT, then Settings, then Data controls.",
   "aiImport.guide.chatgpt.2": "Choose Export data and confirm. ChatGPT emails you a link.",
