@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { InboxView } from "../../shared/inbox";
 import { approvalRow, inboxView, messageRow, reportRow } from "@/testing/inbox-fixture";
 import { api } from "./api";
-import { currentInbox, doneAllInboxNews, doneInboxRow, doneInboxRows, readInboxRow, refreshInbox, setInboxView } from "./inbox";
+import { currentInbox, doneAllInboxNews, doneInboxRow, doneInboxRows, notDecisionInboxRow, readInboxRow, refreshInbox, setInboxView } from "./inbox";
 
 vi.mock("./api", () => ({ api: vi.fn() }));
 
@@ -106,4 +106,21 @@ it("moves all news to Done with an empty body, leaves asks, and keeps what the s
   expect(vi.mocked(api).mock.calls[0]![1]).toMatchObject({ method: "POST", body: "{}" });
   await reply(0, inboxView([approvalRow, { ...messageRow, tab: "done" }, { ...reportRow, tab: "done" }]));
   expect(currentInbox()?.rows.map((row) => row.tab)).toEqual(["needs-you", "done", "done"]);
+});
+
+it("drops a decision mark at once, keeps what the server answers, and puts the mark back when it cannot be told", async () => {
+  const flagged = { ...messageRow, decision: true as const };
+  setInboxView(inboxView([approvalRow, flagged]));
+  void notDecisionInboxRow(flagged);
+  expect(currentInbox()?.rows[1]!.decision).toBeUndefined();
+  expect(requests[0]).toMatchObject({ path: `/api/inbox/${flagged.id}/not-decision` });
+  expect(vi.mocked(api).mock.calls[0]![1]).toMatchObject({ method: "POST" });
+  await reply(0, inboxView([approvalRow, messageRow]));
+  expect(currentInbox()?.rows[1]!.decision).toBeUndefined();
+
+  setInboxView(inboxView([approvalRow, flagged]));
+  void notDecisionInboxRow(flagged);
+  await fail(1);
+  expect(currentInbox()?.rows[1]!.decision).toBe(true);
+  expect(requests[2], "the list is read again").toMatchObject({ path: "/api/inbox" });
 });

@@ -28,6 +28,8 @@ const VIEW_ROWS = 200;
 const ROW_TEXT_MAX = 4_000;
 const NOTICE_TEXT_MAX = 2_000;
 const HOUR_MS = 60 * 60_000;
+const NOT_DECISION_MAX = 300;
+const NOT_DECISIONS_KEPT = 10;
 /** Messages from one conversation in an hour: enough for real news, too few for a loop to bury the person. */
 export const PLACE_MESSAGES_HOURLY = 10;
 
@@ -44,7 +46,10 @@ const lineSchema = z.object({
   untilReply: z.boolean().optional(),
   decision: z.boolean().optional(),
 });
-const fileSchema = z.object({ version: z.literal(1), lines: z.array(lineSchema).max(MAX_LINES), seenAsks: z.array(id).max(MAX_SEEN_ASKS) });
+const fileSchema = z.object({
+  version: z.literal(1), lines: z.array(lineSchema).max(MAX_LINES), seenAsks: z.array(id).max(MAX_SEEN_ASKS),
+  notDecisions: z.array(z.string().max(NOT_DECISION_MAX)).max(NOT_DECISIONS_KEPT).optional(),
+});
 type Line = z.infer<typeof lineSchema>;
 
 /** An open card as the messages table holds it. */
@@ -82,6 +87,8 @@ export interface PlaceInboxDeps {
   /** Conversations resting on the person for a card a running turn does not hold open: a password, a sign-in, an app to
    * connect, or an ask left open after its turn ended. */
   waiting?(): Array<PersonWait & { threadId: string }>;
+  /** Tells whether a message a bot sent the person asks them to decide; null when it cannot say. Never waited on. */
+  sort?(input: { from: string; text: string; notDecisions: readonly string[] }): Promise<"decision" | "news" | null>;
   now?: () => number;
 }
 
@@ -92,10 +99,11 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
   const file = join(deps.dataDir, PLACE_INBOX_FILE);
   let lines: Line[] = [];
   let seenAsks = new Set<string>();
+  let notDecisions: string[] = [];
   try {
     const parsed = fileSchema.safeParse(JSON.parse(readFileSync(file, "utf8")));
     // A hand-off result filed before hand-offs stopped filing lines (its job is the asking conversation, not its own) goes.
-    if (parsed.success) { lines = parsed.data.lines.filter((line) => !(line.kind === "result" && line.workingFor && line.job && line.job !== line.threadId)); seenAsks = new Set(parsed.data.seenAsks); }
+    if (parsed.success) { lines = parsed.data.lines.filter((line) => !(line.kind === "result" && line.workingFor && line.job && line.job !== line.threadId)); seenAsks = new Set(parsed.data.seenAsks); notDecisions = parsed.data.notDecisions ?? []; }
     else console.warn(`place inbox: ${file} is not an inbox file; starting fresh`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`place inbox: ${file} is unreadable; starting fresh`);
@@ -103,7 +111,7 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
   const save = () => {
     lines = lines.filter((line) => now() - line.at < KEEP_MS).slice(-MAX_LINES);
     try {
-      writeFileAtomic(file, `${JSON.stringify({ version: 1, lines, seenAsks: [...seenAsks].slice(-MAX_SEEN_ASKS) })}\n`, { mode: 0o600 });
+      writeFileAtomic(file, `${JSON.stringify({ version: 1, lines, seenAsks: [...seenAsks].slice(-MAX_SEEN_ASKS), ...(notDecisions.length ? { notDecisions } : {}) })}\n`, { mode: 0o600 });
     } catch (error) {
       console.warn(`place inbox: could not save ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -207,6 +215,22 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
   const sent = new Map<string, number[]>();
   const recent = (threadId: string) => (sent.get(threadId) ?? []).filter((at) => now() - at < HOUR_MS);
 
+  /** Asks the decision model in the background; only a `decision` verdict changes the line, and never one the person
+   * already settled either way. */
+  function sortLine(line: Line): void {
+    const sort = deps.sort;
+    if (!sort) return;
+    void (async () => {
+      try {
+        if (await sort({ from: line.from, text: line.text, notDecisions: [...notDecisions] }) !== "decision") return;
+        const current = lines.find((one) => one.id === line.id);
+        if (!current || current.done || current.decision !== undefined) return;
+        current.decision = true;
+        save();
+      } catch { /* the line stays news */ }
+    })();
+  }
+
   /** message_person with no team: one line in the conversation that sent it, one row, and one notification. */
   function message(botId: string, threadId: string, text: string): { status: number; text: string } {
     const bot = store.bot(botId);
@@ -219,8 +243,9 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     const guest = deps.guestOf(threadId);
     const wire: InboxItem = { kind: "message", from: { name: bot.name, botId: bot.id }, replies: true };
     const posted = store.appendMessage(threadId, { role: "bot", kind: "text", text, inbox: wire, ...(group ? { from: { botId: bot.id, name: bot.name, color: bot.color } } : {}) });
-    addLine({ id: posted.id, botId: bot.id, threadId, ...(group ? { groupId: group.id } : {}), kind: "message", from: bot.name.slice(0, 200), ...(handed ? { workingFor: handed } : {}),
+    const line = addLine({ id: posted.id, botId: bot.id, threadId, ...(group ? { groupId: group.id } : {}), kind: "message", from: bot.name.slice(0, 200), ...(handed ? { workingFor: handed } : {}),
       ...(guest ? { guest } : {}), ...(group ? { untilReply: true } : {}), text: clip(text, NOTICE_TEXT_MAX), at: now() });
+    sortLine(line);
     if (group) store.patchGroup(group.id, { unread: true });
     else store.patchTask(bot.id, threadId, { unread: true });
     if (!guest && bot.notifications !== false) {
@@ -259,9 +284,19 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     view,
     message,
     route,
-    /** What waits on this viewer: every open ask, and news they have not read. */
+    /** What waits on this viewer: every open ask, every open decision, and news they have not read. */
     count(auth: RequestAuth): number {
-      return view(auth).rows.filter((row) => row.tab === "needs-you" || (row.tab === "info" && row.unread)).length;
+      return view(auth).rows.filter((row) => row.tab === "needs-you" || (row.tab === "info" && (row.unread || row.decision))).length;
+    },
+    /** The person says this line is no decision: its mark goes, and its text teaches the next sort. False when this viewer
+     * has no such line. */
+    notDecision(auth: RequestAuth, lineId: string): boolean {
+      const line = lines.find((one) => one.id === lineId && lineFor(auth, one));
+      if (!line) return false;
+      line.decision = false;
+      notDecisions = [...notDecisions, clip(line.text, NOT_DECISION_MAX)].slice(-NOT_DECISIONS_KEPT);
+      save();
+      return true;
     },
     markRead(auth: RequestAuth, lineId: string): boolean {
       const line = lines.find((one) => one.id === lineId && lineFor(auth, one));

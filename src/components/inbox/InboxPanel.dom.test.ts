@@ -10,6 +10,8 @@ vi.mock("../../state/api", () => ({
     server.calls.push({ path, method: init?.method ?? "GET", ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
     const done = /^\/api\/inbox\/([\w-]+)\/done$/.exec(path);
     if (done && server.view) server.view = { ...server.view, rows: server.view.rows.map((row) => (row.id === done[1] ? { ...row, tab: "done", unread: false } : row)) };
+    const notDecision = /^\/api\/inbox\/([\w-]+)\/not-decision$/.exec(path);
+    if (notDecision && server.view) server.view = { ...server.view, rows: server.view.rows.map((row) => (row.id === notDecision[1] ? { ...row, decision: undefined } : row)) };
     if (path === "/api/inbox/done-all" && server.view) {
       const ids = (JSON.parse(String(init?.body ?? "{}")) as { ids?: string[] }).ids;
       server.view = { ...server.view, rows: server.view.rows.map((row) => (ids ? ids.includes(row.id) : row.tab === "info") ? { ...row, tab: "done", unread: false } : row) };
@@ -155,6 +157,27 @@ describe("grouped news in the panel", () => {
     expect([...document.querySelectorAll<HTMLElement>("[data-inbox-section]")].map((label) => label.textContent)).toEqual(["Needs your decision", "News"]);
   });
 
+  it("labels a message that looks like a decision, and Not a decision sends it down to the news", async () => {
+    shown(inboxView([approvalRow, { ...messageRow, decision: true }, reportRow]));
+    openInbox();
+    await mount(createElement(InboxPanel));
+    const row = () => document.querySelector<HTMLElement>(`[data-inbox-row="${messageRow.id}"]`)!;
+    const sectionOf = () => {
+      const labels = [...document.querySelectorAll<HTMLElement>("[data-inbox-section]")];
+      return labels.filter((label) => label.compareDocumentPosition(row()) & Node.DOCUMENT_POSITION_FOLLOWING).at(-1)?.textContent;
+    };
+    expect(row().querySelector("[data-inbox-decision-label]")!.textContent).toBe("Looks like it needs your decision");
+    expect(row().querySelector("[data-inbox-not-decision]")!.textContent).toBe("Not a decision");
+    expect([...row().querySelectorAll("[data-inbox-action]")].map((one) => (one as HTMLElement).dataset.inboxAction)).toEqual(expect.arrayContaining(["reply", "done", "open"]));
+    expect(sectionOf()).toBe("Needs your decision");
+    expect(document.querySelector(`[data-inbox-row="${reportRow.id}"] [data-inbox-not-decision]`)).toBeNull();
+    await click(`[data-inbox-row="${messageRow.id}"] [data-inbox-not-decision]`);
+    await settle();
+    expect(server.calls).toContainEqual({ path: `/api/inbox/${messageRow.id}/not-decision`, method: "POST" });
+    expect(row().querySelector("[data-inbox-decision-label], [data-inbox-not-decision]")).toBeNull();
+    expect(sectionOf()).toBe("News");
+  });
+
   it("marks every line of a group done from one Done", async () => {
     grouped();
     openInbox();
@@ -265,5 +288,35 @@ describe("keeping the list live", () => {
     await mount(createElement(Loader, { version: inboxVersion(task(6, 1))! }));
     await settle();
     expect(reads()).toBe(2);
+  });
+  it("reads once more 5 seconds after a change, so a sort verdict that lands late shows up", async () => {
+    vi.useFakeTimers();
+    try {
+      const reads = () => server.calls.filter((call) => call.path === "/api/inbox").length;
+      const wait = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+      await mount(createElement(Loader, { version: "a" }));
+      await wait(0);
+      expect(reads()).toBe(1);
+      await wait(4_900);
+      expect(reads()).toBe(1);
+      await mount(createElement(Loader, { version: "b" }));
+      await wait(0);
+      expect(reads(), "a change reads at once and restarts the wait").toBe(2);
+      await wait(4_900);
+      expect(reads()).toBe(2);
+      await wait(200);
+      expect(reads(), "one more read, 5 seconds after the last change").toBe(3);
+      await wait(30_000);
+      expect(reads(), "exactly one").toBe(3);
+      await mount(createElement(Loader, { version: "c" }));
+      await wait(0);
+      expect(reads()).toBe(4);
+      await act(async () => root.unmount());
+      await wait(10_000);
+      expect(reads(), "unmounting clears the wait").toBe(4);
+      root = createRoot(document.body.appendChild(document.createElement("div")));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

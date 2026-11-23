@@ -3,7 +3,7 @@ import { Check, CornerUpLeft, ExternalLink, Split, X, type LucideIcon } from "lu
 import type { InboxRow } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { settleInboxRow } from "@/state/inbox";
+import { notDecisionInboxRow, settleInboxRow } from "@/state/inbox";
 import type { LocaleKey } from "@/locales";
 import { InboxSender } from "../InboxLine";
 import { threadUpdatedLabel } from "../SidebarThreadRow";
@@ -86,6 +86,7 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
                 <span className="min-w-0 truncate">{choices}</span>
               </span>
             ) : snippet && <span className="line-clamp-2 text-[12px] font-normal leading-4 text-ink-tertiary">{snippet}</span>}
+            {row.decision && <span data-inbox-decision-label className="block text-[12px] font-normal leading-4 text-ink-secondary">{t("inbox.decision.label")}</span>}
           </span>
         )}
       </button>
@@ -111,6 +112,12 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
               </button>
             );
           })}
+          {row.decision && (
+            <button type="button" data-inbox-not-decision onClick={() => { void notDecisionInboxRow(row); }}
+              className="rounded-full px-2.5 py-1 text-[12px] text-ink-secondary hover:bg-ink/[0.07] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus pointer-coarse:py-2">
+              {t("inbox.decision.notDecision")}
+            </button>
+          )}
         </span>
       )}
     </div>

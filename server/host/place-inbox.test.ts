@@ -389,6 +389,121 @@ describe("the inbox of a place that is no team's", () => {
     expect(again.inbox.view(OWNER).rows.map((row) => [row.kind, row.unread])).toEqual(expect.arrayContaining([["ask", false], ["message", true]]));
   });
 
+  describe("sorting a bot's message into decision and news", () => {
+    type Input = { from: string; text: string; notDecisions: readonly string[] };
+    type Verdict = "decision" | "news" | null;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    /** A sort the test settles by hand, so a late verdict can arrive after the person has spoken. */
+    function held() {
+      const asked: Input[] = [];
+      const waiting: Array<(verdict: Verdict) => void> = [];
+      const sort = (input: Input) => { asked.push(input); return new Promise<Verdict>((resolve) => waiting.push(resolve)); };
+      return { sort, asked, answer: async (index: number, verdict: Verdict) => { waiting[index]!(verdict); await settle(); } };
+    }
+    const decisionRows = (f: ReturnType<typeof setup>) => f.inbox.view(OWNER).rows.filter((row) => row.decision);
+
+    it("AC-07: marks a message the model calls a decision, after the line was filed", async () => {
+      const asked: Input[] = [];
+      const f = setup({ sort: async (input) => { asked.push(input); return "decision"; } });
+      f.inbox.message("eli", "eli-pricing", "Approve the new price?");
+      expect(f.inbox.view(OWNER).rows[0]!.decision, "the line is filed first, without waiting").toBeUndefined();
+      await settle();
+      expect(f.inbox.view(OWNER).rows[0]).toMatchObject({ kind: "message", tab: "info", decision: true });
+      expect(asked).toEqual([{ from: "Eli", text: "Approve the new price?", notDecisions: [] }]);
+      const again = setup({ openCards: () => f.cards, store: f.store as unknown as PlaceInboxDeps["store"], now: () => 2_000 }, f.dataDir);
+      expect(again.inbox.view(OWNER).rows[0]!.decision, "the mark is saved").toBe(true);
+    });
+
+    it("AC-07: leaves a message the model calls news, or a line already done, unmarked", async () => {
+      const f = setup({ sort: async () => "news" });
+      f.inbox.message("eli", "eli-pricing", "The report is ready.");
+      await settle();
+      expect(decisionRows(f)).toEqual([]);
+      const late = held();
+      const g = setup({ sort: late.sort });
+      g.inbox.message("eli", "eli-pricing", "Approve it?");
+      g.inbox.markDone(OWNER, g.inbox.view(OWNER).rows[0]!.id);
+      await late.answer(0, "decision");
+      expect(decisionRows(g), "a line the person closed is not reopened as a decision").toEqual([]);
+    });
+
+    it("AC-08: Not a decision clears the mark, and the next sort hears that text", async () => {
+      const f = setup({ sort: async () => "decision" });
+      const sorts: Input[] = [];
+      const g = setup({ sort: async (input) => { sorts.push(input); return "decision"; } });
+      g.inbox.message("eli", "eli-pricing", "Heads up: the build is green.");
+      await settle();
+      const [row] = decisionRows(g);
+      expect(row).toBeDefined();
+      expect(g.inbox.notDecision(OWNER, row!.id)).toBe(true);
+      expect(g.inbox.view(OWNER).rows.find((one) => one.id === row!.id)!.decision).toBeUndefined();
+      g.tick(5);
+      g.inbox.message("eli", "eli-launch", "The deploy finished.");
+      expect(sorts[1]!.notDecisions).toEqual(["Heads up: the build is green."]);
+      expect(f.inbox.notDecision(OWNER, "nope")).toBe(false);
+      expect(g.inbox.notDecision(GUEST, row!.id), "a viewer who lacks the line").toBe(false);
+    });
+
+    it("AC-08: keeps the last 10 counter-examples across a restart, each at most 300 characters", async () => {
+      const sorts: Input[] = [];
+      const f = setup({ sort: async (input) => { sorts.push(input); return "decision"; } });
+      for (let index = 0; index < 12; index++) {
+        f.tick(1);
+        f.inbox.message("eli", `eli-${index % 2 ? "pricing" : "launch"}`, `${index} ${"x".repeat(400)}`);
+        await settle();
+        f.inbox.notDecision(OWNER, f.inbox.view(OWNER).rows[0]!.id);
+        f.tick(1);
+        f.store.appendMessage("eli-pricing", { role: "user", text: "ok" });
+        f.store.appendMessage("eli-launch", { role: "user", text: "ok" });
+      }
+      const again = setup({ sort: async (input) => { sorts.push(input); return "news"; }, openCards: () => f.cards, store: f.store as unknown as PlaceInboxDeps["store"] }, f.dataDir);
+      again.inbox.message("eli", "eli-main", "Next");
+      const kept = sorts.at(-1)!.notDecisions;
+      expect(kept).toHaveLength(10);
+      expect(kept.every((text) => text.length <= 300)).toBe(true);
+      expect(kept[0]!.startsWith("2 ")).toBe(true);
+      expect(kept[9]!.startsWith("11 ")).toBe(true);
+    });
+
+    it("AC-08: a verdict that arrives after Not a decision never puts the mark back", async () => {
+      const late = held();
+      const f = setup({ sort: late.sort });
+      f.inbox.message("eli", "eli-pricing", "Should I book it?");
+      const id = f.inbox.view(OWNER).rows[0]!.id;
+      expect(f.inbox.notDecision(OWNER, id)).toBe(true);
+      await late.answer(0, "decision");
+      expect(decisionRows(f)).toEqual([]);
+    });
+
+    it("AC-10: counts each open decision, read or not, with the asks and unread news", async () => {
+      const f = setup({ sort: async (input) => (input.text.startsWith("Approve") ? "decision" : "news") });
+      f.inbox.message("eli", "eli-pricing", "Approve the price?");
+      f.tick(1);
+      f.inbox.message("eli", "eli-launch", "The launch is live.");
+      await settle();
+      f.ask("eli-main", "q");
+      expect(f.inbox.count(OWNER)).toBe(3);
+      f.inbox.markAllRead(OWNER);
+      expect(f.inbox.count(OWNER), "an open ask and an open decision stay counted once read").toBe(2);
+      const [decision] = decisionRows(f);
+      f.inbox.markDone(OWNER, decision!.id);
+      expect(f.inbox.count(OWNER), "a done decision no longer counts").toBe(1);
+    });
+
+    it("AC-11: with no verdict, an error, or no sort at all, the line stays news and nothing is added", async () => {
+      for (const sort of [async () => null, async () => { throw new Error("model down"); }, () => Promise.reject(new Error("refused")), undefined] as Array<PlaceInboxDeps["sort"]>) {
+        const f = setup({ sort });
+        f.inbox.message("eli", "eli-pricing", "Approve the price?");
+        await settle();
+        const rows = f.inbox.view(OWNER).rows;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ kind: "message", tab: "info", unread: true });
+        expect(rows[0]!.decision).toBeUndefined();
+        expect(f.sent).toHaveLength(1);
+      }
+    });
+  });
+
   describe("on a Cloud with a guest", () => {
     function shared() {
       const f = setup();

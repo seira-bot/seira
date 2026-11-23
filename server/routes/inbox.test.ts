@@ -122,3 +122,35 @@ it("has no done-all off a team", async () => {
   const { call } = setup({ team: false });
   expect(await call("POST", "/api/inbox/done-all")).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
 });
+
+it("clears a line's decision mark through not-decision: 200 with the inbox, 404 for an unknown line or no inbox, 405 for another method", async () => {
+  const view = { botId: null, threadId: null, rows: [], anchor: null };
+  const outcomes: Array<boolean | null> = [true, false, null];
+  const asked: string[] = [];
+  const route = createInboxRoutes({
+    view: () => view, count: () => 0, markDone: () => "done", markDoneMany: () => 0, markRead: () => true, markAllRead: () => 0,
+    notDecision: (_auth, id) => { asked.push(id); return outcomes.shift() ?? null; },
+  });
+  const call = async (method: string, path: string) => {
+    const sent: { status?: number; body?: any } = {};
+    await route({
+      req: {} as IncomingMessage, res: {} as ServerResponse, url: new URL(path, "http://127.0.0.1"), path, method, auth: session(BEN.email),
+      readBody: (async () => ({})) as RouteContext["readBody"],
+      json: ((_res: ServerResponse, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as RouteContext["json"],
+    });
+    return sent;
+  };
+  expect(await call("POST", "/api/inbox/line-1/not-decision")).toMatchObject({ status: 200, body: view });
+  expect(await call("POST", "/api/inbox/line-2/not-decision")).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.lineMissing" } });
+  expect(await call("POST", "/api/inbox/line-3/not-decision")).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+  expect(await call("GET", "/api/inbox/line-1/not-decision")).toMatchObject({ status: 405 });
+  expect(asked).toEqual(["line-1", "line-2", "line-3"]);
+  expect(requiredScope("POST", "/api/inbox/line-1/not-decision")).toBe("client");
+});
+
+it("has no not-decision for someone on a team, whose inbox is not sorted", async () => {
+  const { f, call } = setup();
+  f.team.pass("scout", "cleo-private", "Ben", "The launch moved to Friday.");
+  const [row] = (await call("GET", "/api/inbox")).body.rows;
+  expect(await call("POST", `/api/inbox/${row.id}/not-decision`)).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+});

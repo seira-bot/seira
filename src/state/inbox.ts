@@ -75,11 +75,17 @@ export function refreshInbox(): Promise<void> {
   return reading;
 }
 
+/** A message is sorted a moment after it lands; one more read this long after a change shows that verdict. */
+const SORT_READ_MS = 5_000;
+
 /** Keeps the list in step with what it depends on, and catches up when the window comes back. A server without an inbox is
  * not asked again. */
 export function useInboxLoader(version: string): void {
   useEffect(() => {
-    if (support.get() !== "no") void refreshInbox();
+    if (support.get() === "no") return;
+    void refreshInbox();
+    const later = setTimeout(() => { if (support.get() !== "no") void refreshInbox(); }, SORT_READ_MS);
+    return () => clearTimeout(later);
   }, [version]);
   useEffect(() => {
     const again = () => { if (support.get() !== "no") void refreshInbox(); };
@@ -135,6 +141,17 @@ export function doneInboxRow(row: Pick<InboxRow, "id">): void {
   const before = list.get()?.rows.find((one) => one.id === row.id);
   patchRow(row.id, { tab: "done", unread: false });
   void mark(row.id, "done", before ? { tab: before.tab, unread: before.unread } : {});
+}
+
+/** The person says a line is no decision: its mark goes at once; if the server can't be told, the mark comes back and the
+ * list is read again. */
+export async function notDecisionInboxRow(row: Pick<InboxRow, "id">): Promise<void> {
+  patchRow(row.id, { decision: undefined });
+  const seq = ++sent;
+  const view = await api<InboxView>(`/api/inbox/${row.id}/not-decision`, { method: "POST", background: true }).catch(() => null);
+  if (view && Array.isArray(view.rows)) return show(seq, view);
+  patchRow(row.id, { decision: true });
+  void refreshInbox();
 }
 
 /** Tells the server these lines are done, or with no ids all news; on failure each row goes back and the list is read again. */

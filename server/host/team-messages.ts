@@ -387,6 +387,10 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
       const me = sessionPerson(auth);
       return team && me ? inbox.markDone(me.key, id) : "unknown";
     },
+    /** The viewer says a line is no decision; null for someone on a team, whose inbox is not sorted. */
+    notDecision(auth: RequestAuth, id: string): boolean | null {
+      return !team && deps.place ? deps.place.notDecision(auth, id) : null;
+    },
     /** The viewer is done with the named lines of news, or with no ids all their news; null for someone without an inbox. */
     markDoneMany(auth: RequestAuth, ids?: readonly string[]): number | null {
       if (!team && deps.place) return deps.place.markDoneMany(auth, ids);

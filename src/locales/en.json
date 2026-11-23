@@ -2405,6 +2405,8 @@
   "inbox.youReplied": "You replied",
   "inbox.markAllRead": "Mark all as read",
   "inbox.doneAllNews": "Done all news",
+  "inbox.decision.label": "Looks like it needs your decision",
+  "inbox.decision.notDecision": "Not a decision",
   "inbox.group.count": "{count} updates",
   "inbox.group.expand": "Show all {count}",
   "inbox.group.collapse": "Show less",

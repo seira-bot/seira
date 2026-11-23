@@ -301,6 +301,25 @@ bot's own engine. Pause the watch to stop that (see
 routing off stops only the decision request: the bots' own engines still
 receive the room's lines.
 
+## Sorting the Inbox
+
+The `inboxSort` job reads each new message that a bot sends you with
+`message_person`. It decides if the message asks you to decide, approve,
+choose, or do something yourself. A message that does is marked "Looks like it
+needs your decision" and is listed before the news. It stays in the Inbox count
+until you close it, read or not.
+
+Choose **Not a decision** on a wrong mark. Seira removes the mark and sends that
+text to the model as a counter-example in the next sort. Seira keeps the last 10.
+
+The job sends the sender's name, the message text (up to 1,200 characters) and
+your counter-examples to the provider whose key decides.
+
+The job never adds a line to the Inbox. If it is off, times out, or fails, the
+message stays as news. Cloud's included account does not take this job. Add
+your own decision-model key to use it. To turn it off, set
+`"jobs": { "inboxSort": false }` in `config.json`.
+
 ## Turning it off
 
 Switch off **Use fast decisions and extraction** to stop every decision.
@@ -330,7 +349,7 @@ mentioned**.
   "customBaseUrl": "https://gateway.example.com/v1",
   "customModel": "<decision-model-id>",
   "customApi": "systemone",
-  "jobs": { "roomRouting": true, "inboxTriage": true }
+  "jobs": { "roomRouting": true, "inboxTriage": true, "inboxSort": true }
 }
 ```
 
