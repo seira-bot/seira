@@ -125,7 +125,7 @@ describe("the link record", () => {
     expect(guestOrigin("http://127.0.0.1:8123")).toBe("http://127.0.0.1:8123");
     expect(guestOrigin("http://localhost:8123")).toBe("http://localhost:8123");
     expect(guestOrigin("http://[::1]:8123")).toBe("http://[::1]:8123");
-    expect(guestOrigin("http://192.168.1.4:8123")).toBeNull();
+    expect(guestOrigin("http://lan-host.example:8123")).toBeNull();
     expect(guestOrigin("http://a.example")).toBeNull();
     expect(guestOrigin("https://user:pass@a.example")).toBeNull();
     expect(guestOrigin("ftp://a.example")).toBeNull();
@@ -183,7 +183,7 @@ describe("the approval cap", () => {
 describe("the linked servers manager", () => {
   it("makes an invite only with a secure address and room for one more link, and keeps its code as a hash", () => {
     expect(manager("none", { publicOrigin: () => null }).made.invite({ kind: "cli" })).toEqual({ error: "no_address" });
-    expect(manager("lan", { publicOrigin: () => "http://192.168.1.4:8123" }).made.invite({ kind: "cli" })).toEqual({ error: "no_address" });
+    expect(manager("lan", { publicOrigin: () => "http://lan-host.example:8123" }).made.invite({ kind: "cli" })).toEqual({ error: "no_address" });
 
     const { made, rows, dataDir } = manager("head");
     const answer = made.invite({ kind: "cli" });
@@ -302,7 +302,7 @@ describe("the linked servers manager", () => {
       throw new Error("the join worked");
     };
 
-    for (const origin of ["http://192.168.1.4:8123", "http://head.example", "ftp://head.example"]) {
+    for (const origin of ["http://lan-host.example:8123", "http://head.example", "ftp://head.example"]) {
       expect(await failure(invite(origin))).toMatchObject({ status: 400, message: "That invite points to an address that is not secure, so it was not used." });
     }
     expect(await failure("seira-link:not-an-invite")).toMatchObject({ status: 400 });
