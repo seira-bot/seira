@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isWorkspaceRunning, runOnboardingCommand, runServe, type CliOptions } from "./cli.ts";
 import { qrToString } from "./cli-pairing.ts";
+import { acquireDataDirLease } from "./data-dir-lease.ts";
 
 const mocks = vi.hoisted(() => ({
   // the fleet path is off in these tests: no credential in the environment
@@ -117,6 +118,19 @@ afterEach(() => {
 });
 
 describe("CLI startup lifecycle", () => {
+  it("does not start a second server while a live Seira holds the data folder", async () => {
+    const holder = acquireDataDirLease(dataDir);
+    const errors: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+    try {
+      await expect(runServe(options, vi.fn())).resolves.toBe(1);
+    } finally {
+      holder.release();
+    }
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(errors).toEqual(["Seira is already running with this data. It may still be starting. Wait a minute, or stop it, then start again."]);
+  });
+
   it("does not enable Tailscale or spawn a server when guided logs cannot be opened", async () => {
     mocks.denyLogOpen = true;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 503 })));

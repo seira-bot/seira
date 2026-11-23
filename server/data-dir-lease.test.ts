@@ -6,9 +6,9 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { acquireDataDirLease, releaseOnceAtExit } from "./data-dir-lease.ts";
+import { acquireDataDirLease, acquireDataDirLeaseOrExit, releaseOnceAtExit, runningServerLine } from "./data-dir-lease.ts";
 
 const MODULE_URL = pathToFileURL(join(process.cwd(), "server", "data-dir-lease.ts")).href;
 const dirs: string[] = [];
@@ -176,5 +176,41 @@ describe("Seira data-directory lease", () => {
     }
     expect(calls).toBe(1);
     expect(logged).toEqual(["[data-directory] lease release failed: gone"]);
+  });
+});
+
+describe("a second start while a live Seira holds the data folder", () => {
+  const PLAIN = "Seira is already running with this data. It may still be starting. Wait a minute, or stop it, then start again.";
+
+  it("names the live holder in plain words and nothing when the folder is free", () => {
+    const dir = tempDataDir();
+    expect(runningServerLine(dir)).toBeNull();
+    const lease = acquireDataDirLease(dir);
+    expect(runningServerLine(dir)).toBe(PLAIN);
+    lease.release();
+    expect(runningServerLine(dir)).toBeNull();
+  });
+
+  it("exits with one plain line instead of a stack trace and keeps the live holder's lease", () => {
+    const dir = tempDataDir();
+    const holder = acquireDataDirLease(dir);
+    const printed: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((line: unknown) => { printed.push(String(line)); });
+    const exit = vi.fn((code: number): never => { throw new Error(`exit ${code}`); });
+    try {
+      expect(() => acquireDataDirLeaseOrExit(dir, {}, exit)).toThrow("exit 1");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(printed).toEqual([PLAIN]);
+    expect(runningServerLine(dir)).toBe(PLAIN);
+    holder.release();
+  });
+
+  it("takes the lease when no live Seira holds the folder", () => {
+    const dir = tempDataDir();
+    const lease = acquireDataDirLeaseOrExit(dir, {}, () => { throw new Error("must not exit"); });
+    expect(lease.ownerPid).toBe(process.pid);
+    lease.release();
   });
 });
