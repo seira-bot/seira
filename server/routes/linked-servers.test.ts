@@ -227,6 +227,22 @@ describe("two linked servers", () => {
     expect(a.rows.filter((row) => row.action === "linked-server.remove")).toMatchObject([{ target: { kind: "linked-server", id: inviterLink, name: "branch" } }]);
   }, 30_000);
 
+  it("remove on the joiner: the inviter stops the joiner's work at once and shows the link as ended", async () => {
+    const a = await side("head", [WRITER]), b = await side("branch", [SCOUT]);
+    const { joinerLink } = await link(a, b);
+    await expose(a, b, ["writer"]);
+    let stopped = false;
+    a.knobs.run = (_node, signal) => new Promise((resolve) => { signal.addEventListener("abort", () => { stopped = true; resolve({ ok: false, text: "stopped" }); }); });
+    await b.handOff(SCOUT, b.view()!.bots[0]!.id, "Write the long report");
+    await until(() => a.runs.length === 1, "the writer works");
+
+    expect((await b.api("DELETE", `/api/linked-servers/${joinerLink}`)).status).toBe(200);
+    expect(b.manager.list()).toEqual([]);
+    await until(() => stopped, "the writer's turn is stopped");
+    await until(() => a.view()?.state === "ended", "the inviter shows the link as ended");
+    expect(a.runs).toEqual(["writer"]);
+  }, 30_000);
+
   it("refuse an invite used twice or expired, and an invite to an address that is not secure before anything is asked", async () => {
     let skew = 0;
     const a = await side("head", [WRITER], () => Date.now() + skew), b = await side("branch", [SCOUT]), c = await side("other", [SCOUT]);

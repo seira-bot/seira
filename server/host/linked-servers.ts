@@ -12,6 +12,8 @@
 // - A link takes at most ADMIT.open open hand-offs, and ADMIT.perWindow in each ADMIT.windowMs. At most LINKS_MAX links.
 // - Another server is asked only at https or at this machine's loopback, never through a redirect. Its answers and
 //   its error texts never reach an error, a log line or an activity row here.
+// - Work a linked server started here goes to no bot of another server, and its turns run at no more than that link's
+//   cap: the lowest cap when the work of several links meets in one thread.
 // Open risks:
 // - The names a peer gives itself and its bots reach the bot lists here, cleaned to one short line each.
 // - A peer whose hand-off files never come keeps the open slots of those hand-offs.
@@ -23,7 +25,8 @@ import { z } from "zod";
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import { createDialer } from "../bot-link/dial.ts";
 import { createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
-import { peerKey, type Place } from "../bot-link/protocol.ts";
+import { LINK_PREFIX, isLinkedId, peerKey, type Place } from "../bot-link/protocol.ts";
+import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
 import { json, readBody } from "../harness/http.ts";
 import { bearerToken, requestSource, type RequestAuth } from "../request-auth.ts";
 import { createLinkExchange } from "../routes/bot-link-exchange.ts";
@@ -41,6 +44,7 @@ export { GUEST_TOKEN_PREFIX, INVITE_TTL_MS, LINKS_MAX, type ApprovalCap } from "
 
 export const ACCEPT_PATH = "/api/linked-servers/accept";
 export const GUEST_PATHS = { sync: "/api/linked-servers/sync", file: "/api/linked-servers/file" } as const;
+export const CHAINED = "Work from a linked server cannot go to another server.";
 
 const WORDS = { handedTo: "Handed to another server.", otherSide: "another server" };
 const FAIL_TEXT = "The work could not be done on the other server.";
@@ -56,6 +60,7 @@ const ANSWER_MAX = 64 * 1024;
 const JOIN_MS = 10_000;
 const TIDY_MS = 60 * 60_000;
 const GUEST_BEARER = /\bbearer\s+lsk_/iu;
+const isBye = (frame: unknown) => (frame as { t?: unknown } | null)?.t === "bye";
 const OUTCOMES: ReadonlySet<string> = new Set<Outcome>(["done", "needs_input", "cap_continued", "stalled", "interrupted", "budget", "provider_error", "denied", "expired", "stopped", "refused", "duplicate"]);
 /** The exchange reads no auth: the peer was identified here, by its credential. */
 const NO_AUTH: RequestAuth = { kind: "loopback", scopes: [] };
@@ -210,7 +215,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if ((response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
       return response;
     }) as typeof fetch;
-    return createDialer({ link, fetch: watched, paths: GUEST_PATHS, log: () => log("linked servers: the other server could not be reached; trying again"),
+    return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => log("linked servers: the other server could not be reached; trying again"),
       ...(timing.holdMs ? { holdMs: timing.holdMs } : {}), ...(timing.firstRetryMs ? { firstRetryMs: timing.firstRetryMs } : {}) });
   }
 
@@ -232,16 +237,31 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
       refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
     });
+    const endsOnBye: BotLink = { ...link, receive: (peer, frames) => { if (frames.some(isBye)) link.stopInbound(ENDED_THERE); link.receive(peer, frames); } };
     const entry: Instance = {
       id, key, link,
-      dialer: record.role === "joiner" ? dialerFor(id, link) : null,
+      dialer: record.role === "joiner" ? dialerFor(id, endsOnBye) : null,
       exchange: record.role === "inviter"
-        ? createLinkExchange({ link, paths: GUEST_PATHS, power: deps.power ?? (() => null), ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+        ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };
     instances.set(id, entry);
     return entry;
   }
+
+  /** The links whose peer started the work under this root. A root stays its starter's after the link forgets the work. */
+  function startersOf(rootId: string): Instance[] {
+    if (instances.size === 0 || !rootId.startsWith(LINK_PREFIX)) return [];
+    const root = deps.coordinator().node(rootId);
+    const starter = root && !root.parentId ? root.botId : undefined;
+    return [...instances.values()].filter((entry) => entry.link.ownsRoot(rootId) || entry.link.claims(starter));
+  }
+
+  function chained(node: Pick<HandoffView, "parentId" | "botId" | "rootId">): string | undefined {
+    return node.parentId && isLinkedId(node.botId) && startersOf(node.rootId).length > 0 ? CHAINED : undefined;
+  }
+
+  const capOf = (entry: Instance): ApprovalCap => recordOf(entry.id)?.cap ?? "ask";
 
   function shut(entry: Instance): void {
     entry.dialer?.close();
@@ -435,6 +455,33 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     },
 
     instances(): ReadonlyArray<{ id: string; link: BotLink }> { return [...instances.values()].map(({ id, link }) => ({ id, link })); },
+
+    /** The coordinator's host with every linked server's bots in it, around `inner`. The links are read again at each
+     * call, so a link made or removed while the server runs takes effect at once. */
+    host(inner: CoordinatorHost): CoordinatorHost {
+      let made: { links: BotLink[]; host: CoordinatorHost } | undefined;
+      const current = (): CoordinatorHost => {
+        const links = [...instances.values()].map((entry) => entry.link);
+        if (made?.links.length === links.length && made.links.every((one, index) => one === links[index])) return made.host;
+        const outer = links.reduce((host, link) => link.host(host), inner);
+        made = { links, host: { ...outer, validate: (node, parent) => chained(node) ?? outer.validate(node, parent) } };
+        return made.host;
+      };
+      return new Proxy(inner, { get: (_target, prop) => Reflect.get(current(), prop) });
+    },
+
+    /** Whether a linked server started the work under this root. */
+    started: (rootId: string): boolean => startersOf(rootId).length > 0,
+
+    /** The approval mode of a turn in this thread: no more than the cap of each link whose work runs in it, or that
+     * opened it. */
+    capFor(threadId: string, mode: ApprovalMode): ApprovalMode {
+      if (instances.size === 0) return mode;
+      const caps = new Set<ApprovalCap>();
+      for (const entry of instances.values()) if (entry.link.openedThread(threadId)) caps.add(capOf(entry));
+      for (const node of deps.coordinator().inThread(threadId, { open: true })) for (const entry of startersOf(node.rootId)) caps.add(capOf(entry));
+      return [...caps].reduce(capMode, mode);
+    },
 
     start(): void {
       for (const entry of instances.values()) {
