@@ -5633,6 +5633,8 @@
   "automations.list": "List",
   "automations.calendar": "Calendar",
   "automations.wake": "Keep this computer awake for scheduled automations",
+  "automations.wakeRunning": "Keeps this computer awake while {name} works.",
+  "automations.wakeUntil": "Keeps this computer awake until {time} for {name}.",
   "automations.wakeBattery": "Plug in to hold it awake.",
   "automations.allBots": "All bots",
   "automations.allDepartments": "All departments",

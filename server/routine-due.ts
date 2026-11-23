@@ -3,8 +3,8 @@
 import type { Routine, RoutineRun } from "./routines.ts";
 import { runLimitAt } from "./routine-bounds.ts";
 
-type Due = Pick<Routine, "enabled" | "nextRunAt" | "checks" | "wakeAt" | "checkedAt">;
-type Run = Pick<RoutineRun, "status" | "retryAt">;
+type Due = Pick<Routine, "enabled" | "nextRunAt" | "checks" | "wakeAt" | "checkedAt"> & Partial<Pick<Routine, "id">>;
+type Run = Pick<RoutineRun, "status" | "retryAt"> & Partial<Pick<RoutineRun, "routineId">>;
 const startsLater = (run: Run, now: number) => run.status === "queued" && (run.retryAt ?? 0) > now;
 /** Every time a run is due: enabled routines' next runs and queued runs' retries. A routine with checks counts only the
  * next time they have something to do on time (`checksDue`). */
@@ -25,11 +25,27 @@ const cloudChecksDue = (now: number) => (routine: Due) => {
   return Math.min(routine.wakeAt ?? Infinity, Math.max(retried ? now + CHECK_WAKE_MS : hourly, routine.nextRunAt));
 };
 
-/** Hold the desktop awake: a run that started (or waits on a person), or one due within the horizon. */
-export function wakeHoldOf(routines: readonly Due[], runs: readonly Run[], now: number, horizonMs: number): { hold: boolean; reason?: "running" | "due"; at?: number } {
-  if (runs.some((run) => ["queued", "running", "waiting"].includes(run.status) && !startsLater(run, now))) return { hold: true, reason: "running" };
-  const due = dueTimes(routines, runs, now, meetingsDue).filter((at) => at <= now + horizonMs).sort((a, b) => a - b)[0];
-  return due === undefined ? { hold: false } : { hold: true, reason: "due", at: due };
+/** Every time a run is due, with the routine it is for. */
+const dueWith = (routines: readonly Due[], runs: readonly Run[], now: number): { at: number; routineId?: string }[] => {
+  const found: { at: number; routineId?: string }[] = [];
+  for (const routine of routines) {
+    const at = routine.enabled ? (routine.checks ? meetingsDue(routine) : routine.nextRunAt) : undefined;
+    if (typeof at === "number") found.push({ at, routineId: routine.id });
+  }
+  for (const run of runs) if (startsLater(run, now) && typeof run.retryAt === "number") found.push({ at: run.retryAt, routineId: run.routineId });
+  return found;
+};
+
+export type WakeHold = { hold: boolean; reason?: "running" | "due"; at?: number; routineId?: string };
+
+/** Hold the desktop awake: a run that started, or one due within the horizon. A run that waits on a person holds only
+ * when `waitingHolds` is true (the default): their answer wakes the computer. */
+export function wakeHoldOf(routines: readonly Due[], runs: readonly Run[], now: number, horizonMs: number, { waitingHolds = true }: { waitingHolds?: boolean } = {}): WakeHold {
+  const holding = ["queued", "running", ...(waitingHolds ? ["waiting"] : [])];
+  const active = runs.find((run) => holding.includes(run.status) && !startsLater(run, now));
+  if (active) return { hold: true, reason: "running", ...(active.routineId ? { routineId: active.routineId } : {}) };
+  const due = dueWith(routines, runs, now).filter((entry) => entry.at <= now + horizonMs).sort((a, b) => a.at - b.at)[0];
+  return due === undefined ? { hold: false } : { hold: true, reason: "due", at: due.at, ...(due.routineId ? { routineId: due.routineId } : {}) };
 }
 
 /** A Cloud home's sleep check: a run queued to start now, or running, keeps it awake. One waiting for a person does

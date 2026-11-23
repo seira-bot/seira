@@ -297,7 +297,7 @@ describe("routines with checks", () => {
     h.answers.push({ wakeAt: reminder });
     await past(h, CHECK_BOOT_HOLD_MS + 15 * MINUTE);
     expect(h.manager.nextDueAt()).toBe(reminder);
-    expect(h.manager.wakeHold()).toEqual({ hold: true, reason: "due", at: reminder });
+    expect(h.manager.wakeHold()).toMatchObject({ hold: true, reason: "due", at: reminder });
     h.advance(reminder - h.now());
     await h.tick();
     expect(h.asked).toHaveLength(2);
