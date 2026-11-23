@@ -254,6 +254,20 @@ describe("a guest link", () => {
     expect(JSON.stringify([...joiner.events, ...inviter.events])).not.toMatch(/Draft|launch|did:/u);
   });
 
+  it("sends no cancel for a hand-off whose result came back", async () => {
+    const inviter = server("inviter", [writer], { key: KEY_1, exposed: ["writer"] });
+    const joiner = server("joiner", [scout], { key: KEY_2, exposed: [] });
+    inviter.link.pair({ self: { id: "inviter-environment", name: "Inviter" }, sessionId: "s-1", computer: { id: "joiner-environment", name: "Joiner" } });
+    joiner.link.turnOn({ self: { id: "joiner-environment", name: "Joiner" }, origin: "https://inviter.example", token: "lsk_test", peer: { id: "inviter-environment", name: "Inviter" } });
+    const wire = connect(inviter, KEY_1, joiner, KEY_2);
+    await until(() => joiner.link.linked().length === 1, "the joiner sees the writer");
+    await joiner.handOff("scout", call([linkedId(KEY_2, "writer")], "Draft the launch post"));
+    await until(() => joiner.results.length === 1, "the result is back");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(joiner.results[0]).toMatchObject({ status: "completed" });
+    expect(wire.filter((frame) => frame.t === "cancel")).toEqual([]);
+  });
+
   it("asks the policy before each hand-off with the peer's work still open, and refuses with its text", async () => {
     const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
     const peer = here.accept();
@@ -319,6 +333,21 @@ describe("a guest link", () => {
 
     here.link.receive(peer, [handoff("h2")]);
     expect(here.admitted).toEqual([[peer, 0], [peer, 0]]);
+  });
+
+  it("asks for no more files of a hand-off once a cancel for it came while one was on the way", async () => {
+    const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    let release!: () => void;
+    here.knobs.pull = new Promise<void>((resolve) => { release = resolve; });
+    const two = [{ name: "brief.txt", mime: "text/plain", kind: "file" as const, bytes: 5 }, { name: "notes.txt", mime: "text/plain", kind: "file" as const, bytes: 5 }];
+    here.link.receive(peer, [withFile("h1", { files: two })]);
+    await until(() => here.pulls.length === 1, "h1's first file is on the way");
+    here.link.receive(peer, [{ t: "cancel", id: "h1" }]);
+    release();
+    await until(() => here.landed.length === 1, "the first file came");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect([here.pulls, here.stored, here.runs]).toEqual([["h1"], [], []]);
   });
 
   it("forgets a hand-off whose files never came when a cancel for it comes in the same batch", async () => {
@@ -538,6 +567,19 @@ describe("a guest link", () => {
     expect(again.frames(peer).filter((frame) => frame.t === "result").map((frame) => frame.t === "result" && frame.id)).toEqual(["h1", "h2"]);
     expect(again.events.filter((event) => event.kind === "refused")).toEqual([]);
     expect(again.work("h1")).toMatchObject({ done: { ok: true } });
+  });
+
+  it("writes its record when the same frames come again after a write failed", () => {
+    const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
+    const peer = here.accept();
+    disk.full = true;
+    try {
+      expect(() => here.link.receive(peer, [handoff("h1")])).toThrow("the disk is full");
+    } finally { disk.full = false; }
+    const before = disk.writes;
+    here.link.receive(peer, [handoff("h1")]);
+    expect(disk.writes).toBe(before + 1);
+    expect(here.work("h1")).toBeDefined();
   });
 });
 

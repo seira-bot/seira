@@ -209,9 +209,10 @@ export function createBotLink(deps: BotLinkDeps) {
   const retries = new Map<string, { timer: NodeJS.Timeout; delay: number }>();
   let transfer: FileTransfer | null = null;
 
-  /** Set while a guest peer's frames are taken: the state is written once, at the end, before they are acknowledged. */
-  let batch: { dirty: boolean } | null = null;
-  const write = () => { if (state) writeFileAtomic(file, JSON.stringify(state), { mode: 0o600 }); };
+  /** Set while a guest peer's frames are taken: the state is written once, at the end, before they are acknowledged.
+   * `unsaved`: the last write failed, so the next batch writes even when its frames change nothing. */
+  let batch: { dirty: boolean } | null = null, unsaved = false;
+  const write = () => { if (!state) return; unsaved = true; writeFileAtomic(file, JSON.stringify(state), { mode: 0o600 }); unsaved = false; };
   const save = () => { if (batch) batch.dirty = true; else write(); };
   const linkOf = (peer: string): Live => { let one = live.get(peer); if (!one) { one = { online: false, seq: 0, outbox: [], level: 1, results: new Map() }; live.set(peer, one); } return one; };
   const counted = (one: Live, frame: Frame, by: number) => { if (frame.t !== "result") return; const left = (one.results.get(frame.id) ?? 0) + by; if (left > 0) one.results.set(frame.id, left); else one.results.delete(frame.id); };
@@ -290,16 +291,16 @@ export function createBotLink(deps: BotLinkDeps) {
   async function fetched(peer: string, id: string, way: FileWay, metas: readonly FileMeta[] | undefined): Promise<PassedFile[]> {
     if (!metas?.length || !deps.files) return [];
     const waiting = metas.map((meta, index) => ({ path: spoolFile(peer, id, way, index, meta.name), name: meta.name, meta }));
+    const stillWanted = () => { const entry = pending.get(id); if (policy && (way === "sent" ? state?.work[id] !== undefined || fetching.get(id) !== peer : entry?.peer !== peer || entry.cancelled)) { unspool(peer, id); throw gone("it was stopped"); } };
     if (state?.role === "dialer") {
       if (!transfer) throw new Error("not connected");
       for (const [index, file] of waiting.entries()) {
         let have = -1;
         try { have = statSync(file.path).size; } catch { /* not got yet */ }
-        if (have !== file.meta.bytes) await transfer.pull(id, way, index, file.meta, file.path);
+        if (have !== file.meta.bytes) { stillWanted(); await transfer.pull(id, way, index, file.meta, file.path); }
       }
     } else if (waiting.some((file) => !existsSync(file.path))) throw gone("its files did not arrive");
-    const entry = pending.get(id);
-    if (policy && (way === "sent" ? state?.work[id] !== undefined || fetching.get(id) !== peer : entry?.peer !== peer || entry.cancelled)) { unspool(peer, id); throw gone("it was stopped"); }
+    stillWanted();
     let stored: PassedFile[];
     try {
       stored = await deps.files.store(waiting);
@@ -398,7 +399,7 @@ export function createBotLink(deps: BotLinkDeps) {
     return new Promise<HostTurnResult>((settle) => {
       const entry: Pending = { peer: address.peer, frame, files, settle, threadId: node.threadId, cancelled: false, tries: 0 };
       const abort = () => {
-        if (entry.cancelled) return;
+        if (entry.cancelled || pending.get(node.id) !== entry) return;
         entry.cancelled = true;
         send(entry.peer, { t: "cancel", id: node.id });
         settle({ ok: false, text: STOPPED });
@@ -961,7 +962,7 @@ export function createBotLink(deps: BotLinkDeps) {
     },
     /** Frames from a place, each checked; one that does not parse is dropped. */
     receive(peer: string, frames: readonly unknown[]): void {
-      const own = policy && !batch ? (batch = { dirty: false }) : null;
+      const own = policy && !batch ? (batch = { dirty: unsaved }) : null;
       try {
         for (const raw of frames) {
           const parsed = (policy ? guestFrameSchema : frameSchema).safeParse(raw);
