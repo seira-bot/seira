@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { ui } from "@/lib/ui-anchor";
 import { isRoutineProblemRun } from "@/lib/routines";
+import { routineWakeLine } from "@/lib/routine-wake-line";
 import { saveWebhookCredential, webhookCredentialStore } from "@/lib/webhook-credentials";
 import { botInDepartment, filterableDepartments, GENERAL_DEPARTMENT } from "@/lib/department-filter";
 import { useStore } from "@/state/store";
@@ -164,7 +165,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
                 </ul>
               )}
               {actions.error && !listed.some((automation) => actions.errorFor?.endsWith(`:${automation.id}`)) && <p role="alert" className="mt-3 text-[12px] text-danger">{actions.error}</p>}
-              <RoutineWakeBar />
+              <RoutineWakeBar automations={all} />
             </div>
           </div>
         )}
@@ -188,7 +189,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
 }
 
 /** While a Mac sleeps no schedule runs: the shell can hold it awake the hour before one is due, plugged in only. */
-function RoutineWakeBar() {
+function RoutineWakeBar({ automations }: { automations: readonly { id: string; name: string }[] }) {
   const bridge = typeof window !== "undefined" ? window.ogb?.routines : undefined;
   const [state, setState] = useState<DesktopRoutineWake | null>(null);
   const [busy, setBusy] = useState(false);
@@ -201,9 +202,10 @@ function RoutineWakeBar() {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [bridge]);
   if (!bridge || !state) return null;
+  const holdLine = routineWakeLine(state, automations);
   return (
     <div className="mt-6 flex items-center justify-between gap-4 px-1 text-[12px] text-ink-secondary">
-      <span>{t("automations.wake")}{state.keepAwake && state.onBattery ? ` ${t("automations.wakeBattery")}` : ""}</span>
+      <span>{t("automations.wake")}{state.keepAwake && state.onBattery ? ` ${t("automations.wakeBattery")}` : ""}{holdLine && <span className="mt-0.5 block">{holdLine}</span>}</span>
       <Switch
         checked={state.keepAwake}
         disabled={busy}

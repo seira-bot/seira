@@ -37925,7 +37925,9 @@
       "settings.textSize.default": "2d87899fbdddd13ded190e714cfcbf2657f43471686adcfce8d9c446dc9cd1a1",
       "shortcuts.zoom-in": "f76d9e7e12547bf53d91ea3dc92cfc2022583df6261b72cb7bf2b53731356686",
       "shortcuts.zoom-out": "8d94f5c1cfa0b05b4603f16b8d43129e588231662b83fea097469561bb506d68",
-      "shortcuts.actual-size": "a38da576bd44df8ebde9f3e5b742e024660969cc74170940247b97bbb54f4103"
+      "shortcuts.actual-size": "a38da576bd44df8ebde9f3e5b742e024660969cc74170940247b97bbb54f4103",
+      "automations.wakeRunning": "ffb673328b2728695bd170139972c7986a01c1dd8405b8c4c5f204f6e20f0057",
+      "automations.wakeUntil": "d64f17c6a8c7a327e3d015e2bf5828eeff3e150f32dd38c6800a566354a299b3"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
