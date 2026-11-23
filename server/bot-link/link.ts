@@ -12,6 +12,15 @@
 // Security: the link joins only servers the same person signs in to as owner (server/routes/bot-link.ts), and work that
 // crosses it counts as the person's own, as it does between two bots of one place. Open risk: whoever controls one side
 // can have the other side's bots act at their own approval levels; turning the link off on the computer ends that.
+//
+// Security of a guest link (one with a `policy`), which joins a server of another owner. Its peer sees only the exposed
+// bots, each as an id, name, title and description, and can hand work only to them. Work from the peer always runs as
+// outside work: no frame makes it a person's request, and no quote or person's name from a frame is kept. Work sent to
+// the peer carries no quote, no person's name and no thread id of this server. This server sets the peer's key, so the
+// peer cannot take the address of another link's bots. The peer's bots are found only by address, never by name. A
+// root id in use by work this link did not start is refused. A failure here reaches the peer only as the policy's text.
+// Open risk: a bot at work for a linked server can create a routine. That routine later starts work that the rule
+// against handing work on to another server does not see.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -41,6 +50,8 @@ const ALIVE_EVERY_MS = 60_000;
 /** How often a place's last contact is written down. */
 const SEEN_WRITE_MS = 60 * 60_000;
 const STOPPED = "Coordinated work was stopped";
+const NOT_HERE = "That bot is no longer here.";
+const ENDED: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
 const SPOOL = "bot-link-files";
 /** Bytes that crossed and were never stored (their hand-off was dropped, a side restarted) are removed after this long,
  * and the oldest go first when all of them together pass the size. */
@@ -75,6 +86,8 @@ const workSchema = z.object({
   done: z.object({ ok: z.boolean(), outcome: z.string().optional(), /** Kept only when no assignment here ran. */ text: z.string().optional() }).optional(),
   /** When the requester said it has the result. */
   ackedAt: z.number().optional(),
+  /** On a guest link: the bot here it was for, and the peer's bot that asked. */
+  to: z.string().optional(), by: z.string().optional(),
 });
 const peerSchema = z.object({
   place: placeSchema, bots: z.array(linkedBotSchema),
@@ -154,8 +167,35 @@ export interface BotLinkDeps {
   directoryChanged?(): void;
   /** On the Cloud: ends the session a computer's link used. */
   revoke?(sessionId: string): void;
+  /** Present: a guest link, whose one peer is a server of another owner. */
+  policy?: LinkPolicy;
+  /** On the person's own link: an address of another link's bot. Its nodes are not this link's. */
+  notMine?(botId: string): boolean;
   now?: () => number;
   log?(line: string): void;
+}
+
+/** Why work from a peer was refused. `bot`: the bot is not there or not exposed. `unavailable`: it takes no work now.
+ * `root`: work that this link did not start uses its id. `limit`: the policy did not admit it. */
+export type LinkRefusal = "bot" | "unavailable" | "root" | "limit" | "files" | "error";
+/** One crossing of a guest link, for the activity record: who, and which hand-off, never its words. `bot` is the bot of
+ * this server, `far` the peer's. A restart sends a hand-off again, so `sent` can come twice for one `id`. */
+export type LinkEvent = { peer: string; bot: string; far: string; id: string } & ({ kind: "sent" | "received" } | { kind: "refused"; reason: LinkRefusal }
+  | { kind: "result-sent" | "result-received"; ok: boolean; outcome?: string });
+
+/** How far a guest link trusts its peer. */
+export interface LinkPolicy {
+  /** The peer's key, set by this server: the peer cannot choose the address its bots get here. */
+  key: string;
+  /** The peer can see this bot and hand it work. Asked again at every hand-off. */
+  exposed(botId: string): boolean;
+  /** Why one more hand-off from the peer is refused now, with `open` of its hand-offs at work here. Null admits it. */
+  admit(peer: string, open: number): string | null;
+  /** What the peer is told when work fails here, in place of the local text. */
+  failText(text: string): string;
+  /** `handedTo`: the hand-off tool's answer. `otherSide`: the peer, in the texts that name it. */
+  words: { handedTo: string; otherSide: string };
+  record?(event: LinkEvent): void;
 }
 
 export interface CoordinateContext {
@@ -206,13 +246,29 @@ export function createBotLink(deps: BotLinkDeps) {
   const linkOf = (peer: string): Live => { let one = live.get(peer); if (!one) { one = { online: false, seq: 0, outbox: [], level: 1 }; live.set(peer, one); } return one; };
   const isOnline = (peer: string) => live.get(peer)?.online === true;
   const placeName = (peer: string) => state?.peers[peer]?.place.name ?? "the other place";
-  const directory = (): LinkedBot[] => deps.bots().filter((bot) => !bot.hidden && !bot.movedTo && /^[\w-]{1,128}$/u.test(bot.id)).map((bot) => ({
+  const policy = deps.policy;
+  const words = policy?.words ?? { handedTo: "Handed to the person's other place.", otherSide: "the person's other place" };
+  const audit = (event: LinkEvent) => policy?.record?.(event);
+  /** A local text for the requester: a guest peer gets the policy's text instead. */
+  const peerText = (text: string) => policy?.failText(text) ?? text;
+  const card = ({ id, name, title, description }: LinkedBot): LinkedBot => ({ id, name, ...(title ? { title } : {}), ...(description ? { description } : {}) });
+  const offered = (bot: LocalBot | null | undefined): bot is LocalBot => Boolean(bot && !bot.hidden && (!policy || policy.exposed(bot.id)));
+  const opaque = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 32);
+  /** The address names a bot of one of this link's peers. */
+  const claims = (botId: string | undefined): boolean => { const peer = isLinkedId(botId) ? parseLinked(botId)?.peer : undefined; return peer !== undefined && (peer === policy?.key || Boolean(state?.peers[peer])); };
+  /** A root this link started for work that arrived, while its record is kept. */
+  const ownsRoot = (rootId: string): boolean => { const work = state?.work[handoffOfRoot(rootId)]; return Boolean(work?.child) && work?.root === rootId; };
+  /** Work from a peer whose turn here has not ended: a notice has its result at once, but its turn goes on. */
+  const atWork = (work: Work) => !work.done || (work.child !== undefined && !ENDED.has(deps.coordinator().node(work.child)?.status ?? "completed"));
+  const workFor = (peer: string, frame: HandoffFrame): Work => ({ peer, root: linkRoot(frame.id), from: frame.from.name, at: now(), ...(policy ? { to: frame.to, by: frame.from.botId } : {}) });
+  const crossing = (peer: string, frame: HandoffFrame) => ({ peer, bot: frame.to, far: frame.from.botId, id: frame.id });
+  const directory = (): LinkedBot[] => deps.bots().filter((bot) => !bot.hidden && !bot.movedTo && /^[\w-]{1,128}$/u.test(bot.id) && offered(bot)).map((bot) => ({
     id: bot.id, name: bot.name, ...(bot.title ? { title: bot.title.slice(0, 200) } : {}), ...(bot.description ? { description: bot.description.slice(0, 400) } : {}),
     ...(deps.model?.(bot) ? { model: deps.model(bot)!.slice(0, 200) } : {}), level: deps.level(bot),
     ...(bot.color ? { color: bot.color.slice(0, 64) } : {}), ...(bot.mascotBody ? { mascotBody: bot.mascotBody.slice(0, 64) } : {}), ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor.slice(0, 64) } : {}),
     ...(mascotAccessories(bot.mascotAccessories).length ? { mascotAccessories: mascotAccessories(bot.mascotAccessories) } : {}),
     ...(bot.chiefOfStaff ? { chief: true } : {}), ...(bot.threadId ? { threadId: bot.threadId } : {}),
-  })).slice(0, 500);
+  })).map((bot) => (policy ? card(bot) : bot)).slice(0, 500);
 
   function send(peer: string, frame: Frame): void {
     if (!state?.peers[peer]) return;
@@ -319,6 +375,7 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state) return undefined;
     const wanted = raw.trim();
     if (isLinkedId(wanted)) return remoteOf(wanted);
+    if (policy) return undefined;
     const local = deps.bots();
     if (local.some((bot) => bot.id === wanted)) return undefined;
     const named = fold(wanted);
@@ -358,8 +415,10 @@ export function createBotLink(deps: BotLinkDeps) {
       frame.text = room.text.slice(0, BRIEF_MAX);
       if (room.person) frame.person = room.person.slice(0, 120); else delete frame.person;
     }
+    if (policy) { frame.origin = { kind: "outside" }; delete frame.person; frame.from.threadId = opaque(frame.from.threadId); frame.thread = opaque(frame.thread); }
     const files = deps.files?.carried(node.id, "sent") ?? [];
     if (files.length) frame.files = metaOf(files);
+    audit({ kind: "sent", peer: address.peer, bot: frame.from.botId, far: address.botId, id: node.id });
     return new Promise<HostTurnResult>((settle) => {
       const entry: Pending = { peer: address.peer, frame, files, settle, threadId: node.threadId, cancelled: false, tries: 0 };
       const abort = () => {
@@ -398,8 +457,8 @@ export function createBotLink(deps: BotLinkDeps) {
   /** A kept result as the frame its requester gets: the words come from the runtime's own row of the work. */
   function resultFrame(id: string, work: Work): ResultFrame | null {
     if (!work.done) return null;
-    const text = work.done.text ?? (work.child ? deps.coordinator().status(work.child)?.assignment.result : undefined) ?? (work.done.ok ? GONE : "");
-    return { t: "result", id, ok: work.done.ok, text: text.slice(0, 200_000), ...(work.done.outcome ? { outcome: work.done.outcome } : {}) };
+    const kept = work.done.text, text = kept ?? (work.child ? deps.coordinator().status(work.child)?.assignment.result : undefined) ?? (work.done.ok ? GONE : "");
+    return { t: "result", id, ok: work.done.ok, text: (kept === undefined && !work.done.ok ? peerText(text) : text).slice(0, 200_000), ...(work.done.outcome ? { outcome: work.done.outcome } : {}) };
   }
   /** The files a finished assignment here returns to its requester. */
   const returned = (work: Work): readonly PassedFile[] => (work.done?.ok && work.child && work.ackedAt === undefined ? deps.files?.carried(work.child, "returned") ?? [] : []);
@@ -428,6 +487,7 @@ export function createBotLink(deps: BotLinkDeps) {
     if (childId) work.child = childId;
     work.done = { ok: result.ok, ...(result.outcome ? { outcome: result.outcome } : {}), ...(result.text !== undefined ? { text: result.text.slice(0, 2_000) } : {}) };
     save();
+    audit({ kind: "result-sent", peer: work.peer, bot: work.to ?? "", far: work.by ?? "", id, ok: result.ok, ...(result.outcome ? { outcome: result.outcome } : {}) });
     dispatchResult(id);
   }
 
@@ -436,7 +496,7 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state) return;
     const known = state.work[frame.id];
     if (known) { if (known.peer === peer && known.done) dispatchResult(frame.id); return; }
-    if (!frame.files?.length || !deps.files) { start(peer, frame, []); return; }
+    if (!frame.files?.length || !deps.files || (policy && !offered(deps.bot(frame.to)))) { start(peer, frame, []); return; }
     if (accepting.has(frame.id)) return;
     accepting.add(frame.id);
     fetched(peer, frame.id, "sent", frame.files).then((files) => { settled(`in:${frame.id}`); start(peer, frame, files); }, (error) => {
@@ -444,8 +504,9 @@ export function createBotLink(deps: BotLinkDeps) {
       // Not got yet: tried again on a timer, and when the requester sends the hand-off again with the next session.
       if (!isGone(error)) { log(`bot link: the files of ${frame.id} are not here yet (${said(error)})`); retryLater(`in:${frame.id}`, () => accept(peer, frame)); return; }
       settled(`in:${frame.id}`);
-      state.work[frame.id] = { peer, root: linkRoot(frame.id), from: frame.from.name, at: now() };
-      recordResult(frame.id, { ok: false, text: `The files sent with this could not be taken in (${said(error)}), so the work was not started.`, outcome: "refused" });
+      state.work[frame.id] = workFor(peer, frame);
+      audit({ kind: "refused", reason: "files", ...crossing(peer, frame) });
+      recordResult(frame.id, { ok: false, text: peerText(`The files sent with this could not be taken in (${said(error)}), so the work was not started.`), outcome: "refused" });
     }).finally(() => { accepting.delete(frame.id); });
   }
 
@@ -453,23 +514,28 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state || state.work[frame.id]) return;
     const root = linkRoot(frame.id);
     const address = { botId: linkedId(peer, frame.from.botId), threadId: root };
-    const work: Work = { peer, root, from: frame.from.name, ...(frame.person ? { person: frame.person } : {}), at: now() };
-    const refuse = (text: string) => { state!.work[frame.id] = work; recordResult(frame.id, { ok: false, text, outcome: "refused" }); };
+    const work: Work = { ...workFor(peer, frame), ...(frame.person && !policy ? { person: frame.person } : {}) };
+    const refuse = (text: string, reason: LinkRefusal) => { audit({ kind: "refused", reason, ...crossing(peer, frame) }); state!.work[frame.id] = work; recordResult(frame.id, { ok: false, text, outcome: "refused" }); };
     const bot = deps.bot(frame.to);
-    if (!bot || bot.hidden) return refuse("That bot is no longer here.");
+    if (!offered(bot)) return refuse(NOT_HERE, "bot");
     const refusal = deps.refusal?.(bot);
-    if (refusal) return refuse(refusal);
+    if (refusal) return refuse(peerText(refusal), "unavailable");
     const coordinator = deps.coordinator();
+    // Security invariant: a guest peer chooses the hand-off id, so a root it names that already exists belongs to other work.
+    if (policy && coordinator.node(root)) return refuse(NOT_HERE, "root");
+    const limited = policy?.admit(peer, Object.values(state.work).filter((one) => one.peer === peer && atWork(one)).length);
+    if (limited) return refuse(limited, "limit");
     try {
       coordinator.beginTurn({ id: root, address, brief: frame.text, level: deps.level(bot), opener: {
         requester: { kind: "external_runtime", runId: root, botId: address.botId, threadId: address.threadId },
-        origin: { kind: frame.origin.kind, source: frame.origin.kind === "routine" ? "routine" : "peer", ref: frame.from.threadId, ...(frame.origin.quote ? { quote: frame.origin.quote } : {}) },
+        origin: policy ? { kind: "outside", source: "peer", ref: frame.from.threadId }
+          : { kind: frame.origin.kind, source: frame.origin.kind === "routine" ? "routine" : "peer", ref: frame.from.threadId, ...(frame.origin.quote ? { quote: frame.origin.quote } : {}) },
       } });
       const key = `${peer}:${frame.thread}`;
       let threadId = state.threads[key]?.threadId;
       if (!threadId || !deps.hasThread(bot.id, threadId)) {
         const opened = deps.openThread(bot, `@${frame.from.name} · work`, { botId: address.botId, name: frame.from.name, threadId: address.threadId });
-        if (!opened) throw new Error("That bot is no longer here.");
+        if (!opened) throw new Error(NOT_HERE);
         threadId = opened;
       }
       state.threads[key] = { threadId, at: now() };
@@ -479,12 +545,13 @@ export function createBotLink(deps: BotLinkDeps) {
       work.child = node.id;
       state.work[frame.id] = work;
       save();
+      audit({ kind: "received", ...crossing(peer, frame) });
       coordinator.endTurn(root, { ok: true, text: "" });
       if (frame.mode === "notify") recordResult(frame.id, { ok: true, text: "" });
     } catch (error) {
       const said = error instanceof Error ? error.message : String(error);
       try { coordinator.endTurn(root, { ok: false, text: said }); } catch { /* the root never began */ }
-      refuse(said);
+      refuse(peerText(said), "error");
     }
   }
 
@@ -495,7 +562,8 @@ export function createBotLink(deps: BotLinkDeps) {
         const known = state.peers[peer]!;
         // A computer is the place it paired as: its name may change, its identity may not.
         if (frame.place.id !== known.place.id) { log("bot link: a hello from another place than the one paired was dropped"); return; }
-        if (JSON.stringify([frame.place, frame.bots]) !== JSON.stringify([known.place, known.bots])) { known.place = frame.place; known.bots = frame.bots; save(); deps.kick(); deps.directoryChanged?.(); }
+        const bots = policy ? frame.bots.map(card) : frame.bots;
+        if (JSON.stringify([frame.place, bots]) !== JSON.stringify([known.place, known.bots])) { known.place = frame.place; known.bots = bots; save(); deps.kick(); deps.directoryChanged?.(); }
         return;
       }
       case "handoff": return accept(peer, frame);
@@ -510,6 +578,7 @@ export function createBotLink(deps: BotLinkDeps) {
           pending.delete(frame.id);
           resulted.add(frame.id);
           keepAlive();
+          audit({ kind: "result-received", peer, bot: entry.frame.from.botId, far: entry.frame.to, id: frame.id, ok: frame.ok, ...(frame.outcome ? { outcome: frame.outcome } : {}) });
           if (!entry.cancelled) entry.settle({ ok: frame.ok, text: `${frame.text || (frame.ok ? "" : "The work failed there without saying why.")}${note}` });
         };
         if (!entry || entry.cancelled || !frame.files?.length || !deps.files) return finish();
@@ -619,7 +688,7 @@ export function createBotLink(deps: BotLinkDeps) {
     for (const retry of retries.values()) clearTimeout(retry.timer);
     retries.clear();
     rmSync(spoolRoot, { recursive: true, force: true });
-    failPending(null, "The link between this place and the person's other place was turned off before the work came back.");
+    failPending(null, `The link between this place and ${words.otherSide} was turned off before the work came back.`);
     for (const peer of peers) for (const listener of outboundListeners) listener(peer);
     deps.kick();
     deps.directoryChanged?.();
@@ -670,7 +739,7 @@ export function createBotLink(deps: BotLinkDeps) {
       }
     }
     const sent = refused.length < receipts.length;
-    const mine = sent ? `Handed to the person's other place. ${call.reply === "none" ? "Nothing comes back from a one-way notice." : "Finish your turn now: the result resumes you when it is back."}` : "";
+    const mine = sent ? `${words.handedTo} ${call.reply === "none" ? "Nothing comes back from a one-way notice." : "Finish your turn now: the result resumes you when it is back."}` : "";
     if (here.length === 0) return { status: sent ? 200 : 409, body: { receipts, ...(sent ? { message: mine } : { error: refused.join("; ") }) } };
     const rest = await local({ ...call, botIds: here });
     const theirs = Array.isArray(rest.body.receipts) ? rest.body.receipts as PeerDeliveryReceipt[] : [];
@@ -690,7 +759,8 @@ export function createBotLink(deps: BotLinkDeps) {
   }
   /** The coordinator's host with other places' bots in it: their nodes run there, every other node as before. */
   function host(inner: CoordinatorHost): CoordinatorHost {
-    const awayNode = (node: HandoffView) => isLinkedId(node.botId);
+    const owned = (botId: string | undefined) => (policy ? claims(botId) : isLinkedId(botId) && !deps.notMine?.(botId));
+    const awayNode = (node: HandoffView) => owned(node.botId);
     const peerOf = (node: HandoffView) => parseLinked(node.botId)?.peer ?? "";
     const workOf = (parent: HandoffView | undefined) => (parent && awayNode(parent) ? state?.work[handoffOfRoot(parent.id)] : undefined);
     const nameOf = (linked: string) => { const remote = remoteOf(linked); return remote ? `${remote.bot.name} (${placeName(remote.peer)})` : "Teammate"; };
@@ -699,7 +769,7 @@ export function createBotLink(deps: BotLinkDeps) {
       validate: (node, parent) => {
         if (!awayNode(node)) return inner.validate(node, parent && awayNode(parent) ? undefined : parent);
         if (!node.parentId) return undefined;
-        if (!state) return "The link to the person's other place was turned off, so this was not delivered.";
+        if (!state) return `The link to ${words.otherSide} was turned off, so this was not delivered.`;
         const left = deps.rooms?.problem(node);
         if (left) return left;
         return remoteOf(node.botId) ? undefined : "That bot's place is no longer linked, or the bot is no longer there.";
@@ -738,18 +808,28 @@ export function createBotLink(deps: BotLinkDeps) {
       },
       park: (node, question, restored) => { if (!awayNode(node)) inner.park(node, question, restored); },
       remind: (node, closesAt) => { if (!awayNode(node)) inner.remind?.(node, closesAt); },
-      levelOf: (target, source) => (isLinkedId(target.botId) ? { level: remoteOf(target.botId)?.bot.level ?? "full" } : inner.levelOf(target, source)),
-      chiefOf: (address) => (isLinkedId(address.botId) ? false : inner.chiefOf(address)),
+      levelOf: (target, source) => (owned(target.botId) ? { level: policy ? "ask" : remoteOf(target.botId)?.bot.level ?? "full" } : inner.levelOf(target, source)),
+      chiefOf: (address) => (owned(address.botId) ? false : inner.chiefOf(address)),
       outward: (node) => (awayNode(node) ? [] : inner.outward?.(node) ?? []),
       shareAnswer: (first, joiner) => (awayNode(first) || awayNode(joiner) ? false : inner.shareAnswer?.(first, joiner) ?? false),
-      statusReply: (requester, prompt, signal) => (isLinkedId(requester) ? Promise.resolve(undefined) : inner.statusReply?.(requester, prompt, signal) ?? Promise.resolve(undefined)),
+      statusReply: (requester, prompt, signal) => (owned(requester) ? Promise.resolve(undefined) : inner.statusReply?.(requester, prompt, signal) ?? Promise.resolve(undefined)),
     };
   }
 
   const cloudPeer = () => (state?.role === "dialer" ? Object.keys(state.peers)[0] ?? null : null);
 
   return {
-    host, coordinate, resolve,
+    host, coordinate, resolve, claims, ownsRoot,
+    /** A thread this link opened for work that arrived, while its record is kept. */
+    openedThread: (threadId: string) => Object.values(state?.threads ?? {}).some((one) => one.threadId === threadId),
+    /** Ends the turns of all work from peers that runs here now. Each requester gets a failure with `reason`. */
+    stopInbound(reason: string): void {
+      for (const [id, work] of Object.entries(state?.work ?? {})) {
+        if (!atWork(work)) continue;
+        recordResult(id, { ok: false, text: reason, outcome: "stopped" });
+        deps.coordinator().cancelDirect(work.root, reason);
+      }
+    },
     on: () => state !== null,
     /** What this place is called, as the other places were told. */
     selfName: () => state?.self.name ?? "",
@@ -779,7 +859,7 @@ export function createBotLink(deps: BotLinkDeps) {
       title: bot.title || undefined, description: bot.description || undefined }))),
     /** Turned on, on a computer: it keeps the Cloud's address, its sign-in there and the account that was for. */
     turnOn(input: { self: Place; origin: string; token: string; account?: string; peer: Place }): void {
-      const key = peerKey(input.peer.id);
+      const key = policy?.key ?? peerKey(input.peer.id);
       const kept = state?.role === "dialer" && state.origin === input.origin && state.peers[key] ? state : null;
       if (state && !kept) off(false);
       state = { v: 2, role: "dialer", self: input.self, origin: input.origin, token: input.token, ...(input.account ? { account: input.account } : {}), ...(kept?.sleeps ? { sleeps: true } : {}),
@@ -791,7 +871,7 @@ export function createBotLink(deps: BotLinkDeps) {
     /** On the Cloud: one computer is paired. The session its link used before is returned, for the caller to end; other
      * computers' links are left as they are. Null when no more computers fit. */
     pair(input: { self: Place; sessionId: string; computer: Place }): { peer: string; replaced?: string } | null {
-      const key = peerKey(input.computer.id);
+      const key = policy?.key ?? peerKey(input.computer.id);
       const known = state?.role === "acceptor" ? state.peers[key] : undefined;
       if (!known && state?.role === "acceptor" && Object.keys(state.peers).length >= PEERS_MAX) return null;
       if (state?.role !== "acceptor") state = { v: 2, role: "acceptor", self: input.self, peers: {}, threads: {}, work: {} };
@@ -806,7 +886,7 @@ export function createBotLink(deps: BotLinkDeps) {
     unpair(computerId?: string): void {
       if (state?.role !== "acceptor") return;
       const reason = "The link to that computer was turned off before the work came back.";
-      for (const peer of computerId === undefined ? Object.keys(state.peers) : [peerKey(computerId)]) dropPeer(peer, reason);
+      for (const peer of computerId === undefined ? Object.keys(state.peers) : [policy?.key ?? peerKey(computerId)]) dropPeer(peer, reason);
     },
     /** Turned off on a computer. `told`: its Cloud knows; otherwise the Cloud is told when it can next be reached. */
     turnOff(told: boolean): void { off(told); },
