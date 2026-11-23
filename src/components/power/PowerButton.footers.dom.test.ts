@@ -3,8 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const fixture = vi.hoisted(() => ({ advanced: false }));
-const stub = () => () => null;
+const { fixture, stub } = vi.hoisted(() => ({ fixture: { advanced: false }, stub: () => () => null }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: {}, bots: [], groups: [] }, dispatch: vi.fn() }) }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => fixture.advanced }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
