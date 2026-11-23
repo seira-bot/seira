@@ -403,7 +403,7 @@ describe("an honest pair of servers", () => {
   }, 60_000);
 
   it("keeps within each other's limits when either one restarts", async () => {
-    const head = await server("head", [WRITER]), branch = await server("branch", [SCOUT, CLERK]);
+    const head = await server("head", [WRITER, ANALYST]), branch = await server("branch", [SCOUT, CLERK]);
     const ids = await link(head, branch);
     const [writer] = await offer(head, ids.inviterLink, branch, ids.joinerLink, ["writer"]);
     const [clerk] = await offer(branch, ids.joinerLink, head, ids.inviterLink, ["clerk"]);
@@ -411,9 +411,9 @@ describe("an honest pair of servers", () => {
     let round = 0;
     const both = async () => {
       round += 1;
-      const asked = branch.begin(SCOUT, `Task ${round}`, `scout-task-${round}`), checked = head.begin(WRITER, `Check ${round}`, `writer-task-${round}`);
+      const asked = branch.begin(SCOUT, `Task ${round}`, `scout-task-${round}`), checked = head.begin(ANALYST, `Check ${round}`, `analyst-task-${round}`);
       expect((await branch.coordinate(SCOUT, asked, [writer!], `Task ${round}`)).status).toBe(200);
-      expect((await head.coordinate(WRITER, checked, [clerk!], `Check ${round}`)).status).toBe(200);
+      expect((await head.coordinate(ANALYST, checked, [clerk!], `Check ${round}`)).status).toBe(200);
       branch.coordinator!.endTurn(asked.generation, { ok: true, text: "Handed on." });
       head.coordinator!.endTurn(checked.generation, { ok: true, text: "Handed on." });
       await until(() => back(branch) >= round && back(head) >= round, `round ${round} is back on both sides`, 45_000);
