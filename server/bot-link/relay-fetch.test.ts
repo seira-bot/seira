@@ -206,7 +206,7 @@ describe("fetchOverSession", () => {
   it("puts a 5 MiB Blob whole", async () => {
     const r = await rig();
     const data = pattern(5 * MIB);
-    const answer = await r.fetch(`${ORIGIN}/upload?name=big`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: new Blob([data]) });
+    const answer = await r.fetch(`${ORIGIN}/upload?name=big`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: new Blob([new Uint8Array(data)]) });
     expect(await answer.json()).toEqual({ bytes: 5 * MIB, sha: sha(data), length: String(5 * MIB) });
     await noStreams(r);
   }, 30_000);
