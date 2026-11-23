@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createCoordinator, type BeginTurnRequest, type CoordinateBotsCall, type Coordinator, type CoordinatorHost, type HandoffView, type HostTurnResult } from "../coordinator.ts";
 import type { PassedFile } from "../host/handoff-files.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
+import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { createBotLink, type FileTransfer, type LinkEvent, type LinkPolicy } from "./link.ts";
 import { linkedId, peerKey, type Frame, type HandoffFrame, type ResultFrame } from "./protocol.ts";
 
@@ -263,7 +264,7 @@ describe("a guest link", () => {
     expect(here.admitted.map(([, count]) => count)).toEqual([0, 1, 2, 3, 0]);
   });
 
-  it("refuses a hand-off whose root is work it did not start, and answers its own hand-off sent again from its record", async () => {
+  it("refuses a hand-off whose root is work it did not start, and answers its own hand-off sent again from its record, once while the answer waits", async () => {
     const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
     const peer = here.accept();
     here.coordinator.beginTurn({ id: "link-taken", address: { botId: "writer", threadId: "writer-chat" }, brief: "Mine", level: "full", origin: { kind: "user", request: "Mine" } });
@@ -277,11 +278,58 @@ describe("a guest link", () => {
 
     here.link.receive(peer, [handoff("h1")]);
     await until(() => here.result(peer, "h1") !== undefined, "h1 is done");
-    here.link.receive(peer, [handoff("h1")]);
+    const answers = () => here.frames(peer).filter((frame) => frame.t === "result" && frame.id === "h1");
+    here.link.receive(peer, [handoff("h1"), { t: "cancel", id: "h1" }, handoff("h1")]);
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(here.runs).toHaveLength(1);
-    expect(here.frames(peer).filter((frame) => frame.t === "result" && frame.id === "h1")).toHaveLength(2);
+    expect(answers()).toHaveLength(1);
+
+    here.link.outgoing(peer, Number.MAX_SAFE_INTEGER);
+    here.link.receive(peer, [handoff("h1"), { t: "cancel", id: "h1" }]);
+    expect(answers()).toHaveLength(1);
+    expect(here.runs).toHaveLength(1);
     expect(here.events.filter((event) => event.kind === "refused")).toHaveLength(1);
+  });
+
+  it("removes the files a hand-off stored when a cancel for it came while they were on the way", async () => {
+    const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    let release!: () => void;
+    here.knobs.pull = new Promise<void>((resolve) => { release = resolve; });
+    here.link.receive(peer, [withFile("h1")]);
+    await until(() => here.pulls.length === 1, "h1's file is on the way");
+    here.link.receive(peer, [{ t: "cancel", id: "h1" }]);
+    expect(here.result(peer, "h1")).toMatchObject({ ok: false, outcome: "stopped" });
+    release();
+    await until(() => here.discarded.length === 1, "the stored file is removed");
+    expect([here.stored, here.discarded, here.runs]).toEqual([["brief.txt"], ["brief.txt"], []]);
+
+    here.link.receive(peer, [handoff("h2")]);
+    expect(here.admitted).toEqual([[peer, 0], [peer, 0]]);
+  });
+
+  it("forgets a hand-off whose files never came when a cancel for it comes in the same batch", async () => {
+    const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
+    const peer = here.accept();
+    here.link.receive(peer, [withFile("h1"), { t: "cancel", id: "h1" }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(here.result(peer, "h1")).toMatchObject({ ok: false, outcome: "stopped" });
+    here.link.receive(peer, [handoff("h2")]);
+    expect(here.admitted).toEqual([[peer, 0], [peer, 0]]);
+  });
+
+  it("drops a frame whose file is larger than one file may be, where the person's own link takes it", async () => {
+    const big = { name: "big.bin", mime: "application/octet-stream", kind: "file" as const, bytes: FILE_MAX_BYTES + 1 };
+    const here = server("here", [writer], { key: KEY_1, exposed: ["writer"] });
+    const peer = here.accept();
+    here.link.receive(peer, [withFile("h1", { files: [big] }), { t: "result", id: "r1", ok: true, text: "", files: [big] }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect([here.result(peer, "h1"), here.work("h1"), here.admitted]).toEqual([undefined, undefined, []]);
+
+    const own = server("own", [writer], null);
+    const ownPeer = own.accept();
+    own.link.receive(ownPeer, [withFile("h1", { files: [big] })]);
+    await until(() => own.work("h1") !== undefined, "the own link keeps a record of it");
   });
 
   it("finds the peer's bots by address only, never by name", async () => {

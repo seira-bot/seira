@@ -31,17 +31,17 @@ export const botIdSchema = z.string().regex(/^[\w-]{1,128}$/u);
 const linkSchema = z.object({
   id: z.string().regex(LINK_ID),
   role: z.enum(["inviter", "joiner"]),
-  place: placeSchema,
+  place: z.object(placeSchema.shape),
   exposed: z.array(botIdSchema).max(500),
   cap: z.enum(APPROVAL_CAPS),
   tokenHash: hex64.optional(),
   createdAt: z.number(),
-}).strict().refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
-const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() }).strict();
+}).refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
+const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() });
 /** A link that ended while work its peer started here could still run: by its peer's key, with the cap it had then. */
-const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number() }).strict();
+const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number() });
 const fileSchema = z.object({ v: z.literal(1), links: z.array(linkSchema).max(LINKS_MAX), invites: z.array(inviteSchema).max(INVITES_MAX),
-  ended: z.array(endedSchema).max(ENDED_MAX).optional() }).strict();
+  ended: z.array(endedSchema).max(ENDED_MAX).optional() });
 
 export type StoredLink = z.infer<typeof linkSchema>;
 export type LinksFile = z.infer<typeof fileSchema>;

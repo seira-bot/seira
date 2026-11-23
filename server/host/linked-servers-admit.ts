@@ -1,9 +1,13 @@
 // How much work one linked server may hand this one, and how refusals reach the activity record.
 
-/** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`, whatever becomes of them. `outbox`:
- * while this many frames for it wait unacknowledged, a link's work frames are not taken. */
-export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000 } as const;
+/** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`. `outbox`: while this many frames for
+ * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`. */
+export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10 } as const;
 export const BUSY_TEXT = "The other side is busy now, so try again later.";
+
+const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
+export const kindOf = (frame: unknown): unknown => (frame as { t?: unknown } | null)?.t;
+export const isWork = (frame: unknown): boolean => WORK_FRAMES.has(kindOf(frame));
 
 /** Refuses a hand-off while `open` of the link's hand-offs are at work here, or when the link already had
  * `perWindow` admitted in the last `windowMs`. Only admitted hand-offs count toward the window. */
@@ -23,20 +27,52 @@ export function createAdmission(now: () => number = Date.now) {
   };
 }
 
-/** Takes the work frames of one exchange only when all of them fit in the link's budget for the last `windowMs`. */
+/** What each link spent of `limit` in the last `windowMs`. */
 export function createFrameBudget(now: () => number = Date.now, limit: number = ADMIT.frames) {
   const spent = new Map<string, Array<{ at: number; frames: number }>>();
+  const recent = (linkId: string) => {
+    const at = now(), kept = (spent.get(linkId) ?? []).filter((one) => at - one.at < ADMIT.windowMs);
+    spent.set(linkId, kept);
+    return kept;
+  };
   return {
-    take(linkId: string, frames: number): boolean {
-      if (frames === 0) return true;
-      const at = now();
-      const recent = (spent.get(linkId) ?? []).filter((one) => at - one.at < ADMIT.windowMs);
-      spent.set(linkId, recent);
-      if (recent.reduce((sum, one) => sum + one.frames, 0) + frames > limit) return false;
-      recent.push({ at, frames });
-      return true;
-    },
+    left(linkId: string): number { return Math.max(0, limit - recent(linkId).reduce((sum, one) => sum + one.frames, 0)); },
+    spend(linkId: string, frames: number): void { if (frames > 0) recent(linkId).push({ at: now(), frames }); },
     forget(linkId: string): void { spent.delete(linkId); },
+  };
+}
+
+/** The frames of one exchange that a link takes: from the first, up to the first work frame its budget has no room for,
+ * or up to the first work frame while `full`. Of its hellos only the last is kept, and it goes first in `frames` once the
+ * link's hello budget has room: at this exchange or a later one. */
+export function createIntake(now: () => number = Date.now, limits: { frames?: number | undefined; hellos?: number | undefined } = {}) {
+  const work = createFrameBudget(now, limits.frames ?? ADMIT.frames);
+  const hellos = createFrameBudget(now, limits.hellos ?? ADMIT.hellos);
+  const waiting = new Map<string, unknown>();
+  return {
+    take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[] } {
+      let room = full ? 0 : work.left(linkId), count = 0, spent = 0;
+      const taken: unknown[] = [];
+      for (const frame of frames) {
+        if (isWork(frame)) {
+          if (room === 0) break;
+          room -= 1;
+          spent += 1;
+        }
+        count += 1;
+        if (kindOf(frame) === "hello") waiting.set(linkId, frame);
+        else taken.push(frame);
+      }
+      work.spend(linkId, spent);
+      const hello = waiting.get(linkId);
+      if (hello !== undefined && hellos.left(linkId) > 0) {
+        hellos.spend(linkId, 1);
+        waiting.delete(linkId);
+        taken.unshift(hello);
+      }
+      return { count, frames: taken };
+    },
+    forget(linkId: string): void { work.forget(linkId); hellos.forget(linkId); waiting.delete(linkId); },
   };
 }
 

@@ -1,13 +1,14 @@
 // The standing exchange and the file crossing of a link, for one authenticated peer: the long poll that carries frames both
 // ways, and the file probe, get and put. The caller has already checked who the peer is; this module owns the rest.
-import { createReadStream, createWriteStream, rmSync, statSync } from "node:fs";
+import { createReadStream, createWriteStream, mkdirSync, rmSync, statSync } from "node:fs";
 import type { ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import { dirname } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import type { BotLink } from "../bot-link/link.ts";
-import { LEVEL_HEADER, PROTOCOL_LEVEL, SEEN_MS, fileWay, levelOf, syncRequest } from "../bot-link/protocol.ts";
+import { LEVEL_HEADER, PROTOCOL_LEVEL, SEEN_MS, TAKEN_HEADER, fileWay, levelOf, syncRequest } from "../bot-link/protocol.ts";
 import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { answerAsleep } from "../cloud-power.ts";
 import type { RouteContext } from "./table.ts";
@@ -20,10 +21,11 @@ export interface LinkExchangeOptions {
   /** What this place says its version reads; a test stands in for an older Cloud with it. */
   level?: number;
   /** A guest link's room for a file that is about to arrive at `to` with `bytes`: a release for when its write ends, or
-   * null when it may not come now. Absent: a file needs no room but its own size limit. */
+   * null when it may not come now. Absent: a file needs no room but its own size limit. With it, a file must say its size. */
   room?(to: string, bytes: number): (() => void) | null;
-  /** A guest link's choice of the frames of one exchange to take, or null to refuse the whole exchange for now. */
-  takes?(frames: readonly unknown[], ack: number): readonly unknown[] | null;
+  /** A guest link's choice of the frames of one exchange to take: `count` of them, from the first, are taken and the
+   * peer sends the rest again; `frames` are the ones to act on. The answer says `count` in TAKEN_HEADER. */
+  takes?(frames: readonly unknown[], ack: number): { count: number; frames: readonly unknown[] };
 }
 
 export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes }: LinkExchangeOptions) {
@@ -67,13 +69,15 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     const to = link.incoming(peer, id, way.data, index, fileName);
     if (!to) { req.resume(); return json(res, 409, { error: "that file is not wanted here any more" }); }
     const declared = Number(req.headers["content-length"] ?? Number.NaN);
-    const sized = Number.isSafeInteger(declared) && declared >= 0 && declared <= FILE_MAX_BYTES;
-    const release = room ? room(to, sized ? declared : Number.POSITIVE_INFINITY) : () => {};
-    if (!release) { req.resume(); return json(res, 413, { error: "there is no room for that file here now" }); }
+    if (room && !(Number.isSafeInteger(declared) && declared >= 0)) { req.resume(); return json(res, 411, { error: "say the size of the file" }); }
+    if (room && declared > FILE_MAX_BYTES) { req.resume(); return json(res, 413, { error: `a file may be at most ${Math.round(FILE_MAX_BYTES / (1024 * 1024))} MB` }); }
+    const release = room ? room(to, declared) : () => {};
+    if (!release) { req.resume(); return json(res, 429, { error: "there is no room for that file here now; try again later" }); }
     const limit = room ? declared : FILE_MAX_BYTES;
     let taken = 0;
     const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; done(taken > limit ? new Error("too large") : null, chunk); } });
     try {
+      mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
       await pipeline(req, capped, createWriteStream(to, { mode: 0o600 }));
     } catch {
       rmSync(to, { force: true });
@@ -96,9 +100,9 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     link.setLevel(peer, levelOf(req.headers[LEVEL_HEADER]));
     if ((level ?? PROTOCOL_LEVEL) > 1) res.setHeader(LEVEL_HEADER, String(level ?? PROTOCOL_LEVEL));
     if (body.data.fresh) link.sessionStarted(peer);
-    const frames = takes ? takes(body.data.frames, body.data.ack) : body.data.frames;
-    if (!frames) return json(res, 429, { error: "too many frames now; try again later" });
-    link.receive(peer, frames);
+    const taken = takes?.(body.data.frames, body.data.ack);
+    if (taken) res.setHeader(TAKEN_HEADER, String(taken.count));
+    link.receive(peer, taken ? taken.frames : body.data.frames);
     if (!stillLinked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
     if (body.data.wait > 0 && !link.hasOutgoing(peer, body.data.ack)) await hold(res, peer, body.data.ack, body.data.wait, power?.sleepSignal());
     if (power?.sleeping()) return answerAsleep(res, json);

@@ -32,7 +32,7 @@ import type { PassedFile } from "../host/handoff-files.ts";
 import type { PeerDeliveryReceipt } from "../peer-delivery.ts";
 import type { Level } from "../runtime/types.ts";
 import { endedSchema, stateSchema, type EndedLink, type LinkState, type Work } from "./link-state.ts";
-import { BRIEF_MAX, EXCHANGE_BYTES, FILES_MAX, LINK_EXPIRES_MS, PEERS_MAX, frameSchema, handoffOfRoot, isLinkedId, linkRoot, linkedId, parseLinked, peerKey,
+import { BRIEF_MAX, EXCHANGE_BYTES, FILES_MAX, LINK_EXPIRES_MS, PEERS_MAX, frameSchema, guestFrameSchema, handoffOfRoot, isLinkedId, linkRoot, linkedId, parseLinked, peerKey,
   type FileMeta, type FileWay, type Frame, type HandoffFrame, type LinkedBot, type Numbered, type Place, type ResultFrame } from "./protocol.ts";
 
 export type { EndedLink, LinkState } from "./link-state.ts";
@@ -436,6 +436,7 @@ export function createBotLink(deps: BotLinkDeps) {
   function dispatchResult(id: string): void {
     const work = state?.work[id], frame = work ? resultFrame(id, work) : null;
     if (!work || !frame) return;
+    if (policy && linkOf(work.peer).outbox.some((entry) => entry.frame.t === "result" && entry.frame.id === id)) return;
     const files = returned(work);
     if (!files.length) { send(work.peer, frame); return; }
     const withFiles: ResultFrame = { ...frame, files: metaOf(files) };
@@ -476,7 +477,7 @@ export function createBotLink(deps: BotLinkDeps) {
     if (accepting.has(frame.id)) return;
     accepting.add(frame.id);
     fetched(peer, frame.id, "sent", frame.files).then((files) => { settled(`in:${frame.id}`); start(peer, frame, files); }, (error) => {
-      if (!state?.peers[peer] || state.work[frame.id]) return;
+      if (!state?.peers[peer] || state.work[frame.id]) { if (policy) unspool(peer, frame.id); return; }
       // Not got yet: tried again on a timer, and when the requester sends the hand-off again with the next session.
       if (!isGone(error)) { log(`bot link: the files of ${frame.id} are not here yet (${said(error)})`); retryLater(`in:${frame.id}`, () => accept(peer, frame)); return; }
       settled(`in:${frame.id}`);
@@ -506,7 +507,7 @@ export function createBotLink(deps: BotLinkDeps) {
 
   function start(peer: string, frame: HandoffFrame, files: readonly PassedFile[]): void {
     const admitted = fetching.delete(frame.id);
-    if (!state || state.work[frame.id]) return;
+    if (!state || state.work[frame.id]) { if (policy && files.length) deps.files?.discard?.(files); return; }
     const root = linkRoot(frame.id);
     const address = { botId: linkedId(peer, frame.from.botId), threadId: root };
     const work = workFor(peer, frame, true);
@@ -591,6 +592,8 @@ export function createBotLink(deps: BotLinkDeps) {
         const work = state.work[frame.id];
         if (!work) {
           if (policy && fetching.get(frame.id) !== peer) return;
+          fetching.delete(frame.id);
+          settled(`in:${frame.id}`);
           state.work[frame.id] = { peer, root: linkRoot(frame.id), from: "", at: now() };
           recordResult(frame.id, { ok: false, text: STOPPED, outcome: "stopped" });
           return;
@@ -608,8 +611,9 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state) return;
     const at = now();
     let dropped = false;
+    const kept = (work: Work) => (policy ? atWork(work) : !work.done);
     for (const [id, work] of Object.entries(state.work)) {
-      if (work.done && (work.ackedAt !== undefined ? at - work.ackedAt > KEEP_ACKED_MS : at - work.at > KEEP_RESULTS_MS)) { delete state.work[id]; dropped = true; }
+      if (!kept(work) && (work.ackedAt !== undefined ? at - work.ackedAt > KEEP_ACKED_MS : at - work.at > KEEP_RESULTS_MS)) { delete state.work[id]; dropped = true; }
     }
     for (const [key, thread] of Object.entries(state.threads)) if (at - thread.at > KEEP_THREADS_MS) { delete state.threads[key]; dropped = true; }
     const oldest = <T extends { at: number }>(records: Record<string, T>, keep: (record: T) => boolean) => {
@@ -617,7 +621,7 @@ export function createBotLink(deps: BotLinkDeps) {
       if (extra <= 0) return;
       for (const [id] of Object.entries(records).filter(([, record]) => !keep(record)).sort(([, a], [, b]) => a.at - b.at).slice(0, extra)) { delete records[id]; dropped = true; }
     };
-    oldest(state.work, (work) => !work.done);
+    oldest(state.work, kept);
     oldest(state.threads, () => false);
     if (dropped) save();
   }
@@ -922,7 +926,6 @@ export function createBotLink(deps: BotLinkDeps) {
     incoming(peer: string, id: string, way: FileWay, index: number, name: string): string | null {
       if (!state?.peers[peer] || !deps.files || index < 0 || index >= FILES_MAX) return null;
       if (way === "sent" ? Boolean(state.work[id]) : pending.get(id)?.peer !== peer) return null;
-      mkdirSync(join(spoolOf(peer, id), way), { recursive: true, mode: 0o700 });
       return spoolFile(peer, id, way, index, name);
     },
     /** On the Cloud: a file a computer gets: one a hand-off out to that computer carries, or one a result for it returns. */
@@ -935,7 +938,7 @@ export function createBotLink(deps: BotLinkDeps) {
     /** Frames from a place, each checked; one that does not parse is dropped. */
     receive(peer: string, frames: readonly unknown[]): void {
       for (const raw of frames) {
-        const parsed = frameSchema.safeParse(raw);
+        const parsed = (policy ? guestFrameSchema : frameSchema).safeParse(raw);
         if (!parsed.success) { log("bot link: a frame that did not parse was dropped"); continue; }
         try { take(peer, parsed.data); } catch (error) { log(`bot link: ${parsed.data.t} failed (${String(error)})`); }
       }

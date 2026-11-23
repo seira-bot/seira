@@ -1,5 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,12 +7,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { AdminActionRow } from "../admin-activity.ts";
 import { RECORDS_MAX, SPOOL_KEEP_MS } from "../bot-link/link.ts";
-import { peerKey } from "../bot-link/protocol.ts";
+import { TAKEN_HEADER, peerKey } from "../bot-link/protocol.ts";
 import { createCoordinator, type Coordinator, type CoordinatorHost } from "../coordinator.ts";
 import { json } from "../harness/http.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
+import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { LinkedServerError, capMode, createLinkedServers, type LinkedServers, type LinkedServersDeps } from "./linked-servers.ts";
-import { ADMIT, BUSY_TEXT, createAdmission, createFrameBudget, createRefusalRecord } from "./linked-servers-admit.ts";
+import { ADMIT, BUSY_TEXT, createAdmission, createFrameBudget, createIntake, createRefusalRecord } from "./linked-servers-admit.ts";
+import { createSpoolRoom } from "./linked-servers-spool.ts";
 import { INVITE_TTL_MS, addInvite, cleanName, decodeInvite, encodeInvite, guestOrigin, hashSecret, liveInvite, pruneInvites, readLinks, writeLinks, type LinksFile } from "./linked-servers-store.ts";
 
 const dirs: string[] = [];
@@ -72,6 +74,13 @@ async function accepted(made: LinkedServers, origin: string) {
 }
 const handoff = (id: string) => ({ t: "handoff", id, to: "writer", from: { botId: "scout", name: "Scout", threadId: "scout-chat" }, thread: "t", text: "Do it", mode: "work", origin: { kind: "person" } });
 type Numbered = { seq: number; frame: { t: string } };
+/** One exchange as a joiner makes it: the status, how many of its frames the inviter took, and the answer. */
+const exchangeAt = (origin: string, token: string) => async (frames: unknown[], { ack = 0, fresh = false } = {}) => {
+  const response = await fetch(`${origin}/api/linked-servers/sync`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ...(fresh ? { fresh } : {}), ack, frames, wait: 0 }) });
+  return { status: response.status, taken: response.headers.get(TAKEN_HEADER), body: await response.json() as { frames?: Numbered[] } };
+};
+const hello = (id: string, name: string) => ({ t: "hello", place: { id, name }, bots: [] });
 const NO_FILES: LinkedServersDeps["files"] = { carried: () => [], store: async () => [], crossed: () => {} };
 const until = async (what: () => boolean, label: string, ms = 8_000) => {
   const end = Date.now() + ms;
@@ -105,6 +114,21 @@ describe("the link record", () => {
     pruneInvites(file, start + INVITE_TTL_MS);
     expect(liveInvite(file, late.code, start)).toBeUndefined();
     expect(file.invites).toEqual([]);
+  });
+
+  it("reads a record with fields it does not know, and still refuses a known field that is wrong", () => {
+    const dir = tempDir();
+    const path = join(dir, "linked-servers", "links.json");
+    mkdirSync(join(dir, "linked-servers"), { recursive: true });
+    const link = { id: "0123456789abcdef", role: "inviter", place: { id: "far", name: "Far", region: "north" }, exposed: ["writer"], cap: "ask", tokenHash: hashSecret("lsk_x"), createdAt: 1, color: "blue" };
+    writeFileSync(path, JSON.stringify({ v: 1, links: [link], invites: [{ hash: hashSecret("code"), expiresAt: 5, note: "x" }], ended: [{ key: "abcdef01", cap: "ask", at: 2, why: "x" }], later: true }));
+    const { color: _color, ...known } = link;
+    expect(readLinks(dir)).toEqual({ v: 1, links: [{ ...known, place: { id: "far", name: "Far" } }], invites: [{ hash: hashSecret("code"), expiresAt: 5 }], ended: [{ key: "abcdef01", cap: "ask", at: 2 }] });
+
+    const lines: string[] = [];
+    writeFileSync(path, JSON.stringify({ v: 1, links: [{ ...link, cap: "owner" }], invites: [] }));
+    expect(readLinks(dir, (line) => lines.push(line)).links).toEqual([]);
+    expect(lines).toHaveLength(1);
   });
 
   it("writes mode 600 and reads back only a record that parses", () => {
@@ -186,23 +210,40 @@ describe("admission", () => {
     expect(record.count("a")).toBe(1);
   });
 
-  it("takes the work frames of an exchange only while all of them fit in the link's sliding minute", () => {
+  it("counts what each link spent of its work frames in a sliding minute", () => {
     let now = 0;
     const budget = createFrameBudget(() => now, 10);
-    expect(budget.take("a", 0)).toBe(true);
-    expect(budget.take("a", 11)).toBe(false);
-    expect(budget.take("a", 6)).toBe(true);
+    expect(budget.left("a")).toBe(10);
+    budget.spend("a", 6);
+    expect(budget.left("a")).toBe(4);
     now = 30_000;
-    expect(budget.take("a", 5)).toBe(false);
-    expect(budget.take("a", 4)).toBe(true);
-    expect(budget.take("a", 1)).toBe(false);
-    expect(budget.take("b", 10)).toBe(true);
+    budget.spend("a", 4);
+    expect([budget.left("a"), budget.left("b")]).toEqual([0, 10]);
     now = ADMIT.windowMs;
-    expect(budget.take("a", 6)).toBe(true);
-    expect(budget.take("a", 1)).toBe(false);
+    expect(budget.left("a")).toBe(6);
     budget.forget("a");
-    expect(budget.take("a", 10)).toBe(true);
+    expect(budget.left("a")).toBe(10);
     expect(ADMIT.frames).toBeGreaterThanOrEqual(3 * ADMIT.perWindow);
+  });
+
+  it("takes a batch up to the first work frame past the budget, and applies the last hello once the hello budget has room", () => {
+    let now = 0;
+    const intake = createIntake(() => now, { frames: 3, hellos: 2 });
+    const cancel = (id: string) => ({ t: "cancel", id }), done = { t: "done", id: "x" };
+    expect(intake.take("a", [hello("far", "one"), cancel("1"), done, hello("far", "two"), cancel("2"), cancel("3"), cancel("4"), done], false))
+      .toEqual({ count: 6, frames: [hello("far", "two"), cancel("1"), done, cancel("2"), cancel("3")] });
+    expect(intake.take("a", [cancel("4")], false)).toEqual({ count: 0, frames: [] });
+    expect(intake.take("a", [done, cancel("4")], false)).toEqual({ count: 1, frames: [done] });
+    expect(intake.take("b", [done, cancel("1"), hello("far", "x")], true)).toEqual({ count: 1, frames: [done] });
+    expect(intake.take("b", [hello("far", "x"), done], true)).toEqual({ count: 2, frames: [hello("far", "x"), done] });
+
+    expect(intake.take("a", [hello("far", "three")], false)).toEqual({ count: 1, frames: [hello("far", "three")] });
+    expect(intake.take("a", [hello("far", "four"), hello("far", "five")], false)).toEqual({ count: 2, frames: [] });
+    now = ADMIT.windowMs;
+    expect(intake.take("a", [], false)).toEqual({ count: 0, frames: [hello("far", "five")] });
+    expect(intake.take("a", [cancel("4"), cancel("5"), cancel("6"), cancel("7")], false).count).toBe(3);
+    intake.forget("a");
+    expect(intake.take("a", [cancel("8")], false).count).toBe(1);
   });
 });
 
@@ -377,7 +418,7 @@ describe("the linked servers manager", () => {
     expect(made.list()[0]?.state).toBe("ended");
   });
 
-  it("counts a wrong credential on the exchange and file paths as a failed try, and refuses a sender with too many", async () => {
+  it("counts a wrong credential on the exchange and file paths as a failed try, refuses a sender with too many, and always serves a right one", async () => {
     let allowed = true;
     const { made, failed } = manager("head", { attemptAllowed: () => allowed });
     const origin = await serving(made);
@@ -394,14 +435,14 @@ describe("the linked servers manager", () => {
     expect(failed).toHaveLength(3);
 
     allowed = false;
-    expect((await sync(token)).status).toBe(429);
+    expect((await sync(token)).status).toBe(200);
     expect((await sync(stranger)).status).toBe(429);
     expect(failed).toHaveLength(3);
   });
 
-  it("refuses a file when the link's waiting files would pass their bytes or their number of hand-offs, until they are swept", async () => {
+  it("refuses a file for now when the link's waiting files would pass their bytes, files or hand-offs, and one that does not say its size or says too much", async () => {
     let now = Date.now();
-    const { made, dataDir } = manager("head", { now: () => now, files: NO_FILES, limits: { spool: { bytes: 100, ids: 2 } } });
+    const { made, dataDir } = manager("head", { now: () => now, files: NO_FILES, limits: { spool: { bytes: 100, ids: 2, files: 3 } } });
     const origin = await serving(made);
     const { token, linkId } = await accepted(made, origin);
     const spool = join(dataDir, "linked-servers", linkId, "bot-link-files");
@@ -410,14 +451,24 @@ describe("the linked servers manager", () => {
       (await fetch(at(id, index), { method: "PUT", headers: { authorization: `Bearer ${token}` }, body: new Uint8Array(bytes) })).status;
 
     expect(await put("h-1", 0, 60)).toBe(200);
-    expect(await put("h-1", 1, 50)).toBe(413);
-    expect(await put("h-2", 0, 40)).toBe(200);
-    expect(await put("h-3", 0, 0)).toBe(413);
+    expect(await put("h-1", 1, 50)).toBe(429);
+    expect(await put("h-2", 0, 20)).toBe(200);
+    expect(await put("h-3", 0, 0)).toBe(429);
+    expect(await put("h-2", 1, 10)).toBe(200);
+    expect(await put("h-2", 2, 0)).toBe(429);
     expect(await put("h-1", 0, 60)).toBe(200);
     const unsized = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(1)); controller.close(); } });
-    expect((await fetch(at("h-4", 0), { method: "PUT", headers: { authorization: `Bearer ${token}` }, body: unsized, duplex: "half" } as RequestInit)).status).toBe(413);
+    expect((await fetch(at("h-4", 0), { method: "PUT", headers: { authorization: `Bearer ${token}` }, body: unsized, duplex: "half" } as RequestInit)).status).toBe(411);
+    const oversized = await new Promise<number>((resolve, reject) => {
+      const target = new URL(at("h-4", 0));
+      const asking = httpRequest({ host: target.hostname, port: target.port, path: `${target.pathname}${target.search}`, method: "PUT",
+        headers: { authorization: `Bearer ${token}`, "content-length": String(FILE_MAX_BYTES + 1) } }, (response) => { response.resume(); resolve(response.statusCode ?? 0); asking.destroy(); });
+      asking.on("error", reject);
+      asking.flushHeaders();
+    });
+    expect(oversized).toBe(413);
     expect(readdirSync(spool)).toHaveLength(2);
-    expect(readdirSync(spool).flatMap((one) => readdirSync(join(spool, one, "sent")))).toEqual(["0-a.txt", "0-a.txt"]);
+    expect(readdirSync(spool).flatMap((one) => readdirSync(join(spool, one, "sent"))).sort()).toEqual(["0-a.txt", "0-a.txt", "1-a.txt"]);
 
     now += SPOOL_KEEP_MS + 60_000;
     made.start();
@@ -425,44 +476,86 @@ describe("the linked servers manager", () => {
     expect(await put("h-3", 0, 100)).toBe(200);
   });
 
-  it("takes no frames of an exchange that would pass the link's work frames for the minute, and leaves no trace of a cancel for unknown work", async () => {
+  it("refuses room in a spool that holds more than its limits, makes no folder for a refused hand-off, and counts a file on its way", () => {
+    const root = tempDir("spool");
+    const room = createSpoolRoom(root, { bytes: 1_000, ids: 2, files: 3 });
+    mkdirSync(join(root, "a", "sent"), { recursive: true });
+    for (const index of [0, 1, 2, 3]) writeFileSync(join(root, "a", "sent", `${index}-x.txt`), "x");
+    expect(room(join(root, "a", "sent", "4-x.txt"), 1)).toBeNull();
+    expect(room(join(root, "b", "sent", "0-x.txt"), 1)).toBeNull();
+    expect(existsSync(join(root, "b"))).toBe(false);
+    expect(room(join(tempDir("elsewhere"), "0-x.txt"), 1)).toBeNull();
+
+    const empty = tempDir("free");
+    const free = createSpoolRoom(empty, { bytes: 10, ids: 1, files: 1 });
+    const release = free(join(empty, "a", "sent", "0-x.txt"), 10);
+    expect(release).not.toBeNull();
+    expect(free(join(empty, "a", "sent", "1-x.txt"), 0)).toBeNull();
+    release!();
+    expect(free(join(empty, "a", "sent", "1-x.txt"), 0)).not.toBeNull();
+  });
+
+  it("takes the frames of an exchange up to the first work frame past the link's work frames for the minute, and leaves no trace of a cancel for unknown work", async () => {
     let now = Date.now();
     const { made, rows, dataDir } = manager("head", { now: () => now, limits: { frames: 4 } });
     const origin = await serving(made);
     const { token, linkId } = await accepted(made, origin);
     const state = join(dataDir, "linked-servers", linkId, "bot-link.json");
-    const sync = (frames: unknown[], fresh = false) => post(`${origin}/api/linked-servers/sync`, { ...(fresh ? { fresh } : {}), ack: 0, frames, wait: 0 }, { authorization: `Bearer ${token}` });
+    const sync = exchangeAt(origin, token);
     const cancels = (from: number, count: number) => Array.from({ length: count }, (_, index) => ({ t: "cancel", id: `unknown-${from + index}` }));
-    expect((await sync([], true)).status).toBe(200);
+    const done = { t: "done", id: "unknown-0" };
+    expect((await sync([], { fresh: true })).status).toBe(200);
     const kept = readFileSync(state, "utf8"), written = rows.length;
 
     const answer = await sync(cancels(0, 4));
-    expect(answer.status).toBe(200);
-    expect((answer.body.frames as Numbered[]).map((one) => one.frame.t)).not.toContain("result");
+    expect([answer.status, answer.taken]).toEqual([200, "4"]);
+    expect((answer.body.frames ?? []).map((one) => one.frame.t)).not.toContain("result");
     expect(readFileSync(state, "utf8")).toBe(kept);
     expect(rows).toHaveLength(written);
 
-    expect((await sync(cancels(4, 1))).status).toBe(429);
-    expect((await sync([{ t: "done", id: "unknown-0" }])).status).toBe(200);
+    expect(await sync([...cancels(4, 1), done])).toMatchObject({ status: 200, taken: "0" });
+    expect(await sync([done, ...cancels(4, 1)])).toMatchObject({ status: 200, taken: "1" });
     now += ADMIT.windowMs;
-    expect((await sync(cancels(5, 5))).status).toBe(429);
-    expect((await sync(cancels(5, 4))).status).toBe(200);
-    expect((await sync(cancels(9, 1))).status).toBe(429);
+    expect((await sync(cancels(5, 5))).taken).toBe("4");
+    expect((await sync(cancels(9, 1))).taken).toBe("0");
   });
 
   it("takes the work frames an honest server sends in a minute: its hand-offs, their cancels and its results", async () => {
     const { made } = manager("head");
     const origin = await serving(made);
     const { token } = await accepted(made, origin);
-    const sync = (frames: unknown[]) => post(`${origin}/api/linked-servers/sync`, { ack: 0, frames, wait: 0 }, { authorization: `Bearer ${token}` });
+    const sync = exchangeAt(origin, token);
     const ids = Array.from({ length: ADMIT.perWindow }, (_, index) => `h-${index}`);
-    expect((await sync(ids.map(handoff))).status).toBe(200);
-    expect((await sync(ids.map((id) => ({ t: "cancel", id })))).status).toBe(200);
-    expect((await sync(ids.map((id) => ({ t: "result", id: `out-${id}`, ok: true, text: "" })))).status).toBe(200);
+    for (const frames of [ids.map(handoff), ids.map((id) => ({ t: "cancel", id })), ids.map((id) => ({ t: "result", id: `out-${id}`, ok: true, text: "" }))]) {
+      expect(await sync(frames)).toMatchObject({ status: 200, taken: String(frames.length) });
+    }
     const rest = ADMIT.frames - 3 * ADMIT.perWindow;
     expect(rest).toBeGreaterThan(0);
-    expect((await sync(Array.from({ length: rest }, (_, index) => ({ t: "cancel", id: ids[index % ids.length] })))).status).toBe(200);
-    expect((await sync([{ t: "cancel", id: "h-0" }])).status).toBe(429);
+    expect((await sync(Array.from({ length: rest }, (_, index) => ({ t: "cancel", id: ids[index % ids.length] })))).taken).toBe(String(rest));
+    expect(await sync([{ t: "cancel", id: "h-0" }])).toMatchObject({ status: 200, taken: "0" });
+  });
+
+  it("applies only the last hello of a batch, and no more hellos in a minute than a link may send", async () => {
+    let now = Date.now(), changed = 0;
+    const { made } = manager("head", { now: () => now, limits: { hellos: 2 }, directoryChanged: () => { changed += 1; } });
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    const from = (name: string) => hello("branch-environment", name);
+    expect((await sync([], { fresh: true })).status).toBe(200);
+    const before = changed;
+    const seen = () => [changed - before, made.list()[0]!.name];
+
+    expect((await sync(Array.from({ length: 50 }, (_, index) => from(`Branch ${index}`)))).taken).toBe("50");
+    expect(seen()).toEqual([1, "Branch 49"]);
+    await sync([from("Second")]);
+    expect(seen()).toEqual([2, "Second"]);
+    await sync([from("Third")]);
+    await sync([from("Fourth")]);
+    expect(seen()).toEqual([2, "Second"]);
+    now += ADMIT.windowMs;
+    await sync([]);
+    expect(seen()).toEqual([3, "Fourth"]);
   });
 
   it("writes one refusal row a minute for a link, with the count, and no hand-off row for a refused hand-off", async () => {
@@ -479,22 +572,53 @@ describe("the linked servers manager", () => {
     expect(rows.filter((row) => row.action === "linked-server.handoff")).toEqual([]);
   });
 
-  it("takes no work frames while the frames that wait for the link pass its bound, until it acknowledges them", async () => {
+  it("takes no work frame while the frames that wait for the link pass its bound, until it acknowledges them", async () => {
     const { made, dataDir } = manager("head", { limits: { outbox: 3 } });
     const origin = await serving(made);
     const { token, linkId } = await accepted(made, origin);
     const work = () => Object.keys((JSON.parse(readFileSync(join(dataDir, "linked-servers", linkId, "bot-link.json"), "utf8")) as { work: Record<string, unknown> }).work);
-    const sync = (frames: unknown[], ack = 0, fresh = false) =>
-      post(`${origin}/api/linked-servers/sync`, { ...(fresh ? { fresh } : {}), ack, frames, wait: 0 }, { authorization: `Bearer ${token}` });
-    expect((await sync([], 0, true)).status).toBe(200);
+    const sync = exchangeAt(origin, token);
+    expect((await sync([], { fresh: true })).status).toBe(200);
     const answer = await sync([handoff("h-1"), handoff("h-2"), handoff("h-3")]);
-    const waiting = answer.body.frames as Numbered[];
+    expect(answer.taken).toBe("3");
+    const waiting = answer.body.frames ?? [];
     expect(waiting.map((one) => one.frame.t)).toEqual(["hello", "result", "result", "result"]);
 
-    expect((await sync([handoff("h-4"), { t: "cancel", id: "h-1" }])).status).toBe(200);
+    expect(await sync([handoff("h-4"), { t: "cancel", id: "h-1" }])).toMatchObject({ status: 200, taken: "0" });
     expect(work()).toEqual(["h-1", "h-2", "h-3"]);
-    expect((await sync([handoff("h-4")], Math.max(...waiting.map((one) => one.seq)))).status).toBe(200);
+    expect((await sync([handoff("h-4")], { ack: Math.max(...waiting.map((one) => one.seq)) })).taken).toBe("1");
     expect(work()).toEqual(["h-1", "h-2", "h-3", "h-4"]);
+  });
+
+  it("as the joiner, takes an answer's frames up to its budget, applies only the last hello, and gets the rest again later", async () => {
+    let now = Date.now();
+    const sent = [{ seq: 1, frame: hello("head-environment", "Head one") }, ...Array.from({ length: 6 }, (_, index) => ({ seq: index + 2, frame: handoff(`h-${index + 1}`) })),
+      { seq: 8, frame: hello("head-environment", "Head office") }];
+    const acks: number[] = [];
+    const fake = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new URL(String(input)).pathname === "/api/linked-servers/accept") {
+        return new Response(JSON.stringify({ token: `lsk_${"F".repeat(43)}`, place: { id: "head-environment", name: "Head" } }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body)) as { ack: number; frames: unknown[]; wait: number };
+      acks.push(body.ack);
+      const news = sent.filter((one) => one.seq > body.ack);
+      if (!news.length && body.wait > 0) await new Promise((resolve) => setTimeout(resolve, 50));
+      return new Response(JSON.stringify({ session: "s1", frames: news }), { status: 200, headers: { [TAKEN_HEADER]: String(body.frames.length) } });
+    }) as typeof fetch;
+    const { made, dataDir } = manager("branch", { fetch: fake, now: () => now, limits: { frames: 4 } });
+    const view = await made.join(encodeInvite({ origin: "http://127.0.0.1:9", name: "Head", code: "C".repeat(43) }), { kind: "cli" });
+    const records = () => Object.keys((JSON.parse(readFileSync(join(dataDir, "linked-servers", view.id, "bot-link.json"), "utf8")) as { work: Record<string, unknown> }).work);
+    const acked = () => Math.max(0, ...acks);
+
+    await until(() => acked() === 5 && records().length === 4, "the first four hand-offs are taken");
+    expect(made.list()[0]!.name).toBe("Head one");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect([acked(), records()]).toEqual([5, ["h-1", "h-2", "h-3", "h-4"]]);
+
+    now += ADMIT.windowMs;
+    await until(() => acked() === 8, "the rest is taken");
+    expect(records()).toEqual(["h-1", "h-2", "h-3", "h-4", "h-5", "h-6"]);
+    expect(made.list()[0]!.name).toBe("Head office");
   });
 
   it("keeps a link's work records within their bound at each refusal, not only at the hourly tidy", async () => {
@@ -514,5 +638,27 @@ describe("the linked servers manager", () => {
     expect(kept).toHaveLength(RECORDS_MAX);
     expect(kept).toEqual(expect.arrayContaining(["new-1", "new-2", "new-3"]));
     expect(kept).not.toContain("old-0");
+  });
+
+  it("keeps the record of work still at work when it prunes, so the open hand-offs are counted right", async () => {
+    const first = manager("head");
+    const { linkId, key } = await accepted(first.made, await serving(first.made));
+    first.made.update(linkId, { exposed: ["writer"] }, { kind: "cli" });
+    first.made.close();
+    const path = join(first.dataDir, "linked-servers", linkId, "bot-link.json");
+    const records = () => (JSON.parse(readFileSync(path, "utf8")) as { work: Record<string, { child?: string; done?: { text?: string; outcome?: string } }> }).work;
+    const later = Date.now() + 60 * 60_000;
+    writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")) as object, work: Object.fromEntries(Array.from({ length: RECORDS_MAX }, (_, index) =>
+      [`old-${index}`, { peer: key, root: `link-old-${index}`, from: "", at: later + index, done: { ok: false, outcome: "refused" } }])) }), { mode: 0o600 });
+
+    const { made } = manager("again", { dataDir: first.dataDir, openThread: () => "writer-work", hasThread: () => true });
+    const notes = Array.from({ length: ADMIT.open }, (_, index) => `note-${index}`);
+    made.instances()[0]!.link.receive(key, notes.map((id) => ({ ...handoff(id), mode: "notify" })));
+    made.instances()[0]!.link.receive(key, [handoff("one-more")]);
+
+    const kept = records();
+    expect(Object.keys(kept)).toHaveLength(RECORDS_MAX);
+    expect(notes.every((id) => kept[id]?.done !== undefined && kept[id]?.child !== undefined)).toBe(true);
+    expect(kept["one-more"]?.done).toMatchObject({ outcome: "refused", text: BUSY_TEXT });
   });
 });
