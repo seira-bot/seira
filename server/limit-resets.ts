@@ -91,6 +91,8 @@ export function nearLimitNote(limit: EngineLimit | undefined, name: string, time
 export interface LimitClockOptions {
   /** The signed-in subscription engines whose usage can be read. */
   accounts: () => PlanAccount[];
+  /** The address an account is signed in with, when its own sign-in says one. */
+  email?: (engine: string) => string | undefined;
   /** Plan usage for those engines; the default reads each engine's own sign-in, or SEIRA_TEST_PLAN_USAGE_FILE. */
   loadUsage?: (accounts: PlanAccount[], refresh: boolean) => Promise<PlanUsageReport>;
   /** Something is waiting on a reset time, so usage is checked again on its own. */
@@ -180,7 +182,12 @@ export class LimitResetClock {
       if (!known?.blocked) limit.held = true;
       engines.set(engine, limit);
     }
-    return { checkedAt: this.checkedAt, engines: [...engines.values()] };
+    return { checkedAt: this.checkedAt, engines: [...engines.values()].map((limit) => this.withEmail(limit)) };
+  }
+
+  private withEmail(limit: EngineLimit): EngineLimit {
+    const email = this.options.email?.(limit.engine);
+    return email ? { ...limit, email } : limit;
   }
 
   /** A usage reading counts only while its account's usage is read: one taken before its meter was turned off (or a
