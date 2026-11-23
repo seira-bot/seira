@@ -49,6 +49,37 @@ needed.
 
 Work that the other side started here cannot go on to a bot of a third server.
 
+## What the other side cannot send
+
+The other side holds a credential, but this side does not trust what it sends.
+
+- Names, hand-off texts, result texts and file names lose their control and
+  invisible characters before a bot or a person reads them. A name becomes one
+  short line.
+- A frame whose id holds anything but letters, digits, `_` and `-` is dropped.
+- An error inside this server gives the other side a fixed answer. The cause
+  goes to the log of this side only.
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Links per server | 20 |
+| Open hand-offs per link | 8 |
+| New hand-offs per link | 30 in 60 seconds |
+| Work frames per link | 150 in a minute |
+| Unacknowledged frames per link | 2,000 |
+| Records per link | 1,000 |
+| File size | 100 MB |
+| Files held for a link | 16 hand-offs, 320 files, 2 GiB, about 1 day |
+| Exchanges per link | 120 in 60 seconds |
+| New sessions per link | 10 in 60 seconds |
+| File download | 10 minutes in total, and 60 seconds with no bytes |
+
+The joining side keeps at least 1 second between exchanges and 10 seconds
+between new sessions. An honest pair stays below these limits, also after a
+restart of either side.
+
 ## Who may change a link
 
 Only an admin. The routes under `/api/linked-servers` answer an admin only. The
@@ -90,10 +121,26 @@ not a paired client.
 - A side whose hand-off files never arrive keeps the open slots of those
   hand-offs. A link allows at most 8 open hand-offs and 30 new hand-offs in
   each minute.
+- A bot that an admin exposes can give the other side's work to bots here
+  that are not exposed. The approval cap of the link still applies to that
+  work.
+- A link can hold up to 2 GiB of files for about 1 day. The attachment store
+  has no quota per link.
+- Each new thread from the other side makes a new conversation here. Nothing
+  removes it.
+- When both sides hold 2,000 unacknowledged frames, neither side takes new
+  work until acknowledgements arrive.
+- A file of 100 MB needs at least 1.4 Mbit/s to pass the 10-minute limit. A
+  file name longer than 255 UTF-16 units does not cross a link.
+- The address in an invite must be https. An https address that points to a
+  private network is accepted.
 
 ## Where the code is
 
 - `server/host/linked-servers.ts` keeps the links and the exchange.
+- `server/host/linked-servers-admit.ts` holds the intake limits.
+- `server/host/linked-servers-text.ts` cleans what the other side sends.
+- `server/routes/bot-link-exchange.ts` holds the exchange and the file route.
 - `server/routes/linked-servers.ts` holds the admin routes.
 - `src/components/LinkedServersSection.tsx` is the page.
 - `docs/verification/linked-servers.md` tells how to check all of it.
