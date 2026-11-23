@@ -1941,6 +1941,7 @@ function createWindow({ deferNavigation = false } = {}) {
     },
   });
   mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win); textSize.attach(win.webContents); win.on("move", () => textSize.fit());
+  for (const event of ["unmaximize", "leave-full-screen"]) win.on(event, () => textSize.fit({ grow: true }));
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {
