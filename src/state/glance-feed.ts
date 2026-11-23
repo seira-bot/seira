@@ -85,7 +85,7 @@ export function buildGlanceFeed(input: { bots: GlanceBotInput[]; asks: GlanceAsk
     const state = picked ? (picked.kind === "approval" ? "needs" : "question")
       : bot.status.waiting ? "needs" : bot.status.failed ? "failed" : bot.status.working ? "working" : null;
     if (!state) continue;
-    const line = state === "needs" ? labels.needsYou : state === "question" ? labels.question : state === "failed" ? labels.failed : bot.line || labels.working;
+    const line = state === "working" ? bot.line ?? "" : "";
     bots.push({
       botId: clip(bot.botId, GLANCE_LIMITS.id),
       threadId: clip(picked?.threadId ?? bot.threadId, GLANCE_LIMITS.id),

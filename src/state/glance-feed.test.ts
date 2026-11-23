@@ -20,7 +20,7 @@ describe("buildGlanceFeed", () => {
 
   it("shows an approval as needs, with canAlways and the asking thread", () => {
     const [one] = build([bot({ status: { ...idle, waiting: true } })], [ask()]).bots;
-    expect(one).toMatchObject({ state: "needs", threadId: "t9", line: labels.needsYou, ask: { kind: "approval", requestId: "r1", choices: [], canAlways: true } });
+    expect(one).toMatchObject({ state: "needs", threadId: "t9", line: "", ask: { kind: "approval", requestId: "r1", choices: [], canAlways: true } });
   });
 
   it("shows a question with up to 4 choices", () => {
@@ -36,19 +36,19 @@ describe("buildGlanceFeed", () => {
     expect(typed.ask!.choices).toEqual([]);
   });
 
-  it("orders needs and questions, then failed, then working; failed and working use their words", () => {
+  it("orders needs and questions, then failed, then working; only working carries its own words", () => {
     const feed = build([
       bot({ botId: "w", line: "Searching the web" }),
       bot({ botId: "f", status: { ...idle, failed: true } }),
       bot({ botId: "q" }),
     ], [ask({ botId: "q", kind: "question", choices: ["A"] })]);
     expect(feed.bots.map((one) => [one.botId, one.state, one.line])).toEqual([
-      ["q", "question", labels.question], ["f", "failed", labels.failed], ["w", "working", "Searching the web"],
+      ["q", "question", ""], ["f", "failed", ""], ["w", "working", "Searching the web"],
     ]);
   });
 
-  it("falls back to the working word without a live phrase", () => {
-    expect(build([bot()]).bots[0]!.line).toBe(labels.working);
+  it("leaves the line empty without a live phrase, so Glance shows the state word once", () => {
+    expect(build([bot()]).bots[0]!.line).toBe("");
   });
 
   it("drops an external avatar and a bad colour, keeps a same-origin avatar and a hex colour", () => {

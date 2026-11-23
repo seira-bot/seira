@@ -23,11 +23,11 @@ const bot = (botId, name, color, state, line, more = {}) => ({ botId, threadId: 
 const felix = bot("felix", "Felix", "#4f8dff", "working", "Searching the web", { startedAt: START - 600_000 });
 const rocco = bot("rocco", "Rocco", "#a78bfa", "working", "Writing the report", { startedAt: START - 120_000 });
 const approval = (detail, canAlways = true) => ({ kind: "approval", requestId: "r-bix", title: "Bix wants to run a command", choices: [], detail, canAlways });
-const bix = (ask) => bot("bix", "Bix", "#f5a524", "needs", LABELS.needsYou, { ask });
-const nova = bot("nova", "Nova", "#3ccf8e", "question", LABELS.question, {
+const bix = (ask) => bot("bix", "Bix", "#f5a524", "needs", "", { ask });
+const nova = bot("nova", "Nova", "#3ccf8e", "question", "", {
   ask: { kind: "question", requestId: "r-nova", title: "Which deck should I update?", choices: [{ id: "0", label: "Q3 board deck" }, { id: "1", label: "Sales kickoff" }, { id: "2", label: "Both" }], detail: "", canAlways: false },
 });
-const many = ["Ana", "Ben", "Cy", "Dee", "Eli", "Fay"].map((name, index) => bot(name.toLowerCase(), name, ["#4f8dff", "#a78bfa", "#f472b6", "#22d3ee", "#facc15", "#fb923c"][index], "working", "Working", { startedAt: START - index * 1000 }));
+const many = ["Ana", "Ben", "Cy", "Dee", "Eli", "Fay"].map((name, index) => bot(name.toLowerCase(), name, ["#4f8dff", "#a78bfa", "#f472b6", "#22d3ee", "#facc15", "#fb923c"][index], "working", "", { startedAt: START - index * 1000 }));
 
 /** Each scene: the feeds the page sends in order, and what the person does after the last render. */
 const SCENES = [
@@ -39,7 +39,7 @@ const SCENES = [
   ["needs-approval-long", [[felix], [felix, bix(approval("rsync -av --delete ./build/ deploy@203.0.113.10:/srv/www/site/ && ssh deploy@203.0.113.10 'systemctl restart site-web site-worker && journalctl -u site-web -n 50 --no-pager'"))]]],
   ["needs-no-detail", [[felix], [felix, bix(approval("", false))]]],
   ["question", [[felix], [felix, nova]]],
-  ["failed", [[felix, rocco], [felix, { ...rocco, state: "failed", line: LABELS.failed }]], "click"],
+  ["failed", [[felix, rocco], [felix, { ...rocco, state: "failed", line: "" }]], "click"],
   ["done", [[felix, rocco], [felix]]],
   ["could-not-send", [[felix], [felix, bix(approval("pnpm db:migrate --env staging"))]], "allow-fails"],
 ];

@@ -38,7 +38,8 @@ export interface GlanceBot {
   /** The bot's colour as #rrggbb, or null. */
   color: string | null;
   state: GlanceBotState;
-  /** One line in plain words, for example "Searching the web". Never a raw command. */
+  /** What a working bot does, in plain words, for example "Searching the web". Never a raw command. Empty when the
+   * state word says it all. */
   line: string;
   /** When the current turn started, in milliseconds since the epoch, or null. */
   startedAt: number | null;
