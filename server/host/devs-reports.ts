@@ -1,4 +1,5 @@
-// @devs: a person's message that tags it makes exactly one bug report draft for the Seira team. The bot answering it is
+// @devs: a person's message that tags it makes exactly one bug report draft for the Seira team. A bot that calls
+// report_bug for a message a person wrote without the tag, when they ask it to report a problem, makes one too. The bot answering it is
 // asked (a note on its turn, and report_bug) to add a summary; when none comes, because its engine has no tools, its
 // turn failed, it never called report_bug or no bot answered, the server writes the draft with its own facts once
 // nothing runs in the conversation any more. The person's message and that summary are the only words in it, never
@@ -60,6 +61,8 @@ const MAX_WAITING = 50;
 /** A line older than this is history arriving (a restore, a move), not a person writing now. */
 const FRESH_MS = 10 * 60_000;
 const REPEAT_MS = 30 * 60_000;
+const ALREADY_PREPARED = "Already prepared: report_bug writes one draft per message. Do not call it again for it.";
+const NO_DRAFT = "No draft: report_bug writes a bug report for a message a person wrote, and no person wrote the message you are answering.";
 const SCANNED_LINES = 300;
 
 /** The first question about open reports after a start (an update starts the server, and is when a fix arrives), then how often. */
@@ -264,7 +267,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   }
   const sending = new Map<string, Promise<BugDraftView | DraftRefusal>>();
   const retrying = new Set<Queued>();
-  const lastSent = new Map<string, { at: number }>();
+  const lastSent = new Map<string, { at: number; messageId: string }>();
   const seen = new Set<string>();
   /** Failed rows already read for an offer, so a patch to the same row is not read again. */
   const considered = new Set<string>();
@@ -444,7 +447,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   /** @devs: the draft for the person's message, written from the bot's summary or the server's own facts. Nothing is sent. */
   function prepare(entry: Waiting, author: Author): Draft | null {
     waiting = waiting.filter((one) => one.messageId !== entry.messageId);
-    lastSent.set(entry.threadId, { at: now() });
+    lastSent.set(entry.threadId, { at: now(), messageId: entry.messageId });
     // A message nobody can be named for gets no draft: nobody could read or send it.
     const person = reactorOf(entry.sender?.id);
     if (person === null) return null;
@@ -658,17 +661,44 @@ export function createDevsReports(deps: DevsReportsDeps) {
     }
   }
 
-  /** report_bug from the bot answering a @devs message in this conversation: the draft, never a send. */
+  /** The person's line that a turn in this conversation answers, when a person wrote it and no routine or teammate bot did. */
+  function askedLine(threadId: string): Message | null {
+    let path: readonly Message[];
+    try { path = store.activePath(threadId); } catch { return null; }
+    const line = path.findLast((one) => one.role === "user" && one.kind === "text");
+    if (!line?.text || line.peerAsk || line.aside || line.automated) return null;
+    if (!line.sendId && deps.automated(threadId)) return null;
+    return line;
+  }
+
+  const prepared = (threadId: string, line: Message) => {
+    const last = lastSent.get(threadId);
+    return line.bugOffer !== undefined || drafts.some((one) => one.anchorId === line.id && one.from === "devs")
+      || (last !== undefined && last.messageId === line.id && now() - last.at < REPEAT_MS);
+  };
+
+  /** report_bug from the bot answering a @devs message, or a message in which a person asks for a report: the draft, never a send. */
   function fromBot(botId: string, threadId: string, summary: BotSummary): { status: number; text: string } {
     const bot = store.bot(botId);
-    const entry = waiting.filter((one) => one.threadId === threadId).at(-1);
-    if (!bot || !entry) {
+    if (!bot) return { status: 409, text: NO_DRAFT };
+    const waited = waiting.filter((one) => one.threadId === threadId).at(-1);
+    const asked = waited ? null : askedLine(threadId);
+    const entry = waited ?? (asked && !prepared(threadId, asked) ? waitingFrom(threadId, asked) : undefined);
+    if (!entry) {
       const last = lastSent.get(threadId);
-      if (last && now() - last.at < REPEAT_MS) return { status: 200, text: "Already prepared: report_bug writes one draft per @devs message. Do not call it again for it." };
-      return { status: 409, text: "report_bug works only for a message that tags @devs, once per message. To report a problem to the Seira team, the person types @devs and a few words about what went wrong." };
+      if (asked || (last && now() - last.at < REPEAT_MS)) return { status: 200, text: ALREADY_PREPARED };
+      return { status: 409, text: NO_DRAFT };
     }
     if (!prepare(entry, { bot, summary })) return { status: 200, text: "No draft: nobody in this conversation can read and send it. Do not call report_bug again for it." };
     return { status: 200, text: `Ready for the person to review. Tell them this line in your reply, word for word: "${draftLine(languageFor(entry.sender?.id))}"` };
+  }
+
+  /** What a person's line becomes while it waits for a draft: its text and words, redacted. */
+  function waitingFrom(threadId: string, line: Message, names: string[] = namesBeforeDevs()): Waiting {
+    const redact = (text: string) => clip(redactReportText(text, secrets()), 3_000);
+    return { messageId: line.id, threadId, at: line.at, text: redact(line.text ?? ""),
+      words: redact(ownWords(line.text ?? "").map((part) => withoutDevsTags(part, names)).filter(Boolean).join("\n\n")),
+      ...(line.sender ? { sender: { name: line.sender.name, ...(line.sender.id ? { id: line.sender.id } : {}) } } : {}) };
   }
 
   function personWrote(threadId: string, line: Message): void {
@@ -678,13 +708,10 @@ export function createDevsReports(deps: DevsReportsDeps) {
     if (!typed.some((part) => tagsDevs(part))) return;
     const names = namesBeforeDevs();
     if (!typed.some((part) => tagsDevs(part, names))) return;
-    const own = ownWords(line.text);
     seen.add(line.id);
     if (seen.size > 1_000) seen.delete(seen.values().next().value!);
     if (waiting.length >= MAX_WAITING) return notice(threadId, { ok: false, line: fullLine(MAX_OUTBOX, languageFor(line.sender?.id)) });
-    const redact = (text: string) => clip(redactReportText(text, secrets()), 3_000);
-    waiting.push({ messageId: line.id, threadId, at: line.at, text: redact(line.text), words: redact(own.map((part) => withoutDevsTags(part, names)).filter(Boolean).join("\n\n")),
-      ...(line.sender ? { sender: { name: line.sender.name, ...(line.sender.id ? { id: line.sender.id } : {}) } } : {}) });
+    waiting.push(waitingFrom(threadId, line, names));
     save();
     timer?.poke();
   }

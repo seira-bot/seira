@@ -145,3 +145,48 @@ it("lists the Monthly window in the card", () => {
   expect(row.textContent).toContain("Monthly");
   expect(row.textContent).toContain("40% left");
 });
+
+const WEEK = new Date(2026, 9, 24, 10, 59, 0).getTime();
+const account = (engine: string, name: string, used: number, resetsAt: number, email?: string): EngineLimit => ({
+  engine, name, driver: "claude", window: "5-hour", usedPercent: used, resetsAt, blocked: false,
+  windows: [{ window: "5-hour", usedPercent: used, resetsAt }, { window: "weekly", usedPercent: used / 2, resetsAt: WEEK }],
+  ...(email ? { email } : {}),
+});
+const pill = (engine: string) => card()!.querySelector<HTMLButtonElement>(`[data-usage-engine=${engine}]`)!;
+
+it("shows each account of one provider its own numbers and reset times", () => {
+  fixture.state = { bots: [bot("scout", "nana")], selectedId: "scout" };
+  serve([account("nana", "nana", 1, RESET), account("affan", "affan", 60, new Date(2026, 9, 19, 13, 20, 0).getTime())]);
+  flushSync(() => ring(mount(false))!.click());
+  const row = () => card()!.querySelector("[data-usage-row=5-hour]")!.textContent;
+  expect(row()).toContain("99% left");
+  expect(row()).toContain("3:40 PM");
+  flushSync(() => pill("affan").click());
+  expect(row()).toContain("40% left");
+  expect(row()).toContain("1:20 PM");
+  expect(card()!.textContent).not.toContain("3:40 PM");
+});
+
+it("shows the address each account is signed in with, beside its name", () => {
+  fixture.state = { bots: [bot("scout", "nana")], selectedId: "scout" };
+  serve([account("nana", "nana", 1, RESET, "nana@example.com"), account("affan", "affan", 60, RESET)]);
+  flushSync(() => ring(mount(false))!.click());
+  expect(card()!.querySelector("[data-usage-email]")?.textContent).toBe("nana@example.com");
+  expect(pill("nana").title).toContain("nana@example.com");
+  expect(pill("nana").getAttribute("aria-label")).toContain("nana@example.com");
+  flushSync(() => pill("affan").click());
+  expect(card()!.querySelector("[data-usage-email]")).toBeNull();
+  expect(pill("affan").title).not.toContain("@");
+});
+
+it("says so when two accounts are signed in with the same address, and not otherwise", () => {
+  fixture.state = { bots: [bot("scout", "nana")], selectedId: "scout" };
+  serve([account("nana", "nana", 1, RESET, "Same@Example.com"), account("affan", "affan", 1, RESET, "same@example.com")]);
+  flushSync(() => ring(mount(false))!.click());
+  expect(card()!.querySelector("[data-usage-same-account]")?.textContent).toBe("Signed in with the same account as affan, so both show the same limits.");
+  flushSync(() => root!.unmount());
+  document.body.innerHTML = "";
+  serve([account("nana", "nana", 1, RESET, "nana@example.com"), account("affan", "affan", 1, RESET, "affan@example.com")]);
+  flushSync(() => ring(mount(false))!.click());
+  expect(card()!.querySelector("[data-usage-same-account]")).toBeNull();
+});

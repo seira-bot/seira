@@ -378,6 +378,11 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           if (managedTaskSkillLink(source, path, [root, resolve(dataDir)])) skippedLinks++; else skippedWorkLinks++;
           continue;
         }
+        // The app makes these links again on each turn; a missing or foreign target must not stop the backup.
+        if (stat.isSymbolicLink() && /^workspaces\/[^/]+\/\.(?:claude|agents|grok)\/skills\/[^/]+$/.test(path)) {
+          skippedLinks++;
+          continue;
+        }
         if (stat.isSymbolicLink()) {
           let target: string;
           try { target = realpathSync(source); } catch { throw new Error(`Cannot back up dangling symbolic link: ${path}`); }
@@ -386,12 +391,6 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
             throw new Error(`Cannot back up symbolic link outside the workspace: ${path}`);
           }
           const portableRel = rel.replaceAll("\\", "/");
-          // Only the app's disposable native-discovery links may be omitted; any other link is user data.
-          if (/^workspaces\/[^/]+\/\.(?:claude|agents|grok)\/skills\/[^/]+$/.test(path) &&
-            portableRel.startsWith(`workspaces/${path.split("/")[1]}/skills/`)) {
-            skippedLinks++;
-            continue;
-          }
           const workspace = /^workspaces\/[^/]+\//.exec(path)?.[0];
           if (!workspace || !portableRel.startsWith(workspace)) {
             throw new Error(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`);

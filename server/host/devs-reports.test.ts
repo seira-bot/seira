@@ -160,7 +160,7 @@ describe("a message that tags @devs", () => {
     expect(fx.line("scout-main", message.id)!.bugReport).toEqual({ id: "report-1", status: "received" });
     expect(fx.notices("scout-main")).toEqual([]);
     expect(fx.reports.note("scout-main", true)).toBe("");
-    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per @devs message/);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per message/);
     expect(fx.sent).toHaveLength(1);
     fx.stop();
   });
@@ -383,8 +383,66 @@ describe("a message that tags @devs", () => {
     await fx.settle();
     expect(fx.sent).toEqual([]);
     expect(fx.offers("scout-main")).toEqual([]);
-    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(200);
     fx.stop();
+  });
+});
+
+describe("a person who asks for a report without @devs", () => {
+  it("gets one draft with the bot's summary, and nothing is sent", async () => {
+    const fx = fixture();
+    const message = fx.person("scout-main", "please report this to the Seira team: pictures never load");
+    fx.busy.add("scout-main");
+    expect(fx.reports.note("scout-main", true)).toBe("");
+    const answer = await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" });
+    expect(answer.status).toBe(200);
+    expect(answer.body.text).toBe(readyAnswer(READY));
+    expect(fx.offer("scout-main", message.id)).toEqual({ id: expect.any(String), for: "user", from: "devs", by: "Scout", state: "offer" });
+    expect(fx.sent).toEqual([]);
+    const draft = fx.view("scout-main", message.id)!;
+    expect(draft.description).toContain("Scout's summary: Pictures never load");
+    expect(draft.description.split("\n")[0]).toBe("please report this to the Seira team: pictures never load");
+    fx.stop();
+  });
+
+  it("gets one draft for each message, also after the repeat time", async () => {
+    const fx = fixture();
+    const message = fx.person("scout-main", "please report this to the Seira team: pictures never load");
+    expect((await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" })).status).toBe(200);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared/);
+    expect(fx.offers("scout-main")).toHaveLength(1);
+    fx.advance(31 * 60_000);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared/);
+    expect(fx.offers("scout-main")).toHaveLength(1);
+    expect(fx.offer("scout-main", message.id)).toBeDefined();
+    fx.person("scout-main", "report this to the Seira team too: the send button froze");
+    expect((await fx.call("scout", "scout-main", { went_wrong: "The send button froze" })).status).toBe(200);
+    expect(fx.offers("scout-main")).toHaveLength(2);
+    fx.stop();
+  });
+
+  it("gets no draft when no person wrote the message that the bot answers", async () => {
+    const none = fixture();
+    expect((await none.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    none.stop();
+
+    const peer = fixture();
+    peer.person("scout-main", "report this", { peerAsk: { botId: "rover", name: "Rover" } });
+    expect((await peer.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(peer.offers("scout-main")).toEqual([]);
+    peer.stop();
+
+    const aside = fixture();
+    aside.person("scout-main", "report this", { aside: true });
+    expect((await aside.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(aside.offers("scout-main")).toEqual([]);
+    aside.stop();
+
+    const routine = fixture({ automated: true });
+    routine.person("scout-main", "report this", { sendId: undefined });
+    expect((await routine.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(routine.offers("scout-main")).toEqual([]);
+    routine.stop();
   });
 });
 

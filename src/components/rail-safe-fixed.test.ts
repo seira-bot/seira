@@ -30,4 +30,14 @@ describe("fixed elements and the desktop rail", () => {
     }
     expect(offending).toEqual([]);
   });
+
+  it("keep a full-screen view that shows content beside the rail", () => {
+    const offending: string[] = [];
+    for (const path of sources(SRC)) {
+      for (const [, classes] of readFileSync(path, "utf8").matchAll(/"([^"\n]*\bfixed inset-0\b[^"\n]*)"/g)) {
+        if (/\bbg-(app|panel|card)\b/.test(classes) && !classes.includes("m-auto")) offending.push(`${relative(SRC, path)}: ${classes.slice(0, 80)}`);
+      }
+    }
+    expect(offending).toEqual([]);
+  });
 });

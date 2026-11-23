@@ -1,5 +1,5 @@
-// The agents catalog's report_bug tool: a person's message that tags @devs is a bug report for the Seira team, and
-// the bot answering it writes the summary in its draft. The person reads the draft and sends it themselves.
+// The agents catalog's report_bug tool: a person's message that tags @devs, or that asks the bot to report a problem
+// to the Seira team, is a bug report for the Seira team, and the bot answering it writes the summary in its draft. The person reads the draft and sends it themselves.
 import type { ToolCallContext, ToolCallResult } from "./agents-call.ts";
 import type { Json } from "./agents-client.ts";
 
@@ -19,7 +19,7 @@ export const DEVS_TOOL_DEFINITIONS = [
   {
     name: "report_bug",
     description:
-      "Write a draft of the person's bug report for the Seira team (Seira's developers), with the app's diagnostics. Nothing is sent: the person reads the draft and sends it. Only for a message that tags @devs, once. No passwords, keys, tokens or file contents.",
+      "Write a draft of the person's bug report for the Seira team (Seira's developers), with the app's diagnostics. Nothing is sent: the person reads the draft and sends it. Use it when the person tags @devs or asks you to report a problem to the Seira team, once per message. No passwords, keys, tokens or file contents.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
