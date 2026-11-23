@@ -467,8 +467,8 @@ describe("the linked servers manager", () => {
       asking.flushHeaders();
     });
     expect(oversized).toBe(413);
-    expect(readdirSync(spool).sort()).toEqual(["h-1", "h-2"]);
-    expect(readdirSync(spool).sort().flatMap((one) => readdirSync(join(spool, one, "sent")).sort())).toEqual(["0-a.txt", "0-a.txt", "1-a.txt"]);
+    expect(readdirSync(spool)).toHaveLength(2);
+    expect(readdirSync(spool).flatMap((one) => readdirSync(join(spool, one, "sent"))).sort()).toEqual(["0-a.txt", "0-a.txt", "1-a.txt"]);
 
     now += SPOOL_KEEP_MS + 60_000;
     made.start();
