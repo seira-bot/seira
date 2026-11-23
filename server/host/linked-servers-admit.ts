@@ -1,8 +1,9 @@
 // How much work one linked server may hand this one, and how refusals reach the activity record.
 
 /** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`. `outbox`: while this many frames for
- * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`. */
-export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10 } as const;
+ * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`.
+ * `exchanges` and `sessions`: the exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
+export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, exchanges: 120, sessions: 10 } as const;
 export const BUSY_TEXT = "The other side is busy now, so try again later.";
 
 const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
@@ -39,6 +40,18 @@ export function createFrameBudget(now: () => number = Date.now, limit: number = 
     left(linkId: string): number { return Math.max(0, limit - recent(linkId).reduce((sum, one) => sum + one.frames, 0)); },
     spend(linkId: string, frames: number): void { if (frames > 0) recent(linkId).push({ at: now(), frames }); },
     forget(linkId: string): void { spent.delete(linkId); },
+  };
+}
+
+/** The exchanges and new sessions of each link's joiner: each call takes one, or says false once the window has none. */
+export function createPace(now: () => number = Date.now, limits: { exchanges?: number | undefined; sessions?: number | undefined } = {}) {
+  const exchanges = createFrameBudget(now, limits.exchanges ?? ADMIT.exchanges);
+  const sessions = createFrameBudget(now, limits.sessions ?? ADMIT.sessions);
+  const one = (budget: ReturnType<typeof createFrameBudget>, linkId: string) => { if (budget.left(linkId) < 1) return false; budget.spend(linkId, 1); return true; };
+  return {
+    exchange: (linkId: string) => one(exchanges, linkId),
+    session: (linkId: string) => one(sessions, linkId),
+    forget(linkId: string): void { exchanges.forget(linkId); sessions.forget(linkId); },
   };
 }
 

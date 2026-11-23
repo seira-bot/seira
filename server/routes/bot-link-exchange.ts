@@ -26,9 +26,11 @@ export interface LinkExchangeOptions {
   /** A guest link's choice of the frames of one exchange to take: `count` of them, from the first, are taken and the
    * peer sends the rest again; `frames` are the ones to act on. The answer says `count` in TAKEN_HEADER. */
   takes?(frames: readonly unknown[], ack: number): { count: number; frames: readonly unknown[] };
+  /** A guest link's limits on its peer's exchanges and on the new sessions among them: false answers 429. */
+  pace?: { exchange(): boolean; session(): boolean };
 }
 
-export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes }: LinkExchangeOptions) {
+export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes, pace }: LinkExchangeOptions) {
   const session = randomUUID();
   const held = new Map<string, () => void>();
   const gone = new Map<string, NodeJS.Timeout>();
@@ -91,8 +93,10 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
 
   async function sync({ req, res, method, json, readBody }: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
     if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
+    if (pace && !pace.exchange()) { req.resume(); return json(res, 429, { error: "too many requests; try again later" }); }
     const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024));
     if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
+    if (body.data.fresh && pace && !pace.session()) return json(res, 429, { error: "too many new sessions; try again later" });
     const power = powerOf();
     if (power?.sleeping()) return answerAsleep(res, json);
     seen(peer);

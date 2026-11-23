@@ -10,6 +10,8 @@
 // - A peer sees only the bots an admin exposed to it, as id, name, title and description, read again at each hand-off.
 //   Its work runs here as outside work, at no more than the link's approval cap.
 // - A link takes at most ADMIT.open open hand-offs, and ADMIT.perWindow in each ADMIT.windowMs. At most LINKS_MAX links.
+// - The inviter answers a link's joiner at most ADMIT.exchanges exchanges and ADMIT.sessions new sessions in each
+//   ADMIT.windowMs; more get 429. The joiner waits JOINER_PACE between them, so it stays well below both.
 // - Both sides are guests to each other, so the inviter and the joiner each apply these limits to the frames the other
 //   sends: of one exchange or answer, a side takes the frames up to the first work frame (hand-off, cancel, result)
 //   past ADMIT.frames in ADMIT.windowMs, and no work frame while ADMIT.outbox frames for the other side wait. The rest
@@ -31,7 +33,6 @@
 // - A peer whose hand-off files never come keeps the open slots of those hand-offs.
 // - When the frames each side has for the other both pass ADMIT.outbox, that link carries no more work. Only a peer
 //   that does not take what it is sent can make that happen.
-// - The joiner makes the folder for the files of a hand-off it admitted before it asks for room; a refusal removes it.
 // - A sender that fails too many tries is refused, also when it shares its address with a linked server.
 // - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
 //   does not see the work that routine starts later.
@@ -50,7 +51,7 @@ import { createLinkExchange } from "../routes/bot-link-exchange.ts";
 import type { RouteContext } from "../routes/table.ts";
 import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
-import { ADMIT, createAdmission, createFrameBudget, createIntake, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
+import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
@@ -79,6 +80,8 @@ const ANSWER_MAX = 64 * 1024;
 /** The largest exchange answer a joiner reads: a full exchange, in characters that take up to three bytes each. */
 const EXCHANGE_ANSWER_MAX = 8 * 1024 * 1024;
 const JOIN_MS = 10_000;
+/** At most 60 exchanges and 6 new sessions a minute: half of ADMIT.exchanges and ADMIT.sessions, so restarts fit too. */
+const JOINER_PACE = { gapMs: 1_000, freshMs: 10_000 };
 const TIDY_MS = 60 * 60_000;
 const GUEST_BEARER = /\bbearer\s+lsk_/iu;
 const isBye = (frame: unknown) => kindOf(frame) === "bye";
@@ -150,10 +153,10 @@ export interface LinkedServersDeps extends InstanceDeps {
   now?: () => number;
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
-  timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number };
-  /** Smaller limits for tests: a link's files waiting here, its work frames and hellos in a window, and its frames
-   * waiting here. */
-  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number };
+  timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
+  /** Smaller limits for tests: a link's files waiting here, its work frames and hellos in a window, its frames
+   * waiting here, and its joiner's exchanges and new sessions in a window. */
+  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; exchanges?: number; sessions?: number };
 }
 
 type Instance = {
@@ -177,6 +180,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos });
   const sent = createFrameBudget(now, deps.limits?.frames);
   const heldBack = createRefusalRecord(now);
+  const pace = createPace(now, { exchanges: deps.limits?.exchanges, sessions: deps.limits?.sessions });
   const outboxMax = deps.limits?.outbox ?? ADMIT.outbox;
   let upkeep: NodeJS.Timeout | undefined;
 
@@ -287,7 +291,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => log("linked servers: the other server could not be reached; trying again"),
       takes: (frames) => intakeOf(id, frames, link.backlog(key, 0) >= outboxMax),
       budget: { left: () => sent.left(id), spend: (frames) => sent.spend(id, frames) },
-      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: EXCHANGE_ANSWER_MAX,
+      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: EXCHANGE_ANSWER_MAX, pace: timing.pace ?? JOINER_PACE,
       ...(timing.holdMs ? { holdMs: timing.holdMs } : {}), ...(timing.firstRetryMs ? { firstRetryMs: timing.firstRetryMs } : {}) });
   }
 
@@ -316,7 +320,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye) : null,
       exchange: record.role === "inviter"
         ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
-          ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+          pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) }, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };
     instances.set(id, entry);
@@ -505,6 +509,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       intake.forget(id);
       sent.forget(id);
       heldBack.forget(id);
+      pace.forget(id);
       rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true });
       deps.audit({ category: "linked-server", action: "linked-server.remove", target, actor });
       return true;

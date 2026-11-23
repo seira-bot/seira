@@ -590,6 +590,20 @@ describe("the linked servers manager", () => {
     expect(work()).toEqual(["h-1", "h-2", "h-3", "h-4"]);
   });
 
+  it("answers a joiner no more exchanges and new sessions in a minute than a link may open, and again after the minute", async () => {
+    let now = Date.now();
+    const { made } = manager("head", { now: () => now });
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    for (let index = 0; index < ADMIT.sessions; index++) expect((await sync([], { fresh: true })).status).toBe(200);
+    expect((await sync([], { fresh: true })).status).toBe(429);
+    for (let index = ADMIT.sessions + 1; index < ADMIT.exchanges; index++) expect((await sync([])).status).toBe(200);
+    expect((await sync([handoff("h-1")])).status).toBe(429);
+    now += ADMIT.windowMs;
+    expect(await sync([handoff("h-1")], { fresh: true })).toMatchObject({ status: 200, taken: "1" });
+  });
+
   it("as the joiner, takes an answer's frames up to its budget, applies only the last hello, and gets the rest again later", async () => {
     let now = Date.now();
     const sent = [{ seq: 1, frame: hello("head-environment", "Head one") }, ...Array.from({ length: 6 }, (_, index) => ({ seq: index + 2, frame: handoff(`h-${index + 1}`) })),
