@@ -371,17 +371,30 @@ describe("linked servers through Seira Relay", () => {
     const where = await world();
     const inviter = await node("head", [WRITER], where);
     inviter.serveRelay();
-    await until(() => !("error" in inviter.linked.invite(ADMIN)), "the relay is ready");
-    // One invite is waiting already; a second waits too.
-    expect("error" in inviter.linked.invite(ADMIN)).toBe(false);
+    const made: string[] = [];
+    await until(() => {
+      const one = inviter.linked.invite(ADMIN);
+      if ("error" in one) return false;
+      made.push(one.invite);
+      return true;
+    }, "the relay is ready");
+    const second = inviter.linked.invite(ADMIN);
+    if ("error" in second) throw new Error(second.error);
+    made.push(second.invite);
     expect(inviter.linked.invite(ADMIN)).toEqual({ error: "relay_full" });
     expect(inviter.relayFile().invites).toHaveLength(2);
 
-    const joiners = await Promise.all(Array.from({ length: 5 }, (_, index) => node(`branch${index}`, [SCOUT], where)));
-    for (const [index, one] of joiners.slice(0, 4).entries()) {
-      let made: ReturnType<typeof inviter.linked.invite> = { error: "relay_waiting" };
-      await until(() => { made = inviter.linked.invite(ADMIN); return !("error" in made); }, `invite ${index}`);
-      await one.linked.join((made as { invite: string }).invite, ADMIN);
+    const joiners = await Promise.all(Array.from({ length: 4 }, (_, index) => node(`branch${index}`, [SCOUT], where)));
+    for (const [index, one] of joiners.entries()) {
+      if (index >= made.length) {
+        await until(() => {
+          const next = inviter.linked.invite(ADMIN);
+          if ("error" in next) return false;
+          made.push(next.invite);
+          return true;
+        }, `invite ${index}`);
+      }
+      await one.linked.join(made[index]!, ADMIN);
     }
     await until(() => inviter.relayFile().hosted.length === 4, "four relay links are hosted");
     expect(inviter.linked.invite(ADMIN)).toEqual({ error: "relay_full" });
