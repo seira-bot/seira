@@ -10,7 +10,7 @@ import {
 beforeEach(() => setLocale("en"));
 
 const ids = (ctx: SettingsContext) => visiblePages(ctx).map((page) => page.id);
-const PLACE_PAGES = ["overview", "phone", "ai", "bots", "desktops", "vault", "usage", "transfer", "data"];
+const PLACE_PAGES = ["overview", "phone", "ai", "bots", "desktops", "linked-servers", "vault", "usage", "transfer", "data"];
 const find = (query: string, ctx: SettingsContext = fullContext()) => searchSettings(query, ctx, (entry) => t(entry.labelKey), (page) => t(page.labelKey));
 const first = (query: string, ctx?: SettingsContext) => find(query, ctx)[0]?.entry;
 
@@ -30,7 +30,7 @@ describe("the pages", () => {
 
   it.each(Object.entries(PEOPLE))("keeps the same place pages, in the same order, for %s", (who, ctx) => {
     // A team's member is offered none of the installation's admin pages (AI, Desktops, Spending, Import & export, Data).
-    const expected = who === "a team member" ? PLACE_PAGES.filter((id) => !["ai", "desktops", "usage", "transfer", "data"].includes(id)) : PLACE_PAGES;
+    const expected = who === "a team member" ? PLACE_PAGES.filter((id) => !["ai", "desktops", "linked-servers", "usage", "transfer", "data"].includes(id)) : PLACE_PAGES;
     expect(ids(ctx).filter((id) => PLACE_PAGES.includes(id))).toEqual(expected);
   });
 
@@ -41,7 +41,16 @@ describe("the pages", () => {
       expect(ids({ ...PEOPLE[who], advanced: false })).toEqual(["overview", "phone", "ai", "vault", "transfer", "account", "plan", "app", "appearance"]);
     });
 
-  it("is shorter in Simple: the five Advanced pages come back in Advanced, in place", () => {
+  it("shows Linked places in Advanced mode, to an admin who is not a paired client", () => {
+    expect(ids(fullContext())).toContain("linked-servers");
+    expect(ids(fullContext({ advanced: false }))).not.toContain("linked-servers");
+    expect(ids(PEOPLE["a team member"])).not.toContain("linked-servers");
+    expect(ids(PEOPLE["a team admin"])).toContain("linked-servers");
+    expect(ids(fullContext({ client: true }))).not.toContain("linked-servers");
+    expect(resolveSettingsTarget("linked-servers", fullContext({ advanced: false }))).toEqual({ page: "linked-servers", advanced: true });
+  });
+
+  it("is shorter in Simple: the six Advanced pages come back in Advanced, in place", () => {
     const simple = ids(fullContext({ advanced: false }));
     for (const page of ADVANCED_PAGES) expect(simple).not.toContain(page);
     expect(ids(fullContext()).filter((id) => simple.includes(id))).toEqual(simple);
@@ -105,7 +114,7 @@ describe("the pages", () => {
   });
 
   it("offers a team's member none of the installation's admin pages, and a team's admin all of them", () => {
-    for (const page of ["ai", "desktops", "usage", "transfer", "data"] as const) {
+    for (const page of ["ai", "desktops", "linked-servers", "usage", "transfer", "data"] as const) {
       expect(ids(PEOPLE["a team member"])).not.toContain(page);
       expect(ids(PEOPLE["a team admin"])).toContain(page);
     }
