@@ -39,7 +39,7 @@ function manager(label: string, more: Partial<LinkedServersDeps> = {}) {
     openThread: () => undefined, hasThread: () => false, personName: () => undefined, sentRow: () => {}, resultRow: () => {}, kick: () => {},
     serverName: () => "Head office", selfId: () => `${label}-environment`, publicOrigin: () => "https://head.example/",
     audit: (row) => { rows.push(row); }, attemptAllowed: () => true, attemptFailed: (key) => { failed.push(key); }, log: (line) => { logs.push(line); },
-    timing: { holdMs: 200, firstRetryMs: 20 },
+    timing: { holdMs: 200, firstRetryMs: 20, pace: { gapMs: 20, freshMs: 20 } },
     ...more,
   });
   closers.push(() => { made.close(); try { coordinator?.close(); } catch { /* closed */ } });
