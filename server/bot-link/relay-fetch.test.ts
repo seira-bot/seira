@@ -134,7 +134,7 @@ async function rig(): Promise<Rig> {
 }
 
 const ORIGIN = "https://h-00112233445566778899aabbccddeeff.e2e.invalid";
-const noStreams = (r: Rig) => waitFor(() => (r.session.activeStreams === 0 && r.open() === 0 ? true : null), 5_000);
+const noStreams = (r: Rig) => waitFor(() => (r.session.activeStreams === 0 && r.open() === 0 ? true : null), 5_000).catch((e) => { throw new Error(`${e.message} client=${r.session.activeStreams} server=${r.open()}`); });
 
 describe("fetchOverSession", () => {
   it("posts JSON and reads the answer, and sends only the path and the query", async () => {
