@@ -396,7 +396,7 @@ describe("hiding a provider", () => {
     });
 
     it("refuses force from someone who is not an admin", async () => {
-      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA }], {}, {}, { kind: "loopback", scopes: ["chat"], trust: "service" } as RequestAuth);
+      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA }], {}, {}, { kind: "loopback", scopes: ["client"], trust: "service" } as RequestAuth);
       const reply = await patch(served, { hidden: true, force: true });
       expect(reply.status).toBe(403);
       expect(served.persisted).toEqual([]);
