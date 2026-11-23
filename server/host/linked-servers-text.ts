@@ -24,10 +24,21 @@ function cleaned(value: unknown, cleaners: Record<string, (text: string) => stri
 export const farFileName = line(255, "file");
 const withFiles = (frame: Fields) => ("files" in frame && Array.isArray(frame.files) ? { files: frame.files.map((one) => cleaned(one, { name: farFileName })) } : {});
 
+// The ids a place makes: UUIDs, hex digests, bot ids and `room-` plus a group id, all of word characters and hyphens.
+const SAFE_ID = /^[\w-]{1,200}$/;
+const safeId = (value: unknown): boolean => typeof value !== "string" || SAFE_ID.test(value);
+const idsOf = (frame: Fields): unknown[] => {
+  const from = isFields(frame.from) ? frame.from : {};
+  return frame.t === "handoff" ? [frame.id, frame.to, frame.thread, from.botId, from.threadId] : frame.t === "result" || frame.t === "done" || frame.t === "cancel" ? [frame.id] : [];
+};
+
 /** Security invariant: no invisible or control character in what a guest peer says (its place and bots, a hand-off's
- * sender, words and file names, a result's words and file names) reaches a bot or the app here. */
+ * sender, words and file names, a result's words and file names) reaches a bot or the app here. A frame whose id holds
+ * anything but word characters and hyphens becomes `null`, which the link drops as a frame that does not parse. An id is
+ * never rewritten, so it cannot come to match another one. */
 export function farFrame(raw: unknown): unknown {
   if (!isFields(raw)) return raw;
+  if (!idsOf(raw).every(safeId)) return null;
   switch (raw.t) {
     case "hello":
       return { ...raw, place: cleaned(raw.place, { name: line(120, FAR_PLACE) }),

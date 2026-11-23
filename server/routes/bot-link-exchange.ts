@@ -34,6 +34,9 @@ export interface LinkExchangeOptions {
   log?(line: string): void;
 }
 
+/** An error of reading the request body keeps its own status and text; it holds nothing about this server. */
+class BodyRefused { error: unknown; constructor(error: unknown) { this.error = error; } }
+
 export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes, pace, fileName: ownName = (name) => name, log = (line) => console.error(line) }: LinkExchangeOptions) {
   const session = randomUUID();
   const held = new Map<string, () => void>();
@@ -56,7 +59,17 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     held.set(peer, done);
   });
 
-  async function file({ req, res, url, method, json }: RouteContext, peer: string): Promise<void> {
+  /** Every error that the exchange does not answer itself gets one fixed answer, so a cause (a path in the data folder) never reaches the peer. */
+  function unavailable({ res, json }: RouteContext, what: string, text: string, error: unknown): void {
+    log(`bot link: ${what} (${error instanceof Error ? error.message : String(error)})`);
+    if (res.headersSent || res.destroyed) res.destroy(); else json(res, 503, { error: text });
+  }
+
+  async function file(ctx: RouteContext, peer: string): Promise<void> {
+    try { await fileOf(ctx, peer); } catch (error) { unavailable(ctx, "a file request could not be served", "the file could not be handled now; try again later", error); }
+  }
+
+  async function fileOf({ req, res, url, method, json }: RouteContext, peer: string): Promise<void> {
     const id = url.searchParams.get("id") ?? "", way = fileWay.safeParse(url.searchParams.get("way")), index = Number(url.searchParams.get("index")), fileName = ownName(url.searchParams.get("name") ?? "");
     if (!id || id.length > 200 || !way.success || !Number.isInteger(index) || !fileName || fileName.length > 255) { req.resume(); return json(res, 400, { error: "send id, way, index and name" }); }
     if (powerOf()?.sleeping()) { req.resume(); return answerAsleep(res, json); }
@@ -95,10 +108,17 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     return json(res, 200, { ok: true });
   }
 
-  async function sync({ req, res, method, json, readBody }: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
+  async function sync(ctx: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
+    try { await syncOf(ctx, peer, stillLinked); } catch (error) {
+      if (error instanceof BodyRefused) throw error.error;
+      unavailable(ctx, "an exchange could not be served", "the frames could not be taken now; try again later", error);
+    }
+  }
+
+  async function syncOf({ req, res, method, json, readBody }: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
     if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
     if (pace && !pace.exchange()) { req.resume(); return json(res, 429, { error: "too many requests; try again later" }); }
-    const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024));
+    const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024).catch((error: unknown) => { throw new BodyRefused(error); }));
     if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
     if (body.data.fresh && pace && !pace.session()) return json(res, 429, { error: "too many new sessions; try again later" });
     const power = powerOf();
