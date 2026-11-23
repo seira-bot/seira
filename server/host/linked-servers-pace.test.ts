@@ -86,7 +86,8 @@ function linkedPair() {
   const exchange = createLinkExchange({ link: inviter.link, paths: PATHS, power: () => null, log: () => {},
     takes: (frames) => atInviter.intake.take(LINK, frames, false),
     pace: { exchange: () => atInviter.pace.exchange(LINK), session: () => atInviter.pace.session(LINK) },
-    bytes: { max: GUEST_EXCHANGE_MAX, spend: (bytes) => { if (atInviter.bytes.left(LINK) < bytes) return false; atInviter.bytes.spend(LINK, bytes); return true; } },
+    bytes: { max: GUEST_EXCHANGE_MAX, spend: (bytes) => { if (atInviter.bytes.left(LINK) < bytes) return false; atInviter.bytes.spend(LINK, bytes); return true; },
+      left: () => atInviter.bytes.left(LINK), giveBack: (bytes) => atInviter.bytes.giveBack(LINK, bytes) },
     sends: atInviter.sends });
   const served = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const body = Buffer.from(String(init?.body ?? ""));
