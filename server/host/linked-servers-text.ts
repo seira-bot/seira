@@ -72,7 +72,7 @@ function priceOf(frame: Frame): number {
 
 const UNREAD = { frame: null, price: 0 } as const;
 
-/** A frame from a guest peer as this side reads it: parsed once, and priced in the characters farFrame will clean in
+/** A frame from a guest peer as this side reads it: priced in the characters farFrame will clean in
  * what parsed. Security invariant: nothing the schema drops (a key it does not know, the space around a name) is read
  * past the parse, and this never throws: a frame that does not parse is null, at no price, which the link drops. */
 export function readFar(raw: unknown): { frame: Frame | null; price: number } {

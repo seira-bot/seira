@@ -53,7 +53,7 @@ const readJson = async (response: Response, max: number | undefined): Promise<un
 export const isWorkFrame = (frame: Frame) => frame.t === "handoff" || frame.t === "result" || frame.t === "cancel";
 const workIn = (frames: readonly Numbered[]) => frames.filter(({ frame }) => isWorkFrame(frame)).length;
 
-/** How one side of a guest link paces what it sends the other (server/host/linked-servers-admit.ts). */
+/** How one side of a guest link paces what it sends the other. */
 export interface SendPace {
   /** How many of `frames`, from the first, go now, and when some must wait, in how many milliseconds more may go. */
   next(frames: readonly Numbered[]): { count: number; waitMs: number };
