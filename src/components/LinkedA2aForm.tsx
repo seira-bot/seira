@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { api } from "@/state/store";
 import { SettingsDialog } from "./settings/SettingsDialog";
-import type { ApprovalCap } from "./LinkedServersSection";
+import type { ApprovalCap, LinkedServer } from "./LinkedServersSection";
 
 export interface A2aLink {
   id: string;
@@ -25,7 +25,7 @@ export interface A2aAddress { bot: string; url: string }
 /** What the person must copy now: the token shows once. */
 export interface A2aIssued { name: string; token?: string; urls: A2aAddress[] }
 
-export const isA2a = (link: A2aLink | { kind?: undefined }): link is A2aLink => link.kind === "a2a";
+export const isA2a = (link: A2aLink | LinkedServer): link is A2aLink => link.kind === "a2a";
 
 const messageOf = (cause: unknown): string => (cause instanceof Error && cause.message ? cause.message : t("linked.error.generic"));
 

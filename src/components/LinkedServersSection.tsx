@@ -14,6 +14,7 @@ export type ApprovalCap = typeof APPROVAL_CAPS[number];
 
 export interface LinkedServer {
   id: string;
+  kind?: "seira";
   name: string;
   state: "online" | "offline" | "ended";
   exposed: string[];
