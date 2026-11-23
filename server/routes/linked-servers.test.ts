@@ -269,3 +269,26 @@ describe("two linked servers", () => {
     expect((await a.api("PATCH", `/api/linked-servers/${inviterLink}`, { cap: "edits" })).body.server).toMatchObject({ cap: "edits" });
   }, 30_000);
 });
+
+describe("the admin routes", () => {
+  it("say in plain words why no invite was made", async () => {
+    let made: ReturnType<LinkedServers["invite"]> = { error: "no_address" };
+    const routes = createLinkedServerRoutes({
+      manager: { list: () => [], invite: () => made, join: async () => { throw new Error("not used"); }, update: () => null, remove: async () => false },
+      knownBot: () => true, actor: () => ({ kind: "loopback" }),
+    });
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      void routes({ req, res, url, path: url.pathname, method: req.method ?? "GET", auth: { kind: "loopback", scopes: ["admin"] }, json, readBody });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    cleanups.push(() => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }));
+    const ask = async () => {
+      const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/linked-servers/invites`, { method: "POST" });
+      return { status: response.status, body: await response.json() as Record<string, unknown> };
+    };
+    expect(await ask()).toEqual({ status: 409, body: { error: "Other servers cannot reach this server. Give it a secure public address first." } });
+    made = { error: "full" };
+    expect(await ask()).toEqual({ status: 409, body: { error: "This server already has as many linked servers as it can keep. Remove one first." } });
+  });
+});
