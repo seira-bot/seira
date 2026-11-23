@@ -50,20 +50,21 @@ export function fetchOverSession(session: () => Promise<E2ESession<never>>): typ
           req.destroy();
           return reject(new TypeError(`the other side answered with a redirect (${status})`));
         }
-        const answerHeaders = new Headers();
-        for (const [name, value] of Object.entries(res.headers)) {
-          for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) answerHeaders.append(name, one);
-        }
         const empty = BODYLESS.has(status) || method === "HEAD";
-        // Security: the other side chooses the status line. `Response` throws on a status outside 200 to 599 and on a
-        // reason phrase it cannot hold, and a throw in this listener would leave the session and stop the process.
+        // Security: the other side chooses the status line and the headers. `Headers` and `Response` throw on a status
+        // outside 200 to 599 and on a value they cannot hold, and a throw in this listener would leave the session and
+        // stop the process.
         const refuse = (): void => {
           res.resume();
           req.destroy();
-          reject(new TypeError("the other side answered with a status line that cannot be used"));
+          reject(new TypeError("the other side answered with a status line or a header that cannot be used"));
         };
         if (status < 200 || status > 599) return refuse();
         try {
+          const answerHeaders = new Headers();
+          for (const [name, value] of Object.entries(res.headers)) {
+            for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) answerHeaders.append(name, one);
+          }
           const answer = new Response(empty ? null : (Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>), { status, statusText: res.statusMessage, headers: answerHeaders });
           if (empty) res.resume();
           resolve(answer);
