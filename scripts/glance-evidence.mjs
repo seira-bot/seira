@@ -73,15 +73,19 @@ async function devtools(profile) {
 
 function session(url) {
   const socket = new WebSocket(url);
-  const waiting = new Map(), events = new Map();
-  let next = 0;
+  const waiting = new Map();
+  let next = 0, onLoad = null;
   socket.addEventListener("message", ({ data }) => {
     const message = JSON.parse(data);
     if (message.id && waiting.has(message.id)) {
       const { resolve, reject } = waiting.get(message.id);
       waiting.delete(message.id);
       if (message.error) reject(new Error(message.error.message)); else resolve(message.result);
-    } else events.get(message.method)?.();
+    } else if (message.method === "Page.loadEventFired" && onLoad) {
+      const loaded = onLoad;
+      onLoad = null;
+      loaded();
+    }
   });
   return {
     opened: new Promise((resolve, reject) => { socket.addEventListener("open", resolve); socket.addEventListener("error", reject); }),
@@ -90,7 +94,7 @@ function session(url) {
       waiting.set(id, { resolve, reject });
       socket.send(JSON.stringify({ id, method, params }));
     }),
-    once: (method) => new Promise((resolve) => events.set(method, () => { events.delete(method); resolve(); })),
+    loaded: () => new Promise((resolve) => { onLoad = resolve; }),
     close: () => socket.close(),
   };
 }
@@ -103,7 +107,7 @@ window.glance = {
 const ACTIONS = {
   peek: `document.getElementById("visor").dispatchEvent(new PointerEvent("pointerenter"))`,
   click: `document.getElementById("visor").click()`,
-  "allow-fails": `window.__actResult = false; [...document.querySelectorAll("button")].find((button) => button.textContent === ${JSON.stringify(LABELS.allowOnce)}).click()`,
+  "allow-fails": `window.__actResult = false; document.querySelector(".acts button.primary").click()`,
 };
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -121,7 +125,7 @@ try {
   const page = `data:text/html;charset=utf-8,${encodeURIComponent(glancePageHtml())}`;
   for (const [name, feeds, action] of SCENES) {
     await cdp.send("Emulation.setDeviceMetricsOverride", { width: GLANCE_WINDOW.maxWidth, height: GLANCE_WINDOW.maxHeight, deviceScaleFactor: 2, mobile: false });
-    const loaded = cdp.once("Page.loadEventFired");
+    const loaded = cdp.loaded();
     await cdp.send("Page.navigate", { url: page });
     await loaded;
     await cdp.send("Runtime.evaluate", { expression: `render(${JSON.stringify(viewsOf(feeds))})`, awaitPromise: true });
