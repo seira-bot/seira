@@ -5651,6 +5651,7 @@
   "limits.tryAgainNow": "Try again now",
   "limits.cardTitle": "{engine} usage",
   "limits.checked": "checked {when}",
+  "limits.sameAccount": "Signed in with the same account as {name}, so both show the same limits.",
   "limits.dueOne": "1 automation runs before then",
   "limits.dueMany": "{count} automations run before then",
   "limits.moveAfterReset": "Move to after reset",
