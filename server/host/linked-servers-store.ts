@@ -124,7 +124,7 @@ export function guestOrigin(value: string): string | null {
   return url.origin;
 }
 
-const UNSAFE = /[\p{Cc}‎‏‪-‮⁦-⁩  ]+/gu;
+const UNSAFE = /[\p{Cc}\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029]+/gu;
 
 /** A name another server chose, as one line without control or direction characters, at most `max` UTF-16 units (the
  * unit the link's own place schema counts), never cut inside a character. */

@@ -133,7 +133,7 @@ describe("the link record", () => {
   });
 
   it("keeps a far name to one clean line", () => {
-    expect(cleanName("  Head\noffice\u0007 ‮evil  ")).toBe("Head office evil");
+    expect(cleanName("  Head\noffice\u0007 \u202Eevil  ")).toBe("Head office evil");
     expect(cleanName("😀".repeat(200))).toBe("😀".repeat(60));
     expect(cleanName(`a${"😀".repeat(200)}`)).toBe(`a${"😀".repeat(59)}`);
     expect(cleanName("b".repeat(300))).toHaveLength(120);
@@ -325,7 +325,7 @@ describe("the linked servers manager", () => {
     let sync = () => new Response(null, { status: 500 });
     const fake = (async (input: Parameters<typeof fetch>[0]) => {
       const path = new URL(String(input)).pathname;
-      if (path === "/api/linked-servers/accept") return new Response(JSON.stringify({ token, place: { id: "head-environment", name: "Head‮office" } }), { status: 200 });
+      if (path === "/api/linked-servers/accept") return new Response(JSON.stringify({ token, place: { id: "head-environment", name: "Head\u202Eoffice" } }), { status: 200 });
       return sync();
     }) as typeof fetch;
     const { made, rows, dataDir } = manager("branch", { fetch: fake });
