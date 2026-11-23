@@ -229,21 +229,32 @@ describe("admission", () => {
   it("takes a batch up to the first work frame past the budget, and applies the last hello once the hello budget has room", () => {
     let now = 0;
     const intake = createIntake(() => now, { frames: 3, hellos: 2 });
+    const took = (...args: Parameters<typeof intake.take>) => { const { count, frames } = intake.take(...args); return { count, frames }; };
     const cancel = (id: string) => ({ t: "cancel", id }), done = { t: "done", id: "x" };
-    expect(intake.take("a", [hello("far", "one"), cancel("1"), done, hello("far", "two"), cancel("2"), cancel("3"), cancel("4"), done], false))
+    expect(took("a", [hello("far", "one"), cancel("1"), done, hello("far", "two"), cancel("2"), cancel("3"), cancel("4"), done], false))
       .toEqual({ count: 6, frames: [hello("far", "two"), cancel("1"), done, cancel("2"), cancel("3")] });
-    expect(intake.take("a", [cancel("4")], false)).toEqual({ count: 0, frames: [] });
-    expect(intake.take("a", [done, cancel("4")], false)).toEqual({ count: 1, frames: [done] });
-    expect(intake.take("b", [done, cancel("1"), hello("far", "x")], true)).toEqual({ count: 1, frames: [done] });
-    expect(intake.take("b", [hello("far", "x"), done], true)).toEqual({ count: 2, frames: [hello("far", "x"), done] });
+    expect(took("a", [cancel("4")], false)).toEqual({ count: 0, frames: [] });
+    expect(took("a", [done, cancel("4")], false)).toEqual({ count: 1, frames: [done] });
+    expect(took("b", [done, cancel("1"), hello("far", "x")], true)).toEqual({ count: 1, frames: [done] });
+    expect(took("b", [hello("far", "x"), done], true)).toEqual({ count: 2, frames: [hello("far", "x"), done] });
 
-    expect(intake.take("a", [hello("far", "three")], false)).toEqual({ count: 1, frames: [hello("far", "three")] });
-    expect(intake.take("a", [hello("far", "four"), hello("far", "five")], false)).toEqual({ count: 2, frames: [] });
+    expect(took("a", [hello("far", "three")], false)).toEqual({ count: 1, frames: [hello("far", "three")] });
+    expect(took("a", [hello("far", "four"), hello("far", "five")], false)).toEqual({ count: 2, frames: [] });
     now = ADMIT.windowMs;
-    expect(intake.take("a", [], false)).toEqual({ count: 0, frames: [hello("far", "five")] });
-    expect(intake.take("a", [cancel("4"), cancel("5"), cancel("6"), cancel("7")], false).count).toBe(3);
+    expect(took("a", [], false)).toEqual({ count: 0, frames: [hello("far", "five")] });
+    expect(took("a", [cancel("4"), cancel("5"), cancel("6"), cancel("7")], false).count).toBe(3);
     intake.forget("a");
-    expect(intake.take("a", [cancel("8")], false).count).toBe(1);
+    expect(took("a", [cancel("8")], false).count).toBe(1);
+  });
+
+  it("gives back the work frames of a batch whose frames could not be taken", () => {
+    const intake = createIntake(() => 0, { frames: 2 });
+    const cancel = (id: string) => ({ t: "cancel", id });
+    const failed = intake.take("a", [cancel("1"), cancel("2")], false);
+    expect(intake.take("a", [cancel("1")], false).count).toBe(0);
+    failed.undo();
+    expect(intake.take("a", [cancel("1"), cancel("2")], false).count).toBe(2);
+    expect(intake.take("a", [cancel("3")], false).count).toBe(0);
   });
 });
 

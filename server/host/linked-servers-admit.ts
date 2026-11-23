@@ -38,7 +38,13 @@ export function createFrameBudget(now: () => number = Date.now, limit: number = 
   };
   return {
     left(linkId: string): number { return Math.max(0, limit - recent(linkId).reduce((sum, one) => sum + one.frames, 0)); },
-    spend(linkId: string, frames: number): void { if (frames > 0) recent(linkId).push({ at: now(), frames }); },
+    /** Returns what gives the same frames back. */
+    spend(linkId: string, frames: number): () => void {
+      if (frames <= 0) return () => {};
+      const entry = { at: now(), frames };
+      recent(linkId).push(entry);
+      return () => { const kept = spent.get(linkId) ?? [], at = kept.indexOf(entry); if (at >= 0) kept.splice(at, 1); };
+    },
     forget(linkId: string): void { spent.delete(linkId); },
   };
 }
@@ -63,7 +69,7 @@ export function createIntake(now: () => number = Date.now, limits: { frames?: nu
   const hellos = createFrameBudget(now, limits.hellos ?? ADMIT.hellos);
   const waiting = new Map<string, unknown>();
   return {
-    take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[] } {
+    take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[]; undo(): void } {
       let room = full ? 0 : work.left(linkId), count = 0, spent = 0;
       const taken: unknown[] = [];
       for (const frame of frames) {
@@ -76,14 +82,14 @@ export function createIntake(now: () => number = Date.now, limits: { frames?: nu
         if (kindOf(frame) === "hello") waiting.set(linkId, frame);
         else taken.push(frame);
       }
-      work.spend(linkId, spent);
+      const undo = work.spend(linkId, spent);
       const hello = waiting.get(linkId);
       if (hello !== undefined && hellos.left(linkId) > 0) {
         hellos.spend(linkId, 1);
         waiting.delete(linkId);
         taken.unshift(hello);
       }
-      return { count, frames: taken };
+      return { count, frames: taken, undo };
     },
     forget(linkId: string): void { work.forget(linkId); hellos.forget(linkId); waiting.delete(linkId); },
   };

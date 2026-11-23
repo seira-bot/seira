@@ -17,6 +17,8 @@
 //   past ADMIT.frames in ADMIT.windowMs, and no work frame while ADMIT.outbox frames for the other side wait. The rest
 //   is not acknowledged, so the other side sends it again later. Of the hellos taken, only the last of a batch is
 //   applied, and at most ADMIT.hellos in ADMIT.windowMs.
+// - What a peer says (its place and bots, a hand-off's sender, words and file names, a result's words and file names)
+//   loses its invisible and control characters before this server takes it (farFrame).
 // - A frame whose file is larger than FILE_MAX_BYTES is dropped. The files of a link waiting here, put by the other side
 //   or got from it, stay within SPOOL_ROOM: bytes, hand-off ids and files, checked before any of its folders is made.
 // - A right credential is always served. A wrong one counts as a failed try of its sender, as a wrong invite code does.
@@ -41,7 +43,7 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
-import { createDialer, readCapped } from "../bot-link/dial.ts";
+import { FILE_IDLE_MS, createDialer, readCapped } from "../bot-link/dial.ts";
 import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
 import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
@@ -53,6 +55,7 @@ import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
+import { farFileName, farFrame } from "./linked-servers-text.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
@@ -274,7 +277,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   }
 
   /** The frames of one exchange or answer from the link's other side that are taken now. */
-  function intakeOf(id: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[] } {
+  function intakeOf(id: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[]; undo(): void } {
     const taken = intake.take(id, frames, full);
     if (taken.count < frames.length && heldBack.count(id) !== null) log("linked servers: another Seira sent more than a link takes now; the rest waits");
     return taken;
@@ -291,7 +294,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     return createDialer({ link, fetch: watched, paths: GUEST_PATHS, farText: false, log: () => log("linked servers: the other server could not be reached; trying again"),
       takes: (frames) => intakeOf(id, frames, link.backlog(key, 0) >= outboxMax),
       budget: { left: () => sent.left(id), spend: (frames) => sent.spend(id, frames) },
-      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: EXCHANGE_ANSWER_MAX, pace: timing.pace ?? JOINER_PACE,
+      room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), answerMax: EXCHANGE_ANSWER_MAX, pace: timing.pace ?? JOINER_PACE, fileIdleMs: FILE_IDLE_MS,
       ...(timing.holdMs ? { holdMs: timing.holdMs } : {}), ...(timing.firstRetryMs ? { firstRetryMs: timing.firstRetryMs } : {}) });
   }
 
@@ -313,14 +316,14 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
       refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
     });
-    const endsOnBye: BotLink = { ...link, receive: (peer, frames) => { if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(farFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
     const takes = (frames: readonly unknown[], ack: number) => intakeOf(id, frames, link.backlog(key, ack) >= outboxMax);
     const entry: Instance = {
       id, key, link,
       dialer: record.role === "joiner" ? dialerFor(id, key, dataDir, endsOnBye) : null,
       exchange: record.role === "inviter"
         ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
-          pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) }, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+          pace: { exchange: () => pace.exchange(id), session: () => pace.session(id) }, fileName: farFileName, log, ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };
     instances.set(id, entry);
