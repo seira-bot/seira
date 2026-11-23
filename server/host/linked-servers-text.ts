@@ -1,5 +1,5 @@
 // The text a server of another owner sends over a link, as this server takes it in.
-import { guestFrameSchema } from "../bot-link/protocol.ts";
+import { guestFrameSchema, type Frame } from "../bot-link/protocol.ts";
 import { clean, defuse } from "../records-block.ts";
 
 const FAR_BOT = "Teammate";
@@ -53,14 +53,33 @@ export function farFrame(raw: unknown): unknown {
   }
 }
 
-/** What cleaning `raw` costs, in characters: none for a frame that does not parse or has no words to clean, else the
- * size of the frame. The schema checks a length without reading the text. */
-export function farCost(raw: unknown): number {
-  if (!guestFrameSchema.safeParse(raw).success) return 0;
-  const { t } = raw as { t: string };
-  return t === "done" || t === "cancel" || t === "bye" ? 0 : JSON.stringify(raw).length;
+const length = (text: string | undefined) => text?.length ?? 0;
+const nameChars = (files: ReadonlyArray<{ name: string }> | undefined) => files?.reduce((sum, one) => sum + one.name.length, 0) ?? 0;
+
+/** The characters farFrame cleans in a frame that parsed. */
+function priceOf(frame: Frame): number {
+  switch (frame.t) {
+    case "hello":
+      return frame.place.name.length + frame.bots.reduce((sum, bot) => sum + bot.name.length + length(bot.title) + length(bot.description) + length(bot.model), 0);
+    case "handoff":
+      return frame.text.length + length(frame.doneWhen) + frame.from.name.length + length(frame.origin.quote) + nameChars(frame.files);
+    case "result":
+      return frame.text.length + nameChars(frame.files);
+    default:
+      return 0;
+  }
 }
 
-/** A frame as this side takes it in: cleaned only once it parses, so no text longer than the schema allows is read. A
- * frame that does not parse becomes `null`, which the link drops. */
-export const takeFarFrame = (raw: unknown): unknown => (guestFrameSchema.safeParse(raw).success ? farFrame(raw) : null);
+const UNREAD = { frame: null, price: 0 } as const;
+
+/** A frame from a guest peer as this side reads it: parsed once, and priced in the characters farFrame will clean in
+ * what parsed. Security invariant: nothing the schema drops (a key it does not know, the space around a name) is read
+ * past the parse, and this never throws: a frame that does not parse is null, at no price, which the link drops. */
+export function readFar(raw: unknown): { frame: Frame | null; price: number } {
+  try {
+    const parsed = guestFrameSchema.safeParse(raw);
+    return parsed.success ? { frame: parsed.data, price: priceOf(parsed.data) } : UNREAD;
+  } catch {
+    return UNREAD;
+  }
+}

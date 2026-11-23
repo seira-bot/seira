@@ -7,8 +7,9 @@ import { dirname } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
+import { isWorkFrame, type SendPace } from "../bot-link/dial.ts";
 import type { BotLink } from "../bot-link/link.ts";
-import { LEVEL_HEADER, PROTOCOL_LEVEL, SEEN_MS, TAKEN_HEADER, fileWay, levelOf, syncRequest } from "../bot-link/protocol.ts";
+import { LEVEL_HEADER, PROTOCOL_LEVEL, SEEN_MS, TAKEN_HEADER, fileWay, levelOf, syncRequest, type Numbered } from "../bot-link/protocol.ts";
 import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { answerAsleep } from "../cloud-power.ts";
 import type { RouteContext } from "./table.ts";
@@ -29,6 +30,11 @@ export interface LinkExchangeOptions {
   takes?(frames: readonly unknown[], ack: number): { count: number; frames: readonly unknown[]; undo?(): void };
   /** A guest link's limits on its peer's exchanges and on the new sessions among them: false answers 429. */
   pace?: { exchange(): boolean; session(): boolean };
+  /** A guest link's limit on the bytes of its peer's exchanges: `max` is the most one request may carry, and `spend` takes
+   * the bytes a request says it carries, up to `max`, or `max` when it does not say, before it is read; false answers 429. */
+  bytes?: { max: number; spend(bytes: number): boolean };
+  /** A guest link's pace for its answers. */
+  sends?: SendPace;
   /** A guest link's own form of a file name its peer gives, the same as the one its frames get. */
   fileName?(name: string): string;
   log?(line: string): void;
@@ -37,9 +43,13 @@ export interface LinkExchangeOptions {
 /** An error of reading the request body keeps its own status and text; it holds nothing about this server. */
 class BodyRefused { error: unknown; constructor(error: unknown) { this.error = error; } }
 
-export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes, pace, fileName: ownName = (name) => name, log = (line) => console.error(line) }: LinkExchangeOptions) {
+const TOO_MANY = "too many requests; try again later";
+
+export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes, pace, bytes, sends, fileName: ownName = (name) => name, log = (line) => console.error(line) }: LinkExchangeOptions) {
   const session = randomUUID();
   const held = new Map<string, () => void>();
+  /** The sequence numbers of the work frames of each peer's last answer, to learn from its next ack how many it took. */
+  const answered = new Map<string, number[]>();
   const gone = new Map<string, NodeJS.Timeout>();
   const seen = (peer: string) => {
     link.setOnline(peer, true);
@@ -49,11 +59,11 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     gone.set(peer, timer);
   };
   /** Until the link has something to send, the wait ends, the computer hangs up or asks again, or the Cloud goes to sleep. */
-  const hold = (res: ServerResponse, peer: string, ack: number, wait: number, sleep: AbortSignal | undefined) => new Promise<void>((resolve) => {
+  const hold = (res: ServerResponse, peer: string, ready: () => boolean, wait: number, sleep: AbortSignal | undefined) => new Promise<void>((resolve) => {
     held.get(peer)?.();
     const done = () => { clearTimeout(timer); stop(); res.off("close", done); sleep?.removeEventListener("abort", done); if (held.get(peer) === done) held.delete(peer); resolve(); };
     const timer = setTimeout(done, wait);
-    const stop = link.onOutgoing((changed) => { if (changed === peer && (!link.has(peer) || link.hasOutgoing(peer, ack))) done(); });
+    const stop = link.onOutgoing((changed) => { if (changed === peer && (!link.has(peer) || ready())) done(); });
     res.on("close", done);
     sleep?.addEventListener("abort", done, { once: true });
     held.set(peer, done);
@@ -117,8 +127,10 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
 
   async function syncOf({ req, res, method, json, readBody }: RouteContext, peer: string, stillLinked: () => boolean): Promise<void> {
     if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
-    if (pace && !pace.exchange()) { req.resume(); return json(res, 429, { error: "too many requests; try again later" }); }
-    const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024).catch((error: unknown) => { throw new BodyRefused(error); }));
+    if (pace && !pace.exchange()) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
+    const declared = Number(req.headers["content-length"] ?? Number.NaN);
+    if (bytes && !bytes.spend(Number.isSafeInteger(declared) && declared >= 0 ? Math.min(declared, bytes.max) : bytes.max)) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
+    const body = syncRequest.safeParse(await readBody(req, bytes?.max ?? 4 * 1024 * 1024).catch((error: unknown) => { throw new BodyRefused(error); }));
     if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
     if (body.data.fresh && pace && !pace.session()) return json(res, 429, { error: "too many new sessions; try again later" });
     const power = powerOf();
@@ -128,6 +140,9 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
     link.setLevel(peer, levelOf(req.headers[LEVEL_HEADER]));
     if ((level ?? PROTOCOL_LEVEL) > 1) res.setHeader(LEVEL_HEADER, String(level ?? PROTOCOL_LEVEL));
     if (body.data.fresh) link.sessionStarted(peer);
+    const last = answered.get(peer);
+    answered.delete(peer);
+    if (sends && last && !body.data.fresh) sends.took(last.length, last.filter((seq) => seq <= body.data.ack).length);
     const taken = takes?.(body.data.frames, body.data.ack);
     if (taken) res.setHeader(TAKEN_HEADER, String(taken.count));
     try {
@@ -139,12 +154,24 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level,
       return json(res, 503, { error: "the frames could not be taken now; try again later" });
     }
     if (!stillLinked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
-    if (body.data.wait > 0 && !link.hasOutgoing(peer, body.data.ack)) await hold(res, peer, body.data.ack, body.data.wait, power?.sleepSignal());
+    const { ack, wait } = body.data;
+    const ready = sends ? () => sends.next(link.outgoing(peer, ack)).count > 0 : () => link.hasOutgoing(peer, ack);
+    if (wait > 0 && !ready()) await hold(res, peer, ready, sends ? Math.min(wait, sends.next(link.outgoing(peer, ack)).waitMs || wait) : wait, power?.sleepSignal());
     if (power?.sleeping()) return answerAsleep(res, json);
     if (res.writableEnded || res.destroyed) return;
     if (!stillLinked()) return json(res, 403, { error: "This link is off. Turn it on again in the app." });
     seen(peer);
-    return json(res, 200, { session, frames: link.outgoing(peer, body.data.ack) });
+    return json(res, 200, { session, frames: answer(peer, link.outgoing(peer, ack)) });
+  }
+
+  /** What of `waiting` the answer carries: all of it, or with `sends`, what may go now. */
+  function answer(peer: string, waiting: Numbered[]): Numbered[] {
+    if (!sends) return waiting;
+    const frames = waiting.slice(0, sends.next(waiting).count);
+    sends.sent(frames);
+    const work = frames.filter((entry) => isWorkFrame(entry.frame)).map((entry) => entry.seq);
+    if (work.length > 0) answered.set(peer, work);
+    return frames;
   }
 
   return {

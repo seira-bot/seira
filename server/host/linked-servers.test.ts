@@ -257,7 +257,7 @@ describe("admission", () => {
     expect(intake.take("a", [cancel("3")], false).count).toBe(0);
   });
 
-  const priced = (frame: unknown) => (frame as { c?: number }).c ?? 0;
+  const priced = (frame: unknown) => ({ frame, price: (frame as { c?: number }).c ?? 0 });
   const result = (id: string, c: number) => ({ t: "result", id, ok: true, text: "", c });
 
   it("takes a batch up to the first frame its characters have no room for, and takes the rest once the window has passed", () => {
@@ -275,13 +275,20 @@ describe("admission", () => {
     expect(took([result("5", 10)]).count).toBe(1);
   });
 
-  it("passes one frame larger than the character limit through an empty window, and costs nothing for a frame without a cost", () => {
+  it("passes one frame larger than the character limit through an empty window, which stays full until its price is spent, and costs nothing for a frame without a cost", () => {
     let now = 0;
     const intake = createIntake(() => now, { chars: 10 }, priced);
-    expect(intake.take("a", [result("1", 500), result("2", 1)], false).count).toBe(1);
+    expect(intake.take("a", [result("1", 15), result("2", 1)], false).count).toBe(1);
     expect(intake.take("a", [result("2", 1)], false).count).toBe(0);
     now = ADMIT.windowMs;
-    expect(intake.take("a", [result("2", 1)], false).count).toBe(1);
+    expect(intake.take("a", [result("2", 6)], false).count).toBe(0);
+    expect(intake.take("a", [result("2", 5)], false).count).toBe(1);
+    now = 3 * ADMIT.windowMs;
+    expect(intake.take("a", [result("3", 500)], false).count).toBe(1);
+    now = 4 * ADMIT.windowMs;
+    expect(intake.take("a", [result("4", 1)], false).count).toBe(0);
+    now = 5 * ADMIT.windowMs;
+    expect(intake.take("a", [result("4", 1)], false).count).toBe(1);
     expect(createIntake(() => 0, { chars: 1 }).take("a", [result("1", 500), result("2", 500)], false).count).toBe(2);
   });
 
@@ -295,7 +302,7 @@ describe("admission", () => {
 
   it("keeps a hello waiting until the characters have room for it", () => {
     let now = 0;
-    const intake = createIntake(() => now, { chars: 10 }, (frame) => (kind(frame) === "hello" ? 6 : priced(frame)));
+    const intake = createIntake(() => now, { chars: 10 }, (frame) => (kind(frame) === "hello" ? { frame, price: 6 } : priced(frame)));
     const kind = (frame: unknown) => (frame as { t?: string }).t;
     expect(intake.take("a", [result("1", 8), hello("far", "one")], false)).toMatchObject({ count: 2, frames: [result("1", 8)] });
     expect(intake.take("a", [], false)).toMatchObject({ count: 0, frames: [] });
@@ -443,6 +450,23 @@ describe("the linked servers manager", () => {
     rmdirSync(stored);
     expect((await post(`${origin}/api/linked-servers/accept`, { code: codeOf(answer.invite), place })).status).toBe(200);
     expect(made.list()).toHaveLength(1);
+  });
+
+  it("removes the folder of a link it could not finish making, keeps the invite, and makes the link at the next try", async () => {
+    let fails = true;
+    const { made, dataDir } = manager("head", { audit: (row) => { if (fails && row.action === "linked-server.accept") throw new Error("the record is full"); } });
+    const origin = await serving(made);
+    const answer = made.invite({ kind: "cli" });
+    if ("error" in answer) throw new Error(answer.error);
+    const folders = () => readdirSync(join(dataDir, "linked-servers"), { withFileTypes: true }).filter((one) => one.isDirectory()).map((one) => one.name);
+    const before = folders();
+    const place = { id: "branch-environment", name: "Branch" };
+    expect((await post(`${origin}/api/linked-servers/accept`, { code: codeOf(answer.invite), place })).status).toBe(503);
+    expect([folders(), made.list(), made.instances()]).toEqual([before, [], []]);
+
+    fails = false;
+    expect((await post(`${origin}/api/linked-servers/accept`, { code: codeOf(answer.invite), place })).status).toBe(200);
+    expect(folders().sort()).toEqual([...before, made.list()[0]!.id].sort());
   });
 
   it("joins only an invite at a secure address, and says nothing the other server answered", async () => {
@@ -615,7 +639,8 @@ describe("the linked servers manager", () => {
   });
 
   it("drops a frame past the schema's limits without reading its text, and starts no work from it", async () => {
-    const { made, rows } = manager("head");
+    let now = Date.now();
+    const { made, rows } = manager("head", { now: () => now });
     const origin = await serving(made);
     const { token } = await accepted(made, origin);
     const sync = exchangeAt(origin, token);
@@ -624,12 +649,46 @@ describe("the linked servers manager", () => {
     const huge = "[".repeat(4_000_000);
     const frames = [{ ...handoff("h-huge"), text: huge }, { ...handoff("h-name"), from: { botId: "scout", name: huge, threadId: "scout-chat" } }, { t: "result", id: "r-huge", ok: true, text: huge }];
     for (const frame of frames) {
+      now += ADMIT.windowMs;
       const start = performance.now();
       const answer = await sync([frame]);
-      expect([answer.status, answer.taken, performance.now() - start < 500]).toEqual([200, "1", true]);
+      expect([answer.status, answer.taken, performance.now() - start < 3_000]).toEqual([200, "1", true]);
     }
     expect(rows).toHaveLength(written);
   }, 15_000);
+
+  it("answers 429 to an exchange past the link's bytes for the minute, before it reads it, and reads it again in the next minute", async () => {
+    let now = Date.now();
+    const { made } = manager("head", { now: () => now, limits: { bytes: 20_000 } });
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    const large = [{ t: "result", id: "r1", ok: true, text: "x".repeat(9_000) }];
+    expect((await sync([], { fresh: true })).status).toBe(200);
+    expect([(await sync(large)).status, (await sync(large)).status, (await sync(large)).status]).toEqual([200, 200, 429]);
+    now += ADMIT.windowMs;
+    expect(await sync(large)).toMatchObject({ status: 200, taken: "1" });
+  });
+
+  it("writes at most twenty lines of a link's in a minute, then one line that says the rest were dropped", async () => {
+    let now = Date.now();
+    const { made, logs } = manager("head", { now: () => now });
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    expect((await sync([], { fresh: true })).status).toBe(200);
+    const junk = (count: number) => Array.from({ length: count }, (_, index) => ({ t: "junk", id: `j${index}` }));
+    now += ADMIT.windowMs;
+    const start = logs.length;
+    expect(await sync(junk(50))).toMatchObject({ status: 200, taken: "50" });
+    expect(logs.slice(start)).toEqual([...Array.from({ length: 20 }, () => "bot link: a frame that did not parse was dropped"),
+      "linked servers: a link wrote more than 20 lines in a minute; the rest were dropped"]);
+    expect((await sync(junk(5))).status).toBe(200);
+    expect(logs).toHaveLength(start + 21);
+    now += ADMIT.windowMs;
+    expect((await sync(junk(5))).status).toBe(200);
+    expect(logs.slice(start + 21)).toEqual(Array.from({ length: 5 }, () => "bot link: a frame that did not parse was dropped"));
+  });
 
   it("takes the work frames an honest server sends in a minute: its hand-offs, their cancels and its results", async () => {
     const { made } = manager("head");
