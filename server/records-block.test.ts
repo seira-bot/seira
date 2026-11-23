@@ -43,3 +43,43 @@ describe("the outside-text sanitiser", () => {
     expect(block.match(/\[\/UNTRUSTED APP EVENT DATA\]/g)).toHaveLength(1);
   });
 });
+
+describe("the outside-text sanitiser on long hostile input", () => {
+  const SIZE = 200_000;
+  const hostile: Record<string, string> = {
+    "bracket and spaces": `[${" ".repeat(SIZE - 1)}`,
+    "bracket and controls": `[${"\u0001".repeat(SIZE - 1)}`,
+    "closing marker and spaces": `[/${" ".repeat(SIZE - 2)}`,
+    "spaced closing marker and spaces": `[ /${" ".repeat(SIZE - 3)}`,
+    "end and spaces": `[end${" ".repeat(SIZE - 4)}`,
+    "end of and spaces": `[end of${" ".repeat(SIZE - 7)}`,
+    "records and spaces": `[records${" ".repeat(SIZE - 8)}`,
+    "brackets": "[".repeat(SIZE),
+    "bracket and space pairs": "[ ".repeat(SIZE / 2),
+    "spaces": " ".repeat(SIZE),
+    "newlines": "\n".repeat(SIZE),
+    "bracket and marks": `[${"\u0301".repeat(SIZE - 1)}`,
+    "bracket and mark runs": `[${"\u0301".repeat(255)}`.repeat(780),
+    "bracket and accented letters": `[${"\u00e9".repeat(SIZE - 1)}`,
+    "bracket and word pairs": `[${"a ".repeat(SIZE / 2 - 1)}`,
+    "note openings": "[Seira ".repeat(Math.floor(SIZE / 7)),
+    "delivered note openings": "[message from ".repeat(Math.floor(SIZE / 14)),
+  };
+
+  for (const [name, text] of Object.entries(hostile)) {
+    it(`takes less than a second on ${name}`, () => {
+      for (const run of [() => defuse(text), () => clean(text, 4_000)]) {
+        const started = performance.now();
+        run();
+        expect(performance.now() - started).toBeLessThan(1_000);
+      }
+    });
+  }
+
+  it("still defuses a marker with or without its slash and with white space", () => {
+    for (const marker of ["[ / records from x]", "[/untrusted]", "[  seira note]", "[/ Scheduled routine x]", "[\n/\n\tOpenMausBot: ok]", "[records from x]"]) {
+      const safe = defuse(`a ${marker} b`);
+      expect(safe).toBe(`a (${marker.slice(1)} b`);
+    }
+  });
+});
