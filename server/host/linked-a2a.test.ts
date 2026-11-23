@@ -548,8 +548,8 @@ describe("the characters of far text that a link may have cleaned", () => {
     const token = String(made.body.token);
     for (let index = 0; index < 12; index += 1) {
       expect((await head.call("/api/a2a/writer", token, sendNow(`m-${index}`, `Write post ${index}. ${"Words. ".repeat(140)}`))).status).toBe(200);
+      await until(() => head.runs.length === index + 1, `call ${index} starts work`);
     }
-    await until(() => head.runs.length === 12, "every call starts work");
   }, 60_000);
 
   it("reads the result of a far agent again in a later window while this link has no room for it", async () => {
