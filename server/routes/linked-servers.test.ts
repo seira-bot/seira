@@ -1,4 +1,5 @@
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -341,4 +342,67 @@ describe("the admin routes", () => {
     made = { error: "full" };
     expect(await ask()).toEqual({ status: 409, body: { error: "This Seira already has as many links as it can keep. Remove one first." } });
   });
+});
+
+describe("the admin routes for A2A agents", () => {
+  const ADDRESS = "The address of the A2A agent must be a public https address.";
+  const noLookup = { lookup: async () => [] };
+
+  it("answer an admin only on each A2A route (AC-06)", async () => {
+    const a = await side("head", [WRITER]);
+    const made = await a.api("POST", "/api/linked-servers/a2a", { name: "Partner agent", inbound: true, exposed: ["writer"] });
+    expect(made.status).toBe(200);
+    const id = String((made.body.server as Record<string, unknown>).id);
+    const member = { "x-test-member": "1" };
+    for (const [method, path, body] of [["POST", "/api/linked-servers/a2a", { name: "Another agent", inbound: true }], ["POST", `/api/linked-servers/${id}/token`, undefined],
+      ["PATCH", `/api/linked-servers/${id}`, { name: "Renamed", url: null, token: null, inbound: false }], ["DELETE", `/api/linked-servers/${id}`, undefined]] as const) {
+      expect(await a.api(method, path, body, member), `${method} ${path}`).toEqual({ status: 403, body: { error: "Only an admin can manage links to another Seira." } });
+    }
+    expect(a.manager.list()).toEqual([expect.objectContaining({ id, kind: "a2a", name: "Partner agent", exposed: ["writer"], inbound: expect.objectContaining({ urls: [expect.anything()] }) })]);
+    expect(a.rows.map((row) => row.action)).toEqual(["linked-server.a2a-add"]);
+    expect(a.reached).toEqual([]);
+  }, 30_000);
+
+  it("refuse an address that is not public https, and take loopback only while the test switch is on (AC-30)", async () => {
+    const a = await side("head", [WRITER], undefined, { a2a: { egress: noLookup } });
+    for (const url of ["http://agent.example/", "https://user:secret@agent.example/", "https://10.0.0.1/", "https://169.254.169.254/", "https://[fd00::1]/",
+      "http://127.0.0.1:9/agent", "https://localhost/agent"]) {
+      expect(await a.api("POST", "/api/linked-servers/a2a", { name: "Agent", url, inbound: false }), url).toEqual({ status: 400, body: { error: ADDRESS } });
+    }
+    expect(a.manager.list()).toEqual([]);
+
+    const made = await a.api("POST", "/api/linked-servers/a2a", { name: "Agent", url: "https://agent.example/", inbound: false });
+    expect(made.status).toBe(200);
+    const id = String((made.body.server as Record<string, unknown>).id);
+    expect(await a.api("PATCH", `/api/linked-servers/${id}`, { url: "https://10.0.0.1/" })).toEqual({ status: 400, body: { error: ADDRESS } });
+    expect(a.manager.list()[0]).toMatchObject({ outbound: { url: "https://agent.example/", hasToken: false } });
+
+    const b = await side("branch", [SCOUT], undefined, { a2a: { allowLoopback: true, egress: { ...noLookup, allowLoopback: true } } });
+    const loopback = await b.api("POST", "/api/linked-servers/a2a", { name: "Agent", url: "http://127.0.0.1:9/agent", inbound: false });
+    expect(loopback.status).toBe(200);
+    expect(loopback.body.server).toMatchObject({ outbound: { url: "http://127.0.0.1:9/agent", hasToken: false } });
+  }, 30_000);
+
+  it("leave the links to other Seiras as they are, and list no token or hash (AC-02)", async () => {
+    const a = await side("head", [WRITER]), b = await side("branch", [SCOUT]);
+    await link(a, b);
+    const links = join(a.dataDir, "linked-servers", "links.json");
+    const before = await readFile(links);
+
+    const made = await a.api("POST", "/api/linked-servers/a2a", { name: "Partner agent", inbound: true, exposed: ["writer"] });
+    const id = String((made.body.server as Record<string, unknown>).id), first = String(made.body.token);
+    expect((await a.api("PATCH", `/api/linked-servers/${id}`, { name: "Partner", exposed: [], cap: "auto" })).status).toBe(200);
+    const rotated = await a.api("POST", `/api/linked-servers/${id}/token`);
+    const second = String(rotated.body.token);
+
+    const listed = await a.api("GET", "/api/linked-servers");
+    expect((listed.body.servers as Array<{ kind: string }>).map((one) => one.kind)).toEqual(["seira", "a2a"]);
+    for (const secret of [first, second, hashSecret(first), hashSecret(second)]) {
+      expect(JSON.stringify(listed.body)).not.toContain(secret);
+      expect(JSON.stringify(a.rows)).not.toContain(secret);
+    }
+    expect(await a.api("DELETE", `/api/linked-servers/${id}`)).toEqual({ status: 200, body: { ok: true } });
+    expect((await readFile(links)).equals(before)).toBe(true);
+    expect(a.view()).toMatchObject({ kind: "seira", state: "online" });
+  }, 30_000);
 });
