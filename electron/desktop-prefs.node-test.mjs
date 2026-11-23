@@ -356,11 +356,13 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
     cloudPageAsking: event => event.verifiedCloud ? "cloud" : null,
     serverReady: true, LOCAL_ID: "local", switchEnvironment: id => switched(id),
     process: { platform: "win32" }, windowFrameMade: false, broadcastDesktopCapabilities: async () => { broadcasts++; },
+    textSize: { current: () => 1, set: step => step },
     // main's own: a failed switch shows its dialog and resolves.
     workspaceMenuAction: async action => { try { await action(); } catch { calls.push("dialog"); } },
   });
   vm.runInContext(main.slice(start, end), context);
   assert.equal(options.prefs, context.nativeText.prefs, "the record main read before the tray and the startup screen");
+  assert.equal(options.textSize, context.textSize, "the text size the View menu moves too");
   assert.match(main, /const nativeText = createDesktopText\(app\), nativeT = nativeText\.t;/);
   assert.equal(options.localConfig(), "/home/.seira/config.json", "This computer's own workspace, whichever server the window shows");
   assert.deepEqual([options.frame.made(), options.frame.restarts], [false, true], "Windows: the frame its window was made with, until a restart");
