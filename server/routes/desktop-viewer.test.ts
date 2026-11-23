@@ -46,7 +46,7 @@ async function listen(server: Server): Promise<number> {
   return (server.address() as { port: number }).port;
 }
 
-function headers(token = admin.token) { return { ...remoteHeaders, cookie: `test_session=${token}` }; }
+function headers(token = admin.token) { return { ...remoteHeaders, cookie: `__Host-test_session=${token}` }; }
 
 function get(path: string, extra: Record<string, string> = {}) {
   return new Promise<{ status: number; headers: IncomingHttpHeaders; body: unknown }>((resolve, reject) => {
@@ -161,8 +161,8 @@ it("proxies opaque bytes and keeps workspace credentials out of the VM", async (
 
 it("protects HTTP and upgrade requests with the existing session and scope checks", async () => {
   for (const [extra, expected] of [
-    [{ cookie: "" }, 403], [{ cookie: `test_session=${member.token}` }, 403],
-    [{ origin: "https://evil.example" }, 403], [{ cookie: "test_session=revoked" }, 401],
+    [{ cookie: "" }, 403], [{ cookie: `__Host-test_session=${member.token}` }, 403],
+    [{ origin: "https://evil.example" }, 403], [{ cookie: "__Host-test_session=revoked" }, 401],
   ] as const) {
     expect((await open(undefined, extra)).status).toBe(expected);
     expect((await get(base, extra)).status).toBe(expected);
@@ -414,8 +414,8 @@ it("binds a lease to one bot's desktop and refuses malformed or half-given lease
 it("keeps the session and scope checks ahead of the lease, and closes a session's viewers per bot or all at once", async () => {
   leases.add(leaseKey(phoneTarget, "test-bot", lease));
   leases.add(leaseKey(phoneTarget, "other-bot", lease));
-  expect((await open(bound(), { cookie: `test_session=${member.token}` })).status).toBe(403);
-  expect((await open(bound(), { cookie: "test_session=revoked" })).status).toBe(401);
+  expect((await open(bound(), { cookie: `__Host-test_session=${member.token}` })).status).toBe(403);
+  expect((await open(bound(), { cookie: "__Host-test_session=revoked" })).status).toBe(401);
   const mine = (await open(bound())).socket!;
   const other = (await open(bound(`botId=other-bot&controlLeaseId=${lease}`))).socket!;
   const browser = (await open()).socket!;
