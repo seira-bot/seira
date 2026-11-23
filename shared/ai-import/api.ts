@@ -19,7 +19,8 @@ export const AI_IMPORT_EVENT = "ai-import";
 
 export type ImportJobState = "queued" | "reading" | "ready" | "applying" | "done" | "partly-done" | "failed" | "undone" | "cancelled";
 
-export type ImportErrorCode = "unknown-source" | "upload-too-large" | "too-much-data" | "too-many-files" | "unsafe-archive" | "worker-failed";
+/** `secret-file`: the export holds a key or password file. `bad-export`: the export file's own manifest is broken. */
+export type ImportErrorCode = "unknown-source" | "upload-too-large" | "too-much-data" | "too-many-files" | "unsafe-archive" | "secret-file" | "bad-export" | "worker-failed";
 
 export type ImportDestination = { kind: "new" } | { kind: "bot"; botId: string };
 

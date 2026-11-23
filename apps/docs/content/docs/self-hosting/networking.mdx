@@ -26,6 +26,21 @@ Each prints one pairing link; paste it into the desktop app under **＋ → Conn
 
 A loopback request counts as the owner only when it really comes from this machine; a LAN client that writes `Host: 127.0.0.1` is still a stranger. For webhook delivery, proxy only the dedicated webhook receiver. Never forward the main harness port to the public internet.
 
+## See which requests reach the server
+
+When you debug a tunnel, a tailnet address or a port, turn on the access log. The server then writes one line for each request it answers, to its normal log:
+
+```sh
+npx @seira-bot/seira serve --access-log
+# or: SEIRA_ACCESS_LOG=1 npx @seira-bot/seira serve
+```
+
+```text
+access 2026-11-23T09:15:02.481Z GET /api/health 200 3ms via=local
+```
+
+A line holds the time, the method, the path, the status, the duration and the way in: `tunnel` for the phone tunnel, `local` for every other connection. It never holds the query string, a cookie, a header or a body. The log is off unless you turn it on.
+
 ## Port overrides
 
 Source and advanced deployments can change documented ports with the relevant environment settings. When the default harness port is occupied, packaged builds may fall back to another local port and communicate the selected address internally.

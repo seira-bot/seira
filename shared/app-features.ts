@@ -328,7 +328,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-import",
     name: "Move from another AI",
     place: "Settings → Import & export → Bring things in → Move from another AI",
-    does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. The person reviews what Seira found before anything comes in.",
+    does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. Hermes on another computer makes one file from copied steps. The person reviews it first.",
     releaseNotes: ["aiImport"],
   },
   {
@@ -357,6 +357,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Send crash reports",
     place: "Settings → General → Privacy (the switch is in the desktop app only)",
     does: "On by default. When Seira stops working, the desktop app sends the app version, system type and where its code failed. Never messages, files or names. It is a different switch from Usage analytics.",
+  },
+  {
+    id: "glance",
+    name: "Glance",
+    place: "The top centre of the screen while a bot works (a tray icon on Linux Wayland); turn it on or off with View → Glance in the desktop app",
+    does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
   },
 ];
 
