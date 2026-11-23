@@ -36,6 +36,7 @@ describe("uploadBackupInChunks", () => {
     expect(id).toBe("upload-1");
     expect(state.parts).toEqual([{ offset: 0, size: 2 }, { offset: 2, size: 2 }, { offset: 4, size: 1 }]);
     expect(state.finished).toBe(true);
+    expect(state.calls.filter((call) => call.includes("/chunk?"))).toEqual([2, 2, 1].map((size, index) => `POST ${base}/upload-1/chunk?offset=${index * 2}&bytes=${size}`));
     expect(progress).toEqual([0, 40, 80, 100]);
   });
 

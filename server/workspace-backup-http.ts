@@ -226,8 +226,13 @@ export function createWorkspaceBackupRoutes(options: {
         if (method === "POST" && action === "chunk") {
           const artifact = get(id, auth, "uploading");
           if (artifact.writing) throw failure("This upload is still receiving data. Try again in a moment.", 409);
-          const offset = Number(new URL(req.url ?? "", "http://localhost").searchParams.get("offset"));
-          const length = Number(req.headers["content-length"]);
+          const query = new URL(req.url ?? "", "http://localhost").searchParams;
+          const offset = Number(query.get("offset"));
+          // A proxy may forward the body as Transfer-Encoding: chunked without Content-Length, so the URL carries the size too.
+          const declared = [req.headers["content-length"], query.get("bytes")].filter((value): value is string => typeof value === "string").map(Number);
+          if (declared.length === 0) throw failure("The size of this part of the backup is missing.", 411);
+          if (declared.some((value) => value !== declared[0])) throw failure("The size of this part of the backup does not match.");
+          const length = declared[0];
           if (!Number.isSafeInteger(length) || length <= 0 || length > MAX_CHUNK_BYTES) throw failure("This part of the backup is too large.", 413);
           if (!Number.isSafeInteger(offset) || offset !== artifact.received) throw failure("The upload is out of step. Resume it.", 409);
           if (offset + length > artifact.total!) throw failure("The upload is larger than its announced size.", 413);

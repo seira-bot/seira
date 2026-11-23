@@ -322,3 +322,29 @@ it("refuses every upload route to a caller without admin access", async () => {
     expect((await send(path, { method, body: method === "POST" ? "{}" : undefined, token: member.token })).status).toBe(403);
   }
 });
+
+function chunkedPart(path: string, parts: string[]) {
+  return new Promise<number>((resolve, reject) => {
+    const part = request(`${url}${path}`, { method: "POST", headers: { authorization: `Bearer ${admin.token}`, "transfer-encoding": "chunked" }, signal: AbortSignal.timeout(5000) }, (response) => { response.resume(); resolve(response.statusCode!); });
+    part.on("error", reject);
+    for (const piece of parts) part.write(piece);
+    part.end();
+  });
+}
+
+it("takes the part size from the URL when a proxy sends the body without Content-Length", async () => {
+  const started = await startUpload(10);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=0&bytes=4`, ["ab", "cd"])).toBe(200);
+  expect(await received(started.id)).toBe(4);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4&bytes=3`, ["efgh"])).toBe(413);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4&bytes=5`, ["ef"])).toBe(400);
+  expect(await chunkedPart(`${BASE}/${started.id}/chunk?offset=4`, ["ef"])).toBe(411);
+  expect(readFileSync(uploadFile(started.id), "utf8")).toBe("abcd");
+  expect(await received(started.id)).toBe(4);
+});
+
+it("refuses a part whose Content-Length and bytes differ", async () => {
+  const started = await startUpload(10);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=3`, { body: "abcd" })).status).toBe(400);
+  expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=4`, { body: "abcd" })).status).toBe(200);
+});

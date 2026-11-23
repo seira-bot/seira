@@ -59,7 +59,7 @@ export async function uploadBackupInChunks(file: Blob, options: Options): Promis
   while (received < file.size) {
     const end = Math.min(received + chunkBytes, file.size);
     try {
-      await api(`${BASE}/${id}/chunk?offset=${received}`, {
+      await api(`${BASE}/${id}/chunk?offset=${received}&bytes=${end - received}`, {
         method: "POST", headers: { "content-type": "application/octet-stream" }, body: file.slice(received, end), timeoutMs: PART_TIMEOUT_MS,
       });
       received = end;
