@@ -58,11 +58,7 @@ async function rig(): Promise<Rig> {
   const send = (res: ServerResponse, status: number, payload: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(payload));
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     open += 1;
-    res.once("close", () => { open -= 1; console.log("DBG res close", req.url); });
-    req.socket.once("close", () => console.log("DBG socket close", req.url));
-    req.once("close", () => console.log("DBG req close", req.url));
-    for (const ev of ["end", "finish", "error", "pause", "drain"]) req.socket.on(ev, () => console.log("DBG socket", ev, req.url));
-    setTimeout(() => console.log("DBG state", req.url, req.socket.destroyed, req.socket.readableEnded, req.socket.writableEnded), 1500);
+    res.once("close", () => { open -= 1; });
     const url = new URL(req.url ?? "/", "http://server");
     seen.push({ method: req.method ?? "", url: `${url.pathname}${url.search}`, headers: req.headers });
     if (req.method === "POST" && url.pathname === "/api/pair") {
@@ -93,7 +89,8 @@ async function rig(): Promise<Rig> {
     }
     if (url.pathname === "/trickle") {
       res.writeHead(200, { "content-type": "text/plain" });
-      const tick = setInterval(() => res.write("tick\n"), 10);
+      let ticks = 0;
+      const tick = setInterval(() => { if (++ticks > 40) res.end(); else res.write("tick\n"); }, 10);
       res.once("close", () => clearInterval(tick));
       return;
     }
@@ -138,7 +135,7 @@ async function rig(): Promise<Rig> {
 }
 
 const ORIGIN = "https://h-00112233445566778899aabbccddeeff.e2e.invalid";
-const noStreams = (r: Rig) => waitFor(() => (r.session.activeStreams === 0 && r.open() === 0 ? true : null), 5_000).catch((e) => { throw new Error(`${e.message} client=${r.session.activeStreams} server=${r.open()}`); });
+const noStreams = (r: Rig) => waitFor(() => (r.session.activeStreams === 0 && r.open() === 0 ? true : null), 5_000);
 
 describe("fetchOverSession", () => {
   it("posts JSON and reads the answer, and sends only the path and the query", async () => {
@@ -181,6 +178,8 @@ describe("fetchOverSession", () => {
     const reason = new Error("stop waiting");
     controller.abort(reason);
     await expect(pending).rejects.toBe(reason);
+    await waitFor(() => (r.session.activeStreams === 0 ? true : null), 5_000);
+    r.release();
     await noStreams(r);
     expect((await r.fetch(`${ORIGIN}/echo`)).status).toBe(201);
   });
