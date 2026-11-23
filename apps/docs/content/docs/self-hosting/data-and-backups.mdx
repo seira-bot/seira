@@ -59,9 +59,10 @@ temporarily pauses its own writers and takes a consistent SQLite snapshot. The
 current limit is **10 GB of workspace files and 100,000 entries**; exceeding it
 fails explicitly, never silently produces a partial backup.
 
-Remote proxies and tunnels may impose smaller upload or timeout limits. For a
-large import, use a direct connection to the server or its local desktop UI,
-or configure your own reverse proxy's limits appropriately.
+The app uploads an imported backup in small parts, so a large file passes a
+tunnel or proxy that limits the size of one request. If the connection drops, the
+upload continues from the last part that arrived. An unfinished upload is
+removed after an hour without progress.
 
 To restore, choose **Import backup**, select the file, and enter its password.
 Validation shows its date, version, contents and exclusions before anything is
@@ -121,7 +122,9 @@ Restore with the server stopped, preserving the original paths and ownership, th
 ## The settings file and its dated copies
 
 Every save of `~/.seira/config.json` keeps a copy of the file as it was,
-named `config.json.bak.YYYYMMDD-HHMMSS`, beside it; the last ten are kept. A
+named `config.json.bak.YYYYMMDD-HHMMSS`, beside it; the last ten are kept, and
+so is the last copy of each of the seven days before, so a run of saves never
+takes away the settings as they were the day before. A
 save never replaces a settings file it could not read or understand: it fails
 and says so, so a file that cannot be read is never overwritten by a partial
 one. A save that cannot keep its dated copy fails as well, so the settings file

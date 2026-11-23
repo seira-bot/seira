@@ -14,6 +14,8 @@ export const INVITE_TTL_MS = 15 * 60_000;
 export const LINKS_MAX = 20;
 /** Invites that wait to be used at one time; a new one pushes out the oldest. */
 const INVITES_MAX = 20;
+/** Ended links whose work may still run here; a new one pushes out the oldest. */
+export const ENDED_MAX = 200;
 const INVITE_PREFIX = "seira-link:";
 const DIR = "linked-servers";
 const FILE = "links.json";
@@ -36,7 +38,10 @@ const linkSchema = z.object({
   createdAt: z.number(),
 }).strict().refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
 const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() }).strict();
-const fileSchema = z.object({ v: z.literal(1), links: z.array(linkSchema).max(LINKS_MAX), invites: z.array(inviteSchema).max(INVITES_MAX) }).strict();
+/** A link that ended while work its peer started here could still run: by its peer's key, with the cap it had then. */
+const endedSchema = z.object({ key: z.string().regex(/^[0-9a-f]{8}$/u), cap: z.enum(APPROVAL_CAPS), at: z.number() }).strict();
+const fileSchema = z.object({ v: z.literal(1), links: z.array(linkSchema).max(LINKS_MAX), invites: z.array(inviteSchema).max(INVITES_MAX),
+  ended: z.array(endedSchema).max(ENDED_MAX).optional() }).strict();
 
 export type StoredLink = z.infer<typeof linkSchema>;
 export type LinksFile = z.infer<typeof fileSchema>;

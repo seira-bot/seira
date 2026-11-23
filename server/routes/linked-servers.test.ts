@@ -220,7 +220,7 @@ describe("two linked servers", () => {
     await until(() => b.view()?.state === "ended", "the joiner shows the link as ended");
     await until(() => b.results.length === 1, "the waiting work fails");
     expect(b.results[0]!.status).not.toBe("completed");
-    expect(b.results[0]!.result).toContain("another server");
+    expect(b.results[0]!.result).toContain("another Seira");
     expect(b.asked.some((one) => one.url.endsWith("/api/linked-servers/sync") && (one.status === 401 || one.status === 403))).toBe(true);
     expect((await fetch(`${a.origin}/api/linked-servers/sync`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ ack: 0, frames: [], wait: 0 }) })).status).toBe(401);
@@ -268,7 +268,7 @@ describe("two linked servers", () => {
     const member = { "x-test-member": "1" };
     for (const [method, path, body] of [["GET", "/api/linked-servers", undefined], ["POST", "/api/linked-servers/invites", undefined], ["POST", "/api/linked-servers/join", { invite: "x" }],
       ["PATCH", `/api/linked-servers/${inviterLink}`, { cap: "auto" }], ["DELETE", `/api/linked-servers/${inviterLink}`, undefined]] as const) {
-      expect(await a.api(method, path, body, member), `${method} ${path}`).toEqual({ status: 403, body: { error: "Only an admin can manage linked servers." } });
+      expect(await a.api(method, path, body, member), `${method} ${path}`).toEqual({ status: 403, body: { error: "Only an admin can manage links to another Seira." } });
     }
     expect(a.view()).toMatchObject({ cap: "ask", state: "online" });
 
@@ -279,7 +279,7 @@ describe("two linked servers", () => {
     expect((await a.api("GET", "/api/bots")).status).toBe(200);
     expect(a.reached).toEqual(["GET /api/bots"]);
 
-    expect(await a.api("PATCH", `/api/linked-servers/${inviterLink}`, { exposed: ["ghost"] })).toEqual({ status: 400, body: { error: "One of those bots is not on this server." } });
+    expect(await a.api("PATCH", `/api/linked-servers/${inviterLink}`, { exposed: ["ghost"] })).toEqual({ status: 400, body: { error: "One of those bots is not here." } });
     expect((await a.api("PATCH", `/api/linked-servers/${inviterLink}`, { exposed: ["writer"], extra: true })).status).toBe(400);
     expect((await a.api("PATCH", "/api/linked-servers/ffffffffffffffff", { cap: "auto" })).status).toBe(404);
     expect((await a.api("PATCH", `/api/linked-servers/${inviterLink}`, { cap: "edits" })).body.server).toMatchObject({ cap: "edits" });
@@ -303,8 +303,8 @@ describe("the admin routes", () => {
       const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/linked-servers/invites`, { method: "POST" });
       return { status: response.status, body: await response.json() as Record<string, unknown> };
     };
-    expect(await ask()).toEqual({ status: 409, body: { error: "Other servers cannot reach this server. Give it a secure public address first." } });
+    expect(await ask()).toEqual({ status: 409, body: { error: "Another Seira cannot reach this one. Give it a secure public address first." } });
     made = { error: "full" };
-    expect(await ask()).toEqual({ status: 409, body: { error: "This server already has as many linked servers as it can keep. Remove one first." } });
+    expect(await ask()).toEqual({ status: 409, body: { error: "This Seira already has as many links as it can keep. Remove one first." } });
   });
 });

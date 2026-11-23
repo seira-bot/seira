@@ -19,9 +19,14 @@ export interface LinkExchangeOptions {
   seenMs?: number;
   /** What this place says its version reads; a test stands in for an older Cloud with it. */
   level?: number;
+  /** A guest link's room for a file that is about to arrive at `to` with `bytes`: a release for when its write ends, or
+   * null when it may not come now. Absent: a file needs no room but its own size limit. */
+  room?(to: string, bytes: number): (() => void) | null;
+  /** A guest link's choice of the frames of one exchange to take, or null to refuse the whole exchange for now. */
+  takes?(frames: readonly unknown[], ack: number): readonly unknown[] | null;
 }
 
-export function createLinkExchange({ link, paths, power: powerOf, seenMs, level }: LinkExchangeOptions) {
+export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes }: LinkExchangeOptions) {
   const session = randomUUID();
   const held = new Map<string, () => void>();
   const gone = new Map<string, NodeJS.Timeout>();
@@ -61,14 +66,21 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level 
     if (method !== "PUT") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
     const to = link.incoming(peer, id, way.data, index, fileName);
     if (!to) { req.resume(); return json(res, 409, { error: "that file is not wanted here any more" }); }
+    const declared = Number(req.headers["content-length"] ?? Number.NaN);
+    const sized = Number.isSafeInteger(declared) && declared >= 0 && declared <= FILE_MAX_BYTES;
+    const release = room ? room(to, sized ? declared : Number.POSITIVE_INFINITY) : () => {};
+    if (!release) { req.resume(); return json(res, 413, { error: "there is no room for that file here now" }); }
+    const limit = room ? declared : FILE_MAX_BYTES;
     let taken = 0;
-    const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; done(taken > FILE_MAX_BYTES ? new Error("too large") : null, chunk); } });
+    const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; done(taken > limit ? new Error("too large") : null, chunk); } });
     try {
       await pipeline(req, capped, createWriteStream(to, { mode: 0o600 }));
     } catch {
       rmSync(to, { force: true });
       if (res.destroyed) return;
-      return json(res, taken > FILE_MAX_BYTES ? 413 : 400, { error: taken > FILE_MAX_BYTES ? `a file may be at most ${Math.round(FILE_MAX_BYTES / (1024 * 1024))} MB` : "the file did not arrive whole" });
+      return json(res, taken > limit ? 413 : 400, { error: taken > limit ? `a file may be at most ${Math.round(FILE_MAX_BYTES / (1024 * 1024))} MB` : "the file did not arrive whole" });
+    } finally {
+      release();
     }
     return json(res, 200, { ok: true });
   }
@@ -84,7 +96,9 @@ export function createLinkExchange({ link, paths, power: powerOf, seenMs, level 
     link.setLevel(peer, levelOf(req.headers[LEVEL_HEADER]));
     if ((level ?? PROTOCOL_LEVEL) > 1) res.setHeader(LEVEL_HEADER, String(level ?? PROTOCOL_LEVEL));
     if (body.data.fresh) link.sessionStarted(peer);
-    link.receive(peer, body.data.frames);
+    const frames = takes ? takes(body.data.frames, body.data.ack) : body.data.frames;
+    if (!frames) return json(res, 429, { error: "too many frames now; try again later" });
+    link.receive(peer, frames);
     if (!stillLinked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
     if (body.data.wait > 0 && !link.hasOutgoing(peer, body.data.ack)) await hold(res, peer, body.data.ack, body.data.wait, power?.sleepSignal());
     if (power?.sleeping()) return answerAsleep(res, json);

@@ -52,7 +52,7 @@ const settle = async () => {
 
 const panel = () => host.querySelector<HTMLElement>("[data-browser-transport]")!;
 const maximizeButton = () => host.querySelector<HTMLButtonElement>('[aria-label="Maximize"], [aria-label="Restore size"]');
-const skyward = () => panel().className.split(" ").includes("inset-0");
+const skyward = () => panel().className.split(" ").includes("inset-y-0");
 
 beforeEach(() => {
   dialogCloses = vi.fn();

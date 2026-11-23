@@ -95,6 +95,8 @@ describe("seira command line", () => {
     expect(parseArgs(["serve", "--public-url", "http://192.168.1.20:8799"], {})).toMatchObject({ publicUrl: "http://192.168.1.20:8799" });
     expect(parseArgs(["serve", "--public-url", "http://seira.example.com"], {})).toEqual({ error: expect.stringContaining("plain http isn't encrypted") });
     expect(parseArgs(["serve", "--lan"], {})).toMatchObject({ lan: true });
+    expect(parseArgs(["serve", "--access-log"], {})).toMatchObject({ accessLog: true });
+    expect(parseArgs(["serve"], {})).not.toHaveProperty("accessLog", true);
     expect(parseArgs(["serve", "--lan", "--local"], {})).toEqual({ error: expect.stringContaining("--local") });
   });
 

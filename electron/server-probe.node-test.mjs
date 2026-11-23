@@ -51,6 +51,24 @@ test("on a Mac, a local address that never answers names the Local Network permi
   assert.equal((await probeServer({ address: "seira.example.com", fetch: fakeFetch({ "https://seira.example.com": blocked() }).fetch, platform: "darwin" })).problem, "unreachable");
 });
 
+test("a tailnet name that does not resolve says MagicDNS is off only when the tailnet says so", async () => {
+  const unknownName = new Error("net::ERR_NAME_NOT_RESOLVED");
+  const host = "pc.example-tailnet.ts.net:8799";
+  const fetch = fakeFetch({ "http://pc.example-tailnet.ts.net:8799": unknownName }).fetch;
+  const probe = (magicDns, tailnet = true) => probeServer({ address: "http://pc.example-tailnet.ts.net:8799", fetch, platform: "linux", tailnet: () => tailnet, ...(magicDns ? { magicDns } : {}) });
+  assert.deepEqual(await probe(async () => false), { outcome: "problem", problem: "magicDnsOff", host });
+  assert.deepEqual(await probe(async () => true), { outcome: "problem", problem: "otherTailnet", host });
+  assert.deepEqual(await probe(async () => null), { outcome: "problem", problem: "otherTailnet", host });
+  assert.deepEqual(await probe(async () => { throw new Error("no tailscale"); }), { outcome: "problem", problem: "otherTailnet", host });
+  assert.deepEqual(await probe(undefined), { outcome: "problem", problem: "otherTailnet", host });
+  assert.deepEqual(await probe(async () => false, false), { outcome: "problem", problem: "tailscaleOff", host });
+  // Only a name that did not resolve is explained by MagicDNS.
+  const silent = fakeFetch({ "http://pc.example-tailnet.ts.net:8799": Object.assign(new Error("timeout"), { name: "TimeoutError" }) }).fetch;
+  assert.equal((await probeServer({ address: "http://pc.example-tailnet.ts.net:8799", fetch: silent, platform: "linux", tailnet: () => true, magicDns: async () => false })).problem, "tailnetSilent");
+  const connect = createServerConnect({ fetch, ownEnvironmentId: async () => null, ask: async () => true, open: () => {}, tailnet: () => true, magicDns: async () => false, t: (key) => key });
+  await assert.rejects(connect.connectAsking("http://pc.example-tailnet.ts.net:8799"), { message: "native.connect.magicDnsOff" });
+});
+
 test("a tailnet address that doesn't answer says whose Tailscale to fix", async () => {
   const blocked = () => new Error("net::ERR_ADDRESS_UNREACHABLE");
   const silent = () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });

@@ -17,8 +17,8 @@ const INVITES = `${BASE}/invites`;
 const JOIN = `${BASE}/join`;
 const ONE = /^\/api\/linked-servers\/([0-9a-f]{16})$/u;
 
-const ADMIN_ONLY = "Only an admin can manage linked servers.";
-const NOT_HERE = "That linked server is not here.";
+const ADMIN_ONLY = "Only an admin can manage links to another Seira.";
+const NOT_HERE = "That link is not here.";
 
 const joinBody = z.object({ invite: z.string().min(1).max(4_096) }).strict();
 const updateBody = z.object({ exposed: z.array(botIdSchema).max(500).optional(), cap: z.enum(APPROVAL_CAPS).optional() }).strict();
@@ -48,13 +48,13 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
       const made = manager.invite(actor);
       if (!("error" in made)) return json(res, 200, made);
       return json(res, 409, { error: made.error === "full"
-        ? "This server already has as many linked servers as it can keep. Remove one first."
-        : "Other servers cannot reach this server. Give it a secure public address first." });
+        ? "This Seira already has as many links as it can keep. Remove one first."
+        : "Another Seira cannot reach this one. Give it a secure public address first." });
     }
 
     if (path === JOIN) {
       const body = joinBody.safeParse(await readBody(req, 16 * 1024));
-      if (!body.success) return json(res, 400, { error: "Paste the whole invite from the other server." });
+      if (!body.success) return json(res, 400, { error: "Paste the whole invite from the other side." });
       try {
         return json(res, 200, { server: await manager.join(body.data.invite, actor) });
       } catch (error) {
@@ -69,8 +69,8 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
       return (await manager.remove(id, actor)) ? json(res, 200, { ok: true }) : json(res, 404, { error: NOT_HERE });
     }
     const body = updateBody.safeParse(await readBody(req, 64 * 1024));
-    if (!body.success) return json(res, 400, { error: "Choose bots of this server and one of the approval levels." });
-    if (body.data.exposed?.some((bot) => !deps.knownBot(bot))) return json(res, 400, { error: "One of those bots is not on this server." });
+    if (!body.success) return json(res, 400, { error: "Choose your own bots and one of the approval levels." });
+    if (body.data.exposed?.some((bot) => !deps.knownBot(bot))) return json(res, 400, { error: "One of those bots is not here." });
     const updated = manager.update(id, { ...(body.data.exposed ? { exposed: body.data.exposed } : {}), ...(body.data.cap ? { cap: body.data.cap } : {}) }, actor);
     return updated ? json(res, 200, { server: updated }) : json(res, 404, { error: NOT_HERE });
   };

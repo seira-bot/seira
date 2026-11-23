@@ -46,9 +46,19 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
   const messages: Array<{ threadId: string; message: Record<string, unknown> }> = [];
   const rows: Array<Omit<AdminActionRow, "at">> = [];
   const runs: HandoffView[] = [];
-  const knobs: { run(node: HandoffView, signal: AbortSignal): Promise<HostTurnResult> } = { run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }) };
+  /** `stuck`: the coordinator the link host sees stops nothing, as when work cannot be stopped at once. */
+  const knobs: { run(node: HandoffView, signal: AbortSignal): Promise<HostTurnResult>; stuck: boolean } = {
+    run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }), stuck: false };
   let opened = 0, port = 0, turns = 0;
   let coordinator: Coordinator | undefined;
+  const seen = (): Coordinator => {
+    if (!knobs.stuck) return coordinator!;
+    return new Proxy(coordinator!, { get: (target, prop) => {
+      if (prop === "cancelUnder" || prop === "cancelDirect") return () => {};
+      const value: unknown = Reflect.get(target, prop);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+  };
   const tick = () => { try { coordinator?.tick(); } catch { /* closed */ } };
   const store = {
     bots: records, bot: (id: string) => records.find((bot) => bot.id === id), standIns: new Map<string, BotRecord>(),
@@ -59,10 +69,10 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
     activePath: () => [], messagesFor: () => [], patchGroup: () => {},
   } as unknown as BotLinkHostDeps["store"];
 
-  const made = createBotLinkHost({
+  const build = () => createBotLinkHost({
     dataDir, environmentId: `${label}-environment`, store,
     roomLine: () => "", roomWindow: () => ({ lines: [], order: [], readable: [] }),
-    coordinator: () => coordinator!, kick: () => { queueMicrotask(tick); },
+    coordinator: seen, kick: () => { queueMicrotask(tick); },
     level: () => "full", refusal: () => null, language: () => undefined, personName: () => undefined,
     sessions: { issue: () => { throw new Error("no sessions here"); }, revoke: () => true, attemptAllowed: () => ({ ok: true }), noteFailure: () => {} },
     local: () => false, owner: () => false, power: () => null,
@@ -77,6 +87,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
     levelOf: () => ({ level: "full" }), chiefOf: () => false,
     run: (node, _resumed, signal) => { runs.push(node); return knobs.run(node, signal); },
   };
+  let made = build();
   coordinator = createCoordinator({ dataDir, host: made.link.host(inner), log: () => {} });
   made.start();
 
@@ -108,7 +119,18 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
 
   type At = { generation: string; parentId?: string; address: { botId: string; threadId: string } };
   return {
-    label, origin: `http://127.0.0.1:${port}`, made, linked: made.linked, coordinator, messages, rows, runs, knobs,
+    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, knobs,
+    get made() { return made; },
+    get linked() { return made.linked; },
+    get coordinator() { return coordinator; },
+    /** The server stops and starts again over the same data. */
+    restart() {
+      made.close();
+      coordinator?.close();
+      made = build();
+      coordinator = createCoordinator({ dataDir, host: made.link.host(inner), log: () => {} });
+      made.start();
+    },
     /** A turn the person starts with one of this server's bots. */
     begin(bot: Bot, text: string): At {
       const id = `${label}-turn-${++turns}`, address = { botId: bot.id, threadId: `${bot.id}-chat` };
@@ -148,13 +170,17 @@ async function link(inviter: Server, joiner: Server) {
   return { inviterLink: there()!.id, joinerLink: joined.id };
 }
 
-/** The inviter shows `bots` to the joiner; their addresses at the joiner. */
-async function expose(inviter: Server, joiner: Server, ids: { inviterLink: string; joinerLink: string }, bots: string[]) {
-  inviter.linked.update(ids.inviterLink, { exposed: bots }, ADMIN);
-  const seen = () => joiner.linked.list().find((one) => one.id === ids.joinerLink)?.bots ?? [];
-  await until(() => seen().length === bots.length, `${joiner.label} sees the exposed bots`);
+/** `from` shows `bots` to `to` over the link they share; their addresses at `to`. */
+async function offer(from: Server, fromLink: string, to: Server, toLink: string, bots: string[]) {
+  from.linked.update(fromLink, { exposed: bots }, ADMIN);
+  const seen = () => to.linked.list().find((one) => one.id === toLink)?.bots ?? [];
+  await until(() => seen().length === bots.length, `${to.label} sees the exposed bots`);
   return seen().map((one) => one.id);
 }
+
+/** The inviter shows `bots` to the joiner; their addresses at the joiner. */
+const expose = (inviter: Server, joiner: Server, ids: { inviterLink: string; joinerLink: string }, bots: string[]) =>
+  offer(inviter, ids.inviterLink, joiner, ids.joinerLink, bots);
 
 /** Holds the turns of these bots until `release`. */
 function hold(at: Server, botIds: string[]) {
@@ -254,5 +280,82 @@ describe("work this server starts", () => {
     expect(listed.servers.map((one) => one.name)).toEqual(["other"]);
     const elsewhere = await fetch(`${head.origin}/api/bots`, { headers: { authorization: `Bearer lsk_${"B".repeat(43)}` } });
     expect(elsewhere.status).toBe(403);
+  }, 60_000);
+});
+
+/** A branch server hands work to the head's writer. The writer hands long work to the keeper, here, with no reply, and
+ * finishes, so the work the branch started is done there while the keeper still runs. */
+async function keeperAtWork(headInvites: boolean) {
+  const head = await server("head", [WRITER, KEEPER]), branch = await server("branch", [SCOUT]), other = await server("other", [CLERK]);
+  const pair = headInvites ? await link(head, branch) : await link(branch, head);
+  const ids = headInvites ? { head: pair.inviterLink, branch: pair.joinerLink } : { head: pair.joinerLink, branch: pair.inviterLink };
+  const [writer] = await offer(head, ids.head, branch, ids.branch, ["writer"]);
+  const toOther = await link(other, head);
+  const [clerk] = await offer(other, toOther.inviterLink, head, toOther.joinerLink, ["clerk"]);
+
+  let releaseWriter!: () => void, releaseKeeper!: () => void;
+  const writerGate = new Promise<void>((resolve) => { releaseWriter = resolve; }), keeperGate = new Promise<void>((resolve) => { releaseKeeper = resolve; });
+  cleanups.push(() => releaseKeeper());
+  const signals: AbortSignal[] = [];
+  head.knobs.run = async (node, signal) => {
+    if (node.botId === "writer") await writerGate;
+    if (node.botId === "keeper") {
+      signals.push(signal);
+      await new Promise<void>((resolve) => { signal.addEventListener("abort", () => resolve(), { once: true }); void keeperGate.then(resolve); });
+    }
+    return { ok: true, text: `${node.botId} did: ${node.text}` };
+  };
+
+  const asked = branch.begin(SCOUT, "Draft the launch post");
+  expect((await branch.coordinate(SCOUT, asked, [writer!], "Draft the launch post")).status).toBe(200);
+  branch.coordinator!.endTurn(asked.generation, { ok: true, text: "Handed on." });
+  await until(() => head.runs.some((node) => node.botId === "writer"), "the writer works");
+  const work = head.runs.find((node) => node.botId === "writer")!;
+  const at = head.within(work);
+  const { node: kept } = head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: "keeper", threadId: "keeper-chat" }, "Keep at it", { reply: "none", thread: "standing" });
+  await until(() => head.runs.some((node) => node.botId === "keeper"), "the keeper works");
+  releaseWriter();
+  await until(() => branch.messages.some(({ message }) => (message.roomRequest as { phase?: string } | undefined)?.phase === "result"), "the writer's result is back");
+  expect(head.coordinator!.node(work.id)?.status).toBe("completed");
+  expect(head.coordinator!.node(kept.id)?.status).toBe("running");
+  return { head, branch, ids, kept, clerk: clerk!, signals };
+}
+
+describe("when a link ends", () => {
+  const ends = [
+    { how: "an admin here removes it", headInvites: true, end: (head: Server, _branch: Server, ids: { head: string; branch: string }) => head.linked.remove(ids.head, ADMIN) },
+    { how: "the server that joined removes it", headInvites: true, end: (_head: Server, branch: Server, ids: { head: string; branch: string }) => branch.linked.remove(ids.branch, ADMIN) },
+    { how: "the server that invited removes it", headInvites: false, end: (_head: Server, branch: Server, ids: { head: string; branch: string }) => branch.linked.remove(ids.branch, ADMIN) },
+  ] as const;
+
+  for (const { how, headInvites, end } of ends) {
+    it(`stops what bots here took on from the other server's work when ${how}`, async () => {
+      const { head, branch, ids, kept, signals } = await keeperAtWork(headInvites);
+      expect(await end(head, branch, ids)).toBe(true);
+      await until(() => head.coordinator!.node(kept.id)?.status === "cancelled", "the keeper stops");
+      expect(signals.at(-1)?.aborted).toBe(true);
+    }, 60_000);
+  }
+
+  it("keeps the cap and the rule against other servers on work that could not stop, also after a restart", async () => {
+    const { head, ids, kept, clerk } = await keeperAtWork(true);
+    head.setCap(ids.head, "edits");
+    head.knobs.stuck = true;
+    expect(await head.linked.remove(ids.head, ADMIN)).toBe(true);
+    expect(head.linked.list().map((one) => one.name)).toEqual(["other"]);
+    const keeper = () => head.coordinator!.node(kept.id)!;
+    const rules = async () => {
+      expect(keeper().status).toBe("running");
+      expect(head.made.link.capFor(keeper().threadId, "full")).toBe("edits");
+      const at = head.within(keeper());
+      expect(await head.coordinate(KEEPER, at, [clerk], "Ask the other server")).toEqual(refusal(clerk));
+      expect(() => head.coordinator!.enqueue(at.address, at.generation, at.parentId, { botId: clerk, threadId: `${clerk}:direct` }, "Straight to the coordinator")).toThrow(CHAINED);
+    };
+    await rules();
+
+    const ran = head.runs.filter((node) => node.botId === "keeper").length;
+    head.restart();
+    await until(() => head.runs.filter((node) => node.botId === "keeper").length > ran, "the keeper runs again");
+    await rules();
   }, 60_000);
 });

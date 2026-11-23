@@ -342,7 +342,7 @@ export function readAdminActivityRange(dataDir: string, range: { from: Date; to:
 
 export function adminActorLabel(actor: AdminActor | undefined): string {
   if (actor?.kind === "cli") return "Command line";
-  if (actor?.kind === "linked-server") return actor.name ? `${actor.name} (linked server)` : "Linked server";
+  if (actor?.kind === "linked-server") return actor.name ? `${actor.name} (another Seira)` : "Another Seira";
   return actorLabel(actor as DecisionActor | undefined);
 }
 
