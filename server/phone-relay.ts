@@ -273,10 +273,16 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
 
   const origin = createE2EOrigin((req, res) => relayed(req, res), (_req, socket) => refuseUpgrade(socket), options.streamDeadlines ?? STREAM_DEADLINES);
   const linkOrigin = createE2EOrigin((req, res) => relayed(req, res), (_req, socket) => refuseUpgrade(socket), LINK_DEADLINES);
+  /** Security: a session that an invite code opened stays an invite session after its invite is used or has expired, so it
+   * never gets the requests of a phone that pairs. */
+  const inviteWindows = new Set<string>();
   const guestOf = (peer: Peer) => {
     const hostId = e2e.relay?.hostId;
-    return guests && hostId ? guestKind(peer, guests, hostId) : null;
+    const kind = guests && hostId ? guestKind(peer, guests, hostId) : null;
+    if (kind === "invite" && peer.kind === "pairing" && peer.admHash) inviteWindows.add(peer.admHash);
+    return kind;
   };
+  const spentInvite = (peer: Peer) => peer.kind === "pairing" && peer.admHash !== null && inviteWindows.has(peer.admHash);
 
   /** One phone (or one pairing window) holds a few live sessions; a new one closes its oldest, so a phone that lost its
    * sessions without the relay noticing can still come back. */
@@ -295,7 +301,10 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     void session.closed.then(() => {
       const index = list.indexOf(session);
       if (index >= 0) list.splice(index, 1);
-      if (!list.length && held.get(key) === list) held.delete(key);
+      if (!list.length && held.get(key) === list) {
+        held.delete(key);
+        if (peer.kind === "pairing" && peer.admHash) inviteWindows.delete(peer.admHash);
+      }
     });
   };
 
@@ -362,7 +371,7 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
     if (guest && !guests!.allows(guest, method, path)) return reply(res, 404, { error: "not found" });
-    if (!guest && peer.kind === "device" && peer.id.startsWith(LINK_DEVICE_PREFIX)) return reply(res, 404, { error: "not found" });
+    if (!guest && ((peer.kind === "device" && peer.id.startsWith(LINK_DEVICE_PREFIX)) || spentInvite(peer))) return reply(res, 404, { error: "not found" });
     if (method === "POST" && path === "/api/auth/pair") return reply(res, 404, { error: "pair a phone with its QR code" });
     if (peer.kind === "pairing" && !guest) {
       if (!PAIRING_SESSION_ROUTES.has(`${method} ${path}`)) return reply(res, 401, { error: "pair this phone first" });

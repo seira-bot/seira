@@ -771,8 +771,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if (hosted || id in relayFile.joined) {
         relayFile.hosted = relayFile.hosted.filter((one) => one !== id);
         delete relayFile.joined[id];
-        saveRelay();
         if (hosted) relayHost?.closeLink(id);
+        try { saveRelay(); } catch { /* a relay record with no link is dropped at the next start */ }
       }
       file.links = file.links.filter((one) => one.id !== id);
       const ended = (file.ended ?? []).filter((one) => one.key !== key);

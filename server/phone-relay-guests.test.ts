@@ -236,6 +236,21 @@ describe("guests of the phone relay", () => {
     expect(server.seen).toEqual([]);
   });
 
+  it("answers as an unknown path to a session that an invite code opened, once its invite is gone", async () => {
+    const server = await startServer();
+    const code = server.guests.addInvite();
+    server.guests.host!.changed();
+    await waitFor(() => admitted(server).has(adm(server, code)));
+    const session = await open(server, code);
+    server.guests.invites = [];
+    server.seen.length = 0;
+    for (const [method, path] of [["POST", "/api/pair"], ["GET", "/api/health"], ["POST", ACCEPT], ["GET", "/api/auth/session"]] as const) {
+      const answer = await http(session, method, path, method === "POST" ? { body: "{}", headers: asJson } : {});
+      expect([method, path, answer.status, json(answer)]).toEqual([method, path, 404, { error: "not found" }]);
+    }
+    expect(server.seen).toEqual([]);
+  });
+
   it("keeps the phone's routes as they were: a phone peer is never judged as a link, and an unrelated pairing peer still only pairs", async () => {
     const server = await startServer();
     const phone = await pairPhone(server);

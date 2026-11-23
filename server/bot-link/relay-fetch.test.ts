@@ -96,6 +96,7 @@ async function rig(): Promise<Rig> {
     }
     if (url.pathname === "/redirect") return void res.writeHead(302, { location: "https://elsewhere.example/" }).end();
     if (url.pathname === "/empty") return void res.writeHead(204).end();
+    if (url.pathname === "/odd-status") return void res.writeHead(600).end("{}");
     if (url.pathname === "/not-modified") return void res.writeHead(304, { etag: '"x"' }).end();
     return send(res, 404, { error: "not here" });
   };
@@ -224,6 +225,14 @@ describe("fetchOverSession", () => {
   it("rejects an answer that redirects", async () => {
     const r = await rig();
     await expect(r.fetch(`${ORIGIN}/redirect`, { redirect: "error" })).rejects.toThrow(/redirect/);
+    await noStreams(r);
+  });
+
+  it("rejects an answer whose status is outside 200 to 599, and the session stays usable", async () => {
+    const r = await rig();
+    await expect(r.fetch(`${ORIGIN}/odd-status`)).rejects.toThrow(/status line/);
+    await noStreams(r);
+    expect((await r.fetch(`${ORIGIN}/empty`)).status).toBe(204);
     await noStreams(r);
   });
 

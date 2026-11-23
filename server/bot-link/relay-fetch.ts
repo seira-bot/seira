@@ -55,8 +55,21 @@ export function fetchOverSession(session: () => Promise<E2ESession<never>>): typ
           for (const one of Array.isArray(value) ? value : value === undefined ? [] : [value]) answerHeaders.append(name, one);
         }
         const empty = BODYLESS.has(status) || method === "HEAD";
-        if (empty) res.resume();
-        resolve(new Response(empty ? null : (Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>), { status, statusText: res.statusMessage, headers: answerHeaders }));
+        // Security: the other side chooses the status line. `Response` throws on a status outside 200 to 599 and on a
+        // reason phrase it cannot hold, and a throw in this listener would leave the session and stop the process.
+        const refuse = (): void => {
+          res.resume();
+          req.destroy();
+          reject(new TypeError("the other side answered with a status line that cannot be used"));
+        };
+        if (status < 200 || status > 599) return refuse();
+        try {
+          const answer = new Response(empty ? null : (Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>), { status, statusText: res.statusMessage, headers: answerHeaders });
+          if (empty) res.resume();
+          resolve(answer);
+        } catch {
+          refuse();
+        }
       });
 
       if (body instanceof Blob) pipeline(Readable.fromWeb(body.stream() as unknown as NodeReadableStream), req, noop);
