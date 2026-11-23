@@ -390,6 +390,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
       const rt = runtimes.get(id), key = a2aKey(id);
       if (rt) {
         rt.gone = true;
+        rt.tasks.discard();
         rt.inbound.close();
         deps.stopWork(rt.link, key, REMOVED);
         rt.link.turnOff(true);
@@ -439,7 +440,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
     tidy(): void { for (const rt of runtimes.values()) rt.tasks.prune(); },
 
     close(): void {
-      for (const rt of runtimes.values()) { rt.transport.close(); rt.link.close(); deps.unregister(rt.id); }
+      for (const rt of runtimes.values()) { rt.transport.close(); rt.link.close(); rt.tasks.close(); deps.unregister(rt.id); }
       runtimes.clear();
     },
   };

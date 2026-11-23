@@ -55,6 +55,20 @@ export interface TaskIndex {
   setContext(thread: string, far: string, inputTask?: string): void;
   /** Drops what is past retention and what is over the caps. Returns how many tasks it dropped. */
   prune(): number;
+  /** Writes now what a change left waiting. */
+  flush(): void;
+  /** Writes what waits, then writes no more. */
+  close(): void;
+  /** Writes no more and drops what waits, for a peer whose folder is going. */
+  discard(): void;
+}
+
+export const WRITE_GAP_MS = 1_000;
+
+export interface TaskIndexOptions {
+  /** The least time between two writes of the file. */
+  writeGapMs?: number;
+  write?: typeof writeFileAtomic;
 }
 
 type State = { tasks: TaskEntry[]; contexts: Map<string, z.infer<typeof contextSchema>> };
@@ -81,18 +95,44 @@ function load(path: string, log: (line: string) => void): State {
   return state;
 }
 
-export function createTaskIndex(dir: string, now: () => number, log: (line: string) => void = () => {}): TaskIndex {
+export function createTaskIndex(dir: string, now: () => number, log: (line: string) => void = () => {}, options: TaskIndexOptions = {}): TaskIndex {
   const path = join(dir, FILE);
   const state = load(path, log);
+  const gap = options.writeGapMs ?? WRITE_GAP_MS;
+  const write = options.write ?? writeFileAtomic;
+  let lastWrite = Number.NEGATIVE_INFINITY;
+  let waiting = false;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const persist = (): void => {
+  const stopTimer = (): void => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+
+  const writeNow = (): void => {
+    stopTimer();
+    waiting = false;
+    lastWrite = now();
     try {
       ensurePrivateDir(dir);
-      writeFileAtomic(path, JSON.stringify({ v: 1, tasks: state.tasks, contexts: Object.fromEntries(state.contexts) }), { mode: 0o600 });
+      write(path, JSON.stringify({ v: 1, tasks: state.tasks, contexts: Object.fromEntries(state.contexts) }), { mode: 0o600 });
     } catch {
       log("a2a tasks: the record could not be saved");
     }
   };
+
+  const persist = (): void => {
+    if (stopped) return;
+    waiting = true;
+    const wait = lastWrite + gap - now();
+    if (wait <= 0) { writeNow(); return; }
+    if (timer !== undefined) return;
+    timer = setTimeout(() => { timer = undefined; if (waiting) writeNow(); }, wait);
+    timer.unref();
+  };
+
+  const flush = (): void => { if (waiting && !stopped) writeNow(); };
 
   /** Memory only; the callers save. */
   const trim = (): number => {
@@ -152,5 +192,8 @@ export function createTaskIndex(dir: string, now: () => number, log: (line: stri
       if (dropped > 0 || state.contexts.size !== contextsBefore) persist();
       return dropped;
     },
+    flush,
+    close() { flush(); stopped = true; stopTimer(); },
+    discard() { stopped = true; waiting = false; stopTimer(); },
   };
 }
