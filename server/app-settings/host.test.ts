@@ -273,6 +273,17 @@ describe("safe tier", () => {
     expect((await open.set("appearance.skin", "neon")).status).toBe(400);
   });
 
+  it("AC-10 sets the text size to a step, says it in percent, and refuses a value that is not a step", async () => {
+    const fx = fixture();
+    const done = await fx.set("appearance.textSize", 1.5);
+    expect(done.status).toBe(200);
+    expect(done.body.text).toMatch(/^Done: Set the text size to 150 %\./);
+    expect(fx.windowValues.get("appearance.textSize")).toBe(1.5);
+    expect((await fx.set("appearance.textSize", 1.3)).status).toBe(400);
+    expect((await fx.set("appearance.textSize", "big")).status).toBe(400);
+    expect(fx.windowValues.get("appearance.textSize")).toBe(1.5);
+  });
+
   it(`stops after ${WRITE_BUDGET} writes in one turn and allows the next turn`, async () => {
     const { set } = fixture();
     for (let index = 0; index < WRITE_BUDGET; index += 1) expect((await set("rooms.turnTimeoutMinutes", 10 + index)).status).toBe(200);

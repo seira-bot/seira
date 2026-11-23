@@ -90,7 +90,7 @@ function railKeepsItsSize() {
 if (typeof window !== "undefined") {
   for (const type of ["resize", "DOMContentLoaded"]) window.addEventListener(type, () => { leaveRailRoom(); railKeepsItsSize(); });
 }
-const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "glance", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
+const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "glance", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "textSize", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
 /** My Cloud's own page once it is the person's home (main checks the sender again): it is this app's page then. */
 const HOME_PAGE = ["home", "onChatLink", "onPackageInstall", "exportDiagnostics", "openLogsFolder", "openAtLogin", "callActive"];
 function updaterOffered() {
@@ -283,6 +283,18 @@ const bridge = {
     state: () => ipcRenderer.invoke("window-frame:state"),
     set: (on) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("window-frame:set", on === true) : Promise.reject(new Error("Choose to turn the window frame on or off.")),
+  },
+  // The text size of the window, this desktop's choice for every page of it; main moves it too, from the View menu and
+  // its shortcuts. A server's page changes it only from the person's click.
+  textSize: {
+    get: () => ipcRenderer.invoke("text-size:get"),
+    set: (step) => isLocalPage || navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("text-size:set", Number(step)) : Promise.reject(new Error("Choose a text size.")),
+    onChange: (cb) => {
+      const handler = (_event, step) => cb(Number(step));
+      ipcRenderer.on("text-size:changed", handler);
+      return () => ipcRenderer.removeListener("text-size:changed", handler);
+    },
   },
   // Buying another Cloud from the rail's ＋, on this app's page or a hosted Cloud's: plain words in, what the sheet says
   // out; the account, the token and the checkout page stay in main. Only from the person's click where it opens anything.

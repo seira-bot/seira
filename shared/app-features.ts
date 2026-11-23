@@ -169,6 +169,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["updateCheckHonest", "uiMap"],
   },
   {
+    id: "text-size",
+    name: "Text size",
+    place: "Settings → Appearance → Text size (desktop app); the View menu; Ctrl or Cmd with plus, minus or 0",
+    does: "Makes the whole app larger or smaller, from 90 % to 200 %, on this device. A bot can read and set it as appearance.textSize, with a number such as 1.25.",
+  },
+  {
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",

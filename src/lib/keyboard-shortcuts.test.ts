@@ -24,6 +24,20 @@ describe("keyboard-shortcuts", () => {
     expect(shortcutDescription(items.find((item) => item.id === "toggle-sidebar")!)).toBe("Recolher ou expandir a barra lateral");
   });
 
+  it("AC-11 lists Zoom in, Zoom out and Actual size with their keys, in both languages", () => {
+    const items = SHORTCUT_GROUPS.flatMap((group) => group.items);
+    expect(items.find((item) => item.id === "zoom-in")).toMatchObject({ macKeys: ["⌘", "+"], winKeys: ["Ctrl", "+"] });
+    expect(items.find((item) => item.id === "zoom-out")).toMatchObject({ macKeys: ["⌘", "−"], winKeys: ["Ctrl", "−"] });
+    expect(items.find((item) => item.id === "actual-size")).toMatchObject({ macKeys: ["⌘", "0"], winKeys: ["Ctrl", "0"] });
+    for (const id of ["zoom-in", "zoom-out", "actual-size"]) {
+      const item = items.find((entry) => entry.id === id)!;
+      setLocale("en");
+      expect(shortcutDescription(item)).toBe(item.description);
+      setLocale("pt-br");
+      expect(shortcutDescription(item)).not.toBe(item.description);
+    }
+  });
+
   it("keeps an uncatalogued shortcut's own description", () => {
     setLocale("pt-br");
     expect(shortcutDescription({ id: "future-shortcut", description: "Future action", macKeys: [], winKeys: [] })).toBe("Future action");

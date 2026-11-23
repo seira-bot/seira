@@ -418,6 +418,14 @@ const __APP_VERSION__: string;
         /** From the person's click on another server's page. */
         set(on: boolean): Promise<import("../../electron/desktop-prefs.mjs").WindowFrameState>;
       };
+      /** The window's text size, this desktop's choice (Settings → Appearance). Absent on an older app. */
+      textSize?: {
+        get(): Promise<number>;
+        /** From the person's click on another server's page. Resolves with the step now in use. */
+        set(step: number): Promise<number>;
+        /** Also fires for the View menu and the zoom shortcuts. Returns the way to stop listening. */
+        onChange(callback: (step: number) => void): () => void;
+      };
       /** The renderer-drawn Windows caption buttons; absent outside the
        * frameless Windows shell (macOS/Linux/browser keep native chrome). */
       windowControls?: {

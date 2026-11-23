@@ -5720,6 +5720,7 @@
   "settings.runCard.line": "Mevcut isteğin için kabuk komutlarını gösterir.",
   "settings.chatWidth.line": "Mesaj balonlarının bu cihazda ne kadar genişleyebileceği.",
   "settings.font.line": "Bu cihazda temanın yazı tipini değiştirir.",
+  "settings.textSize.title": "Metin boyutu",
   "accounts.manage": "Hesap ve çıkış",
   "common.ok": "Tamam",
   "connectedWorkspaces.localTitle": "Bu bilgisayardaki ortamlar",

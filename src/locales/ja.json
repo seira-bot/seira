@@ -7742,6 +7742,7 @@
   "settings.runCard.line": "現在のリクエストのシェルコマンドを表示します。",
   "settings.chatWidth.line": "このデバイスでメッセージの吹き出しをどこまで広げるか。",
   "settings.font.line": "このデバイスでテーマのフォントを置き換えます。",
+  "settings.textSize.title": "文字サイズ",
   "remote.status.pairedMany": "{count} 台のデバイスをペアリング済み",
   "remote.status.pairedOne": "1 台のデバイスをペアリング済み",
   "servers.current": "現在",

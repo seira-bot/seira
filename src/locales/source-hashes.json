@@ -4045,7 +4045,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10492,7 +10493,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14329,7 +14331,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18046,7 +18049,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -25947,7 +25951,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -37912,7 +37917,15 @@
       "power.toast.paused": "7d41809f3fa3d66e6f37d72b71a18004f7fffd6b730832bd9175830277a10901",
       "power.toast.resumed": "bdd09e2a3442374f8c4fc5627a194d79e8fa04dd359d41568f2bb600e3ff75ea",
       "power.toast.restarted": "82121eec7c06ab644482be2daba765379e74ca4a956a3a26d3ad75e39bf4c7f3",
-      "power.toast.updated": "da0fcccdc519425a9c333fda0838bbdd50d67fb0266194753bd1044abd0ecbb4"
+      "power.toast.updated": "da0fcccdc519425a9c333fda0838bbdd50d67fb0266194753bd1044abd0ecbb4",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5",
+      "settings.textSize.line": "8bc4cae43ad45e5c3f48fceb528c63ef4986cbac57b205944868f15c025fff8a",
+      "settings.textSize.aria": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5",
+      "settings.textSize.step": "bb8ddd3591649943cc75ea1ac93d39a64d3666a0ec6d390c5ced283345959867",
+      "settings.textSize.default": "2d87899fbdddd13ded190e714cfcbf2657f43471686adcfce8d9c446dc9cd1a1",
+      "shortcuts.zoom-in": "f76d9e7e12547bf53d91ea3dc92cfc2022583df6261b72cb7bf2b53731356686",
+      "shortcuts.zoom-out": "8d94f5c1cfa0b05b4603f16b8d43129e588231662b83fea097469561bb506d68",
+      "shortcuts.actual-size": "a38da576bd44df8ebde9f3e5b742e024660969cc74170940247b97bbb54f4103"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -47939,7 +47952,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58056,7 +58070,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62192,7 +62207,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68141,7 +68157,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74090,7 +74107,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81175,7 +81193,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88309,7 +88328,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95261,7 +95281,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -102858,7 +102879,8 @@
       "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
       "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
       "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
-      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24",
+      "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     }
   }
 }

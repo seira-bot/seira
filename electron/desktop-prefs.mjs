@@ -1,6 +1,6 @@
 // What this desktop keeps whatever page its window shows, whichever port its own page is served on: the notices someone
 // closed, its usage-analytics switch, the app's language, its answer to the product-updates email question, whether
-// the person hid the window's rail of places, whether they turned Glance off and whether they turned the window's frame off.
+// the person hid the window's rail of places, whether they turned Glance off, whether they turned the window's frame off and the size of the app's text.
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { DEFAULT_TALK_KEY, isTalkKey } from "./talk-keys.mjs";
 import { createUpdatesList, updatesListOrigin, withUpstreamFallback } from "./updates-list.mjs";
 import { createUpdatesConsent, parseUpdatesConsent, registerUpdatesConsent } from "./updates-consent.mjs";
 import { accountFullName } from "./system-name.mjs";
+import { isTextSize, normalizeTextSize } from "./text-size.mjs";
 
 export { DESKTOP_PORTS } from "./desktop-ports.mjs";
 /** The only notices a page may record, so no page can write anything else into the file. */
@@ -73,6 +74,7 @@ function parse(raw) {
     ...(typeof record.railHidden === "boolean" ? { railHidden: record.railHidden } : {}),
     ...(typeof record.glanceHidden === "boolean" ? { glanceHidden: record.glanceHidden } : {}),
     ...(typeof record.windowFrame === "boolean" ? { windowFrame: record.windowFrame } : {}),
+    ...(isTextSize(record.textSize) ? { textSize: record.textSize } : {}),
     ...(Object.keys(quickAsks).length ? { quickAsks } : {}) };
 }
 
@@ -167,6 +169,13 @@ export function createDesktopPrefs({ read, write }) {
       const glanceHidden = hidden === true;
       if ((current().glanceHidden === true) !== glanceHidden) save({ ...current(), glanceHidden });
     },
+    /** One of TEXT_SIZE_STEPS, 1 (100 %) until the person picks another; the same for every server's page. */
+    textSize: () => normalizeTextSize(current().textSize),
+    setTextSize(step) {
+      if (!isTextSize(step)) return false;
+      if (current().textSize !== step) save({ ...current(), textSize: step });
+      return true;
+    },
     /** The window draws its own frame until the person turns it off. */
     windowFrame: () => current().windowFrame !== false,
     setWindowFrame(on) {
@@ -186,7 +195,7 @@ export function createDesktopPrefs({ read, write }) {
  * `onLanguage(language)`: tells main, which draws its menus, tray and dialogs in it. `onShown(language, sender)`: the
  * language a page of the window shows, which main's words follow while nothing is picked. `prefs`: the record main reads too.
  */
-export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, updatesList = null, now = Date.now, systemName = accountFullName }) {
+export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, textSize = null, updatesList = null, now = Date.now, systemName = accountFullName }) {
   let prefs = given ?? null;
   const store = () => prefs ??= createDesktopPrefs({ read, write });
   const from = (channel, pages, handler) => (event, ...args) => {
@@ -241,6 +250,10 @@ export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page,
     try { frame?.changed(); } catch {}
     return frameState();
   }));
+  if (textSize) {
+    ipcMain.handle("text-size:get", from("text-size:get", ANY, () => textSize.current()));
+    ipcMain.handle("text-size:set", from("text-size:set", ANY, (_, step) => textSize.set(step)));
+  }
   if (!cloudAccount) return null;
   const list = updatesList ?? createUpdatesList({ origin: updatesListOrigin() });
   const consent = createUpdatesConsent({ prefs: { installId: () => store().installId(), updatesConsent: () => store().updatesConsent(), setUpdatesConsent: value => store().setUpdatesConsent(value) },

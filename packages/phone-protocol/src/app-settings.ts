@@ -50,6 +50,8 @@ export const storedSkinSchema = z.preprocess(
 );
 export const FONT_IDS = ["skin", "system", "inter", "poppins", "serif"] as const;
 export const CHAT_WIDTH_IDS = ["standard", "wide", "full"] as const;
+/** The zoom steps of the desktop window, as fractions: 1 is 100 %. The desktop app keeps the same list in electron/text-size.mjs. */
+export const TEXT_SIZE_STEPS = [0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
 /** The Enter-adds-a-line modes are for input methods that confirm a conversion with Enter (Japanese). */
 export const SEND_KEYS = ["enter", "shift-enter", "mod-enter"] as const;
 export const PLACE_SWATCHES = ["blue", "green", "amber", "rose", "violet", "slate"] as const;
@@ -63,6 +65,7 @@ export const WINDOW_PREFS = {
   "appearance.advanced": z.boolean(),
   "appearance.font": z.enum(FONT_IDS),
   "appearance.chatWidth": z.enum(CHAT_WIDTH_IDS),
+  "appearance.textSize": z.literal([...TEXT_SIZE_STEPS]),
   "general.sendKey": z.enum(SEND_KEYS),
   "general.notificationSounds": z.boolean(),
   "appearance.userBubbles": z.boolean(),
