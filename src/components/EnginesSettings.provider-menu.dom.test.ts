@@ -9,13 +9,15 @@ import { rememberProviderOff } from "@/lib/provider-off";
 
 type Call = { method: string; path: string; body?: unknown };
 const server = vi.hoisted(() => ({
-  all: [] as InstanceInfo[], hidden: new Set<string>(), calls: [] as Call[], persisted: [] as Array<{ id: string; patch: Record<string, unknown> }>, refuse: new Set<string>(),
+  all: [] as InstanceInfo[], hidden: new Set<string>(), calls: [] as Call[], persisted: [] as Array<{ id: string; patch: Record<string, unknown> }>, refuse: new Set<string>(), refuseHide: null as unknown[] | null,
 }));
 const fixture = vi.hoisted(() => ({ state: { instances: [] as InstanceInfo[], bots: [] as Bot[], config: {} as Record<string, unknown> } }));
 vi.mock("@/state/store", async (original) => {
   const visible = () => server.all.filter((instance) => !server.hidden.has(instance.instanceId));
+  const real = await original<typeof import("@/state/store")>();
+  const { ApiError } = real;
   return {
-    ...await original<typeof import("@/state/store")>(),
+    ...real,
     desktopApprovalBridge: () => undefined,
     persistBotUpdate: async (id: string, patch: Record<string, unknown>, _signal: unknown, _api: unknown, _bridge: unknown, bot: Bot) => {
       if (server.refuse.has(id)) throw new Error("This bot is working. Try again when it is done.");
@@ -38,7 +40,8 @@ vi.mock("@/state/store", async (original) => {
       }
       const patch = /^\/api\/instances\/([\w.-]+)$/.exec(path);
       if (patch && method === "PATCH") {
-        const { hidden } = JSON.parse(init!.body!) as { hidden?: boolean };
+        const { hidden, force } = JSON.parse(init!.body!) as { hidden?: boolean; force?: boolean };
+        if (hidden === true && server.refuseHide && !force) throw new ApiError("Bots or conversations still use this AI.", 409, { uses: server.refuseHide });
         if (hidden === true) server.hidden.add(patch[1]!);
         if (hidden === false) server.hidden.delete(patch[1]!);
         return { instances: visible() };
@@ -47,6 +50,7 @@ vi.mock("@/state/store", async (original) => {
     },
   };
 });
+vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 const { EnginesSettings } = await import("./EnginesSettings");
 
 const ready = (instanceId: string, displayName: string, extra: Partial<InstanceInfo> = {}): InstanceInfo => ({
@@ -67,6 +71,7 @@ beforeEach(() => {
   server.calls = [];
   server.persisted = [];
   server.refuse = new Set();
+  server.refuseHide = null;
   rememberProviderOff(null);
   fixture.state = { instances: [...server.all], bots: [], config: {} };
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -218,5 +223,48 @@ describe("Sign out and Remove key", () => {
     await render();
     await openMenu("kimi");
     expect(item("[data-provider-remove-key]")).toBeNull();
+  });
+});
+
+describe("a refused Hide", () => {
+  const refuse = (uses: unknown[]) => { server.refuseHide = uses; };
+
+  it("names what still uses the provider, with a way to change each one", async () => {
+    refuse([
+      { kind: "backup", botId: "robin", botName: "Robin" },
+      { kind: "conversation", botId: "pen", botName: "Pen", threadId: "t1", title: "Weekly sales" },
+      { kind: "default" },
+    ]);
+    await render();
+    await openMenu("kimi");
+    await click(item("[data-provider-hide]"));
+    const list = document.body.querySelector("[data-provider-blockers]");
+    expect(list?.textContent).toContain(t("provider.use.backup", { bot: "Robin" }));
+    expect(list?.textContent).toContain(t("provider.use.conversation", { bot: "Pen", title: "Weekly sales" }));
+    expect(list?.textContent).toContain(t("provider.use.default"));
+    expect(list?.querySelectorAll("[data-provider-use] button")).toHaveLength(3);
+    expect(status()).toBe("");
+  });
+
+  it("hides anyway after a confirm, and sends force", async () => {
+    refuse([{ kind: "backup", botId: "robin", botName: "Robin" }]);
+    await render();
+    await openMenu("kimi");
+    await click(item("[data-provider-hide]"));
+    await click(document.body.querySelector("[data-provider-hide-anyway]"));
+    expect(patches().at(-1)?.body).toEqual({ hidden: true });
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === t("provider.hideAnyway") && button.closest("[role=dialog], [role=alertdialog]")));
+    expect(patches().at(-1)?.body).toEqual({ hidden: true, force: true });
+    expect(server.hidden.has("kimi")).toBe(true);
+  });
+
+  it("disables Hide anyway while a bot is working, and says to wait for it", async () => {
+    refuse([{ kind: "running", botId: "pen", botName: "Pen" }]);
+    await render();
+    await openMenu("kimi");
+    await click(item("[data-provider-hide]"));
+    const button = document.body.querySelector<HTMLButtonElement>("[data-provider-hide-anyway]");
+    expect(button?.disabled).toBe(true);
+    expect(document.body.querySelector("[data-provider-hide-anyway-reason]")?.textContent).toBe(t("provider.hideAnywayWait", { bots: "Pen", name: "Kimi" }));
   });
 });

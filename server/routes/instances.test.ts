@@ -328,6 +328,83 @@ describe("hiding a provider", () => {
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
   });
 
+  describe("a provider that is still in use", () => {
+    const setup = (bots: unknown[], tasks: Record<string, unknown[]> = {}, extra: Partial<InstanceRouteDeps> = {}, auth?: RequestAuth) => {
+      const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "b", model: "m" } };
+      const persisted: Array<Record<string, { hidden?: boolean }>> = [];
+      return serve({
+        cfg: cfg as unknown as AppConfig,
+        store: { bots, tasks: (id: string) => tasks[id] ?? [] } as never,
+        persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => { persisted.push(structuredClone(instances)); (cfg as { instances: unknown }).instances = instances; },
+        ...extra,
+      }, auth).then((served) => ({ ...served, persisted }));
+    };
+    const patch = async (served: { base: string }, body: unknown) => {
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      return { status: reply.status, body: await reply.json() as any };
+    };
+    const onB = { instanceId: "b", model: "m" };
+    const onA = { instanceId: "a", model: "m" };
+
+    it("names a backup model and a conversation when it refuses to hide", async () => {
+      const served = await setup(
+        [{ id: "robin", name: "Robin", modelSelection: onB, fallback: [onA] }, { id: "pen", name: "Pen", modelSelection: onB }],
+        { pen: [{ threadId: "t1", title: "Weekly sales", modelSelection: onA }] },
+      );
+      const reply = await patch(served, { hidden: true });
+      expect(reply.status).toBe(409);
+      expect(reply.body.errorKey).toBe("serverError.instance.hideBlocked");
+      expect(reply.body.uses).toEqual([
+        { kind: "backup", botId: "robin", botName: "Robin" },
+        { kind: "conversation", botId: "pen", botName: "Pen", threadId: "t1", title: "Weekly sales" },
+      ]);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("names the default model", async () => {
+      const cfg = { instances: { a: { driver: "fake" } }, defaultModelSelection: onA };
+      const served = await serve({ cfg: cfg as unknown as AppConfig, store: { bots: [], tasks: () => [] } as never });
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect((await reply.json() as any).uses).toEqual([{ kind: "default" }]);
+    });
+
+    it("hides with force and leaves bots and conversations alone", async () => {
+      const bot = { id: "pen", name: "Pen", modelSelection: onA, fallback: [onA] };
+      const served = await setup([bot], { pen: [{ threadId: "t1", title: "x", modelSelection: onA }] });
+      const reply = await patch(served, { hidden: true, force: true });
+      expect(reply.status).toBe(200);
+      expect(served.persisted.at(-1)!.a).toMatchObject({ hidden: true });
+      expect(bot.modelSelection).toEqual(onA);
+    });
+
+    it("refuses force from someone who is not an admin", async () => {
+      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA }], {}, {}, { kind: "loopback", scopes: ["chat"], trust: "service" } as RequestAuth);
+      const reply = await patch(served, { hidden: true, force: true });
+      expect(reply.status).toBe(403);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("keeps a provider that a bot is working on, also with force, and names the bot", async () => {
+      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA, busy: true }], {}, { activeGroupTurnForBot: () => null });
+      for (const body of [{ hidden: true }, { hidden: true, force: true }]) {
+        const reply = await patch(served, body);
+        expect(reply.status).toBe(409);
+        expect(reply.body.uses).toContainEqual({ kind: "running", botId: "pen", botName: "Pen" });
+      }
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("names the uses when it refuses to remove an added account", async () => {
+      const cfg = { instances: { "chatgpt-2": { driver: "codex" } }, defaultModelSelection: { instanceId: "chatgpt-2", model: "m" } };
+      const served = await serve({ cfg: cfg as unknown as AppConfig, store: { bots: [{ id: "pen", name: "Pen", modelSelection: { instanceId: "chatgpt-2", model: "m" } }], tasks: () => [] } as never });
+      const reply = await fetch(`${served.base}/api/instances/chatgpt-2`, { method: "DELETE" });
+      expect(reply.status).toBe(409);
+      const body = await reply.json() as any;
+      expect(body.errorKey).toBe("serverError.instance.removeBlocked");
+      expect(body.uses).toEqual([{ kind: "default" }, { kind: "bot", botId: "pen", botName: "Pen" }]);
+    });
+  });
+
   describe("a provider the new-bot default points at", () => {
     const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>, bots: unknown[] = []) => {
       const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };

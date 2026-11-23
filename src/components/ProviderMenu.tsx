@@ -11,7 +11,9 @@ import {
   followBotModelRequest, moveTarget, planProviderOff, providerUses, rememberProviderOff, runProviderOff, undoProviderOff, useProviderOffResult,
   type MoveTarget, type MovedBot,
 } from "@/lib/provider-off";
+import type { ProviderUse } from "../../shared/provider-uses";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import { hasSavedApiKey } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
 import { anchoredMenuPosition } from "./SidebarPopoverMenu";
@@ -26,8 +28,8 @@ function useBotSaver() {
   };
 }
 
-async function setHidden(instanceId: string, hidden: boolean, apply: (instances: InstanceInfo[]) => void, refresh: () => Promise<unknown>) {
-  const reply = await api(`/api/instances/${encodeURIComponent(instanceId)}`, { method: "PATCH", body: JSON.stringify({ hidden }) });
+async function setHidden(instanceId: string, hidden: boolean, apply: (instances: InstanceInfo[]) => void, refresh: () => Promise<unknown>, force = false) {
+  const reply = await api(`/api/instances/${encodeURIComponent(instanceId)}`, { method: "PATCH", body: JSON.stringify(force ? { hidden, force } : { hidden }) });
   if (Array.isArray(reply?.instances)) apply(reply.instances);
   else await Promise.resolve(refresh()).catch(() => {});
 }
@@ -37,6 +39,10 @@ export interface ProviderOff {
   target: MoveTarget | null;
   busy: boolean;
   error: string | null;
+  /** What still uses the provider after a refused Hide; empty otherwise. */
+  blocked: ProviderUse[];
+  dismissBlocked: () => void;
+  hideAnyway: () => void;
   run: () => void;
 }
 
@@ -47,19 +53,26 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
   const persist = useBotSaver();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<ProviderUse[]>([]);
   const used = providerUses(instance.instanceId, state.bots);
   const target = used.length > 0 ? moveTarget(instance.instanceId, state.instances, health) : null;
   const run = async () => {
     if (busy || (used.length > 0 && !target)) return;
     setBusy(true);
     setError(null);
+    setBlocked([]);
+    let refused = false;
     try {
       const result = await runProviderOff({ instanceId: instance.instanceId, displayName: engineDisplayName(instance) }, planProviderOff(instance.instanceId, state.bots, target), {
         persist,
         followBotModel: followBotModelRequest,
-        hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances),
+        hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances).catch((cause) => {
+          const uses = blockedUses(cause);
+          if (uses.length > 0) { refused = true; setBlocked(uses); }
+          throw cause;
+        }),
       });
-      rememberProviderOff(result);
+      if (!refused || result.moved.length > 0) rememberProviderOff(result);
       if (!result.hidden) await Promise.resolve(refreshInstances()).catch(() => {});
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -67,7 +80,23 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
       setBusy(false);
     }
   };
-  return { used, target, busy, error, run: () => void run() };
+  const hideAnyway = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances, true);
+      setBlocked([]);
+      rememberProviderOff({ instanceId: instance.instanceId, name: engineDisplayName(instance), moved: [], stayed: [], hidden: true });
+    } catch (cause) {
+      const uses = blockedUses(cause);
+      if (uses.length > 0) setBlocked(uses);
+      else setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { used, target, busy, error, blocked, dismissBlocked: () => setBlocked([]), hideAnyway: () => void hideAnyway(), run: () => void run() };
 }
 
 const ITEM = "ui-menu-row w-full text-left text-ink disabled:cursor-not-allowed disabled:opacity-50";
@@ -244,7 +273,7 @@ export function ProviderMenu({ instance, name: shown, compact = false, status = 
         className={cn("flex items-center justify-center rounded-full text-ink-tertiary outline-none hover:bg-ink/[0.06] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50", compact ? "size-6" : "size-8")}>
         {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <MoreHorizontal size={compact ? 14 : 16} aria-hidden="true" />}
       </button>
-      {(open || error || (status && result)) && (
+      {(open || error || off.blocked.length > 0 || (status && result)) && (
         <Floating anchor={buttonRef} panelRef={panelRef}>
           {open && (
             <div role="menu" className={cn("w-[240px]", MENU_SHEET)}>
@@ -254,6 +283,7 @@ export function ProviderMenu({ instance, name: shown, compact = false, status = 
               <ProviderOffItems off={off} onDone={close} />
             </div>
           )}
+          {off.blocked.length > 0 && <ProviderBlockers name={name} uses={off.blocked} onClose={off.dismissBlocked} hideAnyway={{ run: off.hideAnyway, busy: off.busy }} />}
           {error && <p role="alert" className="rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error}</p>}
           {status && result && <ProviderOffStatus className="shadow-lg" />}
         </Floating>

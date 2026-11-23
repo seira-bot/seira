@@ -12,6 +12,8 @@ import { AppCopyNotice } from "./EngineAppCopy";
 import { forgetAppCopySwitches } from "@/state/engine-install";
 import { AccountsCard, AddAccount, accountGroupOf, accountsReady, type AccountGroup } from "./EngineAccounts";
 import { ProviderMenu, ProviderOffStatus } from "./ProviderMenu";
+import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
+import type { ProviderUse } from "../../shared/provider-uses";
 import { ClaudeEndpoints, CodexEndpoints } from "./ClaudeEndpoints";
 import { ClaudeBedrockEndpoints } from "./ClaudeBedrock";
 import { DEVICE_SIGN_IN_COPY, deviceSignInProvider } from "./DeviceSignIn";
@@ -316,18 +318,22 @@ function EngineAccountAction({ instance, removeBody = "accounts.removeBodyAntigr
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<ProviderUse[]>([]);
   const usedBy = state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId).length;
   const label = t("accounts.remove");
   const run = async () => {
     setConfirming(false);
     setRunning(true);
     setError(null);
+    setBlocked([]);
     try {
       const { instances } = await api(`/api/instances/${encodeURIComponent(instance.instanceId)}`, { method: "DELETE" });
       if (Array.isArray(instances)) dispatch({ type: "instances", instances });
       else await refreshInstances();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const uses = blockedUses(cause);
+      if (uses.length > 0) setBlocked(uses);
+      else setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setRunning(false);
     }
@@ -339,6 +345,7 @@ function EngineAccountAction({ instance, removeBody = "accounts.removeBodyAntigr
       </button>
       {usedBy > 0 && <p className="text-[11px] text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
     </div>
+    {blocked.length > 0 && <ProviderBlockers name={instance.displayName} uses={blocked} onClose={() => setBlocked([])} />}
     {error && <p role="alert" className="text-[12px] text-danger">{error}</p>}
     <ConfirmDialog open={confirming} title={t("accounts.removeTitle", { name: instance.displayName })} body={t(removeBody)}
       confirmLabel={label} tone="neutral" pending={running} onCancel={() => { if (!running) setConfirming(false); }} onConfirm={() => void run()} />
