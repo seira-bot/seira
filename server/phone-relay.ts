@@ -10,7 +10,7 @@ import type { Duplex } from "node:stream";
 
 import { phonePairingLink, type CompanionEndpoint } from "../shared/pairing-link.ts";
 import { relayBaseUrlOverride } from "../companion/src/e2e/config.ts";
-import { b64u, fromB64u } from "../companion/src/e2e/credentials.ts";
+import { admission, admissionHash, b64u, credentialHashFromHex, fromB64u } from "../companion/src/e2e/credentials.ts";
 import type { E2EDescriptor } from "../companion/src/e2e/descriptor.ts";
 import { generateKeyPair, keyPairFromPrivate, TRANSPORT_RELAY, type KeyPair } from "../companion/src/e2e/noise.ts";
 import { createE2EOrigin, e2eContextOf, type E2EOriginDeadlines } from "../companion/src/e2e/origin.ts";
@@ -22,7 +22,9 @@ import { MANAGED_COMPANION_ENDPOINT_FIELD } from "../electron/managed-companion-
 import { createRelayTokenService, validRelayGrant, type RelayGrant } from "../electron/relay-token.mjs";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { writeFileAtomic } from "./atomic.ts";
+import { LEVEL_HEADER } from "./bot-link/protocol.ts";
 import { reportableServerVersion } from "./environment.ts";
+import { guestKind, LINK_DEADLINES, LINK_DEVICE_PREFIX, RELAY_INVITES_MAX, RELAY_LINKS_MAX, type LinkRelayGuests } from "./host/linked-servers-relay.ts";
 import { bearerToken, PROXY_HEADERS } from "./request-auth.ts";
 import { isPairingCredential, type SessionRegistry } from "./sessions.ts";
 import { describeTunnelAccount, FLEET_CREDENTIAL_ENV, fleetCredential, openTunnelCredentials } from "./tunnel.ts";
@@ -43,6 +45,9 @@ const RELAY_ONLY_ADDRESS = "relay-only.invalid";
 /** Live sessions one phone may hold, and sessions on one pairing window: the relay carries 16 per server. */
 export const MAX_SESSIONS_PER_PHONE = 4;
 const MAX_SESSIONS_PER_WINDOW = 2;
+const MAX_SESSIONS_PER_LINK = 2;
+/** The most the relay takes in one admission set. */
+const MAX_ADMISSION_SET = 32;
 const STREAM_DEADLINES: E2EOriginDeadlines = { headersMs: 30_000, requestMs: 300_000 };
 const PAIRING_SESSION_ROUTES = new Set(["POST /api/pair", "GET /api/health"]);
 
@@ -84,6 +89,8 @@ export interface PhoneRelayOptions {
   /** Tests: the control plane's relay-token answer, and shorter stream deadlines. */
   fetchGrant?: (devices: { e2e: number; legacy: number }) => Promise<unknown>;
   streamDeadlines?: E2EOriginDeadlines;
+  /** Servers that joined this one over the relay (links) and invites that wait to be used. */
+  guests?: LinkRelayGuests;
   log?: (line: string) => void;
 }
 
@@ -193,13 +200,23 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
   }
   const phones = readPhones(dataDir);
   const savePhones = () => writeFileAtomic(join(dataDir, PHONE_RELAY_PHONES_FILE), `${JSON.stringify({ v: 1, phones: [...phones] })}\n`, { mode: 0o600 });
+  const guests = options.guests;
+  const phoneRecords = () => sessions.bearerDigests(phones);
+  /** Phones and links share the slots the relay's admission set leaves them, and phones paired first keep theirs. */
+  const linkRecords = () => {
+    const room = Math.max(0, Math.min(RELAY_LINKS_MAX, MAX_RELAY_PHONES - phoneRecords().length));
+    return (guests?.records() ?? []).slice(0, room).map((record) => ({ id: `${LINK_DEVICE_PREFIX}${record.id}`, tokenHash: record.tokenHash }));
+  };
   const devices: E2EDevices = {
-    records: () => sessions.bearerDigests(phones),
-    pairingWindows: () => sessions.pairingDigests(MAX_PAIRING_WINDOWS).map((tokenHash) => ({ tokenHash })),
+    records: () => [...phoneRecords(), ...linkRecords()],
+    pairingWindows: () => [
+      ...sessions.pairingDigests(MAX_PAIRING_WINDOWS).map((tokenHash) => ({ tokenHash })),
+      ...(guests?.windows() ?? []).slice(0, RELAY_INVITES_MAX),
+    ],
     confirm: () => {},
     markE2E: () => {},
   };
-  const live = new Set(devices.records().map((record) => record.id));
+  const live = new Set(phoneRecords().map((record) => record.id));
   if (live.size !== phones.size) {
     for (const id of phones) if (!live.has(id)) phones.delete(id);
     savePhones();
@@ -216,7 +233,7 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
   const descriptor = () => e2e.descriptor(null);
 
   const counts = () => {
-    const e2eCount = devices.records().length;
+    const e2eCount = phoneRecords().length;
     // A server's other devices reach it some other way: they are the devices the relay does not carry.
     return { e2e: Math.min(e2eCount, 100), legacy: Math.min(Math.max(sessions.list().length - e2eCount, 0), 100) };
   };
@@ -255,6 +272,11 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
   });
 
   const origin = createE2EOrigin((req, res) => relayed(req, res), (_req, socket) => refuseUpgrade(socket), options.streamDeadlines ?? STREAM_DEADLINES);
+  const linkOrigin = createE2EOrigin((req, res) => relayed(req, res), (_req, socket) => refuseUpgrade(socket), LINK_DEADLINES);
+  const guestOf = (peer: Peer) => {
+    const hostId = e2e.relay?.hostId;
+    return guests && hostId ? guestKind(peer, guests, hostId) : null;
+  };
 
   /** One phone (or one pairing window) holds a few live sessions; a new one closes its oldest, so a phone that lost its
    * sessions without the relay noticing can still come back. */
@@ -264,6 +286,8 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     if (!peer) return;
     const key = peer.kind === "device" ? `device ${peer.id}` : `window ${peer.admHash}`;
     const list = held.get(key) ?? [];
+    const link = guestOf(peer) === "link";
+    if (link && list.length >= MAX_SESSIONS_PER_LINK) return session.shutdown();
     list.push(session);
     held.set(key, list);
     const limit = peer.kind === "device" ? MAX_SESSIONS_PER_PHONE : MAX_SESSIONS_PER_WINDOW;
@@ -274,6 +298,20 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
       if (!list.length && held.get(key) === list) held.delete(key);
     });
   };
+
+  /** Never more than the relay takes: a set past 32 makes it close every phone, so guests go first. */
+  function admissionSet(): string[] {
+    const set = e2e.admissionSet();
+    const hostId = e2e.relay?.hostId;
+    if (set.length <= MAX_ADMISSION_SET || !hostId) return set.slice(0, MAX_ADMISSION_SET);
+    const guestHashes = new Set([...linkRecords(), ...(guests?.windows() ?? []).slice(0, RELAY_INVITES_MAX)].flatMap((entry) => {
+      const hash = credentialHashFromHex(entry.tokenHash);
+      return hash ? [admissionHash(admission(hash, hostId))] : [];
+    }));
+    const kept = set.filter((hash) => !guestHashes.has(hash));
+    const room = MAX_ADMISSION_SET - kept.length;
+    return [...kept, ...set.filter((hash) => guestHashes.has(hash)).slice(0, Math.max(0, room))].slice(0, MAX_ADMISSION_SET).sort();
+  }
 
   function applyGrant(grant: RelayGrant | null): void {
     const hostId = grant ? fromB64u(grant.hostId) : null;
@@ -287,9 +325,9 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     relay = new RelayClient({
       nodes: grant.nodes,
       token: grant.token,
-      admissionSet: () => e2e.admissionSet(),
+      admissionSet: () => admissionSet(),
       accept: (transport) => {
-        const session = e2e.accept(transport, TRANSPORT_RELAY, "relay", (context) => origin.connect(context));
+        const session = e2e.accept(transport, TRANSPORT_RELAY, "relay", (context) => (guestOf(context.peer) === "link" ? linkOrigin : origin).connect(context));
         void session?.ready.then(() => holdSession(session), () => {});
         return session && { receive: (data, binary) => session.receive(data, binary), transportClosed: (code) => session.transportClosed(code) };
       },
@@ -306,8 +344,9 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
 
   /** Security: a relayed request is never this machine's. It has no peer address, which the request gate always treats as
    * remote, and whatever Host, proxy, cookie or owner headers the phone wrote are replaced: it needs a session of its own. */
-  function scrub(req: IncomingMessage, peer: Peer): void {
+  function scrub(req: IncomingMessage, peer: Peer, kind: "link" | "invite" | null): void {
     for (const name of Object.keys(req.headers)) {
+      if (kind === "link" && name === LEVEL_HEADER) continue;
       if (name === "cookie" || name.startsWith("x-seira-") || (PROXY_HEADERS as readonly string[]).includes(name)) delete req.headers[name];
     }
     req.headers.host = "phone-relay.invalid";
@@ -318,22 +357,24 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     const context = e2eContextOf(req.socket);
     if (!context) return reply(res, 500, { error: "not a relayed request" });
     const peer = context.peer;
-    scrub(req, peer);
+    const guest = guestOf(peer);
+    scrub(req, peer, guest);
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
+    if (guest && !guests!.allows(guest, method, path)) return reply(res, 404, { error: "not found" });
     if (method === "POST" && path === "/api/auth/pair") return reply(res, 404, { error: "pair a phone with its QR code" });
-    if (peer.kind === "pairing") {
+    if (peer.kind === "pairing" && !guest) {
       if (!PAIRING_SESSION_ROUTES.has(`${method} ${path}`)) return reply(res, 401, { error: "pair this phone first" });
       if (method === "POST" && devices.records().length >= MAX_RELAY_PHONES) {
         return reply(res, 409, { error: `This server has ${MAX_RELAY_PHONES} phones on Seira Relay. Remove one (seira devices revoke ID), then pair again.` });
       }
-    } else {
+    } else if (peer.kind === "device") {
       const bearer = bearerToken(req.headers.authorization);
       const own = devices.records().find((record) => record.id === peer.id);
       if (bearer && (!own || !sameDigest(own.tokenHash, sha256Hex(bearer)))) return reply(res, 401, { error: "this connection belongs to another device" });
       const ticket = new URL(req.url ?? "/", "http://phone-relay.invalid").searchParams.get("ticket");
       if (ticket && sessions.ticketOwner(ticket) !== peer.id) return reply(res, 401, { error: "this connection belongs to another device" });
-      if (method === "GET" && path === "/api/companion/endpoints") {
+      if (!guest && method === "GET" && path === "/api/companion/endpoints") {
         if (!bearer) return reply(res, 401, { error: "pair this device first" });
         const route = qrRoute(options.publicOrigin());
         return reply(res, 200, { serverName: options.serverName(), endpoints: route.endpoints ?? [], ...(version ? { version } : {}), ...(descriptor() ? { e2e: descriptor() } : {}) });
@@ -359,7 +400,23 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
     e2e.closeDevice(sessionId);
     setTimeout(() => relay?.refreshAdmission(), ADMISSION_SETTLE_MS).unref();
   });
+  /** A removed link hears GoAway(3) inside its session before the relay drops it from the admission set. */
+  let settleUntil = 0;
+  const refreshAdmission = () => {
+    const wait = settleUntil - Date.now();
+    if (wait > 0) setTimeout(() => relay?.refreshAdmission(), wait).unref();
+    else relay?.refreshAdmission();
+  };
   e2e.onAdmissionChange(() => relay?.refreshAdmission());
+  guests?.attach({
+    descriptor,
+    room: () => ({ devices: phoneRecords().length, links: guests.records().length }),
+    changed: refreshAdmission,
+    closeLink(id) {
+      settleUntil = Date.now() + ADMISSION_SETTLE_MS;
+      e2e.closeDevice(`${LINK_DEVICE_PREFIX}${id}`);
+    },
+  });
   tokens.start();
 
   return {
@@ -379,8 +436,10 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
       stopIssued();
       stopRevoked();
       tokens.stop();
+      guests?.attach(null);
       e2e.closeAll();
       origin.close();
+      linkOrigin.close();
     },
   };
 }
