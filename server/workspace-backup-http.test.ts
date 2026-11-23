@@ -348,3 +348,49 @@ it("refuses a part whose Content-Length and bytes differ", async () => {
   expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=3`, { body: "abcd" })).status).toBe(400);
   expect((await send(`${BASE}/${started.id}/chunk?offset=0&bytes=4`, { body: "abcd" })).status).toBe(200);
 });
+
+async function exportedDownload() {
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string };
+  const fetchRange = (range?: string) => fetch(`${url}/api/workspace-backup/download/${exported.id}`, { headers: { authorization: `Bearer ${admin.token}`, ...(range ? { range } : {}) } });
+  return fetchRange;
+}
+
+it("offers byte ranges on the download", async () => {
+  const response = await (await exportedDownload())();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("accept-ranges")).toBe("bytes");
+  expect(await response.text()).toBe("fixture encrypted bytes");
+});
+
+it.each([
+  ["bytes=0-6", "fixture", "bytes 0-6/23"],
+  ["bytes=8-", "encrypted bytes", "bytes 8-22/23"],
+  ["bytes=-5", "bytes", "bytes 18-22/23"],
+  ["bytes=18-999", "bytes", "bytes 18-22/23"],
+])("answers %s with 206 and only those bytes", async (range, body, contentRange) => {
+  const response = await (await exportedDownload())(range);
+  expect(response.status).toBe(206);
+  expect(response.headers.get("content-range")).toBe(contentRange);
+  expect(response.headers.get("content-length")).toBe(String(body.length));
+  expect(await response.text()).toBe(body);
+});
+
+it.each(["bytes=23-", "bytes=500-600", "bytes=-0"])("answers the unsatisfiable range %s with 416", async (range) => {
+  const response = await (await exportedDownload())(range);
+  expect(response.status).toBe(416);
+  expect(response.headers.get("content-range")).toBe("bytes */23");
+  await response.arrayBuffer();
+});
+
+it("sends the whole file for several ranges at once", async () => {
+  const response = await (await exportedDownload())("bytes=0-1,4-5");
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe("fixture encrypted bytes");
+});
+
+it("still refuses a download without a session", async () => {
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string };
+  const response = await fetch(`${url}/api/workspace-backup/download/${exported.id}`, { headers: { range: "bytes=0-3" } });
+  expect(response.status).toBeGreaterThanOrEqual(401);
+  await response.arrayBuffer();
+});

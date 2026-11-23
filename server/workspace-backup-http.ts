@@ -31,6 +31,25 @@ type Artifact = {
 };
 type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string> };
 
+/** One `bytes=a-b`, `a-` or `-n` range; any other header, including a list of ranges, means the whole file. */
+function byteRange(header: string | undefined, size: number): { start: number; end: number } | "unsatisfiable" | undefined {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header?.trim() ?? "");
+  if (!match || (!match[1] && !match[2])) return undefined;
+  let start: number;
+  let end: number;
+  if (!match[1]) {
+    const length = Number(match[2]);
+    if (length === 0) return "unsatisfiable";
+    start = Math.max(0, size - length);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+    if (match[2] && Number(match[2]) < start) return undefined;
+  }
+  return start >= size || !Number.isSafeInteger(start) ? "unsatisfiable" : { start, end };
+}
+
 export function isWorkspaceBackupSessionControl(method: string, path: string): boolean {
   return (method === "GET" && path === "/api/auth/sessions") ||
     (method === "POST" && path === "/api/auth/logout") ||
@@ -156,12 +175,25 @@ export function createWorkspaceBackupRoutes(options: {
       if (method === "GET" && download) {
         const artifact = get(download[1], auth, "download");
         const file = artifact.path!;
-        res.writeHead(200, {
+        const size = statSync(file).size;
+        const range = byteRange(req.headers.range, size);
+        const headers = {
           "content-type": "application/octet-stream",
-          "content-length": statSync(file).size,
+          "accept-ranges": "bytes",
           "content-disposition": `attachment; filename="Seira-${artifact.summary!.createdAt.slice(0, 10)}.seirabackup"`,
           "x-content-type-options": "nosniff",
-        });
+        };
+        if (range === "unsatisfiable") {
+          res.writeHead(416, { ...headers, "content-range": `bytes */${size}`, "content-length": 0 });
+          res.end();
+          return true;
+        }
+        if (range) {
+          res.writeHead(206, { ...headers, "content-range": `bytes ${range.start}-${range.end}/${size}`, "content-length": range.end - range.start + 1 });
+          await pipeline(createReadStream(file, range), res);
+          return true;
+        }
+        res.writeHead(200, { ...headers, "content-length": size });
         await pipeline(createReadStream(file), res);
         return true;
       }
