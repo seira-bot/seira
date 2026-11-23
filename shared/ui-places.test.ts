@@ -12,7 +12,7 @@ const EN = JSON.parse(readFileSync(join(ROOT, "src/locales/en.json"), "utf8")) a
 
 function* sources(path: string): Generator<string> {
   if (statSync(path).isDirectory()) {
-    for (const name of readdirSync(path)) if (name !== "node_modules" && name !== "locales") yield* sources(join(path, name));
+    for (const name of readdirSync(path)) if (name !== "node_modules" && !name.endsWith(".json")) yield* sources(join(path, name));
   } else if (/\.tsx?$/.test(path) && !/\.test\.|\.d\.ts$|\/testing\//.test(path)) yield path;
 }
 
