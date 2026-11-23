@@ -38,17 +38,14 @@ describe("restore progress marker", () => {
 
   it("writes at most once every two seconds and writes again after that", () => {
     const dir = dataDir();
-    let now = 1_000_000;
     beginRestoreBeat(dir);
     const file = join(dir, ".backups", "restore-progress");
     const first = readFileSync(file, "utf8");
-    restoreBeat(() => now);
-    const second = readFileSync(file, "utf8");
-    restoreBeat(() => now + 500);
-    expect(readFileSync(file, "utf8")).toBe(second);
-    restoreBeat(() => now + 3_000);
-    expect(readFileSync(file, "utf8")).not.toBe(second);
-    expect(second).not.toBe(first);
+    const at = Number(first);
+    restoreBeat(() => at + 500);
+    expect(readFileSync(file, "utf8")).toBe(first);
+    restoreBeat(() => at + 3_000);
+    expect(readFileSync(file, "utf8")).toBe(`${at + 3_000}\n`);
   });
 
   it("does nothing outside a restore", () => {
