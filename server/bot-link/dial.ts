@@ -20,6 +20,7 @@ const POWER_HEADER = "x-omb-cloud-power";
 const BACKGROUND_HEADER = "x-seira-background";
 /** One file may take this long to cross. */
 const FILE_MS = 10 * 60_000;
+const FAR_REFUSED = "the other server did not take or give the file";
 
 export interface DialerOptions {
   link: BotLink;
@@ -31,9 +32,11 @@ export interface DialerOptions {
   level?: number;
   /** The paths of the exchange and of the file crossing on the other side. */
   paths?: { sync: string; file: string };
+  /** false: an error never carries the other side's own words, as for a server of another owner. */
+  farText?: boolean;
 }
 
-export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH } }: DialerOptions) {
+export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, holdMs = HOLD_MS, firstRetryMs = FIRST_RETRY_MS, level = PROTOCOL_LEVEL, paths = { sync: SYNC_PATH, file: FILE_PATH }, farText = true }: DialerOptions) {
   let running = false, stopped = true, asleep = false, needsPairing = false;
   let session = "", ack = 0, fresh = true, retryMs = firstRetryMs;
   let held: AbortController | null = null;
@@ -49,8 +52,10 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
    * answer in the 400s says the Cloud will not take or does not have it (`gone`); anything else is tried again. */
   const fileUrl = (origin: string, id: string, way: FileWay, index: number, name: string, more: Record<string, string> = {}) => `${origin}${paths.file}?${new URLSearchParams({ id, way, index: String(index), name, ...more })}`;
   const refusedFile = async (response: Response) => {
+    const gone = response.status >= 400 && response.status < 500 && ![401, 403, 408, 429].includes(response.status);
+    if (!farText) { await response.body?.cancel().catch(() => {}); return Object.assign(new Error(FAR_REFUSED), { gone }); }
     const told = await response.json().then((answer) => { const error = (answer as { error?: unknown } | null)?.error; return typeof error === "string" ? error : ""; }, () => "");
-    return Object.assign(new Error(told || `the Cloud answered ${response.status}`), { gone: response.status >= 400 && response.status < 500 && ![401, 403, 408, 429].includes(response.status) });
+    return Object.assign(new Error(told || `the Cloud answered ${response.status}`), { gone });
   };
   const cloud = () => { const target = link.dial(); if (!target) throw new Error("not linked"); return { ...target, headers: { authorization: `Bearer ${target.token}`, origin: target.origin } }; };
   const transfer: FileTransfer = {

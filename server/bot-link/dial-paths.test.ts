@@ -64,3 +64,29 @@ describe("dialer paths", () => {
     expect(urls.some((url) => url.includes(SYNC_PATH) || url.includes(FILE_PATH))).toBe(false);
   });
 });
+
+/** The error a file request gets when the other side answers `status` with its own words. */
+async function refusal(status: number, options: { farText?: boolean } = {}) {
+  const { link, transfer } = fakeLink();
+  const dialer = createDialer({ link, holdMs: 50, ...options,
+    fetch: (async () => new Response(JSON.stringify({ error: "far side secret words" }), { status, headers: { "content-type": "application/json" } })) as typeof fetch });
+  try {
+    await transfer().holds("id", "result" as never, 0, { name: "a.txt", bytes: 1, mime: "text/plain", kind: "file", path: "/nowhere" } as never);
+    throw new Error("the file request did not fail");
+  } catch (error) {
+    return { message: (error as Error).message, gone: (error as { gone?: boolean }).gone };
+  } finally { dialer.close(); }
+}
+
+describe("a refused file", () => {
+  it("carries the other side's words by default", async () => {
+    expect(await refusal(404)).toEqual({ message: "far side secret words", gone: true });
+  });
+
+  it("carries only a fixed text when the other side's words must not reach this server", async () => {
+    expect(await refusal(404, { farText: false })).toEqual({ message: "the other server did not take or give the file", gone: true });
+    const denied = await refusal(403, { farText: false });
+    expect(denied).toEqual({ message: "the other server did not take or give the file", gone: false });
+    expect(denied.message).not.toContain("far side");
+  });
+});
