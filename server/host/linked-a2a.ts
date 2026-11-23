@@ -7,7 +7,7 @@
 //   its link through farFrame, under the policy, admission and approval cap of a linked server.
 // - Only the sha256 of an inbound token is kept, in the peer's record. The token is shown once, when it is made.
 // - The outbound token is kept only in the state of the peer's own link (mode 600). No view, log line or activity row
-//   holds a token, a hash or the peer's address.
+//   holds a token or a hash, and no log line or activity row holds the peer's address.
 // - A rotated, turned off or removed inbound token is refused at once: the record changes first, then held calls end.
 // - A peer's link counts with every other link here (createLinkedServers), so work it started goes to no other link and
 //   work another link started goes to no A2A peer.
@@ -137,7 +137,7 @@ export type LinkedA2a = ReturnType<typeof createLinkedA2a>;
 export function createLinkedA2a(deps: LinkedA2aDeps) {
   const { now, log } = deps;
   const allowLoopback = deps.allowLoopback === true;
-  const egress = deps.egress ?? { allowLoopback };
+  const egress: EgressDeps = { allowLoopback, ...deps.egress };
   const file = readA2aPeers(deps.dataDir, log);
   const runtimes = new Map<string, Runtime>();
   const frames = createFrameBudget(now, ADMIT.frames);

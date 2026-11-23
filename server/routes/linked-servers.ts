@@ -37,7 +37,8 @@ const updateBody = z.object({
 }).strict();
 
 export interface LinkedServerRouteDeps {
-  manager: Pick<LinkedServers, "list" | "invite" | "join" | "update" | "remove" | "addA2a" | "rotateA2a">;
+  /** Without `addA2a` and `rotateA2a`, the routes for A2A agents are not here. */
+  manager: Pick<LinkedServers, "list" | "invite" | "join" | "update" | "remove"> & Partial<Pick<LinkedServers, "addA2a" | "rotateA2a">>;
   /** Whether a bot of this server has this id. */
   knownBot(id: string): boolean;
   /** Who did it, for the activity record. */
@@ -49,8 +50,10 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
   return async ({ req, res, path, method, auth, json, readBody }) => {
     const id = ONE.exec(path)?.[1];
     const tokenOf = TOKEN.exec(path)?.[1];
-    const known = (path === BASE && method === "GET") || ((path === INVITES || path === JOIN || path === A2A) && method === "POST")
-      || (id !== undefined && (method === "PATCH" || method === "DELETE")) || (tokenOf !== undefined && method === "POST");
+    const { addA2a, rotateA2a } = manager;
+    const known = (path === BASE && method === "GET") || ((path === INVITES || path === JOIN) && method === "POST")
+      || (id !== undefined && (method === "PATCH" || method === "DELETE"))
+      || (method === "POST" && ((path === A2A && addA2a !== undefined) || (tokenOf !== undefined && rotateA2a !== undefined)));
     if (!known) return PASS;
     res.setHeader("cache-control", "no-store");
     if (!auth.scopes.includes("admin")) { req.resume(); return json(res, 403, { error: ADMIN_ONLY }); }
@@ -74,16 +77,16 @@ export function createLinkedServerRoutes(deps: LinkedServerRouteDeps): RouteHand
         return json(res, 200, { server: await manager.join(body.data.invite, actor) });
       }
 
-      if (path === A2A) {
+      if (path === A2A && addA2a) {
         const body = addBody.safeParse(await readBody(req, 64 * 1024));
         if (!body.success) return json(res, 400, { error: "Check the name, the address and the token of the A2A agent." });
         if (body.data.exposed?.some((bot) => !deps.knownBot(bot))) return json(res, 400, { error: NOT_A_BOT });
-        return json(res, 200, manager.addA2a(body.data, actor));
+        return json(res, 200, addA2a(body.data, actor));
       }
 
-      if (tokenOf !== undefined) {
+      if (tokenOf !== undefined && rotateA2a) {
         req.resume();
-        const made = manager.rotateA2a(tokenOf, actor);
+        const made = rotateA2a(tokenOf, actor);
         return made ? json(res, 200, made) : json(res, 404, { error: NOT_HERE });
       }
 
