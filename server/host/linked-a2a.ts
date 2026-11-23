@@ -131,7 +131,8 @@ const originOf = (id: string) => `a2a:${id}`;
 
 /** What the far agent says, and what its calls start, as the link takes it in. The sides have cleaned the text already. A
  * frame that does not parse becomes `null`, which the link drops. */
-export const taking = (link: BotLink): Pick<BotLink, "receive" | "has" | "ownsRoot"> => ({
+type Taking = Pick<BotLink, "receive" | "has" | "ownsRoot">;
+export const taking = (link: Taking): Taking => ({
   receive: (peer, raw) => { link.receive(peer, raw.map((frame) => (guestFrameSchema.safeParse(frame).success ? frame : null))); },
   has: (peer) => link.has(peer),
   ownsRoot: (rootId) => link.ownsRoot(rootId),
