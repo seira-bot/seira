@@ -2,13 +2,14 @@
 // address, what it may reach here, and only the sha256 of the token it sends. The token this server sends to a peer is
 // never in this file. A field this version does not know is dropped on read, and the peer is kept.
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { join } from "node:path";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
 import { isPublicDomainAddress } from "../custom-domain.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 import { APPROVAL_CAPS, ENDED_MAX, LINKS_MAX, LINK_ID, botIdSchema, cleanName, hashSecret, linkedServersDir, sameHash } from "./linked-servers-store.ts";
 
 export const A2A_TOKEN_PREFIX = "lsa_";
@@ -91,7 +92,7 @@ export function writeA2aPeers(dataDir: string, file: A2aPeersFile): void {
   const peers = file.peers.map((peer) => a2aPeerSchema.parse(peer));
   if (peers.length > LINKS_MAX) throw new Error("too many A2A peers");
   const ended = (file.ended ?? []).map((one) => endedSchema.parse(one)).slice(-ENDED_MAX);
-  mkdirSync(linkedServersDir(dataDir), { recursive: true, mode: 0o700 });
+  ensurePrivateDir(linkedServersDir(dataDir));
   writeFileAtomic(join(linkedServersDir(dataDir), FILE), JSON.stringify({ v: 1, peers, ...(ended.length ? { ended } : {}) }), { mode: 0o600 });
 }
 

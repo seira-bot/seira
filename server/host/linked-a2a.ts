@@ -11,7 +11,7 @@
 // - A rotated, turned off or removed inbound token is refused at once: the record changes first, then held calls end.
 // - A peer's link counts with every other link here (createLinkedServers), so work it started goes to no other link and
 //   work another link started goes to no A2A peer.
-import { mkdirSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import type { EgressDeps } from "../a2a/egress.ts";
@@ -23,6 +23,7 @@ import { createA2aTransport, type A2aTransport } from "../a2a/transport.ts";
 import type { BotLink, LinkEvent, LinkPolicy } from "../bot-link/link.ts";
 import { peerKey, type Place } from "../bot-link/protocol.ts";
 import type { Coordinator } from "../coordinator.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 import { PEER_NAME_MAX, newA2aToken, outboundUrl, peerByToken, readA2aPeers, writeA2aPeers, type A2aPeer, type EndedPeer } from "./a2a-peers-store.ts";
 import { ADMIT, createFrameBudget } from "./linked-servers-admit.ts";
 import { ENDED_MAX, LINKS_MAX, botIdSchema, cleanName, guestOrigin, instanceDir, type ApprovalCap } from "./linked-servers-store.ts";
@@ -193,7 +194,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   /** The peer's runtime, registered with the other links. Its link is not turned on here: that may kick the coordinator. */
   function open(peer: A2aPeer): Runtime {
     const { id } = peer, key = a2aKey(id), dir = instanceDir(deps.dataDir, id);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dir);
     const link = deps.link(dir, policyOf(id, key), () => capOf(id));
     const index = createTaskIndex(dir, now, log);
     const tasks: TaskIndex = {

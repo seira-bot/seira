@@ -1,11 +1,12 @@
 // The index of one A2A peer: which A2A task and context belong to which Seira hand-off. It lives in the peer's own folder
 // as a2a-tasks.json, mode 600. It holds ids, states and refusal or failure notes, never result text.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 import { NOTE_MAX, TASK_STATES, isTerminal } from "./protocol.ts";
 
 export const TASKS_MAX = 1_000;
@@ -86,7 +87,7 @@ export function createTaskIndex(dir: string, now: () => number, log: (line: stri
 
   const persist = (): void => {
     try {
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      ensurePrivateDir(dir);
       writeFileAtomic(path, JSON.stringify({ v: 1, tasks: state.tasks, contexts: Object.fromEntries(state.contexts) }), { mode: 0o600 });
     } catch {
       log("a2a tasks: the record could not be saved");
