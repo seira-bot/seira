@@ -59,9 +59,10 @@ temporarily pauses its own writers and takes a consistent SQLite snapshot. The
 current limit is **10 GB of workspace files and 100,000 entries**; exceeding it
 fails explicitly, never silently produces a partial backup.
 
-Remote proxies and tunnels may impose smaller upload or timeout limits. For a
-large import, use a direct connection to the server or its local desktop UI,
-or configure your own reverse proxy's limits appropriately.
+The app uploads an imported backup in small parts, so a large file passes a
+tunnel or proxy that limits the size of one request. If the connection drops, the
+upload continues from the last part that arrived. An unfinished upload is
+removed after an hour without progress.
 
 To restore, choose **Import backup**, select the file, and enter its password.
 Validation shows its date, version, contents and exclusions before anything is

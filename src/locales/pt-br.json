@@ -6229,6 +6229,8 @@
   "backup.importPassword": "Senha deste backup",
   "backup.validate": "Validar backup",
   "backup.validating": "Validando backup…",
+  "backup.uploading": "Enviando backup… {percent}%",
+  "backup.uploadFailed": "O envio parou antes de terminar. Verifique sua conexão e tente novamente.",
   "backup.preview": "Backup validado",
   "backup.date": "Criado em",
   "backup.version": "Versão do app",

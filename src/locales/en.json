@@ -6566,6 +6566,8 @@
   "backup.importPassword": "Password for this backup",
   "backup.validate": "Validate backup",
   "backup.validating": "Validating backup…",
+  "backup.uploading": "Uploading backup… {percent}%",
+  "backup.uploadFailed": "The upload stopped before it finished. Check your connection and try again.",
   "backup.preview": "Validated backup",
   "backup.date": "Created",
   "backup.version": "App version",
