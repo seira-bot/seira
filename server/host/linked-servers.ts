@@ -164,7 +164,7 @@ export interface LinkedServersDeps extends InstanceDeps {
   limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; chars?: number; exchanges?: number; sessions?: number };
   /** Links to A2A agents. `allowLoopback`: tests only, an agent on this machine's loopback at http. `origin`: the address
    * those agents reach this server at, when it is not `publicOrigin`. `holdMs`: a shorter hold of a call, for tests. */
-  a2a?: { allowLoopback?: boolean; origin?(): string | null; egress?: EgressDeps; holdMs?: number };
+  a2a?: { allowLoopback?: boolean; origin?(): string | null; egress?: EgressDeps; holdMs?: number; cleanChars?: number };
 }
 
 type Instance = {
@@ -495,6 +495,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     allowLoopback: deps.a2a?.allowLoopback === true,
     ...(deps.a2a?.egress ? { egress: deps.a2a.egress } : {}),
     ...(deps.a2a?.holdMs ? { holdMs: deps.a2a.holdMs } : {}),
+    ...(deps.a2a?.cleanChars ? { cleanChars: deps.a2a.cleanChars } : {}),
   });
 
   for (const record of file.links) open(record);

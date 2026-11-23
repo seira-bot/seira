@@ -57,7 +57,7 @@ export interface BotLinkHostDeps extends Omit<BotLinkStoreDeps, "store" | "files
   log(line: string): void;
   /** Tests only: A2A agents on this machine's loopback, at http. Default: the environment variable
    * SEIRA_TEST_A2A_LOOPBACK is 1. */
-  a2a?: { allowLoopback?: boolean };
+  a2a?: { allowLoopback?: boolean; cleanChars?: number };
 }
 
 type Answer = { status: number; body: Record<string, unknown> };
@@ -109,7 +109,7 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
     serverName: deps.serverName, selfId: () => deps.environmentId, publicOrigin: deps.publicOrigin, audit: deps.audit,
     attemptAllowed: (source) => deps.sessions.attemptAllowed(source).ok, attemptFailed: (source) => { deps.sessions.noteFailure(source); },
     ownPeer: (key) => link.has(key),
-    a2a: { allowLoopback: loopback, egress: { allowLoopback: loopback },
+    a2a: { allowLoopback: loopback, egress: { allowLoopback: loopback }, ...(deps.a2a?.cleanChars ? { cleanChars: deps.a2a.cleanChars } : {}),
       origin: () => deps.publicOrigin() ?? (loopback && testPort ? `http://127.0.0.1:${testPort}` : null) },
   });
   const dialer = createDialer({ link, log: deps.log });

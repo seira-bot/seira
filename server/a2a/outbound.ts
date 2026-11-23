@@ -16,7 +16,7 @@ import { defuse } from "../records-block.ts";
 import { A2aEgressError, a2aRequest, type EgressDeps, type EgressOptions, type EgressResult } from "./egress.ts";
 import {
   CARD_BODY_MAX, ERR, NOTE_MAX, RESULT_TEXT_MAX, RPC_BODY_MAX, farCard, farSendResult, farTask, isTerminal, jsonRpcInterface,
-  type FarCard, type FarTask, type TaskState,
+  type Cleaning, type FarCard, type FarTask, type TaskState,
 } from "./protocol.ts";
 import type { TaskEntry, TaskIndex } from "./tasks.ts";
 
@@ -52,6 +52,7 @@ export const PROBLEM = {
 export const RESULT_TEXT = {
   busy: "Too much work waits on the A2A agent now, so this was not sent. Try again later.",
   notSent: "The A2A agent could not be reached, so the work was not sent.",
+  crowded: "The A2A agent answered, but too much text came in just now to read it. It was not sent again.",
   noAnswer: "The work went to the A2A agent, but no usable answer came back. It was not sent again.",
   unread: "The work went to the A2A agent, but its answer cannot be read now.",
   token: "The A2A agent did not take the token, so the work did not start there.",
@@ -80,6 +81,8 @@ export interface A2aOutboundDeps {
   token(): string | null;
   /** The peer's task index, shared with its inbound side. */
   tasks: TaskIndex;
+  /** The characters of the far agent's text that may be cleaned now. A result with no room waits for a later poll. */
+  cleaning: Cleaning;
   egress?: EgressDeps;
   request?: A2aRequestFn;
   now?: () => number;
@@ -130,18 +133,26 @@ export function cardAddress(url: URL): URL {
   return card;
 }
 
+const textOf = (parts: readonly TextPart[]): string[] => parts.flatMap((part) => (typeof part.text === "string" ? [part.text] : []));
+/** The characters that cleaning the text of `parts` reads, at most the limit of a result. */
+const partsCost = (parts: readonly TextPart[]): number => Math.min(textOf(parts).reduce((sum, text) => sum + text.length + 1, 0), RESULT_TEXT_MAX);
+
 function joined(parts: readonly TextPart[]): string {
-  const texts = parts.flatMap((part) => (typeof part.text === "string" ? [part.text] : []));
+  const texts = textOf(parts);
   const left = parts.length - texts.length;
   const note = left === 0 ? "" : `\n\n(${left} ${left === 1 ? "part that is" : "parts that are"} not text ${left === 1 ? "was" : "were"} left out.)`;
-  const text = defuse(texts.join("\n")).trim();
+  const text = defuse(texts.join("\n").slice(0, RESULT_TEXT_MAX)).trim();
   return text || note ? `${cut(text || RESULT_TEXT.empty, RESULT_TEXT_MAX - note.length)}${note}` : RESULT_TEXT.empty;
 }
 const outputOf = (task: FarTask): readonly TextPart[] => (task.artifacts?.length ? task.artifacts.flatMap((artifact) => artifact.parts) : task.status.message?.parts ?? []);
+const noteParts = (task: FarTask): readonly TextPart[] => task.status.message?.parts ?? [];
+/** The characters that cleaning the far agent's note reads. */
+const noteCost = (task: FarTask): number => Math.min(partsCost(noteParts(task)), NOTE_MAX);
 const farNote = (task: FarTask): string | undefined => {
-  const text = defuse((task.status.message?.parts ?? []).flatMap((part) => (typeof part.text === "string" ? [part.text] : [])).join("\n")).trim();
+  const text = defuse(textOf(noteParts(task)).join("\n").slice(0, NOTE_MAX)).trim();
   return text ? cut(text, NOTE_MAX) : undefined;
 };
+const NOTE_STATES: ReadonlySet<TaskState> = new Set(["TASK_STATE_INPUT_REQUIRED", "TASK_STATE_FAILED", "TASK_STATE_REJECTED"]);
 
 export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
   const now = deps.now ?? Date.now;
@@ -156,6 +167,13 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
   let connecting: Promise<void> | null = null;
   let calls = 0;
   let closed = false;
+
+  /** Takes room for cleaning `chars` characters of far text. False: this window has none, and nothing was taken. */
+  const room = (chars: number): boolean => {
+    if (!deps.cleaning.fits(chars)) return false;
+    deps.cleaning.spend(chars);
+    return true;
+  };
 
   const authorization = (): Record<string, string> => { const token = deps.token(); return token ? { authorization: `Bearer ${token}` } : {}; };
 
@@ -292,6 +310,8 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
     const far = task.contextId ?? known?.far ?? "";
     const inputTask = state === "TASK_STATE_INPUT_REQUIRED" ? task.id : undefined;
     if (known?.far !== far || known.inputTask !== inputTask) deps.tasks.setContext(run.thread, far, inputTask);
+    const price = state === "TASK_STATE_COMPLETED" ? partsCost(outputOf(task)) : NOTE_STATES.has(state) ? noteCost(task) : 0;
+    if (price > 0 && !room(price)) { schedule(run); return; }
     record(run, state, far);
     switch (state) {
       case "TASK_STATE_SUBMITTED": case "TASK_STATE_WORKING": schedule(run); return;
@@ -315,7 +335,8 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
       return;
     }
     if (answer.kind === "error") {
-      const said = cut(defuse(answer.message).trim(), NOTE_MAX);
+      const raw = answer.message.slice(0, NOTE_MAX);
+      const said = room(raw.length) ? cut(defuse(raw).trim(), NOTE_MAX) : "";
       finish(run, { ok: false, text: said ? `${RESULT_TEXT.refused} It said: ${said}` : RESULT_TEXT.refused }, "TASK_STATE_REJECTED");
       return;
     }
@@ -323,6 +344,7 @@ export function createA2aOutbound(deps: A2aOutboundDeps): A2aOutbound {
     if (!result?.success) { finish(run, { ok: false, text: RESULT_TEXT.noAnswer }, "TASK_STATE_FAILED"); return; }
     if (result.data.task) { settleTask(run, result.data.task); return; }
     const message = result.data.message!;
+    if (!room(partsCost(message.parts))) { finish(run, { ok: false, text: RESULT_TEXT.crowded }, "TASK_STATE_FAILED"); return; }
     const known = deps.tasks.outOf(run.thread);
     if (message.contextId && (known?.far !== message.contextId || known.inputTask !== undefined)) deps.tasks.setContext(run.thread, message.contextId);
     finish(run, { ok: true, text: joined(message.parts) }, "TASK_STATE_COMPLETED");

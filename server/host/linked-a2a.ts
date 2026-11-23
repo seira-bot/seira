@@ -4,7 +4,11 @@
 //
 // Security invariants:
 // - The far agent is an outside party, also when its token is valid. All it says, and all work its calls start, reaches
-//   its link through farFrame, under the policy, admission and approval cap of a linked server.
+//   its link under the policy, admission and approval cap of a linked server.
+// - Far text is cleaned in one place, by the side that reads it (server/a2a/inbound.ts, server/a2a/outbound.ts), and only
+//   after the text is known to be within its limit. Each link has ADMIT.chars characters to clean in each ADMIT.windowMs,
+//   the same budget as a link to another Seira: a call with no room is refused, and a result with no room is read again at
+//   a later poll. A frame the link takes in must parse as a guest frame.
 // - Only the sha256 of an inbound token is kept, in the peer's record. The token is shown once, when it is made.
 // - The outbound token is kept only in the state of the peer's own link (mode 600). No view, log line or activity row
 //   holds a token or a hash, and no log line or activity row holds the peer's address.
@@ -17,17 +21,16 @@ import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-act
 import type { EgressDeps } from "../a2a/egress.ts";
 import { ROOT_CARD_PATH, createA2aInbound, type A2aGate, type A2aInbound, type InboundBot } from "../a2a/inbound.ts";
 import { PROBLEM, createA2aOutbound, type A2aOutbound } from "../a2a/outbound.ts";
-import { A2A_PREFIX } from "../a2a/protocol.ts";
+import { A2A_PREFIX, type Cleaning } from "../a2a/protocol.ts";
 import { createTaskIndex, type TaskIndex } from "../a2a/tasks.ts";
 import { createA2aTransport, type A2aTransport } from "../a2a/transport.ts";
 import type { BotLink, LinkEvent, LinkPolicy } from "../bot-link/link.ts";
-import { peerKey, type Place } from "../bot-link/protocol.ts";
+import { guestFrameSchema, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { Coordinator } from "../coordinator.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
 import { PEER_NAME_MAX, newA2aToken, outboundUrl, peerByToken, readA2aPeers, writeA2aPeers, type A2aPeer, type EndedPeer } from "./a2a-peers-store.ts";
 import { ADMIT, createFrameBudget } from "./linked-servers-admit.ts";
 import { ENDED_MAX, LINKS_MAX, botIdSchema, cleanName, guestOrigin, instanceDir, type ApprovalCap } from "./linked-servers-store.ts";
-import { farFrame } from "./linked-servers-text.ts";
 
 const WORDS = { handedTo: "Handed to the A2A agent.", otherSide: "the A2A agent" };
 const FAIL_TEXT = "The work could not be done on the other side.";
@@ -116,6 +119,8 @@ export interface LinkedA2aDeps {
   allowLoopback?: boolean;
   egress?: EgressDeps;
   holdMs?: number;
+  /** Tests only: the characters of far text a link may have cleaned in each window. */
+  cleanChars?: number;
 }
 
 type Sides = { id: string; key: string; link: BotLink; place: Place; tasks: TaskIndex };
@@ -124,9 +129,10 @@ type Runtime = Sides & { inbound: A2aInbound; outbound: A2aOutbound; transport: 
 export const a2aKey = (id: string): string => peerKey(`a2a:${id}`);
 const originOf = (id: string) => `a2a:${id}`;
 
-/** What the far agent says, and what its calls start, as the link takes it in: the one path every far text takes. */
-const taking = (link: BotLink): Pick<BotLink, "receive" | "has" | "ownsRoot"> => ({
-  receive: (peer, raw) => { link.receive(peer, raw.map(farFrame)); },
+/** What the far agent says, and what its calls start, as the link takes it in. The sides have cleaned the text already. A
+ * frame that does not parse becomes `null`, which the link drops. */
+export const taking = (link: BotLink): Pick<BotLink, "receive" | "has" | "ownsRoot"> => ({
+  receive: (peer, raw) => { link.receive(peer, raw.map((frame) => (guestFrameSchema.safeParse(frame).success ? frame : null))); },
   has: (peer) => link.has(peer),
   ownsRoot: (rootId) => link.ownsRoot(rootId),
 });
@@ -142,6 +148,13 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   const file = readA2aPeers(deps.dataDir, log);
   const runtimes = new Map<string, Runtime>();
   const frames = createFrameBudget(now, ADMIT.frames);
+  const charMax = deps.cleanChars ?? ADMIT.chars;
+  const chars = createFrameBudget(now, charMax);
+  const priced = (count: number) => Math.min(Math.max(0, Math.ceil(count)), charMax);
+  const cleaningOf = (key: string): Cleaning => ({
+    fits: (count) => chars.left(key) >= priced(count),
+    spend: (count) => { chars.spend(key, priced(count)); },
+  });
 
   const save = () => writeA2aPeers(deps.dataDir, file);
   const recordOf = (id: string) => file.peers.find((one) => one.id === id);
@@ -178,6 +191,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
       endpoint: (botId) => `${origin() ?? ""}${A2A_PREFIX}${botId}`,
       coordinator: deps.coordinator, tasks: rt.tasks,
       frames: { left: () => frames.left(rt.key), spend: (count) => { frames.spend(rt.key, count); } },
+      cleaning: cleaningOf(rt.key),
       failText: FAIL_TEXT, now, ...(deps.holdMs ? { holdMs: deps.holdMs } : {}),
     });
   }
@@ -187,7 +201,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
       link: taking(rt.link), key: rt.key, place: rt.place,
       url: () => { const peer = recordOf(rt.id); return peer ? urlOf(peer) : null; },
       token: () => rt.link.dial()?.token ?? null,
-      tasks: rt.tasks, egress, now, log,
+      tasks: rt.tasks, cleaning: cleaningOf(rt.key), egress, now, log,
     });
   }
 
@@ -380,14 +394,24 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
         rt.link.turnOff(true);
       }
       file.peers = file.peers.filter((one) => one.id !== id);
+      const open = deps.openRoots();
       const ended = (file.ended ?? []).filter((one) => one.key !== key);
-      file.ended = deps.openRoots().has(key) ? [...ended, { key, cap: peer.cap, at: now() }].slice(-ENDED_MAX) : ended;
+      if (open.has(key)) ended.push({ key, cap: peer.cap, at: now() });
+      // A record with no open work goes first. A record with open work goes last, and its work stops, so no work of a
+      // peer with no record runs above the cap the peer had.
+      while (ended.length > ENDED_MAX) {
+        const at = Math.max(0, ended.findIndex((one) => !open.has(one.key)));
+        const [gone] = ended.splice(at, 1);
+        for (const rootId of open.get(gone!.key) ?? []) deps.cancelUnder(rootId, REMOVED);
+      }
+      file.ended = ended;
       save();
       if (rt) { rt.transport.close(); rt.link.close(); }
       runtimes.delete(id);
       deps.unregister(id);
       deps.forget(id);
       frames.forget(key);
+      chars.forget(key);
       rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true });
       deps.audit({ category: "linked-server", action: "linked-server.remove", target: targetOf(peer), actor });
       return true;

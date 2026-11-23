@@ -47,7 +47,7 @@ const hexId = (n: number) => n.toString(16).padStart(16, "0");
 const open: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of open.splice(0).reverse()) await close(); });
 
-interface PeerSpec { label: string; name?: string; exposed?: string[]; holdMs?: number; limits?: { requests?: number; holds?: number }; frames?: number }
+interface PeerSpec { label: string; name?: string; exposed?: string[]; holdMs?: number; limits?: { requests?: number; holds?: number }; frames?: number; chars?: number }
 
 async function world(specs: PeerSpec[]) {
   const dir = mkdtempSync(join(tmpdir(), "a2a-inbound-"));
@@ -89,10 +89,13 @@ async function world(specs: PeerSpec[]) {
     one.link.turnOn({ self: HERE, origin: `a2a:${one.spec.label}`, token: "a2a", peer: { id: `a2a:${one.spec.label}`, name } });
     const tasks = createTaskIndex(one.dataDir, Date.now);
     const budget = createFrameBudget(Date.now, one.spec.frames ?? 1_000);
+    const charMax = one.spec.chars ?? 10_000_000, chars = createFrameBudget(Date.now, charMax);
+    const priced = (count: number) => Math.min(count, charMax);
     const inbound = createA2aInbound({
       link: one.link, key: one.key, peerName: () => name, exposed: (id) => one.exposed.has(id), bot: (id) => BOTS.find((bot) => bot.id === id),
       endpoint: (botId) => `https://seira.example/api/a2a/${botId}`, coordinator: () => real, tasks,
       frames: { left: () => budget.left(one.key), spend: (count) => budget.spend(one.key, count) },
+      cleaning: { fits: (count) => chars.left(one.key) >= priced(count), spend: (count) => { chars.spend(one.key, priced(count)); } },
       failText: FAIL, holdMs: one.spec.holdMs ?? 2_000, limits: { requests: 100_000, ...one.spec.limits },
     });
     const sent: HandoffFrame[] = [], cancelled: string[] = [];
@@ -570,7 +573,7 @@ describe("a request that starts nothing (lesson 6)", () => {
       link: { receive: (_peer, frames) => { received.push(...frames); }, has: () => true, ownsRoot: () => false },
       key: "abcd1234", peerName: () => "Partner", exposed: () => true, bot: (id) => BOTS.find((bot) => bot.id === id),
       endpoint: (botId) => `https://seira.example/api/a2a/${botId}`, coordinator: () => ({ children: () => [] }), tasks,
-      frames: { left: () => 10, spend: () => {} }, failText: FAIL,
+      frames: { left: () => 10, spend: () => {} }, cleaning: { fits: () => true, spend: () => {} }, failText: FAIL,
     });
     const res = await call(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, "/api/a2a/writer", { token: "lsa_stub", body: sendMessage("m1") });
     expect(res.body.error.code).toBe(-32603);

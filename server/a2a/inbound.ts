@@ -17,7 +17,7 @@ import { bearerToken, requestSource } from "../request-auth.ts";
 import {
   A2A_PREFIX, CONTEXTS_MAX, ERR, HOLD_MS, INBOUND_BODY_MAX, NOTE_MAX, RESULT_TEXT_MAX, RPC_HTTP_STATUS, agentCard, cancelTaskParams, getTaskParams,
   isTerminal, parseRequest, rpcError, rpcResult, sendMessageParams, stateOf, taskView, textOfParts, versionOk, wantsPush,
-  type A2aTask, type ErrorCode, type RpcId, type TaskState,
+  type A2aTask, type Cleaning, type ErrorCode, type RpcId, type TaskState,
 } from "./protocol.ts";
 import { frameId, threadKey, type TaskEntry, type TaskIndex } from "./tasks.ts";
 
@@ -64,6 +64,8 @@ export interface A2aInboundDeps {
   coordinator(): Pick<Coordinator, "children">;
   tasks: TaskIndex;
   frames: FrameBudget;
+  /** The characters of the peer's text that may be cleaned now. A call with no room is refused before it is read. */
+  cleaning: Cleaning;
   /** The fixed text the peer reads for work that failed here. */
   failText: string;
   holdMs?: number;
@@ -189,8 +191,7 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     if (message.taskId !== undefined) return failure(id, inTask(message.taskId) ? ERR.UNSUPPORTED_OPERATION : ERR.TASK_NOT_FOUND);
     const text = textOfParts(message.parts);
     if (text.kind === "unsupported") return failure(id, ERR.CONTENT_TYPE_NOT_SUPPORTED);
-    const brief = text.kind === "text" ? defuse(text.text) : "";
-    if (text.kind === "tooLong" || brief.trim() === "") return failure(id, ERR.INVALID_PARAMS);
+    if (text.kind === "tooLong") return failure(id, ERR.INVALID_PARAMS);
     const taskId = frameId(deps.key, message.messageId);
     const wait = configuration?.returnImmediately === true ? 0 : holdMs;
     if (inTask(taskId)) {
@@ -200,11 +201,14 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
     const context = message.contextId ?? `seira-${botId}`;
     const thread = threadKey(botId, context);
     if (message.contextId !== undefined && !deps.tasks.hasThread(thread) && deps.tasks.threadCount() >= CONTEXTS_MAX) return failure(id, ERR.UNSUPPORTED_OPERATION);
+    if (deps.frames.left() < 1 || !deps.cleaning.fits(text.text.length)) return throttled(id);
+    deps.cleaning.spend(text.text.length);
+    const brief = defuse(text.text);
+    if (brief.trim() === "") return failure(id, ERR.INVALID_PARAMS);
     const frame = guestFrameSchema.safeParse({
       t: "handoff", id: taskId, to: botId, from: { botId: CALLER_ID, name: callerName(), threadId: thread }, thread, text: brief, mode: "work", origin: { kind: "outside" },
     });
     if (!frame.success) return failure(id, ERR.INVALID_PARAMS);
-    if (deps.frames.left() < 1) return throttled(id);
     deps.frames.spend(1);
     deps.link.receive(deps.key, [frame.data]);
     deps.tasks.put({ id: taskId, dir: "in", bot: botId, context, thread, state: "TASK_STATE_SUBMITTED", at: now() });

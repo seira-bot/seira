@@ -6,6 +6,14 @@ import { BRIEF_MAX } from "../bot-link/protocol.ts";
 import type { HandoffStatus } from "../coordinator.ts";
 
 export const A2A_PREFIX = "/api/a2a/";
+
+/** The characters of far text that one link may have cleaned in each window: cleaning costs time in proportion to them.
+ * A text costs at most the whole budget, so one text always fits in an empty window. */
+export interface Cleaning {
+  /** Whether a text of `chars` characters has room now. */
+  fits(chars: number): boolean;
+  spend(chars: number): void;
+}
 export const HOLD_MS = 55_000;
 export const CONTEXTS_MAX = 50;
 export const TEXT_MAX = BRIEF_MAX;

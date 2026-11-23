@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminActionRow } from "../admin-activity.ts";
 import { createCoordinator, type CoordinateBotsCall, type Coordinator, type CoordinatorHost, type HandoffView, type HostTurnResult } from "../coordinator.ts";
@@ -12,6 +12,7 @@ import { PASS } from "../routes/table.ts";
 import type { BotRecord } from "../store.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { createBotLinkHost, type BotLinkHostDeps } from "./bot-link-host.ts";
+import { taking } from "./linked-a2a.ts";
 import { CHAINED, LINKS_MAX, type A2aPeerView, type LinkedServerView } from "./linked-servers.ts";
 import { hashSecret } from "./linked-servers-store.ts";
 
@@ -48,8 +49,8 @@ function filesUnder(dir: string): Array<{ path: string; text: string }> {
 }
 
 /** One server as index.ts wires it, with A2A agents on loopback allowed: the bot link host over a store, a coordinator
- * over its host, and its routes. A source that sends `tries` wrong credentials is throttled. */
-async function server(label: string, bots: Bot[], { tries = Number.POSITIVE_INFINITY } = {}) {
+ * over its host, and its routes. A source that sends `tries` wrong credentials is throttled. `chars` is the characters of far text a link may have cleaned in a window. */
+async function server(label: string, bots: Bot[], { tries = Number.POSITIVE_INFINITY, chars = 0 } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), `linked-a2a-${label}-`));
   const records = bots.map((bot) => ({ ...bot, threadId: `${bot.id}-chat`, modelSelection: { instanceId: "", model: "" } }) as unknown as BotRecord);
   const threads = new Set(records.map((bot) => bot.threadId));
@@ -82,7 +83,7 @@ async function server(label: string, bots: Bot[], { tries = Number.POSITIVE_INFI
     files: { carried: () => [], crossed: () => {}, sentWith: () => ({}), returnedWith: () => ({}), drop: () => {} },
     storeFile: async () => { throw new Error("no files here"); },
     serverName: () => label, publicOrigin: () => `http://127.0.0.1:${port}`, audit: (row) => { rows.push(row); }, actor: () => ({ kind: "loopback" }),
-    log: (line) => { logs.push(line); }, a2a: { allowLoopback: true },
+    log: (line) => { logs.push(line); }, a2a: { allowLoopback: true, ...(chars ? { cleanChars: chars } : {}) },
   });
   const inner: CoordinatorHost = {
     validate: () => undefined, busy: () => false, report: () => {}, changed: () => {}, park: () => {},
@@ -499,4 +500,84 @@ describe("the shared limit (AC-03)", () => {
     expect(await head.api("DELETE", `/api/linked-servers/${head.linked.list()[0]!.id}`)).toEqual({ status: 200, body: { ok: true } });
     expect((await head.api("POST", "/api/linked-servers/invites")).status).toBe(200);
   }, 60_000);
+});
+
+/** `Date.now` and every clock made from it after this call run `skew` milliseconds ahead. Call it before a server starts. */
+function skewing() {
+  const real = Date.now.bind(Date);
+  const clock = { skew: 0, forward(ms: number) { clock.skew += ms; } };
+  const spy = vi.spyOn(Date, "now").mockImplementation(() => real() + clock.skew);
+  cleanups.push(() => { spy.mockRestore(); });
+  return clock;
+}
+const sendNow = (messageId: string, text: string) => ({
+  jsonrpc: "2.0", id: `send-${messageId}`, method: "SendMessage",
+  params: { message: { messageId, role: "ROLE_USER", parts: [{ text }] }, configuration: { returnImmediately: true } } });
+const BUSY = "The other side is busy now, so try again later.";
+const received = (at: Server) => at.rows.filter((row) => row.action === "linked-server.handoff" && (row.after as { direction?: string }).direction === "received");
+
+describe("the characters of far text that a link may have cleaned", () => {
+  it("refuses a call with no room before it reads the text and starts no work, then takes calls again in a later window", async () => {
+    const clock = skewing();
+    const head = await server("head", [WRITER], { chars: 100 });
+    const made = await head.api("POST", "/api/linked-servers/a2a", { name: "Caller agent", inbound: true, exposed: ["writer"] });
+    const token = String(made.body.token);
+
+    const first = await head.call("/api/a2a/writer", token, sendNow("m-1", "a".repeat(60)));
+    expect(first.status).toBe(200);
+    await until(() => received(head).length === 1 && head.runs.length === 1, "the first call starts work");
+    const refused = await head.call("/api/a2a/writer", token, sendNow("m-2", "b".repeat(60)));
+    expect(refused.status).toBe(429);
+    expect(refused.body).toMatchObject({ error: { message: BUSY } });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect([head.runs.length, received(head).length]).toEqual([1, 1]);
+    expect(JSON.stringify(head.rows)).not.toContain("m-2");
+    const task = (id: string) => head.call("/api/a2a/writer", token, { jsonrpc: "2.0", id: "g", method: "GetTask", params: { id } });
+    const ids = (await head.call("/api/a2a/writer", token, sendNow("m-1", "a".repeat(60)))).body.result as { task: { id: string } };
+    expect((await task(ids.task.id)).body.result).toBeDefined();
+
+    clock.forward(61_000);
+    const later = await head.call("/api/a2a/writer", token, sendNow("m-2", "b".repeat(60)));
+    expect(later.status).toBe(200);
+    await until(() => head.runs.length === 2, "the call of the later window starts work");
+  }, 60_000);
+
+  it("takes the calls of an honest agent with the default limit", async () => {
+    const head = await server("head", [WRITER]);
+    const made = await head.api("POST", "/api/linked-servers/a2a", { name: "Caller agent", inbound: true, exposed: ["writer"] });
+    const token = String(made.body.token);
+    for (let index = 0; index < 12; index += 1) {
+      expect((await head.call("/api/a2a/writer", token, sendNow(`m-${index}`, `Write post ${index}. ${"Words. ".repeat(140)}`))).status).toBe(200);
+    }
+    await until(() => head.runs.length === 12, "every call starts work");
+  }, 60_000);
+
+  it("reads the result of a far agent again in a later window while this link has no room for it", async () => {
+    const clock = skewing();
+    const head = await server("head", [WRITER]), branch = await server("branch", [SCOUT], { chars: 300 });
+    const { agent } = await pair(branch, head, ["writer"]);
+    head.knobs.run = async () => ({ ok: true, text: "r".repeat(250) });
+    for (const text of ["Draft one", "Draft two"]) {
+      const asked = branch.begin(SCOUT, text);
+      expect((await branch.coordinate(SCOUT, asked, [agent], text)).status).toBe(200);
+      branch.coordinator!.endTurn(asked.generation, { ok: true, text: "Handed on." });
+    }
+    await until(() => results(branch).length === 1, "the first result is back", 30_000);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(results(branch)).toHaveLength(1);
+    clock.forward(61_000);
+    await until(() => results(branch).length === 2, "the second result is back in the later window", 40_000);
+    for (const one of results(branch)) expect(JSON.stringify(one)).toContain("r".repeat(250));
+  }, 90_000);
+
+  it("never cleans a frame that does not parse, so a field of 4,000,000 characters costs no time", () => {
+    const seen: unknown[] = [];
+    const link = { receive: (_peer: string, frames: readonly unknown[]) => { seen.push(...frames); }, has: () => true, ownsRoot: () => false };
+    const bad = { t: "result", id: "x1", ok: true, text: "⦋".repeat(4_000_000) };
+    const good = { t: "result", id: "x2", ok: true, text: "fine" };
+    const started = process.hrtime.bigint();
+    taking(link).receive("peer", [bad, good]);
+    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(500);
+    expect(seen).toEqual([null, good]);
+  }, 15_000);
 });

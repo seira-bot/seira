@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBotLink } from "../bot-link/link.ts";
 import { linkedId, peerKey, type Frame, type HandoffFrame, type ResultFrame } from "../bot-link/protocol.ts";
 import { createCoordinator, type CoordinateBotsCall, type Coordinator, type CoordinatorHost } from "../coordinator.ts";
+import { createFrameBudget } from "../host/linked-servers-admit.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { A2aEgressError, type EgressReason, type EgressResult } from "./egress.ts";
 import {
@@ -78,7 +79,14 @@ type Far = ReturnType<typeof fakeFar>;
 const dirs: string[] = [];
 const opened: Array<{ close(): void }> = [];
 
-function fixture(options: { url?: string | null; token?: string | null; far?: Far; dir?: string } = {}) {
+/** A character budget of `max` for one link, as the manager gives each side. */
+function budgetOf(max: number, now: () => number = () => Date.now()) {
+  const spent = createFrameBudget(now, max);
+  const priced = (count: number) => Math.min(Math.ceil(count), max);
+  return { fits: (count: number) => spent.left("link") >= priced(count), spend: (count: number) => { spent.spend("link", priced(count)); } };
+}
+
+function fixture(options: { url?: string | null; token?: string | null; far?: Far; dir?: string; chars?: number } = {}) {
   const dir = options.dir ?? mkdtempSync(join(tmpdir(), "a2a-outbound-"));
   if (!options.dir) dirs.push(dir);
   const frames: Frame[] = [];
@@ -88,7 +96,7 @@ function fixture(options: { url?: string | null; token?: string | null; far?: Fa
   const tasks: TaskIndex = createTaskIndex(dir, () => Date.now());
   const logs: string[] = [];
   const outbound: A2aOutbound = createA2aOutbound({
-    link, key: KEY, place: PLACE, tasks, request: far.request, log: (line) => { logs.push(line); },
+    link, key: KEY, place: PLACE, tasks, request: far.request, log: (line) => { logs.push(line); }, cleaning: budgetOf(options.chars ?? 10_000_000),
     url: () => (settings.url ? new URL(settings.url) : null), token: () => settings.token,
   });
   opened.push(outbound);
@@ -305,6 +313,63 @@ describe("the A2A outbound side", () => {
       expect(text.startsWith(`${RESULT_TEXT.refused} It said: No way`)).toBe(true);
       expect(text).toHaveLength(RESULT_TEXT.refused.length + " It said: ".length + NOTE_MAX);
       expect(tasks.get("h1")).toMatchObject({ state: "TASK_STATE_REJECTED" });
+    });
+
+    describe("the characters of far text that may be cleaned", () => {
+      const output = (text: string) => ({ artifacts: [{ parts: [{ text }] }] });
+      const completed = (text: string) => result(task("COMPLETED", output(text)));
+
+      it("reads a result again at a later poll while the window has no room for it, and takes it once there is", async () => {
+        const { outbound, far, resultOf, tasks } = fixture({ chars: 200 });
+        const first = "a".repeat(150), second = "b".repeat(100);
+        far.on("SendMessage", sent("COMPLETED", output(first)), sent("COMPLETED", output(second)));
+        far.on("GetTask", ...Array.from({ length: 20 }, () => completed(second)));
+        outbound.send(handoff("h1"));
+        outbound.send(handoff("h2"));
+        await flush();
+        expect(resultOf("h1")?.text).toBe(first);
+        expect(resultOf("h2")).toBeUndefined();
+        await step(POLL_FIRST_MS);
+        await step(30_000);
+        expect(resultOf("h2")).toBeUndefined();
+        expect(far.rpc("GetTask").length).toBeGreaterThan(1);
+        await step(60_000);
+        expect(resultOf("h2")).toEqual({ t: "result", id: "h2", ok: true, text: second });
+        expect(far.rpc("SendMessage")).toHaveLength(2);
+        expect(tasks.get("h2")).toMatchObject({ state: "TASK_STATE_COMPLETED" });
+      });
+
+      it("ends a message answer that has no room with a fixed text, and does not keep it for later", async () => {
+        const { outbound, far, resultOf } = fixture({ chars: 50 });
+        far.on("SendMessage", result({ message: message("x".repeat(40)) }), result({ message: message("y".repeat(40)) }));
+        outbound.send(handoff("h1"));
+        outbound.send(handoff("h2"));
+        await flush();
+        expect(resultOf("h1")).toMatchObject({ ok: true, text: "x".repeat(40) });
+        expect(resultOf("h2")).toEqual({ t: "result", id: "h2", ok: false, text: RESULT_TEXT.crowded });
+        expect(far.rpc("GetTask")).toHaveLength(0);
+      });
+
+      it("leaves out the words of a refusal that has no room, and still ends the work as refused", async () => {
+        const { outbound, far, resultOf } = fixture({ chars: 30 });
+        far.on("SendMessage", rpcError(ERR.INVALID_PARAMS, "z".repeat(25)), rpcError(ERR.INVALID_PARAMS, "w".repeat(25)));
+        outbound.send(handoff("h1"));
+        outbound.send(handoff("h2"));
+        await flush();
+        expect(resultOf("h1")?.text).toBe(`${RESULT_TEXT.refused} It said: ${"z".repeat(25)}`);
+        expect(resultOf("h2")).toEqual({ t: "result", id: "h2", ok: false, text: RESULT_TEXT.refused });
+      });
+
+      it("never cleans an answer whose field is longer than its limit, so a field of 4,000,000 characters costs no time", async () => {
+        const { outbound, far, resultOf } = fixture();
+        far.on("SendMessage", result({ task: task("COMPLETED", { artifacts: [{ parts: [{ text: "\u298b".repeat(4_000_000) }] }] }) }));
+        const started = process.hrtime.bigint();
+        outbound.send(handoff("h1"));
+        await flush();
+        const took = Number(process.hrtime.bigint() - started) / 1e6;
+        expect(resultOf("h1")).toEqual({ t: "result", id: "h1", ok: false, text: RESULT_TEXT.noAnswer });
+        expect(took).toBeLessThan(500);
+      }, 15_000);
     });
 
     it("ends on a 401 and names the token problem", async () => {
@@ -574,7 +639,7 @@ describe("the A2A outbound side on a real guest link", () => {
     const ticker = setInterval(() => real.tick(), 15);
     link.turnOn({ self: { id: "here-environment", name: "Here" }, origin: PLACE.id, token: "a2a", peer: PLACE });
     const far = fakeFar();
-    const outbound = createA2aOutbound({ link, key, place: PLACE, url: () => new URL(ADDRESS), token: () => "far-token", tasks: createTaskIndex(dir, Date.now), request: far.request });
+    const outbound = createA2aOutbound({ link, key, place: PLACE, url: () => new URL(ADDRESS), token: () => "far-token", tasks: createTaskIndex(dir, Date.now), cleaning: budgetOf(10_000_000, Date.now), request: far.request });
     const routed = { sent: [] as string[], cancelled: [] as string[] };
     const transport = createA2aTransport({
       link, key, inbound: { settled: () => {}, close: () => {} },
