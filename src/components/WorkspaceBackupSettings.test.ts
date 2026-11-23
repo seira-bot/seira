@@ -111,10 +111,11 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     let view = render();
     change(view.nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
-    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id", chunkBytes: 1024 }).mockResolvedValueOnce({ received: file.size }).mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
     submit(formOf("backup-import")); await flush();
-    expect(fixture.api.mock.calls[1]).toEqual(["/api/workspace-backup/upload", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file }]);
-    expect(JSON.parse(fixture.api.mock.calls[2][1].body)).toEqual({ id: "upload-id", password: "correct horse battery" });
+    expect(fixture.api.mock.calls.slice(1, 4).map(([path]) => path)).toEqual(["/api/workspace-backup/upload/start", "/api/workspace-backup/upload/upload-id/chunk?offset=0&bytes=17", "/api/workspace-backup/upload/upload-id/finish"]);
+    expect(fixture.api.mock.calls[2][1]).toMatchObject({ method: "POST", headers: { "content-type": "application/octet-stream" } });
+    expect(JSON.parse(fixture.api.mock.calls[4][1].body)).toEqual({ id: "upload-id", password: "correct horse battery" });
     view = render();
     const replace = () => render().nodes.find((node) => node.type === "button" && node.props.children === "Replace installation")!;
     expect(replace().props.disabled).toBe(true);
@@ -123,7 +124,7 @@ describe("Settings full backups", () => {
     change(confirm, "REPLACE"); expect(replace().props.disabled).toBe(false);
     fixture.api.mockResolvedValueOnce({ restartRequired: true, restoreId: "stage-id" });
     replace().props.onClick!(); await flush();
-    expect(JSON.parse(fixture.api.mock.calls[3][1].body)).toEqual({ id: "stage-id", confirmation: "REPLACE" });
+    expect(JSON.parse(fixture.api.mock.calls[5][1].body)).toEqual({ id: "stage-id", confirmation: "REPLACE" });
     expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(render().html).toContain("Fully quit Seira");
   });
@@ -133,10 +134,48 @@ describe("Settings full backups", () => {
     open("import");
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [new File(["archive"], "file.seirabackup")] } });
     change(render().nodes.filter((node) => node.props.type === "password")[0], "wrong password");
-    fixture.api.mockResolvedValueOnce({ id: "upload" }).mockRejectedValueOnce(new Error("Wrong password"));
+    fixture.api.mockResolvedValueOnce({ id: "upload" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload" }).mockRejectedValueOnce(new Error("Wrong password"));
     submit(formOf("backup-import")); await flush();
     const html = render().html;
     expect(html).toContain('role="alert"'); expect(html).toContain("Wrong password"); expect(html).not.toContain("Replace installation");
+  });
+
+  it("shows an error with a Retry button when the upload fails, and the retry resumes the same upload", async () => {
+    await ready();
+    const file = new File(["archive"], "file.seirabackup");
+    open("import");
+    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
+    change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
+    const refusal = Object.assign(new Error("The backup is too large."), { status: 413 });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockRejectedValueOnce(refusal);
+    submit(formOf("backup-import")); await flush();
+    let html = render().html;
+    expect(html).toMatch(/role="alert"[^>]*>The backup is too large\./);
+    expect(html).not.toContain("Validating backup");
+    const retry = render().nodes.find((node) => node.type === "button" && node.props.type === "submit")!;
+    expect(retry.props.children).toContain("Retry");
+    fixture.api.mockResolvedValueOnce({ received: 0 }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    submit(formOf("backup-import")); await flush();
+    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload/start"))).toHaveLength(1);
+    expect(fixture.api.mock.calls.map(([path]) => path)).toContain("/api/workspace-backup/upload/upload-id");
+    expect(render().html).toContain("Validated backup");
+  });
+
+  it("shows the percent sent while the file uploads, before validation", async () => {
+    await ready();
+    const file = new File(["archive"], "file.seirabackup");
+    open("import");
+    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
+    change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
+    let release!: (value: unknown) => void;
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    submit(formOf("backup-import")); await flush();
+    expect(render().html).toContain("Uploading backup… 0%");
+    expect(render().html).not.toContain("Validating backup");
+    release({ received: 7 });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    await flush();
+    expect(render().html).toContain("Validated backup");
   });
 
   it("reuploads the selected file if its upload or validated stage expires", async () => {
@@ -146,17 +185,17 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     const validate = async () => { change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery"); submit(formOf("backup-import")); await flush(); };
     const expired = Object.assign(new Error("Backup expired; upload again"), { status: 404 });
-    fixture.api.mockResolvedValueOnce({ id: "upload-old" }).mockRejectedValueOnce(expired);
+    fixture.api.mockResolvedValueOnce({ id: "upload-old" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-old" }).mockRejectedValueOnce(expired);
     await validate();
-    fixture.api.mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ id: "stage-old", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ id: "stage-old", summary });
     await validate();
     change(render().nodes.find((node) => node.type === "input" && !node.props.type)!, "REPLACE");
     fixture.api.mockRejectedValueOnce(expired);
     render().nodes.find((node) => node.type === "button" && node.props.children === "Replace installation")!.props.onClick!(); await flush();
     expect(render().html).not.toContain("Validated backup");
-    fixture.api.mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ id: "stage-final", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ id: "stage-final", summary });
     await validate();
-    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload"))).toHaveLength(3);
+    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload/start"))).toHaveLength(3);
     expect(render().html).toContain("Validated backup");
   });
 

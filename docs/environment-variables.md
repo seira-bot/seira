@@ -20,6 +20,12 @@ In Docker, rename `OMB_*` to `SEIRA_*` in your `.env` file. The server image set
 
 To find what still uses the old prefix on a server, start it and search its log for `is deprecated`.
 
+## Access log
+
+`SEIRA_ACCESS_LOG=1` (or `seira serve --access-log`) makes the server write one line for each request it answers:
+time, method, path, status, duration and the way in (`local` or `tunnel`). The query string, cookies, headers and bodies
+are never written. It is off unless you set it.
+
 ## What the harness keeps to itself
 
 Both prefixes are reserved, and names are matched without regard to letter case, as Windows does. A custom MCP server cannot be given a variable that starts with `SEIRA_` or `OMB_`, a bot's

@@ -56,7 +56,7 @@ export const USAGE = `seira — your team of AI bots, ready in a few steps
   seira setup [--data-dir DIR]
   seira start [the same options as serve]
   seira serve [--port 8799] [--data-dir DIR] [--label NAME]
-                    [--public-url https://host | --domain HOST | --tailscale] [--tunnel] [--lan] [--relay]
+                    [--public-url https://host | --domain HOST | --tailscale] [--tunnel] [--lan] [--relay] [--access-log]
   seira pair  [--label NAME] [--phone [ios|android] | --computer] [--ttl 24h] [--public-url https://host]
   seira devices [revoke ID]
   seira status
@@ -108,6 +108,11 @@ fleet   many client workspaces on one Linux server, each its own account,
         init --operator USER also installs the fleet agent, a root service
         on a Unix socket only USER may open, so the workspace running as
         USER manages the others from Settings → Installations.
+
+--access-log  write one line for each request the server answers (time,
+              method, path, status, duration), to see what reaches it. Never
+              the query string, cookies, headers or bodies. SEIRA_ACCESS_LOG=1
+              does the same. Off by default.
 
 Ways in (pick one; --lan can join any):
 --public-url you already have HTTPS in front (cloudflared, Caddy, nginx):

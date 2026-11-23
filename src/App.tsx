@@ -35,6 +35,7 @@ import { NotificationRail, NotificationsPanel } from "@/components/Notifications
 import { useNotificationFeed } from "@/lib/notification-preferences";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { AppNotices } from "@/components/AppNotices";
+import { PowerHost } from "@/components/power/PowerHost";
 import { AppGrantHost, AppGrantNotice } from "@/components/AppGrantPrompt";
 import { BotLimitPopup } from "@/components/BotLimitPopup";
 import { CloudAsleepStrip } from "@/components/CloudAsleepStrip";
@@ -45,6 +46,7 @@ import { useTeamChats } from "@/state/team-chats";
 import { needsYouVersion, useTeamPeopleLoader } from "@/state/team-people";
 import { useTeamPresence } from "@/state/team-presence";
 import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/state/inbox";
+import { useGlance } from "@/state/use-glance";
 import { useWorkflowsUnavailable } from "@/state/workflows";
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
@@ -149,7 +151,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     dispatch(phonePairingSettingsAction());
   }, [dispatch]);
   useConnectLink(dispatch, Boolean(state.config?.team));
-  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
+  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useGlance(); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
   usePresence(state, dispatch); useTeamPresence(state);
   usePageLanguage(effectiveLanguage(useLanguageChoice(), state.config?.language), true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -347,6 +349,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     <div data-look="app" className={cn("flex h-full flex-col", framed && "bg-frame")} onClickCapture={drawerOpen ? noteDrawerAction : undefined} onKeyDownCapture={drawerOpen ? noteDrawerAction : undefined}>
       <WindowFrameBar notifications={notificationTray} />
       <BotLimitPopup />
+      <PowerHost />
       <ConversationShareDialogs />
       {!framed && strips}
       <div className="relative flex min-h-0 flex-1">

@@ -690,6 +690,7 @@ export type Action =
       alwaysAllow?: { botId: string; key: string };
       always?: boolean;
       rememberCommand?: boolean;
+      onSent?: () => void;
       onError?: (message: string) => void;
     }
   | { type: "newTask"; botId: string; projectId?: string; cwd?: string; continueFrom?: string; onCreated?: () => void; onError?: (message: string) => void }
@@ -2447,6 +2448,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (response?.settlementPending && typeof response.message === "string") {
                 showError(new Error(response.message));
               }
+              action.onSent?.();
             })
             .catch((error) => {
               // A failed settings flush or grant save stops the response so work never resumes under a stale approval level.

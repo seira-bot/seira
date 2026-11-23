@@ -228,6 +228,13 @@ describe("a bot's page in the chat", () => {
     expect(fetchMock.mock.calls.some(([path]) => path.includes("/publish"))).toBe(false);
   });
 
+  it("starts the full-screen page beside the desktop rail, not under it", async () => {
+    await render(row(payload()));
+    await click("Full screen", card());
+    expect(overlay()?.className).toContain("left-[var(--rail-beside,0px)]");
+    expect(overlay()?.className).not.toContain("inset-0");
+  });
+
   it("opens Full screen over the chat, points there too, and closes on Escape or when Point ends after a pick", async () => {
     await render(row(payload()));
     await click("Full screen", card());
