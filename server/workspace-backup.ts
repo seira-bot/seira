@@ -19,7 +19,7 @@ import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEngineP
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
-import { userHome } from "./env-path.ts";
+import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
@@ -230,7 +230,7 @@ function copyRegular(source: string, destination: string): { size: number; mode:
       if (!count) break;
       size += count;
       if (size > before.size) throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-      hash.update(chunk.subarray(0, count));
+      hash.update(chunk.subarray(0, count)); restoreBeat();
       let offset = 0;
       while (offset < count) offset += writeSync(output, chunk, offset, count - offset);
     }
@@ -256,7 +256,7 @@ function hashFile(path: string): string {
     for (;;) {
       const count = readSync(fd, chunk, 0, chunk.length, null);
       if (!count) return hash.digest("hex");
-      hash.update(chunk.subarray(0, count));
+      hash.update(chunk.subarray(0, count)); restoreBeat();
     }
   } finally { closeSync(fd); }
 }
@@ -951,8 +951,7 @@ export function applyPendingWorkspaceRestore(dataDir: string): WorkspaceRestoreR
     return { restored: false, rolledBack: true, id: pending.id, safetyCopyPath };
   }
   const staged = join(jobPath(dataDir, pending.id), "staged");
-  const manifest = validateStaged(staged);
-  const prepared = prepareRestore(dataDir, pending.id, manifest);
+  const prepared = withRestoreBeat(dataDir, () => prepareRestore(dataDir, pending.id, validateStaged(staged)));
   folder(join(safetyCopyPath, "data"));
   const journal: RestoreJournal = {
     id: pending.id, phase: "applying",

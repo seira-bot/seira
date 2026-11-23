@@ -19,6 +19,8 @@ export function limitMessage(code: ImportErrorCode): string {
     case "too-much-data": return t("aiImport.error.tooMuchData", { gb: String(AI_IMPORT_LIMITS.extractedBytes / GB) });
     case "too-many-files": return t("aiImport.error.tooManyFiles", { count: AI_IMPORT_LIMITS.entries.toLocaleString() });
     case "unsafe-archive": return t("aiImport.error.unsafe");
+    case "secret-file": return t("aiImport.error.secretFile");
+    case "bad-export": return t("aiImport.error.badExport");
     case "unknown-source": return t("aiImport.error.unknown");
     default: return t("aiImport.error.failed");
   }

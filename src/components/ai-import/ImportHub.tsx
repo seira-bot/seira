@@ -1,6 +1,6 @@
 // Settings → Import & export → Move from another AI. Views take plain props so tests can draw every screen;
 // ImportHubSection holds the state.
-import { Bot, ClipboardPaste } from "lucide-react";
+import { Bot, Check, ClipboardPaste, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { aiImportApi, uploadAll, type AiImportClient, type DroppedFile } from "@/lib/ai-import";
@@ -10,6 +10,7 @@ import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
 import type { ApplyImportJob, ImportDestination, ImportErrorCode, ImportJobView, InstructionsAs, LocalSourceView, PasteSource } from "../../../shared/ai-import/api";
 import type { ImportSourceKind } from "../../../shared/ai-import/bundle";
+import { HERMES_EXPORT_SKILL } from "../../../shared/ai-import/hermes-export";
 import { parsePaste, pastePrompt } from "../../../shared/ai-import/paste";
 import { GrokBotMark } from "../GrokBotMark";
 import { ClaudeMark, HermesMark, PresetProviderMark } from "../ProviderIcons";
@@ -24,7 +25,7 @@ import { ApplyView, ReadingView } from "./Progress";
 import { ReportView } from "./Report";
 import { chosenDestination, ReviewView, type BotChoice } from "./Review";
 
-export type GuideSource = "chatgpt" | "claude-ai";
+export type GuideSource = "chatgpt" | "claude-ai" | "hermes";
 const LOCAL_KINDS: ReadonlySet<ImportSourceKind> = new Set(["hermes", "openclaw", "claude-code"]);
 
 export function SourceMark({ kind, size = 18 }: { kind: ImportSourceKind | "grok-bot"; size?: number }): ReactNode {
@@ -69,10 +70,10 @@ export interface HubViewProps {
   onFiles: (files: DroppedFile[]) => void;
 }
 
-function SourceRow({ kind, title, line, action, onAction, extra }: { kind: ImportSourceKind | "grok-bot"; title?: string; line: string; action: string; onAction: () => void; extra?: ReactNode }) {
+function SourceRow({ kind, title, line, action, onAction, extra, marker }: { kind: ImportSourceKind | "grok-bot"; title?: string; marker?: string; line: string; action: string; onAction: () => void; extra?: ReactNode }) {
   return (
     <SettingRow title={title ?? sourceName(kind)} subtitle={line} leading={<SettingsMark><SourceMark kind={kind} /></SettingsMark>} message={extra}>
-      <button type="button" data-ai-import-source={kind} className="ui-button" onClick={onAction}>{action}</button>
+      <button type="button" data-ai-import-source={marker ?? kind} className="ui-button" onClick={onAction}>{action}</button>
     </SettingRow>
   );
 }
@@ -114,6 +115,7 @@ export function HubView(props: HubViewProps) {
       ) : (
         <SettingRow title={t("aiImport.group.here")} subtitle={t("aiImport.remoteNote")}>{null}</SettingRow>
       )}
+      <SourceRow kind="hermes" marker="hermes-file" title={t("aiImport.hermesFile.title")} line={t("aiImport.line.hermes-file")} action={t("aiImport.action.choose")} onAction={() => onGuide("hermes")} />
       <SourceRow kind="chatgpt" line={t("aiImport.line.chatgpt")} action={t("aiImport.action.choose")} onAction={() => onGuide("chatgpt")} />
       <SourceRow kind="claude-ai" line={t("aiImport.line.claude-ai")} action={t("aiImport.action.choose")} onAction={() => onGuide("claude-ai")} />
       <div data-settings-block="grok-move" className="flex flex-col">
@@ -128,12 +130,24 @@ export function HubView(props: HubViewProps) {
   );
 }
 
-export function GuideView({ source, sending, failed, onFiles, onBack }: { source: GuideSource; sending: HubViewProps["sending"]; failed?: boolean; onFiles: (files: DroppedFile[]) => void; onBack: () => void }) {
+export function GuideView({ source, sending, failed, copied = false, onCopy, onFiles, onBack }: { source: GuideSource; sending: HubViewProps["sending"]; failed?: boolean; copied?: boolean; onCopy?: () => void; onFiles: (files: DroppedFile[]) => void; onBack: () => void }) {
   return (
     <div data-ai-import-screen="guide" className="flex flex-col gap-4">
       <h3 className="text-[14px] font-medium text-ink">{t("aiImport.guide.title", { source: sourceName(source) })}</h3>
       <ol className="flex list-decimal flex-col gap-1.5 ps-5 text-[13px] leading-[18px] text-ink">
-        {[1, 2, 3].map((step) => <li key={step}>{t(`aiImport.guide.${source}.${step}` as LocaleKey)}</li>)}
+        {[1, 2, 3].map((step) => (
+          <li key={step}>
+            {t(`aiImport.guide.${source}.${step}` as LocaleKey)}
+            {source === "hermes" && step === 1 && onCopy && (
+              <div className="mt-2">
+                <button type="button" data-ai-import-copy="" className="ui-button gap-1.5" onClick={onCopy}>
+                  {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                  {copied ? t("aiImport.paste.copied") : t("common.copy")}
+                </button>
+              </div>
+            )}
+          </li>
+        ))}
       </ol>
       <DropZone sending={sending} failed={failed} onFiles={onFiles} />
       <div><button type="button" data-ai-import-back="" className="ui-button" disabled={sending !== null} onClick={onBack}>{t("aiImport.back")}</button></div>
@@ -165,6 +179,7 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
   const [busy, setBusy] = useState(false);
   const [undoFailed, setUndoFailed] = useState(false);
   const [paste, setPaste] = useState<{ ai: PasteSource; text: string; destination: ImportDestination; copied: boolean }>({ ai: "chatgpt", text: "", destination: { kind: "new" }, copied: false });
+  const [hermesCopied, setHermesCopied] = useState(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -212,10 +227,11 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
     try { remember(await work()); } finally { if (alive.current) setBusy(false); }
   }, fail);
 
-  const backToHub = () => { setScreen({ name: "hub" }); setChoices({}); setUndoFailed(false); };
+  const backToHub = () => { setHermesCopied(false); setScreen({ name: "hub" }); setChoices({}); setUndoFailed(false); };
 
   if (screen.name === "error") return <Panel><ImportError code={screen.code} onBack={backToHub} /></Panel>;
-  if (screen.name === "guide") return <Panel><GuideView source={screen.source} sending={sending} failed={sendFailed} onFiles={sendFiles} onBack={backToHub} /></Panel>;
+  if (screen.name === "guide") return <Panel><GuideView source={screen.source} sending={sending} failed={sendFailed} copied={hermesCopied}
+      onCopy={() => void copyText(HERMES_EXPORT_SKILL).then((result) => { if (result === "copied") setHermesCopied(true); })} onFiles={sendFiles} onBack={backToHub} /></Panel>;
   if (screen.name === "paste") {
     return (
       <Panel>
@@ -258,7 +274,7 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
     <HubView local={local} localSources={localSources} transcripts={transcripts} instructions={instructions} grokOpen={grokOpen} resume={resumableJob(Object.values(jobs), Date.now())}
       grokDialog={grokOpen ? <GrokMoveDialog inline onClose={() => setGrokOpen(false)} /> : undefined}
       sending={sending} sendFailed={sendFailed}
-      onTranscripts={setTranscripts} onInstructions={setInstructions} onGuide={(source) => { setSendFailed(false); setScreen({ name: "guide", source }); }}
+      onTranscripts={setTranscripts} onInstructions={setInstructions} onGuide={(source) => { setSendFailed(false); setHermesCopied(false); setScreen({ name: "guide", source }); }}
       onBring={(source) => run(() => client.create({ from: "local", sourceId: source.id, ...(source.kind === "claude-code" ? { transcripts, instructions } : {}) }).then((job) => { openJob(job); return job; }))}
       onPaste={() => setScreen({ name: "paste" })} onGrok={() => setGrokOpen((open) => !open)}
       onResume={openJob} onFiles={sendFiles} />

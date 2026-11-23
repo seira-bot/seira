@@ -322,7 +322,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-import",
     name: "Move from another AI",
     place: "Settings → Import & export → Bring things in → Move from another AI",
-    does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. The person reviews what Seira found before anything comes in.",
+    does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. Hermes on another computer makes one file from copied steps. The person reviews it first.",
     releaseNotes: ["aiImport"],
   },
   {

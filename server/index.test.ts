@@ -1540,7 +1540,7 @@ describe("harness HTTP API", () => {
       }
       expect(result.code).not.toBe(0);
       expect(result.signal).toBeNull();
-      expect(contenderStderr).toMatch(/already using this data directory.*close the other instance first/i);
+      expect(contenderStderr).toMatch(/Seira is already running with this data\. It may still be starting\./);
       expect((await api("GET", "/api/health")).status).toBe(200);
     } finally {
       await waitForExit(contender, { signal: "SIGTERM", graceMs: 1_000 });

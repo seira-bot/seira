@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendTunnelJson } from "./tunnel-gzip.ts";
 
 export { gzipTunnelReplies } from "./tunnel-gzip.ts";
+export { withAccessLog } from "../access-log.ts";
 
 const jsonHooks = new WeakMap<ServerResponse, (body: unknown) => unknown>();
 const parsedBodies = new WeakMap<IncomingMessage, unknown>();
