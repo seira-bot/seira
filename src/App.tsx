@@ -45,6 +45,7 @@ import { useTeamChats } from "@/state/team-chats";
 import { needsYouVersion, useTeamPeopleLoader } from "@/state/team-people";
 import { useTeamPresence } from "@/state/team-presence";
 import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/state/inbox";
+import { useGlance } from "@/state/use-glance";
 import { useWorkflowsUnavailable } from "@/state/workflows";
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
@@ -149,7 +150,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     dispatch(phonePairingSettingsAction());
   }, [dispatch]);
   useConnectLink(dispatch, Boolean(state.config?.team));
-  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
+  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useGlance(); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
   usePresence(state, dispatch); useTeamPresence(state);
   usePageLanguage(effectiveLanguage(useLanguageChoice(), state.config?.language), true);
   const [paletteOpen, setPaletteOpen] = useState(false);
