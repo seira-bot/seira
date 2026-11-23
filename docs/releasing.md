@@ -8,10 +8,13 @@ Seira ships three desktop packages:
 - macOS apps for Apple silicon (arm64) and Intel (x64), which the
   `Package macOS` workflow builds, signs, and notarizes on a GitHub-hosted
   macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
-  Until a maintainer sets them, a release has no macOS assets.
+  Until a maintainer sets them, a release has no macOS assets. With them set,
+  creating the release starts that workflow, which attaches the macOS assets
+  to the same release (see step 6).
 
-A maintainer creates the tag and the GitHub release, and attaches every file
-by hand. No workflow creates a tag or publishes a release. The only package
+A maintainer creates the tag and the GitHub release, and attaches the Linux
+and Windows files by hand. No workflow creates a tag, creates a release or
+publishes one. The only package
 that a workflow publishes is the npm package (see [Publish to npm](#publish-to-npm)).
 
 Only the maintainers can release:
@@ -336,7 +339,24 @@ Rules for the package:
 ### 6. Build and attach the macOS apps
 
 Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set. Attach the files to the draft release.
+are set. Creating the draft release in step 4 starts it. Do it by hand only
+when that run did not attach the files.
+
+**A release starts the build.** `Package macOS` also starts when a release is
+created (a draft counts). It builds the tag of the release, then its `attach`
+job puts the twelve files on that same release with
+`scripts/release-assets.mjs upload`, feed last. That job has a write token for
+`contents` and nothing else. The release stays a draft.
+
+- All five secrets set: the files are attached after every gate below passes.
+- No secret set: the build is skipped. The run does not fail. Its summary says
+  that the release has no macOS assets. No unsigned file is attached, ever.
+- Only some secrets set: the run stops and names the missing ones.
+- A run that someone outside `RELEASE_MAINTAINERS` causes waits for the
+  `release-approval` environment, as a manual run does.
+- A re-run that fails halfway can upload again: the script stops at the first
+  upload that GitHub refuses, for example a file that is already there. Delete
+  the macOS assets of the draft and re-run all jobs, or attach by hand as below.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -358,8 +378,11 @@ commit only. The run summary shows the commit. Before it uploads anything:
 - it makes sure that Gatekeeper accepts both apps and both disk images, and
   that `latest-mac.yml` names each package with the correct SHA-512 and size.
 
-It uploads the twelve macOS assets as one workflow artifact. It cannot publish
-them: its token can only read the repository.
+It uploads the twelve macOS assets as one workflow artifact. Only its `attach`
+job can write, and only to the release that started the run. Neither job can
+publish the release.
+
+To build by hand, or when the run of the release did not attach the files:
 
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>

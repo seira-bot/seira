@@ -16,8 +16,14 @@ interface Step {
 }
 
 interface Workflow {
-  on: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> } };
-  jobs: Record<string, { environment?: unknown; permissions?: unknown; outputs?: Record<string, string>; steps: Step[] }>;
+  on: {
+    release?: { types?: string[] };
+    workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> };
+  };
+  jobs: Record<
+    string,
+    { environment?: unknown; permissions?: unknown; needs?: unknown; if?: string; outputs?: Record<string, string>; steps: Step[] }
+  >;
 }
 
 const text = readFileSync(new URL("../.github/workflows/package-macos.yml", import.meta.url), "utf8");
@@ -26,6 +32,7 @@ const job = flow.jobs.package;
 const steps = job.steps;
 const findSha = flow.jobs.commit.steps;
 const SIGNED = "steps.mode.outputs.signed == 'true'";
+const NOT_SKIPPED = "steps.mode.outputs.skip != 'true'";
 const APPLE_SECRETS = [
   "MAC_CERT_P12_BASE64",
   "MAC_CERT_PASSWORD",
@@ -77,15 +84,23 @@ function runStep(name: string, cwd: string, env: Record<string, string>, path: s
 }
 
 describe("package-macos.yml", () => {
-  it("starts only by hand, from a ref that a maintainer names", () => {
-    expect(Object.keys(flow.on)).toEqual(["workflow_dispatch"]);
+  it("starts by hand from a ref that a maintainer names, or when a release is created", () => {
+    expect(Object.keys(flow.on).sort()).toEqual(["release", "workflow_dispatch"]);
     expect(flow.on.workflow_dispatch?.inputs?.ref?.required).toBe(true);
+    // Not `published`: a release stays a draft until the maintainer publishes it, and the files must be on it by then.
+    expect(flow.on.release?.types).toEqual(["created"]);
+  });
+
+  it("reads the tag of a release event, and the ref input otherwise, in both jobs that name the ref", () => {
+    const expression = "${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}";
+    expect(text.split(expression)).toHaveLength(3);
+    expect(text).not.toMatch(/REF: \$\{\{ inputs\.ref \}\}/);
   });
 
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package"]);
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package", "attach"]);
     expect(flow.jobs.commit.environment).toBeUndefined();
     expect(flow.jobs.commit.permissions).toBeUndefined();
     expect(JSON.stringify(flow.jobs.commit)).not.toContain("secrets.");
@@ -161,6 +176,47 @@ describe("package-macos.yml", () => {
       expect(result.stdout).toContain("NOT FOR RELEASE");
     });
 
+    it("skips the build of a release when no Apple secret is set, without failing and with a clear message", () => {
+      const cwd = folder();
+      const result = runStep("Choose a signed or an unsigned build", cwd, {
+        EVENT: "release",
+        ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, ""])),
+      });
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.outputs).toEqual({ signed: "false", skip: "true" });
+      expect(result.stdout).toContain("::notice::No Apple secret is set, so this release gets no macOS build.");
+      const summary = readFileSync(join(cwd, "summary.md"), "utf8");
+      expect(summary).toContain("macOS build skipped");
+      expect(summary).toContain("no macOS assets");
+    });
+
+    it("signs a release when all five Apple secrets are set, and does not skip", () => {
+      const result = runStep("Choose a signed or an unsigned build", folder(), {
+        EVENT: "release",
+        ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, "value"])),
+      });
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.outputs).toEqual({ signed: "true" });
+    });
+
+    it("stops a release when only some Apple secrets are set, so a half-made setup is not hidden", () => {
+      const result = runStep("Choose a signed or an unsigned build", folder(), {
+        EVENT: "release",
+        ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, name === "MAC_CERT_PASSWORD" ? "value" : ""])),
+      });
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+    });
+
+    it("skips every step after the choice that is not already limited to a signed build", () => {
+      const after = steps.slice(position("Choose a signed or an unsigned build") + 1);
+      for (const each of after) {
+        const name = each.name ?? each.uses;
+        if (each.if === undefined) expect.fail(`${name} has no condition, so it would run on a skipped release`);
+        expect(each.if === NOT_SKIPPED || each.if.includes(SIGNED), name).toBe(true);
+      }
+    });
+
     it.each([
       [["MAC_CERT_P12_BASE64", "MAC_CERT_PASSWORD"]],
       [APPLE_SECRETS.slice(2)],
@@ -207,7 +263,7 @@ describe("package-macos.yml", () => {
     it("run on signed and unsigned builds, before notarization", () => {
       expect(gates.length).toBeGreaterThan(0);
       for (const gate of gates.filter((each) => !each.name!.includes("Gatekeeper"))) {
-        expect(gate.if, gate.name).toBeUndefined();
+        expect(gate.if, gate.name).toBe(NOT_SKIPPED);
         expect(steps.indexOf(gate), gate.name).toBeLessThan(notarize);
       }
     });
@@ -294,7 +350,7 @@ describe("package-macos.yml", () => {
   it("uploads one artifact, the staged folder, after every gate", () => {
     const uploads = steps.filter((each) => each.uses?.startsWith("actions/upload-artifact@"));
     expect(uploads).toHaveLength(1);
-    expect(uploads[0].if).toBeUndefined();
+    expect(uploads[0].if).toBe(NOT_SKIPPED);
     expect(uploads[0].with).toMatchObject({
       name: "${{ steps.version.outputs.artifact }}",
       path: "${{ runner.temp }}/seira-macos/",
@@ -366,6 +422,85 @@ describe("package-macos.yml", () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(`the build did not write release/${packages[3]}`);
       expect(existsSync(join(cwd, "stage", "NOT-FOR-RELEASE.txt"))).toBe(false);
+    });
+  });
+
+  describe("attaches the signed files to the release", () => {
+    const attach = flow.jobs.attach;
+    const upload = () => attach.steps.find((each) => each.name === "Upload the twelve files, update feed last")!;
+
+    it("is the only job with a write token, only for contents, and reads no secret", () => {
+      expect(attach.permissions).toEqual({ contents: "write" });
+      expect(attach.environment).toBe("release");
+      expect(JSON.stringify(attach)).not.toContain("secrets.");
+      for (const id of ["commit", "approval", "package"]) expect(JSON.stringify(flow.jobs[id].permissions ?? {})).not.toContain("write");
+      expect(attach.needs).toEqual(["commit", "approval", "package"]);
+    });
+
+    it("runs only for a release event, after a signed build, behind the same approval as the build", () => {
+      const condition = attach.if!;
+      expect(condition).toContain("github.event_name == 'release'");
+      expect(condition).toContain("needs.package.result == 'success'");
+      expect(condition).toContain("needs.package.outputs.signed == 'true'");
+      expect(condition).toContain("needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt");
+      expect(condition).toContain("!cancelled() && needs.commit.result == 'success'");
+      expect(flow.jobs.package.outputs).toMatchObject({ signed: "${{ steps.mode.outputs.signed }}" });
+    });
+
+    it("checks out the built commit, drops the credentials, installs no package and runs no package script", () => {
+      const checkout = attach.steps.find((each) => each.uses?.startsWith("actions/checkout@"));
+      expect(checkout?.with).toMatchObject({ ref: "${{ needs.commit.outputs.sha }}", "persist-credentials": false });
+      const all = attach.steps.map((each) => each.run ?? "").join("\n");
+      expect(all).not.toMatch(/\bpnpm\b|\bnpm\b|\bnpx\b|gh release (create|edit|delete)/);
+      expect(attach.steps.some((each) => each.uses?.startsWith("actions/download-artifact@"))).toBe(true);
+    });
+
+    it("uploads the twelve files through release-assets.mjs, in one command, and never publishes", () => {
+      const script = upload().run!;
+      expect(script).toContain("scripts/release-assets.mjs\" upload \"$TAG\"");
+      expect(script).not.toMatch(/release-assets\.mjs"? publish/);
+      expect(script).toContain("latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt");
+      expect(script).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+$");
+    });
+
+    it("refuses a tag that is not v1.2.3, and an artifact with another file set, before it uploads", () => {
+      const run = (tag: string, extra?: string) => {
+        const cwd = folder();
+        const stageDir = join(cwd, "stage");
+        const bin = join(cwd, "bin");
+        mkdirSync(stageDir);
+        mkdirSync(bin);
+        const version = "1.2.3";
+        const names = [
+          ...["arm64.dmg", "x64.dmg", "arm64.zip", "x64.zip"].flatMap((end) => [`Seira-${version}-${end}`, `Seira-${version}-${end}.blockmap`]),
+          "latest-mac.yml", "Seira.dmg", "Seira-intel.dmg", "SHA256SUMS-mac.txt",
+        ];
+        for (const name of extra ? [...names, extra] : names) writeFileSync(join(stageDir, name), "x");
+        mkdirSync(join(cwd, "scripts"));
+        writeFileSync(join(cwd, "scripts", "release-assets.mjs"), "console.log('UPLOAD', process.argv.slice(2).join(' '));\n");
+        const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", upload().run!], {
+          cwd,
+          env: {
+            PATH: [dirname(process.execPath), process.env.PATH].join(delimiter),
+            TAG: tag, STAGE: stageDir, GH_TOKEN: "x", GITHUB_WORKSPACE: cwd, GITHUB_REPOSITORY: "owner/repo",
+            GITHUB_STEP_SUMMARY: join(cwd, "summary.md"),
+          },
+          encoding: "utf8",
+        });
+        return result;
+      };
+      const ok = run("v1.2.3");
+      expect(ok.status, ok.stderr + ok.stdout).toBe(0);
+      expect(ok.stdout).toContain("UPLOAD upload v1.2.3 Seira-1.2.3-arm64.dmg");
+      expect(ok.stdout).toContain("latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt --repo owner/repo");
+      for (const tag of ["main", "v1.2", "v1.2.3-rc.1", "../v1.2.3"]) {
+        const result = run(tag);
+        expect(result.status, tag).toBe(1);
+        expect(result.stdout).not.toContain("UPLOAD");
+      }
+      const extra = run("v1.2.3", "Seira-unsigned.dmg");
+      expect(extra.status).toBe(1);
+      expect(extra.stdout).not.toContain("UPLOAD");
     });
   });
 });

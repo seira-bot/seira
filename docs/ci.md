@@ -132,14 +132,19 @@ Two workflows read secrets in the `release` environment:
 | `package-macos.yml` | The macOS arm64 and x64 apps as `.dmg` and `.zip`, their block maps, `latest-mac.yml`, `Seira.dmg`, `Seira-intel.dmg`, and `SHA256SUMS-mac.txt`. Without the Apple secrets it builds test apps only, in an artifact named `NOT-FOR-RELEASE`. |
 
 A package workflow builds a package and uploads it as a workflow artifact.
-It does not create a tag or a release. A maintainer attaches the artifact to
-the release by hand (see [Releasing](releasing.md)). `scripts/ci-workflow.test.ts`
-holds these rules for every `package-*.yml` file:
+It does not create a tag or a release, and it never publishes one. A
+maintainer attaches the artifact to the release by hand (see
+[Releasing](releasing.md)), with one exception: the `attach` job of
+`package-macos.yml`. `scripts/ci-workflow.test.ts` holds these rules for every
+`package-*.yml` file:
 
 - The only trigger is `workflow_dispatch`. Only a person with write access can
-  start it, and a pull request never runs it.
+  start it, and a pull request never runs it. The one exception is
+  `package-macos.yml`, which also starts on `release: created`. Only a person
+  with write access can create a release.
 - No job asks for a permission, so the token can only read the repository.
-  The `approval` job sets `permissions: {}`, which grants nothing.
+  The `approval` job sets `permissions: {}`, which grants nothing. The one
+  exception is the `attach` job of `package-macos.yml` (see below).
 - A job uses an environment only to read the signing secrets, and only the
   `release` environment. Today only `package-macos.yml` does this. The one
   exception is an `approval` job in the `release-approval` environment. It
@@ -159,6 +164,16 @@ holds these rules for every `package-*.yml` file:
   person who is not a maintainer cannot re-run a failed `package` job and
   reuse an earlier approval. That person must re-run all jobs, which asks for
   a new approval, or ask a maintainer to re-run.
+- The `attach` job of `package-macos.yml` has `contents: write` and the
+  `release` environment, and reads no secret. It runs only for a release event
+  after a signed build: all five Apple secrets set, and every gate passed. It
+  needs `commit`, `approval` and `package`, with the same approval condition as
+  `package`. It checks out the built commit, downloads the artifact of the same
+  run, checks that the artifact holds exactly the twelve macOS files, and
+  uploads them with `scripts/release-assets.mjs upload`. It installs no
+  package, runs no package script, and never publishes the release. When no
+  Apple secret is set, a release event skips the build with a notice and a run
+  summary. The run does not fail and nothing is attached.
 - A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
   goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
