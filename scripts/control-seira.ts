@@ -191,6 +191,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_BROWSER_TIMING === "1") childEnv.SEIRA_BROWSER_TIMING = "1";
   // A share on the tailnet (server/tailnet-listener.ts): a test names one of this machine's own addresses as its stand-in.
   for (const key of ["SEIRA_TAILNET_NAME", "SEIRA_TAILNET_ADDRESSES", "SEIRA_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  // Lets an A2A agent on this machine's loopback, at http, be added and called (server/host/bot-link-host.ts).
+  if (parentEnv.SEIRA_TEST_A2A_LOOPBACK === "1") childEnv.SEIRA_TEST_A2A_LOOPBACK = "1";
   // The addresses a phone link names (server/phone-routes.ts).
   for (const key of ["SEIRA_PUBLIC_URL", "SEIRA_PHONE_ROUTES"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // The limits of a turn nobody is watching (server/host/unattended-turns.ts), brought within a test's reach.
