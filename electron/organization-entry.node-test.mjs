@@ -60,7 +60,7 @@ test("desktop relaunch accepts every platform once, guards its sender, and prese
     const frame = { url: `${origin}/` }, contents = { mainFrame: frame, getURL: () => `${origin}/` };
     const mainWindow = { webContents: contents, isDestroyed: () => false };
     runInNewContext(source, {
-      localOnly: localOrigin.localOnly, mainWindow, desktopShutdownStarted: false,
+      localOnly: localOrigin.localOnly, mainWindow, desktopShutdownStarted: false, installPowerIpc: () => {},
       ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
       BrowserWindow: { fromWebContents: sender => sender === contents ? mainWindow : null },
       process: { platform, argv },

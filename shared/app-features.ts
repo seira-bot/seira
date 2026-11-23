@@ -42,6 +42,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["memoryForBots"],
   },
   {
+    id: "power",
+    name: "Power button",
+    place: "The power button at the bottom of the sidebar, in the desktop app",
+    does: "Hold Shut down or Restart for a moment to quit or restart the app. Restart to update installs a ready update. Pause every bot stops all bot work at once, with Undo. Bots that are working finish their step first.",
+  },
+  {
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
