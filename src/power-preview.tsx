@@ -54,7 +54,6 @@ function Driver() {
     const open = () => document.querySelector<HTMLButtonElement>("[data-power-button]")?.click();
     const later = (run: () => void, ms: number) => void setTimeout(run, ms);
     const nothing = { deps: { relaunch: never, quit: never, install: never } };
-    if (state === "wake") rememberWake({ kind: params.get("update") === "1" ? "update" : "restart", version: "0.1.191", at: Date.now() });
     if (["pill", "hold", "paused", "update", "waiting"].includes(state)) later(open, 50);
     if (state === "hold") later(() => hold(document.querySelector('[data-power-action="restart"]')), 150);
     if (state === "waiting") later(() => requestPower("restart", { update: null, working: 2 }), 150);
@@ -65,6 +64,7 @@ function Driver() {
   return null;
 }
 
+if (state === "wake") rememberWake({ kind: params.get("update") === "1" ? "update" : "restart", version: "0.1.191", at: Date.now() });
 await loadLocale(params.get("lang") ?? "en");
 createRoot(document.getElementById("root")!).render(
   <BotEditorStore value={store}>
