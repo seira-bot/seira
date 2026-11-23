@@ -71,7 +71,7 @@ use an appropriate event/webhook workflow instead of a fake weekly schedule.
   occurrence. The preview uses the same calculation as execution.
 - Routine execution defaults to **Bot’s current setup**: its selected model and
   configured computer, including a self-hosted VPS. A routine always runs on
-  the bot's own model; a routine saved to run on the old Boat cloud computer
+  the bot's own model; a routine saved to run on a retired cloud computer
   runs this way too, since the first start after the update moves it there.
 - Seira must be running to dispatch routines, including cloud-targeted
   routines. There is no external always-on scheduling service: the schedule

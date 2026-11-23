@@ -130,7 +130,7 @@ describe("the heavy-work part of the system prompt (AC-01)", () => {
     expect(HEAVY_WORK_PROMPT).toContain("machine_budget");
   });
   it("is the same bytes in the stable half every turn", () => {
-    for (const kind of [null, "local", "vm-private", "box"] as const) expect(longCommandsPrompt(kind)).toContain(HEAVY_WORK_PROMPT);
+    for (const kind of [null, "local", "vm-private", "vps"] as const) expect(longCommandsPrompt(kind)).toContain(HEAVY_WORK_PROMPT);
     const build = () => buildSystemPrompt("persona", "", [{ id: "shell", label: "Long-running commands", text: longCommandsPrompt("local") }]);
     const [a, b] = [build(), build()];
     expect(a.stable).toBe(b.stable);

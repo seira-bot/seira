@@ -24,7 +24,6 @@ import { Store, toWireTask, type BotRecord } from "./store.ts";
 import { STARTER_CHARACTERS } from "./bot-look.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
 import { SECTION_CONTEXTS_FILE, readSectionContext, writeSectionContext } from "./section-context.ts";
-import { TeamComputers } from "./team-computers.ts";
 import { allowsTool } from "../shared/tool-scope.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
@@ -225,7 +224,7 @@ describe("Store", () => {
     expect(readFileSync(join(DATA_DIR, "groups.json"), "utf8")).toBe(groups);
   });
 
-  it("renames populated teams without changing members, conversations, grants or computer identity", () => {
+  it("renames populated teams without changing members, conversations or grants", () => {
     const store = new Store(selection);
     const chief = store.createBot({ section: "Delivery" });
     store.setChiefOfStaff(chief.id);
@@ -238,10 +237,7 @@ describe("Store", () => {
     const room = store.createGroup("Room", [chief.id], false, "Delivery");
     const message = store.appendMessage(chief.threadId, { role: "user", kind: "text", text: "Keep this conversation" });
     writeSectionContext("Delivery", "Shared team instructions");
-    const computers = new TeamComputers(join(DATA_DIR, "team-computers.json"), "5c57ceec-f5aa-4d79-a9c7-0e1f93875e70");
-    const computer = computers.create("Shared desktop");
-    computers.assign(computer.id, "Delivery");
-    expect(store.renameSection("Delivery", "Launch", computers)).toBeUndefined();
+    expect(store.renameSection("Delivery", "Launch")).toBeUndefined();
     expect(store.bot(chief.id)).toBe(chief);
     expect(chief).toMatchObject({ section: "Launch", chiefOfStaff: true });
     expect(archived).toMatchObject({ section: "Launch", hidden: true });
@@ -250,7 +246,6 @@ describe("Store", () => {
     expect(room.section).toBe("Launch");
     expect(readSectionContext("Launch")?.text).toBe("Shared team instructions");
     expect(readSectionContext("Delivery")).toBeNull();
-    expect(computers.forSection("Launch")?.id).toBe(computer.id);
     const restored = new Store(selection);
     expect(restored.bot(chief.id)?.section).toBe("Launch");
     expect(hasTeamAuthority(restored.bot(manager.id)!, "Launch")).toBe(true);
@@ -1147,25 +1142,25 @@ describe("Store", () => {
 
   it("normalizes persisted cloud backends: a removed Boat backend is cleared, valid or absent values are unchanged", () => {
     const store = new Store(selection);
-    const boat = store.createBot();
+    const legacy = store.createBot();
     const vps = store.createBot();
     const invalid = store.createBot();
     const absent = store.createBot();
     const raw: BotRecord[] = readRegistry(DATA_DIR).bots;
-    raw.find((bot) => bot.id === boat.id)!.cloudBackend = "box";
+    raw.find((bot) => bot.id === legacy.id)!.cloudBackend = "box";
     raw.find((bot) => bot.id === vps.id)!.cloudBackend = "vps";
     (raw.find((bot) => bot.id === invalid.id) as unknown as { cloudBackend: string }).cloudBackend = "daytona";
     delete raw.find((bot) => bot.id === absent.id)!.cloudBackend;
     writeRegistry(DATA_DIR, { bots: raw });
 
     const reloaded = new Store(selection);
-    expect(reloaded.bot(boat.id)?.cloudBackend).toBeUndefined();
+    expect(reloaded.bot(legacy.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(vps.id)?.cloudBackend).toBe("vps");
     expect(reloaded.bot(invalid.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(absent.id)?.cloudBackend).toBeUndefined();
 
     const saved: BotRecord[] = readRegistry(DATA_DIR).bots;
-    expect(saved.find((bot) => bot.id === boat.id)).not.toHaveProperty("cloudBackend");
+    expect(saved.find((bot) => bot.id === legacy.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === vps.id)?.cloudBackend).toBe("vps");
     expect(saved.find((bot) => bot.id === invalid.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === absent.id)).not.toHaveProperty("cloudBackend");

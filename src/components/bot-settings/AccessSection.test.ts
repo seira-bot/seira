@@ -253,7 +253,7 @@ describe("AccessSection Works on", () => {
   });
 
   it("says on a selectable tile of a bot not made yet what stands in its way, with no name to borrow", () => {
-    fixture.config = { box: { configured: true } } as Partial<ConfigStatus>;
+    fixture.config = {} as Partial<ConfigStatus>;
     fixture.instances = [{ instanceId: "local", capabilities: { computerMcp: true } }];
     fixture.capabilities.host = { homeDir: undefined, platform: "darwin" };
     let tree!: ReturnType<typeof AccessSection>;

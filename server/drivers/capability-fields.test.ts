@@ -12,7 +12,7 @@ import { OpenAICompatDriver } from "./openai-compat.ts";
 import { PiDriver } from "./pi.ts";
 
 const created: ProviderInstance[] = [];
-const onBoat = (instance: ProviderInstance) =>
+const onCloud = (instance: ProviderInstance) =>
   canWorkOnCloud({ computerMcp: instance.adapter.capabilities.computerMcp });
 const keep = async (promise: Promise<ProviderInstance>): Promise<ProviderInstance> => {
   const instance = await promise;
@@ -38,7 +38,7 @@ describe("typed capability fields for the cloud computer", () => {
     expect(mounted.adapter.capabilities.dataMcp).toBe(true);
     expect(mounted.adapter.capabilities.emailMcp).toBe(true);
     expect(mounted.adapter.capabilities.deviceMcp).toBe(true);
-    expect(onBoat(mounted)).toBe(true);
+    expect(onCloud(mounted)).toBe(true);
     const bare = await keep(OpenAICompatDriver.create({
       instanceId: "caps-compat-bare", displayName: "Caps Compat Bare", environment: {}, enabled: true,
       config: { ...OpenAICompatDriver.defaultConfig(), tools: false },
@@ -47,7 +47,7 @@ describe("typed capability fields for the cloud computer", () => {
     expect(bare.adapter.capabilities.dataMcp).toBe(false);
     expect(bare.adapter.capabilities.emailMcp).toBe(false);
     expect(bare.adapter.capabilities.deviceMcp).toBe(false);
-    expect(onBoat(bare)).toBe(false);
+    expect(onCloud(bare)).toBe(false);
     expect(cloudPlaceRefusal({ computerMcp: bare.adapter.capabilities.computerMcp, name: "Caps Compat Bare" }, "works-on", "Scout")?.message)
       .toBe("Caps Compat Bare can't use a desktop. Choose a model that can, such as Claude or ChatGPT. Choose another model in Scout's settings.");
     expect(cloudPlaceRefusal({ computerMcp: mounted.adapter.capabilities.computerMcp, name: "Caps Compat" }, "works-on", "Scout")).toBeNull();
@@ -58,17 +58,17 @@ describe("typed capability fields for the cloud computer", () => {
       instanceId: "caps-claude", displayName: "Caps Claude", environment: {}, enabled: true,
       config: ClaudeDriver.defaultConfig(),
     }));
-    expect(onBoat(claude)).toBe(true);
+    expect(onCloud(claude)).toBe(true);
     const codex = await keep(CodexDriver.create({
       instanceId: "caps-codex", displayName: "Caps Codex", environment: {}, enabled: true,
       config: CodexDriver.defaultConfig(),
     }));
-    expect(onBoat(codex)).toBe(true);
+    expect(onCloud(codex)).toBe(true);
     const pi = await keep(PiDriver.create({
       instanceId: "caps-pi", displayName: "Caps Pi", environment: {}, enabled: true,
       config: PiDriver.defaultConfig(),
     }));
-    expect(onBoat(pi)).toBe(true);
+    expect(onCloud(pi)).toBe(true);
   });
 
   it("registers no driver that runs a turn somewhere other than its own engine", async () => {

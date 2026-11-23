@@ -969,7 +969,7 @@ On the Cloud home (`server/shared-computers.ts`, `server/index.ts`):
   | Claude Code (2.1.257 or newer) | `--restricted` and only Read, Grep, Glob, Edit, Write and WebSearch: no Bash, PowerShell or WebFetch; reads outside its folder refused outright (`blockReadsOutsideWorkingDirectories`, plus deny rules); the folder's own `.mcp.json` and settings never load; only the harness's own MCP tools are pre-allowed, every other call asks the owner. The session's `init` must list no command-running tool, or the turn stops. An older Claude Code refuses. |
   | Codex / ChatGPT (codex-cli 0.159) | no environment (`environments: []`: no `exec_command`, `apply_patch` or `view_image`, and calls to them are refused), `features.shell_tool`, `unified_exec` and `view_image` off and web search disabled, proven in `config/read` before the turn starts, or the turn refuses. |
   | API models (OpenAI-compatible, MiniMax, Mistral, Grok API) | no shell or file tool on the machine at all; only the harness's own agents tools are pre-allowed, every other MCP call asks the owner, and no owner's "Allow for this session" applies or is kept. |
-  | Cursor, Qwen, Gemini, Hermes, Pi, OpenCode, Grok Build, Antigravity, Droid, Kimi, a custom ACP engine, Boat | refused: each runs its own shell or reads files outside its folder without asking in Ask (Qwen, Gemini, OpenCode and Pi could have it switched off; that needs a separate process per guest conversation, a follow-up). |
+  | Cursor, Qwen, Gemini, Hermes, Pi, OpenCode, Grok Build, Antigravity, Droid, Kimi, a custom ACP engine | refused: each runs its own shell or reads files outside its folder without asking in Ask (Qwen, Gemini, OpenCode and Pi could have it switched off; that needs a separate process per guest conversation, a follow-up). |
 - Everything the owner's own devices write carries one owner identity, so
   pairing a device again (or revoking one) never makes the owner's earlier
   conversations someone else's. A guest never carries it.
@@ -1128,7 +1128,7 @@ launcher starts only the server again; after a crash (exit 70 from
 server again after 1, 2, 5, 15 and 30 s, then gives up so Fly restarts the machine.
 
 The machine's secrets (`SEIRA_CLOUD_BOOTSTRAP_SECRET` and the relay tokens
-`SEIRA_CLOUD_BOAT_TOKEN`, `SEIRA_CLOUD_VOICE_TOKEN`, `SEIRA_CLOUD_DECIDER_TOKEN`, `SEIRA_CLOUD_X_TOKEN`,
+`SEIRA_CLOUD_VOICE_TOKEN`, `SEIRA_CLOUD_DECIDER_TOKEN`, `SEIRA_CLOUD_X_TOKEN`,
 `SEIRA_CLOUD_HOSTING_TOKEN`)
 arrive as the launcher's environment, from the Fly app secrets the Admin
 sets. The launcher never puts them in a child's environment, because
@@ -1422,16 +1422,14 @@ ignores them:
   trial's Claude credit (below); the person's own engines are otherwise the
   only way to a model.
 
-### Included Boat computers, voice and decisions
+### Included voice and decisions
 
-Pro includes Boat cloud computers, ElevenLabs voice and the decision model
+Pro includes ElevenLabs voice and the decision model
 (TypeSafe's Jev, [decision-model.md](decision-model.md)) with no key to paste.
 For each service the Admin has configured, it also sets:
 
 | Variable | Fly | Value |
 | --- | --- | --- |
-| `SEIRA_CLOUD_BOAT_URL` | env | `https://cloud.seira.bot/api/cloud/services/boat/api/box/v1`, the Admin's Boat relay. The app speaks Boat's public API v1 (`/sandboxes`, `sandbox` envelopes); this relay still serves Boat's retired box API (`/boxes`, `box` envelopes), so for a base ending in `/api/box/v1` the app translates paths and answers in one place, `server/boat-relay.ts`. A base ending in `/api/v1` gets v1 as it is. Bots use it only for cloud computers, as a tool on their own engine; no turn runs on Boat's own agent, so nothing calls its `/prompt`, `/events`, `/prompts/{id}` or `/interrupt` routes. |
-| `SEIRA_CLOUD_BOAT_TOKEN` | secret | This machine's Boat relay token (`box_seira_…`). It is not a Boat key and works only through the relay. |
 | `SEIRA_CLOUD_VOICE_URL` | env | `https://cloud.seira.bot/api/cloud/services/voice/v1`, the Admin's voice relay. |
 | `SEIRA_CLOUD_VOICE_TOKEN` | secret | This machine's voice relay token (`seira_voice_…`). |
 | `SEIRA_TTS_DEFAULT_VOICE` | env | An ElevenLabs voice id, used until the person picks a voice or another speech provider in Settings. |
@@ -1443,23 +1441,19 @@ For each service the Admin has configured, it also sets:
 | `SEIRA_CLOUD_HOSTING_TOKEN` | secret | This machine's app hosting relay token (`seira_host_…`). Not a Netlify token; it works only through the relay, within the plan's apps and monthly publishes. Bots never get it: they call `publish_app`, and the server publishes. |
 
 A service is included only when both its URL and its token are set
-(`server/included-services.ts`). The real Boat, ElevenLabs and Jev keys stay
-on the Admin, which checks the subscription, the monthly caps and which
-computers belong to this machine on every request.
+(`server/included-services.ts`). The real ElevenLabs and Jev keys stay
+on the Admin, which checks the subscription and the monthly caps on every request.
 
 - **The person's own key always wins.** An included token is a fallback, used
   only while the person has no key of their own: none saved in Settings
-  (`box.token`, `tts.key`, `decider.key`, `decider.workersAiToken`) and no
-  `BOX_TOKEN`, `SEIRA_TTS_KEY`, `SEIRA_JEV_API_KEY` or `SEIRA_WORKERS_AI_TOKEN` in
+  (`tts.key`, `decider.key`, `decider.workersAiToken`) and no
+  `SEIRA_TTS_KEY`, `SEIRA_JEV_API_KEY` or `SEIRA_WORKERS_AI_TOKEN` in
   the environment (for extraction, only a Workers AI token with its account ID
   counts: a Jev key does not read). Adding a key switches to it at
-  once; removing it falls back to the included service again (for Boat, once
-  that key's cloud computers are deleted: removing a Boat key that still has
-  computers is refused). The choice is made on every request.
+  once; removing it falls back to the included service again. The choice is made on every request.
 - **Each credential goes to one place.** The relays know only the Admin's
-  accounts, so an own key goes only to the provider (`SEIRA_BOAT_API`,
-  `SEIRA_ELEVENLABS_API` or `decider.baseUrl` when set, for development and
-  tests, else Boat's, ElevenLabs' and Jev's own APIs) and an included token
+  accounts, so an own key goes only to the provider (`SEIRA_ELEVENLABS_API` or `decider.baseUrl` when set, for development and
+  tests, else ElevenLabs' and Jev's own APIs) and an included token
   only to its relay, whatever those settings say.
 - **The decision relay takes four decision requests and three extraction
   requests, and the app sends it nothing else.** Through the included token
@@ -1509,9 +1503,7 @@ computers belong to this machine on every request.
   `included: true`, and says "Included with your Cloud plan"), and Settings
   never verifies, rotates or clears it. The decision model's **Test** button,
   with no key pasted, makes one tiny decision call and one extraction check
-  through the relay, never to Jev directly. Boat's account-change rules still
-  apply: adding an own Boat key while included cloud computers exist is refused
-  until they are deleted, because the new account cannot reach them.
+  through the relay, never to Jev directly.
 - **What holding the tokens does and does not do.** The server receives the
   tokens over the launcher's pipe, never its environment, keeps them in
   memory, and they are on the credential list. So no process the server
@@ -1525,14 +1517,7 @@ computers belong to this machine on every request.
   fix is engines under a user of their own. A relay token is only this customer's own Seira Cloud
   allowance: it works only through the Admin, only on this machine's cloud
   computers, voice and decisions, and only up to the monthly caps.
-- A refusal from the Boat or voice relay (for example, the month's cloud
-  computer hours are used up) is shown as the relay's own message. A resume
-  that fails with a server error is retried on the next poll, as Boat asks.
-- An included cloud computer goes to sleep through the relay's `POST
-  /boxes/{id}/stop` after 10 idle minutes, as one on a person's own key does
-  at Boat; a refused stop is retried later, a longer wait each time. A
-  computer stays on when a routine that uses it runs within the next 30
-  minutes, since every wake counts against the Boat account's shared starts.
+- A refusal from the voice relay is shown as the relay's own message.
 - A refusal from the decision relay (401 for an unknown token, 402 without an
   active subscription, 429 over the month's cap or a rate limit, 502 or 503
   upstream) never reaches a turn: as with any decision-model failure, the room
@@ -1850,7 +1835,7 @@ apps are looked up in the background at most every 30 minutes, so a slow
 provider never holds the answer. `connectors.items` lists only apps the
 person set up: connected now, or connected once and since expired or failed.
 An app never connected is not listed. Cloud computers are not listed: through
-the Admin's Boat relay that would count as using an included service and hold back
+a cloud computer lookup would count as using an included service and hold back
 updates; a cloud computer that fails a turn arrives as its place's code
 (`cc-unavailable`, `cc-no-start`, `cc-provider`, …).
 

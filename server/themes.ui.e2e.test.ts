@@ -18,7 +18,7 @@ let browser: any;
 beforeAll(async () => {
   if (!ready) return;
   vi.spyOn(console, "log").mockImplementation(() => {});
-  fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true }, [], undefined, dist);
+  fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true }, [], dist);
   const { chromium } = createRequire(join(playwrightPath!, "package.json"))("playwright-core");
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ["--use-mock-keychain"] });
   if (shots) mkdirSync(shots, { recursive: true });

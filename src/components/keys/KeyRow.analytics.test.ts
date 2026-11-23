@@ -62,7 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fixture.values = [];
   fixture.refs = [];
-  fixture.config = { anthropic: { configured: false }, box: { configured: false } };
+  fixture.config = { anthropic: { configured: false } };
   vi.stubGlobal("window", {});
   vi.stubGlobal("document", { activeElement: null });
 });

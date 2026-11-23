@@ -10,13 +10,10 @@ import {
   computerSelectionPrompt,
   computerSkippedNote,
   computerToolsRefusal,
-  handoffUsesOwnCloud,
   failedOnHostPath,
   withoutCloudComputerRow,
-  isHandedWork,
   namesHostPath,
   openBrowserBeside,
-  ownCloudStateWithin,
   parseSurface,
   pinSource,
   placeUnavailable,
@@ -35,48 +32,6 @@ describe("browserIsThePlace", () => {
     expect(browserIsThePlace(resolveSurface({ destination: "browser", browserOn: false }))).toBe(false);
     expect(browserIsThePlace(resolveSurface({ destination: "local", browserOn: true }))).toBe(false);
     expect(browserIsThePlace(resolveSurface({ destination: "off", browserOn: true }))).toBe(false);
-  });
-});
-
-describe("isHandedWork", () => {
-  it("counts only work another bot handed over: not a person's own resumed root, not a consult", () => {
-    expect(isHandedWork({ parentId: "root-1", mode: "work" })).toBe(true);
-    expect(isHandedWork({ mode: "work" })).toBe(false);
-    expect(isHandedWork({ parentId: "root-1", mode: "consult" })).toBe(false);
-    expect(isHandedWork(undefined)).toBe(false);
-  });
-});
-
-describe("ownCloudStateWithin", () => {
-  it("answers with the cloud computer's state, and marks a failed or slow lookup as unavailable", async () => {
-    await expect(ownCloudStateWithin(Promise.resolve({ box: { state: "stopped" } }))).resolves.toEqual({ state: "stopped", unavailable: false });
-    await expect(ownCloudStateWithin(Promise.resolve({ box: null }))).resolves.toEqual({ state: undefined, unavailable: false });
-    await expect(ownCloudStateWithin(Promise.reject(new Error("Boat is down")))).resolves.toEqual({ state: undefined, unavailable: true });
-    const started = Date.now();
-    await expect(ownCloudStateWithin(new Promise(() => {}), 20)).resolves.toEqual({ state: undefined, unavailable: true });
-    expect(Date.now() - started).toBeLessThan(1_000);
-  });
-});
-
-describe("handoffUsesOwnCloud", () => {
-  const auto = resolveSurface({ destination: undefined, browserOn: true });
-  it("runs handed-off work on Auto on the receiving bot's own cloud computer, awake or asleep", () => {
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: "running" })).toBe(true);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: "archived" })).toBe(true);
-  });
-  it("never creates one, and leaves a person's own turns and consults alone", () => {
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: null })).toBe(false);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: undefined })).toBe(false);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: false, ownCloudState: "running" })).toBe(false);
-  });
-  it("keeps Works on and a pin as they are", () => {
-    for (const plan of [
-      resolveSurface({ destination: "browser", browserOn: true }),
-      resolveSurface({ destination: "local", browserOn: true }),
-      resolveSurface({ destination: "off", browserOn: true }),
-      resolveSurface({ destination: undefined, pinnedSurface: "browser", browserOn: true }),
-      resolveSurface({ destination: undefined, pinnedSurface: "vm", browserOn: true }),
-    ]) expect(handoffUsesOwnCloud({ plan, handoffWork: true, ownCloudState: "running" })).toBe(false);
   });
 });
 
@@ -446,8 +401,7 @@ describe("surface parsing", () => {
     expect(parseSurface(undefined)).toBeUndefined();
   });
 
-  it("folds both cloud backends into one surface", () => {
-    expect(surfaceOfComputerKind("box")).toBe("cloud");
+  it("maps each computer kind to its surface", () => {
     expect(surfaceOfComputerKind("vps")).toBe("cloud");
     expect(surfaceOfComputerKind("vm")).toBe("vm");
     expect(surfaceOfComputerKind("local")).toBe("local");
@@ -637,23 +591,14 @@ describe("a vm_exec command that names this computer's own paths", () => {
 });
 
 describe("a Cloud pick with no cloud computer behind it", () => {
-  const base = { wants: "cloud", backend: "box", boatConfigured: false, vpsConfigured: false, teamComputer: false, routine: false, cloudHome: false } as const;
+  const base = { wants: "cloud", vpsConfigured: false, routine: false, cloudHome: false } as const;
 
-  it("goes on without a computer", () => {
+  it("goes on without a computer while no VPS is set up for the bot, and not once there is one", () => {
     expect(cloudPickWithoutComputer(base)).toBe(true);
-  });
-
-  it("goes on without a computer on a VPS backend with no VPS set up, and not once there is one", () => {
-    expect(cloudPickWithoutComputer({ ...base, backend: "vps" })).toBe(true);
-    expect(cloudPickWithoutComputer({ ...base, backend: "vps", boatConfigured: true })).toBe(true);
-    expect(cloudPickWithoutComputer({ ...base, backend: "vps", vpsConfigured: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, vpsConfigured: true })).toBe(false);
   });
 
   it("leaves every other case to its own rule", () => {
-    expect(cloudPickWithoutComputer({ ...base, boatConfigured: true })).toBe(false);
-    expect(cloudPickWithoutComputer({ ...base, backend: "vps", vpsConfigured: true })).toBe(false);
-    expect(cloudPickWithoutComputer({ ...base, vpsConfigured: true })).toBe(true);
-    expect(cloudPickWithoutComputer({ ...base, teamComputer: true })).toBe(false);
     expect(cloudPickWithoutComputer({ ...base, routine: true })).toBe(false);
     expect(cloudPickWithoutComputer({ ...base, cloudHome: true })).toBe(false);
     for (const wants of ["vm", "local", "off", undefined] as const) {
@@ -661,10 +606,9 @@ describe("a Cloud pick with no cloud computer behind it", () => {
     }
   });
 
-  it("words its notice without naming a vendor", () => {
+  it("words its notice", () => {
     const row = withoutCloudComputerRow("Scout", "pin");
     expect(row).toEqual({ state: "cc-not-set-up", params: { bot: "Scout" }, source: "pin" });
     expect(placeRowText(row)).toMatch(/^Scout answered without a computer.*own server/);
-    expect(placeRowText(row)).not.toMatch(/boat/i);
   });
 });

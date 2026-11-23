@@ -160,7 +160,7 @@ rollback of one release can still lose data without it noticing:
 - Many JSON stores accept only `"version": 1` and throw, or start empty, on
   anything else: among them `server/command-allowlist.ts`, `server/fleet.ts`,
   `server/bot-directory.ts`, `server/data/sheet.ts`, `server/pages/store.ts`,
-  `server/sentinel/store.ts` and `server/boat-delete-journal.ts`. A release
+  and `server/sentinel/store.ts`. A release
   that raised one of those versions without raising `writes` would pass every
   check here, and the release before it would start on that data and drop it.
 - The SQLite databases (`messages.db`, `runtime.db`, the cloud-sync store)

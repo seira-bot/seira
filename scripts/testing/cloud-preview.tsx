@@ -70,7 +70,7 @@ window.fetch = async (input, init) => {
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status, headers: { "content-type": "application/json" },
   });
-  if (/^\/api\/bots\/[\w-]+\/computer$/.test(path)) return json({ surface: surfaceScenario === "auto-vm" ? "vm" : "cloud", configured: true, box: { state: "idle" } });
+  if (/^\/api\/bots\/[\w-]+\/computer$/.test(path)) return json({ surface: surfaceScenario === "auto-vm" ? "vm" : "cloud", configured: true });
   if (path.endsWith("/local-computer/start")) {
     transport.vmStarts++;
     vmRunning = true;
@@ -93,7 +93,7 @@ window.fetch = async (input, init) => {
     }
     return json({ image: vmScreenshot });
   }
-  // The real server refuses provision/sleep while a turn owns the boat.
+  // The real server refuses provision/sleep while a turn owns the computer.
   if (path.endsWith("/computer/provision")) {
     if (turnActive) return json({ error: CLOUD_COMPUTER_BUSY_ERROR }, 409);
     return json({ state: "idle" });
@@ -165,7 +165,7 @@ function Fixture() {
   const [scenario, setScenario] = useState("default");
   useEffect(() => {
     if (bot) {
-      dispatch({ type: "updateBot", botId: bot.id, patch: { computer: "cloud", cloudBackend: "box" } });
+      dispatch({ type: "updateBot", botId: bot.id, patch: { computer: "cloud", cloudBackend: "vps" } });
       dispatch({ type: "toggleComputer", open: true });
     }
   }, [bot?.id, dispatch]);

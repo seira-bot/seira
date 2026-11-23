@@ -308,18 +308,9 @@ export async function launchVerificationServer(
   room?: { scripted: boolean },
   /** Optional repository-owned fake providers for multi-engine setup checks. */
   extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp" | "opencode" | "kimi"> = [],
-  /** Programmatic tests only: an owned loopback Boat provider, never a live account. */
-  boatFixtureApi?: string,
   /** Programmatic web UI qualification against the fixture's static server. */
   staticDir?: string,
 ): Promise<VerificationServer> {
-  if (boatFixtureApi) {
-    if (!/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(boatFixtureApi)) {
-      throw new ControlSeiraError("Boat verification requires an explicit loopback HTTP provider");
-    }
-    try { new URL(boatFixtureApi); }
-    catch { throw new ControlSeiraError("Boat verification requires a valid loopback port"); }
-  }
   if (localVm) {
     const endpoint = new URL(localVm.host);
     if (endpoint.protocol !== "ssh:" || endpoint.hostname !== "127.0.0.1" || endpoint.password) {
@@ -345,7 +336,6 @@ export async function launchVerificationServer(
     ? { primary: { provider: "openai" }, fallback: { provider: "custom", model: "fixture-image" }, customUrl: imageApi }
     : undefined;
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-    ...(boatFixtureApi ? { box: { token: "box_verification_fixture" } } : {}),
     ...(imageGen ? { imageGen } : {}),
     // A setup card's answers would be one more engine call at every new bot, taking replies a test scripts for its turns.
     features: { smartSetupChoices: false },
@@ -402,7 +392,6 @@ export async function launchVerificationServer(
     SEIRA_AGENT_BROWSER_PATH: browser.binaryPath,
     AGENT_BROWSER_EXECUTABLE_PATH: browser.executablePath,
   });
-  if (boatFixtureApi) childEnv.SEIRA_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.SEIRA_STATIC_DIR = staticDir;
   const boxFolder = parentEnv.SEIRA_VERIFY_BOT_BOX === "1" ? boxFixtureFolder(parentEnv, dataDir) : null;
   if (boxFolder) {

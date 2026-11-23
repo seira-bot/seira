@@ -37,7 +37,7 @@ describe("redactSecrets", () => {
             command: "/usr/bin/node",
             args: ["/app/computer-proxy.js"],
             env: [
-              { name: "OGB_BOX_ID", value: "boat-9" },
+              { name: "OGB_BOX_ID", value: "box-9" },
               { name: "OGB_BOX_TOKEN", value: "box_live_abcdefghijklmnop" },
             ],
           },
@@ -53,7 +53,7 @@ describe("redactSecrets", () => {
     expect(out).toContain("SEIRA_COMMS_TOKEN");
     expect(out).toContain("OGB_BOX_TOKEN");
     expect(out).toContain("bot-123");
-    expect(out).toContain("boat-9");
+    expect(out).toContain("box-9");
     expect(out).toContain("/app/agents-proxy.js");
     expect(out).toContain("«redacted 24 chars»");
   });

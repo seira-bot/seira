@@ -58,7 +58,7 @@ Properties are counts, `true` or `false`, or words from fixed lists in the app's
 
 | List | Values |
 | --- | --- |
-| Key provider | `anthropic`, `openai`, `openrouter`, `openai_compat`, `xai`, `mistral`, `cerebras`, `groq`, `greenference`, `modelgo`, `meta`, `boat`, `composio`, `opencode_go`, `custom_endpoint`, `elevenlabs`, `fish_audio`, `jev`, `openrouter_decider`, `openai_image`, `custom_image`, `openai_live`, `onepassword`, `treg` |
+| Key provider | `anthropic`, `openai`, `openrouter`, `openai_compat`, `xai`, `mistral`, `cerebras`, `groq`, `greenference`, `modelgo`, `meta`, `composio`, `opencode_go`, `custom_endpoint`, `elevenlabs`, `fish_audio`, `jev`, `openrouter_decider`, `openai_image`, `custom_image`, `openai_live`, `onepassword`, `treg` |
 | Engine | `claude`, `codex`, `gemini`, `cursor`, `opencode`, `qwen`, `hermes`, `cline`, `custom_acp`, `pi`, `openai_compat`, `grok`, `grok_api`, `kimi`, `droid`, `antigravity`, `minimax`, `mistral`, `cerebras`, `groq`, `greenference`, `modelgo`, `meta`, `muse_code`, `deepseek`, `copilot`, `command_code`, `kiro`, `devin`, `omp`, `mistral_vibe` |
 | App | The 24 apps Connected apps lists by default: `slack`, `github`, `gmail`, `googlecalendar`, `googlesheets`, `googledocs`, `googledrive`, `notion`, `linear`, `sentry`, `posthog`, `discord`, `twitter`, `reddit`, `zapier`, `hubspot`, `salesforce`, `jira`, `asana`, `trello`, `dropbox`, `airtable`, `figma`, `stripe`. Every other app is `other`. |
 | Starting role | `assistant`, `inbox`, `research`, `coder`, `community`, `ops` |
@@ -71,27 +71,21 @@ engines the app ships with, and any engine account added later as `other`.
 ## The daily snapshot
 
 `app_snapshot` is one count of what is set up, sent at most once a day. It answers questions such as how many people
-use their own Boat key, and how many bots run on cloud computers, without sending what anything is called.
+use their own Composio project, and how many bots run on cloud computers, without sending what anything is called.
 
 - Only the owner or an admin sends it. A member, a device paired without admin access and a Cloud guest never do.
 - The app checks once it has loaded, then every hour, and sends at most once per UTC day for each app page.
 - It counts what the app has already loaded. It also asks, once: this server for its signed-in devices (counted, never
   listed) and its connected-app inventory; on the desktop app, the app itself for the number of paired phones and the
-  Cloud plan; and, when a Boat account is set, this server for the number of cloud computers. To answer that, the server
-  lists the computers once at boat.dev with your Boat key, or at Seira Cloud's relay for computers included with a
-  plan. That listing only reads: it never changes a computer.
+  Cloud plan.
 - When a source fails, its properties are left out and the rest is sent.
 
 | Property | Type | Meaning |
 | --- | --- | --- |
-| `key_providers` | list of key providers | Providers with your own key saved: the model providers and an OpenAI-compatible key when set; `boat` for your own Boat key (not one included with a plan); `composio` for a self-hosted Composio project; `opencode_go`; `elevenlabs` or `fish_audio` for your own voice key; `jev` or `openrouter_decider` for your own decision-model key; `openai_image` or `custom_image` for your own avatar-image key (an xAI key counts once, as `xai`); `openai_live` for a separate Live call key |
+| `key_providers` | list of key providers | Providers with your own key saved: the model providers and an OpenAI-compatible key when set; `composio` for a self-hosted Composio project; `opencode_go`; `elevenlabs` or `fish_audio` for your own voice key; `jev` or `openrouter_decider` for your own decision-model key; `openai_image` or `custom_image` for your own avatar-image key (an xAI key counts once, as `xai`); `openai_live` for a separate Live call key |
 | `key_count` | count | How many entries `key_providers` has |
-| `has_boat_key` | true/false | Your own Boat key is saved |
-| `cloud_computer_source` | `own_key`, `included`, `none` | Where cloud computers come from: your own Boat key (it wins when both exist), a Cloud plan, or nowhere |
-| `cloud_computers` | count | Cloud computers this install manages for bots and team computers; `0` without a Boat account; left out while the Boat account is changing or when the provider could not be read |
-| `team_computers` | count | Team computers |
 | `bots` | count | Bots, not counting archived ones (no bot count below includes them) |
-| `bots_cloud_boat`, `bots_cloud_vps` | count | Bots set to work on a cloud computer, on Boat or on your VPS |
+| `bots_cloud_vps` | count | Bots set to work on a cloud computer, which is your VPS |
 | `bots_local_vm`, `bots_this_computer`, `bots_browser`, `bots_off`, `bots_auto` | count | Bots set to work on a Local VM, on this computer, in the browser only, nowhere, or left on Auto |
 | `rooms` | count | Rooms |
 | `bot_channels` | count | Channels bots opened with each other |
@@ -177,7 +171,7 @@ use their own Boat key, and how many bots run on cloud computers, without sendin
 | `grok_move_popup` | The one-time Move from Grok Bot popup is shown or you act on it | `action`: `shown`, `start`, `not_now`, `close` |
 | `two_places_card` | You act on the card that says your bots live in two places (this computer and a server of your own, or My Cloud) | `action`: `bring`, `not_now`; `kind`: `server`, `cloud`, the place it offered |
 
-`api_key_saved` reports `ok` for a key the server checks with its provider before saving it (Boat, Composio,
+`api_key_saved` reports `ok` for a key the server checks with its provider before saving it (Composio,
 ElevenLabs, Fish Audio), and for a model provider key whose test passed right after saving. A key nothing checks before
 it is used (OpenCode, OpenAI images, an added OpenAI-compatible server, an xAI key from a chat request) reports
 `unverified`.

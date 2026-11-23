@@ -24,7 +24,7 @@ describe("appendNative", () => {
             {
               name: "computer",
               env: [
-                { name: "OGB_BOX_ID", value: "boat-7" },
+                { name: "OGB_BOX_ID", value: "box-7" },
                 { name: "OGB_BOX_TOKEN", value: "box_live_dontlogme" },
               ],
             },
@@ -37,7 +37,7 @@ describe("appendNative", () => {
     expect(log).not.toContain("box_live_dontlogme");
     expect(log).toContain("session/new");
     expect(log).toContain("OGB_BOX_TOKEN");
-    expect(log).toContain("boat-7");
+    expect(log).toContain("box-7");
   });
 
   it("keeps the length of inline screenshots and files, never their bytes", () => {

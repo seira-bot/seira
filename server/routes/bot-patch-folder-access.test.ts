@@ -30,7 +30,7 @@ function fixture(setElsewhere = false, level: "edit" | "chat" = "chat") {
   const deps = {
     store, cfg: {} as AppConfig, requestedTaskBot: () => null, activeVpsThreads: new Set<string>(),
     wireBot: (record: BotRecord) => record as unknown as WireBot, broadcast: () => {}, audienceChanged: () => {},
-    assertTeamComputerChangeIdle: () => {}, routines: () => null, levelOf: () => level,
+    assertComputerChangeIdle: () => {}, routines: () => null, levelOf: () => level,
     mainThreadTasks: (botId: string) => store.tasks(botId), activeGroupTurnForBot: () => null,
     folderAccess: { dataDir, home: root, setElsewhere: () => setElsewhere },
   } as unknown as BotPatchRouteDeps;

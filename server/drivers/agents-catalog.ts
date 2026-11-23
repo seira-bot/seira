@@ -97,7 +97,7 @@ const TRIGGER_FIELDS_SCHEMA = {
   event_config: { type: "object", description: "app_event: config_fields from trigger_info action=events." },
   run_on: {
     type: "string",
-    // "box" is Boat's historical run_on destination id (agents wire contract).
+    // "box" stays in the enum: released agents send it (agents wire contract).
     enum: ["seira", "box"],
     description: "Omit normally: seira (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
   },
@@ -216,20 +216,6 @@ const TOOL_DEFINITIONS = [
       surface: { type: "string", enum: ["auto", "cloud", "vm", "local", "browser"],
         description: "auto = suitable configured computer, cloud = the bot's cloud computer or self-hosted VPS, vm = isolated Local VM, local = user's own desktop, browser = built-in browser. Omit to list." },
     } },
-  },
-  {
-    name: "reset_cloud_computer",
-    description:
-      "Reset your cloud computer when it is stuck: it is deleted with everything on it once your turn ends, and your next turn makes a fresh one. Only for a stuck computer. End your turn after calling it." + CHIEF_PROFILE_TARGET,
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        why: { type: "string", description: "One sentence shown in the chat: what is wrong with the computer." },
-        for_bot_id: { type: "string", description: "Chief of Staff only: the bot whose cloud computer to reset, from list_bots." },
-      },
-      required: ["why"],
-    },
   },
   {
     name: "list_threads",
@@ -822,7 +808,7 @@ const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);
 const CHIEF_ONLY_TOOL_NAMES = new Set([
   "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread", "suggest_team",
 ]);
-const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model", "reset_cloud_computer"]);
+const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model"]);
 const CHIEF_TARGET_FIELDS = new Set(["for_bot_id", "browserProfile"]);
 const WATCHER_TOOL_NAMES = new Set(["create_options_card"]);
 
@@ -869,7 +855,7 @@ function catalogTools(profile: CatalogProfile) {
     (profile.computerSelection === true || tool.name !== "select_computer") &&
     (profile.room !== true || !ROOM_REFUSED_TOOL_NAMES.has(tool.name)) &&
     (profile.imageGeneration === true || !IMAGE_TOOL_NAMES.has(tool.name)) && (profile.appHosting === true || !HOSTING_TOOL_NAMES.has(tool.name)) &&
-    (profile.meetings === true || (!MEETING_TOOL_NAMES.has(tool.name) && tool.name !== "reset_cloud_computer")));
+    (profile.meetings === true || !MEETING_TOOL_NAMES.has(tool.name)));
   const AUTHORING_TOOLS = profile.skillAuthoring
     ? BOT_SCOPED_TOOLS
     : BOT_SCOPED_TOOLS.filter((tool) => !SKILL_TOOL_NAMES.has(tool.name));

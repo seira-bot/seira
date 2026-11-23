@@ -76,7 +76,7 @@ function type(value: string) {
 beforeEach(() => {
   setLocale("en");
   fx.section = "engines";
-  fx.config = { composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" } };
+  fx.config = { composio: { configured: false }, vps: { configured: false, sshAlias: "" } };
   fx.dispatch.mockReset();
   fx.dispatch.mockImplementation((action: { type: string; section?: AppSettingsSection; config?: Record<string, unknown> }) => {
     if (action.type === "toggleAppSettings" && action.section) fx.section = action.section;

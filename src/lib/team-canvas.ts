@@ -9,7 +9,6 @@ export const CARD_HEIGHT = 126;
 export const GAP = 16;
 export const TEAM_PADDING = 20;
 export const HEADER_HEIGHT = 64;
-export const COMPUTER_DRAG_TYPE = "application/x-seira-computer";
 
 export function orderBots<T extends { id: string }>(bots: T[], order: string[] = []): T[] {
   const rank = new Map(order.map((id, index) => [id, index]));
@@ -50,10 +49,9 @@ export function teamSize(section: TeamMapSection): { width: number; height: numb
 export function layoutTeams(
   sections: TeamMapSection[],
   positions: Record<string, Point>,
-  options: { sizes?: ReadonlyArray<{ width: number; height: number }>; columns?: number } = {},
 ): Tile[] {
-  const sizes = options.sizes ?? sections.map(teamSize);
-  const columns = Math.max(1, Math.floor(options.columns ?? 2));
+  const sizes = sections.map(teamSize);
+  const columns = 2;
   const columnX = [40];
   for (let column = 1; column < columns; column++) {
     const previous = Math.max(0, ...sizes.filter((_, index) => index % columns === column - 1).map((size) => size.width));

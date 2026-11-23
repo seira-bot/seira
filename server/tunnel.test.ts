@@ -382,7 +382,7 @@ describe("a fleet's credential in the environment", () => {
       const env = { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url };
       expect(fleetCredential({})).toBeNull();
       expect(fleetCredential({ SEIRA_INSTALLATION_CREDENTIAL: "   " })).toBeNull();
-      const credential = stub.seedInstallation("boat-1");
+      const credential = stub.seedInstallation("install-1");
       expect(fleetCredential({ SEIRA_INSTALLATION_CREDENTIAL: ` ${credential} ` })).toBe(credential);
       const access = await fleetAccess({ credential, env, version: "9.8.7" });
       expect(access).toEqual({ endpoint: stub.endpointUrl, token: stub.connectorToken });
