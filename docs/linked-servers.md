@@ -40,7 +40,7 @@ needed.
 |-----|----------------------------------------------------------------|
 | `ask` | Nothing. A person here approves each command and each file change. |
 | `edits` | Edit files. A person here approves everything else. |
-| `auto` | Run commands. No person here is asked. |
+| `auto` | Run the commands that the automatic review of the provider approves. A person here approves the others. |
 
 ## What a link carries
 
@@ -121,8 +121,9 @@ not a paired client.
 - Texts that a bot writes go to the other side as written. A bot can put any
   text in a hand-off or in a result. An admin who exposes a bot trusts the other
   side with what that bot knows.
-- The approval cap `auto` lets work from the other side run commands on this
-  side without asking anyone. Use it only with a side that the admin trusts.
+- The approval cap `auto` lets the automatic review of the provider approve
+  commands from the other side with no person here. Use it only with a side
+  that the admin trusts.
 - The names that the other side gives itself and its bots reach the lists here.
   Each name is cleaned to one short line.
 - A side whose hand-off files never arrive keeps the open slots of those

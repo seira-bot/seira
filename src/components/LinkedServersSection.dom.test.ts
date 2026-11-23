@@ -213,7 +213,7 @@ describe("changing a link", () => {
     await open();
     await click(button("Change"));
     await choose(host.querySelector<HTMLSelectElement>("[data-linked-edit] select")!, "auto");
-    expect(host.querySelector("[data-linked-cap-note]")!.textContent).toContain("can run commands here without asking anyone");
+    expect(host.querySelector("[data-linked-cap-note]")!.textContent).toContain("An automatic review lets routine commands run");
   });
 
   it("leaves out a bot that no longer exists, so the save is not refused for it", async () => {
