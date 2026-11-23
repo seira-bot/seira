@@ -58,7 +58,9 @@ async function rig(): Promise<Rig> {
   const send = (res: ServerResponse, status: number, payload: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(payload));
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     open += 1;
-    res.once("close", () => { open -= 1; });
+    res.once("close", () => { open -= 1; console.log("DBG res close", req.url); });
+    req.socket.once("close", () => console.log("DBG socket close", req.url));
+    req.once("close", () => console.log("DBG req close", req.url));
     const url = new URL(req.url ?? "/", "http://server");
     seen.push({ method: req.method ?? "", url: `${url.pathname}${url.search}`, headers: req.headers });
     if (req.method === "POST" && url.pathname === "/api/pair") {
