@@ -1,0 +1,137 @@
+// The record of this server's links to servers of other owners: <data>/linked-servers/links.json, mode 600. It keeps each
+// link's far place, what that place may reach here, and on the side that issued it only the sha256 of its credential.
+// Invites are kept the same way, as a hash, and each is good once for INVITE_TTL_MS.
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+
+import { writeFileAtomic } from "../atomic.ts";
+import { placeSchema, type Place } from "../bot-link/protocol.ts";
+
+export const GUEST_TOKEN_PREFIX = "lsk_";
+export const INVITE_TTL_MS = 15 * 60_000;
+export const LINKS_MAX = 20;
+/** Invites that wait to be used at one time; a new one pushes out the oldest. */
+const INVITES_MAX = 20;
+const INVITE_PREFIX = "seira-link:";
+const DIR = "linked-servers";
+const FILE = "links.json";
+
+export const APPROVAL_CAPS = ["ask", "edits", "auto"] as const;
+export type ApprovalCap = typeof APPROVAL_CAPS[number];
+
+export const LINK_ID = /^[0-9a-f]{16}$/u;
+const SECRET = /^[A-Za-z0-9_-]{43}$/u;
+const hex64 = z.string().regex(/^[0-9a-f]{64}$/u);
+export const botIdSchema = z.string().regex(/^[\w-]{1,128}$/u);
+
+const linkSchema = z.object({
+  id: z.string().regex(LINK_ID),
+  role: z.enum(["inviter", "joiner"]),
+  place: placeSchema,
+  exposed: z.array(botIdSchema).max(500),
+  cap: z.enum(APPROVAL_CAPS),
+  tokenHash: hex64.optional(),
+  createdAt: z.number(),
+}).strict().refine((link) => (link.role === "inviter") === (link.tokenHash !== undefined));
+const inviteSchema = z.object({ hash: hex64, expiresAt: z.number(), usedAt: z.number().optional() }).strict();
+const fileSchema = z.object({ v: z.literal(1), links: z.array(linkSchema).max(LINKS_MAX), invites: z.array(inviteSchema).max(INVITES_MAX) }).strict();
+
+export type StoredLink = z.infer<typeof linkSchema>;
+export type LinksFile = z.infer<typeof fileSchema>;
+
+const empty = (): LinksFile => ({ v: 1, links: [], invites: [] });
+
+export const linkedServersDir = (dataDir: string): string => join(dataDir, DIR);
+
+/** The folder of one link's own state. Only a well-formed link id names one. */
+export function instanceDir(dataDir: string, id: string): string {
+  if (!LINK_ID.test(id)) throw new Error("not a link id");
+  return join(dataDir, DIR, id);
+}
+
+export function readLinks(dataDir: string, log: (line: string) => void = () => {}): LinksFile {
+  let text: string;
+  try { text = readFileSync(join(dataDir, DIR, FILE), "utf8"); } catch { return empty(); }
+  try {
+    const parsed = fileSchema.safeParse(JSON.parse(text));
+    if (parsed.success) return parsed.data;
+  } catch { /* reported below */ }
+  log("linked servers: their record did not parse, so no link is in use");
+  return empty();
+}
+
+export function writeLinks(dataDir: string, file: LinksFile): void {
+  mkdirSync(join(dataDir, DIR), { recursive: true, mode: 0o700 });
+  writeFileAtomic(join(dataDir, DIR, FILE), JSON.stringify(file), { mode: 0o600 });
+}
+
+export const hashSecret = (secret: string): string => createHash("sha256").update(secret).digest("hex");
+export function sameHash(a: string, b: string): boolean {
+  const left = Buffer.from(a, "hex"), right = Buffer.from(b, "hex");
+  return left.length === 32 && right.length === 32 && timingSafeEqual(left, right);
+}
+const newSecret = (): string => randomBytes(32).toString("base64url");
+export const newToken = (): string => `${GUEST_TOKEN_PREFIX}${newSecret()}`;
+export const newLinkId = (): string => randomBytes(8).toString("hex");
+
+export function pruneInvites(file: LinksFile, now: number): void {
+  file.invites = file.invites.filter((one) => one.usedAt === undefined && one.expiresAt > now).slice(-INVITES_MAX);
+}
+
+/** A new single-use code. Only its hash is kept. */
+export function addInvite(file: LinksFile, now: number): { code: string; expiresAt: number } {
+  pruneInvites(file, now);
+  const code = newSecret(), expiresAt = now + INVITE_TTL_MS;
+  file.invites = [...file.invites, { hash: hashSecret(code), expiresAt }].slice(-INVITES_MAX);
+  return { code, expiresAt };
+}
+
+/** The invite this code opens, while it is unused and has not expired. */
+export function liveInvite(file: LinksFile, code: string, now: number): LinksFile["invites"][number] | undefined {
+  if (!SECRET.test(code)) return undefined;
+  const hash = hashSecret(code);
+  const found = file.invites.find((one) => sameHash(one.hash, hash));
+  return found && found.usedAt === undefined && found.expiresAt > now ? found : undefined;
+}
+
+export interface Invite { origin: string; name: string; code: string }
+const inviteBody = z.object({ v: z.literal(1), origin: z.string().max(300), name: z.string().max(400), code: z.string().regex(SECRET) }).strict();
+
+export const encodeInvite = ({ origin, name, code }: Invite): string => `${INVITE_PREFIX}${Buffer.from(JSON.stringify({ v: 1, origin, name, code })).toString("base64url")}`;
+
+export function decodeInvite(text: string): Invite | null {
+  const trimmed = text.trim();
+  if (trimmed.length > 4_096 || !trimmed.startsWith(INVITE_PREFIX)) return null;
+  const body = trimmed.slice(INVITE_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]+$/u.test(body)) return null;
+  try {
+    const parsed = inviteBody.safeParse(JSON.parse(Buffer.from(body, "base64url").toString("utf8")));
+    return parsed.success ? { origin: parsed.data.origin, name: cleanName(parsed.data.name), code: parsed.data.code } : null;
+  } catch { return null; }
+}
+
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Security invariant: another server is asked only at https, or at http on this machine's loopback, and never at an
+ * address that carries a user name or password. Null for any other address. */
+export function guestOrigin(value: string): string | null {
+  let url: URL;
+  try { url = new URL(value); } catch { return null; }
+  if (url.username || url.password) return null;
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && LOOPBACK.has(url.hostname))) return null;
+  return url.origin;
+}
+
+const UNSAFE = /[\p{Cc}‎‏‪-‮⁦-⁩  ]+/gu;
+
+/** A name another server chose, as one line without control or direction characters, at most `max` characters. */
+export function cleanName(raw: string, max = 120): string {
+  return Array.from(raw.replace(UNSAFE, " ").replace(/\s+/gu, " ").trim()).slice(0, max).join("").trim();
+}
+
+/** A far place as this server keeps it: its id as sent, its name cleaned. */
+export function cleanPlace(place: Place, fallback: string): Place {
+  return { id: place.id, name: cleanName(place.name) || fallback };
+}
