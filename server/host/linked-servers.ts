@@ -652,6 +652,9 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   async function joinOverRelay(invite: Extract<DecodedInvite, { v: 2 }>, actor: AdminActor): Promise<SeiraLinkView> {
     if (full()) throw new LinkedServerError(FULL_HERE, 409);
     const route: RelayRoute = { e2e: invite.e2e, transportKey: invite.transportKey, hostId: invite.hostId };
+    const { k, h, r } = invite.e2e;
+    if (!h || !r) throw new LinkedServerError(UNREACHABLE, 502);
+    const stored = { v: 1 as const, k, h, r };
     const origin = placeholderOrigin(invite.hostId);
     const self = selfPlace();
     let session: Awaited<ReturnType<typeof openRelaySession>>;
@@ -665,7 +668,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     try { answer = await askToJoin(origin, invite.code, self, fetchOverSession(async () => session)); } finally { session.shutdown(); }
     if (full()) throw new LinkedServerError(FULL_HERE, 409);
     const record: StoredLink = { id: freshId(), role: "joiner", place: cleanPlace(answer.place, FALLBACK_NAME), exposed: [], cap: "ask", createdAt: now() };
-    relayFile.joined[record.id] = invite.e2e;
+    relayFile.joined[record.id] = stored;
     try { saveRelay(); file.links.push(record); save(); } catch (error) {
       delete relayFile.joined[record.id];
       file.links = file.links.filter((one) => one !== record);
