@@ -14,6 +14,9 @@ import { keepUnreadableAside } from "./unreadable-aside.ts";
 export const CONFIG_BACKUP_PREFIX = "config.json.bak.";
 /** How many dated copies are kept; the oldest go first. */
 export const CONFIG_BACKUP_KEEP = 10;
+/** Besides those, the last copy of each of this many days before the save is kept, so an afternoon of saves never
+ * takes away the settings as they were the day before. */
+export const CONFIG_BACKUP_DAYS = 7;
 
 const BACKUP_NAME = /^config\.json\.bak\.(\d{8})-(\d{6})(?:-(\d+))?$/;
 
@@ -143,7 +146,13 @@ function pruneConfigBackups(dir: string, justWritten: string): void {
   // A corrected clock may put this save before every existing timestamp. The
   // copy that makes the imminent overwrite reversible must survive retention.
   const removable = copies.filter((copy) => copy.name !== justWritten);
-  for (const copy of removable.slice(0, Math.max(0, copies.length - CONFIG_BACKUP_KEEP))) {
+  const kept = new Set(removable.slice(Math.max(0, copies.length - CONFIG_BACKUP_KEEP)).map((copy) => copy.name));
+  // The days are the ones before this save's, so copies a wrong clock dated in the future never count as earlier days.
+  const today = backupOrder(justWritten).stamp.slice(0, 8);
+  const lastOfDay = new Map<string, string>();
+  for (const copy of removable) if (copy.stamp.slice(0, 8) < today) lastOfDay.set(copy.stamp.slice(0, 8), copy.name);
+  for (const name of [...lastOfDay.values()].slice(-CONFIG_BACKUP_DAYS)) kept.add(name);
+  for (const copy of removable.filter((copy) => !kept.has(copy.name))) {
     try {
       unlinkSync(copy.path);
     } catch {

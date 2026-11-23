@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  CONFIG_BACKUP_DAYS,
   CONFIG_BACKUP_KEEP,
   configSaveRefusal,
   listConfigBackups,
@@ -87,6 +88,31 @@ describe("the dated copies", () => {
     const copies = listConfigBackups(dir);
     expect(copies).toHaveLength(CONFIG_BACKUP_KEEP);
     expect(copies[copies.length - 1]!.name).toBe("config.json.bak.20261116-000013");
+  });
+
+  it("keep the settings as they were the day before, however many saves follow in one sitting", () => {
+    const dir = tempDir();
+    writeConfigBackup(configPath(dir), "yesterday", new Date("2026-11-22T18:00:00Z"));
+    // An onboarding: a save after each step, 45 seconds apart.
+    for (let step = 0; step < CONFIG_BACKUP_KEEP + 1; step += 1) {
+      writeConfigBackup(configPath(dir), `step ${step}`, new Date(Date.UTC(2026, 10, 23, 14, 24, 0) + step * 45_000));
+    }
+    const copies = listConfigBackups(dir);
+    expect(copies[0]!.name).toBe("config.json.bak.20261122-180000");
+    expect(readFileSync(copies[0]!.path, "utf8")).toBe("yesterday");
+    expect(copies.slice(1)).toHaveLength(CONFIG_BACKUP_KEEP);
+  });
+
+  it("keep the last copy of each earlier day for a week, and no more", () => {
+    const dir = tempDir();
+    for (let day = 1; day <= 20; day += 1) {
+      writeConfigBackup(configPath(dir), `morning ${day}`, new Date(Date.UTC(2026, 10, day, 9)));
+      writeConfigBackup(configPath(dir), `evening ${day}`, new Date(Date.UTC(2026, 10, day, 18)));
+    }
+    for (let second = 0; second < CONFIG_BACKUP_KEEP; second += 1) writeConfigBackup(configPath(dir), `today ${second}`, new Date(Date.UTC(2026, 10, 21, 9, 0, second)));
+    const earlier = listConfigBackups(dir).filter((copy) => copy.stamp < "20261121");
+    expect(earlier.map((copy) => copy.stamp)).toEqual(Array.from({ length: CONFIG_BACKUP_DAYS }, (_, i) => `202611${String(14 + i).padStart(2, "0")}-180000`));
+    expect(listConfigBackups(dir)).toHaveLength(CONFIG_BACKUP_KEEP + CONFIG_BACKUP_DAYS);
   });
 
   it("are listed oldest first", () => {

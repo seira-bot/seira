@@ -47,6 +47,7 @@ import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from 
 import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
 import { restoreInProgress } from "./restore-progress.ts";
+import { runningServerLine } from "./data-dir-lease.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
@@ -637,6 +638,11 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   const { browserEngineStatus, describeBrowserEngine } = await import("./browser-engine.ts");
   if (await serverUp(options.port)) {
     console.error(`something already answers on http://127.0.0.1:${options.port}; use ${cliCommand("pair")} against it, or --port for a second server`);
+    return 1;
+  }
+  const running = runningServerLine(options.dataDir);
+  if (running) {
+    console.error(running);
     return 1;
   }
   let publicUrl = options.publicUrl ?? (options.local ? undefined : envPublicUrl(process.env, log));
