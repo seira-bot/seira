@@ -30,6 +30,8 @@ describe("service units", () => {
     expect(unit).toContain("User=seira");
     expect(unit).toContain("Environment=SEIRA_DATA_DIR=/home/seira/.seira");
     expect(unit).toContain("ExecStart=/usr/bin/node /usr/lib/node_modules/seira/cli.js serve --port 8799 --data-dir /home/seira/.seira --domain seira.example.com --no-pair");
+    expect(unit).toContain("After=network-online.target nginx.service caddy.service apache2.service httpd.service traefik.service\n");
+    expect(unit).toContain("Wants=network-online.target\n");
     expect(unit).toContain("Restart=always");
     expect(unit).toContain("AmbientCapabilities=CAP_NET_BIND_SERVICE");
     expect(unit).toContain("WantedBy=multi-user.target");

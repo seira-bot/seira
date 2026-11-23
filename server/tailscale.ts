@@ -136,11 +136,33 @@ export function tailnetListenFallback(failure: TailscaleFailure, status: Tailsca
 
 const FALLBACK_HTTPS_PORT = 8443;
 
-/** Port 443 unless another program listens there and 8443 is free; with both taken it stays 443 and Tailscale reports the clash. */
-export function pickTailscaleHttpsPort(listening: Iterable<number>): { port: number; line: string | null } {
+/** Where a run records the HTTPS ports it serves on the tailnet, so each start keeps the addresses devices already use. */
+export const tailscalePortsFile = (dataDir: string) => join(dataDir, "tailscale-https.json");
+
+const validPort = (port: unknown): port is number => Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535;
+
+function savedTailscalePorts(dataDir: string): number[] | null {
+  try {
+    const { ports } = JSON.parse(readFileSync(tailscalePortsFile(dataDir), "utf8")) as { ports?: unknown };
+    if (!Array.isArray(ports) || ports.length === 0 || ports.length > 4 || !ports.every(validPort) || new Set(ports).size !== ports.length) return null;
+    return ports;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The HTTPS ports to serve; the first is the address people see. Saved ports win and no listener is consulted. Without
+ * them: 443, plus 8443 when another program listens on 443, so devices set up on either address keep working.
+ * `primaryBusy` tells whether another program listens on the first port on this server. That does not stop other
+ * tailnet devices: tailscaled takes their traffic itself, and only its listener for connections from this server fails.
+ */
+export function chooseTailscaleHttpsPorts(dataDir: string, listening: Iterable<number>): { ports: number[]; primaryBusy: boolean; line: string | null } {
   const taken = new Set(listening);
-  if (!taken.has(443) || taken.has(FALLBACK_HTTPS_PORT)) return { port: 443, line: null };
-  return { port: FALLBACK_HTTPS_PORT, line: `tailscale: port 443 is in use by another program, so the tailnet address uses port ${FALLBACK_HTTPS_PORT}.` };
+  const saved = savedTailscalePorts(dataDir);
+  if (saved) return { ports: saved, primaryBusy: taken.has(saved[0]!), line: null };
+  if (!taken.has(443)) return { ports: [443], primaryBusy: false, line: null };
+  return { ports: [443, FALLBACK_HTTPS_PORT], primaryBusy: true, line: `tailscale: port 443 is in use by another program, so the server also answers on port ${FALLBACK_HTTPS_PORT}, for devices set up with that address.` };
 }
 
 /** Why Tailscale cannot give phones an HTTPS address now, or null when it can. */
@@ -153,58 +175,82 @@ export async function tailscaleHttpsProblem(probe: typeof tailscaleStatus = tail
 /** Where a run that shares over Tailscale notes it, so the next start can turn off a share a crash left behind. */
 export const tailscaleMarker = (dataDir: string) => join(dataDir, "tailscale-serve.marker");
 
+const originFor = (dnsName: string, httpsPort: number) => (httpsPort === 443 ? `https://${dnsName}` : `https://${dnsName}:${httpsPort}`);
+
 /**
- * `tailscale serve` in the foreground: the share ends with this process. Before serving, the tailnet must have HTTPS
- * certificates (`CertDomains`), or serve waits on an enablement link forever; and the name must not already front a
- * different Seira server. Resolves once serve has run for `settleMs` without exiting.
+ * `tailscale serve` in the foreground, one process per HTTPS port: the share ends with this process. Before serving,
+ * the tailnet must have HTTPS certificates (`CertDomains`), or serve waits on an enablement link forever; and the name
+ * must not already front a different Seira server. Resolves once the first port has run for `settleMs` without exiting.
+ * Another port that fails is skipped with one line; the first port decides the result. `origin` is the first port's.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,
   localPort: number,
-  options: { dataDir: string; httpsPort?: number; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean> },
-): Promise<{ origin: string; stop(): Promise<void> } | { failure: TailscaleFailure }> {
-  const httpsPort = options.httpsPort ?? 443;
+  options: { dataDir: string; httpsPorts?: number[]; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean>; log?: (line: string) => void },
+): Promise<{ origin: string; origins: string[]; stop(): Promise<void> } | { failure: TailscaleFailure }> {
+  const wanted = options.httpsPorts?.length ? options.httpsPorts : [443];
   if (!status.dnsName) return { failure: "no-magicdns" };
   if (!status.httpsEnabled) return { failure: "https-not-enabled" };
-  const origin = httpsPort === 443 ? `https://${status.dnsName}` : `https://${status.dnsName}:${httpsPort}`;
-  if (await (options.otherServer ?? (() => Promise.resolve(false)))(origin)) return { failure: "other-server" };
+  const dnsName = status.dnsName;
+  const running: Array<{ port: number; stop(): Promise<void> }> = [];
+  const stopAll = () => Promise.all(running.map((one) => one.stop())).then(() => undefined);
+  for (const httpsPort of wanted) {
+    const started = await serveOnPort(status, localPort, httpsPort, options);
+    if (!("failure" in started)) { running.push({ port: httpsPort, stop: started.stop }); continue; }
+    if (running.length === 0) return started;
+    options.log?.(`tailscale: port ${httpsPort} could not start (${explainTailscaleFailure(started.failure)}). The address on port ${wanted[0]} still works; the next start tries port ${httpsPort} again.`);
+  }
+  try {
+    mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
+    writeFileSync(tailscalePortsFile(options.dataDir), JSON.stringify({ ports: wanted }), { mode: 0o600 });
+    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPorts: running.map((one) => one.port), localPort }), { mode: 0o600 });
+  } catch (error) {
+    await stopAll();
+    throw error;
+  }
+  return {
+    origin: originFor(dnsName, wanted[0]!),
+    origins: running.map((one) => originFor(dnsName, one.port)),
+    async stop() {
+      await stopAll();
+      rmSync(tailscaleMarker(options.dataDir), { force: true });
+    },
+  };
+}
+
+async function serveOnPort(
+  status: TailscaleStatus,
+  localPort: number,
+  httpsPort: number,
+  options: { settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean> },
+): Promise<{ stop(): Promise<void> } | { failure: TailscaleFailure }> {
+  if (await (options.otherServer ?? (() => Promise.resolve(false)))(originFor(status.dnsName!, httpsPort))) return { failure: "other-server" };
   const child = (options.spawnImpl ?? spawn)(status.cli, ["serve", `--https=${httpsPort}`, `http://127.0.0.1:${localPort}`], { stdio: ["ignore", "ignore", "pipe"], env: tailscaleEnvironment() });
   let stderr = "";
   child.stderr?.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-4096); });
   const exited = new Promise<number | null>((done) => { child.once("exit", (code) => done(code)); child.once("error", () => done(-1)); });
   const early = await Promise.race([exited, new Promise<"running">((done) => setTimeout(() => done("running"), options.settleMs ?? 2_500))]);
   if (early !== "running") return { failure: early === -1 ? "not-installed" : classifyTailscaleStderr(stderr) };
-  const stopServe = async () => {
-    child.kill("SIGTERM");
-    const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
-    await exited;
-    clearTimeout(timer);
-  };
-  try {
-    mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
-    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
-  } catch (error) {
-    await stopServe();
-    throw error;
-  }
   return {
-    origin,
     async stop() {
-      await stopServe();
-      rmSync(tailscaleMarker(options.dataDir), { force: true });
+      child.kill("SIGTERM");
+      const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
+      await exited;
+      clearTimeout(timer);
     },
   };
 }
 
 /** Turns off a share a run of ours left on (its marker says so), never one the person made. True when it did. */
 export async function clearLeftoverTailscaleServe(dataDir: string): Promise<boolean> {
-  let marker: { cli?: unknown; httpsPort?: unknown };
+  let marker: { cli?: unknown; httpsPort?: unknown; httpsPorts?: unknown };
   try {
     marker = JSON.parse(readFileSync(tailscaleMarker(dataDir), "utf8"));
   } catch {
     return false;
   }
-  if (typeof marker.cli === "string" && Number.isInteger(marker.httpsPort)) await run(marker.cli, ["serve", `--https=${marker.httpsPort}`, "off"], 10_000);
+  const ports = Array.isArray(marker.httpsPorts) ? marker.httpsPorts : [marker.httpsPort];
+  if (typeof marker.cli === "string") for (const port of ports.filter(validPort)) await run(marker.cli, ["serve", `--https=${port}`, "off"], 10_000);
   rmSync(tailscaleMarker(dataDir), { force: true });
   return true;
 }
