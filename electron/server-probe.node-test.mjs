@@ -52,7 +52,7 @@ test("on a Mac, a local address that never answers names the Local Network permi
 });
 
 test("a tailnet name that does not resolve says MagicDNS is off only when the tailnet says so", async () => {
-  const unknownName = () => new Error("net::ERR_NAME_NOT_RESOLVED");
+  const unknownName = new Error("net::ERR_NAME_NOT_RESOLVED");
   const host = "pc.example-tailnet.ts.net:8799";
   const fetch = fakeFetch({ "http://pc.example-tailnet.ts.net:8799": unknownName }).fetch;
   const probe = (magicDns, tailnet = true) => probeServer({ address: "http://pc.example-tailnet.ts.net:8799", fetch, platform: "linux", tailnet: () => tailnet, ...(magicDns ? { magicDns } : {}) });
@@ -63,9 +63,8 @@ test("a tailnet name that does not resolve says MagicDNS is off only when the ta
   assert.deepEqual(await probe(undefined), { outcome: "problem", problem: "otherTailnet", host });
   assert.deepEqual(await probe(async () => false, false), { outcome: "problem", problem: "tailscaleOff", host });
   // Only a name that did not resolve is explained by MagicDNS.
-  const silent = fakeFetch({ "http://pc.example-tailnet.ts.net:8799": () => Object.assign(new Error("timeout"), { name: "TimeoutError" }) }).fetch;
+  const silent = fakeFetch({ "http://pc.example-tailnet.ts.net:8799": Object.assign(new Error("timeout"), { name: "TimeoutError" }) }).fetch;
   assert.equal((await probeServer({ address: "http://pc.example-tailnet.ts.net:8799", fetch: silent, platform: "linux", tailnet: () => true, magicDns: async () => false })).problem, "tailnetSilent");
-  // The sentence reaches the person through createServerConnect's own check of Tailscale.
   const connect = createServerConnect({ fetch, ownEnvironmentId: async () => null, ask: async () => true, open: () => {}, tailnet: () => true, magicDns: async () => false, t: (key) => key });
   await assert.rejects(connect.connectAsking("http://pc.example-tailnet.ts.net:8799"), { message: "native.connect.magicDnsOff" });
 });
