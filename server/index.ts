@@ -511,7 +511,7 @@ import {
 import { createGracefulShutdown } from "./graceful-shutdown.ts";
 import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
 import { dataHome } from "./data-dir.ts";
-import { acquireDataDirLeaseForProcess, releaseOnceAtExit } from "./data-dir-lease.ts"; import { markEngineRunClean, startEngineRecords } from "./engine-records.ts";
+import { acquireDataDirLeaseOrExit, releaseOnceAtExit } from "./data-dir-lease.ts"; import { markEngineRunClean, startEngineRecords } from "./engine-records.ts";
 import { createWorkspaceAccess, describeEdition, editionForSettings, editionStatus, entitled, hostedWorkspaceConfiguration, hostedWorkspaceConfigured, licenseWarning, sharedWorkspaceFullAccessConfigured, loadEnterpriseLayer, workspaceMembership, type WorkspaceAccess } from "./enterprise.ts";
 import { environmentDescriptor, loadEnvironmentId, OWNER_LENDING, serverVersion } from "./environment.ts"; import { dataFormatAtStart } from "./data-format.ts"; import { doctorAtStart } from "./doctor/start.ts";
 import { WorkspaceBackupMaintenance } from "./workspace-backup-maintenance.ts";
@@ -654,7 +654,7 @@ const STATIC_DIR = process.env.SEIRA_STATIC_DIR || null;
 
 migrateLegacyData({ home: dataHome(), dataDir: DATA_DIR }); dataFormatAtStart("check", DATA_DIR, serverVersion()); ensureDirs();
 // Acquire before any durable identity, sessions, config or Store state is loaded.
-const dataDirLease = acquireDataDirLeaseForProcess(DATA_DIR); void startEngineRecords(DATA_DIR); // stops what an earlier server left
+const dataDirLease = acquireDataDirLeaseOrExit(DATA_DIR); void startEngineRecords(DATA_DIR); // stops what an earlier server left
 repairLegacyHomePaths(DATA_DIR);
 const releaseDataDirLeaseAtExit = releaseOnceAtExit(dataDirLease);
 process.once("exit", releaseDataDirLeaseAtExit);
