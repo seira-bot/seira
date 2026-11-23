@@ -55,6 +55,9 @@ export interface BotLinkHostDeps extends Omit<BotLinkStoreDeps, "store" | "files
   /** Who made an admin request, for the activity record. */
   actor(auth: RequestAuth, req: IncomingMessage): AdminActor;
   log(line: string): void;
+  /** Tests only: A2A agents on this machine's loopback, at http. Default: the environment variable
+   * SEIRA_TEST_A2A_LOOPBACK is 1. */
+  a2a?: { allowLoopback?: boolean };
 }
 
 type Answer = { status: number; body: Record<string, unknown> };
@@ -98,12 +101,16 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
     ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, rooms, directoryChanged: () => { syncStandIns(); }, revoke: (sessionId) => { deps.sessions.revoke(sessionId); },
     notMine: (botId) => linked.instances().some((one) => one.link.claims(botId)),
   });
+  const loopback = deps.a2a?.allowLoopback ?? process.env.SEIRA_TEST_A2A_LOOPBACK === "1";
+  const testPort = process.env.SEIRA_PORT;
   const linked = createLinkedServers({
     ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, power: deps.power,
     dropFiles: (paths) => deps.files.drop(paths),
     serverName: deps.serverName, selfId: () => deps.environmentId, publicOrigin: deps.publicOrigin, audit: deps.audit,
     attemptAllowed: (source) => deps.sessions.attemptAllowed(source).ok, attemptFailed: (source) => { deps.sessions.noteFailure(source); },
     ownPeer: (key) => link.has(key),
+    a2a: { allowLoopback: loopback, egress: { allowLoopback: loopback },
+      origin: () => deps.publicOrigin() ?? (loopback && testPort ? `http://127.0.0.1:${testPort}` : null) },
   });
   const dialer = createDialer({ link, log: deps.log });
   let stopWatching: (() => void) | undefined, stopWatchingGuests: (() => void) | undefined, upkeep: NodeJS.Timeout | undefined;
@@ -157,7 +164,7 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
       return link.coordinate(call, context, guests);
     },
     agents: () => [...link.agents(), ...linked.instances().flatMap((one) => one.link.agents())],
-    /** Requests before sign-in that only a linked server makes. False: not one of them. */
+    /** Requests before sign-in that only a linked server or an A2A agent makes. False: not one of them. */
     publicRoutes: (ctx: GuestRequest): Promise<boolean> => linked.serve(ctx),
     capFor: (threadId: string, mode: ApprovalMode): ApprovalMode => linked.capFor(threadId, mode),
   };
