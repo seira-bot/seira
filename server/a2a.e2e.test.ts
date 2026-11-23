@@ -23,7 +23,7 @@ const TOKEN = /^lsa_[A-Za-z0-9_-]{43}$/u;
 function place(fixture: Fixture) {
   const { url, dataDir } = fixture.info;
   const planPath = join(dataDir, "room-plan.json");
-  const plans: Record<string, { turns: unknown[] }> = {};
+  const plans: Record<string, { turns: unknown[]; byPrompt?: Array<{ promptIncludes: string; plan: unknown }> }> = {};
   const call = async (method: string, path: string, body?: unknown, options: { token?: string } = {}) => {
     const response = await fetch(`${url}${path}`, { method, headers: { "content-type": "application/json", origin: url, ...(options.token ? { authorization: `Bearer ${options.token}` } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000) });
@@ -44,6 +44,8 @@ function place(fixture: Fixture) {
     url, dataDir, api, call, rpc,
     cli: (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<Json>,
     plan(botId: string, ...turns: unknown[]) { (plans[botId] ??= { turns: [] }).turns.push(...turns); writeFileSync(planPath, JSON.stringify(plans)); },
+    /** The plan of the turn whose request holds this text. A turn that was stopped leaves no record, so its place in a list of turns is not known. */
+    planFor(botId: string, promptIncludes: string, plan: unknown) { ((plans[botId] ??= { turns: [] }).byPrompt ??= []).push({ promptIncludes, plan }); writeFileSync(planPath, JSON.stringify(plans)); },
     providerTurns: (): Array<{ botId: string; approval?: { behavior: string } }> => existsSync(`${planPath}.evidence.jsonl`)
       ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [],
     messages: async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as Message[],
@@ -143,7 +145,7 @@ describe("an A2A agent between two servers", () => {
 
   it("shows the approval card on the far server under the cap ask, and the caller sees working until a person answers (AC-28)", async () => {
     expect((await far.peers()).find((one) => one.id === farPeer)!.cap).toBe("ask");
-    far.plan(atlas.id, approveAndPush("Atlas pushed."));
+    far.planFor(atlas.id, "Push the export branch.", approveAndPush("Atlas pushed."));
     const sent = await far.rpc(token, atlas.id, "SendMessage", message("Push the export branch.", "m-ask"));
     expect(sent.status, JSON.stringify(sent.body)).toBe(200);
     const taskId = String(sent.body.result.task.id);
@@ -162,7 +164,7 @@ describe("an A2A agent between two servers", () => {
   }, hostTimeout(120_000));
 
   it("stops a second task when the caller cancels it, and refuses to cancel it twice", async () => {
-    far.plan(atlas.id, approveAndPush("Atlas pushed again."));
+    far.planFor(atlas.id, "Push it once more.", approveAndPush("Atlas pushed again."));
     const sent = await far.rpc(token, atlas.id, "SendMessage", message("Push it once more.", "m-cancel"));
     const taskId = String(sent.body.result.task.id);
     await expect.poll(async () => (await far.openApprovals(atlas.id)).length, { timeout: 30_000 }).toBe(1);
@@ -174,7 +176,7 @@ describe("an A2A agent between two servers", () => {
 
   it("hands work from a bot on the near server to the agent, and the result returns to the asking thread, with no token in either activity record (AC-05)", async () => {
     await far.api("PATCH", `/api/linked-servers/${farPeer}`, { cap: "auto" });
-    far.plan(atlas.id, { reply: "Atlas counted 42 orders." });
+    far.planFor(atlas.id, "Count this week's orders.", { reply: "Atlas counted 42 orders." });
     near.plan(writer.id,
       { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: [agentAddress], request_key: "count", message: "Count this week's orders." } }], reply: "Asked Atlas." },
       { reply: "Atlas says 42." });
@@ -206,7 +208,7 @@ describe("an A2A agent between two servers", () => {
     let other = "";
     await expect.poll(async () => { other = (await far.peers()).find((one) => one.name === "Near writer")?.bots[0]?.id ?? ""; return other; }, { timeout: 30_000 }).toMatch(/^link-/u);
 
-    far.plan(atlas.id, { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: [other], request_key: "hop", message: "Pass this on." } }], reply: "Tried to pass it on." });
+    far.planFor(atlas.id, "Pass this on to the writer.", { steps: [{ tool: "coordinate_bots", arguments: { bot_ids: [other], request_key: "hop", message: "Pass this on." } }], reply: "Tried to pass it on." });
     const sent = await far.rpc(token, atlas.id, "SendMessage", message("Pass this on to the writer.", "m-hop"));
     const taskId = String(sent.body.result.task.id);
     await expect.poll(async () => stateOf((await far.rpc(token, atlas.id, "GetTask", { id: taskId })).body), { timeout: 60_000 }).toMatch(/^TASK_STATE_(COMPLETED|FAILED)$/u);
@@ -227,7 +229,7 @@ describe("an A2A agent between two servers", () => {
 
   it("answers 401 to the old token and stops the work of the agent once the far server removes it (AC-40)", async () => {
     await far.api("PATCH", `/api/linked-servers/${farPeer}`, { cap: "ask" });
-    far.plan(atlas.id, approveAndPush("Atlas pushed a third time."));
+    far.planFor(atlas.id, "Push it a third time.", approveAndPush("Atlas pushed a third time."));
     const sent = await far.rpc(token, atlas.id, "SendMessage", message("Push it a third time.", "m-removed"));
     const taskId = String(sent.body.result.task.id);
     await expect.poll(async () => (await far.openApprovals(atlas.id)).length, { timeout: 30_000 }).toBe(1);
