@@ -561,6 +561,30 @@ describe("budgets of one peer", () => {
   });
 });
 
+describe("the character budget of a peer", () => {
+  it("answers 429 with the busy text when the text has no room, before it reads the text, and starts nothing", async () => {
+    const w = await world([{ label: "one", chars: 100 }]);
+    const [peer] = w.peers as [Peer];
+    const release = gated(w);
+    expect((await rpc(w, peer, sendMessage("m1", { text: "a".repeat(60) }))).status).toBe(200);
+    const res = await rpc(w, peer, sendMessage("m2", { text: "b".repeat(60) }));
+    expect([res.status, res.headers.get("retry-after")]).toEqual([429, "60"]);
+    expect(res.body.error).toMatchObject({ code: -32603, message: BUSY_TEXT });
+    expect(peer.tasks.get(frameId(peer.key, "m2"))).toBeNull();
+    expect(w.begun).toHaveLength(1);
+    release();
+  });
+
+  it("takes no room for a call that repeats a message id", async () => {
+    const w = await world([{ label: "one", chars: 100 }]);
+    const [peer] = w.peers as [Peer];
+    const release = gated(w);
+    for (let n = 0; n < 3; n += 1) expect((await rpc(w, peer, sendMessage("m1", { text: "a".repeat(60) }))).status).toBe(200);
+    expect(w.begun).toHaveLength(1);
+    release();
+  });
+});
+
 describe("a request that starts nothing (lesson 6)", () => {
   it("leaves no task when the link took no work from it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "a2a-inbound-stub-"));
