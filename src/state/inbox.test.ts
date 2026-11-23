@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { InboxView } from "../../shared/inbox";
-import { inboxView, messageRow } from "@/testing/inbox-fixture";
+import { approvalRow, inboxView, messageRow, reportRow } from "@/testing/inbox-fixture";
 import { api } from "./api";
-import { currentInbox, doneInboxRow, readInboxRow, refreshInbox, setInboxView } from "./inbox";
+import { currentInbox, doneAllInboxNews, doneInboxRow, doneInboxRows, readInboxRow, refreshInbox, setInboxView } from "./inbox";
 
 vi.mock("./api", () => ({ api: vi.fn() }));
 
@@ -87,4 +87,23 @@ it.each(["done", "read"] as const)("puts the row back when %s fails and the read
   await reply(2, inboxView([{ ...messageRow, text: "Reconciled text", unread: false }]));
   await loading;
   expect(currentInbox()?.rows[0]).toMatchObject({ tab: "info", unread: false, text: "Reconciled text" });
+});
+
+it("moves the named lines to Done together, and puts each back when the server cannot be told", async () => {
+  setInboxView(inboxView([approvalRow, messageRow, reportRow]));
+  doneInboxRows([messageRow, reportRow]);
+  expect(currentInbox()?.rows.map((row) => row.tab)).toEqual(["needs-you", "done", "done"]);
+  await fail(0);
+  expect(requests[0]).toMatchObject({ path: "/api/inbox/done-all" });
+  expect(vi.mocked(api).mock.calls[0]![1]).toMatchObject({ method: "POST", body: JSON.stringify({ ids: [messageRow.id, reportRow.id] }) });
+  expect(currentInbox()?.rows.map((row) => [row.tab, row.unread])).toEqual([["needs-you", true], ["info", true], ["info", false]]);
+});
+
+it("moves all news to Done with an empty body, leaves asks, and keeps what the server answers", async () => {
+  setInboxView(inboxView([approvalRow, messageRow, reportRow]));
+  doneAllInboxNews();
+  expect(currentInbox()?.rows.map((row) => row.tab)).toEqual(["needs-you", "done", "done"]);
+  expect(vi.mocked(api).mock.calls[0]![1]).toMatchObject({ method: "POST", body: "{}" });
+  await reply(0, inboxView([approvalRow, { ...messageRow, tab: "done" }, { ...reportRow, tab: "done" }]));
+  expect(currentInbox()?.rows.map((row) => row.tab)).toEqual(["needs-you", "done", "done"]);
 });

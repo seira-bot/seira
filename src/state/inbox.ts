@@ -5,6 +5,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import type { InboxRow, InboxView } from "../../shared/inbox";
 import { api } from "./api";
 import { randomUuid } from "../lib/random-uuid";
+import { isNews } from "../components/inbox/inbox-kind";
 
 type InboxTaskLike = { threadId: string; inbox?: true; openAsks?: number; inboxChangedAt?: number };
 
@@ -134,6 +135,38 @@ export function doneInboxRow(row: Pick<InboxRow, "id">): void {
   const before = list.get()?.rows.find((one) => one.id === row.id);
   patchRow(row.id, { tab: "done", unread: false });
   void mark(row.id, "done", before ? { tab: before.tab, unread: before.unread } : {});
+}
+
+/** Tells the server these lines are done, or with no ids all news; on failure each row goes back and the list is read again. */
+async function markDoneMany(ids: string[] | null, before: Map<string, Partial<InboxRow>>): Promise<void> {
+  const seq = ++sent;
+  const view = await api<InboxView>("/api/inbox/done-all", { method: "POST", background: true, body: JSON.stringify(ids ? { ids } : {}) }).catch(() => null);
+  if (view && Array.isArray(view.rows)) return show(seq, view);
+  for (const [id, undo] of before) patchRow(id, undo);
+  void refreshInbox();
+}
+
+const moveToDone = (match: (row: InboxRow) => boolean): Map<string, Partial<InboxRow>> => {
+  const view = list.get();
+  const before = new Map<string, Partial<InboxRow>>();
+  if (!view) return before;
+  for (const row of view.rows) if (match(row)) before.set(row.id, { tab: row.tab, unread: row.unread });
+  shown = ++sent;
+  list.set({ ...view, rows: view.rows.map((row) => (before.has(row.id) ? { ...row, tab: "done", unread: false } : row)) });
+  return before;
+};
+
+/** The person is done with several lines of news, such as a group's: they move to Done together. */
+export function doneInboxRows(rows: ReadonlyArray<Pick<InboxRow, "id">>): void {
+  const ids = rows.map((row) => row.id);
+  if (!ids.length) return;
+  const named = new Set(ids);
+  void markDoneMany(ids, moveToDone((row) => named.has(row.id)));
+}
+
+/** The person is done with all news: decisions and open asks stay. */
+export function doneAllInboxNews(): void {
+  void markDoneMany(null, moveToDone(isNews));
 }
 
 /** A reply to a line of news that waits on one: it goes back where the line came from, as a Reply in the chat does. */

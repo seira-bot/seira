@@ -306,7 +306,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "inbox",
     name: "Inbox",
     place: "Your inbox under People in the sidebar",
-    does: "Where a bot leaves news for the person, or a message for a teammate, when it should not wait in a chat.",
+    does: "Where a bot leaves news for the person, or a message for a teammate. Repeated updates from one chat group into one card, and Done all news clears the news but keeps questions.",
     tools: ["message_person", "list_unread_notifications", "mark_notifications_read"],
   },
   {

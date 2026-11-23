@@ -331,6 +331,24 @@ describe("the inbox of a place that is no team's", () => {
     expect(f.inbox.markDone(OWNER, "not-a-line")).toBe("unknown");
   });
 
+  it("marks the named news done, or with no ids all news that is no decision, and never an ask", () => {
+    const dir = mkdtempSync(join(tmpdir(), "place-inbox-"));
+    const line = (id: string, extra: Record<string, unknown> = {}) => ({ id, botId: "eli", threadId: "eli-main", kind: "message", from: "Eli", text: id, at: 900, ...extra });
+    writeFileSync(join(dir, PLACE_INBOX_FILE), JSON.stringify({ version: 1, seenAsks: [], lines: [line("n1"), line("n2"), line("n3"), line("flagged", { decision: true }), line("guest-line", { guest: "p_guest" })] }));
+    const f = setup({}, dir);
+    f.ask("eli-main", "q");
+    expect(f.inbox.view(OWNER).rows.find((row) => row.id === "flagged")).toMatchObject({ decision: true, tab: "info" });
+    expect(f.inbox.markDoneMany(OWNER, ["n1", "card-q", "nope", "guest-line"]), "an ask, an unknown id and a guest's line are ignored").toBe(1);
+    expect(f.inbox.markDoneMany(OWNER)).toBe(2);
+    const tabs = Object.fromEntries(f.inbox.view(OWNER).rows.map((row) => [row.id, row.tab]));
+    expect(tabs).toEqual({ n1: "done", n2: "done", n3: "done", flagged: "info", "card-q": "needs-you" });
+    expect(f.inbox.markDoneMany(OWNER)).toBe(0);
+    expect(f.inbox.markDoneMany(OWNER, ["flagged"]), "a decision named on purpose is done").toBe(1);
+    expect(f.inbox.view(GUEST).rows.map((row) => [row.id, row.tab])).toEqual([["guest-line", "info"]]);
+    expect(f.inbox.markDoneMany(SHELL)).toBe(0);
+    expect(JSON.parse(readFileSync(join(dir, PLACE_INBOX_FILE), "utf8")).lines.filter((one: { done?: boolean }) => one.done)).toHaveLength(4);
+  });
+
   it("reads every line and open ask at once for the viewer who has them, answers nothing, and repeats harmlessly", () => {
     const f = setup();
     f.guests.set("guest-chat", "p_guest");

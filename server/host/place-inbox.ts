@@ -42,6 +42,7 @@ const lineSchema = z.object({
   job: id.optional(),
   /** A message posted in a room: only a reply to it (or Done) answers it, not the person's other talk there. */
   untilReply: z.boolean().optional(),
+  decision: z.boolean().optional(),
 });
 const fileSchema = z.object({ version: z.literal(1), lines: z.array(lineSchema).max(MAX_LINES), seenAsks: z.array(id).max(MAX_SEEN_ASKS) });
 type Line = z.infer<typeof lineSchema>;
@@ -188,6 +189,7 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
     id: line.id, kind: line.kind, tab: lineTab(line), from: { name: line.from, botId: line.botId }, ...(line.workingFor ? { workingFor: line.workingFor } : {}),
     origin: { botId: line.botId, threadId: line.threadId, title: titleOf(line.botId, line.threadId), ...(line.groupId ? { groupId: line.groupId } : {}), messageId: line.id },
     text: clip(line.text, ROW_TEXT_MAX), at: line.at, unread: !line.seen, ...(line.kind === "message" ? { replies: true as const } : {}),
+    ...(line.decision ? { decision: true as const } : {}),
   });
 
   function view(auth: RequestAuth): InboxView {
@@ -286,6 +288,19 @@ export function createPlaceInbox(deps: PlaceInboxDeps) {
         return "done";
       }
       return askRows(auth).some((row) => row.id === lineId) ? "an ask" : "unknown";
+    },
+    /** Marks done the named lines this viewer lists, or with no ids every news line that is no decision; asks stay open.
+     * Returns how many changed. */
+    markDoneMany(auth: RequestAuth, ids?: readonly string[]): number {
+      const named = ids ? new Set(ids) : null;
+      let changed = 0;
+      for (const line of lines) {
+        if (named ? !named.has(line.id) : line.decision || lineTab(line) !== "info") continue;
+        if (!lineFor(auth, line) || line.done) continue;
+        line.done = true; line.seen = true; changed++;
+      }
+      if (changed) save();
+      return changed;
     },
     /** The person opened this conversation: what waited there for them is read. */
     seen(auth: RequestAuth, threadId: string): void {

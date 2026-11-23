@@ -13,11 +13,11 @@ function setup(options: Parameters<typeof teamInbox>[0] = {}) {
   const f = teamInbox(options);
   fixtures.push(f);
   const route = createInboxRoutes(f.team);
-  const call = async (method: string, path: string, auth: RequestAuth = session(BEN.email)) => {
+  const call = async (method: string, path: string, auth: RequestAuth = session(BEN.email), body: unknown = {}) => {
     const sent: { status?: number; body?: any } = {};
     const out = await route({
       req: {} as IncomingMessage, res: {} as ServerResponse, url: new URL(path, "http://127.0.0.1"), path, method, auth,
-      readBody: (async () => ({})) as RouteContext["readBody"],
+      readBody: (async () => body) as RouteContext["readBody"],
       json: ((_res: ServerResponse, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as RouteContext["json"],
     });
     return { out, ...sent };
@@ -95,4 +95,30 @@ it("reads every unread line at once for the caller alone, leaves an ask waiting 
 it("has no bulk read off a team", async () => {
   const { call } = setup({ team: false });
   expect(await call("POST", "/api/inbox/read-all")).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
+});
+
+it("marks news done in one call: the named lines, or all news, never an ask, and answers 400 to a bad list", async () => {
+  const { f, call } = setup();
+  f.team.pass("scout", "cleo-private", "Ben", "First news.");
+  f.team.pass("scout", "cleo-private", "Ben", "Second news.");
+  f.team.pass("scout", "cleo-private", "Ben", "Third news.");
+  const [first] = (await call("GET", "/api/inbox")).body.rows as Array<{ id: string }>;
+  const tabs = async () => ((await call("GET", "/api/inbox")).body.rows as Array<{ tab: string }>).map((row) => row.tab);
+  const bad = { status: 400, body: { error: "Those Inbox items could not be marked done.", errorKey: "serverError.inbox.badIds" } };
+  const tooMany = Array.from({ length: 501 }, (_, i) => `id-${i}`);
+  for (const body of [[], "text", null, { ids: "x" }, { ids: [1] }, { ids: [""] }, { ids: ["x".repeat(513)] }, { ids: tooMany }]) {
+    expect(await call("POST", "/api/inbox/done-all", session(BEN.email), body), JSON.stringify(body).slice(0, 40)).toMatchObject(bad);
+  }
+  expect(await tabs(), "a refused request changes nothing").toEqual(["info", "info", "info"]);
+  expect((await call("POST", "/api/inbox/done-all", session(BEN.email), { ids: [first!.id] })).body.rows.filter((row: { tab: string }) => row.tab === "done")).toHaveLength(1);
+  expect(await call("POST", "/api/inbox/done-all", session(BEN.email), { ids: [] })).toMatchObject({ status: 200 });
+  expect((await call("POST", "/api/inbox/done-all")).status).toBe(200);
+  expect(await tabs()).toEqual(["done", "done", "done"]);
+  expect(await call("GET", "/api/inbox/done-all")).toMatchObject({ status: 405 });
+  expect(requiredScope("POST", "/api/inbox/done-all")).toBe("client");
+});
+
+it("has no done-all off a team", async () => {
+  const { call } = setup({ team: false });
+  expect(await call("POST", "/api/inbox/done-all")).toMatchObject({ status: 404, body: { errorKey: "serverError.inbox.missing" } });
 });

@@ -10,6 +10,10 @@ vi.mock("../../state/api", () => ({
     server.calls.push({ path, method: init?.method ?? "GET", ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
     const done = /^\/api\/inbox\/([\w-]+)\/done$/.exec(path);
     if (done && server.view) server.view = { ...server.view, rows: server.view.rows.map((row) => (row.id === done[1] ? { ...row, tab: "done", unread: false } : row)) };
+    if (path === "/api/inbox/done-all" && server.view) {
+      const ids = (JSON.parse(String(init?.body ?? "{}")) as { ids?: string[] }).ids;
+      server.view = { ...server.view, rows: server.view.rows.map((row) => (ids ? ids.includes(row.id) : row.tab === "info") ? { ...row, tab: "done", unread: false } : row) };
+    }
     if (path === "/api/inbox/read-all" && server.view) server.view = { ...server.view, rows: server.view.rows.map((row) => ({ ...row, unread: false })) };
     return server.view;
   }),
@@ -18,8 +22,8 @@ vi.mock("../../state/api", () => ({
 import { initialState, StoreContext, type AppState, type Bot } from "@/state/store";
 import { BOT_BUTTON, botButtonTone } from "@/lib/bot-button";
 import { closeInbox, currentInbox, currentInboxPanel, inboxVersion, openInbox, setInboxView, useInboxLoader } from "@/state/inbox";
-import { approvalRow, inboxView, messageRow, questionRow, reportRow, settledRow } from "@/testing/inbox-fixture";
-import type { InboxView } from "../../../shared/inbox";
+import { INBOX_NOW, approvalRow, inboxView, messageRow, questionRow, reportRow, settledRow } from "@/testing/inbox-fixture";
+import type { InboxRow, InboxView } from "../../../shared/inbox";
 import { InboxCardSlot } from "./InboxCard";
 import { InboxPanel } from "./InboxPanel";
 
@@ -116,6 +120,61 @@ describe("the inbox panel", () => {
     await mount(createElement(InboxPanel));
     expect(document.querySelector('[data-inbox-panel="sheet"]')).not.toBeNull();
     expect(document.querySelector('[data-inbox-panel="side"]')).toBeNull();
+  });
+});
+
+describe("grouped news in the panel", () => {
+  const update = (id: string, minutes: number): InboxRow => ({
+    id, kind: "message", tab: "info", unread: id === "up-3", at: INBOX_NOW - minutes * 60_000, replies: true, from: { name: "Scout", botId: "scout" },
+    origin: { botId: "scout", threadId: "scout-main", title: "Launch page" }, text: `Update ${id}`,
+  });
+  const grouped = () => shown(inboxView([approvalRow, update("up-3", 1), update("up-2", 5), update("up-1", 9), reportRow]));
+  const exit = () => new Promise((resolve) => setTimeout(resolve, 260));
+
+  it("shows one card with the newest line and the count, and expands to every line newest first", async () => {
+    grouped();
+    openInbox();
+    await mount(createElement(InboxPanel));
+    const group = document.querySelector<HTMLElement>("[data-inbox-group]")!;
+    expect(group.dataset.inboxGroupCount).toBe("3");
+    expect(group.querySelector("[data-inbox-group-chip]")!.textContent).toBe("3 updates");
+    expect(group.querySelectorAll("[data-inbox-row]")).toHaveLength(1);
+    expect(group.textContent).toContain("Update up-3");
+    expect(document.querySelector("[data-inbox-group-rows]")).toBeNull();
+    await click("[data-inbox-group-toggle]");
+    expect([...group.querySelectorAll<HTMLElement>("[data-inbox-group-row]")].map((line) => line.dataset.inboxGroupRow)).toEqual(["up-3", "up-2", "up-1"]);
+    expect(document.querySelector("[data-inbox-group-toggle]")!.textContent).toBe("Show less");
+    await click('[data-inbox-group-row="up-2"]');
+    expect(document.querySelector('[data-inbox-reading="up-2"]')).not.toBeNull();
+  });
+
+  it("labels the decisions and the news when both are listed", async () => {
+    grouped();
+    openInbox();
+    await mount(createElement(InboxPanel));
+    expect([...document.querySelectorAll<HTMLElement>("[data-inbox-section]")].map((label) => label.textContent)).toEqual(["Needs your decision", "News"]);
+  });
+
+  it("marks every line of a group done from one Done", async () => {
+    grouped();
+    openInbox();
+    await mount(createElement(InboxPanel));
+    await click('[data-inbox-group] [data-inbox-action="done"]');
+    await exit();
+    expect(server.calls).toContainEqual({ path: "/api/inbox/done-all", method: "POST", body: { ids: ["up-3", "up-2", "up-1"] } });
+    expect(document.querySelector("[data-inbox-group]")).toBeNull();
+    expect(document.querySelector(`[data-inbox-row="${reportRow.id}"]`), "other news stays").not.toBeNull();
+  });
+
+  it("marks all news done and leaves the asks", async () => {
+    grouped();
+    openInbox();
+    await mount(createElement(InboxPanel));
+    expect(document.querySelector("[data-inbox-done-all]")!.textContent).toBe("Done all news");
+    await click("[data-inbox-done-all]");
+    expect(server.calls).toContainEqual({ path: "/api/inbox/done-all", method: "POST", body: {} });
+    expect([...document.querySelectorAll<HTMLElement>("[data-inbox-row]")].map((row) => row.dataset.inboxRow)).toEqual([approvalRow.id]);
+    expect(document.querySelector("[data-inbox-done-all]"), "no news is left").toBeNull();
   });
 });
 

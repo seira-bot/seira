@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { approvalRow, inboxView, messageRow, questionRow, reportRow, settledRow } from "@/testing/inbox-fixture";
-import { askOf, choiceResponse, choicesOf, closeResponse, listedRows, quickActions, rowsIn, subjectOf, tabCounts } from "./inbox-view";
+import type { InboxRow } from "../../../shared/inbox";
+import { askOf, choiceResponse, choicesOf, closeResponse, inboxItems, isDecision, isNews, listedRows, quickActions, rowsIn, subjectOf, tabCounts, waitingCount } from "./inbox-view";
 
 describe("the inbox's lines", () => {
   it("lists what waits on the person and their news as one list, newest first, and leaves settled lines out", () => {
@@ -48,5 +49,52 @@ describe("a row's actions", () => {
     expect(closeResponse(questionRow)).toMatchObject({ behavior: "answer", dismiss: true });
     expect(closeResponse(approvalRow), "an approval closes as a deny").toMatchObject({ behavior: "deny" });
     expect(choicesOf(approvalRow)).toEqual([]);
+  });
+});
+
+const news = (id: string, at: number, extra: Partial<InboxRow> = {}): InboxRow => ({
+  id, kind: "message", tab: "info", unread: false, at, from: { name: "Scout", botId: "scout" }, text: id,
+  origin: { botId: "scout", threadId: "scout-main", title: "Launch" }, ...extra,
+});
+
+describe("grouped news", () => {
+  it("tells news from a decision", () => {
+    const flagged = news("flagged", 1, { decision: true });
+    expect([approvalRow, questionRow, messageRow, reportRow, flagged].map(isNews)).toEqual([false, false, true, true, false]);
+    expect([approvalRow, questionRow, messageRow, reportRow, flagged, settledRow].map(isDecision)).toEqual([true, true, false, false, true, false]);
+  });
+
+  it("lists decisions first, then news, each newest first", () => {
+    const flagged = news("flagged", 10, { decision: true });
+    const newer = news("newer", 5000);
+    expect(listedRows(inboxView([newer, flagged, questionRow, approvalRow])).map((row) => row.id)).toEqual([approvalRow.id, questionRow.id, "flagged", "newer"]);
+  });
+
+  it("groups two or more news lines of one bot in one conversation, at the place of the newest", () => {
+    const rows = [news("a", 50), approvalRow, news("b", 40), news("other-chat", 30, { origin: { botId: "scout", threadId: "scout-two", title: "Two" } }), news("c", 20)];
+    const items = inboxItems(rows);
+    expect(items.map((item) => (item.kind === "row" ? item.row.id : item.rows.map((row) => row.id)))).toEqual([["a", "b", "c"], approvalRow.id, "other-chat"]);
+  });
+
+  it("puts a group's lines newest first even when the input is not", () => {
+    const [item] = inboxItems([news("old", 1), news("new", 9)]);
+    expect(item).toMatchObject({ kind: "group", rows: [{ id: "new" }, { id: "old" }] });
+  });
+
+  it("never groups a line without a conversation, an ask, a decision, or another bot's line", () => {
+    const rows = [news("x", 9, { origin: undefined }), news("y", 8, { origin: undefined }), news("d1", 7, { decision: true }), news("d2", 6, { decision: true }),
+      news("other", 5, { from: { name: "Reporter", botId: "reporter" } }), news("mine", 4)];
+    expect(inboxItems(rows).every((item) => item.kind === "row")).toBe(true);
+  });
+
+  it("falls back to the sender's name when a line has no bot", () => {
+    const rows = [news("p", 9, { from: { name: "Cleo" } }), news("q", 8, { from: { name: "Cleo" } })];
+    expect(inboxItems(rows)).toMatchObject([{ kind: "group", rows: [{ id: "p" }, { id: "q" }] }]);
+  });
+
+  it("counts each open decision once, read or not, and unread news", () => {
+    const view = inboxView([{ ...approvalRow, unread: false }, news("read-decision", 3, { decision: true, unread: false }), news("unread-decision", 3, { decision: true, unread: true }),
+      news("unread", 2, { unread: true }), news("read", 1), settledRow]);
+    expect(waitingCount(view)).toBe(4);
   });
 });

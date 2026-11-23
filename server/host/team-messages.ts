@@ -387,6 +387,12 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
       const me = sessionPerson(auth);
       return team && me ? inbox.markDone(me.key, id) : "unknown";
     },
+    /** The viewer is done with the named lines of news, or with no ids all their news; null for someone without an inbox. */
+    markDoneMany(auth: RequestAuth, ids?: readonly string[]): number | null {
+      if (!team && deps.place) return deps.place.markDoneMany(auth, ids);
+      const me = sessionPerson(auth);
+      return team && me ? inbox.markDoneMany(me.key, ids) : null;
+    },
     /** The viewer read a line of their inbox. */
     markRead(auth: RequestAuth, id: string): boolean {
       if (!team && deps.place) return deps.place.markRead(auth, id);
