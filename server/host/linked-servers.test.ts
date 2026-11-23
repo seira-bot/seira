@@ -340,6 +340,7 @@ describe("the linked servers manager", () => {
 
     sync = () => new Response(null, { status: 401 });
     await until(() => made.list()[0]?.state === "ended", "the link shows as ended");
-    expect(existsSync(own)).toBe(false);
+    await until(() => !existsSync(own), "the credential is gone");
+    expect(made.list()[0]?.state).toBe("ended");
   });
 });
