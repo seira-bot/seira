@@ -20,6 +20,10 @@ export interface GlanceAsk {
   title: string;
   /** A question's choices, at most GLANCE_LIMITS.choices. Empty for an approval and for a question that needs typing. */
   choices: GlanceChoice[];
+  /** Security: what an approval covers (the command, file or site), whole, as the Inbox row shows it. Glance offers
+   * Allow only next to this text, so it is empty, and only Deny and Open chat show, when the approval is not a plain
+   * tool approval or its text is longer than GLANCE_LIMITS.detail. Empty for a question. */
+  detail: string;
   /** An approval whose card offers Always allow. */
   canAlways: boolean;
 }
@@ -79,6 +83,7 @@ export const GLANCE_LIMITS = Object.freeze({
   name: 80,
   line: 160,
   title: 240,
+  detail: 400,
   choices: 4,
   choiceLabel: 80,
   label: 120,
