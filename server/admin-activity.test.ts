@@ -296,6 +296,15 @@ describe("linked servers", () => {
     expect(activityEntries([], [row], { what: "all" })[0]!.who).toBe("Another Seira");
   });
 
+  it("names an A2A agent as one, with or without its name, under the linked servers heading", () => {
+    const agent = { ...PEER, name: "Partner agent", a2a: true as const };
+    const rows: AdminActionRow[] = [
+      { at: "2026-09-21T09:00:00.000Z", category: "linked-server", action: "linked-server.handoff", actor: agent },
+      { at: "2026-09-21T09:01:00.000Z", category: "linked-server", action: "linked-server.refused", actor: { ...agent, name: "" } },
+    ];
+    expect(activityEntries([], rows, { what: "linked-server" }).map((entry) => entry.who).sort()).toEqual(["An A2A agent", "Partner agent (A2A agent)"]);
+  });
+
   it("hides a credential-named value that reaches a link row", async () => {
     const dir = tempDir();
     appendAdminAction(dir, {

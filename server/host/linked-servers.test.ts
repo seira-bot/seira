@@ -864,3 +864,50 @@ describe("the linked servers manager", () => {
     expect(kept["one-more"]?.done).toMatchObject({ outcome: "refused", text: BUSY_TEXT });
   });
 });
+
+describe("links to A2A agents in the manager", () => {
+  const A2A_ONLY = "This sign-in works only for the calls of an A2A agent.";
+  const FULL = "This Seira already has as many links as it can keep. Remove one first.";
+
+  it("counts an A2A agent toward the limit of links of every kind (AC-03)", async () => {
+    const dataDir = tempDir("full-mixed");
+    writeLinks(dataDir, { v: 1, invites: [], links: Array.from({ length: 19 }, (_, index) => ({
+      id: index.toString(16).padStart(16, "0"), role: "joiner" as const, place: { id: `far-${index}`, name: "Far" }, exposed: [], cap: "ask" as const, createdAt: 1 })) });
+    const { made } = manager("head", { dataDir });
+    const origin = await serving(made);
+    const early = made.invite({ kind: "cli" });
+    if ("error" in early) throw new Error(early.error);
+
+    const { server } = made.addA2a({ name: "Partner agent", inbound: true }, { kind: "cli" });
+    expect(made.list()).toHaveLength(20);
+    expect(made.invite({ kind: "cli" })).toEqual({ error: "full" });
+    expect(() => made.addA2a({ name: "One more", inbound: true }, { kind: "cli" })).toThrow(expect.objectContaining({ status: 409, message: FULL }));
+    const invite = encodeInvite({ origin: "https://far.example", name: "Far", code: "A".repeat(43) });
+    await expect(made.join(invite, { kind: "cli" })).rejects.toMatchObject({ status: 409, message: FULL });
+    expect(await post(`${origin}/api/linked-servers/accept`, { code: codeOf(early.invite), place: { id: "branch-environment", name: "Branch" } }))
+      .toEqual({ status: 409, body: { error: "This Seira cannot take another link now." } });
+    expect(made.list()).toHaveLength(20);
+
+    expect(await made.remove(server.id, { kind: "cli" })).toBe(true);
+    expect(made.invite({ kind: "cli" })).not.toHaveProperty("error");
+  });
+
+  it("takes an A2A agent's token on its own paths only, and refuses it on every other path (AC-10)", async () => {
+    const { made } = manager("head");
+    const origin = await serving(made);
+    const { token } = made.addA2a({ name: "Partner agent", inbound: true, exposed: ["writer"] }, { kind: "cli" });
+    expect(token).toMatch(/^lsa_[A-Za-z0-9_-]{43}$/u);
+
+    for (const [method, path] of [["GET", "/api/bots"], ["POST", "/api/bot-link/sync"], ["GET", "/api/linked-servers"], ["DELETE", "/api/linked-servers/0123456789abcdef"]] as const) {
+      const response = await fetch(`${origin}${path}`, { method, headers: { authorization: `Bearer ${token!}` } });
+      expect(response.status, path).toBe(403);
+      expect(await response.json()).toEqual({ error: A2A_ONLY });
+    }
+    expect((await post(`${origin}/api/linked-servers/sync`, { ack: 0, frames: [], wait: 0 }, { authorization: `Bearer ${token!}` })).status).toBe(401);
+    const file = await fetch(`${origin}/api/linked-servers/file?id=x&way=sent&index=0&name=a.txt`, { headers: { authorization: `Bearer ${token!}` } });
+    expect(file.status).toBe(401);
+    const card = await fetch(`${origin}/api/a2a/writer/.well-known/agent-card.json`, { headers: { authorization: `Bearer ${token!}` } });
+    expect(card.status).toBe(200);
+    expect(await card.json()).toMatchObject({ name: "Writer", supportedInterfaces: [{ url: "https://head.example/api/a2a/writer" }] });
+  });
+});
