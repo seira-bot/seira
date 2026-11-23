@@ -6,6 +6,8 @@ import { automationsFrom, hasUnseenProblemRun } from "@/lib/automations";
 import { cn } from "@/lib/cn";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
+import type { UiPlaceId } from "../../shared/ui-places";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useWebPanels } from "@/lib/web-panel-preferences";
 import { useSidebarToolsLayout, type SidebarDensity } from "@/lib/sidebar-preferences";
@@ -26,6 +28,7 @@ function NavRow({
   rail = false,
   quiet = false,
   tourId,
+  ui: uiId,
   onClick,
 }: {
   id: string;
@@ -38,11 +41,12 @@ function NavRow({
   /** Advanced's Tools row: the 32px quiet row that Inbox and Automations use. */
   quiet?: boolean;
   tourId?: string;
+  ui?: UiPlaceId;
   onClick: () => void;
 }) {
   if (quiet) {
     return (
-      <button type="button" data-tour={tourId} data-sidebar-nav={id} onClick={onClick} aria-current={active ? "page" : undefined}
+      <button type="button" data-tour={tourId} data-ui={uiId} data-sidebar-nav={id} onClick={onClick} aria-current={active ? "page" : undefined}
         className={cn(SIMPLE_NAV_ROW, "font-normal aria-[current=page]:bg-raised aria-[current=page]:text-ink")}>
         {icon(active)}
         <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -54,6 +58,7 @@ function NavRow({
     <button
       type="button"
       data-tour={tourId}
+      data-ui={uiId}
       data-sidebar-nav={id}
       onClick={onClick}
       aria-label={iconsOnly ? label : undefined}
@@ -152,6 +157,7 @@ export function SidebarFooterNav({
   />;
   const boardRow = advanced && !iconsOnly ? null : <NavRow
     id="board"
+    ui={ui("sidebar.board")}
     label={t("sidebar.nav.board")}
     iconsOnly={iconsOnly || toolbar}
     active={state.activeView === "board"}
@@ -160,6 +166,7 @@ export function SidebarFooterNav({
   />;
   const filesRow = useCloudFilesReady() && <NavRow
     id="files"
+    ui={ui("sidebar.files")}
     label={t("sidebar.nav.files")}
     iconsOnly={iconsOnly}
     rail={rail}
@@ -201,6 +208,7 @@ export function SidebarFooterNav({
       {filesRow}
       <NavRow
         id="published-apps"
+        ui={ui("sidebar.published-apps")}
         label={t("sidebar.nav.publishedApps")}
         iconsOnly={iconsOnly || toolbar}
         quiet={quiet}

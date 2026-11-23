@@ -4,6 +4,7 @@ import type { Bot } from "@/state/store";
 import type { TeamPerson } from "@/state/team-people";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { LocaleKey } from "@/locales";
 import type { MentionRowKind } from "@/lib/mention-row-kinds";
 import { normalizeState } from "@/lib/mascot";
@@ -64,6 +65,7 @@ export function MentionMenu({ listRef, motion, choices, highlight, everyoneCount
     <div
       ref={listRef}
       role="listbox"
+      data-ui={ui("composer.mention")}
       aria-label={t("composer.mention.aria")}
       className={cn("absolute bottom-full start-2 z-20 mb-2 max-h-72 w-72 overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-hairline/40 bg-raised shadow-lg", motion.className, className)} {...motion.exitProps}
     >

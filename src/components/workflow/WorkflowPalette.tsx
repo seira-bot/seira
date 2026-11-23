@@ -2,6 +2,7 @@ import { Bot, Hourglass, Send, Split, StickyNote, type LucideIcon } from "lucide
 
 import type { WorkflowStepKind } from "../../../shared/workflows";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { STEP_DRAG_TYPE } from "@/lib/workflow-canvas";
 import { KIND_LABEL } from "@/lib/workflow-graph";
 
@@ -15,7 +16,7 @@ const ITEMS: Array<{ kind: WorkflowStepKind; icon: LucideIcon }> = [
 
 export function WorkflowPalette({ onAdd, disabled }: { onAdd: (kind: WorkflowStepKind) => void; disabled?: boolean }) {
   return (
-    <div role="group" aria-label={t("workflow.palette.label")}
+    <div role="group" data-ui={ui("workflow.palette")} aria-label={t("workflow.palette.label")}
       className="flex flex-col gap-0.5 rounded-xl border border-hairline/60 bg-menu p-1 shadow-sm">
       {ITEMS.map(({ kind, icon: Icon }) => (
         <button key={kind} type="button" disabled={disabled} draggable={!disabled} data-workflow-palette={kind}

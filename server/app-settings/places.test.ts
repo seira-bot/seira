@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { SETTINGS_PLACES, type SettingsPlace } from "../../shared/settings-places.ts";
-import { findPlaces, placePath, placesList } from "./places.ts";
+import { findPlaces, findUiPlaces, placePath, placesList } from "./places.ts";
+import { UI_PLACES } from "../../shared/ui-places.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const ARROW = " → ";
@@ -29,6 +30,40 @@ describe("places", () => {
     const lines = placesList().split("\n");
     expect(lines[0]).toMatch(/^Settings opens from/);
     expect(lines).toHaveLength(SETTINGS_PLACES.length + 1);
+  });
+});
+
+describe("UI map search", () => {
+  it("gives a control outside Settings with its name, position and clicks in order", () => {
+    const hit = findUiPlaces("calendar")[0]!;
+    expect(hit).toMatch(/^Calendar: top right of the Automations page/);
+    expect(hit).toContain("Clicks: Click Automations in the sidebar → Click Calendar, at the top right of the page");
+    expect(findUiPlaces("draw as workflow")[0]).toMatch(/^Draw as workflow: in the Message actions menu.*Clicks: Point at the message → Click the ⋯ button beside it \(Message actions\) → Click Draw as workflow/);
+    expect(findUiPlaces("board")[0]).toMatch(/^Board: sidebar, a row under Inbox/);
+  });
+
+  it("says nothing for words no entry holds", () => {
+    expect(findUiPlaces("zz")).toEqual([]);
+    expect(findUiPlaces("quantum flux capacitor")).toEqual([]);
+  });
+
+  it("says when only Advanced mode shows a control, and gives the Simple path when it has one", () => {
+    expect(findUiPlaces("find in conversation")[0]).toContain("Shown in Advanced mode only; in Simple mode: Click the bot's name at the top left of the chat, then Details, then Find in conversation.");
+    expect(findUiPlaces("all threads")[0]).toContain("Shown in Advanced mode only; app_settings set appearance.advanced true turns it on.");
+    expect(findUiPlaces("attach files")[0]).toContain("In Advanced mode: Click the + button at the left end of the message box.");
+    expect(findUiPlaces("search apps")[0]).not.toContain("Advanced");
+  });
+
+  it("limits what it returns and names where a control shows only on one kind of place", () => {
+    expect(findUiPlaces("sidebar", 3)).toHaveLength(3);
+    expect(findUiPlaces("invite someone")[0]).toContain("Only on admins of a team or shared server.");
+  });
+
+  it("holds an entry for each area the issue names", () => {
+    const ids = UI_PLACES.map((place) => place.id);
+    for (const area of ["sidebar.", "chat.", "panel.", "composer.", "message.", "automations.", "workflow.", "board.", "files.", "apps."]) expect(ids.some((id) => id.startsWith(area)), area).toBe(true);
+    expect(ids).toContain("sidebar.people");
+    expect(ids).toContain("sidebar.inbox");
   });
 });
 

@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { BookOpen, Sparkles, Target } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import type { ComposerSlashCommand } from "@/lib/composer-commands";
 import type { MenuMotion } from "./MenuMotion";
 import { MENU_SHEET } from "./menu-recipe";
@@ -23,6 +24,7 @@ export function SlashCommandMenu({ listRef, motion, commands, highlight, onPick,
       <div
         ref={listRef}
         role="listbox"
+        data-ui={ui("composer.commands")}
         aria-label={t("composer.commands.aria")}
         data-slash-menu="advanced"
         className={cn("absolute bottom-full start-2 z-20 mb-2 flex max-h-80 w-[360px] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain", MENU_SHEET, motion.className)} {...motion.exitProps}
@@ -54,6 +56,7 @@ export function SlashCommandMenu({ listRef, motion, commands, highlight, onPick,
     <div
       ref={listRef}
       role="listbox"
+      data-ui={ui("composer.commands")}
       aria-label={t("composer.commands.aria")}
       className={cn("absolute bottom-full left-2 z-20 mb-2 max-h-80 w-80 max-w-[calc(100%-1rem)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-hairline/40 bg-raised shadow-lg", motion.className)} {...motion.exitProps}
     >
