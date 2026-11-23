@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
+import { parseDescriptor, type E2EDescriptor } from "../../companion/src/e2e/descriptor.ts";
 import { placeSchema, type Place } from "../bot-link/protocol.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
 
@@ -103,19 +104,51 @@ export function liveInvite(file: LinksFile, code: string, now: number): LinksFil
 }
 
 export interface Invite { origin: string; name: string; code: string }
+/** An invite for a server with no address of its own: it names the server by its Seira Relay identity instead. */
+export interface RelayInvite { name: string; code: string; e2e: E2EDescriptor }
+export type DecodedInvite =
+  | ({ v: 1 } & Invite)
+  | { v: 2; name: string; code: string; e2e: E2EDescriptor; transportKey: Buffer; hostId: Buffer }
+  /** The invite has a version this Seira does not know. */
+  | { v: "newer" };
+
 const inviteBody = z.object({ v: z.literal(1), origin: z.string().max(300), name: z.string().max(400), code: z.string().regex(SECRET) }).strict();
+const relayInviteBody = z.object({ v: z.literal(2), name: z.string().max(400), code: z.string().regex(SECRET), e2e: z.unknown() }).strict();
 
-export const encodeInvite = ({ origin, name, code }: Invite): string => `${INVITE_PREFIX}${Buffer.from(JSON.stringify({ v: 1, origin, name, code })).toString("base64url")}`;
+export function encodeInvite(invite: Invite): string;
+export function encodeInvite(invite: RelayInvite): string;
+export function encodeInvite(invite: Invite | RelayInvite): string {
+  const body = "e2e" in invite ? { v: 2, name: invite.name, code: invite.code, e2e: invite.e2e } : { v: 1, origin: invite.origin, name: invite.name, code: invite.code };
+  return `${INVITE_PREFIX}${Buffer.from(JSON.stringify(body)).toString("base64url")}`;
+}
 
-export function decodeInvite(text: string): Invite | null {
+function inviteJson(text: string): unknown {
   const trimmed = text.trim();
-  if (trimmed.length > 4_096 || !trimmed.startsWith(INVITE_PREFIX)) return null;
+  if (trimmed.length > 4_096 || !trimmed.startsWith(INVITE_PREFIX)) return undefined;
   const body = trimmed.slice(INVITE_PREFIX.length);
-  if (!/^[A-Za-z0-9_-]+$/u.test(body)) return null;
-  try {
-    const parsed = inviteBody.safeParse(JSON.parse(Buffer.from(body, "base64url").toString("utf8")));
-    return parsed.success ? { origin: parsed.data.origin, name: cleanName(parsed.data.name), code: parsed.data.code } : null;
-  } catch { return null; }
+  if (!/^[A-Za-z0-9_-]+$/u.test(body)) return undefined;
+  try { return JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch { return undefined; }
+}
+
+/** An invite that carries an address, as stage 1 made it. Any other invite is null. */
+export function decodeInvite(text: string): Invite | null {
+  const parsed = inviteBody.safeParse(inviteJson(text));
+  return parsed.success ? { origin: parsed.data.origin, name: cleanName(parsed.data.name), code: parsed.data.code } : null;
+}
+
+/** Every invite this Seira can use: with an address (version 1), through Seira Relay (version 2), or a newer one. */
+export function decodeAnyInvite(text: string): DecodedInvite | null {
+  const json = inviteJson(text);
+  const version = json && typeof json === "object" ? (json as { v?: unknown }).v : undefined;
+  if (typeof version === "number" && Number.isSafeInteger(version) && version > 2) return { v: "newer" };
+  const first = decodeInvite(text);
+  if (first) return { v: 1, ...first };
+  const parsed = relayInviteBody.safeParse(json);
+  if (!parsed.success) return null;
+  const route = parseDescriptor(parsed.data.e2e);
+  if (route.outcome === "update") return { v: "newer" };
+  if (route.outcome !== "ok" || route.hostId === null || route.descriptor.routes !== undefined) return null;
+  return { v: 2, name: cleanName(parsed.data.name), code: parsed.data.code, e2e: route.descriptor, transportKey: route.transportKey, hostId: route.hostId };
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
