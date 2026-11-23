@@ -14,6 +14,7 @@ import type { BotRecord } from "../store.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { createBotLinkHost, type BotLinkHostDeps } from "./bot-link-host.ts";
 import { CHAINED, type ApprovalCap } from "./linked-servers.ts";
+import { ADMIT } from "./linked-servers-admit.ts";
 
 type Bot = { id: string; name: string };
 type Answer = { status: number; body: Record<string, unknown> };
@@ -46,6 +47,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
   const messages: Array<{ threadId: string; message: Record<string, unknown> }> = [];
   const rows: Array<Omit<AdminActionRow, "at">> = [];
   const runs: HandoffView[] = [];
+  const logs: string[] = [];
   /** `stuck`: the coordinator the link host sees stops nothing, as when work cannot be stopped at once. */
   const knobs: { run(node: HandoffView, signal: AbortSignal): Promise<HostTurnResult>; stuck: boolean } = {
     run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }), stuck: false };
@@ -79,7 +81,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
     files: { carried: () => [], crossed: () => {}, sentWith: () => ({}), returnedWith: () => ({}), drop: () => {} },
     storeFile: async () => { throw new Error("no files here"); },
     serverName: () => label, publicOrigin: () => `http://127.0.0.1:${port}`, audit: (row) => { rows.push(row); }, actor: () => ({ kind: "loopback" }),
-    log: () => {},
+    log: (line) => { logs.push(line); },
   });
   const inner: CoordinatorHost = {
     validate: () => undefined, busy: () => false, report: () => {}, changed: () => {}, park: () => {},
@@ -119,7 +121,7 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
 
   type At = { generation: string; parentId?: string; address: { botId: string; threadId: string } };
   return {
-    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, knobs,
+    label, origin: `http://127.0.0.1:${port}`, messages, rows, runs, logs, knobs,
     get made() { return made; },
     get linked() { return made.linked; },
     get coordinator() { return coordinator; },
@@ -131,9 +133,9 @@ async function server(label: string, bots: Bot[], { ownLink = false } = {}) {
       coordinator = createCoordinator({ dataDir, host: made.link.host(inner), log: () => {} });
       made.start();
     },
-    /** A turn the person starts with one of this server's bots. */
-    begin(bot: Bot, text: string): At {
-      const id = `${label}-turn-${++turns}`, address = { botId: bot.id, threadId: `${bot.id}-chat` };
+    /** A turn the person starts with one of this server's bots, in its own chat or in `threadId`. */
+    begin(bot: Bot, text: string, threadId = `${bot.id}-chat`): At {
+      const id = `${label}-turn-${++turns}`, address = { botId: bot.id, threadId };
       coordinator!.beginTurn({ id, address, brief: text, level: "full", origin: { kind: "user", request: text } });
       return { generation: id, address };
     },
@@ -357,5 +359,43 @@ describe("when a link ends", () => {
     head.restart();
     await until(() => head.runs.filter((node) => node.botId === "keeper").length > ran, "the keeper runs again");
     await rules();
+  }, 60_000);
+});
+
+describe("an honest pair of servers", () => {
+  it("carries a minute of full work both ways, the hand-offs, their cancels and their results, with nothing held back or refused", async () => {
+    const head = await server("head", [WRITER, ANALYST]), branch = await server("branch", [SCOUT, CLERK]);
+    const ids = await link(head, branch);
+    const [writer] = await offer(head, ids.inviterLink, branch, ids.joinerLink, ["writer"]);
+    const [clerk] = await offer(branch, ids.joinerLink, head, ids.inviterLink, ["clerk"]);
+    for (const [side, worker] of [[head, "writer"], [branch, "clerk"]] as const) {
+      side.knobs.run = (node, signal) => (node.botId !== worker ? Promise.resolve({ ok: true, text: "Handed on." })
+        : new Promise((resolve) => { signal.addEventListener("abort", () => resolve({ ok: false, text: "stopped" }), { once: true }); }));
+    }
+    const running = (at: Server, botId: string) => at.runs.filter((node) => node.botId === botId).length;
+    const back = (at: Server) => at.rows.filter((row) => row.action === "linked-server.handoff" && (row.after as { direction?: unknown } | undefined)?.direction === "result-received").length;
+
+    /** A minute of work from `sender` to `address`, in waves of as many hand-offs as may be open; each wave is stopped once it all runs. */
+    async function minute(from: Server, sender: Bot, address: string, to: Server, worker: string) {
+      for (let sent = 0; sent < ADMIT.perWindow; sent += ADMIT.open) {
+        const size = Math.min(ADMIT.open, ADMIT.perWindow - sent), turns: string[] = [];
+        for (let index = sent; index < sent + size; index++) {
+          const at = from.begin(sender, `Task ${index}`, `${sender.id}-task-${index}`);
+          expect((await from.coordinate(sender, at, [address], `Task ${index}`)).status).toBe(200);
+          from.coordinator!.endTurn(at.generation, { ok: true, text: "Handed on." });
+          turns.push(at.generation);
+        }
+        await until(() => running(to, worker) >= sent + size, `${to.label} runs ${sent + size}`);
+        for (const generation of turns) from.coordinator!.cancelUnder(generation, "Stopped");
+        await until(() => back(from) >= sent + size, `${from.label} has ${sent + size} results back`);
+      }
+    }
+    await Promise.all([minute(branch, SCOUT, writer!, head, "writer"), minute(head, ANALYST, clerk!, branch, "clerk")]);
+
+    expect([running(head, "writer"), running(branch, "clerk"), back(head), back(branch)]).toEqual(Array.from({ length: 4 }, () => ADMIT.perWindow));
+    for (const side of [head, branch]) {
+      expect(side.logs.filter((line) => line.includes("the rest waits"))).toEqual([]);
+      expect(side.rows.filter((row) => row.action === "linked-server.refused")).toEqual([]);
+    }
   }, 60_000);
 });
