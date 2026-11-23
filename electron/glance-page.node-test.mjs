@@ -6,6 +6,10 @@ import { GLANCE_PAGE_CSP, GLANCE_PAGE_SCRIPT, GLANCE_TIMING, glancePageHtml } fr
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.handlers = {}; this.className = ""; this.textContent = ""; this.disabled = false; this.style = { setProperty() {}, backgroundImage: "" }; this.parent = null; const set = new Set(); this.classList = { add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) }; }
   getBoundingClientRect() { return { width: 100, height: 40 }; }
+  get scrollHeight() { return this.cut && this.className === "detail" ? 400 : 100; }
+  get clientHeight() { return 100; }
+  get scrollWidth() { return 100; }
+  get clientWidth() { return 100; }
   get firstChild() { return this.children[0] ?? null; }
   appendChild(child) { child.parent = this; this.children.push(child); return child; }
   removeChild(child) { this.children = this.children.filter((c) => c !== child); }
@@ -16,13 +20,13 @@ class Node {
   text() { return this.textContent + this.children.map((c) => c.text()).join(" "); }
 }
 
-function world() {
+function world({ cut = false } = {}) {
   const timers = [];
   const calls = { size: [], act: [] };
   const visor = new Node("div");
   let clock = 0, answer = true;
   const sandbox = {
-    document: { body: new Node("body"), getElementById: () => visor, createElement: (tag) => new Node(tag), createElementNS: (_ns, tag) => new Node(tag) },
+    document: { body: new Node("body"), getElementById: () => visor, createElement: (tag) => Object.assign(new Node(tag), { cut }), createElementNS: (_ns, tag) => new Node(tag) },
     matchMedia: () => ({ matches: false }),
     setTimeout: (fn, ms) => { const timer = { fn, at: clock + ms, dead: false }; timers.push(timer); return timer; },
     clearTimeout: (timer) => { if (timer) timer.dead = true; },
@@ -137,6 +141,14 @@ test("an approval card shows the detail whole and offers Allow only when the det
   await w.render(w.view([bare], { openOn: { key: bare.key, id: "r2" } }));
   await w.advance(GLANCE_TIMING.fadeMs + 10);
   assert.equal(w.visor.all().some((n) => n.className === "detail"), false);
+  assert.deepEqual(w.buttons().map((t) => t.trim()).filter((t) => /deny|allowOnce|alwaysAllow|openChat/.test(t)), ["deny", "openChat"]);
+});
+
+test("AC-18 Allow hides while the detail needs scrolling to be read whole", async () => {
+  const w = world({ cut: true });
+  const bot = w.entry("a", { state: "needs", ask: approvalAsk("echo ok\n".repeat(40)) });
+  await w.render(w.view([bot], { openOn: { key: bot.key, id: "r1" } }));
+  assert.equal(w.visor.all().some((n) => n.className === "detail"), true);
   assert.deepEqual(w.buttons().map((t) => t.trim()).filter((t) => /deny|allowOnce|alwaysAllow|openChat/.test(t)), ["deny", "openChat"]);
 });
 

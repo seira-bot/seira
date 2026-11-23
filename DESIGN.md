@@ -64,8 +64,9 @@ where they belong instead of adding new places.
   work, need the person, failed or just finished: one avatar each, at most
   four, with a status ring and never a count. It opens by itself only for an
   approval or a question the chat already shows, never takes keyboard focus,
-  and answers through the chat card's own path. It offers Allow only next to
-  the whole text of what the approval covers, as the Inbox shows it. It is not
+  and answers through the chat card's own path. It offers Allow only while
+  the whole text of what the approval covers, as the Inbox shows it, is in
+  view without scrolling. It is not
   a new ask: it shows the same card. Don't add other surfaces outside the
   window.
 - **No new asks.** No new permission asks, approval cards, confirm dialogs,

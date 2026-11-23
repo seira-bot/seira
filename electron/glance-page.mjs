@@ -59,7 +59,7 @@ body.attached #visor[data-level=open]{border-radius:0 0 22px 22px}
 .who .state{color:var(--ink3);font-size:12px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .say{margin:12px 0 0;font-size:15px;line-height:22px;font-weight:500;overflow-wrap:anywhere}
 .err{margin:8px 0 0;color:var(--bad)}
-.detail{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.35);box-shadow:inset 0 0 0 1px var(--line);font:12px/16px ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:140px;overflow:auto;-webkit-user-select:text;user-select:text}
+.detail{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.35);box-shadow:inset 0 0 0 1px var(--line);font:12px/16px ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:176px;overflow:auto;-webkit-user-select:text;user-select:text}
 .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .vbtn{height:28px;padding:0 12px;border:0;border-radius:999px;cursor:pointer;background:rgba(255,255,255,.08);color:var(--ink);font:inherit;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vbtn:hover{background:rgba(255,255,255,.13)}
@@ -82,7 +82,7 @@ var PEEK_MS = ${GLANCE_TIMING.peekMs}, LEAVE_MS = ${GLANCE_TIMING.leaveMs}, FADE
 var visor = document.getElementById("visor");
 var reduced = false;
 try { reduced = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
-var S = { view: null, open: false, peek: false, inside: false, focus: null, level: null, seq: 0, size: "", openId: "", peekTimer: null, leaveTimer: null, sending: {}, failed: {} };
+var S = { view: null, open: false, peek: false, inside: false, focus: null, level: null, seq: 0, size: "", openId: "", peekTimer: null, leaveTimer: null, sending: {}, failed: {}, afterPaint: null };
 
 function el(tag, cls, text) {
   var node = document.createElement(tag);
@@ -192,6 +192,10 @@ function openChat(entry) {
   Promise.resolve().then(function () { return window.glance.act({ kind: "open", botId: entry.botId, threadId: entry.threadId }); }).then(function () {}, function () {});
   closeCard();
 }
+/** Security: Allow shows only while the whole text of what it covers is in view without scrolling. */
+function cutOff(node) {
+  return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+}
 function buildCard(entry) {
   var l = words(), card = el("div", "card"), busy = S.sending[entry.key] === true;
   card.setAttribute("data-k", entry.state);
@@ -201,7 +205,8 @@ function buildCard(entry) {
   var text = ask ? ask.title : entry.state === "failed" ? (entry.line || say(l.failedLine, entry.name)) : entry.state === "done" ? say(l.finished, entry.name) : entry.line;
   if (text) add(card, el("p", "say", text));
   var detail = ask && ask.kind === "approval" && typeof ask.detail === "string" ? ask.detail : "";
-  if (detail) add(card, el("pre", "detail", detail));
+  var pre = detail ? el("pre", "detail", detail) : null;
+  add(card, pre);
   if (S.failed[entry.key]) {
     var err = el("p", "err", l.couldNotSend);
     err.setAttribute("role", "alert");
@@ -215,8 +220,11 @@ function buildCard(entry) {
   }
   if (ask && ask.kind === "approval") {
     add(acts, approval(l.deny, "deny", ""));
-    if (detail) add(acts, approval(l.allowOnce, "once", "primary"));
-    if (detail && ask.canAlways) add(acts, approval(l.alwaysAllow, "always", ""));
+    var allow = [];
+    if (detail) allow.push(approval(l.allowOnce, "once", "primary"));
+    if (detail && ask.canAlways) allow.push(approval(l.alwaysAllow, "always", ""));
+    allow.forEach(function (node) { add(acts, node); });
+    if (allow.length) S.afterPaint = function () { if (cutOff(pre)) allow.forEach(function (node) { acts.removeChild(node); }); };
   } else if (ask) {
     ask.choices.forEach(function (choice) {
       var node = button(choice.label, "", function () { sendAct(entry, { kind: "answer", botId: entry.botId, threadId: entry.threadId, requestId: ask.requestId, choiceId: choice.id }); });
@@ -254,7 +262,9 @@ function paint(level, ticket) {
   S.level = level;
   visor.setAttribute("data-level", level);
   while (visor.firstChild) visor.removeChild(visor.firstChild);
+  S.afterPaint = null;
   visor.appendChild(build(level));
+  if (S.afterPaint) S.afterPaint();
   var box = visor.getBoundingClientRect();
   var size = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
   var mark = size.width + "x" + size.height;

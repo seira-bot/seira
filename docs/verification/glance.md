@@ -29,8 +29,9 @@ They prove:
   window has focus or Glance is off;
 - an answer from the visor checked against the current card, sent to the page,
   and a failed or late answer reported back as an error;
-- Allow once and Always allow offered only next to the whole text of what the
-  approval covers; without that text, only Deny and Open chat;
+- Allow once and Always allow offered only while the whole text of what the
+  approval covers is in view without scrolling; otherwise only Deny and Open
+  chat;
 - the window flags (never focusable, shown inactive, on top of full-screen
   apps), the tray rows, the View menu item and the saved choice;
 - the page feed: idle bots left out, no raw command text, and each answer sent
@@ -55,6 +56,7 @@ visible text.
 | Card of a working bot | ![Card of a working bot](evidence/glance/open-working.png) |
 | Approval with what it covers | ![Approval card with the command and Allow buttons](evidence/glance/needs-approval.png) |
 | Long approval text, whole and scrollable | ![Approval card with a long command](evidence/glance/needs-approval-long.png) |
+| Approval text that needs scrolling | ![Approval card with a tall command and only Deny and Open chat](evidence/glance/needs-approval-cut.png) |
 | Approval without that text | ![Approval card with only Deny and Open chat](evidence/glance/needs-no-detail.png) |
 | Question | ![Question card with three choices](evidence/glance/question.png) |
 | Failed | ![Card of a bot that stopped with a problem](evidence/glance/failed.png) |

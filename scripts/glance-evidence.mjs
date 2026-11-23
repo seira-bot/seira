@@ -37,6 +37,7 @@ const SCENES = [
   ["open-working", [[felix, rocco]], "click"],
   ["needs-approval", [[felix], [felix, bix(approval("pnpm db:migrate --env staging"))]]],
   ["needs-approval-long", [[felix], [felix, bix(approval("rsync -av --delete ./build/ deploy@203.0.113.10:/srv/www/site/ && ssh deploy@203.0.113.10 'systemctl restart site-web site-worker && journalctl -u site-web -n 50 --no-pager'"))]]],
+  ["needs-approval-cut", [[felix], [felix, bix(approval("echo step\n".repeat(30) + "rm -rf ./build"))]]],
   ["needs-no-detail", [[felix], [felix, bix(approval("", false))]]],
   ["question", [[felix], [felix, nova]]],
   ["failed", [[felix, rocco], [felix, { ...rocco, state: "failed", line: "" }]], "click"],
