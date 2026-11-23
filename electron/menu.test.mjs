@@ -201,4 +201,20 @@ describe("buildApplicationMenu", () => {
     expect(build("linux")[0].submenu.at(-1).label).toBe("Quit");
     expect(build("linux").find((entry) => entry.role === "windowMenu").submenu.at(-1).label).toBe("Close");
   });
+
+  it("AC-12 puts a Glance checkbox in the View menu, only when Glance is offered, and a click turns it the other way", () => {
+    const onToggle = vi.fn();
+    for (const platform of ["darwin", "linux", "win32"]) {
+      const view = (template) => template.find((entry) => entry.role === "viewMenu").submenu;
+      expect(view(build(platform)).some((item) => item.id === "glance")).toBe(false);
+      const on = view(build(platform, { glance: { checked: true, onToggle } })).find((item) => item.id === "glance");
+      expect(on).toMatchObject({ type: "checkbox", checked: true });
+      expect(typeof on.label).toBe("string");
+      on.click();
+      expect(onToggle).toHaveBeenLastCalledWith(false);
+      const off = view(build(platform, { glance: { checked: false, onToggle } })).find((item) => item.id === "glance");
+      off.click();
+      expect(onToggle).toHaveBeenLastCalledWith(true);
+    }
+  });
 });

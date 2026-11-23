@@ -60,6 +60,9 @@ export interface DesktopPrefs {
   /** False until the person hides the window's rail of places. */
   railHidden(): boolean;
   setRailHidden(hidden: boolean): void;
+  /** False until the person turns Glance off. */
+  glanceHidden(): boolean;
+  setGlanceHidden(hidden: boolean): void;
   /** True until the person turns the window's frame off. */
   windowFrame(): boolean;
   setWindowFrame(on: boolean): void;
