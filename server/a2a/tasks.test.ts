@@ -188,11 +188,10 @@ describe("pruning", () => {
   });
 
   it("holds at most 1,000 tasks and drops the oldest ended tasks first", () => {
-    const { open, clock } = fixture();
+    const { open, clock, file } = fixture();
+    const tasks = Array.from({ length: TASKS_MAX }, (_, n) => entry(`t${n}`, { state: n < 10 ? "TASK_STATE_WORKING" : "TASK_STATE_COMPLETED", at: clock.now + n }));
+    writeFileSync(file, JSON.stringify({ v: 1, tasks, contexts: {} }));
     const index = open();
-    for (let n = 0; n < TASKS_MAX; n += 1) {
-      index.put(entry(`t${n}`, { state: n < 10 ? "TASK_STATE_WORKING" : "TASK_STATE_COMPLETED", at: clock.now + n }));
-    }
     index.put(entry("extra", { state: "TASK_STATE_COMPLETED", at: clock.now + TASKS_MAX }));
     expect(index.get("extra")).not.toBeNull();
     expect(index.get("t0")).not.toBeNull();
@@ -201,23 +200,26 @@ describe("pruning", () => {
   });
 
   it("drops the oldest open task when every task is open", () => {
-    const { open, clock } = fixture();
+    const { open, clock, file } = fixture();
+    const tasks = Array.from({ length: TASKS_MAX }, (_, n) => entry(`t${n}`, { at: clock.now + n }));
+    writeFileSync(file, JSON.stringify({ v: 1, tasks, contexts: {} }));
     const index = open();
-    for (let n = 0; n <= TASKS_MAX; n += 1) index.put(entry(`t${n}`, { at: clock.now + n }));
+    index.put(entry(`t${TASKS_MAX}`, { at: clock.now + TASKS_MAX }));
     expect(index.get("t0")).toBeNull();
     expect(index.get(`t${TASKS_MAX}`)).not.toBeNull();
     expect(open().get("t1")).not.toBeNull();
   });
 
   it("caps the far contexts", () => {
-    const { open, clock } = fixture();
+    const { open, clock, file } = fixture();
+    const contexts = Object.fromEntries(Array.from({ length: CONTEXT_ENTRIES_MAX }, (_, n) => [`th${n}`, { far: "far", at: clock.now + n }]));
+    writeFileSync(file, JSON.stringify({ v: 1, tasks: [], contexts }));
     const index = open();
-    for (let n = 0; n <= CONTEXT_ENTRIES_MAX; n += 1) {
-      clock.now += 1;
-      index.setContext(`th${n}`, "far");
-    }
+    clock.now += CONTEXT_ENTRIES_MAX;
+    index.setContext("newest", "far");
     expect(index.outOf("th0")).toBeNull();
-    expect(index.outOf(`th${CONTEXT_ENTRIES_MAX}`)).not.toBeNull();
+    expect(index.outOf("th1")).not.toBeNull();
+    expect(index.outOf("newest")).not.toBeNull();
   });
 });
 
