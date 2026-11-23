@@ -12,23 +12,24 @@ const REMOTE = "https://remote.example.test";
 function setup() {
   const handlers = new Map();
   const mainFrame = {};
-  let quits = 0;
+  let quits = 0, relaunches = 0;
   installPowerIpc({
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     localOnly: localOrigin.localOnly,
     requireMainWindowSender: (event) => {
       if (event.sender.window !== "main" || event.senderFrame !== mainFrame) throw new Error("The desktop client window is unavailable");
     },
+    relaunch: () => { relaunches += 1; },
     quit: () => { quits += 1; },
   });
   const event = (url, window = "main") => ({ senderFrame: url === null ? {} : mainFrame, sender: { window, mainFrame, getURL: () => url ?? "" } });
-  return { handler: handlers.get("desktop:quit"), event, quits: () => quits, channels: [...handlers.keys()] };
+  return { handler: handlers.get("desktop:quit"), event, quits: () => quits, relaunches: () => relaunches, channels: [...handlers.keys()] };
 }
 
 test("the local main window quits the app", () => {
   const power = setup();
   localOrigin.setLocalOrigin(LOCAL);
-  assert.deepEqual(power.channels, ["desktop:quit"]);
+  assert.deepEqual(power.channels, ["desktop:relaunch", "desktop:quit"]);
   assert.equal(power.handler(power.event(`${LOCAL}/`)), true);
   assert.equal(power.quits(), 1);
 });
@@ -42,4 +43,5 @@ test("a page that is not the local main window cannot quit the app", () => {
   localOrigin.setLocalOrigin(null);
   assert.throws(() => power.handler(power.event(`${LOCAL}/`)), /only available while using the local server/);
   assert.equal(power.quits(), 0);
+  assert.equal(power.relaunches(), 0);
 });

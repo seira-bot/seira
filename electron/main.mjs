@@ -2338,12 +2338,7 @@ ipcMain.handle("perm:request-mic", localOnly("perm:request-mic", () => askForMic
 const privacySettings = pane => openPrivacySettings(pane, { available: nativeActions.applePrivacySettings, openExternal: url => shell.openExternal(url) });
 ipcMain.handle("perm:open-settings", localOnly("perm:open-settings", (_event, pane) => privacySettings(pane)));
 
-ipcMain.handle("desktop:relaunch", localOnly("desktop:relaunch", (event) => {
-  requireMainWindowSender(event);
-  relaunchAfterDesktopRemoteChange();
-  return true;
-}));
-installPowerIpc({ ipcMain, localOnly, requireMainWindowSender, quit: () => app.quit() });
+installPowerIpc({ ipcMain, localOnly, requireMainWindowSender, relaunch: relaunchAfterDesktopRemoteChange, quit: () => app.quit() });
 
 const talk = installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, appleSpeech: nativeActions.appleSpeech,
   speech: { start: startSpeech, stop: stopSpeech, finish: finishSpeech, busy: speechBusy }, packaged: app.isPackaged, devUrl: DEV_URL, nativeImage, iconPath: APP_ICON, openLink: queueChatLink, reveal: revealForLink, log: slog, t: nativeT });
