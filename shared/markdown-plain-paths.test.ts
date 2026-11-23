@@ -22,7 +22,7 @@ function links(markdown: string): string[] {
 describe("plain file paths", () => {
   it("links POSIX, Windows and UNC paths in prose, keeping each one's spelling", () => {
     expect(links("I saved it to /Users/me/reports/q3.md, take a look.")).toEqual(["/Users/me/reports/q3.md"]);
-    expect(links(String.raw`Written to C:\Users\me\.openmausbot\report.md.`)).toEqual([String.raw`C:\Users\me\.openmausbot\report.md`]);
+    expect(links(String.raw`Written to C:\Users\me\.seira\report.md.`)).toEqual([String.raw`C:\Users\me\.seira\report.md`]);
     expect(links(String.raw`It's on \\fileserver\team\plans\roadmap.docx now.`)).toEqual([String.raw`\\fileserver\team\plans\roadmap.docx`]);
   });
 
@@ -41,5 +41,21 @@ describe("plain file paths", () => {
     expect(links("See https://example.com/docs/guide.md for more.")).toEqual([]);
     expect(links("```\ncat /Users/me/notes.md\n```")).toEqual([]);
     expect(links("[the report](/Users/me/report.md)")).toEqual(["/Users/me/report.md"]);
+  });
+
+  it("links a Windows path in backticks, with a trailing backslash or none", () => {
+    const code = (path: string) => links(`\`${path}\``);
+    expect(code("C:\\Users\\me\\My Reports\\q3 final.md")).toEqual(["C:\\Users\\me\\My Reports\\q3 final.md"]);
+    expect(code("C:\\Users\\me\\")).toEqual(["C:\\Users\\me\\"]);
+    expect(code("C:\\")).toEqual([]);
+    expect(code("C:\\a\\\\b")).toEqual([]);
+  });
+
+  it("answers an attack string in under 500 ms", () => {
+    for (const attack of ["A:\\" + "\\[".repeat(30_000), "A:\\x" + "\\x".repeat(30_000) + "\\\\", "A:\\" + "a\\".repeat(30_000) + "\\\\"]) {
+      const started = performance.now();
+      links(`\`${attack}\``);
+      expect(performance.now() - started).toBeLessThan(500);
+    }
   });
 });

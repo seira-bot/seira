@@ -1,6 +1,8 @@
-// A stand-in for MausBot's pages: the Admin's token route and the pages Worker, as one fetch. Pages, quotas and tokens
+// A stand-in for Seira's pages: the Admin's token route and the pages Worker, as one fetch. Pages, quotas and tokens
 // are kept in memory; nothing reaches the network.
+import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import { pagesHomeSignature } from "../pages/access.ts";
+import { readCloudSigned } from "../cloud-signed-headers.ts";
 
 export const FAKE_ADMIN = "https://cloud.example.test";
 export const FAKE_TOKEN_URL = `${FAKE_ADMIN}/api/cloud/pages/token`;
@@ -21,9 +23,9 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
 
   const caller = (request: Request, body: string): "desktop" | "home" | null => {
     if (request.headers.get("authorization") === `Bearer ${FAKE_DESKTOP_TOKEN}`) return "desktop";
-    const machine = request.headers.get("x-omb-cloud-machine"), timestamp = request.headers.get("x-omb-cloud-timestamp") ?? "", nonce = request.headers.get("x-omb-cloud-nonce") ?? "";
+    const { machineId: machine, timestamp = "", nonce = "", signature } = readCloudSigned((name) => request.headers.get(name));
     const expected = `v1=${pagesHomeSignature(FAKE_HOME.bootstrapSecret, FAKE_HOME.machineId, timestamp, nonce, body)}`;
-    return machine === FAKE_HOME.machineId && request.headers.get("x-omb-cloud-signature") === expected ? "home" : null;
+    return machine === FAKE_HOME.machineId && signature === expected ? "home" : null;
   };
 
   const fetch: typeof globalThis.fetch = async (input, init) => {
@@ -41,7 +43,7 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
       }
       const id = action === "create" ? newId() : pageId!, token = `fake-token-${minted.length}`;
       tokens.set(token, { action, pageId: id });
-      return Response.json({ token, pageId: id, action, uploadUrl: upload, pageUrl: `https://${id}.mausbot.page/`, plan: state.plan,
+      return Response.json({ token, pageId: id, action, uploadUrl: upload, pageUrl: `https://${id}.${SEIRA_HOSTS.pages}/`, plan: state.plan,
         limits: { pages: state.quota, bytes: 5 * 1024 * 1024, files: 200, perHour: 30 }, badge: state.plan === "free",
         ...(action === "create" ? { limit: { message: `You’ve used your ${state.quota} free pages.`, upgrade: true } } : {}) });
     }
@@ -59,7 +61,7 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
       const files = new Map<string, string>();
       for (const [index, file] of manifest.files.entries()) files.set(file.path, await (form.get(`f${index}`) as Blob).text());
       pages.set(page, { title: manifest.title, files });
-      return Response.json({ pageId: page, url: `https://${page}.mausbot.page/`, version: 1, badge: state.plan === "free", usage: usage() });
+      return Response.json({ pageId: page, url: `https://${page}.${SEIRA_HOSTS.pages}/`, version: 1, badge: state.plan === "free", usage: usage() });
     }
     throw new Error(`Unexpected request to ${url.href}`);
   };

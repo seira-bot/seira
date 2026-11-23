@@ -2,11 +2,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, 
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 
 import { defuse } from "./records-block.ts";
 
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
+import { PLACE_LOST_MESSAGE, placeConfirmed } from "./place-lost.ts";
 import type { RoutineRunOn } from "./routines.ts";
 import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
@@ -106,7 +108,7 @@ export const DEFAULT_MAX_PENDING_RUNS = 3;
 export const MAX_PENDING_RUNS_LIMIT = 50;
 const maxPendingRunsSchema = z.number().int().min(1).max(MAX_PENDING_RUNS_LIMIT);
 
-const runOnSchema = z.enum(["maus", "cloud"]);
+const runOnSchema = z.preprocess(currentRunOn, z.enum(["seira", "cloud"]));
 const deliverySchema = z.enum(["run", "post"]);
 const eventTypesSchema = z.array(z.string()).max(20).optional();
 export const PAYLOAD_FILTER_MAX_FIELDS = 10;
@@ -126,7 +128,7 @@ const triggerInputSchema = z.object({
   maxPendingRuns: maxPendingRunsSchema.nullable().optional(),
   sameConversation: z.boolean().optional(),
 });
-const triggerPatchSchema = triggerInputSchema.partial();
+const triggerPatchSchema = triggerInputSchema.partial().extend({ confirmPlace: z.literal(true).optional() });
 const verificationSampleSchema = z.object({
   receivedAt: z.number().finite().nonnegative(),
   eventName: z.string().optional(),
@@ -157,6 +159,7 @@ const storedWebhookSchema = z.object({
   // A hand-edited value out of range falls back to the default instead of making the file unreadable.
   maxPendingRuns: maxPendingRunsSchema.optional().catch(undefined),
   sameConversation: z.boolean().optional().catch(undefined),
+  placeLost: z.literal(true).optional().catch(undefined),
   secretHash: z.string().regex(/^[a-f0-9]{64}$/),
   /** The current secret, sealed under WEBHOOK_KEY_FILE beside this file, so the person and the owning bot get the same
    * address back. Never in a public trigger or a workspace backup; absent for a webhook made before it was kept. */
@@ -262,10 +265,10 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   const name = input.name.trim().slice(0, 80);
   const prompt = input.prompt.trim().slice(0, 20_000);
   const botId = input.botId.trim();
-  const runOn = input.runOn ?? "maus";
+  const runOn = input.runOn ?? "seira";
   if (!name) fail(400, "Give the webhook a name");
-  if (!botId) fail(400, "Choose a MAUS");
-  if (runOn !== "maus" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
+  if (!botId) fail(400, "Choose a bot");
+  if (runOn !== "seira" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
   const eventTypes = Array.from(new Set(
     (input.eventTypes ?? [])
       .map((value) => value.trim().slice(0, 200))
@@ -298,7 +301,7 @@ function parseTriggerInput(value: JsonValue): WebhookTriggerInput {
   return parsed.data;
 }
 
-function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> {
+function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> & { confirmPlace?: true } {
   const parsed = triggerPatchSchema.safeParse(value);
   if (!parsed.success) invalidInput(parsed.error);
   return parsed.data;
@@ -461,7 +464,7 @@ export class WebhookManager {
   create(input: JsonValue): CreatedWebhook {
     this.assertWritable();
     const clean = cleanInput(parseTriggerInput(input));
-    if (this.options.botState(clean.botId) === "missing") fail(400, "That MAUS no longer exists");
+    if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     const now = this.now();
     const secret = newSecret();
@@ -512,6 +515,7 @@ export class WebhookManager {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     const patch = parseTriggerPatch(value);
+    const placeCleared = placeConfirmed(trigger.placeLost, patch);
     const clean = cleanInput({
       name: patch.name ?? trigger.name,
       prompt: patch.prompt ?? trigger.prompt,
@@ -527,9 +531,10 @@ export class WebhookManager {
       maxPendingRuns: patch.maxPendingRuns === undefined ? trigger.maxPendingRuns : patch.maxPendingRuns,
       sameConversation: patch.sameConversation ?? trigger.sameConversation,
     });
-    if (this.options.botState(clean.botId) === "missing") fail(400, "That MAUS no longer exists");
+    if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
+    if (placeCleared) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
     if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;
@@ -611,7 +616,7 @@ export class WebhookManager {
     this.deliveries = this.deliveries.filter((delivery) => !endpoints.some((prefix) => delivery.key.startsWith(prefix)));
     for (const trigger of gone) {
       this.rate.delete(trigger.endpointId);
-      this.options.cancelQueued?.(trigger.id, "The assigned MAUS was deleted");
+      this.options.cancelQueued?.(trigger.id, "The assigned bot was deleted");
     }
     this.save();
     for (const trigger of gone) this.options.emit?.({ kind: "webhook.deleted", webhookId: trigger.id });
@@ -650,12 +655,12 @@ export class WebhookManager {
     this.recordRejectedForTrigger(trigger, status, error instanceof Error ? error.message : String(error), event);
   }
 
-  test(id: string, payload: JsonValue = { event: "openmaus.test", message: "Test webhook delivery" }): WebhookReceiveResult | null {
+  test(id: string, payload: JsonValue = { event: "seira.test", message: "Test webhook delivery" }): WebhookReceiveResult | null {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     // A room delivery synthesizes voice and stores images asynchronously; the test route stays synchronous.
     if (trigger.delivery === "post" && trigger.groupId) fail(400, "a room webhook posts through its webhook URL, not the test button");
-    const eventName = trigger.eventTypes?.[0] ?? "openmaus.test";
+    const eventName = trigger.eventTypes?.[0] ?? "seira.test";
     // Run now is the person's own test: like a schedule's, it runs while paused.
     return this.dispatch(trigger, {
       payload,
@@ -676,7 +681,8 @@ export class WebhookManager {
    *  An ignored or duplicate event comes back as its finished receipt. */
   private admit(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson: boolean, now: number): { deliveryId: string } | { receipt: WebhookReceiveResult } {
     if (!trigger.enabled && !byPerson) fail(409, "This webhook is paused");
-    if (this.options.botState(trigger.botId) === "missing") fail(410, "The assigned MAUS no longer exists");
+    if (trigger.placeLost && byPerson) fail(409, PLACE_LOST_MESSAGE);
+    if (this.options.botState(trigger.botId) === "missing") fail(410, "The assigned bot no longer exists");
 
     const ignore = (reason: string) => {
       const deliveryId = String(event.deliveryId ?? "").trim().slice(0, 200) || randomUUID();
@@ -868,7 +874,7 @@ export class WebhookManager {
       outcome: "captured",
       statusCode: 202,
       deliveryId,
-      reason: "Test event captured; enable the webhook to start MAUS tasks",
+      reason: "Test event captured; enable the webhook to start bot tasks",
     });
     this.save();
     this.emit(trigger);

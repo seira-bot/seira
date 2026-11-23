@@ -336,6 +336,7 @@ export const CURSOR_SIGN_IN: DeviceSignIn = {
   homeEnv: "CURSOR_CONFIG_DIR",
   homeDir: ".cursor",
   loginArgs: ["login"],
+  logoutArgs: ["logout"],
   env: { NO_OPEN_BROWSER: "1" },
   install: "Install Cursor's CLI (https://cursor.com/docs/cli/installation) for the user running Seira, then try again.",
   failure: cursorLoginFailure,
@@ -490,7 +491,7 @@ const support = (run: typeof execCli): AcpSupport => ({
     standalone: CURSOR_STANDALONE,
   },
 
-  // Global flags precede `acp`. `--approve-mcps` covers OpenMausBot's own servers from session/new.
+  // Global flags precede `acp`. `--approve-mcps` covers Seira's own servers from session/new.
   // `--force` / `--auto-review` are the documented tool-permission switches only.
   spawnArgs: (config, turn) => [
     ...(config.fullAuto ? ["--force"] : turn.approvalMode === "auto" ? ["--auto-review"] : []),
@@ -500,7 +501,7 @@ const support = (run: typeof execCli): AcpSupport => ({
   ],
   // Cursor keeps the first MCP registration for a process's life; a new agents bearer must start fresh.
   restartOnMcpChange: true,
-  // Cursor advertises http MCP; OpenMausBot's own servers as endpoints avoid a stdio proxy under Cursor's client.
+  // Cursor advertises http MCP; Seira's own servers as endpoints avoid a stdio proxy under Cursor's client.
   ownMcpOverHttp: true,
   credentialEnv: ["CURSOR_API_KEY", "CURSOR_AUTH_TOKEN"],
 

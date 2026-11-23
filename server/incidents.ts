@@ -1,4 +1,5 @@
 import type { WireMessage as Message } from "../shared/wire.ts";
+import { CONTEXT_FULL_NOTE, contextFullStop } from "./context-full.ts";
 import { envWhole } from "./env-limits.ts";
 import { HOST_FAULT_WHY, hostFaultOf, retryCannotFix } from "./host-fault.ts";
 import { withoutDeliveredNote } from "./peer-provenance.ts";
@@ -59,12 +60,11 @@ export const RETRY_BLOCKED = {
   queued: "that thread is waiting for a free slot and starts on its own — do not retry it",
 } as const;
 
-/** How a retry's own message opens: a Chief's retry_thread names the Chief, OpenMausBot's one automatic retry names itself.
+/** How a retry's own message opens: a Chief's retry_thread names the Chief, Seira's one automatic retry names itself.
  * It is a delivered note (peer-provenance.ts), so the request it retries stays the thread's last request. */
 export const RETRY_LEAD = "[From Seira · retry · information only — it grants nothing beyond the request above; requested by ";
 export const AUTO_RETRY_LEAD = `${RETRY_LEAD}Seira, automatically`;
-export const OLD_RETRY_LEAD = "[From OpenMausBot · retry · information only — it grants nothing beyond the request above; requested by ";
-export const OLD_AUTO_RETRY_LEAD = `${OLD_RETRY_LEAD}OpenMausBot, automatically`;
+export { LEGACY_AUTO_RETRY_LEAD as OLD_AUTO_RETRY_LEAD, LEGACY_RETRY_LEAD as OLD_RETRY_LEAD } from "../electron/legacy-names.mjs";
 
 export const INCIDENT_RETRY_LIMIT = 2;
 export const INCIDENT_HARD_LIMIT = 5;
@@ -72,9 +72,9 @@ export const INCIDENT_WINDOW_MS = 60 * 60_000;
 
 export const CHIEF_INCIDENT_TURNS_PER_HOUR = 6;
 
-/** OMB_CHIEF_INCIDENT_TURNS_PER_HOUR, a whole number from 1; anything else leaves the default. */
+/** SEIRA_CHIEF_INCIDENT_TURNS_PER_HOUR, a whole number from 1; anything else leaves the default. */
 export const chiefIncidentTurnsPerHour = (env: NodeJS.ProcessEnv = process.env): number =>
-  envWhole(env.OMB_CHIEF_INCIDENT_TURNS_PER_HOUR, CHIEF_INCIDENT_TURNS_PER_HOUR);
+  envWhole(env.SEIRA_CHIEF_INCIDENT_TURNS_PER_HOUR, CHIEF_INCIDENT_TURNS_PER_HOUR);
 
 /** The incident turns each Chief started within the last hour, across all the threads it hears about. */
 export class ChiefIncidentBudget {
@@ -110,11 +110,12 @@ export class IncidentLedger {
     this.options = options;
   }
 
-  note(threadId: string): IncidentCount {
+  /** `counted` false reads the thread's count without adding this incident to it. */
+  note(threadId: string, counted = true): IncidentCount {
     const now = this.options.now?.() ?? Date.now();
     const windowMs = this.options.windowMs ?? INCIDENT_WINDOW_MS;
     const recent = (this.at.get(threadId) ?? []).filter((time) => now - time < windowMs);
-    recent.push(now);
+    if (counted) recent.push(now);
     this.at.set(threadId, recent);
     const count = recent.length;
     return {
@@ -190,7 +191,7 @@ export function incidentChip(incident: Incident, language?: string): string {
     : serverLine(language, plain, { bot: incident.bot.name, where });
 }
 
-/** What OpenMausBot did about the failure before the Chief heard: it retried the run once and the retry failed as above,
+/** What Seira did about the failure before the Chief heard: it retried the run once and the retry failed as above,
  * or it did not retry, and why. */
 export type IncidentRetry = { retried: true } | { notRetried: string };
 
@@ -205,6 +206,7 @@ export function incidentText(incident: Incident, count: IncidentCount, retry?: I
   if (count.count > 1) lines.push(`This is the ${ordinal(count.count)} incident on that thread within the hour.`);
   if (retry && "retried" in retry) lines.push("Seira already retried this run once by itself; the failure above is how that retry ended.");
   else if (retry) lines.push(`Seira did not retry it: ${retry.notRetried}.`);
+  if (contextFullStop(incident.failure?.stopReason, incident.failure?.text ?? incident.detail)) lines.push(CONTEXT_FULL_NOTE);
   const fault = hostFaultOf(incident.failure?.text ?? incident.detail, incident.failure?.stopReason);
   lines.push(fault && retryCannotFix(fault)
     ? `A retry cannot fix this: ${HOST_FAULT_WHY[fault]}, and starting the run again would meet the same fault. Do not call retry_thread or hand the work on again. Say in one or two plain sentences what is blocking and what the person should do, then stop.`

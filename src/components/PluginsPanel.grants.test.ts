@@ -38,7 +38,6 @@ vi.mock("@/lib/connector-oauth", () => ({
 vi.mock("@/lib/product-events", () => ({ connectorConnect: vi.fn() }));
 vi.mock("./McpServersPanel", () => ({ McpServersPanel: () => null }));
 vi.mock("./XCard", () => ({ X_CARD_SEARCH: "x", XCard: () => null }));
-vi.mock("./PostizCard", () => ({ PostizCard: () => null }));
 vi.mock("./EmailCard", () => ({
   EmailCard: ({ onConnection }: { onConnection: (connected: boolean | null) => void }) => {
     useEffect(() => onConnection(fixture.email), [onConnection]);
@@ -164,15 +163,15 @@ describe("after connecting an app", () => {
     await open();
     await connectApollo();
     expect(writes()).toEqual([{ type: "updateBot", botId: "ada", patch: { composio: true, connectorScopes: { apps: { apollo: "write" } } } }]);
-    expect(toast()?.textContent).toContain("Your bots can now use Apollo.");
+    expect(toast()?.textContent).toBe("1 bot can't use Apollo yet.Change");
   });
 
-  it("says plainly when every bot's apps are off, and Change opens the switches", async () => {
+  it("counts the bots that still cannot use it when their apps are off, and Change opens the switches", async () => {
     fixture.state.bots = [bot("scout", { composio: false }), bot("ada", { composio: false })];
     await open();
     await connectApollo();
     expect(writes()).toEqual([]);
-    expect(toast()?.textContent).toBe("No bot uses Apollo yet.Change");
+    expect(toast()?.textContent).toBe("2 bots can't use Apollo yet.Change");
     await click(toast()!.querySelector("button")!);
     await flush();
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "togglePlugins", open: true, surface: "apps" });
@@ -351,7 +350,7 @@ describe("on a Team Cloud", () => {
   });
 
   it("gives an admin's team app to the team's bots without asking, never to a person's own helper", async () => {
-    fixture.state.bots = [bot("scout", { connectorScopes: { apps: {} } }), bot("maus", { connectorScopes: { apps: {} }, defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
+    fixture.state.bots = [bot("scout", { connectorScopes: { apps: {} } }), bot("seira", { connectorScopes: { apps: {} }, defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
     await open();
     await connectApollo();
     expect(prompt()).toBeNull();
@@ -360,11 +359,11 @@ describe("on a Team Cloud", () => {
   });
 
   it("leaves each person's own helper out of the choice", async () => {
-    fixture.state.bots = [bot("scout"), bot("maus", { defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
+    fixture.state.bots = [bot("scout"), bot("seira", { defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
     fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
     await open();
     await click(button(tile(), "Which bots can use Apollo?"));
-    expect(switchOf("Maus")).toBeNull();
+    expect(switchOf("Seira")).toBeNull();
     expect(switchOf("Scout")).not.toBeNull();
   });
 });

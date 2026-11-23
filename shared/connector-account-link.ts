@@ -3,6 +3,9 @@ export interface LinkableAccount {
   id?: string;
   alias?: string | null;
   status?: string;
+  /** False when the Session that makes the link cannot use this account (it is on another auth config):
+   *  the account then counts as one that stopped working. Absent means usable. */
+  usableBySession?: boolean;
 }
 
 export type AccountLinkPlan =
@@ -13,7 +16,8 @@ export const ACCOUNT_ALIAS_REQUIRED = "Add an account alias so the existing conn
 
 const USABLE = /^(active|initiated|initializing|pending)$/i;
 
-const mayBeActive = (account: LinkableAccount) => !account.id || !account.status || /^active$/i.test(account.status);
+const mayBeActive = (account: LinkableAccount) =>
+  account.usableBySession !== false && (!account.id || !account.status || /^active$/i.test(account.status));
 
 /** How the next sign-in link for one toolkit is made. A label is required only beside a working account; an account
  *  that never finished or stopped working gives its label up, and is removed (`replace`) before the link is made. */

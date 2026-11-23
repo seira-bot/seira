@@ -9,7 +9,7 @@ import { createDataEngine } from "./engine.ts";
 import { DataSheetStore } from "./sheet.ts";
 import { describeTarget, exportData, quoteLiteral, showCard, type DataContext } from "./tools.ts";
 
-const root = mkdtempSync(join(tmpdir(), "omb-query-boundaries-"));
+const root = mkdtempSync(join(tmpdir(), "seira-query-boundaries-"));
 const engine = createDataEngine({ botFolder: (id) => join(root, "bots", id), dataDir: join(root, "data") });
 const connection = "bot" as const;
 let sequence = 0;
@@ -48,7 +48,7 @@ async function valueFrom(ctx: DataContext, operation: Operation, sql: string): P
     const result = await showCard(ctx, { kind: "table", sql });
     expect(result.rowCount).toBe(1);
     expect(ctx.sheet.card(result.id)!.sql).toBe(sql);
-    resultSql = `SELECT value FROM omb_results.${result.id}`;
+    resultSql = `SELECT value FROM seira_results.${result.id}`;
   } else {
     const result = await exportData(ctx, { format: "csv", sql });
     expect(result.rowCount).toBe(1);
@@ -86,7 +86,7 @@ it("charts a CTE query with a final terminator and comment", async () => {
   const result = await showCard(ctx, { kind: "chart", sql, chart: { type: "bar", x: "category", y: "amount", bins: 2 } });
   expect(result.rowCount).toBe(2);
   expect(ctx.sheet.card(result.id)!.sql).toBe(sql);
-  const rows = (await ctx.database.run(`SELECT * FROM omb_results.${result.id} ORDER BY x`, { connection })).rows;
+  const rows = (await ctx.database.run(`SELECT * FROM seira_results.${result.id} ORDER BY x`, { connection })).rows;
   expect(rows.map(([x, x2, y]) => [Number(x), Number(x2), Number(y)])).toEqual([[1, 2, 3], [2, 3, 5]]);
 });
 

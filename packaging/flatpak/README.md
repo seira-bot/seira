@@ -19,6 +19,8 @@ Regenerate it after a change to `pnpm-lock.yaml` or the Electron version:
 flatpak-node-generator pnpm pnpm-lock.yaml -o packaging/flatpak/generated-sources.json
 ```
 
+CI and the pre-push hook run `node scripts/check-flatpak-sources.mjs`. It fails when the file does not match the lockfile.
+
 For Flathub, replace the `dir` source in the manifest with a `git` source pinned to a release tag and commit.
 
 ## Lint
@@ -40,6 +42,7 @@ Flatpak and software centers show that version. Do not edit the version in the m
 | `--share=network` | The app talks to model providers and its own pages. |
 | `--share=ipc`, `--socket=fallback-x11`, `--socket=wayland`, `--device=dri` | Window and graphics. |
 | `--socket=pulseaudio` | Voice. |
+| `--filesystem=~/.seira:create` | The data folder, at the same path as the AppImage and the Debian package use. Agent programs on the host start in its task folders, so the sandbox and the host must see the same path. Without it, the data stays inside the sandbox and is lost when the app closes. |
 | `--talk-name=org.freedesktop.Notifications` | Notifications. |
 | `--talk-name=org.freedesktop.Flatpak` | Start agent programs on the host (below). |
 
@@ -70,6 +73,7 @@ Agent CLIs live on the host. In a Flatpak the server finds them and starts them 
 ## Test
 
 `packaging/flatpak/test-host-bridge.sh` checks start-up under Xvfb and the host bridge with a dummy program.
+It also makes a folder in the data folder from inside the sandbox, and starts a host program in that folder.
 
 ## Repository
 

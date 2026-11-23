@@ -6,12 +6,15 @@ import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { t } from "@/lib/i18n";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
-import { closeInbox, markAllInboxRead, readInboxLine, readInboxRow, useInboxMarkingAll, useInboxPanel, useInboxView, widenInbox } from "@/state/inbox";
+import { closeInbox, doneAllInboxNews, markAllInboxRead, readInboxLine, readInboxRow, useInboxMarkingAll, useInboxPanel, useInboxSummarizing, useInboxView, widenInbox } from "@/state/inbox";
 import { InboxActive } from "./InboxActive";
+import { InboxGroup } from "./InboxGroup";
+import { InboxMenu } from "./InboxMenu";
+import { InboxSummaryCard } from "./InboxSummaryCard";
 import { InboxReading } from "./InboxReading";
 import { InboxRowItem } from "./InboxRow";
 import { matchesSearch, nextAfter } from "./inbox-answer";
-import { listedRows, waitingCount } from "./inbox-view";
+import { inboxItems, isDecision, isNews, listedRows, waitingCount } from "./inbox-view";
 import { useInboxActions } from "./use-inbox-actions";
 import { roundButtonCls } from "../bot-panel/rows";
 import { SeiraCharacter } from "../seira-character";
@@ -21,6 +24,7 @@ export function InboxPanel() {
   const view = useInboxView();
   const panel = useInboxPanel();
   const markingAll = useInboxMarkingAll();
+  const summarizing = useInboxSummarizing();
   const phone = useMediaQuery(PHONE_LAYOUT);
   const simple = !useAdvancedMode();
   const { run } = useInboxActions(view);
@@ -39,7 +43,10 @@ export function InboxPanel() {
   const reading = panel.reading ? view?.rows.find((row) => row.id === panel.reading) : undefined;
   const open = (row: InboxRow) => { readInboxRow(row); readInboxLine(row.id); };
   const rows = listedRows(view).filter((row) => matchesSearch(row, query));
-  const ids = rows.map((row) => row.id);
+  const items = inboxItems(rows);
+  const ordered = items.flatMap((item) => (item.kind === "row" ? [item.row] : item.rows));
+  const ids = ordered.map((row) => row.id);
+  const sections = rows.some(isDecision) && rows.some((row) => !isDecision(row));
   const at = reading ? ids.indexOf(reading.id) : -1;
 
   const order = useRef<string[]>([]);
@@ -57,7 +64,7 @@ export function InboxPanel() {
   }, [reading, ids, view]);
 
   const step = (by: -1 | 1) => {
-    const row = rows[at + by];
+    const row = ordered[at + by];
     if (row) open(row);
   };
   const count = waitingCount(view);
@@ -75,6 +82,13 @@ export function InboxPanel() {
             {t("inbox.markAllRead")}
           </button>
         )}
+        {listedRows(view).some(isNews) && (
+          <button type="button" data-inbox-done-all onClick={doneAllInboxNews}
+            className="shrink-0 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] text-accent hover:underline">
+            {t("inbox.doneAllNews")}
+          </button>
+        )}
+        {view && <InboxMenu view={view} />}
         {!phone && (
           <button type="button" onClick={() => widenInbox(!panel.wide)} aria-pressed={Boolean(panel.wide)} aria-label={t(panel.wide ? "inbox.action.narrow" : "inbox.action.widen")}
             title={t(panel.wide ? "inbox.action.narrow" : "inbox.action.widen")} className={roundButtonCls}>
@@ -87,7 +101,7 @@ export function InboxPanel() {
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {reading && view ? (
-          <InboxReading view={view} row={reading} now={now} position={at >= 0 ? { index: at, count: rows.length } : null} onStep={step} />
+          <InboxReading view={view} row={reading} now={now} position={at >= 0 ? { index: at, count: ordered.length } : null} onStep={step} />
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -96,6 +110,8 @@ export function InboxPanel() {
                 <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("inbox.search")} aria-label={t("inbox.search")}
                   className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-tertiary [&::-webkit-search-cancel-button]:hidden" />
               </label>}
+              {!query.trim() && view?.summary && <InboxSummaryCard view={view} onOpen={open} />}
+              {!query.trim() && !view?.summary && summarizing && <p data-inbox-summary-working role="status" className="px-4 pb-2 text-[12px] text-ink-tertiary">{t("inbox.summary.working")}</p>}
               <div role="list" data-inbox-list aria-label={t("inbox.panel.title")} className="space-y-2 px-3 pb-2">
                 {rows.length === 0
                   ? query.trim() && listedRows(view).length
@@ -110,7 +126,22 @@ export function InboxPanel() {
                         <p className="mt-1 text-[13px] leading-[18px] text-ink-tertiary">{t("inbox.emptyHint")}</p>
                       </div>
                     )
-                  : rows.map((row) => <InboxRowItem key={row.id} row={row} now={now} onOpen={open} onAction={run} />)}
+                  : items.map((item, index) => {
+                    const first = item.kind === "row" ? item.row : item.rows[0]!;
+                    const previous = index > 0 ? items[index - 1]! : null;
+                    const lastOf = previous && (previous.kind === "row" ? previous.row : previous.rows[0]!);
+                    const label = sections && (!lastOf || isDecision(lastOf) !== isDecision(first))
+                      ? <p data-inbox-section={isDecision(first) ? "decisions" : "news"} className="px-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-ink-tertiary">{t(isDecision(first) ? "inbox.section.decisions" : "inbox.section.news")}</p>
+                      : null;
+                    return (
+                      <div key={item.kind === "row" ? item.row.id : item.key} className="space-y-2">
+                        {label}
+                        {item.kind === "row"
+                          ? <InboxRowItem row={item.row} now={now} onOpen={open} onAction={run} />
+                          : <InboxGroup rows={item.rows} now={now} onOpen={open} onAction={run} />}
+                      </div>
+                    );
+                  })}
               </div>
               {!query.trim() && <InboxActive view={view} />}
             </div>

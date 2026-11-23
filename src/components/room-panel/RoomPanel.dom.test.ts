@@ -20,7 +20,7 @@ vi.mock("../DesktopCapabilities", async (importOriginal) => ({
   useCaptionChrome: () => ({ dragProps: {}, padClass: "" }),
   useDesktopCapabilities: () => ({ capabilities: { host: { homeDir: "/Users/ada" } }, ready: true }),
 }));
-vi.mock("../Avatar", () => ({ BotAvatar: () => null, MausAvatar: () => null }));
+vi.mock("../Avatar", () => ({ BotAvatar: () => null, SeiraAvatar: () => null }));
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 const bot = (id: string, name: string): Bot => ({
@@ -116,6 +116,34 @@ describe("the Room panel's card", () => {
     render(room({ defaultResponder: { kind: "mentions" }, bulletin: "" }));
     expect(rowValue('[data-panel-page="responder"]')).toBe("Only who I @mention");
     expect($('[data-panel-edit="instructions"]')?.textContent).toContain("Tell the bots what this room is for");
+  });
+});
+
+describe("the Room panel's picture", () => {
+  const URL_A = "/api/attachments/desk-1.png";
+
+  it("shows the room's picture in the hero instead of the faces, with Change and Remove", () => {
+    render(room({ avatarUrl: URL_A }));
+    expect($("[data-room-picture]")?.getAttribute("src")).toBe(URL_A);
+    expect($("[data-room-panel-faces]")).toBeNull();
+    expect($("[data-room-picture-change]")?.textContent).toBe("Change picture");
+    click($("[data-room-picture-remove]"));
+    expect(patches()).toEqual([{ type: "patchGroup", groupId: "desk", patch: { avatarUrl: null } }]);
+  });
+
+  it("shows the faces and only Change while the room has no picture", () => {
+    render(room());
+    expect($("[data-room-picture]")).toBeNull();
+    expect($("[data-room-panel-faces]")).not.toBeNull();
+    expect($("[data-room-picture-change]")).not.toBeNull();
+    expect($("[data-room-picture-remove]")).toBeNull();
+  });
+
+  it("shows the faces again when the picture fails to load", () => {
+    render(room({ avatarUrl: URL_A }));
+    flushSync(() => $("[data-room-picture]")!.dispatchEvent(new Event("error")));
+    expect($("[data-room-picture]")).toBeNull();
+    expect($("[data-room-panel-faces]")).not.toBeNull();
   });
 });
 

@@ -121,7 +121,7 @@ const LISTEN_INSTEAD: Partial<Record<TailscaleFailure, [why: string, fix: string
  * name, or no Tailscale interface here (userspace networking, as in most containers).
  */
 export function tailnetListenFallback(failure: TailscaleFailure, status: TailscaleStatus, port: number, interfaces: NodeJS.Dict<Array<{ address: string }>> = networkInterfaces()):
-  { origin: string; env: { OMB_TAILNET_NAME: string }; line: string } | null {
+  { origin: string; env: { SEIRA_TAILNET_NAME: string }; line: string } | null {
   const reason = LISTEN_INSTEAD[failure];
   const local = tailnetInterfaceAddresses(interfaces);
   const addresses = status.addresses.filter((address) => local.includes(address.toLowerCase()));
@@ -129,9 +129,25 @@ export function tailnetListenFallback(failure: TailscaleFailure, status: Tailsca
   const origin = tailnetOrigin(status.dnsName, port);
   return {
     origin,
-    env: { OMB_TAILNET_NAME: status.dnsName },
+    env: { SEIRA_TAILNET_NAME: status.dnsName },
     line: `tailscale: ${reason[0]}, so this server listens on ${origin} itself (only your tailnet can reach it, and WireGuard encrypts it). For an https:// address, ${reason[1]}.`,
   };
+}
+
+const FALLBACK_HTTPS_PORT = 8443;
+
+/** Port 443 unless another program listens there and 8443 is free; with both taken it stays 443 and Tailscale reports the clash. */
+export function pickTailscaleHttpsPort(listening: Iterable<number>): { port: number; line: string | null } {
+  const taken = new Set(listening);
+  if (!taken.has(443) || taken.has(FALLBACK_HTTPS_PORT)) return { port: 443, line: null };
+  return { port: FALLBACK_HTTPS_PORT, line: `tailscale: port 443 is in use by another program, so the tailnet address uses port ${FALLBACK_HTTPS_PORT}.` };
+}
+
+/** Why Tailscale cannot give phones an HTTPS address now, or null when it can. */
+export async function tailscaleHttpsProblem(probe: typeof tailscaleStatus = tailscaleStatus): Promise<string | null> {
+  const result = await probe();
+  if ("failure" in result) return explainTailscaleFailure(result.failure);
+  return result.status.httpsEnabled ? null : explainTailscaleFailure("https-not-enabled");
 }
 
 /** Where a run that shares over Tailscale notes it, so the next start can turn off a share a crash left behind. */
@@ -140,7 +156,7 @@ export const tailscaleMarker = (dataDir: string) => join(dataDir, "tailscale-ser
 /**
  * `tailscale serve` in the foreground: the share ends with this process. Before serving, the tailnet must have HTTPS
  * certificates (`CertDomains`), or serve waits on an enablement link forever; and the name must not already front a
- * different MausBot server. Resolves once serve has run for `settleMs` without exiting.
+ * different Seira server. Resolves once serve has run for `settleMs` without exiting.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,

@@ -34,7 +34,7 @@ test("home is My Cloud only once the move switched and the same account is signe
 test("a frozen copy with its journal lost counts as moved, to the Cloud it names or the account's own", () => {
   assert.deepEqual(homeOf({ frozenCloud: CLOUD, state: connected() }), { kind: "cloud", origin: CLOUD });
   assert.deepEqual(homeOf({ frozenCloud: true, state: connected() }), { kind: "cloud", origin: CLOUD });
-  assert.deepEqual(homeOf({ frozenCloud: "https://omb-t-2.fly.dev", state: connected() }), { kind: "signin", other: true });
+  assert.deepEqual(homeOf({ frozenCloud: "https://seira-t-2.fly.dev", state: connected() }), { kind: "signin", other: true });
   assert.deepEqual(homeOf({ frozenCloud: true, state: { status: "unavailable", account: ACCOUNT } }), { kind: "signin" }, "no Cloud to name: the sign-in screen, never the frozen copy");
   assert.deepEqual(homeOf({ frozenCloud: CLOUD, state: null }), { kind: "signin" });
   assert.deepEqual(homeOf({ journal: { ...done(), phase: "freeze" }, frozenCloud: CLOUD, state: connected() }), { kind: "computer" }, "a move under way is not a move done");
@@ -443,7 +443,7 @@ const PRELOAD = readFileSync(new URL("./preload.cjs", import.meta.url), "utf8");
 function preload(origin, { home = false, activation = false, pairedElsewhere = false } = {}) {
   let bridge; const invoked = [], synced = [], listeners = new Map();
   vm.runInNewContext(PRELOAD, {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`, ...(pairedElsewhere ? ["--openmausbot-remote-client"] : ["--omb-company-desktop=1"])] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL}`, ...(pairedElsewhere ? ["--seira-remote-client"] : ["--seira-company-desktop=1"])] },
     location: { origin }, navigator: { userActivation: { isActive: activation } }, TextEncoder, localStorage: { getItem: () => null },
     queueMicrotask,
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
@@ -537,7 +537,7 @@ function pageIpc(overrides = {}) {
 }
 
 test("no page gets a control over lending this computer: not My Cloud's, another Cloud's or this computer's own, and main handles none", async () => {
-  for (const origin of [CLOUD, "https://omb-c-a.fly.dev", LOCAL]) {
+  for (const origin of [CLOUD, "https://seira-c-a.fly.dev", LOCAL]) {
     const page = preload(origin, { activation: true });
     assert.equal(page.bridge.cloudLending, undefined, origin);
     assert.equal(page.bridge.cloudAccount?.lending, undefined, origin);
@@ -600,7 +600,8 @@ test("the place asked for: My Cloud unless a team is asked or remembered; a team
   assert.deepEqual(placeOf({ ask: "cloud", remembered: { team: "team-acme" }, state }), { kind: "cloud" }, "asked for My Cloud: My Cloud");
   assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state }), { kind: "team", id: "team-acme", name: "Acme", role: "member", origin: TEAM, machine: ACME.machine });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Old name", origin: "https://old.fly.dev" }, state }).origin, TEAM, "the session's address wins over the saved one");
-  assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "team", id: "team-acme", name: "Acme", role: "member", origin: null, machine: null });
+  assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "cloud", noCloud: true }, "listed with no machine: no place");
+  assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Acme", origin: TEAM }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "cloud", noCloud: true });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Acme", origin: TEAM }, state: connected() }), { kind: "cloud", left: "Acme" }, "connected, not listed: gone, by name");
   assert.deepEqual(placeOf({ ask: { team: "team-acme", name: "Acme" }, state: connected() }), { kind: "cloud", left: "Acme" });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme" }, state: connected() }), { kind: "cloud", left: null }, "gone, with no name to say");
@@ -691,7 +692,6 @@ test("signed out, a team shows the sign-in screen with its name; the Admin refus
     assert.deepEqual(await stoppedFor("member", machine), { screen: "plan", machine: machine.status, name: "Acme", member: true }, "a team's User is sent to its owner");
     for (const role of ["owner", "admin"]) assert.equal((await stoppedFor(role, machine)).member, undefined, role);
   }
-  assert.equal((await stoppedFor("member", null)).member, true, "no machine at all: stopped, for a User too");
 });
 
 test("on the team's page, a session that ends is renewed through the team pairing, the page counts as this app's, and its new version reloads at a quiet moment", async () => {
@@ -801,7 +801,7 @@ test("while the window is on the place's own sign-in page, its 401s start no sec
   const w = world({ state: { ...connected(), teams: [ACME] }, team: { signedIn: false } });
   await w.home.show({ place: { team: "team-acme" } });
   assert.deepEqual(w.teamPairs, ["team-acme"]);
-  assert.match(w.url, /^https:\/\/omb-u-acme\.fly\.dev\/pair#code=/);
+  assert.match(w.url, /^https:\/\/seira-u-acme\.fly\.dev\/pair#code=/);
   w.home.responded({ url: `${TEAM}/api/auth/session`, statusCode: 401, webContentsId: 7 });
   await w.later(0);
   assert.deepEqual(w.teamPairs, ["team-acme"], "the code on its way is not replaced");
@@ -962,7 +962,7 @@ test("an account leaving: nothing under way for it goes on, and the next show ta
   assert.deepEqual(here.local, [false], "already on this computer's page: nothing moves");
 });
 
-const B_CLOUD = "https://omb-b.fly.dev";
+const B_CLOUD = "https://seira-b.fly.dev";
 const accountB = (machine) => ({ status: "connected", account: { id: "acct-2", email: "b@example.test" }, ...(machine ? { machine } : {}) });
 
 test("moved to A's Cloud, B signed in with a Cloud of its own: B's Cloud opens, and A's frozen copy is never shown", () => {

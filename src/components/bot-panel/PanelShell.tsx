@@ -3,12 +3,14 @@ import { Settings, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import type { Bot, BotSettingsSection } from "@/state/store";
 import { ChatShareMenu } from "@/components/ChatMoreMenu";
 import { useCaptionChrome } from "../DesktopCapabilities";
 import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerived";
 import { AvatarEditorCard } from "./AvatarEditorCard";
+import { ActivityTab } from "./ActivityTab";
 import { ComputerTab } from "./ComputerTab";
 import { DetailsTab } from "./DetailsTab";
 import { LibraryTab } from "./LibraryTab";
@@ -21,7 +23,7 @@ import { PanelTabs } from "./PanelTabs";
 import { PageHeader, roundButtonCls } from "./rows";
 
 function initialTarget(section: BotSettingsSection | null, link: PanelLink | null): PanelTarget {
-  return section ? linkTarget(section, link) : { tab: "details" };
+  return section ? linkTarget(section, link) : { tab: "activity" };
 }
 
 export function BotPanel({ bot, derived, linkedSection, onClose }: {
@@ -115,6 +117,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
         <button
           type="button"
           data-panel-gear
+          data-ui={ui("panel.settings")}
           aria-label={t("botPanel.page.settings")}
           title={t("botPanel.page.settings")}
           aria-current={page === "settings" ? "page" : undefined}
@@ -149,6 +152,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
             <PanelQuickActions onAction={quick} canMessage={bot.yourAccess !== "view"} />
             <PanelTabs tab={tab} onSelect={openTab} />
             <div role="tabpanel">
+              {tab === "activity" && <ActivityTab bot={bot} />}
               {tab === "details" && <DetailsTab bot={bot} derived={derived} onOpen={openPage} />}
               {tab === "library" && <LibraryTab bot={bot} onOpen={openPage} />}
               {tab === "computer" && <ComputerTab bot={bot} derived={derived} onOpen={openPage} />}

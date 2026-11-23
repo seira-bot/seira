@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // Offline stand-in for Cursor's `cursor-agent` sign-in commands, printing what cursor-agent 2026.10.22 prints: no
 // network, no real credential; needs explicit opt-in and a disposable HOME.
-//   FAKE_CURSOR_MODE  approve (signed in once HOME/.omb-fake-cursor-approved exists, as when the person finishes in their
+//   FAKE_CURSOR_MODE  approve (signed in once HOME/.seira-fake-cursor-approved exists, as when the person finishes in their
 //     browser) | evil (a link on another host) | extra (a link carrying a token) | crash | curl (answers --version as
 //     curl does, as an install command pasted as the CLI path runs)
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 const home = process.env.HOME;
-if (process.env.OMB_DEVICE_AUTH_FIXTURE !== "1" || !home || !isAbsolute(home)) {
-  process.stderr.write("This fake CLI requires OMB_DEVICE_AUTH_FIXTURE=1 and an isolated HOME.\n");
+if (process.env.SEIRA_DEVICE_AUTH_FIXTURE !== "1" || !home || !isAbsolute(home)) {
+  process.stderr.write("This fake CLI requires SEIRA_DEVICE_AUTH_FIXTURE=1 and an isolated HOME.\n");
   process.exit(2);
 }
 const mode = process.env.FAKE_CURSOR_MODE || "approve";
@@ -30,12 +30,15 @@ if (args.join(" ") === "--version") {
   process.stdout.write(`${JSON.stringify({ status: signedIn ? "authenticated" : "unauthenticated", isAuthenticated: signedIn, hasAccessToken: signedIn, hasRefreshToken: signedIn }, null, 2)}\n`);
 } else if (args.join(" ") === "status") {
   process.stdout.write(existsSync(auth) ? "Logged in\n" : "Not logged in\n");
+} else if (args.join(" ") === "logout") {
+  rmSync(auth, { force: true });
+  process.stdout.write("Logged out\n");
 } else if (args.join(" ") === "login") {
   writeFileSync(join(home, "fake-cursor-login.pid"), String(process.pid));
   process.stdout.write(["Starting login process...", "Authenticating with Cursor...", "Waiting for browser authentication...", `Open a browser and navigate to this link: ${link}`, ""].join("\n"));
   if (mode === "crash") setTimeout(() => { process.stderr.write("access_token=secret-token\n"); process.exit(1); }, 80);
   else setInterval(() => {
-    if (!existsSync(join(home, ".omb-fake-cursor-approved"))) return;
+    if (!existsSync(join(home, ".seira-fake-cursor-approved"))) return;
     mkdirSync(join(home, ".config", "cursor"), { recursive: true });
     writeFileSync(auth, "{\"fixture\":\"offline, not a credential\"}\n", { mode: 0o600 });
     process.stdout.write("Login successful!\n");

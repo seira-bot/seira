@@ -3,13 +3,13 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createEmailSignIn } from "./account-signin.ts";
-import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TRIES, SIGNIN_CODE_TTL_MS, smtpOptions, type MailMessage } from "./sign-in-mail.ts";
+import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TRIES, SIGNIN_CODES_PER_ADDRESS_ALL, SIGNIN_CODE_TTL_MS, smtpOptions, type MailMessage } from "./sign-in-mail.ts";
 
 const URL_ = "smtps://signin%40example.test:p%40ss@smtp.example.test:465";
 
 function mailbox() {
   const sent: MailMessage[] = [];
-  return { sent, transport: { sendMail: async (message: MailMessage) => { sent.push(message); } }, code: () => /(\d{4}) (\d{4})/.exec(sent.at(-1)!.text)!.slice(1).join("") };
+  return { sent, transport: { sendMail: async (message: MailMessage) => { sent.push(message); } }, code: () => /^(\d{8})$/m.exec(sent.at(-1)!.text)![1]! };
 }
 
 describe("sign-in codes through the server's own mail server", () => {
@@ -37,9 +37,37 @@ describe("sign-in codes through the server's own mail server", () => {
 
   it("names the server the code signs in to in the subject", async () => {
     const box = mailbox();
-    await createSignInMail({ url: URL_, transport: box.transport }).send("her@example.test", "maus.example.com");
-    expect(box.sent[0]).toMatchObject({ subject: "Your Seira sign-in code for maus.example.com" });
-    expect(box.sent[0]?.text).toContain("to sign in to maus.example.com is");
+    await createSignInMail({ url: URL_, transport: box.transport }).send("her@example.test", "seira.example.com");
+    expect(box.sent[0]).toMatchObject({ subject: "Your Seira sign-in code for seira.example.com" });
+  });
+
+  it("writes the approved plain-text mail, with and without a server name", async () => {
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, transport: box.transport });
+    await mail.send("her@example.test", "kantor.acme.id");
+    const code = box.code();
+    expect(box.sent[0]?.text).toBe([
+      "Your code to sign in to kantor.acme.id:", "", code, "",
+      "Do not share this code with anyone.",
+      "Did not ask for this code? Ignore this email. Nothing changes.", "",
+      "--", "Sent by the Seira server at kantor.acme.id", "seira.bot", "",
+    ].join("\n"));
+    await mail.send("other@example.test");
+    const plain = box.sent[1]!.text;
+    expect(plain.split("\n")[0]).toBe("Your code to sign in to Seira:");
+    expect(plain).not.toContain("Sent by");
+    for (const message of box.sent) expect(message.text).not.toMatch(/minutes|\bten\b/i);
+  });
+
+  it("accepts a code typed with a space or a hyphen", async () => {
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, transport: box.transport });
+    await mail.send("her@example.test");
+    const code = box.code();
+    expect(mail.check("her@example.test", `${code.slice(0, 4)} ${code.slice(4)}`)).toBe("ok");
+    await mail.send("his@example.test");
+    const next = box.code();
+    expect(mail.check("his@example.test", `${next.slice(0, 4)}-${next.slice(4)}`)).toBe("ok");
   });
 
   it("ends a code after ten minutes or five wrong tries, and sends at most one every 30 seconds", async () => {
@@ -62,6 +90,47 @@ describe("sign-in codes through the server's own mail server", () => {
     expect(mail.check("her@example.test", box.code())).toBe("wrong");
   });
 
+  it("limits the codes one address gets in ten minutes", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < 3; sent++) {
+      expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("tooSoon");
+    expect(box.sent).toHaveLength(3);
+    expect(await mail.send("his@example.test", null, "203.0.113.1")).toBe("sent");
+    clock += SIGNIN_CODE_TTL_MS;
+    expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+  });
+
+  it("one source cannot use up the codes of another source", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < 3; sent++) {
+      expect(await mail.send("her@example.test", null, "source-a")).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(await mail.send("her@example.test", null, "source-a")).toBe("tooSoon");
+    expect(await mail.send("her@example.test", null, "source-b")).toBe("sent");
+  });
+
+  it("one address gets at most ten codes in ten minutes from all sources", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < SIGNIN_CODES_PER_ADDRESS_ALL; sent++) {
+      expect(await mail.send("her@example.test", null, `source-${sent % 4}`)).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(box.sent).toHaveLength(SIGNIN_CODES_PER_ADDRESS_ALL);
+    expect(await mail.send("her@example.test", null, "source-new")).toBe("tooSoon");
+    clock += SIGNIN_CODE_TTL_MS;
+    expect(await mail.send("her@example.test", null, "source-new")).toBe("sent");
+  });
+
   it("forgets a code the mail server refused, and needs a sender address", async () => {
     let refuse = true;
     const sent: MailMessage[] = [];
@@ -70,14 +139,14 @@ describe("sign-in codes through the server's own mail server", () => {
     refuse = false;
     expect(await mail.send("her@example.test")).toBe("sent");
     await expect(createSignInMail({ url: "smtp://localhost:25", transport: { sendMail: async () => undefined } }).send("her@example.test"))
-      .rejects.toThrow("OMB_SIGNIN_SMTP_FROM");
+      .rejects.toThrow("SEIRA_SIGNIN_SMTP_FROM");
   });
 
-  it("is what email sign-in uses when OMB_SIGNIN_SMTP_URL is set: no account service, the allow-list as before", async () => {
+  it("is what email sign-in uses when SEIRA_SIGNIN_SMTP_URL is set: no account service, the allow-list as before", async () => {
     const box = mailbox();
     const signIn = createEmailSignIn({
       allow: { admins: ["her@example.test"], members: ["@team.test"] },
-      env: { OMB_SIGNIN_SMTP_URL: URL_, OMB_CONTROL_PLANE_URL: "https://control-plane.invalid" },
+      env: { SEIRA_SIGNIN_SMTP_URL: URL_, SEIRA_CONTROL_PLANE_URL: "https://control-plane.invalid" },
       fetchImpl: async () => { throw new Error("the account service must not be asked"); },
       mailTransport: box.transport,
     });
@@ -93,10 +162,10 @@ describe("sign-in codes through the server's own mail server", () => {
   });
 
   it("says why when the mail server cannot be used", async () => {
-    const signIn = createEmailSignIn({ allow: { admins: ["her@example.test"], members: [] }, env: { OMB_SIGNIN_SMTP_URL: "smtp://localhost:25" } });
+    const signIn = createEmailSignIn({ allow: { admins: ["her@example.test"], members: [] }, env: { SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25" } });
     const refused = await signIn.start("her@example.test");
     expect(refused).toMatchObject({ ok: false, status: 502 });
-    expect(refused.ok ? "" : refused.error).toContain("OMB_SIGNIN_SMTP_FROM");
+    expect(refused.ok ? "" : refused.error).toContain("SEIRA_SIGNIN_SMTP_FROM");
   });
 });
 
@@ -134,7 +203,7 @@ describe("a real SMTP conversation", () => {
     expect(await mail.send("her@example.test")).toBe("sent");
     const message = received.join("\n");
     expect(message).toContain("To: her@example.test");
-    const code = /(\d{4}) (\d{4})/.exec(message)!.slice(1).join("");
+    const code = /^(\d{8})$/m.exec(message)![1]!;
     expect(mail.check("her@example.test", code)).toBe("ok");
   });
 });

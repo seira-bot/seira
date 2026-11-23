@@ -4,10 +4,12 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, readlinkSyn
 import { homedir, hostname, uptime } from "node:os";
 import { dirname, join, posix } from "node:path";
 
-const LEASE_NAME = "openmausbot-server.lease";
-const DELEGATED_CHILD_DIR = ".openmausbot-server-child";
+import { LEGACY_CHILD_LEASE_FOLDER, LEGACY_LEASE_FILE } from "./legacy-names.mjs";
+
+const LEASE_NAME = "seira-server.lease";
+const DELEGATED_CHILD_DIR = ".seira-server-child";
 // Internal parent-to-child capability, obtained only from utilityServerLeaseEnvironment(); never public configuration.
-const CHILD_LEASE_ENV = "OPENMAUSBOT_INTERNAL_DATA_DIR_LEASE";
+const CHILD_LEASE_ENV = "SEIRA_INTERNAL_DATA_DIR_LEASE";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_PID = 0x7fffffff;
 const MAX_BOOT_ID = 128;
@@ -187,7 +189,7 @@ function machineId() {
     const raw = readRawMachineId();
     cachedMachineId = raw === null
       ? null
-      : createHash("sha256").update(`openmausbot-machine:${raw.toLowerCase()}`).digest("hex").slice(0, 32);
+      : createHash("sha256").update(`seira-machine:${raw.toLowerCase()}`).digest("hex").slice(0, 32);
   }
   return cachedMachineId;
 }
@@ -742,6 +744,35 @@ export function acquireDataDirLease(dataDir, options = {}) {
 }
 
 /**
+ * Whether a process of an earlier version may still use `dataDir` through its own lease record. A record that cannot be
+ * read, or that another host wrote, counts as held: only a dead owner on this host proves the folder free.
+ */
+export function legacyLeaseHeld(dataDir) {
+  for (const path of [join(dataDir, LEGACY_LEASE_FILE), join(dataDir, LEGACY_CHILD_LEASE_FOLDER, LEGACY_LEASE_FILE)]) {
+    let raw;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") continue;
+      return true;
+    }
+    let owner;
+    try {
+      owner = JSON.parse(raw);
+    } catch {
+      return true;
+    }
+    if (!isLeaseOwner(owner) || owner.host !== hostname()) return true;
+    try {
+      if (ownerIsAlive(owner)) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * For a data directory only one machine or container uses at a time (a Cloud home's volume, which its launcher holds
  * locked: server/cloud-home-start.ts), where a record another one wrote can never belong to a live process: removes every
  * lease, delegated-child lease and recovery record held by another machine or container and returns their holders.
@@ -792,7 +823,7 @@ function clearRecords(dataDir, stale) {
 }
 
 /**
- * Who holds the data directory's lease, read only (`openmausbot doctor`): "none"; "alive", a running process on this
+ * Who holds the data directory's lease, read only (`seira doctor`): "none"; "alive", a running process on this
  * machine; "dead", a process of this machine that is gone, which the next acquireDataDirLease() retires; "other-machine";
  * or "invalid", a record that cannot be read, which acquireDataDirLease() refuses. Never changes a file.
  */

@@ -17,7 +17,7 @@ const START = Date.parse("2026-11-16T08:00:00Z");
 const dirs: string[] = [];
 
 function folder(): string {
-  const dir = mkdtempSync(join(tmpdir(), "omb-routine-ledger-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-routine-ledger-"));
   dirs.push(dir);
   return join(dir, "routines.json");
 }
@@ -64,7 +64,7 @@ function invariants(section: ScheduleSection, now: number): ScheduleSection {
   return section;
 }
 
-const every = (minutes: number, extra: Record<string, unknown> = {}) => ({ name: "Fix new bugs", prompt: "Look for new bug reports and fix them", botId: "maus-1",
+const every = (minutes: number, extra: Record<string, unknown> = {}) => ({ name: "Fix new bugs", prompt: "Look for new bug reports and fix them", botId: "seira-1",
   schedule: { type: "interval" as const, everyMinutes: minutes, anchorAt: START }, ...extra });
 const NONE = { ran: 0, failed: 0, missed: 0, late: 0, retried: 0 };
 
@@ -119,7 +119,7 @@ describe("an occurrence's record", () => {
     h.manager.failThread("thread-2", "Provider said: payroll-figures rejected", { cause: "refused" });
     h.manager.close();
     const written = [readFileSync(ledgerPaths(h.file).ledger, "utf8"), readFileSync(ledgerPaths(h.file).mark, "utf8"), JSON.stringify(h.report())];
-    for (const text of written) for (const secret of ["Quarterly", "payroll", "board@example.com", "Email", "Provider said", "maus-1", "thread-1"]) expect(text).not.toContain(secret);
+    for (const text of written) for (const secret of ["Quarterly", "payroll", "board@example.com", "Email", "Provider said", "seira-1", "thread-1"]) expect(text).not.toContain(secret);
     expect(written[2]).not.toContain(routine.id);
     for (const run of h.runs()) expect(written[2]).not.toContain(run.id);
     expect(JSON.stringify(h.report()).length).toBeLessThan(1_000);
@@ -238,7 +238,7 @@ describe("a computer asleep, or a server down, across due times", () => {
 
   it("closes every occurrence on one row the owner is told about when even the newest is more than 12 hours old", async () => {
     const h = harness();
-    const daily = { name: "Morning report", prompt: "Write the morning report", botId: "maus-1", schedule: { type: "interval" as const, everyMinutes: 1_440, anchorAt: START } };
+    const daily = { name: "Morning report", prompt: "Write the morning report", botId: "seira-1", schedule: { type: "interval" as const, everyMinutes: 1_440, anchorAt: START } };
     h.manager.create(daily);
     await h.tickAt(START + 3 * DAY + 13 * HOUR);
     expect(h.started).toEqual([]);
@@ -266,7 +266,7 @@ describe("a computer asleep, or a server down, across due times", () => {
 
   it("spreads the late starts of many routines out instead of starting them all in one second", async () => {
     const h = harness();
-    for (const index of [0, 1, 2, 3]) h.manager.create(every(60, { name: `Routine ${index}`, botId: `maus-${index}` }));
+    for (const index of [0, 1, 2, 3]) h.manager.create(every(60, { name: `Routine ${index}`, botId: `seira-${index}` }));
     await h.tickAt(START + HOUR + 30 * MINUTE);
     expect(h.started).toHaveLength(1);
     expect(h.runs().map((run) => run.retryAt).sort()).toEqual([START + HOUR + 30 * MINUTE + CATCH_UP_STAGGER_MS, START + HOUR + 30 * MINUTE + 2 * CATCH_UP_STAGGER_MS, START + HOUR + 30 * MINUTE + 3 * CATCH_UP_STAGGER_MS, undefined]);
@@ -276,7 +276,7 @@ describe("a computer asleep, or a server down, across due times", () => {
     expect(h.report().oldestUnconfirmed).toBeNull();
 
     const onTime = harness();
-    for (const index of [0, 1]) onTime.manager.create(every(60, { botId: `maus-${index}` }));
+    for (const index of [0, 1]) onTime.manager.create(every(60, { botId: `seira-${index}` }));
     await onTime.tickAt(START + HOUR);
     expect(onTime.started).toHaveLength(2);
   });
@@ -378,7 +378,7 @@ describe("a scheduler pass held up by another run's start", () => {
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const h = harness(START, file, { startTurn: async (_botId, threadId) => { h.started.push(threadId); if (threadId === "thread-1") await gate; } });
     h.manager.create(every(24 * 60, { anchorAt: undefined, schedule: { type: "interval" as const, everyMinutes: 1_440, anchorAt: START + HOUR } }));
-    h.manager.create(every(60, { name: "Half past", botId: "maus-2", schedule: { type: "interval" as const, everyMinutes: 60, anchorAt: START + 90 * MINUTE } }));
+    h.manager.create(every(60, { name: "Half past", botId: "seira-2", schedule: { type: "interval" as const, everyMinutes: 60, anchorAt: START + 90 * MINUTE } }));
     h.at(START + HOUR);
     const held = h.manager.tick();
     h.at(START + 3 * HOUR + 40 * MINUTE);
@@ -609,7 +609,7 @@ describe("retries that run out", () => {
 
 describe("the files", () => {
   const rows = (count: number, routineId: string): RoutineRun[] => Array.from({ length: count }, (_, index) => ({
-    id: `run-${index}`, routineId, routineName: "Fix new bugs", target: "bot" as const, botId: "maus-1", runOn: "maus" as const, scheduledFor: START - (count - index) * 5 * MINUTE,
+    id: `run-${index}`, routineId, routineName: "Fix new bugs", target: "bot" as const, botId: "seira-1", runOn: "seira" as const, scheduledFor: START - (count - index) * 5 * MINUTE,
     status: index % 50 === 7 ? "failed" as const : index % 50 === 9 ? "missed" as const : "completed" as const, manual: index % 100 === 3, triggerSource: index % 100 === 3 ? "manual" as const : "schedule" as const,
     createdAt: START - (count - index) * 5 * MINUTE, ...(index % 50 === 9 ? {} : { startedAt: START - (count - index) * 5 * MINUTE + 1_000 }),
     finishedAt: START - (count - index) * 5 * MINUTE + 60_000, ...(index % 50 === 7 ? { error: "Provider crashed", retried: "failed" as const } : {}),
@@ -731,7 +731,7 @@ describe("the files", () => {
   it("holds a start back a few passes for a ledger that cannot be written, then runs without it, and never stops another run or a save", async () => {
     const h = harness();
     const hourly = h.manager.create(every(60));
-    const other = h.manager.create(every(24 * 60, { name: "Weekly digest", botId: "maus-2" }));
+    const other = h.manager.create(every(24 * 60, { name: "Weekly digest", botId: "seira-2" }));
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { ledger } = ledgerPaths(h.file);
     // A folder where the file should be: every append fails, on Windows as on any other system.

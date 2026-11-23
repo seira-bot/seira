@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 
+import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import {
-  limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
+  limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, shownUsageLimit, sameAccountAs, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
 } from "@/lib/limit-resets";
 import type { Routine } from "@/lib/routines";
@@ -123,7 +124,7 @@ export function UsageRing({ limit, className }: { limit: EngineLimit; className?
 
 /** When the usage was last read, each window's share left with its reset and a track filled by use; at the limit, how it
  * clears and a fresh check. */
-export function UsageRows({ limit }: { limit: EngineLimit }) {
+export function UsageRows({ limit, twin }: { limit: EngineLimit; /** Another AI signed in with the same account. */ twin?: EngineLimit }) {
   const [checking, setChecking] = useState(false);
   const { dispatch } = useStore();
   const now = Date.now();
@@ -131,7 +132,10 @@ export function UsageRows({ limit }: { limit: EngineLimit }) {
   return (
     <div data-usage-rows className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 truncate text-[13px] font-semibold leading-[18px] text-ink">{t("limits.cardTitle", { engine: limit.name })}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-[13px] font-semibold leading-[18px] text-ink">{t("limits.cardTitle", { engine: limit.name })}</span>
+          {limit.email && <span data-usage-email className="truncate text-[12px] leading-4 text-ink-tertiary">{limit.email}</span>}
+        </span>
         {checkedAt > 0 && <span data-usage-checked className="shrink-0 text-[12px] leading-4 text-ink-tertiary">{t("limits.checked", { when: threadUpdatedLabel(checkedAt, now) })}</span>}
       </div>
       {usageRows(limit).map((row) => (
@@ -148,6 +152,7 @@ export function UsageRows({ limit }: { limit: EngineLimit }) {
           </div>
         </div>
       ))}
+      {twin && <p data-usage-same-account className="text-[12px] leading-4 text-ink-tertiary">{t("limits.sameAccount", { name: twin.name })}</p>}
       {limit.blocked && (
         <div className="flex items-start justify-between gap-3 border-t-[0.5px] border-ink/10 pt-2.5 text-[12px] leading-4">
           <p className="min-w-0 text-ink-tertiary">{t("limits.clearsOnReply", { engine: limit.name })}</p>
@@ -186,8 +191,8 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
       {limits.some((limit) => limit.engine !== engine) && (
         <div data-usage-rings role="group" aria-label={t("limits.title")} className="-mx-1.5 flex flex-wrap gap-1">
           {limits.map((limit) => (
-            <button key={limit.engine} type="button" data-usage-engine={limit.engine} aria-pressed={limit === shown} aria-label={limitLine(limit, now, ", ")}
-              title={limitLine(limit, now)} onClick={() => { setPicked(limit.engine); onPick?.(limit.engine); }}
+            <button key={limit.engine} type="button" data-usage-engine={limit.engine} aria-pressed={limit === shown} aria-label={`${limitLine(limit, now, ", ")}${limit.email ? `, ${limit.email}` : ""}`}
+              title={`${limitLine(limit, now)}${limit.email ? ` · ${limit.email}` : ""}`} onClick={() => { setPicked(limit.engine); onPick?.(limit.engine); }}
               className={cn("flex h-6 min-w-0 items-center gap-1.5 rounded-full px-1.5 text-[12px] leading-4",
                 limit === shown ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
               <UsageRing limit={limit} />
@@ -196,7 +201,7 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
           ))}
         </div>
       )}
-      {shown && <UsageRows limit={shown} />}
+      {shown && <UsageRows limit={shown} twin={sameAccountAs(shown, limits)} />}
     </div>
   );
 }
@@ -207,20 +212,45 @@ const CARD_WIDTH = 272;
 const CARD_GAP = 8;
 const keep = (event: SyntheticEvent) => event.stopPropagation();
 
-function UsageCard({ limit, anchor, onEnter, onLeave }: { limit: EngineLimit; anchor: DOMRect; onEnter: () => void; onLeave: () => void }) {
+function UsageCard({ id, limit, anchor, onEnter, onLeave }: { id?: string; limit: EngineLimit; anchor: DOMRect; onEnter: () => void; onLeave: () => void }) {
   const below = anchor.top < window.innerHeight / 2;
+  // The window's rail of places is drawn over the page's left edge: the card never opens under it.
+  const rail = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rail-beside")) || 0;
   const style: CSSProperties = {
     position: "fixed", width: CARD_WIDTH,
-    left: Math.max(CARD_GAP, Math.min(anchor.left + anchor.width / 2 - CARD_WIDTH / 2, window.innerWidth - CARD_WIDTH - CARD_GAP)),
+    left: Math.max(rail + CARD_GAP, Math.min(anchor.left + anchor.width / 2 - CARD_WIDTH / 2, window.innerWidth - CARD_WIDTH - CARD_GAP)),
     ...(below ? { top: anchor.bottom + CARD_GAP } : { bottom: window.innerHeight - anchor.top + CARD_GAP }),
   };
   // A portal still bubbles React events to the model button it was opened from, which would open the model menu.
   return (
-    <div data-usage-card role="group" aria-label={limit.name} style={style} className="menu-surface z-[90] px-3 py-2.5"
+    <div id={id} data-usage-card role="group" aria-label={limit.name} style={style} className="menu-surface z-[90] px-3 py-2.5"
       onPointerEnter={onEnter} onPointerLeave={onLeave} onPointerDown={keep} onMouseDown={keep} onClick={keep} onKeyDown={keep}>
       <UsageOverview engine={limit.engine} />
     </div>
   );
+}
+
+/** Hover and click state of the usage card: opens after a short hover, closes shortly after the pointer leaves. */
+function useUsageCard<Spot extends HTMLElement>(hover: boolean, blocked?: (spot: Spot) => boolean) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const spot = useRef<Spot>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const later = (next: () => void, ms: number) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(next, ms);
+  };
+  const enter = (event?: ReactPointerEvent) => {
+    if (!hover || event?.pointerType === "touch" || (spot.current && blocked?.(spot.current))) return;
+    later(() => setAnchor(spot.current?.getBoundingClientRect() ?? null), anchor ? 0 : HOVER_OPEN_MS);
+  };
+  const leave = () => later(() => setAnchor(null), HOVER_CLOSE_MS);
+  const close = () => later(() => setAnchor(null), 0);
+  const toggle = () => {
+    clearTimeout(timer.current);
+    setAnchor((open) => open ? null : spot.current?.getBoundingClientRect() ?? null);
+  };
+  return { anchor, spot, enter, leave, close, toggle };
 }
 
 /** The usage left as bars inside the model button, with every window in a card on hover. `compact` hides the bars in
@@ -228,29 +258,43 @@ function UsageCard({ limit, anchor, onEnter, onLeave }: { limit: EngineLimit; an
  * same rows open at the top of the model menu for keyboard and touch. */
 export function UsageBars({ engine, compact = false, hover = true, className }: { engine: string | undefined; compact?: boolean; hover?: boolean; className?: string }) {
   const limit = useEngineUsage(engine);
-  const [anchor, setAnchor] = useState<DOMRect | null>(null);
-  const spot = useRef<HTMLSpanElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const card = useUsageCard<HTMLSpanElement>(hover, (spot) => Boolean(spot.closest("[aria-expanded=true]")));
   if (!limit) return null;
   const tone = usageTone(limit);
-  const later = (next: () => void, ms: number) => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(next, ms);
-  };
-  const enter = (event?: ReactPointerEvent) => {
-    if (!hover || event?.pointerType === "touch" || spot.current?.closest("[aria-expanded=true]")) return;
-    later(() => setAnchor(spot.current?.getBoundingClientRect() ?? null), anchor ? 0 : HOVER_OPEN_MS);
-  };
-  const leave = () => later(() => setAnchor(null), HOVER_CLOSE_MS);
   return (
     // An empty title keeps the button's own tooltip from opening over the card.
-    <span ref={spot} title="" data-usage-bars={tone} data-usage-warn={tone === "fine" ? undefined : ""} className={cn("flex shrink-0 items-center", className)}
-      onPointerEnter={enter} onPointerLeave={leave} onPointerDown={() => later(() => setAnchor(null), 0)}>
+    <span ref={card.spot} title="" data-usage-bars={tone} data-usage-warn={tone === "fine" ? undefined : ""} className={cn("flex shrink-0 items-center", className)}
+      onPointerEnter={card.enter} onPointerLeave={card.leave} onPointerDown={card.close}>
       <UsageGlyph limit={limit} className={compact && tone === "fine" ? "@max-4xl/chathead:hidden" : undefined} />
       <span className="sr-only">{limitLine(limit, Date.now(), ", ")}</span>
-      {anchor && createPortal(<UsageCard limit={limit} anchor={anchor} onEnter={() => enter()} onLeave={leave} />, document.body)}
+      {card.anchor && createPortal(<UsageCard limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} />, document.body)}
     </span>
+  );
+}
+
+/** The sidebar footer's ring for the selected bot's AI, or the most constrained one, with every window in a card on
+ * hover or click. Nothing shows while no connected AI reports usage; Simple shows it only near or at the limit. */
+export function SidebarUsageRing({ simple, shape = "row" }: { simple: boolean; shape?: "row" | "column" }) {
+  const { state } = useStore();
+  const limits = useEngineLimits();
+  const engine = state.bots.find((bot) => bot.id === state.selectedId)?.modelSelection?.instanceId;
+  const limit = shownUsageLimit(limits, engine);
+  const card = useUsageCard<HTMLButtonElement>(true);
+  const id = useId();
+  const reach = useRef<{ contains(target: unknown): boolean }>({ contains: (target) => Boolean(card.spot.current?.contains(target as Node) || document.getElementById(id)?.contains(target as Node)) });
+  usePopoverDismiss(card.anchor !== null, reach, card.close);
+  if (!limit || (simple && usageTone(limit) === "fine")) return null;
+  const line = limitLine(limit, Date.now(), ", ");
+  return (
+    <>
+      <button ref={card.spot} type="button" data-sidebar-usage={usageTone(limit)} aria-label={line} aria-expanded={card.anchor !== null} aria-controls={id}
+        onPointerEnter={card.enter} onPointerLeave={card.leave} onClick={card.toggle}
+        className={cn("flex shrink-0 items-center justify-center text-ink-secondary transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus",
+          shape === "row" ? "size-8 rounded-lg touch:size-10" : "size-9 rounded-full")}>
+        <UsageRing limit={limit} />
+      </button>
+      {card.anchor && createPortal(<UsageCard id={id} limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} />, document.body)}
+    </>
   );
 }
 

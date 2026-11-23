@@ -8,7 +8,7 @@ describe("social-posts skill guide", () => {
   const ids = (text: string) => selectBundledSkills(text, [], skills).map((skill) => skill.manifest.id);
 
   it("mounts when a bot is asked for a social post, and stays out of other uses of the word post", () => {
-    for (const text of ["Plan next week's posts for LinkedIn and X", "Draft three posts about our launch and add them to Postiz", "Write a LinkedIn post about hiring", "make me an Instagram carousel",
+    for (const text of ["Plan next week's posts for LinkedIn and X", "Draft three posts for LinkedIn about our launch and add them to Repliz", "Write a LinkedIn post about hiring", "make me an Instagram carousel",
       "tweet this for me", "Plan next week's social posts from memory/social.md", "write a post about our launch", "a caption for an instagram reel", "write a post for x"]) {
       expect(ids(text), text).toContain("social-posts");
     }
@@ -22,6 +22,5 @@ describe("social-posts skill guide", () => {
     expect(guide).not.toMatch(/\b(engines?|servers?)\b/i);
     expect(guide).toContain("posts.html");
     expect(guide).toContain("show_html");
-    expect(guide).toContain("integrationSchema");
   });
 });

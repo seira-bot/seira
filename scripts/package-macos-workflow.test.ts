@@ -219,8 +219,49 @@ describe("package-macos.yml", () => {
     });
 
     it("refuse an app that names another update feed or lacks the dictation helper", () => {
-      expect(step("Gate: both apps use the Seira update feed").run).toMatch(/owner: seira-bot[\s\S]*repo: seira/);
+      expect(step("Gate: the update feed file matches the signing mode").run).toMatch(/owner: seira-bot[\s\S]*repo: seira/);
       expect(step("Gate: both apps carry every helper for their own CPU").run).toContain("Seira Speech.app/Contents/MacOS/speech-helper");
+    });
+
+    describe("on the update feed file", () => {
+      const feedGate = () => step("Gate: the update feed file matches the signing mode");
+      const run = (signed: string, withFile: boolean, content = "provider: github\nowner: seira-bot\nrepo: seira\n") => {
+        const cwd = folder();
+        for (const app of ["release/mac-arm64/Seira.app", "release/mac/Seira.app"]) {
+          const resources = join(cwd, app, "Contents", "Resources");
+          mkdirSync(resources, { recursive: true });
+          if (withFile) writeFileSync(join(resources, "app-update.yml"), content);
+        }
+        const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", feedGate().run!], {
+          cwd, env: { PATH: process.env.PATH!, SIGNED: signed }, encoding: "utf8",
+        });
+        return result;
+      };
+
+      it("passes a signed app that has the file, and stops one that lacks it or names another repository", () => {
+        expect(run("true", true).status).toBe(0);
+        expect(run("true", false).status).toBe(1);
+        expect(run("true", true, "provider: github\nowner: someone\nrepo: seira\n").status).toBe(1);
+      });
+
+      it("passes an ad-hoc app without the file, and stops one that has it", () => {
+        expect(run("false", false).status).toBe(0);
+        const carrying = run("false", true);
+        expect(carrying.status).toBe(1);
+        expect(carrying.stdout).toContain("must not carry");
+      });
+
+      it("asks the packager to leave the file out of ad-hoc builds only", () => {
+        const script = step("Package both architectures").run!;
+        const [signed, adhoc] = script.split("else");
+        expect(adhoc).toContain("export SEIRA_NO_UPDATE_FEED=1");
+        expect(signed).not.toContain("SEIRA_NO_UPDATE_FEED");
+        expect(adhoc.indexOf("SEIRA_NO_UPDATE_FEED")).toBeLessThan(adhoc.indexOf("pnpm package:mac"));
+      });
+
+      it("checks the file before the package is signed off for notarization", () => {
+        expect(position("Gate: the update feed file matches the signing mode")).toBeLessThan(notarize);
+      });
     });
   });
 

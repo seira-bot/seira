@@ -163,7 +163,7 @@ describe("plan usage parsers", () => {
     expect(parsed.weekly).toMatchObject({ available: true, usedPercent: 40, remainingPercent: 60 });
     expect(parsed.extra).toEqual([
       expect.objectContaining({
-        label: "30-day",
+        label: "Monthly",
         usedPercent: 5,
         remainingPercent: 95,
         resetsAt: new Date(1_800_000_000_000).toISOString(),
@@ -171,6 +171,14 @@ describe("plan usage parsers", () => {
     ]);
     expect(parsed.models).toEqual([]);
     expect(JSON.stringify(parsed)).not.toContain(SECRET);
+  });
+
+  it("labels a 28-day and a 31-day Codex window Monthly, and any other long window by its days", () => {
+    const parsed = (days: number) => parseCodexUsage({ rate_limit: { primary_window: { used_percent: 7, limit_window_seconds: days * 86400, reset_at: 1_800_000_000 } } });
+    expect(parsed(28).extra).toEqual([expect.objectContaining({ label: "Monthly", usedPercent: 7 })]);
+    expect(parsed(31).extra).toEqual([expect.objectContaining({ label: "Monthly", usedPercent: 7 })]);
+    expect(parsed(14).extra).toEqual([expect.objectContaining({ label: "14-day" })]);
+    expect(parsed(28).fiveHour.available).toBe(false);
   });
 
   it("keeps Codex model windows separate from the account plan", () => {
@@ -272,7 +280,7 @@ describe("an OpenCode Go allowance", () => {
 describe("plan usage fetcher", () => {
   it("does not call fetch when the Claude token is expired", async () => {
     const fetchImpl = vi.fn<PlanFetch>();
-    const configDir = join(tmpdir(), "omb-plan-usage-claude");
+    const configDir = join(tmpdir(), "seira-plan-usage-claude");
     const reads: string[] = [];
     const report = await fetchPlanUsage([account("claude", { id: "work", name: "Work Claude", configDir })], {
       fetch: fetchImpl,
@@ -325,7 +333,7 @@ describe("plan usage fetcher", () => {
 
   it("asks the keychain only for the custom config dir service", async () => {
     const token = "claude-keychain-other-token";
-    const configDir = normalize(join(tmpdir(), "omb-plan-usage-claude-other"));
+    const configDir = normalize(join(tmpdir(), "seira-plan-usage-claude-other"));
     const suffixed = `Claude Code-credentials-${createHash("sha256").update(configDir).digest("hex").slice(0, 8)}`;
     const fetchImpl = vi.fn<PlanFetch>(async () => jsonResponse({
       five_hour: { utilization: 25, resets_at: "2026-09-26T12:00:00.000Z" },
@@ -355,7 +363,7 @@ describe("plan usage fetcher", () => {
 
   it("does not use the default Claude keychain login for a custom config dir", async () => {
     const defaultToken = "claude-keychain-default-token";
-    const configDir = normalize(join(tmpdir(), "omb-plan-usage-claude-custom"));
+    const configDir = normalize(join(tmpdir(), "seira-plan-usage-claude-custom"));
     const suffixed = `Claude Code-credentials-${createHash("sha256").update(configDir).digest("hex").slice(0, 8)}`;
     const fetchImpl = vi.fn<PlanFetch>(async () => jsonResponse({}));
     const services: string[] = [];
@@ -378,6 +386,33 @@ describe("plan usage fetcher", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(report.providers[0]).toMatchObject({ ok: false, error: "Sign in again in Claude" });
     expect(JSON.stringify(report)).not.toContain(defaultToken);
+  });
+
+  it("reads each Claude account with its own folder's login, and reports each one's own windows", async () => {
+    const dirA = normalize(join(tmpdir(), "seira-plan-usage-nana")), dirB = normalize(join(tmpdir(), "seira-plan-usage-affan"));
+    const logins = new Map([[join(dirA, ".credentials.json"), "token-nana"], [join(dirB, ".credentials.json"), "token-affan"]]);
+    const used: Record<string, [number, string]> = { "token-nana": [1, "2026-09-26T12:00:00.000Z"], "token-affan": [60, "2026-09-26T16:00:00.000Z"] };
+    const fetchImpl = vi.fn<PlanFetch>(async (_url, init) => {
+      const [utilization, resets_at] = used[init.headers.Authorization!.replace("Bearer ", "")]!;
+      return jsonResponse({ five_hour: { utilization, resets_at }, seven_day: { utilization: utilization / 2, resets_at } });
+    });
+    const accounts = [account("claude", { id: "nana", name: "nana", configDir: dirA }), account("claude", { id: "affan", name: "affan", configDir: dirB })];
+    const report = await fetchPlanUsage(accounts, {
+      fetch: fetchImpl,
+      now: () => NOW,
+      credentials: fileCredentialReader({
+        now: () => NOW,
+        env: { HOME: tmpdir(), USERPROFILE: tmpdir() },
+        readText: (path) => {
+          const token = logins.get(path);
+          return token ? JSON.stringify({ claudeAiOauth: { accessToken: token, expiresAt: NOW + 3_600_000 } }) : null;
+        },
+      }),
+    });
+    expect(report.providers.map((row) => [row.id, row.fiveHour.usedPercent, row.fiveHour.resetsAt])).toEqual([
+      ["nana", 1, "2026-09-26T12:00:00.000Z"],
+      ["affan", 60, "2026-09-26T16:00:00.000Z"],
+    ]);
   });
 
   it("turns a 401 into ok:false without throwing and still returns the other provider", async () => {

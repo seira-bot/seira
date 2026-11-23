@@ -4,7 +4,7 @@ Run the focused checks in disposable homes:
 
 ```sh
 pnpm exec vitest run src/components/ComputerPanel.takeover.test.ts src/components/computer-takeover.test.ts src/components/ComputerPanel.simple.test.ts
-pnpm exec vitest run server/computer-take-control.e2e.test.ts server/boat-desktop-link.test.ts server/container-computer.test.ts server/vps-computer.test.ts server/routes/desktop-viewer.test.ts
+pnpm exec vitest run server/container-computer.test.ts server/vps-computer.test.ts server/routes/desktop-viewer.test.ts
 ```
 
 The panel checks mount the real `ComputerPanel` with its real control requests;
@@ -23,26 +23,16 @@ only the live desktop itself is a stand-in. They prove:
   a half; an out-of-order event does not end it.
 - A desktop that never comes up gives the computer back and says so.
 - Handing back a VPS also closes its viewer tunnel.
-- A cloud computer's desktop is hosted by its provider, so it still opens in
-  the app's viewer window. On plain web it opens in its own tab, cut off from
-  the app; closing that tab gives the computer back, and a failed join closes it
-  and gives the computer back.
 
-The server checks run the real routes against a stub Boat relay that holds every
-screen capture. They prove that a screen preview in flight never blocks taking
-control or the desktop link, for a bot's own cloud computer, a team's shared one
-and the Team map's take, while putting the computer to sleep still waits for the
-capture, and two viewers share one capture. Each request for a desktop link is
-bounded, so a provider that never answers cannot leave the bot waiting. A Local
-VM or VPS desktop gets a process cap of 4096; one made under the old 512 cap is
+The server checks run the real routes. A Local VM or VPS desktop gets a process cap of 4096; one made under the old 512 cap is
 raised in place once, and a cap someone chose stays.
 
 ## By hand, against a real Local VM
 
 Use Docker on macOS or Linux and a server from source in a temporary home:
-`HOME` and `OMB_DATA_DIR` in a new temporary folder, the fake engine in its
-`config.json` with `localVm: { mode: "per-bot" }`, `OMB_STATIC_DIR` set to a
-`pnpm exec vite build` output and `OMB_DEV_TRUST_LOCAL_BROWSER=1`. Give a bot
+`HOME` and `SEIRA_DATA_DIR` in a new temporary folder, the fake engine in its
+`config.json` with `localVm: { mode: "per-bot" }`, `SEIRA_STATIC_DIR` set to a
+`pnpm exec vite build` output and `SEIRA_DEV_TRUST_LOCAL_BROWSER=1`. Give a bot
 the Local VM, create its VM from the panel and send it a message so it works.
 
 1. Press **Take control**. Within a fraction of a second the panel's picture

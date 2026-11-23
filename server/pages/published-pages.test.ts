@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishedPageCard } from "../../shared/published-page.ts";
 import { FAKE_DESKTOP_TOKEN, FAKE_HOME, FAKE_TOKEN_URL, fakePagesService } from "../testing/fake-pages.ts";
-import { applyIncludedPagesMessage, pagesHomeSignature } from "./access.ts";
+import { applyIncludedPagesMessage, pagesHomeSignature, pagesOffered } from "./access.ts";
+import { createPagesClient } from "./client.ts";
 import { PageBundleError, readPageBundle, skippedNote } from "./bundle.ts";
 import * as bundle from "./bundle.ts";
 import { PublishedPagesStore } from "./store.ts";
@@ -15,9 +16,9 @@ import { PASS } from "../routes/table.ts";
 const SITE = { "index.html": "<!doctype html><h1>Bake sale</h1>", "style.css": "h1{color:red}" };
 let dir: string;
 
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "omb-pages-")); });
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "seira-pages-")); });
 afterEach(() => {
-  applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: null });
+  applyIncludedPagesMessage({ type: "seira:included-pages", access: null });
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -28,11 +29,11 @@ function writeSite(folder: string, files: Record<string, string> = SITE) {
   }
   return folder;
 }
-const signIn = () => applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } });
+const signIn = () => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } });
 
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
 
@@ -57,7 +58,7 @@ describe("publishing a page", () => {
     const f = setup();
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again." });
+    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.", reason: "sign_in" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
@@ -66,20 +67,20 @@ describe("publishing a page", () => {
     const f = setup({ selfHosted: true });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers yet." });
+    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers.", reason: "unavailable" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
 
   it("says publishing isn't turned on yet, never \"sign in\", when this signed-in desktop's Admin offers no pages", async () => {
     const f = setup();
-    applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: null, offered: false });
+    applyIncludedPagesMessage({ type: "seira:included-pages", access: null, offered: false });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome.text).toBe("Publishing pages isn't turned on for this account yet.");
+    expect(outcome.text).toBe("Public links for pages aren't available on this account.");
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
-    applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: null });
+    applyIncludedPagesMessage({ type: "seira:included-pages", access: null });
     expect((await f.publish({ path: "site" })).text).toMatch(/^Publishing a page needs a Seira account/u);
   });
 
@@ -90,7 +91,7 @@ describe("publishing a page", () => {
     const outcome = await f.publish({ path: "site" });
     expect(outcome.status).toBe(200);
     const [page] = [...f.service.pages.keys()];
-    const url = `https://${page}.mausbot.page/`;
+    const url = `https://${page}.seira.page/`;
     expect(outcome.text).toContain(`Published “Bake sale” at ${url}`);
     expect(outcome.text).toContain("This account now has 1 of 5 pages.");
     expect(outcome.text.split("\n").at(-1)).toBe("Free pages carry a small “Made with Seira” badge.");
@@ -109,7 +110,7 @@ describe("publishing a page", () => {
     writeFileSync(join(site, "index.html"), "<h1>Tomorrow's menu</h1>");
     const again = await f.publish({ path: join(site), threadId: "routine-run-2" });
     const [page] = [...f.service.pages.keys()];
-    expect(again.text).toContain(`Updated “Bake sale” at the same link: https://${page}.mausbot.page/`);
+    expect(again.text).toContain(`Updated “Bake sale” at the same link: https://${page}.seira.page/`);
     expect(f.service.minted.map((call) => call.action)).toEqual(["create", "update"]);
     expect(f.service.pages.size).toBe(1);
     expect(f.service.pages.get(page!)!.files.get("index.html")).toBe("<h1>Tomorrow's menu</h1>");
@@ -119,7 +120,7 @@ describe("publishing a page", () => {
     await f.publish({ path: "other", pageId: page });
     expect(f.service.minted.at(-1)).toEqual({ action: "update", pageId: page, caller: "desktop" });
     expect(f.service.pages.get(page!)!.files.get("index.html")).toBe("<p>Other</p>");
-    expect(f.cards.map((card) => card.card.url)).toEqual(Array(3).fill(`https://${page}.mausbot.page/`));
+    expect(f.cards.map((card) => card.card.url)).toEqual(Array(3).fill(`https://${page}.seira.page/`));
   });
 
   it("gives a folder whose page was unpublished elsewhere a new link instead of failing", async () => {
@@ -269,7 +270,7 @@ describe("publishing a page", () => {
     signIn();
     writeSite(join(f.work, "site"));
     f.service.state.down = true;
-    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes." });
+    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes.", reason: "unavailable" });
   });
 });
 
@@ -503,15 +504,61 @@ describe("unpublishing a page", () => {
     };
     const fromSite = f.publish({ path: "site" });
     await stored;
+    const readFolder = bundle.readPageBundle;
+    const draftRead = deferred<{ read: ReturnType<typeof readFolder> }>();
+    const read = vi.spyOn(bundle, "readPageBundle").mockImplementationOnce((...args) => {
+      const reading = readFolder(...args);
+      draftRead.resolve({ read: reading });
+      return reading;
+    });
     const fromDraft = f.publish({ path: "draft", pageId: page });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // A promise runs its callbacks in the order they were added. The publish awaits its read before this test does, so it
+    // has joined the page's queue when this await returns.
+    await (await draftRead.promise).read;
+    read.mockRestore();
     const unpublished = f.pages.publisher.unpublish({ pageId: page });
-    await new Promise((resolve) => setTimeout(resolve, 20));
     release();
     expect((await Promise.all([fromSite, fromDraft, unpublished])).map((outcome) => outcome.status)).toEqual([200, 200, 200]);
     expect(f.service.pages.size).toBe(0);
     expect(f.pages.store.get(page!)).toBeNull();
     expect(f.cards.map((card) => card.card.state)).toEqual(["unpublished", "unpublished", "unpublished"]);
+  });
+
+  it("says the page is gone to an update from another folder by its page id that finished reading its folder only after an unpublish took the page down", async () => {
+    const f = setup();
+    signIn();
+    writeSite(join(f.work, "site"));
+    writeSite(join(f.work, "draft"));
+    await f.publish({ path: "site" });
+    const [page] = [...f.service.pages.keys()];
+    const answered = deferred(), stored = deferred();
+    let held = false;
+    const fetch = f.service.fetch;
+    f.service.fetch = async (input, init) => {
+      const response = await fetch(input, init);
+      if (init?.method === "PUT" && !held) { held = true; stored.resolve(); await answered.promise; }
+      return response;
+    };
+    const fromSite = f.publish({ path: "site" });
+    await stored.promise;
+    const readFolder = bundle.readPageBundle;
+    const takenDown = deferred();
+    const read = vi.spyOn(bundle, "readPageBundle").mockImplementationOnce(async (...args) => {
+      await takenDown.promise;
+      return readFolder(...args);
+    });
+    const fromDraft = f.publish({ path: "draft", pageId: page });
+    const unpublished = f.pages.publisher.unpublish({ pageId: page });
+    answered.resolve();
+    expect((await fromSite).status).toBe(200);
+    expect((await unpublished).status).toBe(200);
+    takenDown.resolve();
+    expect(await fromDraft).toMatchObject({ status: 410, reason: "gone" });
+    read.mockRestore();
+    expect(f.service.pages.size).toBe(0);
+    expect(f.pages.store.get(page!)).toBeNull();
+    expect(f.pages.store.list()).toEqual([]);
+    expect(f.cards.map((card) => card.card.state)).toEqual(["unpublished", "unpublished"]);
   });
 
   it("updates the page a folder's publish waited for, though the folder moved to another page meanwhile", async () => {
@@ -628,14 +675,13 @@ describe("sharing a chat page from its card", () => {
 
 describe("pages access", () => {
   it("takes only a well-formed pages token for the Admin over https from the desktop", () => {
-    expect(applyIncludedPagesMessage({ type: "openmausbot:included-x", access: null })).toBe(false);
-    expect(() => applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: { url: "http://cloud.example.test/x", token: FAKE_DESKTOP_TOKEN } })).toThrow();
-    expect(() => applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: { url: FAKE_TOKEN_URL, token: "omb_xd_short" } })).toThrow();
-    expect(applyIncludedPagesMessage({ type: "openmausbot:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } })).toBe(true);
+    expect(applyIncludedPagesMessage({ type: "seira:included-x", access: null })).toBe(false);
+    expect(() => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: "http://cloud.example.test/x", token: FAKE_DESKTOP_TOKEN } })).toThrow();
+    expect(() => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: "seira_xd_short" } })).toThrow();
+    expect(applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } })).toBe(true);
   });
 
   it("signs a home's request exactly as the Admin checks it", () => {
-    // The same vector is pinned in openmaus-cloud tests/cloud-pages.test.ts.
     expect(pagesHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"action":"create"}')).toBe("smys7kDYS99REKsdwsd9OaXv6pH_hP1Wajaq3KrTiVo");
   });
 });
@@ -651,7 +697,7 @@ describe("a live published page", () => {
     expect((await publishLive(f, true)).status).toBe(200);
     const [page] = [...f.service.pages.keys()];
     const html = f.service.pages.get(page!)!.files.get("index.html")!;
-    expect(html.startsWith("<!doctype html><meta name=\"omb-live\" content=\"")).toBe(true);
+    expect(html.startsWith("<!doctype html><meta name=\"seira-live\" content=\"")).toBe(true);
     expect(html).toContain("location.reload()");
     expect(html.endsWith("<h1>Bake sale</h1>")).toBe(true);
     expect(f.service.pages.get(page!)!.files.get("style.css")).toBe(SITE["style.css"]);
@@ -733,3 +779,30 @@ describe("a live published page", () => {
   });
 });
 
+describe("whether pages are offered", () => {
+  const reset = () => applyIncludedPagesMessage({ type: "seira:included-pages", access: null });
+
+  it("is false on a self-hosted server, and true for a home or a desktop that has not been told otherwise", () => {
+    reset();
+    expect(pagesOffered(null, true)).toBe(false);
+    expect(pagesOffered(null, false)).toBe(true);
+    expect(pagesOffered(FAKE_HOME, false)).toBe(true);
+  });
+
+  it("is false once the desktop's Admin offers no pages, and true again when it gives a token", () => {
+    applyIncludedPagesMessage({ type: "seira:included-pages", access: null, offered: false });
+    expect(pagesOffered(null, false)).toBe(false);
+    signIn();
+    expect(pagesOffered(null, false)).toBe(true);
+    reset();
+    expect(pagesOffered(null, false)).toBe(true);
+  });
+
+  it("treats a Cloud home's 501 for the token route as not offered, with a message that names no route or status", async () => {
+    const client = createPagesClient({ access: () => ({ kind: "home", url: FAKE_TOKEN_URL, machineId: FAKE_HOME.machineId, secret: FAKE_HOME.bootstrapSecret }),
+      fetch: async () => Response.json({ error: "unsupported" }, { status: 501 }) });
+    const outcome = await client.unpublish("abcdefghijklmnopqrstuvwxyz");
+    expect(outcome).toEqual({ ok: false, reason: "unavailable", message: "Public links for pages aren't available on this account." });
+    expect(outcome.ok === false && outcome.message).not.toMatch(/\byet\b|501|\/api\//u);
+  });
+});

@@ -20,6 +20,7 @@ describe("OAuth tab reservation", () => {
     const launch = reserveConnectionPage();
     expect(open).toHaveBeenCalledWith("", "_blank");
     expect(page.opener).toBeNull();
+    expect(launch.confirms).toBe(true);
     expect(page.location.replace).not.toHaveBeenCalled();
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(page.location.replace).toHaveBeenCalledWith("https://auth.example.test/flow");
@@ -56,6 +57,7 @@ describe("OAuth tab reservation", () => {
     vi.stubGlobal("window", { ogb: { openExternal }, open });
     const launch = reserveConnectionPage();
     expect(open).not.toHaveBeenCalled();
+    expect(launch.confirms).toBe(true);
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(openExternal).toHaveBeenCalledWith("https://auth.example.test/flow");
   });
@@ -65,12 +67,53 @@ describe("OAuth tab reservation", () => {
     vi.stubGlobal("window", { ogb: { platform: "darwin" }, open });
     const launch = reserveConnectionPage();
     expect(open).not.toHaveBeenCalled();
+    expect(launch.confirms).toBe(false);
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(open).toHaveBeenCalledWith("https://auth.example.test/flow", "_blank", "noopener,noreferrer");
+  });
+
+  it("says the page did not open when a remote server's page cannot hand it to the desktop app", async () => {
+    vi.stubGlobal("window", { ogb: { platform: "win32" }, open: vi.fn(() => { throw new Error("refused"); }) });
+    expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
+  });
+
+  it("opens the page through the app's sign-in bridge from a remote server's page, and knows it opened", async () => {
+    const openSignInPage = vi.fn(async () => true);
+    const open = vi.fn();
+    vi.stubGlobal("window", { ogb: { platform: "linux", openSignInPage }, open });
+    const launch = reserveConnectionPage();
+    expect(launch.confirms).toBe(true);
+    expect(await launch.open("https://auth.example.test/flow")).toBe(true);
+    expect(openSignInPage).toHaveBeenCalledWith("https://auth.example.test/flow");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("says the page did not open when the app's sign-in bridge refuses it", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { ogb: { openSignInPage: vi.fn(async () => { throw new Error("Use the link to open the page."); }) }, open });
+    expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
+    expect(open).not.toHaveBeenCalled();
   });
 
   it("says the page did not open when the desktop app refuses it", async () => {
     vi.stubGlobal("window", { ogb: { openExternal: vi.fn(async () => { throw new Error("only available while using the local server"); }) }, open: vi.fn() });
     expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
+  });
+
+  it("opens the clean window only when asked and available, else the old path", async () => {
+    const openExternal = vi.fn(async () => true);
+    const openCleanSignInPage = vi.fn(async () => true);
+    vi.stubGlobal("window", { ogb: { openExternal, openCleanSignInPage } });
+    const url = "https://auth.example.test/flow";
+    await reserveConnectionPage().open(url);
+    await reserveConnectionPage().open(url, { cleanWindow: false });
+    expect(openCleanSignInPage).not.toHaveBeenCalled();
+    expect(openExternal).toHaveBeenCalledTimes(2);
+    await reserveConnectionPage().open(url, { cleanWindow: true });
+    expect(openCleanSignInPage).toHaveBeenCalledWith(url);
+    expect(openExternal).toHaveBeenCalledTimes(2);
+    vi.stubGlobal("window", { ogb: { openExternal } });
+    await reserveConnectionPage().open(url, { cleanWindow: true });
+    expect(openExternal).toHaveBeenCalledTimes(3);
   });
 });

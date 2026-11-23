@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { DESKTOP_DOWNLOAD_URL } from "../../shared/computer-ask";
 import { unlessRefused } from "@/lib/admin-scope";
 import { openExternalLink } from "@/lib/app-links";
 import { t } from "@/lib/i18n";
 import { serverUpdateConfirmBody, serverUpdateView, type ServerUpdateCheck, type ServerUpdateStatus, type ServerUpdateView } from "@/lib/server-update";
 import { ApiError } from "@/state/api";
 import { api, useStore } from "@/state/store";
-import type { AppUpdateAnswer } from "@/types/ogb";
+import type { AppUpdateAnswer, AppUpdateWay } from "@/types/ogb";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SettingRow } from "./SettingsPrimitives";
 
@@ -33,6 +34,14 @@ export function useServerUpdate() {
   const [pressed, setPressed] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [appAnswer, setAppAnswer] = useState<AppUpdateAnswer | null>(null);
+  const [appWay, setAppWay] = useState<AppUpdateWay | null>(null);
+  const askable = askableAppVersion() !== null;
+  useEffect(() => {
+    if (!askable) return;
+    let alive = true;
+    void Promise.resolve(window.ogb?.appUpdate?.way?.()).then((way) => { if (alive && way) setAppWay(way); }, () => {});
+    return () => { alive = false; };
+  }, [askable]);
 
   const readStatus = useCallback(async () => {
     const next = await unlessRefused(STATUS, () => api<ServerUpdateStatus>(STATUS, { timeoutMs: 20_000 }), null);
@@ -110,7 +119,7 @@ export function useServerUpdate() {
   }, []);
 
   const waitedMs = waitingSince === null ? 0 : Math.max(0, now - waitingSince);
-  const view: ServerUpdateView = serverUpdateView({ check, status, app: askableAppVersion(), checking, failed, pressed, appAnswer, waitedMs });
+  const view: ServerUpdateView = serverUpdateView({ check, status, app: askableAppVersion(), checking, failed, pressed, appAnswer, appWay, waitedMs });
   return { check, status, view: problem ? { ...view, note: problem, noteTone: "danger" as const } : view, load, readStatus, updateServer, updateApp };
 }
 
@@ -118,6 +127,7 @@ const ACTION_LABEL = {
   check: "settings.updates.check",
   "update-server": "serverUpdate.updateServer",
   "update-app": "serverUpdate.updateApp",
+  "download-app": "serverUpdate.downloadApp",
   reload: "settings.simple.updates.reload",
 } as const;
 
@@ -131,6 +141,7 @@ export function ServerUpdateRow({ title }: { title: string }) {
     if (view.action === "check") return void update.load();
     if (view.action === "reload") return window.location.reload();
     if (view.action === "update-app") return void update.updateApp();
+    if (view.action === "download-app") return void openExternalLink(DESKTOP_DOWNLOAD_URL);
     if (view.action === "update-server") {
       void update.readStatus().catch(() => null);
       setConfirming(true);

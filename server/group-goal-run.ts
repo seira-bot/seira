@@ -1,16 +1,17 @@
 import type { ServerText } from "../shared/server-text.ts";
+import { currentGoalTags } from "../electron/legacy-names.mjs";
 import { noticeFailure } from "./chat-notices.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { GroupDefaultResponder } from "./store.ts";
 
 // Odd so the final bounded turn always falls to the coordinator for the completion decision.
 export const GROUP_GOAL_MAX_TURNS = 13;
-export const GROUP_GOAL_WAIT_MAX_MS = Math.max(1_000, Number(process.env.OMB_GOAL_WAIT_MAX_MS) || 30 * 60_000);
+export const GROUP_GOAL_WAIT_MAX_MS = Math.max(1_000, Number(process.env.SEIRA_GOAL_WAIT_MAX_MS) || 30 * 60_000);
 const GROUP_GOAL_MAX_WAIT_EXHAUSTIONS = 3;
-export const GROUP_GOAL_CONTROL_OPEN = "<openmaus-goal>";
-export const GROUP_GOAL_CONTROL_CLOSE = "</openmaus-goal>";
+export const GROUP_GOAL_CONTROL_OPEN = "<seira-goal>";
+export const GROUP_GOAL_CONTROL_CLOSE = "</seira-goal>";
 /** A close tag the model sometimes escapes; it ends an envelope exactly like the plain one. */
-const ESCAPED_GOAL_CONTROL_CLOSE = "<\\/openmaus-goal>";
+const ESCAPED_GOAL_CONTROL_CLOSE = "<\\/seira-goal>";
 
 export type GroupGoalDecision =
   | { status: "continue"; next: string; instruction: string; detail?: string }
@@ -40,7 +41,7 @@ const bounded = (value: unknown, max: number): string =>
 
 /** A reply without its private goal envelopes; a turn outside the goal's own (a teammate's result waking the lead) can write one too. */
 export function visibleCoordinatorText(text: string): string {
-  let visible = text;
+  let visible = currentGoalTags(text);
   for (;;) {
     // An envelope ends at the earliest plain or escaped close tag, so an escaped
     // envelope is stripped exactly like a plain one and any visible text after it is kept.
@@ -239,7 +240,7 @@ export function groupGoalWorkerInstructions(args: {
     `Your assignment: ${args.assignment}`,
     `This is team turn ${args.turn} of ${args.maxTurns}.`,
     "Do the assigned work now and put concrete results, evidence, or a clear blocker in your reply.",
-    `Address your result to ${args.coordinatorName}. Do not invent a new orchestration protocol or emit an openmaus-goal control envelope.`,
+    `Address your result to ${args.coordinatorName}. Do not invent a new orchestration protocol or emit a seira-goal control envelope.`,
   ].join("\n");
 }
 

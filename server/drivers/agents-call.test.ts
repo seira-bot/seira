@@ -508,7 +508,7 @@ describe("X research tools", () => {
   it("sends each tool's arguments to its route and returns the JSON the route gave", async () => {
     for (const [tool, route] of Object.entries(ROUTES)) {
       const calls: Array<{ path: string; body: unknown }> = [];
-      const result = await callTool(tool, { query: "maus", handle: "@maus", post: "42" }, context({
+      const result = await callTool(tool, { query: "seira", handle: "@seira", post: "42" }, context({
         client: {
           api: async () => ({}),
           apiResponse: async (path, init) => {
@@ -517,14 +517,14 @@ describe("X research tools", () => {
           },
         },
       }));
-      expect(calls).toEqual([{ path: `/api/internal/x/${route}`, body: { query: "maus", handle: "@maus", post: "42" } }]);
+      expect(calls).toEqual([{ path: `/api/internal/x/${route}`, body: { query: "seira", handle: "@seira", post: "42" } }]);
       expect(result.isError).toBeUndefined();
       expect(JSON.parse(result.text)).toEqual({ posts: [{ id: "1" }], more: false });
     }
   });
 
   it("hands the bot the route's own sentence when it refuses", async () => {
-    const result = await callTool("x_search", { query: "maus" }, context({
+    const result = await callTool("x_search", { query: "seira" }, context({
       client: {
         api: async () => ({}),
         apiResponse: async () => ({ ok: false, status: 403, body: { error: "X research is off for this bot. Turn it on in this bot's settings under Access." } }),
@@ -537,10 +537,10 @@ describe("X research tools", () => {
 describe("page tools", () => {
   it("send the tool's arguments to their internal routes and hand back the sentence, or the refusal as an error", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
-    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.mausbot.page/" } },
+    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.seira.page/" } },
       { ok: false, status: 402, body: { error: "You’ve used your 5 free pages. Seira Cloud gives you more, and pages without the badge." } }];
     const client = { api: async () => ({}), apiResponse: async (path: string, init?: RequestInit) => { calls.push({ path, body: JSON.parse(String(init?.body)) }); return answers.shift()!; } };
-    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.mausbot.page/" });
+    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.seira.page/" });
     expect(await callTool("unpublish_page", { page_id: "abcdefghijklmnopqrstuvwxyz" }, context({ client })))
       .toEqual({ text: "You’ve used your 5 free pages. Seira Cloud gives you more, and pages without the badge.", isError: true });
     expect(calls).toEqual([{ path: "/api/internal/pages/publish", body: { path: "site", title: "Bake sale" } },
@@ -690,33 +690,5 @@ describe("blank optional arguments", () => {
     expect(calls).toEqual([
       { path: "/api/internal/manage-room", body: { fromBotId: "bot-voice", fromThreadId: "thread-voice", roomId: "room-1", action: "set_bulletin", bulletin: "" } },
     ]);
-  });
-});
-
-describe("reset_cloud_computer", () => {
-  it("posts the why, and for a Chief the bot it names, and returns the route's text or refusal", async () => {
-    const calls: Array<{ path: string; method?: string; body: unknown }> = [];
-    const reply = (ok: boolean) => context({
-      client: {
-        api: async () => ({}),
-        apiResponse: async (path, init) => {
-          calls.push({ path, method: init?.method, body: JSON.parse(String(init?.body)) });
-          return ok ? { ok: true, status: 200, body: { text: "Your cloud computer is being reset." } } : { ok: false, status: 403, body: { error: "not yours" } };
-        },
-      },
-    });
-    expect(await callTool("reset_cloud_computer", { why: "Stuck starting." }, reply(true))).toEqual({ text: "Your cloud computer is being reset." });
-    expect(await callTool("reset_cloud_computer", { why: "Stuck.", for_bot_id: " bot-b " }, reply(false))).toEqual({ text: "not yours", isError: true });
-    expect(calls).toEqual([
-      { path: "/api/internal/cloud-computer/reset", method: "POST", body: { why: "Stuck starting." } },
-      { path: "/api/internal/cloud-computer/reset", method: "POST", body: { why: "Stuck.", targetBotId: "bot-b" } },
-    ]);
-  });
-
-  it("is mounted only where a cloud computer can be had, and names another bot only for a Chief", () => {
-    const tool = (env: Record<string, string>) => availableTools(catalogProfileFromEnv(env)).find((entry) => entry.name === "reset_cloud_computer");
-    expect(tool({})).toBeUndefined();
-    expect(Object.keys(tool({ OMB_MEETINGS: "1" })?.inputSchema.properties ?? {})).toEqual(["why"]);
-    expect(Object.keys(tool({ OMB_MEETINGS: "1", OMB_CHIEF_OF_STAFF: "1" })?.inputSchema.properties ?? {})).toEqual(["why", "for_bot_id"]);
   });
 });

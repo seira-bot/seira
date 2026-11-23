@@ -34,7 +34,6 @@ vi.mock("./AndroidDevicePanel", async (importOriginal) => ({
   },
 }));
 vi.mock("./BrowserPanel", () => ({ BrowserPanel: () => null }));
-vi.mock("./CloudBackendPicker", () => ({ CloudBackendPicker: () => null }));
 vi.mock("./bot-settings/RoutinesSection", () => ({ RoutinesSection: () => null }));
 vi.mock("./data/DataPanel", () => ({ DataPanel: () => createElement("div", { "data-testid": "data-panel" }) }));
 const panelViewStore = vi.hoisted(() => ({ current: "computer" }));
@@ -49,7 +48,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: async (path: string) => {
     if (path.startsWith("/api/bots/scout/computer/control")) return { held: false, helpReason: null };
-    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "box", configured: true, box: { boxId: "bx_23456789", state: "ready" } };
+    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "vps", configured: true };
     return {};
   },
 }));
@@ -76,7 +75,7 @@ const makeBot = (patch: Partial<Bot> = {}): Bot => ({
 let root: Root | null = null;
 let features: NonNullable<AppState["config"]>["features"];
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { box: { configured: true }, features } as AppState["config"] } as AppState,
+  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { features } as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
   refreshInstances: async () => {},

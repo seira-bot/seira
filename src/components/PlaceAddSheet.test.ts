@@ -7,16 +7,19 @@ import { suggestedLocalName } from "@/lib/places";
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("./cloud-buy/CloudMascotScene", () => ({ CloudMascotScene: () => null }));
-const { NewLocalFromMenu, RailSheet } = await import("./PlaceAddSheet");
+const { ConnectServerFromMenu, NewLocalFromMenu, PlaceAddSheet, RailSheet } = await import("./PlaceAddSheet");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-let host: HTMLDivElement, root: Root | null = null, ask: (() => void) | null = null;
-const create = vi.fn(async (_name: string, _color: unknown) => ({ outcome: "made" as const, id: "work" }));
+let host: HTMLDivElement, root: Root | null = null, ask: (() => void) | null = null, askConnect: (() => void) | null = null;
+type Made = { outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" | "failed" };
+const create = vi.fn(async (_name: string, _color: unknown): Promise<Made> => ({ outcome: "made", id: "work" }));
+const places = vi.fn(async () => ({ places: [], add: { cloud: false, link: false, address: false } }));
 beforeEach(() => {
   setLocale("en");
   vi.clearAllMocks();
-  Object.assign(window, { ogb: { workspaces: { places: vi.fn(async () => ({ places: [], add: { cloud: false, link: false, address: false } })), onChanged: () => () => {},
-    local: { create, edit: vi.fn(), remove: vi.fn() }, onNewLocal: (callback: () => void) => { ask = callback; return () => { ask = null; }; } } } });
+  Object.assign(window, { ogb: { workspaces: { places, onChanged: () => () => {},
+    local: { create, edit: vi.fn(), remove: vi.fn() }, onNewLocal: (callback: () => void) => { ask = callback; return () => { ask = null; }; },
+    onConnectServer: (callback: () => void) => { askConnect = callback; return () => { askConnect = null; }; }, probe: vi.fn(async () => ({ outcome: "problem", problem: "unreachable", host: "" })) } } });
   host = document.createElement("div"); document.body.append(host);
 });
 afterEach(async () => { await act(async () => root?.unmount()); root = null; host.remove(); document.body.innerHTML = ""; });
@@ -42,6 +45,35 @@ it("the Server menu's New workspace on this computer opens the same step on this
   expect(document.querySelector("[data-place-add-sheet]"), "Escape: no dead end").toBeNull();
 });
 
+it("Create that main can't do keeps the sheet open and says why in it: this computer is full, it can't take one now, or try again", async () => {
+  root = createRoot(host);
+  await act(async () => { root!.render(createElement(NewLocalFromMenu)); });
+  await act(async () => { ask!(); });
+  const form = document.querySelector<HTMLFormElement>('[data-place-add="local"]')!;
+  const said = async (answer: () => Promise<Made>) => {
+    create.mockImplementationOnce(answer);
+    await act(async () => { form.requestSubmit(); for (let i = 0; i < 4; i++) await Promise.resolve(); });
+    expect(document.querySelector("[data-place-add-sheet]"), "the sheet stays open").not.toBeNull();
+    return document.querySelector("[data-local-problem]")?.textContent;
+  };
+  expect(await said(async () => ({ outcome: "full" }))).toBe("This computer has as many places as it can hold. Remove one, then try again.");
+  expect(places).not.toHaveBeenCalled();
+  expect(await said(async () => ({ outcome: "unavailable" }))).toBe("You can't add a place on this computer now. Choose another kind of place.");
+  expect(places, "main's choices read again").toHaveBeenCalledTimes(1);
+  expect(await said(async () => { throw new Error("gone"); })).toBe("That didn't work. Try again in a moment.");
+  expect(create).toHaveBeenCalledTimes(3);
+});
+
+it("the Server menu's Connect to a server… opens the sheet that takes a link, or an address and a code", async () => {
+  root = createRoot(host);
+  await act(async () => { root!.render(createElement(ConnectServerFromMenu)); });
+  expect(document.querySelector("[data-place-add-sheet]")).toBeNull();
+  await act(async () => { askConnect!(); });
+  expect(document.querySelector('[data-place-add="own-server"] [data-own-server-link]')).not.toBeNull();
+  await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(document.querySelector("[data-place-add-sheet]"), "Escape: no dead end").toBeNull();
+});
+
 it("a parent re-render with a new onClose keeps focus inside the sheet instead of handing it back to the opener", async () => {
   const opener = document.createElement("button"); document.body.append(opener); opener.focus();
   const sheet = (onClose: () => void) => createElement(RailSheet, { focusKey: "server", onClose, children: [createElement("button", { key: "a" }, "A"), createElement("button", { key: "b", "data-second": "" }, "B")] });
@@ -53,4 +85,19 @@ it("a parent re-render with a new onClose keeps focus inside the sheet instead o
   expect(document.activeElement).toBe(second);
   await act(async () => { root!.render(createElement("div")); });
   expect(document.activeElement, "closing still returns focus to the opener").toBe(opener);
+});
+
+it("the server view offers Install on my server only where the desktop bridge exists", async () => {
+  root = createRoot(host);
+  const open = async () => { await act(async () => { root!.render(createElement(PlaceAddSheet, { choices: { cloud: false, link: true, address: false }, onClose: () => {} })); }); };
+  await open();
+  expect(document.querySelector("[data-own-server-install]"), "no bridge, no link").toBeNull();
+  await act(async () => root?.unmount());
+  root = createRoot(host);
+  (window as { ogb?: { serverInstall?: unknown } }).ogb!.serverInstall = { info: async () => ({ agent: false }), onEvent: () => () => {}, cancel: async () => true };
+  await open();
+  const link = document.querySelector<HTMLButtonElement>("[data-own-server-install]");
+  expect(link?.textContent).toBe("Install on my server");
+  await act(async () => { link!.click(); });
+  expect(document.querySelector('[data-server-install="form"]')).not.toBeNull();
 });

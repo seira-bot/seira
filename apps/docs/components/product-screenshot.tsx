@@ -1,7 +1,6 @@
 // Pixel size of each image in docs/screenshots. The page keeps this space before the image loads.
 const screenshotSizes = {
   'approval-card': [1980, 1470],
-  'byo-vps-picker': [717, 565],
   'docs-automations': [2560, 1600],
   'docs-computer-panel': [2560, 1600],
   'docs-connected-apps': [2560, 1600],
@@ -25,8 +24,8 @@ export function ProductScreenshot({
 }) {
   const [width, height] = screenshotSizes[name];
   return (
-    <figure className="omb-product-shot">
-      <div className="omb-product-shot-frame">
+    <figure className="seira-product-shot">
+      <div className="seira-product-shot-frame">
         <img
           src={`/screenshots/${name}.png`}
           alt={alt}

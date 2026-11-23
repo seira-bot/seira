@@ -1,14 +1,16 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import {
-  currentUser, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
-  servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
+  currentUser, earlierSentinelSchedule, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
+  servicePath, servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
 import { cliCommand } from "./cli-invocation.ts";
+import { controlPlaneProblem, fleetCredential } from "./tunnel.ts";
 
 export interface ServiceInstallInput {
   action: "install" | "uninstall";
@@ -30,11 +32,15 @@ export interface ServiceInstallInput {
   hasSentinel?: (script: string) => boolean;
   script: string;
   node: string;
-  /** Under npx: installs `openmausbot@version` into `prefix` and resolves whether npm succeeded. */
+  /** Under npx: installs `seira@version` into `prefix` and resolves whether npm succeeded. */
   installCopy?: (prefix: string, version: string) => boolean;
   platform?: NodeJS.Platform;
   home?: string;
   user?: string;
+  /** The PATH to carry into the service; defaults to this process's. */
+  pathEnv?: string;
+  /** Defaults to this process's effective user id. */
+  euid?: number | null;
 }
 
 export interface ServiceIo {
@@ -65,6 +71,13 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `seira serve` at startup");
     return 1;
   }
+  if (input.action === "install" && input.tunnel && !input.domain && !fleetCredential(input.env)) {
+    const problem = controlPlaneProblem(input.env);
+    if (problem) {
+      io.error(`--tunnel: ${problem}`);
+      return 1;
+    }
+  }
   if (input.action === "uninstall") {
     io.log(`to stop and remove the service:`);
     for (const line of plan.deactivate) io.log(`  ${line}`);
@@ -84,11 +97,12 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     user: input.user ?? currentUser(),
     home,
     bindsLowPorts: Boolean(input.domain),
+    path: servicePath(input.node, input.pathEnv ?? process.env.PATH, platform),
     ...(input.label ? { label: input.label } : {}),
     ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };
   const rendered = platform === "darwin" ? launchdPlist(spec) : systemdUnit(spec);
-  mkdirSync(input.dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(input.dataDir);
   writeFileSync(plan.file, rendered, { mode: 0o644 });
   io.log(`wrote ${plan.file}`);
   io.log("");
@@ -96,8 +110,15 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   if (input.domain && platform === "linux") io.log("the unit grants Caddy the capability for ports 80 and 443, so no setcap is needed under the service");
-  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u openmausbot -f"}`);
-  io.log(`change options later by running \`${cliCommand("service install")}\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart openmausbot"}`);
+  io.log(`the service searches this PATH for engines: ${spec.path}. After you upgrade Node, run \`${cliCommand("service install")}\` again.`);
+  const euid = "euid" in input ? input.euid : process.geteuid?.();
+  if (euid === 0) {
+    io.error("");
+    io.error("warning: this service runs as root. Claude Code refuses Full access for a root process, so bots that use it cannot run with Full access.");
+    io.error(`run the server as a normal user instead: create one (for example \`sudo adduser seira\`), sign in as that user, and run \`${cliCommand("service install")}\` there.`);
+  }
+  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u seira -f"}`);
+  io.log(`change options later by running \`${cliCommand("service install")}\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart seira"}`);
   return 0;
 }
 
@@ -113,7 +134,7 @@ function pinnedCopy(input: ServiceInstallInput, io: ServiceIo): string | null {
   const command = `npm install --prefix ${prefix} @seira-bot/seira@${version ?? "latest"}`;
   io.log(`this run comes from npx's cache, which npm prunes: installing @seira-bot/seira ${version ?? ""} into ${prefix} for the service`.replace("  ", " "));
   const installed = (input.installCopy ?? installWithNpm)(prefix, version ?? "latest");
-  const script = join(prefix, "node_modules", "@seira-bot", "seira", "dist-server", "openmausbot.js");
+  const script = join(prefix, "node_modules", "@seira-bot", "seira", "dist-server", "seira.js");
   if (installed && (input.exists ?? existsSync)(script)) return script;
   io.error(`could not install that copy. Run this, then the same service install command again from it:\n  ${command}\n  node ${script} service install …`);
   return null;
@@ -154,6 +175,12 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
     io.error(refusal);
     return 1;
   }
+  const earlier = earlierSentinelSchedule(platform, home, input.exists ?? existsSync);
+  if (earlier) {
+    io.log("first remove the schedule an earlier version installed:");
+    for (const line of earlier.deactivate) io.log(`  ${line}`);
+    io.log("");
+  }
   const shipped = shippedSentinelCli(platform, home, input.exists ?? existsSync, input.hasSentinel ?? bundleHasSentinel);
   if (!shipped) {
     const warning = unstableInstallWarning(input.script);
@@ -186,7 +213,7 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   io.log(`issues: ${join(out, "issues.jsonl")}`);
-  io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u openmausbot-sentinel"}`);
+  io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u seira-sentinel"}`);
   io.log("after an app update or a Node upgrade, check the schedule still points at both: seira sentinel --check-install");
   return 0;
 }

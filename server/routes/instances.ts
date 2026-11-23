@@ -1,6 +1,8 @@
 import { agentEndpointAddress, discoverAgentEndpointModels, hasExplicitModel, isGatewayEndpoint } from "../agent-endpoint-models.ts";
 import { codexEndpointSchema, codexEndpointUpdateSchema, newCodexEndpoint, updateCodexEndpoint, withCodexEndpointInfo, isCodexEndpoint } from "../codex-endpoints.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
+import { providerUses, usesVisibleTo } from "../provider-uses.ts";
+import type { VisibleSet } from "../bot-visibility.ts";
 import { modelManifest } from "../model-manifest/manifest.ts";
 import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
@@ -39,12 +41,13 @@ import { productName } from "../brand.ts";
 import { checkEngine, type EngineCheck } from "../engine-check.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import type { ProviderAuthSessions } from "../provider-auth-sessions.ts";
-import { providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
-import { isLoopbackHost, isProxied, ownerOrAdmin } from "../request-auth.ts";
+import { instanceIcon, providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
+import { isLoopbackHost, isProxied, ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { PHONE_WIRE_NAMES, sentWireName } from "../../electron/phone-wire-names.mjs";
 
 export interface InstanceRouteDeps {
   store: Pick<Store, "bots" | "tasks">;
@@ -61,11 +64,15 @@ export interface InstanceRouteDeps {
   broadcast(payload: Record<string, unknown>): void;
   testCliBinary(cli: string, driver: (typeof BUILT_IN_DRIVERS)[number] | undefined): Promise<unknown>;
   cliProbeEnvironment(): NodeJS.ProcessEnv;
+  visibleFor: (auth: RequestAuth) => Pick<VisibleSet, "bot" | "thread">;
   threadBusy(botId: string, threadId: string): boolean;
   botForThread(botId: string, threadId: string): Pick<{ modelSelection: ModelSelection }, "modelSelection"> | null;
   activeGroupTurnForBot(botId: string): { threadId: string } | null;
   /** The server's tested-AI record (server/tested-ai.ts): a check there also settles the new-bot default. */
   checkInstance?(instance: ProviderInstance): Promise<EngineCheck>;
+  /** Moves the model new bots start with off a provider that is about to be hidden, to the first provider that is ready.
+   * Answers null when none is ready. */
+  moveNewBotModelOff?(instanceId: string): Promise<ModelSelection | null>;
   /** Whether an added server lists its models (server/openai-compat-endpoints.ts); replaced in tests. */
   endpointModelsReadable?(config: { url: string; key: string; catalog?: unknown }): Promise<boolean>;
 }
@@ -74,20 +81,22 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   const {
     store, cfg, registry, sessions, providerAuthSessions, hostedModels, providerConfigBusy, providerInstancesChanging,
     persistProviderInstance, configStatus, broadcast, testCliBinary, cliProbeEnvironment, threadBusy,
-    botForThread, activeGroupTurnForBot,
+    botForThread, activeGroupTurnForBot, visibleFor,
   } = deps;
   const detectModels = deps.endpointModelsReadable ?? endpointModelsReadable;
   const describeInstances = async () => hostedModels ? deps.describeInstances()
     : withEndpointUrls(withCodexEndpointInfo(withClaudeBedrockInfo(withClaudeEndpointInfo(await deps.describeInstances(), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {});
-  /** Bots, their backups and threads, the new-bot default, or a turn running on it: a provider in use can't go away. */
-  const providerInUse = (instanceId: string): boolean => cfg.defaultModelSelection?.instanceId === instanceId || store.bots.some((bot) =>
-    bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) => task.modelSelection?.instanceId === instanceId)) ||
-    busyProviderSelections().some((selection) => selection.instanceId === instanceId);
-  const busyProviderSelections = () => store.bots.flatMap((bot) => {
+  const busyBotSelections = () => store.bots.flatMap((bot) => {
     const busyTasks = store.tasks(bot.id).filter((task) => threadBusy(bot.id, task.threadId));
     const selections = busyTasks.map((task) => botForThread(bot.id, task.threadId)!.modelSelection);
     if (activeGroupTurnForBot(bot.id) || (bot.busy && busyTasks.length === 0)) selections.push(bot.modelSelection);
-    return selections;
+    return selections.map((selection) => ({ botId: bot.id, instanceId: selection.instanceId }));
+  });
+  const busyProviderSelections = () => busyBotSelections();
+  /** The new-bot default, bots, their backups and conversations, and turns running on it: a provider in use can't go away. */
+  const providerUsesOf = (instanceId: string, withDefault = true) => providerUses({
+    instanceId, defaultInstanceId: withDefault ? cfg.defaultModelSelection?.instanceId ?? null : null,
+    bots: store.bots, tasks: (botId) => store.tasks(botId), running: busyBotSelections(),
   });
   /** After the app installed its own copy of an engine whose CLI found a copy that does not start: point the engine at the
    * app's copy, as Set CLI would. Not while provider settings are changing or a bot is using the engine. */
@@ -114,7 +123,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (method === "GET" && path === "/api/instances/hidden") {
       const hidden = Object.entries(persistableInstanceConfigs(cfg)).filter(([, entry]) => entry.hidden === true);
-      return json(res, 200, { instances: hidden.map(([instanceId, entry]) => ({ instanceId, driverKind: entry.driver, displayName: entry.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === entry.driver)?.metadata.displayName ?? instanceId })) });
+      return json(res, 200, { instances: hidden.map(([instanceId, entry]) => ({ instanceId, driverKind: entry.driver, displayName: entry.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === entry.driver)?.metadata.displayName ?? instanceId, ...instanceIcon(entry) })) });
     }
     if (method === "GET" && path === "/api/instances") {
       // Rescan PATH: Windows never pushes PATH changes into a live process, so a CLI installed since launch stays invisible.
@@ -136,7 +145,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
     if (method === "GET" && path === "/api/health/engines") {
       const described = await describeInstances();
       const available = Array.isArray(described) ? described.filter((instance) => Object(Object(instance).snapshot).state === "available").length : 0;
-      return json(res, 200, { app: "openmausbot", engines: available });
+      return json(res, 200, { app: sentWireName("healthApp"), legacyApp: PHONE_WIRE_NAMES.healthApp.legacy, engines: available });
     }
     const companyMutation = /^\/api\/instances\/(company\.[\w.-]+)(?:\/|$)/.exec(path);
     if (hostedModels && path.startsWith("/api/instances/") && method !== "GET") return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
@@ -476,8 +485,9 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       if (!parsed.success) return json(res, 400, { ...userError("serverError.instance.settingsInvalid") });
       const body = parsed.data;
       const instanceId = instancePatch[1];
+      if (body.force && !ownerOrAdmin(auth)) return json(res, 403, { ...userError("serverError.chat.ownerOrAdmin") });
       if (providerConfigBusy.get()) return json(res, 409, { error: "provider settings are already being updated" });
-      if (busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
+      if (body.hidden !== true && busyProviderSelections().some((selection) => selection.instanceId === instanceId)) {
         return json(res, 409, { error: "Wait for bots using this account to finish before changing its settings." });
       }
       /** Set when the model list is read again from a new address or with a new key: after the busy guard, so bots on
@@ -493,8 +503,14 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         if ((body.configDir !== undefined && entry.driver !== "claudeAgent") || (body.displayName !== undefined && !["claudeAgent", "codex"].includes(entry.driver))) {
           return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
         }
-        if (body.hidden === true && providerInUse(instanceId)) {
-          return json(res, 409, { error: "Choose another model for the bots and default model using this provider before hiding it." });
+        if (body.hidden === true && deps.moveNewBotModelOff && providerUsesOf(instanceId, false).length === 0
+          && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection?.instanceId === instanceId)) {
+          await deps.moveNewBotModelOff(instanceId);
+        }
+        if (body.hidden === true) {
+          const uses = providerUsesOf(instanceId);
+          if (uses.some((use) => use.kind === "running")) return json(res, 409, { ...userError("serverError.instance.hideRunning"), uses: usesVisibleTo(uses, visibleFor(auth)) });
+          if (uses.length > 0 && !body.force) return json(res, 409, { ...userError("serverError.instance.hideBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
         }
         if (body.hidden !== undefined) {
           if (body.hidden) entry.hidden = true;
@@ -566,10 +582,9 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       if (!addedChatgpt && !addedAntigravity && !isCodexEndpoint(instances[instanceId]) && !isAddedEndpoint(instanceId, instances[instanceId]) && (instances[instanceId].driver !== "claudeAgent" || instanceId === "claude")) {
         return json(res, 400, { error: "Only added accounts and custom endpoints can be removed here." });
       }
-      if (providerInUse(instanceId)) {
-        return json(res, 409, { error: "Choose another account for the bots and default model using this account before removing it." });
-      }
-      // OpenMausBot keeps a ChatGPT account's sign-in in its own data folder: removing the account clears it.
+      const uses = providerUsesOf(instanceId);
+      if (uses.length > 0) return json(res, 409, { ...userError("serverError.instance.removeBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
+      // Seira keeps a ChatGPT account's sign-in in its own data folder: removing the account clears it.
       const live = addedChatgpt ? registry.get(instanceId) : undefined;
       if (live?.signOut) {
         try { await providerAuthSessions.signOut(live, auth.kind === "session" ? auth.session.id : "loopback"); }
@@ -584,7 +599,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       try {
         delete instances[instanceId];
         await persistProviderInstance(instanceId, instances);
-        // An added Antigravity account's Google sign-in lives in OpenMausBot's data folder too: removing the account deletes it.
+        // An added Antigravity account's Google sign-in lives in Seira's data folder too: removing the account deletes it.
         if (addedAntigravity) await removeAntigravityProfile(instanceId);
         return json(res, 200, { instances: await describeInstances() });
       } finally {

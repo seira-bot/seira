@@ -123,3 +123,61 @@ describe("Use a saved one: GET .../saved and POST .../use", () => {
     }
   });
 });
+
+describe("POST /api/bots/<bot>/secret-cards/<card>/provide", () => {
+  const PATH = "/api/bots/atlas/secret-cards/card-1/provide";
+  const PHONE_HEADERS = { "x-seira-companion": "1", "x-seira-companion-device": "phone-1" };
+  const phoneSession = { ...ADMIN, session: { id: "s2", pairedDevice: true } as SessionRecord } as RequestAuth;
+  function provide(auth: RequestAuth, headers: Record<string, string>) {
+    const provideSecretFromPhone = vi.fn();
+    const handler = createSecretCardRoutes({
+      cards: { secretMessage: vi.fn(), provideSecretFromPhone } as unknown as SecretCards,
+      phoneSecretSubmissions: { has: () => false }, threadVisible: () => true, answerContext: () => team(null, null),
+    });
+    const ctx: RouteContext = {
+      req: { headers: { "content-type": "text/plain", ...headers } } as unknown as IncomingMessage, res: {} as ServerResponse,
+      path: PATH, method: "POST", url: new URL(PATH, "http://fixture.invalid"), auth, readBody: vi.fn(async () => ({})), json: vi.fn(),
+    };
+    return { handler, ctx, provideSecretFromPhone };
+  }
+
+  it("refuses a session whatever headers it sends, a paired phone's too", async () => {
+    for (const auth of [ADMIN, phoneSession]) {
+      const { handler, ctx, provideSecretFromPhone } = provide(auth, PHONE_HEADERS);
+      await handler(ctx);
+      expect(ctx.json).toHaveBeenCalledExactlyOnceWith(ctx.res, 403, { error: "Secure phone entry must come from a paired phone" });
+      expect(provideSecretFromPhone).not.toHaveBeenCalled();
+    }
+  });
+
+  it("takes the phone the companion proved, or a local companion's header, and reads no further without JSON", async () => {
+    const proven: RequestAuth = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" };
+    const local: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
+    for (const [auth, headers] of [[proven, {}], [local, PHONE_HEADERS]] as const) {
+      const { handler, ctx } = provide(auth, headers);
+      await handler(ctx);
+      expect(ctx.json).toHaveBeenCalledExactlyOnceWith(ctx.res, 415, { error: "content-type must be application/json" });
+    }
+    const { handler, ctx } = provide(local, {});
+    await handler(ctx);
+    expect(vi.mocked(ctx.json).mock.calls[0]?.[1]).toBe(403);
+  });
+
+  it("refuses a phone's envelope for a key no card can ask for, and opens one for a known key", async () => {
+    const proven: RequestAuth = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" };
+    const envelope = (target: string) => ({
+      version: 1, threadId: "thread-1", keyId: "k".repeat(22), deviceId: "phone-1", target, requestKey: "request-1",
+      encapsulatedKey: "e".repeat(87), ciphertext: "c".repeat(32),
+    });
+    const refused = provide(proven, { "content-type": "application/json" });
+    vi.mocked(refused.ctx.readBody).mockResolvedValue(envelope("boxToken"));
+    await refused.handler(refused.ctx);
+    expect(refused.ctx.json).toHaveBeenCalledExactlyOnceWith(refused.ctx.res, 400, { error: "The encrypted credential request is invalid" });
+    expect(refused.provideSecretFromPhone).not.toHaveBeenCalled();
+    const known = provide(proven, { "content-type": "application/json" });
+    vi.mocked(known.ctx.readBody).mockResolvedValue(envelope("xaiApiKey"));
+    await known.handler(known.ctx);
+    expect(known.provideSecretFromPhone).toHaveBeenCalledOnce();
+    expect(vi.mocked(known.ctx.json).mock.calls[0]?.[1]).toBe(200);
+  });
+});

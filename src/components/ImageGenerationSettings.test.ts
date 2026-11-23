@@ -81,14 +81,16 @@ describe("Image generation settings", () => {
     });
     expect(view.textContent).toContain("Ready with the backup only · images are made with Grok (xAI)");
     expect(view.querySelector('input[aria-label="Gemini API key"]')).not.toBeNull();
-    expect(view.querySelector('input[aria-label="Grok (xAI) API key"]')).not.toBeNull();
+    // The xAI key is saved in AI › Other services: its card shows it and offers no second field for it.
+    expect(view.querySelector('input[aria-label="Grok (xAI) API key"]')).toBeNull();
+    expect(view.querySelector('[data-settings-block="images-xai"]')?.textContent).toContain("Key saved");
     expect(view.textContent).toContain("also used");
   });
 
   it("offers every provider but the base as the backup, and None", async () => {
     const view = await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: null });
     const options = [...view.querySelectorAll<HTMLOptionElement>('select[aria-label="Backup provider"] option')].map((option) => option.value);
-    expect(options).toEqual(["", "xai", "gemini", "openrouter", "custom"]);
+    expect(options).toEqual(["", "codex", "xai", "gemini", "openrouter", "custom"]);
   });
 
   it("saves a chosen base, a cleared backup and the per-reply limit", async () => {
@@ -169,10 +171,81 @@ describe("Image generation settings", () => {
     expect([...view.querySelectorAll("button")].some((item) => item.textContent === "Test")).toBe(false);
   });
 
+  it("uses the main OpenAI key with no second key field, and says where that key lives", async () => {
+    fixture.api.mockImplementation(async (path: string) => path === "/api/images/test" ? { ok: true, check: "authentication" } : {});
+    const view = await mount({ configured: true, ready: true, openaiShared: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: null });
+    expect(view.querySelector('input[aria-label="OpenAI API key"]')).toBeNull();
+    expect(view.textContent).toContain("Images use the OpenAI key saved in AI › Other services.");
+    await act(async () => { [...view.querySelectorAll("button")].find((item) => item.textContent === "Open AI › Other services")!.click(); });
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "connections" });
+    await act(async () => { [...view.querySelectorAll("button")].find((item) => item.textContent === "Test")!.click(); });
+    expect(fixture.api).toHaveBeenCalledWith("/api/images/test", { method: "POST", body: JSON.stringify({ provider: "openai" }) });
+    expect(view.textContent).toContain("The key is accepted.");
+  });
+
+  it("keeps the shared OpenRouter key field while no OpenRouter key is saved", async () => {
+    const view = await mount({ configured: false, ready: false, primary: { provider: "openrouter", model: "google/gemini-2.5-flash-image", configured: false }, fallback: null });
+    expect(view.querySelector('input[aria-label="OpenRouter API key"]')).not.toBeNull();
+  });
+
   it("takes the OpenRouter key on this page and saves it as the shared OpenRouter key", async () => {
     await mount({ configured: false, ready: false, primary: { provider: "openrouter", model: "google/gemini-2.5-flash-image", configured: false }, fallback: null });
     const input = await type("OpenRouter API key", "or-new-key");
     await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     expect(sentPatches()).toEqual([["/api/config", { openrouter: { key: "or-new-key" } }]]);
+  });
+});
+
+describe("Codex images with a ChatGPT plan", () => {
+  const codex = (extra: Partial<NonNullable<ConfigStatus["imageGen"]>> = {}) => ({
+    configured: false, ready: false, primary: { provider: "codex" as const, model: "gpt-image-2", configured: false }, fallback: null, ...extra,
+  });
+  const card = () => container.querySelector('[data-settings-block="images-codex"]')!;
+  const button = (text: string) => [...container.querySelectorAll("button")].find((item) => item.textContent === text);
+
+  it("offers Codex as a base and a backup provider", async () => {
+    await mount({ configured: true, ready: true, primary: { provider: "openai", model: "gpt-image-2", configured: true }, fallback: null });
+    expect(options("Base provider")).toContainEqual(["", "codex"]);
+    expect([...container.querySelectorAll<HTMLOptionElement>('select[aria-label="Base provider"] option')].find((option) => option.value === "codex")?.textContent).toBe("Codex (ChatGPT plan)");
+    expect(options("Backup provider")).toContainEqual(["", "codex"]);
+  });
+
+  it("asks for a Codex sign-in, with no key field, and opens AI › Providers", async () => {
+    const view = await mount(codex({ codexSignedIn: false, codexPlan: null }));
+    expect(view.textContent).toContain("Needs Codex signed in with ChatGPT: see below.");
+    expect(view.textContent).toContain("Not set up. Sign in to Codex with ChatGPT below.");
+    expect(card().textContent).toContain("Not signed in");
+    expect(card().textContent).toContain("Sign in to Codex with ChatGPT in AI › Providers.");
+    expect(card().querySelector("input")).toBeNull();
+    expect(button("Test")).toBeUndefined();
+    await act(async () => { button("Open AI › Providers")!.click(); });
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "engines" });
+  });
+
+  it("shows the plan of a Codex sign-in and tests it without saving anything", async () => {
+    fixture.api.mockImplementation(async (path: string) => path === "/api/images/test" ? { ok: true, check: "authentication" } : {});
+    const view = await mount(codex({ configured: true, ready: true, codexSignedIn: true, codexPlan: "plus", primary: { provider: "codex", model: "gpt-image-2", configured: true } }));
+    expect(view.textContent).toContain("Ready · images are made with Codex (ChatGPT plan)");
+    expect(card().textContent).toContain("Signed in · ChatGPT Plus");
+    expect(card().querySelector("input")).toBeNull();
+    await act(async () => { button("Test")!.click(); });
+    expect(fixture.api).toHaveBeenCalledWith("/api/images/test", { method: "POST", body: JSON.stringify({ provider: "codex" }) });
+    expect(card().textContent).toContain("Works: Codex is signed in with ChatGPT.");
+    expect(sentPatches()).toEqual([]);
+  });
+
+  it("gives a fixed sentence when ChatGPT refuses the Codex sign-in", async () => {
+    fixture.api.mockImplementation(async (path: string) => path === "/api/images/test" ? { ok: false, reason: "rejected", status: 401 } : {});
+    await mount(codex({ configured: true, ready: true, codexSignedIn: true, codexPlan: null, primary: { provider: "codex", model: "gpt-image-2", configured: true } }));
+    expect(card().textContent).toContain("Signed in with ChatGPT");
+    await act(async () => { button("Test")!.click(); });
+    expect(card().textContent).toContain("ChatGPT refused the Codex sign-in. Sign in to Codex again in AI › Providers.");
+  });
+
+  it("says the free plan makes no images, and offers no Test", async () => {
+    const view = await mount(codex({ codexSignedIn: true, codexPlan: "free" }));
+    expect(card().textContent).toContain("The free ChatGPT plan makes no images.");
+    expect(button("Test")).toBeUndefined();
+    expect(view.querySelector('[data-testid="image-gen-codex-state"]')?.className).toContain("text-danger");
   });
 });

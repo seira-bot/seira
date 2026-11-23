@@ -3,15 +3,15 @@ import { appendFileSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The Linux jobs' work as lanes of one machine: when the static job runs on a Boat VM (ci.yml, BOAT_CI), the vitest
-// job's Linux shards, behavior evals and the Linux packaged server smoke run there as processes side by side, each
-// lane its commands in order. ci-workflow.test.ts holds every command equal to the job step it stands for.
+// The Linux jobs' work as lanes of one machine: when the static job runs the Linux work itself
+// (`SEIRA_CI_LINUX_IN_STATIC`), the vitest job's Linux shards, behavior evals and the Linux packaged server smoke run
+// there as processes side by side, each lane its commands in order. ci-workflow.test.ts holds every command equal to the job step it stands for.
 
 /** The vitest job's two steps for one Linux matrix entry, with the step's environment. */
 export function vitestLane(entry, retryLog) {
   return {
     name: `vitest (ubuntu-latest, ${entry.part})`,
-    env: { OMB_VITEST_RETRY_LOG: retryLog, OMB_VITEST_E2E: entry.e2e, OMB_VITEST_SUBSET: entry.files, OMB_VITEST_WORKERS: entry.workers },
+    env: { SEIRA_VITEST_RETRY_LOG: retryLog, SEIRA_VITEST_E2E: entry.e2e, SEIRA_VITEST_SUBSET: entry.files, SEIRA_VITEST_WORKERS: entry.workers },
     commands: [
       `pnpm exec vitest run ${entry.files} --shard=${entry.shard}/${entry.shards} --reporter=default --reporter=github-actions`,
       ...(entry.node_tests ? ["pnpm broker:test && pnpm test:electron"] : []),
@@ -91,11 +91,11 @@ export async function runLanes(lanes, { dir, timeoutMs, heartbeatMs = 60_000, lo
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const plan = JSON.parse(process.env.OMB_CI_LINUX_LANES ?? "");
+  const plan = JSON.parse(process.env.SEIRA_CI_LINUX_LANES ?? "");
   const temp = process.env.RUNNER_TEMP ?? "/tmp";
   const failed = await runLanes(lanesFor(plan, join(temp, "vitest-retries.jsonl")), {
     dir: join(temp, "linux-lanes"),
-    timeoutMs: Number(process.env.OMB_CI_LANE_TIMEOUT_MINUTES ?? 30) * 60_000,
+    timeoutMs: Number(process.env.SEIRA_CI_LANE_TIMEOUT_MINUTES ?? 30) * 60_000,
     summary: (markdown) => process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown),
   });
   if (failed.length) {

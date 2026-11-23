@@ -28,6 +28,10 @@ rule that guards correctness; fix the code.
 
 More specific `AGENTS.md` files override this note within their directories.
 
+## App feature catalog
+
+When you add a page, a tab, an agent tool, a slash command, a composer menu row or a release note, add or update its entry in `shared/app-features.ts`. The drift test fails until you do.
+
 ## Local details stay local
 
 This repository is public. A committed file must work on any machine and must not
@@ -42,7 +46,30 @@ describe one person's machine or private workflow.
   never link a public file to `internal/`.
 - Put notes for your own machine in `AGENTS.local.md` (gitignored). Read it when
   it exists.
+- Turn on the hooks right after you clone, and in every worktree or review checkout, even without
+  `pnpm install`: `git config core.hooksPath scripts/git-hooks`. The hooks need only git and node.
+  Without this line a commit is not checked, and the check scripts print a notice.
 - `node scripts/check-local-leaks.mjs` finds these details in the lines you add.
   The pre-commit hook in `scripts/git-hooks/` runs it on the staged lines. Put
   your own user name, host aliases and LAN addresses in `.leakcheck.local`, one
-  regular expression per line.
+  regular expression per line. A built-in rule also blocks the marker for an internal-only document.
+
+## Private by default
+
+This repository is public. Before you add a file, decide if every user or
+contributor needs it. If not, the file does not go here.
+
+Keep these out of the repository:
+
+- Code and config of hosted services that only the maintainers deploy. They
+  live in a private repository.
+- Business numbers of the hosted service: its plan prices, quotas and costs.
+- Customer data.
+- Plans, specs, research and task notes. Put them in `internal/`.
+- Scratch files, backups and experiments.
+- Local files and env files.
+
+When you are unsure, keep the file local and ask the maintainer.
+
+`node scripts/check-public-paths.mjs` blocks a new file under a known private
+path. The pre-commit hook and CI run it.

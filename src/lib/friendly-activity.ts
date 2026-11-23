@@ -18,11 +18,11 @@ const BY_PHASE: Array<[readonly string[], LocaleKey[]]> = [
 ];
 
 /** Servers of the app's own tools: their work reads as what it does, never as "Working in …". */
-const OWN_SERVERS = new Set(["ogb", "agents", "omb", "openmausbot", "computer", "browser", "harness"]);
+const OWN_SERVERS = new Set(["ogb", "agents", "seira", "seira", "computer", "browser", "harness"]);
 
 /** The outside service a tool call works in, by its MCP server or a connected-app tool's name, as a person names it. */
 export function toolService(name: string | undefined): string | null {
-  const server = /^mcp__([^_]+(?:-[^_]+)*)__(.+)$/.exec(name ?? "");
+  const server = /^mcp__([^_]+)__(.+)$/.exec(name ?? "");
   if (!server) return null;
   const [, id, tool] = server;
   if (OWN_SERVERS.has(id!.toLowerCase())) return null;

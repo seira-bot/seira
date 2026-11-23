@@ -17,7 +17,7 @@ instructions to forbid that when memory must stay in another source of truth.
 ## Where it lives
 
 ```
-~/.openmausbot/workspaces/<botId>/
+~/.seira/workspaces/<botId>/
 ├── MEMORY.md            the notes that load into every conversation
 └── memory/
     ├── <topic>.md       longer notes the bot reads on demand
@@ -172,7 +172,7 @@ off. It keeps the notes in shape without the bot having to decide to:
   moving. At most 20 lines move in one pass; each file's change
   is a journal row (*filed into topics*) that can be undone.
 - **About me.** A lasting fact about the person, taken from their own words,
-  is added to **Settings → General → About me**, which every bot reads, as a
+  is added to **Settings → You and your bots → About you**, which every bot reads, as a
   dated line `- 2026-09-25 · learned by Scout · …`. **Added by your bots**
   under About me lists each one with **Remove**; a removed fact is never
   added again. On a shared installation, another person's messages never add
@@ -242,9 +242,9 @@ file, so adding the helper or taking it out again applies without a restart:
 { "helper": { "instanceId": "claude", "model": "claude-haiku-4-5" } }
 ```
 
-or set `OMB_HELPER_INSTANCE` (and, if you want, `OMB_HELPER_MODEL`) in the
+or set `SEIRA_HELPER_INSTANCE` (and, if you want, `SEIRA_HELPER_MODEL`) in the
 server's environment before it starts. The environment wins over the file,
-and an empty `OMB_HELPER_INSTANCE` switches a saved helper off. `instanceId` is the id of
+and an empty `SEIRA_HELPER_INSTANCE` switches a saved helper off. `instanceId` is the id of
 a connected instance as `config.json` and `GET /api/instances` name it, such
 as `claude`, `claudeApi`, `openai` or `openrouter`; it has to be Claude or an
 API model, the engines with a quick text call of their own. `model` is
@@ -290,7 +290,7 @@ capture, no review), and the server log says once why the helper is not
 used. The one job a turn waits for is the compaction summary, and a helper
 that hangs holds it for at most the summary's usual 20 seconds. Helper calls
 count toward the monthly spend limit and stop at it. Each is its own row in
-**Settings → Usage → History**, for the bot it wrote for, with the helper's
+**Settings → Spending**, for the bot it wrote for, with the helper's
 engine and model: group by **Person** to see them together as *Helper
 model*, which is also what the CSV's `triggered_by` column says.
 
@@ -377,7 +377,7 @@ agreed shows up in each member's next 1:1 brief.
 
 Every change to a memory file that the app can see is recorded — yours from
 the panel, the bot's during a task, an import, an undo — in
-`~/.openmausbot/memory-journal/<botId>.ndjson`. It lives *outside* the
+`~/.seira/memory-journal/<botId>.ndjson`. It lives *outside* the
 workspace on purpose: the bot's file tools point at the workspace, and a
 record the bot could edit would not be a record.
 

@@ -17,7 +17,7 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
     "botPanel.", "botApi.", "botSettings.simple.", "botAccess.tools.", "botAccess.browser.", "memory.learnFromRooms.", "memory.upkeep.",
   ],
   "the Screen panel and where a bot works": [
-    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.cloud.", "computer.badge.", "computer.problem.",
+    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.badge.", "computer.problem.",
     "computer.screen.", "vm.cloud.", "browser.",
   ],
   "Seira Cloud: buying it, setting it up, moving to it and sharing with it": [
@@ -26,7 +26,9 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
     "files.", "usageMeter.", "roomCard.", "botLimit.",
   ],
   "routines and automations": ["routines.", "automations."],
-  "the team map": ["canvas.", "mapComputer.", "canvasComputers."],
+  "the Board": ["board."],
+  "the team map": ["canvas.", "mapComputer."],
+  "the workflow canvas and its runs": ["workflow."],
   "Apps": ["apps.", "connectors."],
   "the Settings pages Simple mode shows": ["settings.section.", "settings.group.", "settings.mcpCalls.", "settings.logins."],
   "Settings's pages, its search and Phone & devices": [
@@ -37,8 +39,8 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
 
 const EVERYDAY_KEYS: Record<string, readonly string[]> = {
   "the Screen panel": [
-    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal", "computer.chooseCloudWake",
-    "computer.chooseCloudOpen", "computer.chooseCloudManage", "computer.autoChooseCloudOpen", "computer.createVm", "computer.replaceVm",
+    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal",
+    "computer.autoChooseCloudOpen", "computer.createVm", "computer.replaceVm",
     "computer.openVmSetup", "computer.confirm.replaceVm", "computer.err.emptyFrame", "computer.err.frameTimeout", "computer.err.noDesktopLink",
     "computer.err.vmNotReady", "computer.err.vmEngine", "computer.err.localEngine", "computer.err.vmOpenSettings", "computer.worksOnHint",
     "computer.worksOnHintCloudHome", "computer.linux.waylandAfter", "vm.dest.vm", "vm.setup.start", "vm.setup.starting", "vm.stopped.detail",
@@ -68,7 +70,7 @@ type Word = { word: string; pattern: RegExp; say: string };
 const INTERNAL_WORDS: readonly Word[] = [
   { word: "engine", pattern: /\bengines?\b/i, say: "AI" },
   { word: "instance", pattern: /\binstances?\b/i, say: "AI account" },
-  // "Your own server" is the person's own word for a computer they run OpenMausBot on (the rail's ＋).
+  // "Your own server" is the person's own word for a computer they run Seira on (the rail's ＋).
   { word: "server", pattern: /(?<!(?:Discord|Slack|MCP|own) )\bservers?\b/i, say: "the app, the Cloud when it is hosted, or your own server" },
   { word: "Composio", pattern: /composio/i, say: "connected apps" },
   { word: "Cloud computer", pattern: /\bcloud computers?\b/i, say: "cloud desktop" },
@@ -90,6 +92,7 @@ const ALLOWED: Record<string, string> = {
   "sidebar.switchServerError": "points at the app menu's Server menu",
   "sidebar.update.howOther": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
   "sidebar.update.howOtherRestart": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
+  "sidebar.update.availableShort": "a self-hosted server's own release, which its owner installs apart from this app's update",
   "connectors.setupNeeded": "names Composio because the person must add their own Composio project key",
   "connectors.setupNeededRemote": "names Composio because the host needs the owner's own Composio project key",
   "botAccess.tools.syntax": "the tool names people type, such as mcp:SERVER:NAME",
@@ -128,7 +131,7 @@ describe("everyday screens", () => {
     ]) expect(wordsIn(bad), bad).not.toEqual([]);
     for (const good of [
       "Switch this bot to another AI", "Pick a Discord server", "Post in your Slack servers", "Copy to {server}", "Add your own server",
-      "Run `openmausbot server start`", "Open the Cloud", "Start the cloud desktop", "Your MCP servers", "Add MCP server", "Private desktop",
+      "Run `seira server start`", "Open the Cloud", "Start the cloud desktop", "Your MCP servers", "Add MCP server", "Private desktop",
     ]) expect(wordsIn(good), good).toEqual([]);
   });
 

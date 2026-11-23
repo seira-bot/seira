@@ -45,7 +45,7 @@ const HOUR = 3_600_000;
 const claude = (used: number, blocked = false): EngineLimit => ({ engine: "claude", name: "Claude", driver: "claude", window: "5-hour", usedPercent: used, resetsAt: RESET, blocked });
 const bot = { id: "scout", name: "Scout", hidden: false, threadId: "t-main", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" }, tasks: [] } as unknown as Bot;
 const routine = (id: string, nextRunAt: number, extra: Partial<Routine> = {}): Routine => ({
-  id, name: id, prompt: "Finish the report.", target: "bot", botId: "scout", runOn: "maus", enabled: true,
+  id, name: id, prompt: "Finish the report.", target: "bot", botId: "scout", runOn: "seira", enabled: true,
   schedule: { type: "daily", time: "11:00", weekdays: [0, 1, 2, 3, 4, 5, 6] }, durationMinutes: 30, nextRunAt, createdAt: 0, updatedAt: 0, ...extra,
 });
 
@@ -117,6 +117,64 @@ describe("the words", () => {
     expect(limits.resetMarkers([claude(92), { ...claude(10), engine: "codex", name: "Codex", resetsAt: null }], NOW, NOW + 24 * HOUR, NOW))
       .toEqual([{ engine: "claude", name: "Claude", at: RESET }]);
     expect(limits.resetMarkers([claude(92)], RESET + 1, RESET + HOUR, NOW)).toEqual([]);
+  });
+});
+
+describe("the monthly window", () => {
+  const monthly = (used: number, extra: Partial<EngineLimit> = {}): EngineLimit => ({
+    ...claude(used), engine: "go", name: "OpenCode", driver: "opencode", window: "monthly", resetsAt: MONDAY,
+    windows: [{ window: "weekly", usedPercent: 8, resetsAt: RESET }, { window: "monthly", usedPercent: used, resetsAt: MONDAY }], ...extra,
+  });
+
+  it("is labelled Monthly, and an unknown window still reads Usage", () => {
+    expect(limits.windowLabel("monthly")).toBe("Monthly");
+    expect(limits.windowLabel("other")).toBe("Usage");
+  });
+
+  it("gets its own row with the share left and its reset", () => {
+    expect(limits.usageRows(monthly(40))).toEqual([
+      { window: "weekly", left: 92, resetsAt: RESET, tone: "fine" }, { window: "monthly", left: 60, resetsAt: MONDAY, tone: "fine" },
+    ]);
+    const card = mount(createElement(UsageRows, { limit: monthly(40) }));
+    expect(card.querySelector("[data-usage-row=monthly]")?.textContent).toContain("Monthly");
+    expect(card.querySelector("[data-usage-row=monthly]")?.textContent).toContain("60% left");
+  });
+});
+
+describe("accounts signed in with one address", () => {
+  const at = (engine: string, email?: string, driver: EngineLimit["driver"] = "claude"): EngineLimit => ({ ...claude(10), engine, name: engine, driver, ...(email ? { email } : {}) });
+
+  it("finds another AI of the same kind with the same address, ignoring case", () => {
+    const all = [at("nana", "A@example.com"), at("affan", "a@example.com"), at("work", "w@example.com")];
+    expect(limits.sameAccountAs(all[0]!, all)?.engine).toBe("affan");
+    expect(limits.sameAccountAs(all[2]!, all)).toBeUndefined();
+  });
+
+  it("finds nothing without an address, or across kinds of AI", () => {
+    const all = [at("nana"), at("affan"), at("codex", "a@example.com", "codex"), at("other", "a@example.com")];
+    expect(limits.sameAccountAs(all[0]!, all)).toBeUndefined();
+    expect(limits.sameAccountAs(all[3]!, all)).toBeUndefined();
+  });
+});
+
+describe("the AI the sidebar ring shows", () => {
+  const ai = (engine: string, used: number, resetsAt: number | null = RESET, blocked = false): EngineLimit => ({ ...claude(used, blocked), engine, name: engine, resetsAt });
+
+  it("picks the one at its limit, then the nearest, then the fullest, then the soonest reset", () => {
+    expect(limits.mostConstrained([ai("a", 95), ai("b", 100, RESET, true), ai("c", 50)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 91), ai("b", 96), ai("c", 50)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 40, MONDAY), ai("b", 40, RESET)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 40, null), ai("b", 40, RESET)])?.engine).toBe("b");
+    expect(limits.mostConstrained([{ ...ai("a", 0), usedPercent: null }])).toBeUndefined();
+    expect(limits.mostConstrained([])).toBeUndefined();
+  });
+
+  it("takes the selected bot's AI when it reports usage, else the most constrained", () => {
+    const all = [ai("a", 20), ai("b", 95)];
+    expect(limits.shownUsageLimit(all, "a")?.engine).toBe("a");
+    expect(limits.shownUsageLimit(all, "other")?.engine).toBe("b");
+    expect(limits.shownUsageLimit(all, undefined)?.engine).toBe("b");
+    expect(limits.shownUsageLimit([{ ...ai("a", 0), usedPercent: null }, ai("b", 30)], "a")?.engine).toBe("b");
   });
 });
 
@@ -355,9 +413,9 @@ describe("the calendar", () => {
     const onCreate = vi.fn();
     const container = grid(onDropOnReset, onCreate);
     const shown = container.querySelector('[data-limit-marker="claude"]')!;
-    drop(shown, "application/x-openmaus-bot", "scout");
+    drop(shown, "application/x-seira-bot", "scout");
     expect(onDropOnReset).toHaveBeenLastCalledWith({ botId: "scout" }, marker);
-    drop(shown, "application/x-openmaus-calendar-event", JSON.stringify({ kind: "routine", id: "brief", at: NOW + HOUR }));
+    drop(shown, "application/x-seira-calendar-event", JSON.stringify({ kind: "routine", id: "brief", at: NOW + HOUR }));
     expect(onDropOnReset).toHaveBeenLastCalledWith({ event: { kind: "routine", id: "brief", at: NOW + HOUR } }, marker);
     expect(onCreate).not.toHaveBeenCalled();
   });

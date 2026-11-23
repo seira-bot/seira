@@ -6,65 +6,88 @@ export const WORKSPACE_CREDENTIAL_ENV = [
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "CEREBRAS_API_KEY",
-  "OMB_GROQ_API_KEY",
-  "OMB_GREENFERENCE_API_KEY",
-  "OMB_MODELGO_API_KEY",
-  "OMB_META_API_KEY",
-  "OMB_DEEPSEEK_API_KEY",
-  "OMB_ANTHROPIC_API_KEY",
-  "OMB_ANTHROPIC_API_URL",
-  "OMB_HOSTED_MODEL_TOKEN",
-  "OMB_HOSTED_MODELS",
+  "SEIRA_GROQ_API_KEY",
+  "SEIRA_GREENFERENCE_API_KEY",
+  "SEIRA_MODELGO_API_KEY",
+  "SEIRA_META_API_KEY",
+  "SEIRA_DEEPSEEK_API_KEY",
+  "SEIRA_ANTHROPIC_API_KEY",
+  "SEIRA_ANTHROPIC_API_URL",
+  "SEIRA_HOSTED_MODEL_TOKEN",
+  "SEIRA_HOSTED_MODELS",
   "OPENAI_COMPAT_API_KEY",
   "OPENAI_COMPAT_URL",
-  "OMB_OPENAI_API_KEY",
-  "OMB_OPENROUTER_API_KEY",
+  "SEIRA_OPENAI_API_KEY",
+  "SEIRA_OPENROUTER_API_KEY",
   "BOX_TOKEN",
   "OPENCODE_API_KEY",
-  "OMB_TTS_KEY",
-  "OMB_FISH_AUDIO_API_KEY",
-  "OMB_GEMINI_API_KEY",
-  "OMB_JEV_API_KEY",
-  "OMB_OPENROUTER_DECIDER_KEY",
-  "OMB_WORKERS_AI_TOKEN",
-  "OMB_CUSTOM_DECIDER_KEY",
-  "OMB_OPENAI_IMAGE_KEY",
-  "OMB_CUSTOM_IMAGE_KEY",
-  "OMB_GEMINI_IMAGE_KEY",
-  "OMB_OPENAI_LIVE_KEY", "OMB_TREG_KEY", "OMB_POSTIZ_API_KEY",
+  "SEIRA_TTS_KEY",
+  "SEIRA_FISH_AUDIO_API_KEY",
+  "SEIRA_GEMINI_API_KEY",
+  "SEIRA_JEV_API_KEY",
+  "SEIRA_OPENROUTER_DECIDER_KEY",
+  "SEIRA_WORKERS_AI_TOKEN",
+  "SEIRA_CUSTOM_DECIDER_KEY",
+  "SEIRA_OPENAI_IMAGE_KEY",
+  "SEIRA_CUSTOM_IMAGE_KEY",
+  "SEIRA_GEMINI_IMAGE_KEY",
+  "SEIRA_OPENAI_LIVE_KEY", "SEIRA_TREG_KEY",
+  // Retired: still stripped, because an old environment can still set it.
+  "SEIRA_POSTIZ_API_KEY",
   "COMPOSIO_API_KEY",
-  "OMB_COMPOSIO_BROKER_TOKEN",
-  "OMB_CLOUD_BOAT_TOKEN",
-  "OMB_CLOUD_VOICE_TOKEN",
-  "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN", "OMB_CLOUD_X_TOKEN", "OMB_CLOUD_HOSTING_TOKEN", "OMB_CLOUD_CONNECTED_APPS_GRANT",
+  "SEIRA_COMPOSIO_BROKER_TOKEN",
+  "SEIRA_CLOUD_BOAT_TOKEN",
+  "SEIRA_CLOUD_VOICE_TOKEN",
+  "SEIRA_CLOUD_DECIDER_TOKEN",
+  "SEIRA_CLOUD_AI_TOKEN", "SEIRA_CLOUD_X_TOKEN", "SEIRA_CLOUD_HOSTING_TOKEN", "SEIRA_CLOUD_CONNECTED_APPS_GRANT",
   // Not credentials, but they point a shell-capable agent at app-owned state.
-  "OMB_BROWSER_CONNECTION", "OMB_USER_DATA", "OMB_BOAT_API",
+  "SEIRA_BROWSER_CONNECTION", "SEIRA_USER_DATA", "SEIRA_BOAT_API",
 ] as const;
 
-/** Operator secrets only this process reads, plus every `OMB_CLOUD_` var (the underscore leaves out OMB_CLOUDFLARED_PATH). */
-export const CONTROL_PLANE_ENV = ["OMB_LICENSE_KEY", "OMB_INSTALLATION_CREDENTIAL"] as const;
-export const CONTROL_PLANE_ENV_PREFIX = "OMB_CLOUD_";
+/** Operator secrets only this process reads, plus every `SEIRA_CLOUD_` var (the underscore leaves out SEIRA_CLOUDFLARED_PATH). */
+export const CONTROL_PLANE_ENV = ["SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_TOKEN"] as const;
+export const CONTROL_PLANE_ENV_PREFIX = "SEIRA_CLOUD_";
 
 /** Names compare case-insensitively because Windows environments do. */
 export function stripControlPlaneEnv(env: Record<string, string | undefined>): void {
   for (const key of Object.keys(env)) {
-    const name = key.toUpperCase();
+    const name = canonicalEnvName(key);
     if (name.startsWith(CONTROL_PLANE_ENV_PREFIX) || (CONTROL_PLANE_ENV as readonly string[]).includes(name)) delete env[key];
   }
 }
 
+/** An env name as filters compare it: in capitals (Windows environments are case-insensitive) with the old `OMB_` prefix read as `SEIRA_`. */
+export function canonicalEnvName(name: string): string {
+  const upper = name.toUpperCase();
+  return upper.startsWith("OMB_") ? `SEIRA_${upper.slice("OMB_".length)}` : upper;
+}
+
+/** Deletes every name of `env` that matches one of `names` under {@link canonicalEnvName}, except a name `keep` lists exactly (in capitals,
+ * and not under the old prefix). */
+export function stripEnvNames(env: Record<string, string | undefined>, names: readonly string[], keep: readonly string[] = []): void {
+  const denied = new Set(names.map(canonicalEnvName));
+  const kept = new Set(keep.map((name) => name.toUpperCase()));
+  for (const key of Object.keys(env)) {
+    if (denied.has(canonicalEnvName(key)) && !kept.has(key.toUpperCase())) delete env[key];
+  }
+}
+
+/** Removes every workspace credential in any letter case, and its `OMB_` twin. `keep` spares a name (in capitals), never its twin. */
+export function stripWorkspaceCredentialKeys(env: Record<string, string | undefined>, keep: ReadonlySet<string> = new Set()): void {
+  stripEnvNames(env, WORKSPACE_CREDENTIAL_ENV, [...keep]);
+}
+
 export function stripWorkspaceCredentialEnv(env: Record<string, string | undefined>): void {
-  for (const key of WORKSPACE_CREDENTIAL_ENV) delete env[key];
+  stripWorkspaceCredentialKeys(env);
   stripControlPlaneEnv(env);
 }
 
-const DESKTOP_STORE_KEY_ENV: ReadonlySet<string> = new Set(["MISTRAL_API_KEY", "CEREBRAS_API_KEY", "OPENAI_COMPAT_API_KEY", "OMB_OPENAI_API_KEY", "OMB_OPENROUTER_API_KEY"]);
+const DESKTOP_STORE_KEY_ENV: ReadonlySet<string> = new Set(["MISTRAL_API_KEY", "CEREBRAS_API_KEY", "OPENAI_COMPAT_API_KEY", "SEIRA_OPENAI_API_KEY", "SEIRA_OPENROUTER_API_KEY"]);
 
 /** A key an operator set on the server. Security: under the desktop app these variables hold workspace keys from its
  * encrypted store, which reach only the instances the workspace routes, never one with a URL of its own. */
 export function operatorEnvKey(name: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  return env.OMB_DESKTOP_PARENT === "1" && DESKTOP_STORE_KEY_ENV.has(name) ? undefined : env[name];
+  return env.SEIRA_DESKTOP_PARENT === "1" && DESKTOP_STORE_KEY_ENV.has(name) ? undefined : env[name];
 }
 
 /** Env a provider CLI may read as its billing identity; a foreign key must never move a subscription CLI onto API billing. */

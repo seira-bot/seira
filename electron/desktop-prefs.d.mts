@@ -4,7 +4,7 @@ export interface DesktopNoticesState {
   /** Notices this desktop has shown and someone closed, on whichever page of its window; This computer's own workspace
    * record counts too (an earlier close of the What's new popup). */
   seen: string[];
-  /** This desktop sells MausBot Cloud: the installed app, not a branded build, not connected to another computer. */
+  /** This desktop sells Seira Cloud: the installed app, not a branded build, not connected to another computer. */
   cloud: boolean;
 }
 /** On every page this desktop's window shows: this computer's, My Cloud's or another saved server's. */
@@ -37,6 +37,9 @@ export interface DesktopPrefs {
   markSeen(id: string): void;
   analytics(): boolean | null;
   setAnalytics(enabled: boolean): void;
+  /** On until the person chooses; off while the saved record cannot be read. */
+  crashReports(): boolean;
+  setCrashReports(enabled: boolean): void;
   language(): string | null;
   /** False for anything that is not a locale code or "". */
   setLanguage(language: unknown): boolean;
@@ -57,9 +60,16 @@ export interface DesktopPrefs {
   /** False until the person hides the window's rail of places. */
   railHidden(): boolean;
   setRailHidden(hidden: boolean): void;
+  /** False until the person turns Glance off. */
+  glanceHidden(): boolean;
+  setGlanceHidden(hidden: boolean): void;
   /** True until the person turns the window's frame off. */
   windowFrame(): boolean;
   setWindowFrame(on: boolean): void;
+  /** The text size of this desktop's window: 1 (100 %) or one of the steps in text-size.mjs. */
+  textSize(): number;
+  /** False, and nothing kept, for a value that is not a step. */
+  setTextSize(step: number): boolean;
 }
 /** The window's frame, this desktop's choice, as Settings reads and changes it. */
 export interface WindowFrameState {
@@ -102,7 +112,7 @@ export declare function registerDesktopPrefs(options: {
   /** The window's frame: `made()`, the frame the window was made with (null before it is); `restarts`, a change waits for
    * the app to start again; `changed()`, the pages hear it. */
   frame?: { made(): boolean | null; restarts: boolean; changed(): void } | null;
-  /** The MausBot Cloud sign-in client: with it, the product-updates question is asked and its answer kept here. */
+  /** The Seira Cloud sign-in client: with it, the product-updates question is asked and its answer kept here. */
   cloudAccount?(): import("./updates-consent.mjs").UpdatesConsentClient | null;
   /** The updates list client; tests inject one. */
   updatesList?: import("./updates-list.mjs").UpdatesList | null;

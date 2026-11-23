@@ -52,7 +52,6 @@ describe("resolveComputerPromptKind", () => {
   it.each([
     [{ kind: "vm", vmPrivate: false }, "vm-shared"],
     [{ kind: "vm", vmPrivate: true }, "vm-private"],
-    [{ kind: "box", vmPrivate: false }, "box"],
     [{ kind: "vps", vmPrivate: false }, "vps"],
     [{ kind: "local", vmPrivate: false }, "local"],
     [{ kind: null, vmPrivate: true }, null],
@@ -67,7 +66,6 @@ describe("computerPrompt", () => {
     const paragraphs: Record<string, string> = {
       "vm-private": "your own isolated Cua sandbox",
       "vm-shared": "shared, isolated Cua sandbox",
-      box: "You control the assigned cloud computer",
       vps: "This is the user's own VPS",
       local: "act on the user's computer",
     };
@@ -227,7 +225,6 @@ describe("computerPrompt", () => {
     }
     expect(SANDBOX_DESKTOP_INPUT).toContain('delivery_mode "foreground" for keys, typing, scrolling and pixel clicks');
     expect(computerPrompt("local")).not.toContain(SANDBOX_DESKTOP_INPUT);
-    expect(computerPrompt("box")).not.toContain(SANDBOX_DESKTOP_INPUT);
   });
   it("is empty with no computer", () => {
     expect(computerPrompt(null)).toBe("");
@@ -236,10 +233,9 @@ describe("computerPrompt", () => {
   it("shares the authorized sign-in policy across every computer and browser surface", () => {
     expect(computerPrompt("vm-private")).toContain("your own isolated Cua sandbox");
     expect(computerPrompt("vm-shared")).toContain("a shared, isolated Cua sandbox");
-    expect(computerPrompt("box")).toContain("You control the assigned cloud computer");
     expect(computerPrompt("vps")).toContain("self-hosted remote Linux computer");
     expect(computerPrompt("local")).toContain("act on the user's computer");
-    for (const kind of ["vm-private", "vm-shared", "box", "vps", "local"] as const) {
+    for (const kind of ["vm-private", "vm-shared", "vps", "local"] as const) {
       expect(computerPrompt(kind).endsWith(SIGN_IN_PROMPT)).toBe(true);
       expect(computerPrompt(kind).startsWith(" ")).toBe(true);
     }
@@ -274,7 +270,7 @@ describe("computerPrompt", () => {
     // An inbox code no longer sends the person in; only a code the bot cannot read does.
     expect(SIGN_IN_PROMPT).not.toMatch(/\bMFA\b/u);
     expect(SIGN_IN_PROMPT.indexOf("type the code into that site yourself")).toBeLessThan(SIGN_IN_PROMPT.indexOf("call request_sign_in"));
-    for (const prompt of [computerPrompt("local"), computerPrompt("box"), BUILT_IN_BROWSER_SYSTEM_PROMPT]) expect(prompt).toContain("type the code into that site yourself");
+    for (const prompt of [computerPrompt("local"), computerPrompt("vps"), BUILT_IN_BROWSER_SYSTEM_PROMPT]) expect(prompt).toContain("type the code into that site yourself");
   });
 
   it("prefers connected apps for Google and Microsoft data without refusing an asked-for Google or Microsoft sign-in", () => {
@@ -340,6 +336,8 @@ describe("shared sentences", () => {
 
   it("configuration prompts follow actual applied or pending results without elevating another bot", () => {
     expect(PROFILE_PROMPT).toContain("propose_profile");
+    expect(PROFILE_PROMPT).toContain("action=places for where something is");
+    expect(PROFILE_PROMPT).toContain("name only what it returns");
     for (const prompt of [PROFILE_PROMPT, LEARN_PROMPT]) {
       expect(prompt).toContain("continue the requested work without asking for another confirmation");
       expect(prompt).toContain("Never claim success before an applied result");
@@ -362,6 +360,11 @@ describe("shared sentences", () => {
     expect(TRIGGER_PROMPT).not.toMatch(/pending|explicitly asks/);
     expect(CREDENTIAL_PROMPT).toContain("secure credential request");
     expect(CREDENTIAL_PROMPT).not.toContain("applied immediately");
+  });
+
+  it("tells bots that a missing GH_TOKEN is not missing GitHub access, and how to check it", () => {
+    expect(CREDENTIAL_PROMPT).toContain("A missing GH_TOKEN does not mean no GitHub access.");
+    expect(CREDENTIAL_PROMPT).toContain("run gh auth status (never with -t) with the real HOME, not a test HOME");
   });
 });
 
@@ -452,7 +455,7 @@ describe("cloudHomePrompt", () => {
     expect(cloudHomePrompt(false, [], [{ name: "Ash-MBP", platform: "darwin" }])).not.toContain("away_computers");
   });
 
-  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called "OMB Cloud".
+  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called by an old name.
   it("names the person's computer by its platform, never a Mac unless it is one, and the product by its name", () => {
     const pc = cloudHomePrompt(true, [], [{ name: "ASH-PC", platform: "win32" }]);
     expect(pc).toContain("If they ask for something on their PC (ASH-PC), check list_shared_computers");
@@ -490,7 +493,7 @@ it("tells Cloud bots that a sign-in ending on an unreachable 127.0.0.1 page is f
 
 describe("longCommandsPrompt", () => {
   it("names Bash's limit everywhere and vm_exec's own limit only with a Local VM", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("pass `timeout` in milliseconds, up to 86400000, which is 1440 minutes, unless a lower limit is set here");
       expect(text).toContain("Never wait inside a command for CI, a deploy or any other job to finish (no sleep loops or polls): check once");
@@ -504,7 +507,7 @@ describe("longCommandsPrompt", () => {
   });
 
   it("keeps a long command in the foreground, and trusts only its own fresh exit code", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("stay in the foreground until it exits");
       expect(text).toContain("split work that cannot finish within that");

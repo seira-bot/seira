@@ -5,7 +5,7 @@
 
 /** Background requests (polls nobody asked for just now) carry this header, so the home doesn't count them as someone
  * using it (server/cloud-power.ts `countsAsActivity`). */
-export const BACKGROUND_HEADER = "x-omb-background";
+export const BACKGROUND_HEADER = "x-seira-background";
 export const CLOUD_POWER_HEADER = "x-omb-cloud-power";
 const WAKE_PATH = "/api/auth/session";
 

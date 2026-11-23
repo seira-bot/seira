@@ -78,7 +78,7 @@ describe("browser tool shaping", () => {
   });
 
   it("tells the bot the install command when Chrome cannot load a system library", () => {
-    const launch = "Chrome exited early (exit code: 127) without writing DevToolsActivePort\nChrome stderr:\n  /home/maus/.agent-browser/browsers/chrome-157.0.8103.38/chrome: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory";
+    const launch = "Chrome exited early (exit code: 127) without writing DevToolsActivePort\nChrome stderr:\n  /home/seira/.agent-browser/browsers/chrome-157.0.8103.38/chrome: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory";
     const platform = process.platform;
     const shape = (result: unknown) => shapeBrowserToolResult(result) as { content: Array<{ text: string }>; isError?: boolean };
     try {
@@ -123,7 +123,7 @@ describe("browser tool shaping", () => {
   });
 
   it("names only tools the pinned engine advertises", () => {
-    // `agent-browser mcp --tools core` on the pinned 0.37.0 plus OMB's own tools: guidance naming a tool the engine does not list costs a failed call.
+    // `agent-browser mcp --tools core` on the pinned 0.37.0 plus Seira's own tools: guidance naming a tool the engine does not list costs a failed call.
     const advertised = new Set([
       "agent_browser_tools_profiles", "agent_browser_open", "agent_browser_read", "agent_browser_snapshot", "agent_browser_click",
       "agent_browser_fill", "agent_browser_type", "agent_browser_press", "agent_browser_check", "agent_browser_uncheck",

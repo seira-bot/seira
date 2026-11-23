@@ -4,7 +4,7 @@ import { Crown, Pencil } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
-import type { MausState } from "@/lib/mascot";
+import type { MascotState } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
 import { PanelStatePill } from "./PanelStatePill";
 import { BOT_PROFILE_LIMITS } from "../../../shared/bot-profile";
@@ -59,7 +59,7 @@ function useInlineEdit(save: (value: string) => void) {
 
 export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor }: {
   bot: Bot;
-  activeState: MausState;
+  activeState: MascotState;
   patch: (patch: BotPatch) => void;
   editorOpen: boolean;
   onToggleEditor: () => void;
@@ -90,7 +90,7 @@ export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor 
         onClick={onToggleEditor}
         className="group relative rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border"
       >
-        <BotAvatar bot={bot} size={88} state={activeState} />
+        <BotAvatar bot={bot} size={88} state={activeState} animated={Boolean(bot.busy)} />
         <span
           aria-hidden="true"
           className="absolute inset-0 flex items-center justify-center rounded-[24px] bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/40 group-hover:opacity-100 group-focus-visible:bg-black/40 group-focus-visible:opacity-100 group-focus-within:opacity-100 touch:opacity-100 motion-reduce:transition-none"

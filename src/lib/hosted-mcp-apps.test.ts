@@ -36,30 +36,34 @@ describe("hosted MCP apps", () => {
   type Extra = { enabled: boolean; auth?: "signed-in" | "needs-sign-in"; headerKeys?: string[] };
   const connectedWith = (app: HostedApp, extra: Extra) => hostedConnections([{ type: "http", url: app.url, ...extra }])[app.id];
 
-  it.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("$label is connected only while its server is on and signed in", (app) => {
+  it.each(HOSTED_MCP_APPS)("$label is connected while its server is on and signed in or holds an Authorization header", (app) => {
     expect(connectedWith(app, { enabled: true, auth: "signed-in" })).toBe(true);
-    expect(connectedWith(app, { enabled: true })).toBe(false);
-    expect(connectedWith(app, { enabled: true, auth: "needs-sign-in" })).toBe(false);
-    expect(connectedWith(app, { enabled: false, auth: "signed-in" })).toBe(false);
-    expect(connectedWith(app, { enabled: true, headerKeys: ["Authorization"] })).toBe(false);
-  });
-
-  it.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("$label is connected only while its server is on and holds its key", (app) => {
     expect(connectedWith(app, { enabled: true, headerKeys: ["Authorization"] })).toBe(true);
     expect(connectedWith(app, { enabled: true, headerKeys: ["authorization"] })).toBe(true);
-    expect(connectedWith(app, { enabled: true, headerKeys: [] })).toBe(false);
+    expect(connectedWith(app, { enabled: true })).toBe(false);
+    expect(connectedWith(app, { enabled: true, auth: "needs-sign-in" })).toBe(false);
     expect(connectedWith(app, { enabled: true, headerKeys: ["X-Api-Key"] })).toBe(false);
+    expect(connectedWith(app, { enabled: false, auth: "signed-in" })).toBe(false);
     expect(connectedWith(app, { enabled: false, headerKeys: ["Authorization"] })).toBe(false);
-    expect(connectedWith(app, { enabled: true, auth: "signed-in" })).toBe(false);
   });
 
-  it("takes a pasted key exactly for the services with no browser sign-in, each with an https page to make one", () => {
-    expect(HOSTED_MCP_APPS.filter((app) => "key" in app).map((app) => app.id)).toEqual(["vapi", "telnyx"]);
-    for (const app of HOSTED_MCP_APPS) if ("key" in app) expect(app.key.url).toMatch(/^https:\/\//);
+  it("offers exactly the hosted apps with a card, at their official endpoints", () => {
+    expect(HOSTED_MCP_APPS.map((app) => [app.id, app.url])).toEqual([
+      ["konektor", "https://mcp.konektor.id/mcp"],
+      ["biver", "https://mcp.biver.id/mcp"],
+      ["coret", "https://mcp.coret.id/mcp"],
+      ["termilo", "https://api.termilo.id/mcp"],
+      ["citcat", "https://api-crm.citcat.id/api/mcp"],
+      ["repliz", "https://mcp.repliz.com/mcp"],
+      ["dalekta", "https://mcp.dalekta.id/mcp"],
+      ["grupy", "https://mcp.grupy.chat/mcp"],
+    ]);
+    const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
+    for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);
   });
 
   it("counts each app on its own server", () => {
-    const [first] = HOSTED_MCP_APPS;
+    const first = HOSTED_MCP_APPS[0];
     const connections = hostedConnections([
       { type: "http", url: first.url, enabled: true, auth: "signed-in" },
       { type: "http", url: "https://unrelated.example/mcp", enabled: true, auth: "signed-in" },

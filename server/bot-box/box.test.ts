@@ -1,12 +1,13 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, writeSeccompFile } from "./box.ts";
+import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, foldersKey, writeSeccompFile } from "./box.ts";
 import { processStart, seesProcess } from "./box-probe.ts";
 import { procHidepid } from "./hidepid.ts";
-import { visibleInBox } from "./plan.ts";
+import { boxUploadsDir, under, visibleInBox } from "./plan.ts";
+import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./program-trust.ts";
 import { DENIED_SYSCALLS, seccompBytes } from "./seccomp.ts";
 import { engineInstallRoots, npmEnginesPrefix } from "../engine-roots.ts";
 import { spawnCli } from "../procs.ts";
@@ -15,7 +16,7 @@ import { waitForExit } from "../procs.ts";
 const bridge = { socat: "/usr/bin/socat", bridgeScript: "/app/dist-server/bot-box/box-bridge.js", node: "/usr/local/bin/node" };
 
 describe("BoxRunner.wrap", () => {
-  const setup = { dataDir: "/data/.openmausbot", home: "/data", codeRoots: ["/app"], engineRoots: engineInstallRoots("/data/.openmausbot"), bridges: [{ name: "egress", port: BOX_EGRESS_PORT, socket: "/data/.openmausbot/box/egress.sock" }, { name: "harness", port: 8799, socket: "/data/.openmausbot/box/harness.sock" }] };
+  const setup = { dataDir: "/data/.seira", home: "/data", codeRoots: ["/app"], engineRoots: engineInstallRoots("/data/.seira"), bridges: [{ name: "egress", port: BOX_EGRESS_PORT, socket: "/data/.seira/box/egress.sock" }, { name: "harness", port: 8799, socket: "/data/.seira/box/harness.sock" }] };
 
   // An engine installed in the app's npm prefix: the absolute path the driver resolved, or the bare name looked up on the
   // PATH it was handed (the prefix's bin first), both read through the bin link's relative target.
@@ -24,7 +25,7 @@ describe("BoxRunner.wrap", () => {
     const bin = join(npmEnginesPrefix(setup.dataDir), "bin");
     const target = join(bin, "..", "lib", "node_modules", "opencode-ai", "bin", "opencode.exe");
     for (const command of [join(bin, "opencode"), "opencode"]) {
-      const wrapped = runner.wrap({ command, args: ["acp"], cwd: "/data/.openmausbot/task-workspaces/b1/t1", env: { PATH: `${bin}:/usr/local/bin:/usr/bin`, HOME: "/data" } });
+      const wrapped = runner.wrap({ command, args: ["acp"], cwd: "/data/.seira/task-workspaces/b1/t1", env: { PATH: `${bin}:/usr/local/bin:/usr/bin`, HOME: "/data" } });
       const inner = wrapped.args.slice(wrapped.args.indexOf("--") + 1);
       expect(inner.slice(-2)).toEqual([command, "acp"]);
       expect(wrapped.env.PATH!.split(":")[0]).toBe(bin);
@@ -38,8 +39,8 @@ describe("BoxRunner.wrap", () => {
   it("runs the engine under bwrap with the plan, the allow-listed environment and the proxy pointed at the gate", () => {
     const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set(["COMPOSIO_API_KEY"]) });
     const wrapped = runner.wrap({
-      command: "/usr/local/bin/claude", args: ["-p", "--output-format", "stream-json"], cwd: "/data/.openmausbot/task-workspaces/b1/t1",
-      env: { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "k", COMPOSIO_API_KEY: "c", OMB_CLOUD_BOOTSTRAP_SECRET: "s", RANDOM_SECRET: "r" },
+      command: "/usr/local/bin/claude", args: ["-p", "--output-format", "stream-json"], cwd: "/data/.seira/task-workspaces/b1/t1",
+      env: { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "k", COMPOSIO_API_KEY: "c", SEIRA_CLOUD_BOOTSTRAP_SECRET: "s", RANDOM_SECRET: "r" },
     });
     expect(wrapped.command).toBe("/usr/bin/bwrap");
     expect(wrapped.args.slice(0, 3)).toEqual(["--ro-bind", "/usr", "/usr"]);
@@ -64,11 +65,11 @@ describe("BoxRunner.wrap", () => {
   // The box's paths are POSIX paths inside it, which Windows' path module would write with drive letters and backslashes.
   it.skipIf(process.platform === "win32")("a relay is bound in and dialed by the Node bridge, even where socat bridges the gates; a shared-network box has none", () => {
     const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set() });
-    const relay = "/data/.openmausbot/box/relay-ab12.sock";
-    const wrapped = runner.wrap({ command: "/data/.openmausbot/tools/agy", args: ["--uid="], env: { PATH: "/usr/bin" }, relay });
-    expect(wrapped.args.join(" ")).toContain(`--bind ${relay} /run/omb/relay.sock`);
+    const relay = "/data/.seira/box/relay-ab12.sock";
+    const wrapped = runner.wrap({ command: "/data/.seira/tools/agy", args: ["--uid="], env: { PATH: "/usr/bin" }, relay });
+    expect(wrapped.args.join(" ")).toContain(`--bind ${relay} /run/seira/relay.sock`);
     const inner = wrapped.args.slice(wrapped.args.indexOf("--") + 1);
-    expect(inner).toEqual([bridge.node, bridge.bridgeScript, "--bridge=3128=/run/omb/egress.sock", "--bridge=8799=/run/omb/harness.sock", "--relay=/run/omb/relay.sock", "--", "/data/.openmausbot/tools/agy", "--uid="]);
+    expect(inner).toEqual([bridge.node, bridge.bridgeScript, "--bridge=3128=/run/seira/egress.sock", "--bridge=8799=/run/seira/harness.sock", "--relay=/run/seira/relay.sock", "--", "/data/.seira/tools/agy", "--uid="]);
     const shared = runner.wrap({ command: "/opt/chrome", args: [], env: {}, net: "shared", relay });
     expect(shared.args).not.toContain(relay);
     expect(shared.args.slice(shared.args.indexOf("--") + 1)).toEqual(["/opt/chrome"]);
@@ -76,16 +77,16 @@ describe("BoxRunner.wrap", () => {
 
   it("the env-all mutation hands over the whole environment (so the self-check can prove the allow-list)", () => {
     const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup: { ...setup, mutate: new Set(["env-all" as const]) }, denyEnv: new Set() });
-    expect(runner.wrap({ command: "x", args: [], env: { OMB_CLOUD_BOOTSTRAP_SECRET: "s", EMPTY: undefined } }).env).toMatchObject({ OMB_CLOUD_BOOTSTRAP_SECRET: "s" });
+    expect(runner.wrap({ command: "x", args: [], env: { SEIRA_CLOUD_BOOTSTRAP_SECRET: "s", EMPTY: undefined } }).env).toMatchObject({ SEIRA_CLOUD_BOOTSTRAP_SECRET: "s" });
   });
 });
 
 describe("the box's hardening (T0c)", () => {
   it("hands each box the seccomp filter on descriptor 3, and the no-seccomp mutation leaves it out", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-seccomp-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-seccomp-"));
     const file = join(dir, "seccomp.bpf");
     writeFileSync(file, seccompBytes());
-    const setup = { dataDir: "/data/.openmausbot", home: "/data", codeRoots: ["/app"], engineRoots: [], bridges: [] };
+    const setup = { dataDir: "/data/.seira", home: "/data", codeRoots: ["/app"], engineRoots: [], bridges: [] };
     const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set(), seccompFile: file });
     const wrapped = runner.wrap({ command: "/usr/bin/x", args: [], env: {} });
     expect(wrapped.args).toContain("--seccomp");
@@ -122,16 +123,18 @@ describe("BotBox", () => {
     for (const box of boxes.splice(0)) await box.stop();
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
-  const temp = () => { const dir = mkdtempSync(join(tmpdir(), "omb-box-")); dirs.push(dir); return dir; };
+  const temp = () => { const dir = mkdtempSync(join(tmpdir(), "seira-box-")); dirs.push(dir); return dir; };
 
   it("off: wraps nothing and reports why", async () => {
     const box = new BotBox();
     boxes.push(box);
     const lines: string[] = [];
-    expect((await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: (line) => lines.push(line) })).box).toBe("off");
+    expect((await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: { SEIRA_BOT_BOX: "0" }, log: (line) => lines.push(line) })).box).toBe("off");
     expect(box.wrap({ command: "claude", args: [], env: {} })).toBeNull();
-    expect(box.report()).toMatchObject({ box: "off", reason: "not-cloud", checks: null, bridge: null, boxed: 0, refused: { egress: 0, harness: 0 }, broker: { on: false, tokens: 0, forwarded: 0, refused: 0, unbrokered: [] }, hardening: { seccomp: "off", denied: 0 } });
-    expect(lines).toEqual(["bot box: off (not-cloud)"]);
+    expect(box.scope()).toBeNull();
+    expect(box.boxesBot("b1")).toBe(false);
+    expect(box.report()).toMatchObject({ box: "off", reason: "switched-off", checks: null, bridge: null, boxed: 0, refused: { egress: 0, harness: 0 }, broker: { on: false, tokens: 0, forwarded: 0, refused: 0, unbrokered: [] }, hardening: { seccomp: "off", denied: 0 } });
+    expect(lines).toEqual(["bot box: off (switched-off)"]);
     expect(existsSync(join(dirs[0]!, "box"))).toBe(false);
   });
 
@@ -154,12 +157,12 @@ describe("BotBox", () => {
     const wrapped = box.wrap({ command: "/usr/bin/codex", args: ["app-server"], env: { PATH: "/usr/bin" } })!;
     expect(wrapped.command).toBe("/usr/bin/bwrap");
     expect(wrapped.args).toContain(join(dataDir, "box", "harness.sock"));
-    expect(wrapped.args).toContain("/run/omb/harness.sock");
-    expect(wrapped.args).toContain("/run/omb/broker.sock");
+    expect(wrapped.args).toContain("/run/seira/harness.sock");
+    expect(wrapped.args).toContain("/run/seira/broker.sock");
     expect(box.report()).toMatchObject({ box: "bwrap", bridge: "node", boxed: 1, checks: null, broker: { on: true, tokens: 0 } });
     // A key becomes a token bound to this process; releasing it (the process exit) revokes it.
     const keyed = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b1", "t1"), env: { PATH: "/usr/bin", ANTHROPIC_API_KEY: "sk-ant-real", XAI_API_KEY: "xai-real" } })!;
-    expect(keyed.token).toMatch(/^omb_t0_[a-f0-9]{48}$/);
+    expect(keyed.token).toMatch(/^seira_t0_[a-f0-9]{48}$/);
     expect(keyed.env.ANTHROPIC_API_KEY).toBe(keyed.token);
     expect(keyed.env.ANTHROPIC_BASE_URL).toBe(`http://127.0.0.1:18080/b/${keyed.token}/anthropic`);
     expect(JSON.stringify(keyed.env)).not.toContain("sk-ant-real");
@@ -170,7 +173,7 @@ describe("BotBox", () => {
     box.noteChecks({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(box.report().checks).toEqual({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^bot box: on \(bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
+    expect(lines[0]).toMatch(/^bot box: on \(every bot; bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
     const relay = (await box.openRelay())!;
     expect(relay.socketPath.startsWith(join(dataDir, "box", "relay-"))).toBe(true);
     expect(existsSync(relay.socketPath)).toBe(true);
@@ -181,8 +184,174 @@ describe("BotBox", () => {
   it("off: no relay", async () => {
     const box = new BotBox();
     boxes.push(box);
-    await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: () => {} });
+    await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: { SEIRA_BOT_BOX: "0" }, log: () => {} });
     expect(await box.openRelay()).toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("limited: boxes only the spawns of bots limited to chosen folders and leaves every other spawn as it was", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = temp();
+    const lines: string[] = [];
+    box.scopeFolders((botId) => botId === "b1" ? { limited: true, grants: [{ path: "/work/docs", write: false }] } : botId === "b2" ? { limited: false, grants: [{ path: "/work/docs", write: false }] } : null);
+    await box.start({
+      dataDir, home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: (line) => lines.push(line),
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    expect(box.enabled(), "not every bot spawn is boxed").toBe(false);
+    expect(box.scope()).toBe("limited");
+    expect(lines[0]).toMatch(/^bot box: on \(bots limited to chosen folders; bubblewrap/);
+    expect(homeProgramsDistrusted(), "the person and the other bots write HOME anyway").toBe(false);
+    const env = { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "sk-ant-real" };
+    const limited = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b1", "t1"), env })!;
+    expect(limited.command).toBe("/usr/bin/bwrap");
+    expect(visibleInBox(limited.plan, "/work/docs/a.md")).toBe("ro");
+    expect(limited.env.ANTHROPIC_API_KEY, "its key goes through the broker").toBe(limited.token);
+    expect(box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b2", "t1"), env }), "a bot with folders but no limit").toBeNull();
+    expect(box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b3", "t1"), env }), "a bot with no setting").toBeNull();
+    expect(box.wrap({ command: "/usr/bin/node", args: [], env }), "a spawn of no bot").toBeNull();
+    expect(box.report().boxed).toBe(1);
+    expect([box.boxesBot("b1"), box.boxesBot("b2"), box.boxesBot("b3"), box.boxesBot(undefined)]).toEqual([true, false, false, false]);
+    expect(box.boxesFolders({ limited: true, grants: [] })).toBe(true);
+    expect(box.boxesFolders({ limited: false, grants: [] })).toBe(false);
+    expect(box.boxesFolders(undefined)).toBe(false);
+    expect(box.takes({ cwd: join(dataDir, "task-workspaces", "b1", "t1") })).toBe(true);
+    expect(box.takes({ cwd: join(dataDir, "task-workspaces", "b2", "t1") })).toBe(false);
+    expect(box.broker("b1")?.port).toBe(18080);
+    expect(box.broker("b2"), "a bot outside the box keeps its URL servers direct").toBeNull();
+    expect(box.broker()).toBeNull();
+    expect(await box.openRelay(), "relays are for a box of every bot").toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("limited: the server runs no program from a folder a limited box writes, and HOME stays trusted", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const real = () => realpathSync(temp());
+    const home = real(), dataDir = join(home, ".seira"), chosen = real(), later = real(), beside = real(), cwd = real(), elsewhere = real();
+    mkdirSync(join(home, ".grok", "downloads"), { recursive: true });
+    mkdirSync(join(home, ".grok", "bin"), { recursive: true });
+    mkdirSync(join(home, ".grok", "sessions"), { recursive: true });
+    writeFileSync(join(home, ".grok", "downloads", "grok-1"), "");
+    symlinkSync(join("..", "downloads", "grok-1"), join(home, ".grok", "bin", "grok"));
+    symlinkSync(join(home, ".grok", "bin"), join(home, ".grok", "sessions", "bin"));
+    mkdirSync(join(home, ".claude", "local"), { recursive: true });
+    writeFileSync(join(home, ".claude", "local", "claude"), "");
+    mkdirSync(join(home, ".kimi-code", "bin"), { recursive: true });
+    symlinkSync(join(home, ".grok"), join(home, "grok-link"));
+    mkdirSync(join(elsewhere, "codex", "bin"), { recursive: true });
+    symlinkSync(join(elsewhere, "codex"), join(home, ".codex"));
+    let named = [chosen, join(dataDir, "workspaces", "b1", "docs"), dirname(home), "relative/bin"];
+    box.scopeFolders(() => ({ limited: true, grants: [] }));
+    box.scopeLimitedWrites(() => named);
+    await box.start({
+      dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    expect(homeProgramsDistrusted(), "the person and the other bots write HOME anyway").toBe(false);
+    const keptPrograms = [join(home, ".grok", "bin"), join(home, ".grok", "bin", "grok"), join(home, ".grok", "downloads", "grok-1"), join(home, ".claude", "local"), join(home, ".claude", "local", "claude"), join(home, ".kimi-code", "bin"), join(home, "grok-link", "bin")];
+    const boxWrites = [
+      join(home, ".grok"), join(home, ".grok", "sessions"), join(home, ".grok", "sessions", "bin"), join(home, "grok-link", "sessions"), join(home, ".claude"), join(home, ".claude", "projects"),
+      join(home, ".kimi-code", "cache"), join(home, ".config", "opencode", "bin"),
+      join(dataDir, "task-workspaces", "b1", "t1", "tool"), join(dataDir, "workspaces", "b1"), join(dataDir, "engine-homes", "a1"), join(dataDir, "team-files"),
+      join(chosen, "bin"), join(elsewhere, "codex", "bin"),
+    ];
+    const trusted = () => {
+      for (const path of keptPrograms) expect(serverMayRunFrom(path), `${path}: the box has it read-only`).toBe(true);
+      for (const path of boxWrites) expect(serverMayRunFrom(path), path).toBe(false);
+    };
+    trusted();
+    for (const path of [home, join(home, ".local", "bin"), join(home, ".config", "git"), join(dataDir, "tools", "npm", "bin"), join(beside, "bin"), "/usr/bin"]) {
+      expect(serverMayRunFrom(path), `${path}: a grant around the data folder is never bound, so it stays trusted`).toBe(true);
+    }
+    expect(serverPath([join(home, ".local", "bin"), join(home, ".grok", "bin"), join(home, ".grok", "sessions"), join(chosen, "bin"), "/usr/bin", "."].join(delimiter)))
+      .toBe([join(home, ".local", "bin"), join(home, ".grok", "bin"), "/usr/bin"].join(delimiter));
+    expect(serverMayRunFrom(join(later, "bin"))).toBe(true);
+    named = [...named, later];
+    expect(serverMayRunFrom(join(later, "bin")), "a folder an admin adds counts at once").toBe(false);
+    expect(serverMayRunFrom(join(cwd, "bin"))).toBe(true);
+    const wrapped = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
+    wrapped.release();
+    for (const path of [join(home, ".grok", "bin", "grok"), join(home, ".grok", "downloads", "grok-1"), join(home, ".claude", "local", "claude"), join(home, ".kimi-code", "bin")]) expect(visibleInBox(wrapped.plan, path), path).toBe("ro");
+    for (const path of [join(home, ".grok", "sessions"), join(home, ".claude", "settings.json"), join(home, ".kimi-code", "config.toml")]) expect(visibleInBox(wrapped.plan, path), path).toBe("rw");
+    expect(serverMayRunFrom(join(cwd, "bin")), "a folder a box here was given, outside every list").toBe(false);
+    trusted();
+    await box.stop();
+    for (const path of [join(home, ".grok", "sessions"), join(chosen, "bin"), join(later, "bin"), join(cwd, "bin"), join(dataDir, "workspaces", "b1")]) {
+      expect(serverMayRunFrom(path), `${path} after the box stops`).toBe(true);
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("limited: a folder a box was given stays distrusted where it was, after a link to it changes", async () => {
+    const home = realpathSync(temp()), dataDir = join(home, ".seira"), first = realpathSync(temp()), second = realpathSync(temp());
+    const cwd = join(realpathSync(temp()), "project");
+    symlinkSync(first, cwd);
+    const box = new BotBox();
+    boxes.push(box);
+    box.scopeFolders(() => ({ limited: true, grants: [] }));
+    await box.start({
+      dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!.release();
+    expect(serverMayRunFrom(join(first, "bin"))).toBe(false);
+    rmSync(cwd);
+    symlinkSync(second, cwd);
+    expect(serverMayRunFrom(join(first, "bin")), "the box still writes the folder it was bound to").toBe(false);
+    expect(serverMayRunFrom(join(cwd, "bin"))).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("limited: no box has a program folder of a sign-in folder writable, so trust needs no memory across a restart", async () => {
+    const home = realpathSync(temp()), dataDir = join(home, ".seira"), cwd = realpathSync(temp());
+    mkdirSync(join(home, ".kimi-code"), { recursive: true });
+    mkdirSync(join(home, ".grok"), { recursive: true, mode: 0o500 });
+    mkdirSync(join(home, ".claude", "elsewhere"), { recursive: true });
+    symlinkSync("elsewhere", join(home, ".claude", "local"));
+    const canBlock = process.getuid?.() !== 0;
+    const start = async () => {
+      const box = new BotBox();
+      boxes.push(box);
+      box.scopeFolders(() => ({ limited: true, grants: [] }));
+      await box.start({
+        dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+        detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+      });
+      return box;
+    };
+    const first = await start();
+    const wrapped = first.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
+    wrapped.release();
+    expect(statSync(join(home, ".kimi-code", "bin")).mode & 0o777, "made before the box, for the person only").toBe(0o700);
+    expect(visibleInBox(wrapped.plan, join(home, ".kimi-code", "bin", "kimi"))).toBe("ro");
+    expect(visibleInBox(wrapped.plan, join(home, ".kimi-code", "config.toml"))).toBe("rw");
+    expect(visibleInBox(wrapped.plan, join(home, ".claude", "local", "claude")), "a program folder that is a link: the sign-in folder is read-only").toBe("ro");
+    expect(visibleInBox(wrapped.plan, join(home, ".claude", "settings.json"))).toBe("ro");
+    if (canBlock) expect(visibleInBox(wrapped.plan, join(home, ".grok", "bin", "grok")), "a program folder that cannot be made: the sign-in folder is read-only").toBe("ro");
+    for (const path of wrapped.plan.writable) expect(["bin", "local"].some((name) => path.endsWith(`/${name}`)) && under(path, home) && !under(path, dataDir), path).toBe(false);
+    await first.stop();
+
+    chmodSync(join(home, ".grok"), 0o700);
+    mkdirSync(join(home, ".grok", "bin"), { recursive: true });
+    await start();
+    expect(serverMayRunFrom(join(home, ".kimi-code", "bin")), "after a restart, with no memory of the earlier box").toBe(true);
+    expect(serverMayRunFrom(join(home, ".grok", "bin")), "made outside every box").toBe(true);
+    for (const path of [join(home, ".claude", "local"), join(home, ".claude", "elsewhere"), join(home, ".kimi-code", "cache"), join(home, ".grok")]) expect(serverMayRunFrom(path), path).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("limited: a bot working in a folder of its own choosing still reads its conversation's uploads", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = temp();
+    box.scopeFolders(() => ({ limited: true, grants: [{ path: "/srv/project", write: true }] }));
+    await box.start({
+      dataDir, home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    const wrapped = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: "/srv/project", conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
+    expect(wrapped.plan.botId).toBe("b1");
+    const uploads = boxUploadsDir(dataDir, "b1", "t1");
+    expect(existsSync(uploads)).toBe(true);
+    expect(visibleInBox(wrapped.plan, join(uploads, "photo.png"))).toBe("ro");
+    expect(visibleInBox(wrapped.plan, "/srv/project/a.txt")).toBe("rw");
   });
 });
 
@@ -193,7 +362,7 @@ describe("the box a bot's Chrome runs in", () => {
     for (const box of boxes.splice(0)) await box.stop();
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
-  const temp = () => { const dir = mkdtempSync(join(tmpdir(), "omb-box-")); dirs.push(dir); return dir; };
+  const temp = () => { const dir = mkdtempSync(join(tmpdir(), "seira-box-")); dirs.push(dir); return dir; };
 
   it("is no box off a Cloud home, which is what Windows gets", () => {
     expect(new BotBox().browserBox(9, []), "no box off a Cloud home").toBeNull();
@@ -204,7 +373,7 @@ describe("the box a bot's Chrome runs in", () => {
   it.skipIf(process.platform === "win32")("has the host's network and the read-only paths asked for, and none of HOME or the data folder", async () => {
     const box = new BotBox();
     boxes.push(box);
-    const dataDir = join(temp(), "home", ".openmausbot"), home = dirname(dataDir);
+    const dataDir = join(temp(), "home", ".seira"), home = dirname(dataDir);
     mkdirSync(dataDir, { recursive: true });
     await box.start({ dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {}, detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null } }) });
     const uploads = join(dataDir, "browser-uploads");
@@ -232,7 +401,7 @@ describe("spawnCli goes through the box", () => {
 
   it.skipIf(process.platform === "win32")("a bot spawn runs under the box's command; other spawns and box: false do not", async () => {
     const { botBox } = await import("./box.ts");
-    const dir = mkdtempSync(join(tmpdir(), "omb-spawn-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-spawn-"));
     dirs.push(dir);
     // A stand-in for bwrap: records its argv, then runs what follows `--`.
     const fakeBwrap = join(dir, "fake-bwrap.sh"), record = join(dir, "argv.txt");
@@ -243,7 +412,7 @@ describe("spawnCli goes through the box", () => {
       // /usr/bin/true stands in for socat: the shell init starts it, waits once, and execs the engine.
       detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: fakeBwrap, socat: "/usr/bin/true" } }),
     });
-    const run = async (owner: "bot" | "openmausbot", box?: false) => {
+    const run = async (owner: "bot" | "seira", box?: false) => {
       rmSync(record, { force: true });
       const child = spawnCli("/bin/sh", ["-c", "echo ran"], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: "/usr/bin:/bin", HOME: dir, SECRET_THING: "x" }, box }, owner);
       let out = "";
@@ -255,10 +424,10 @@ describe("spawnCli goes through the box", () => {
     expect(boxed.boxed).toBe(true);
     expect(boxed.out).toBe("ran");
     expect(boxed.argv).toContain("--unshare-net");
-    expect(boxed.argv).toContain("/run/omb/egress.sock");
+    expect(boxed.argv).toContain("/run/seira/egress.sock");
     const engines = npmEnginesPrefix(join(dir, "data"));
     expect(boxed.argv, "the engines Seira installed, read-only").toContain(`--ro-bind-try\n${engines}\n${engines}\n`);
-    expect((await run("openmausbot")).boxed).toBe(false);
+    expect((await run("seira")).boxed).toBe(false);
     expect((await run("bot", false)).boxed).toBe(false);
     expect(botBox.report().boxed).toBe(1);
   });
@@ -267,7 +436,7 @@ describe("spawnCli goes through the box", () => {
 describe("BoxRunner.lend", () => {
   // A plan over the Linux box's POSIX paths, which Windows' path module would join with backslashes.
   it.skipIf(process.platform === "win32")("puts a conversation's lent folders (a memory layer) back read-write in its boxes only, until they are taken back", () => {
-    const dataDir = "/data/.openmausbot";
+    const dataDir = "/data/.seira";
     const setup = { dataDir, home: "/data", codeRoots: ["/app"], engineRoots: [], bridges: [{ name: "egress", port: BOX_EGRESS_PORT, socket: `${dataDir}/box/egress.sock` }, { name: "harness", port: 8799, socket: `${dataDir}/box/harness.sock` }] };
     const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set() });
     const layer = join(dataDir, "workspaces", "bot-a--member-p_ada");
@@ -297,5 +466,60 @@ describe("the probe tells the server and the canary from a box process with the 
     expect(seesProcess(7, "4321789", () => "4321789")).toBe(true);
     expect(seesProcess(7, "4321789", () => "88")).toBe(false);
     expect(seesProcess(7, "4321789", () => null)).toBe(false);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("a bot's folder list in its box", () => {
+  const setup = { dataDir: "/data/.seira", home: "/data", codeRoots: ["/app"], engineRoots: engineInstallRoots("/data/.seira"), bridges: [] };
+  const cwd = "/data/.seira/task-workspaces/b1/t1";
+  const request = { command: "/usr/local/bin/claude", args: [], cwd, env: { HOME: "/data" } };
+  const boxes: BotBox[] = [];
+  afterEach(async () => { for (const box of boxes.splice(0)) await box.stop(); });
+
+  it("gives every spawn of a bot that bot's folders and no other bot's", () => {
+    const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set() });
+    const asked: string[] = [];
+    runner.scopeFolders((botId) => { asked.push(botId); return botId === "b1" ? { limited: false, grants: [{ path: "/work/docs", write: false }] } : null; });
+    expect(visibleInBox(runner.wrap(request).plan, "/work/docs/a.md")).toBe("ro");
+    const other = runner.wrap({ ...request, cwd: "/data/.seira/task-workspaces/b2/t1" });
+    expect(visibleInBox(other.plan, "/work/docs/a.md")).toBe("none");
+    expect(asked).toEqual(["b1", "b2"]);
+    runner.scopeFolders(null);
+    expect(visibleInBox(runner.wrap(request).plan, "/work/docs/a.md")).toBe("none");
+  });
+
+  it("changes the key a kept process starts again on when the folders change (AC-18)", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = join(mkdtempSync(join(tmpdir(), "seira-folders-key-")), "home", ".seira"), home = dirname(dataDir);
+    mkdirSync(dataDir, { recursive: true });
+    let folders: { limited: boolean; grants: Array<{ path: string; write: boolean }> } | null = null;
+    box.scopeFolders(() => folders);
+    await box.start({ dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {}, detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null } }) });
+    const turn = { cwd: join(dataDir, "task-workspaces", "b1", "t1") };
+    const keys = () => [box.audienceKey(turn), box.sharedThreadsKey(turn)];
+    expect(keys(), "no setting leaves the keys as they were").toEqual([null, null]);
+    folders = { limited: false, grants: [{ path: "/work/a", write: true }] };
+    const first = keys();
+    expect(first[0]).not.toBeNull();
+    expect(first[1]).not.toBeNull();
+    folders = { limited: true, grants: [{ path: "/work/a", write: true }] };
+    const limited = keys();
+    folders = { limited: true, grants: [{ path: "/work/a", write: false }] };
+    const readOnly = keys();
+    folders = { limited: true, grants: [{ path: "/work/a", write: false }, { path: "/work/b", write: true }] };
+    const more = keys();
+    const all = [first, limited, readOnly, more];
+    for (const field of [0, 1]) expect(new Set(all.map((keys) => keys[field])).size).toBe(4);
+    folders = { limited: true, grants: [{ path: "/work/b", write: true }, { path: "/work/a", write: false }] };
+    expect(keys(), "the order of the list is not a change").toEqual(more);
+    folders = null;
+    expect(keys()).toEqual([null, null]);
+  });
+
+  it("writes the key from the sorted list and the limit", () => {
+    expect(foldersKey(null)).toBeNull();
+    expect(foldersKey({ limited: false, grants: [{ path: "/b", write: true }, { path: "/a", write: false }] })).toBe(foldersKey({ limited: false, grants: [{ path: "/a", write: false }, { path: "/b", write: true }] }));
+    expect(foldersKey({ limited: false, grants: [] })).not.toBe(foldersKey({ limited: true, grants: [] }));
   });
 });

@@ -18,6 +18,8 @@ import {
   routineVisible,
   sameAudience,
   webhookVisible,
+  workflowRunVisible,
+  workflowVisible,
   SEES_EVERYTHING,
   storedVisibility,
   viewerSees,
@@ -43,6 +45,8 @@ const groups = [
   { id: "room-pub", threadId: "t-room-pub", memberIds: ["pub"], section: "Ops" },
   { id: "room-mixed", threadId: "t-room-mixed", memberIds: ["pub", "hr"], tasks: [{ threadId: "t-room-mixed-2" }] },
   { id: "room-empty", threadId: "t-room-empty", memberIds: ["gone"] },
+  { id: "room-hr-only", threadId: "t-room-hr-only", memberIds: ["hr"], avatarUrl: "/api/attachments/room-hr.png" },
+  { id: "room-open", threadId: "t-room-open", memberIds: ["pub"], avatarUrl: "/api/attachments/room-open.png" },
 ];
 
 describe("visibility values", () => {
@@ -155,6 +159,15 @@ describe("VisibleSet", () => {
     expect(new VisibleSet(bots, groups, ADA).attachment("in-hr.png", lookup)).toBe(true);
   });
 
+  it("serves a room's picture only to people who can see that room", () => {
+    const lookup = () => [] as string[];
+    const bob = new VisibleSet(bots, groups, BOB);
+    const ada = new VisibleSet(bots, groups, ADA);
+    expect(bob.attachment("room-hr.png", lookup)).toBe(false);
+    expect(ada.attachment("room-hr.png", lookup)).toBe(true);
+    expect(bob.attachment("room-open.png", lookup)).toBe(true);
+  });
+
   it("routes each path to the entity it names", () => {
     expect(pathSubject("/api/bots/hr/messages")).toEqual({ kind: "bot", id: "hr" });
     expect(pathSubject("/api/bots/hr")).toEqual({ kind: "bot", id: "hr" });
@@ -176,6 +189,33 @@ describe("VisibleSet", () => {
     expect(routineVisible({ botId: "pub" }, bob)).toBe(true);
     expect(routineVisible({ botId: "hr" }, bob)).toBe(false);
     expect(routineVisible({ botId: "pub", groupId: "room-mixed" }, bob)).toBe(false);
+  });
+
+  it("hides a routine whose workflow names a bot the person cannot see", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", "corp"] }, bob)).toBe(true);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", "hr"] }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", 7] }, bob)).toBe(false);
+    expect(routineRunVisible({ botId: "pub", workflowBotIds: ["hr"] }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["hr"] }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
+  });
+
+  it("shows a workflow and its runs only when every bot in them is visible", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const step = (botId: unknown) => ({ id: "s", kind: "bot", botId, instruction: "go" });
+    expect(workflowVisible({ steps: [step("pub"), { id: "p", kind: "post" }, step("corp")] }, bob)).toBe(true);
+    expect(workflowVisible({ steps: [step("pub"), step("hr")] }, bob)).toBe(false);
+    expect(workflowVisible({ steps: [step(undefined)] }, bob)).toBe(false);
+    expect(workflowVisible({ steps: [step("hr")] }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
+    expect(workflowRunVisible({ botIds: ["pub", "corp"], stepRuns: [] }, bob)).toBe(true);
+    expect(workflowRunVisible({ botIds: ["pub", "hr"], stepRuns: [] }, bob)).toBe(false);
+  });
+
+  it("hides a workflow run when any chat in its thread map is hidden", () => {
+    const seen = { everything: false, bot: () => true, hides: (threadId: string) => threadId === "t-private" } as unknown as VisibleSet;
+    const run = (threads: Record<string, string>) => ({ botIds: ["pub"], stepRuns: [{ stepId: "s1" }], threads });
+    expect(workflowRunVisible(run({ s1: "t-open" }), seen)).toBe(true);
+    expect(workflowRunVisible(run({ s1: "t-open", s2: "t-private" }), seen)).toBe(false);
   });
 
   it("shows a room webhook only to someone who sees both its bot and its room", () => {
@@ -215,6 +255,8 @@ describe("live frames for a member", () => {
       { kind: "computer-control", botId: "adm", held: true },
       { kind: "routine", routine: { id: "r", botId: "hr" } },
       { kind: "routine.run", run: { id: "r", botId: "pub", groupId: "room-mixed" } },
+      { kind: "workflow", workflow: { id: "w", steps: [{ id: "s", kind: "bot", botId: "hr", instruction: "go" }] } },
+      { kind: "workflow.run", run: { runId: "r", botIds: ["pub", "hr"], stepRuns: [] } },
       { kind: "webhook", webhook: { id: "hook-hr", botId: "hr" } },
       { kind: "webhook.attempt", attempt: { webhookId: "hook-hr" } },
       { kind: "webhook", webhook: { id: "hook-room-mixed", botId: "pub", groupId: "room-mixed" } },
@@ -237,6 +279,12 @@ describe("live frames for a member", () => {
     expect(frameForMember({ kind: "groups.order", groupIds: ["room-mixed", "room-pub"] }, ctx, seen())).toEqual({ kind: "groups.order", groupIds: ["room-pub"] });
     const config = { kind: "config", membership: {} };
     expect(frameForMember(config, ctx, seen())).toBe(config);
+    const workflow = { kind: "workflow", workflow: { id: "w", steps: [{ id: "s", kind: "bot", botId: "pub", instruction: "go" }] } };
+    expect(frameForMember(workflow, ctx, seen())).toBe(workflow);
+    const workflowRun = { kind: "workflow.run", run: { runId: "r", botIds: ["pub"], stepRuns: [] } };
+    expect(frameForMember(workflowRun, ctx, seen())).toBe(workflowRun);
+    const deleted = { kind: "workflow.deleted", workflowId: "w" };
+    expect(frameForMember(deleted, ctx, seen())).toBe(deleted);
     expect(frameForMember({ kind: "bot", bot: { id: "corp", visibility: { people: ["@example.test"] } } }, ctx, seen()))
       .toEqual({ kind: "bot", bot: { id: "corp" } });
   });
@@ -493,22 +541,22 @@ describe("a Team Cloud's audiences", () => {
 
   it("a person's own Seira exists for them alone: no admin and no other member sees it, whatever its sharing says", () => {
     // As an admin could once leave it: listed for everyone.
-    const adas = { id: "adas-maus", threadId: "t-maus", defaultBot: { person: "ada@example.test" }, visibility: "everyone", access: { everyone: "chat", people: {} } };
-    const withMaus = [...open, adas];
-    const rooms = [...openGroups, { id: "room-maus", threadId: "t-room-maus", memberIds: ["pub", "adas-maus"] }];
-    const set = (viewer: Viewer, person: string | null) => new VisibleSet(withMaus, rooms, viewer, undefined, { of: audienceOf, person });
+    const adas = { id: "adas-seira", threadId: "t-seira", defaultBot: { person: "ada@example.test" }, visibility: "everyone", access: { everyone: "chat", people: {} } };
+    const withSeira = [...open, adas];
+    const rooms = [...openGroups, { id: "room-seira", threadId: "t-room-seira", memberIds: ["pub", "adas-seira"] }];
+    const set = (viewer: Viewer, person: string | null) => new VisibleSet(withSeira, rooms, viewer, undefined, { of: audienceOf, person });
     const ada = set(ADA, ADA_KEY), admin = set(BEN_ADMIN, BEN_KEY), member = set(BOB, BEN_KEY);
-    expect([ada.bot("adas-maus"), ada.level("adas-maus"), ada.group("room-maus")]).toEqual([true, "edit", true]);
+    expect([ada.bot("adas-seira"), ada.level("adas-seira"), ada.group("room-seira")]).toEqual([true, "edit", true]);
     for (const other of [admin, member, set({ kind: "all", email: "" }, null)]) {
-      expect([other.bot("adas-maus"), other.level("adas-maus"), other.group("room-maus")]).toEqual([false, "none", false]);
+      expect([other.bot("adas-seira"), other.level("adas-seira"), other.group("room-seira")]).toEqual([false, "none", false]);
       expect(other.bot("pub"), "team bots are as they were").toBe(true);
-      expect(frameForMember({ kind: "bot", bot: { id: "adas-maus", name: "Confidant" } }, { visible: other, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined }, { bots: new Set(), groups: new Set() })).toBeUndefined();
-      expect(routineVisible({ botId: "adas-maus" }, other)).toBe(false);
+      expect(frameForMember({ kind: "bot", bot: { id: "adas-seira", name: "Confidant" } }, { visible: other, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined }, { bots: new Set(), groups: new Set() })).toBeUndefined();
+      expect(routineVisible({ botId: "adas-seira" }, other)).toBe(false);
     }
     expect(admin.bot("no-such-bot"), "an admin's unknown id is still the route's to answer").toBe(true);
     // The server itself, and anywhere that is not a team, sees it as before.
-    expect(new VisibleSet(withMaus, rooms, SEES_EVERYTHING, undefined, { of: audienceOf, person: null }).bot("adas-maus")).toBe(true);
-    expect(new VisibleSet(withMaus, rooms, BEN_ADMIN).bot("adas-maus")).toBe(true);
+    expect(new VisibleSet(withSeira, rooms, SEES_EVERYTHING, undefined, { of: audienceOf, person: null }).bot("adas-seira")).toBe(true);
+    expect(new VisibleSet(withSeira, rooms, BEN_ADMIN).bot("adas-seira")).toBe(true);
   });
 
   it("a bot's reorder is no bot's route", () => {

@@ -1,7 +1,7 @@
 # The headless command line
 
 Use an isolated fixture, never the live app or workspace. The end-to-end test
-runs the published `openmausbot` entry as a child process against its own
+runs the published `seira` entry as a child process against its own
 fake-engine server (ports 19975-19999): a team file makes a Chief, two
 teammates and a room, and a second apply sends no write; `run --wait job`
 waits until the Chief and both teammates are done, and the export holds the
@@ -18,18 +18,18 @@ pnpm typecheck
 pnpm lint
 ```
 
-By hand, against a fixture (`OMB_TEST_PORTS` keeps it in a range):
+By hand, against a fixture (`SEIRA_TEST_PORTS` keeps it in a range):
 
 ```sh
-OMB_TEST_PORTS=19975-19999 node --experimental-strip-types scripts/control-seira.ts launch
+SEIRA_TEST_PORTS=19975-19999 node --experimental-strip-types scripts/control-seira.ts launch
 pnpm control:seira doctor --url http://127.0.0.1:PORT
 pnpm control:seira team apply team.yaml --dry-run --url http://127.0.0.1:PORT
 pnpm control:seira team apply team.yaml --url http://127.0.0.1:PORT
 pnpm control:seira run --bot ID --text "Say hello" --url http://127.0.0.1:PORT
-pnpm control:seira export --thread THREAD_ID --out /tmp/omb-export --url http://127.0.0.1:PORT
+pnpm control:seira export --thread THREAD_ID --out /tmp/seira-export --url http://127.0.0.1:PORT
 ```
 
-`control-seira` runs the same verbs as `openmausbot` (docs/headless-cli.md) and
+`control-seira` runs the same verbs as `seira` (docs/headless-cli.md) and
 prints each JSON result; a verb that changes something needs the explicit
 `--url`. The job a wait watches is the server's own read,
 `GET /api/threads/:id/job`; keep its JSON with the run's result as evidence.

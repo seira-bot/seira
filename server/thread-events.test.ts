@@ -7,7 +7,7 @@ import { readThreadEvents } from "./thread-events.ts";
 
 const dirs: string[] = [];
 function tmp() {
-  const d = mkdtempSync(join(tmpdir(), "omb-thread-events-"));
+  const d = mkdtempSync(join(tmpdir(), "seira-thread-events-"));
   dirs.push(d);
   return d;
 }
@@ -167,11 +167,11 @@ describe("readThreadEvents", () => {
     const eventsDir = tmp();
     const nativeDir = tmp();
     const base = {
-      provider: "boatagent",
+      provider: "claudeAgent",
       threadId: "t1",
       type: "request.opened",
       requestType: "question",
-      tool: "omb-ask",
+      tool: "seira-ask",
       summary: "Which framework?",
     };
     writeFileSync(

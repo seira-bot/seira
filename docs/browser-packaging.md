@@ -7,6 +7,9 @@ Browser access is on by default, both for the workspace (Settings) and for
 each bot (its computer panel); switching either off withholds the browser,
 and bundling executables never overrides that switch.
 
+How bots drive the browser, the live view, page health and recorded steps are in
+[The bots' browser](browser-engine.md).
+
 ## Package layout and lookup
 
 `pnpm package:prepare` runs `pnpm build:browser`. It downloads verified vendor
@@ -15,8 +18,8 @@ archives and stages `dist-native/browser/PLATFORM-ARCH`, copied as
 Each package includes only its target architecture: macOS ARM64/x64,
 Windows x64, or Linux x64.
 
-The server receives `OMB_RESOURCES_PATH` from Electron. It resolves an explicit
-`OMB_AGENT_BROWSER_PATH` override first, then the complete bundled engine and
+The server receives `SEIRA_RESOURCES_PATH` from Electron. It resolves an explicit
+`SEIRA_AGENT_BROWSER_PATH` override first, then the complete bundled engine and
 browser, then a separately installed engine or PATH. An incomplete bundle
 fails closed with a reinstall/update message. An explicit
 `AGENT_BROWSER_EXECUTABLE_PATH` still overrides the browser executable.
@@ -36,24 +39,25 @@ real Chrome whenever this machine has one, chosen once per machine
    `HKLM\SOFTWARE\Policies\Google\Chrome` key, or a JSON file in
    `/etc/opt/chrome/policies/managed`). Bots get their own profiles; the
    person's Chrome profile is never touched.
-2. Otherwise **Chrome for Testing** 153.0.8010.47, downloaded once into
+2. Otherwise **Chrome for Testing** 158.0.8127.36, downloaded once into
    `tools/chrome/` in the data directory at first launch, checked against its
    pinned size and SHA-256 before it is unpacked, and moved into place in one
-   rename. Only platforms with a pin download (Apple silicon Macs and Linux
-   servers on x64 or arm64 today; `scripts/pin-chrome-for-testing.ts` measures
-   more). A browser call made
+   rename. Only platforms with a pin download (Apple silicon Macs, and Linux
+   desktops and servers on x64 or arm64 today;
+   `scripts/pin-chrome-for-testing.ts` measures more). A browser call made
    during the download waits up to 45 seconds, then says how far it got.
-3. A Linux desktop without Google Chrome, and a platform without a pin, keep
-   the bundled headless shell. That stays the machine's choice; it never
-   changes while the server runs.
+   The Linux desktop downloads it too, because sites such as WhatsApp Web
+   refuse the bundled headless shell's `HeadlessChrome` user agent.
+3. A platform without a pin keeps the bundled headless shell. That stays the
+   machine's choice; it never changes while the server runs.
 
 Servers and the Docker image name their browser with
 `AGENT_BROWSER_EXECUTABLE_PATH` (the image's Chrome for Testing), or use the
 Chrome for Testing `agent-browser install` put in place. A Linux server where
 agent-browser already finds a browser (Chrome, Chromium or Brave on `PATH`, or a
 complete Puppeteer or Playwright Chromium in their caches) keeps it; with none,
-it downloads its own as in step 2. `OMB_CHROME_PATH`
-names one explicitly. An `OMB_AGENT_BROWSER_PATH` engine keeps its own choice
+it downloads its own as in step 2. `SEIRA_CHROME_PATH`
+names one explicitly. An `SEIRA_AGENT_BROWSER_PATH` engine keeps its own choice
 unless a Chrome is named too.
 
 **Identity.** The chosen Chrome reports exactly what it reports headed, read
@@ -62,20 +66,20 @@ from the binary itself once per version: its own user agent without
 platform version, architecture). agent-browser runs a generated launcher
 (`browser/chrome-launcher.sh`, `.cmd` on Windows) that adds
 `--disable-blink-features=AutomationControlled`, that user agent, the primary
-display's size and, when OMB knows it, the language; on a server it also
+display's size and, when Seira knows it, the language; on a server it also
 passes the server's `TZ`. A bot's Chrome never touches the person's keychain
 or keyring (`--use-mock-keychain` on macOS, `--password-store=basic` on
 Linux), and on macOS it always runs with the person's own home, so no
 "keychain cannot be found" dialog can appear. A second DevTools connection gives every page,
 cross-site frame and worker the matching client hints before it runs.
 Nothing is invented: Chrome for Testing reports Chromium brands, Google Chrome
-its own. `OMB_BROWSER_SCREEN`, `OMB_BROWSER_LANG` and `OMB_BROWSER_TIMEZONE`
+its own. `SEIRA_BROWSER_SCREEN`, `SEIRA_BROWSER_LANG` and `SEIRA_BROWSER_TIMEZONE`
 override the display, language and zone.
 
 `seira browser status`, the server's startup log and the
 `browserEngine.chrome` field of its configuration status name the choice, for
 example `Google Chrome 155 (installed)`. **Rollback:** start the server with
-`OMB_BROWSER_LEGACY_SHELL=1` to run exactly the previous engine.
+`SEIRA_BROWSER_LEGACY_SHELL=1` to run exactly the previous engine.
 
 `node --experimental-strip-types scripts/verify-browser-identity.ts --public`
 checks what sites see, in a throwaway home: the identity on a loopback probe
@@ -83,7 +87,7 @@ page, then the four public bot-test pages, read-only.
 
 ## Signed-in sites and My Chrome
 
-Each built-in browser lists its signed-in sites (Settings → Browser profiles,
+Each built-in browser lists its signed-in sites (Settings → Desktops & browser → Built-in browser,
 or a bot's Browser panel) with Sign out per site and Sign out of all. It works
 the same on desktop, a server and Cloud, for an open or a closed browser. A
 shared profile can instead use **My Chrome**, the person's own running Chrome,
@@ -95,8 +99,7 @@ default and dropped when lending is turned off; Chrome then travels over the
 device link, to the DevTools port the computer finds itself, and only the
 person's own conversations and routines use it. My Chrome works only on a
 personal Cloud home: on a Team Cloud and on self-hosted servers profiles stay
-built-in. Details: [the browser engine plan, step 5](plans/browser-engine.md)
-and [Seira Cloud](cloud-pro.md#your-chrome).
+built-in. Details: [Seira Cloud](cloud-pro.md#your-chrome).
 
 ## What a bot's browser can reach
 
@@ -110,14 +113,14 @@ loopback traffic through it too (`--proxy-bypass-list=<-loopback>`), and
 WebRTC sends no UDP around it. If the gate is not running, the browser
 connects nowhere.
 
-The owner can set an optional unauthenticated SOCKS5 upstream in Settings →
-Bot desktops → Built-in browser. The gate still resolves and checks every
+The owner can set an optional unauthenticated SOCKS5 upstream in Settings → Desktops & browser → Built-in
+browser. The gate still resolves and checks every
 destination locally, then passes only a checked public IP to that proxy; local,
 private, own-service, link-local and metadata destinations are never sent
 through it. New connections use the saved proxy immediately. My Chrome keeps
 using the person's own Chrome settings. The built-in browser also follows the
 app's language setting for its Chrome locale and `Accept-Language`; an explicit
-`OMB_BROWSER_LANG` environment value takes precedence.
+`SEIRA_BROWSER_LANG` environment value takes precedence.
 
 | Destination | Desktop | Self-hosted server | Seira Cloud |
 |---|---|---|---|
@@ -153,7 +156,7 @@ round, on that port only. Seira's own ports, metadata and
 link-local addresses stay closed whatever it lists, and Seira Cloud and shared
 company workspaces ignore it.
 
-Settings > Computer > "Open sites on this server" (`browserEngine.egress.localNetwork: true`, off by default and
+Settings → Desktops & browser → Built-in browser, "Open sites on this server" (`browserEngine.egress.localNetwork: true`, off by default and
 shown only to the server's owner or an admin; not on a shared company workspace, whose network is the operator's) opens this server's own sites and its local network without listing
 them. Seira's own ports, metadata and link-local addresses stay closed, also through a private address such as
 a Docker host's gateway, and a public name that resolves to loopback is still refused. It applies to new connections;
@@ -266,7 +269,7 @@ Recording requires `ffmpeg` on the server's PATH, with `libvpx` for WebM or
 `libx264` for MP4. `agent-browser doctor` reports these optional dependencies.
 They are not bundled or required for normal browsing. Higher frame rates use
 more CPU and disk space; the actual distinct frames depend on page repaints.
-There is no recording control in OMB's browser panel.
+There is no recording control in Seira's browser panel.
 
 ## Linux sandbox
 

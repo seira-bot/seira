@@ -46,6 +46,7 @@ async function serve(extra: Partial<InstanceRouteDeps> = {}, auth: RequestAuth =
     threadBusy: () => false,
     botForThread: () => null,
     activeGroupTurnForBot: () => null,
+    visibleFor: () => ({ bot: () => true, thread: () => true }),
     ...extra,
   } as unknown as InstanceRouteDeps;
   const routes = [createInstanceRoutes(deps)];
@@ -125,9 +126,9 @@ describe("whether the server can start a bot", () => {
         { instanceId: "broken" },
       ],
     });
-    expect(await call("GET", "/api/health/engines")).toEqual({ app: "openmausbot", engines: 2 });
+    expect(await call("GET", "/api/health/engines")).toEqual({ app: "seira", legacyApp: "openmausbot", engines: 2 });
     const none = await serve({ describeInstances: async () => [{ instanceId: "codex", snapshot: { state: "unavailable" } }] });
-    expect(await none.call("GET", "/api/health/engines")).toEqual({ app: "openmausbot", engines: 0 });
+    expect(await none.call("GET", "/api/health/engines")).toEqual({ app: "seira", legacyApp: "openmausbot", engines: 0 });
   });
 });
 
@@ -326,6 +327,156 @@ describe("hiding a provider", () => {
     await call("PATCH", "/api/instances/hermes", { hidden: false });
     expect(persisted.at(-1)!.hermes).not.toHaveProperty("hidden");
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
+  });
+
+  describe("a provider that is still in use", () => {
+    const setup = (bots: unknown[], tasks: Record<string, unknown[]> = {}, extra: Partial<InstanceRouteDeps> = {}, auth?: RequestAuth) => {
+      const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "b", model: "m" } };
+      const persisted: Array<Record<string, { hidden?: boolean }>> = [];
+      return serve({
+        cfg: cfg as unknown as AppConfig,
+        store: { bots, tasks: (id: string) => tasks[id] ?? [] } as never,
+        persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => { persisted.push(structuredClone(instances)); (cfg as { instances: unknown }).instances = instances; },
+        ...extra,
+      }, auth).then((served) => ({ ...served, persisted }));
+    };
+    const patch = async (served: { base: string }, body: unknown) => {
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      return { status: reply.status, body: await reply.json() as any };
+    };
+    const onB = { instanceId: "b", model: "m" };
+    const onA = { instanceId: "a", model: "m" };
+
+    it("names a backup model and a conversation when it refuses to hide", async () => {
+      const served = await setup(
+        [{ id: "robin", name: "Robin", modelSelection: onB, fallback: [onA] }, { id: "pen", name: "Pen", modelSelection: onB }],
+        { pen: [{ threadId: "t1", title: "Weekly sales", modelSelection: onA }] },
+      );
+      const reply = await patch(served, { hidden: true });
+      expect(reply.status).toBe(409);
+      expect(reply.body.errorKey).toBe("serverError.instance.hideBlocked");
+      expect(reply.body.uses).toEqual([
+        { kind: "backup", botId: "robin", botName: "Robin" },
+        { kind: "conversation", botId: "pen", botName: "Pen", threadId: "t1", title: "Weekly sales" },
+      ]);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("tells a viewer who cannot see a bot only how many uses they cannot open", async () => {
+      const served = await setup(
+        [{ id: "robin", name: "Robin", modelSelection: onA }, { id: "secret", name: "Hidden Bot", modelSelection: onB }],
+        { secret: [{ threadId: "thread-secret", title: "Private plan", modelSelection: onA }], robin: [{ threadId: "t9", title: "Mine", modelSelection: onA }] },
+        { visibleFor: () => ({ bot: (id: string) => id === "robin", thread: (id: string) => id === "t9" }) },
+      );
+      const reply = await patch(served, { hidden: true });
+      expect(reply.status).toBe(409);
+      expect(reply.body.uses).toEqual([
+        { kind: "bot", botId: "robin", botName: "Robin" },
+        { kind: "conversation", botId: "robin", botName: "Robin", threadId: "t9", title: "Mine" },
+        { kind: "other", count: 1 },
+      ]);
+      const text = JSON.stringify(reply.body);
+      for (const secret of ["Hidden Bot", "Private plan", "thread-secret", "\"secret\""]) expect(text).not.toContain(secret);
+    });
+
+    it("names the default model", async () => {
+      const cfg = { instances: { a: { driver: "fake" } }, defaultModelSelection: onA };
+      const served = await serve({ cfg: cfg as unknown as AppConfig, store: { bots: [], tasks: () => [] } as never });
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect((await reply.json() as any).uses).toEqual([{ kind: "default" }]);
+    });
+
+    it("hides with force and leaves bots and conversations alone", async () => {
+      const bot = { id: "pen", name: "Pen", modelSelection: onA, fallback: [onA] };
+      const served = await setup([bot], { pen: [{ threadId: "t1", title: "x", modelSelection: onA }] });
+      const reply = await patch(served, { hidden: true, force: true });
+      expect(reply.status).toBe(200);
+      expect(served.persisted.at(-1)!.a).toMatchObject({ hidden: true });
+      expect(bot.modelSelection).toEqual(onA);
+    });
+
+    it("refuses force from someone who is not an admin", async () => {
+      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA }], {}, {}, { kind: "loopback", scopes: ["client"], trust: "service" } as RequestAuth);
+      const reply = await patch(served, { hidden: true, force: true });
+      expect(reply.status).toBe(403);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("keeps a provider that a bot is working on, also with force, and names the bot", async () => {
+      const served = await setup([{ id: "pen", name: "Pen", modelSelection: onA, busy: true }], {}, { activeGroupTurnForBot: () => null });
+      for (const body of [{ hidden: true }, { hidden: true, force: true }]) {
+        const reply = await patch(served, body);
+        expect(reply.status).toBe(409);
+        expect(reply.body.uses).toContainEqual({ kind: "running", botId: "pen", botName: "Pen" });
+      }
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("names the uses when it refuses to remove an added account", async () => {
+      const cfg = { instances: { "chatgpt-2": { driver: "codex" } }, defaultModelSelection: { instanceId: "chatgpt-2", model: "m" } };
+      const served = await serve({ cfg: cfg as unknown as AppConfig, store: { bots: [{ id: "pen", name: "Pen", modelSelection: { instanceId: "chatgpt-2", model: "m" } }], tasks: () => [] } as never });
+      const reply = await fetch(`${served.base}/api/instances/chatgpt-2`, { method: "DELETE" });
+      expect(reply.status).toBe(409);
+      const body = await reply.json() as any;
+      expect(body.errorKey).toBe("serverError.instance.removeBlocked");
+      expect(body.uses).toEqual([{ kind: "default" }, { kind: "bot", botId: "pen", botName: "Pen" }]);
+    });
+  });
+
+  describe("a provider the new-bot default points at", () => {
+    const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>, bots: unknown[] = []) => {
+      const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };
+      const persisted: Array<Record<string, { hidden?: boolean }>> = [];
+      return serve({
+        cfg: cfg as unknown as AppConfig,
+        store: { bots, tasks: () => [] } as never,
+        persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => { persisted.push(structuredClone(instances)); (cfg as { instances: unknown }).instances = instances; },
+        moveNewBotModelOff: (instanceId: string) => move(instanceId, cfg) as Promise<null>,
+      }).then((served) => ({ ...served, cfg, persisted }));
+    };
+
+    it("moves the default to another provider before it hides", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId, cfg) => {
+        calls.push(instanceId);
+        cfg.defaultModelSelection = { instanceId: "b", model: "m" };
+        return { instanceId: "b", model: "m" };
+      });
+      await served.call("PATCH", "/api/instances/a", { hidden: true });
+      expect(calls).toEqual(["a"]);
+      expect(served.persisted.at(-1)!.a).toMatchObject({ hidden: true });
+    });
+
+    it("still refuses to hide it when nothing can take the default", async () => {
+      const served = await setup(async () => null);
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect(reply.status).toBe(409);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("keeps the default where it is when a bot still uses the provider", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId) => { calls.push(instanceId); return null; }, [{ id: "pen", modelSelection: { instanceId: "a", model: "m" } }]);
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect(reply.status).toBe(409);
+      expect(calls).toEqual([]);
+      expect(served.cfg.defaultModelSelection).toEqual({ instanceId: "a", model: "m" });
+    });
+
+    it("leaves the default alone when it points at another provider", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId) => { calls.push(instanceId); return null; });
+      await served.call("PATCH", "/api/instances/b", { hidden: true });
+      expect(calls).toEqual([]);
+    });
+  });
+
+  it("lists a hidden provider with the mark it shows when shown", async () => {
+    const cfg = { instances: { openai: { driver: "openai-compat", displayName: "OpenAI", hidden: true, config: { url: "https://api.openai.com/v1" } } } };
+    const { call } = await serve({ cfg: cfg as unknown as AppConfig });
+    expect((await call("GET", "/api/instances/hidden")).instances).toEqual([
+      { instanceId: "openai", driverKind: "openai-compat", displayName: "OpenAI", icon: { kind: "preset", preset: "openai" } },
+    ]);
   });
 });
 

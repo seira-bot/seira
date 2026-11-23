@@ -35,6 +35,7 @@ import { SettingsPage } from "./SettingsPage";
 import { panelMemoryNotes, withMemoryNote, withoutMemoryNote, type PanelMemoryNote } from "./memory-notes";
 import type { SimplePageId } from "./page-registry";
 import { BotSwitch, buttonCls, Card, ColRow, ItemRow, LinkRow, NoteRow, RadioRow, RowIcon, rowCls, RowText, SwitchRow, TextRow, TrashButton } from "./rows";
+import { BotFolderAccess } from "./BotFolderAccess";
 import { MemoryUpkeepCards } from "./MemoryUpkeepCards";
 import { useMemoryDoc } from "./use-memory-doc";
 import { useTeamMemoryEntries } from "../conversation-share/conversation-share";
@@ -403,7 +404,7 @@ function MemoryFullWindow({ label, onClose, children }: { label: string; onClose
       aria-modal="true"
       aria-label={label}
       data-memory-full-window=""
-      className="fixed inset-0 z-[65] flex flex-col gap-3 bg-app p-4 outline-none"
+      className="fixed inset-y-0 right-0 left-[var(--rail-beside,0px)] z-[65] flex flex-col gap-3 bg-app p-4 outline-none"
     >
       {children}
     </div>,
@@ -594,6 +595,7 @@ export function FolderPage({ bot }: PageContext) {
           {error && <NoteRow tone="warn">{error}</NoteRow>}
         </Card>
       )}
+      <BotFolderAccess bot={bot} variant="panel" />
     </>
   );
 }

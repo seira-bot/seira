@@ -1,17 +1,21 @@
 // `seira serve --tunnel`: every public request arrives over an IPC listener, so request-auth always demands a paired session.
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { FRIENDLY_MESSAGES } from "../electron/companion-account-messages.mjs";
 import {
   COMPANION_ACCOUNT_EMAIL_FIELD,
   COMPANION_INSTALLATION_ID_FIELD,
   createCompanionAccountService,
   resolveCompanionControlPlaneURL,
+  resolveServerControlPlaneURL,
   type CompanionAccountService,
+  type CompanionAccountState,
   type CredentialDocument,
 } from "../electron/companion-account-service.mjs";
 import {
@@ -20,15 +24,18 @@ import {
   MANAGED_COMPANION_ORIGIN_PORT,
   type CompanionOriginEndpoint,
 } from "../electron/companion-origin-gateway.mjs";
-import { ControlPlaneError, createControlPlaneClient } from "../electron/control-plane-client.mjs";
+import { ControlPlaneError, createControlPlaneClient, type ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import {
   createManagedCompanionTunnel,
   managedCompanionTunnelAccess,
   resolveCloudflaredBinary,
+  serverTunnelEndpointAllowed,
   stagedCloudflaredPath,
   type ManagedTunnelAccess,
   type ManagedTunnelState,
 } from "../electron/managed-companion-tunnel.mjs";
+import { cloudOriginFor } from "../electron/cloud-signin.mjs";
+import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
 import { createSecureCredentialState } from "../electron/secure-credential-state.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 
@@ -74,7 +81,7 @@ export function openTunnelCredentials(dataDir: string): TunnelCredentials {
     }
   }
   const persist = (next: CredentialDocument) => {
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dataDir);
     writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   };
   const state = createSecureCredentialState(initial, persist, { writable: status !== "unavailable" });
@@ -105,8 +112,45 @@ export function describeTunnelAccount(document: CredentialDocument): TunnelAccou
   };
 }
 
-export function tunnelAccess(document: CredentialDocument): ManagedTunnelAccess | null {
-  return managedCompanionTunnelAccess(document);
+/** The saved access, or null when its address is not one this server may use. */
+export function tunnelAccess(document: CredentialDocument, env: NodeJS.ProcessEnv = process.env): ManagedTunnelAccess | null {
+  const access = managedCompanionTunnelAccess(document);
+  return access && serverTunnelEndpointAllowed(access.endpoint, env) ? access : null;
+}
+
+export interface TunnelAddressRefusal {
+  code: "endpoint_capacity" | "endpoint_limit" | "control_plane_unavailable";
+  message: string;
+}
+
+/** A friendly text with its "{wait}" filled in, and the error reference that can follow it. */
+const friendlyText = (template: string) =>
+  new RegExp(`^${template.split("{wait}").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".+")}(?: Reference: .+\\.)?$`);
+const ADDRESS_REFUSALS = [
+  { code: "endpoint_capacity", problem: "busy", text: friendlyText(FRIENDLY_MESSAGES.endpoint_capacity) },
+  { code: "endpoint_limit", problem: "limit", text: friendlyText(FRIENDLY_MESSAGES.endpoint_limit) },
+] as const;
+
+/** FR-221: why the control plane gave this signed-in machine no seira.run address, read from the state that
+ * `account.service.retry()` returns. Null when an address is there, nobody is signed in, or the failure is another kind. */
+export function tunnelAddressRefusal(state: CompanionAccountState): TunnelAddressRefusal | null {
+  if (state.status !== "error" || state.endpoint) return null;
+  if (state.problem === "unreachable") return { code: "control_plane_unavailable", message: FRIENDLY_MESSAGES.control_plane_unavailable };
+  const message = state.message ?? "";
+  const refusal = ADDRESS_REFUSALS.find((entry) => entry.problem === state.problem && entry.text.test(message));
+  return refusal ? { code: refusal.code, message } : null;
+}
+
+/** Refuses an address outside the allowed zones before the caller stores its connector token or starts a connector. */
+function withEndpointCheck(client: ControlPlaneClient, env: NodeJS.ProcessEnv): ControlPlaneClient {
+  return {
+    ...client,
+    async ensureEndpoint(credential, options) {
+      const provision = await client.ensureEndpoint(credential, options);
+      if (!serverTunnelEndpointAllowed(provision.endpoint.url, env)) throw new ControlPlaneError("invalid_response");
+      return provision;
+    },
+  };
 }
 
 export function platformName(platform: NodeJS.Platform = process.platform): "darwin" | "windows" | "linux" {
@@ -125,7 +169,7 @@ export interface TunnelRecovery {
 
 const STOPPED_TUNNEL: ManagedTunnelState = { status: "stopped", ready: false };
 
-/** A server's operator owns its environment, so OMB_CONTROL_PLANE_URL is always honoured here (the desktop: dev builds only). */
+/** A server's operator owns its environment, so SEIRA_CONTROL_PLANE_URL is always honoured here (the desktop: dev builds only). */
 export function createTunnelAccount(options: {
   dataDir: string;
   version: string | undefined;
@@ -133,8 +177,10 @@ export function createTunnelAccount(options: {
   fetchImpl?: typeof fetch;
   machineName?: string;
   recovery?: TunnelRecovery;
-  /** `login --relay`: sign in without reserving a public address; phones reach this machine through MausBot Relay. */
+  /** `login --relay`: sign in without reserving a public address; phones reach this machine through Seira Relay. */
   relayOnly?: boolean;
+  /** Services treated as live; tests only. */
+  liveServices?: readonly string[];
   log?: (line: string) => void;
   clock?: {
     setTimer: (callback: () => void, milliseconds: number) => unknown;
@@ -144,14 +190,22 @@ export function createTunnelAccount(options: {
 }): TunnelAccount {
   const env = options.env ?? process.env;
   const credentials = openTunnelCredentials(options.dataDir);
-  const controlPlane = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-  const client = controlPlane ? createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl }) : null;
+  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...(options.liveServices ? { live: options.liveServices } : {}) });
+  const machineName = options.machineName ?? hostname();
+  const cloudSignIn = createSeiraCloudSignIn({
+    origin: cloudOriginFor(env),
+    identity: { deviceName: machineName, platform: process.platform, appVersion: options.version },
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
+  const client = controlPlane
+    ? withEndpointCheck(createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl, cloudSignIn }), env)
+    : null;
   const recovery = options.recovery;
   const service = createCompanionAccountService({
     client,
     readCredentials: () => credentials.read(),
     updateCredentials: (derive, afterPersist) => credentials.update(derive, afterPersist),
-    identity: { name: options.machineName ?? hostname(), platform: platformName(), appVersion: options.version, kind: "server" },
+    identity: { name: machineName, platform: platformName(), appVersion: options.version, kind: "server" },
     newClientInstanceId: () => randomUUID(),
     ...(options.log ? { log: options.log } : {}),
     ...(options.relayOnly ? { onDemand: true, managedEndpointNeeded: async () => false, relay: { capable: () => true, legacyDevices: async () => 0 } } : {}),
@@ -162,7 +216,7 @@ export function createTunnelAccount(options: {
           managedConnectionState: () => recovery.running()?.state() ?? STOPPED_TUNNEL,
           activatePersistedEndpoint: async () => {
             const tunnel = recovery.running();
-            const access = tunnelAccess(credentials.read());
+            const access = tunnelAccess(credentials.read(), env);
             if (!tunnel || !access) return tunnel?.state() ?? STOPPED_TUNNEL;
             return tunnel.restart(access);
           },
@@ -173,7 +227,21 @@ export function createTunnelAccount(options: {
   return { service, credentials, controlPlane };
 }
 
-export const FLEET_CREDENTIAL_ENV = "OMB_INSTALLATION_CREDENTIAL";
+/** What the control plane is asked for. Seira's own control plane gives tunnel addresses, not Seira Relay. */
+export type ControlPlanePurpose = "tunnel" | "relay";
+
+/** Null when `purpose` has a control plane. Otherwise the reason that it cannot work, with the ways in that do. */
+export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env, purpose: ControlPlanePurpose = "tunnel", liveServices?: readonly string[]): string | null {
+  const url = purpose === "relay"
+    ? resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })
+    : resolveServerControlPlaneURL({ environment: env, ...(liveServices ? { live: liveServices } : {}) });
+  if (url) return null;
+  if (env.SEIRA_CONTROL_PLANE_URL?.trim()) return "SEIRA_CONTROL_PLANE_URL is set but is not an https address";
+  const service = purpose === "relay" ? "Seira Relay" : "tunnel addresses";
+  return `this Seira build has no account service for ${service}; set SEIRA_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)`;
+}
+
+export const FLEET_CREDENTIAL_ENV = "SEIRA_INSTALLATION_CREDENTIAL";
 
 /** A fleet container's installation credential comes from the environment; nothing is written to disk. */
 export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -181,11 +249,13 @@ export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | 
   return value ? value : null;
 }
 
-export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch }): Promise<ManagedTunnelAccess> {
+export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; liveServices?: readonly string[] }): Promise<ManagedTunnelAccess> {
   const env = options.env ?? process.env;
-  const controlPlane = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-  if (!controlPlane) throw new Error("no phone account service: set OMB_CONTROL_PLANE_URL to an https address");
-  const client = createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl });
+  const live = options.liveServices ? { live: options.liveServices } : {};
+  const problem = controlPlaneProblem(env, "tunnel", options.liveServices);
+  if (problem) throw new Error(problem);
+  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...live });
+  const client = withEndpointCheck(createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl }), env);
   try {
     const { endpoint, connectorToken } = await client.ensureEndpoint(options.credential, { appVersion: options.version, kind: "server" });
     return { endpoint: endpoint.url, token: connectorToken };
@@ -198,7 +268,7 @@ export async function fleetAccess(options: { credential: string; version?: strin
   }
 }
 
-/** OMB_CLOUDFLARED_PATH, then the copy this command downloaded into the data
+/** SEIRA_CLOUDFLARED_PATH, then the copy this command downloaded into the data
  * dir, then PATH. */
 export function cloudflaredPath(dataDir: string, env: NodeJS.ProcessEnv = process.env): string | null {
   return resolveCloudflaredBinary({ isPackaged: false, appPath: dataDir, environment: env });
@@ -225,7 +295,7 @@ export async function ensureCloudflared(options: {
   const env = options.env ?? process.env;
   const found = cloudflaredPath(options.dataDir, env);
   const staged = stagedCloudflaredPath({ appPath: options.dataDir });
-  const refreshStaged = !env.OMB_CLOUDFLARED_PATH?.trim() && found === staged;
+  const refreshStaged = !env.SEIRA_CLOUDFLARED_PATH?.trim() && found === staged;
   if (found && !refreshStaged) return found;
   options.log(
     refreshStaged
@@ -261,7 +331,7 @@ export interface RunningTunnel {
   stop(): Promise<void>;
 }
 
-/** The control plane points the tunnel at 127.0.0.1:8812 (OMB_TUNNEL_ORIGIN_PORT for tests); the gateway forwards to the IPC socket. */
+/** The control plane points the tunnel at 127.0.0.1:8812 (SEIRA_TUNNEL_ORIGIN_PORT for tests); the gateway forwards to the IPC socket. */
 export function startTunnel(options: {
   dataDir: string;
   access: ManagedTunnelAccess;
@@ -273,7 +343,7 @@ export function startTunnel(options: {
   onState?: (state: ManagedTunnelState) => void;
 }): RunningTunnel {
   const env = options.env ?? process.env;
-  const originPort = Number(env.OMB_TUNNEL_ORIGIN_PORT || MANAGED_COMPANION_ORIGIN_PORT);
+  const originPort = Number(env.SEIRA_TUNNEL_ORIGIN_PORT || MANAGED_COMPANION_ORIGIN_PORT);
   let current: ManagedTunnelState = { status: "stopped", ready: false };
   const tunnel = createManagedCompanionTunnel({
     binaryPath: options.binaryPath,

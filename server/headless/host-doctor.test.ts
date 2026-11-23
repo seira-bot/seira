@@ -31,7 +31,7 @@ function probe(overrides: { files?: Record<string, string | null>; lists?: Recor
   };
   const { files: _files, lists: _lists, commands: _commands, ...rest } = overrides;
   return {
-    platform: "linux", arch: "x64", kernel: "6.8.0-45-generic", cpus: 8, memoryBytes: 32 * 2 ** 30,
+    platform: "linux", arch: "x64", kernel: "6.8.0-45-generic", cpus: 8, euid: 1000, memoryBytes: 32 * 2 ** 30,
     read: (path) => files[path] ?? null,
     list: (path) => lists[path] ?? [],
     run: async (command) => ({ ok: false, stdout: "", stderr: "", missing: false, ...commands[command] }),
@@ -42,7 +42,7 @@ function probe(overrides: { files?: Record<string, string | null>; lists?: Recor
   };
 }
 
-const OPTIONS = { dataDir: "/srv/mausbot", port: 8799 };
+const OPTIONS = { dataDir: "/srv/seira", port: 8799 };
 const byId = (checks: HostCheck[], id: string) => checks.find((check) => check.id === id);
 
 describe("doctor --host", () => {
@@ -52,12 +52,13 @@ describe("doctor --host", () => {
     expect(report.human).toEqual([
       "ok    Ubuntu 24.04.1 LTS, kernel 6.8.0-45-generic",
       "ok    x86_64",
+      "ok    Runs as a normal user",
       "ok    Docker 27.3.1",
       "ok    Unprivileged user namespaces are allowed",
       "ok    seccomp is available",
       "ok    cgroup v2",
-      "ok    412 GB free for /srv/mausbot",
-      "ok    /srv/mausbot is on an encrypted disk",
+      "ok    412 GB free for /srv/seira",
+      "ok    /srv/seira is on an encrypted disk",
       "ok    8 CPUs, 32 GB memory (a team of 20 needs 8 CPUs and 16 GB)",
       "ok    Port 8799 is free for the server",
       "ok    Ports 80 and 443 are free",
@@ -128,11 +129,25 @@ describe("doctor --host", () => {
     expect(byId(checks, "clock")!.message).toBe("Clock is 45 s ahead of network time");
   });
 
+  it("warns, and still passes, when the CLI runs as root", async () => {
+    const checks = await checkHost(probe({ euid: 0 }), OPTIONS);
+    expect(byId(checks, "user")).toMatchObject({ status: "warn", message: expect.stringContaining("Full access"), fix: expect.stringContaining("normal user") });
+    expect(hostReport(checks).exitCode).toBe(0);
+    expect(byId(await checkHost(probe({ euid: null }), OPTIONS), "user")!.status).toBe("ok");
+  });
+
+  it("says that tailscale serve needs port 443, and never that Tailscale needs no port 443", async () => {
+    const web = byId(await checkHost(probe({ files: { "/proc/net/tcp": tcp(22, 443) } }), OPTIONS), "web-ports")!;
+    expect(web.message).toContain("`tailscale serve` needs 443");
+    expect(web.message).not.toMatch(/Tailscale does not/);
+    expect(byId(await checkHost(probe({ files: { "/proc/net/tcp": tcp(22, 80) } }), OPTIONS), "web-ports")!.message).not.toContain("tailscale");
+  });
+
   it("needs ports 80 and 443 for --domain, unless this server already answers", async () => {
     const taken = { files: { "/proc/net/tcp": tcp(22, 80, 8799), "/proc/net/tcp6": tcp(443) } };
-    expect(byId(await checkHost(probe(taken), { ...OPTIONS, domain: "maus.example.com" }), "web-ports"))
-      .toMatchObject({ status: "FAIL", message: "Ports 80 and 443 are taken, and --domain maus.example.com needs 80 and 443" });
-    const ours = await checkHost(probe({ ...taken, serverAnswers: async () => true }), { ...OPTIONS, domain: "maus.example.com" });
+    expect(byId(await checkHost(probe(taken), { ...OPTIONS, domain: "seira.example.com" }), "web-ports"))
+      .toMatchObject({ status: "FAIL", message: "Ports 80 and 443 are taken, and --domain seira.example.com needs 80 and 443" });
+    const ours = await checkHost(probe({ ...taken, serverAnswers: async () => true }), { ...OPTIONS, domain: "seira.example.com" });
     expect(byId(ours, "port")).toMatchObject({ status: "ok", message: "Seira already answers on port 8799" });
     expect(byId(ours, "web-ports")!.status).toBe("warn");
   });
@@ -162,18 +177,18 @@ describe("doctor --host", () => {
     const seen: string[] = [];
     const watching = probe({ freeBytes: (path) => { seen.push(path); return 412 * GB; } });
     const ctx = (flags: Record<string, string | boolean>, env: NodeJS.ProcessEnv = {}) => ({ flags, env }) as unknown as VerbContext;
-    await hostDoctor(ctx({ host: true }, { OMB_DATA_DIR: "/srv/from-env" }), watching);
-    const flagged = await hostDoctor(ctx({ host: true, "data-dir": "/srv/mausbot", port: "9000", domain: "Maus.Example.com" }), probe({
+    await hostDoctor(ctx({ host: true }, { SEIRA_DATA_DIR: "/srv/from-env" }), watching);
+    const flagged = await hostDoctor(ctx({ host: true, "data-dir": "/srv/seira", port: "9000", domain: "Seira.Example.com" }), probe({
       freeBytes: (path) => { seen.push(path); return 412 * GB; }, files: { "/proc/net/tcp": tcp(443, 9000) } }));
-    expect(seen).toEqual(["/srv/from-env", "/srv/mausbot"]);
+    expect(seen).toEqual(["/srv/from-env", "/srv/seira"]);
     expect((flagged.result as { checks: HostCheck[] }).checks.filter((check) => check.status === "FAIL").map((check) => check.message))
-      .toEqual(["Port 9000 is taken by another program", "Port 443 is taken, and --domain maus.example.com needs 80 and 443"]);
+      .toEqual(["Port 9000 is taken by another program", "Port 443 is taken, and --domain seira.example.com needs 80 and 443"]);
     await expect(hostDoctor(ctx({ host: true, port: "99999" }), probe())).rejects.toMatchObject({ exitCode: 2 });
   });
 
   it("is doctor --host on the command line, and its flags belong to it", async () => {
     const io: HeadlessIo = { out: () => undefined, err: () => undefined, readStdin: async () => "" };
-    expect(await runHeadless(["doctor", "--domain", "maus.example.com"], { io, env: {} })).toBe(2);
+    expect(await runHeadless(["doctor", "--domain", "seira.example.com"], { io, env: {} })).toBe(2);
     expect(await runHeadless(["doctor", "--host", "--wait", "1m"], { io, env: {} })).toBe(2);
   });
 

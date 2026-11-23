@@ -12,6 +12,7 @@ const pairs: Array<[UserErrorKey, string]> = [
   ["serverError.computer.systemUnsupported", "chat.notice.computerSystemUnsupported"],
   ["serverError.computer.aiUnsupported", "chat.notice.computerAiUnsupported"],
   ["serverError.engine.signedOut", "chat.notice.engineSignedOut"],
+  ["serverError.engine.rootFullAccess", "chat.notice.engineRootFullAccess"],
 ];
 
 describe("coded start failures", () => {

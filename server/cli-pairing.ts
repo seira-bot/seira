@@ -3,6 +3,7 @@
 import qrcode from "qrcode-terminal";
 
 import { cliCommand } from "./cli-invocation.ts";
+import { controlPlaneProblem } from "./tunnel.ts";
 import type { PhoneRelayStatus } from "./phone-relay.ts";
 
 /** The desktop app owns this server, so only the app (or a paired device) may mint a code: say where pairing works instead. */
@@ -25,7 +26,8 @@ export function untilText(expiresAt: number, now = Date.now()): string {
 /**
  * What `serve` and `pair` print for one pairing code. `link`: the address other devices reach this server at, with the
  * code (null when it has no way in); `localLink`: a browser on this machine (or the Docker host, `localPlace`);
- * `inviteUrl`: the phone-app link only Android's scanner needs; `prefix`: how the CLI was started, so commands paste.
+ * `inviteUrl`: the phone-app link only Android's scanner needs; `computer`: a code for another computer, so no phone QR;
+ * `prefix`: how the CLI was started, so commands paste.
  */
 export function pairingBlock(input: {
   code: string;
@@ -36,6 +38,7 @@ export function pairingBlock(input: {
   localPlace?: "machine" | "docker";
   inviteUrl?: string | null;
   phone?: "ios" | "android";
+  computer?: boolean;
   prefix: string;
   now?: number;
 }): string {
@@ -51,10 +54,15 @@ export function pairingBlock(input: {
   lines.push(`Link           ${input.link}`);
   lines.push("");
   lines.push("  Desktop app   ＋ → Connect to a server, paste the link");
+  if (input.computer) {
+    lines.push(`  Command line  seira connect ${input.link} --out FILE`);
+    return lines.join("\n");
+  }
   lines.push(scanInvite ? "  Phone         scan this with the Seira app" : "  Phone         scan with your camera or the Seira app");
   lines.push("");
   lines.push(qrToString(scanInvite ? input.inviteUrl! : input.link));
   if (!input.chatOnly) lines.push(`For a phone (chat and approvals only)   ${input.prefix} pair --phone`);
+  if (!input.phone) lines.push(`For a script on another computer   ${input.prefix} pair --computer${input.chatOnly ? " --client" : ""}`);
   return lines.join("\n");
 }
 
@@ -94,10 +102,14 @@ const isStatus = (value: unknown): value is PhoneRelayStatus =>
 export const RELAY_NOT_WITH_TUNNEL = "--relay cannot be used on a machine whose saved choice is a tunnel address: a relay token would make the tunnel go for good. Start with --local, or use the relay on a machine signed in with `seira login --relay`.";
 
 /** Why phones cannot pair through the relay yet, in words for the person at the terminal; empty when they can. */
-export function relayProblemLines(status: PhoneRelayStatus | null, prefix: string): string[] {
+export function relayProblemLines(status: PhoneRelayStatus | null, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
   if (!status) return [`Seira Relay is off on this server. Start it with: ${prefix} serve --relay`];
   if (status.grant === "tunnel") return [`Seira Relay stays off here: ${status.reason ?? "this machine holds a tunnel address"}. A relay token would make that tunnel go for good; use the relay on a machine signed in with ${prefix} login --relay.`];
-  if (status.grant === "signed-out") return [`Seira Relay needs this machine signed in to a Seira account: ${prefix} login --relay (then leave the server running; it connects within a minute).`];
+  if (status.grant === "signed-out") {
+    const problem = controlPlaneProblem(env, "relay");
+    if (problem) return [`Seira Relay is not available: ${problem}.`];
+    return [`Seira Relay needs this machine signed in to a Seira account: ${prefix} login --relay (then leave the server running; it connects within a minute).`];
+  }
   if (status.grant === "unavailable") return ["Seira Relay is not available for this machine right now. The server keeps working here; it asks again every half hour."];
   if (status.grant === "failed") return ["The Seira account service did not answer. The server keeps working here and keeps trying."];
   if (status.grant === "waiting") return ["Still asking the Seira account service for a relay pass…"];

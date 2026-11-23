@@ -1,4 +1,5 @@
 // The companion sidecar is the only part of the app that listens off-machine; the renderer never reaches its control port.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import { app, utilityProcess } from "electron";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -110,7 +111,7 @@ async function control(method, urlPath, body, { timeoutMs = 4_000 } = {}) {
   const options = {
     method,
     signal: AbortSignal.timeout(timeoutMs),
-    headers: { "x-openmausbot-control-token": controlToken },
+    headers: { "x-seira-control-token": controlToken },
   };
   if (body !== undefined) {
     options.body = JSON.stringify(body);
@@ -162,6 +163,13 @@ export function setCompanionE2EHooks(hooks) {
   e2eHooks = { ...e2eHooks, ...hooks };
 }
 
+let workspaceHooks = { initialMessage: () => null, receive: () => false };
+
+/** The workspaces a paired phone lists: the facts go to every new sidecar over the port, and its requests come back the same way. */
+export function setCompanionWorkspaceHooks(hooks) {
+  workspaceHooks = { ...workspaceHooks, ...hooks };
+}
+
 /** In-memory port only. False when no sidecar runs. */
 export function postCompanionMessage(message) {
   if (!proc) return false;
@@ -209,19 +217,19 @@ async function start({ resourcesPath, harnessPort, mutationToken, hostedUrl = nu
 
   // Never inherit an endpoint from the launch environment: main passes one only after verifying the connector.
   const childEnvironment = { ...process.env };
-  delete childEnvironment.OMB_COMPANION_HOSTED_URL;
-  delete childEnvironment.OMB_COMPANION_INTERNAL_ORIGIN;
-  delete childEnvironment.OMB_PHONE_SECRET_PUBLIC_KEY;
-  delete childEnvironment.OMB_COMPANION_TAILNET_NAME;
-  childEnvironment.OMB_APP_VERSION = app.getVersion();
+  delete childEnvironment.SEIRA_COMPANION_HOSTED_URL;
+  delete childEnvironment.SEIRA_COMPANION_INTERNAL_ORIGIN;
+  delete childEnvironment.SEIRA_PHONE_SECRET_PUBLIC_KEY;
+  delete childEnvironment.SEIRA_COMPANION_TAILNET_NAME;
+  childEnvironment.SEIRA_APP_VERSION = app.getVersion();
   const settings = companionSettings();
   const direct = directRoutesOn(settings);
-  childEnvironment.OMB_COMPANION_ROUTES = Object.keys(direct).filter((route) => direct[route]).join(",");
-  if (direct.tailscale && settings.routes.tailscale.name) childEnvironment.OMB_COMPANION_TAILNET_NAME = settings.routes.tailscale.name;
-  if (hostedUrl) childEnvironment.OMB_COMPANION_HOSTED_URL = hostedUrl;
-  childEnvironment.OMB_COMPANION_INTERNAL_ORIGIN = allocatedOrigin.socketPath;
+  childEnvironment.SEIRA_COMPANION_ROUTES = Object.keys(direct).filter((route) => direct[route]).join(",");
+  if (direct.tailscale && settings.routes.tailscale.name) childEnvironment.SEIRA_COMPANION_TAILNET_NAME = settings.routes.tailscale.name;
+  if (hostedUrl) childEnvironment.SEIRA_COMPANION_HOSTED_URL = hostedUrl;
+  childEnvironment.SEIRA_COMPANION_INTERNAL_ORIGIN = allocatedOrigin.socketPath;
   if (/^[A-Za-z0-9_-]{87}$/.test(String(secretPublicKey ?? ""))) {
-    childEnvironment.OMB_PHONE_SECRET_PUBLIC_KEY = secretPublicKey;
+    childEnvironment.SEIRA_PHONE_SECRET_PUBLIC_KEY = secretPublicKey;
   }
 
   controlToken = randomBytes(32).toString("base64url");
@@ -230,9 +238,9 @@ async function start({ resourcesPath, harnessPort, mutationToken, hostedUrl = nu
     child = utilityProcess.fork(resolved.entry, [], {
       env: {
         ...childEnvironment,
-        OMB_PORT: String(harnessPort),
-        OMB_COMPANION_PORT: String(COMPANION_PORT),
-        OMB_CONTROL_PORT: String(CONTROL_PORT),
+        SEIRA_PORT: String(harnessPort),
+        SEIRA_COMPANION_PORT: String(COMPANION_PORT),
+        SEIRA_CONTROL_PORT: String(CONTROL_PORT),
       },
       execArgv: resolved.execArgv,
       stdio: ["ignore", "pipe", "pipe"],
@@ -245,16 +253,19 @@ async function start({ resourcesPath, harnessPort, mutationToken, hostedUrl = nu
   child.once("spawn", () => {
     // Never expose this capability in argv, environment, logs or the renderer.
     try {
-      child.postMessage({ type: "openmausbot:companion-mutation-token", token: mutationToken, controlToken });
+      child.postMessage({ type: "seira:companion-mutation-token", token: mutationToken, controlToken });
       const e2e = e2eHooks.initialMessage();
       if (e2e) child.postMessage(e2e);
+      const workspaces = workspaceHooks.initialMessage();
+      if (workspaces) child.postMessage(workspaces);
     } catch {
       log?.("companion authorization could not be initialized");
       child.kill();
     }
   });
   child.on("message", (message) => {
-    if (message?.type === "openmausbot:companion-e2e-token-rejected") e2eHooks.tokenRejected();
+    if (message?.type === "seira:companion-e2e-token-rejected") e2eHooks.tokenRejected();
+    else workspaceHooks.receive(message);
   });
   child.stdout?.on("data", (d) => log?.(`[companion] ${String(d).trimEnd()}`));
   child.stderr?.on("data", (d) => log?.(`[companion err] ${String(d).trimEnd()}`));
@@ -395,7 +406,7 @@ export async function companionPairing(open, expectedToken) {
   if (!proc) return companionState();
   const conditionalClose = !open && expectedToken !== undefined;
   const candidate = String(expectedToken ?? "");
-  const token = /^omb_pair_[A-Za-z0-9_-]{43}$/.test(candidate)
+  const token = new RegExp(`^(?:${acceptedWireNames("pairingCredentialPrefix").join("|")})[A-Za-z0-9_-]{43}$`).test(candidate)
     ? candidate
     : "invalid-pairing-token";
   const path = conditionalClose

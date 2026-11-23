@@ -56,7 +56,7 @@ function fixture(extra: Partial<BotPatchRouteDeps> = {}) {
     wireBot: (record: BotRecord) => record as unknown as WireBot,
     broadcast: () => {},
     audienceChanged: () => {},
-    assertTeamComputerChangeIdle: () => {},
+    assertComputerChangeIdle: () => {},
     routines: () => null,
     // A member's session may chat with this bot: the level that still can't move it or change what it may do.
     levelOf: () => "chat",
@@ -149,7 +149,7 @@ describe("PATCH /api/bots/:id vpsAlias relocation guard", () => {
     const member = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "s", label: "Laptop", scopes: ["client"] } } as unknown as RequestAuth;
 
     const fromMember = await patch(bot.id, { vpsAlias: "gamma-vps" }, { auth: member });
-    const fromPhone = await patch(bot.id, { vpsAlias: "gamma-vps" }, { headers: { "x-openmausbot-companion": "1" } });
+    const fromPhone = await patch(bot.id, { vpsAlias: "gamma-vps" }, { headers: { "x-seira-companion": "1" } });
 
     expect(fromMember.status).toBe(403);
     expect(fromMember.body.error).toMatch(/not "vpsAlias"/);
@@ -157,6 +157,16 @@ describe("PATCH /api/bots/:id vpsAlias relocation guard", () => {
     expect(fromPhone.body.error).toMatch(/not "vpsAlias"/);
     expect(scan).not.toHaveBeenCalled();
     expect(store.bot(bot.id)?.vpsAlias).toBeUndefined();
+  });
+
+  it("makes Cloud the person's own VPS whichever client chose it, and leaves other places alone", async () => {
+    const { bot, store, patch } = fixture();
+    expect((await patch(bot.id, { computer: "cloud" })).status).toBe(200);
+    expect([store.bot(bot.id)?.computer, store.bot(bot.id)?.cloudBackend]).toEqual(["cloud", "vps"]);
+    expect((await patch(bot.id, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
+    expect(store.bot(bot.id)?.cloudBackend).toBe("vps");
+    expect((await patch(bot.id, { computer: "off" })).status).toBe(200);
+    expect(store.bot(bot.id)?.computer).toBe("off");
   });
 
   it("still refuses the move while the bot's computer lives on the old server", async () => {
@@ -289,6 +299,36 @@ describe("PATCH /api/bots/:id liveVoice", () => {
   });
 });
 
+describe("PATCH /api/bots/:id callSpeed and callLanguage", () => {
+  it("saves both, returns them on the bot, and clears them with null or an empty string", async () => {
+    const { store, bot, patch } = fixture();
+    const saved = await patch(bot.id, { callSpeed: 1.25, callLanguage: "id" });
+    expect(saved.status).toBe(200);
+    expect(saved.body.bot).toMatchObject({ callSpeed: 1.25, callLanguage: "id" });
+    expect(store.bot(bot.id)).toMatchObject({ callSpeed: 1.25, callLanguage: "id" });
+    expect((await patch(bot.id, { callSpeed: null, callLanguage: "" })).status).toBe(200);
+    expect(store.bot(bot.id)?.callSpeed).toBeUndefined();
+    expect(store.bot(bot.id)?.callLanguage).toBeUndefined();
+    await patch(bot.id, { callLanguage: "auto" });
+    expect(store.bot(bot.id)?.callLanguage).toBe("auto");
+  });
+  it("refuses a speed outside 0.5 to 2 or not a number, and an unlisted language, keeping the saved value", async () => {
+    const { store, bot, patch } = fixture();
+    await patch(bot.id, { callSpeed: 1.5, callLanguage: "fr" });
+    for (const callSpeed of [0.4, 2.1, "1", true, Number.NaN]) expect((await patch(bot.id, { callSpeed })).status, String(callSpeed)).toBe(400);
+    for (const callLanguage of ["xx", "FR", 5, "fr-CA"]) expect((await patch(bot.id, { callLanguage })).status, String(callLanguage)).toBe(400);
+    expect(store.bot(bot.id)).toMatchObject({ callSpeed: 1.5, callLanguage: "fr" });
+  });
+  it("tells the live call only when the saved speed changed", async () => {
+    const callSpeedChanged = vi.fn();
+    const { bot, patch } = fixture({ callSpeedChanged });
+    await patch(bot.id, { callSpeed: 1.2 });
+    await patch(bot.id, { callSpeed: 1.2 });
+    await patch(bot.id, { callSpeed: null });
+    expect(callSpeedChanged.mock.calls).toEqual([[bot.id, 1.2], [bot.id, undefined]]);
+  });
+});
+
 describe("PATCH /api/bots/:id alwaysAllow", () => {
   it("stores the list once each, and refuses a list over the limit instead of cutting it", async () => {
     const { store, bot, patch } = fixture();
@@ -384,7 +424,7 @@ describe("PATCH /api/bots/:id phoneApps", () => {
     const { store, bot, patch } = fixture();
 
     const client = await patch(bot.id, { phoneApps: { calendar: "write" } }, { auth: { kind: "session", via: "bearer", scopes: ["client"], session: { id: "s-member", email: "member@example.com", label: "Front desk" } } as unknown as RequestAuth });
-    const paired = await patch(bot.id, { phoneApps: { calendar: "write" } }, { headers: { "x-openmausbot-companion": "1" } });
+    const paired = await patch(bot.id, { phoneApps: { calendar: "write" } }, { headers: { "x-seira-companion": "1" } });
 
     expect(client.status).toBe(403);
     expect(paired.status).toBe(403);
@@ -514,9 +554,67 @@ describe("PATCH /api/bots/:id mainThreadChoice", () => {
   it("refuses a client session and a paired device", async () => {
     const { store, bot, patch } = fixture();
     const client = await patch(bot.id, { mainThreadChoice: bot.threadId }, { auth: { kind: "session", via: "bearer", scopes: ["client"], session: { id: "s-member", email: "member@example.com", label: "Front desk" } } as unknown as RequestAuth });
-    const paired = await patch(bot.id, { mainThreadChoice: bot.threadId }, { headers: { "x-openmausbot-companion": "1" } });
+    const paired = await patch(bot.id, { mainThreadChoice: bot.threadId }, { headers: { "x-seira-companion": "1" } });
     expect(client.status).toBe(403);
     expect(paired.status).toBe(403);
     expect(store.bot(bot.id)?.mainThreadChoice).toBeUndefined();
+  });
+});
+
+describe("PATCH /api/bots/:id takes the paired-device limits from the pairing record", () => {
+  const PAIRED = /^forbidden: a paired device may change how a bot looks, not "/;
+  const session = (scopes: string[], record: Record<string, unknown> = {}) =>
+    ({ kind: "session", via: "bearer", scopes, session: { id: "s-device", label: "Device", scopes, ...record } }) as unknown as RequestAuth;
+  const phone = (scopes = ["admin", "client"]) => session(scopes, { pairedDevice: true });
+  const teamPhone = session(["client"], { email: "ada@example.com", membershipAuthority: "team", teamRole: "member", memberCheckedAt: 1 });
+  const companionPhone = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" } as RequestAuth;
+
+  it("holds a paired phone to the limits when it sends no companion header", async () => {
+    const { store, bot, patch } = fixture({ levelOf: () => "edit" } as Partial<BotPatchRouteDeps>);
+    for (const as of [phone(), teamPhone, companionPhone]) {
+      for (const body of [{ vpsAlias: "gamma-vps" }, { approvalMode: "full" }, { name: "Renamed" }]) {
+        const refused = await patch(bot.id, body, { auth: as });
+        expect(refused.status, JSON.stringify(body)).toBe(403);
+        expect(refused.body.error).toMatch(PAIRED);
+      }
+    }
+    expect(scan).not.toHaveBeenCalled();
+    expect(store.bot(bot.id)).toMatchObject({ name: "Scout" });
+    expect(store.bot(bot.id)?.vpsAlias).toBeUndefined();
+    expect((await patch(bot.id, { pinned: true }, { auth: phone() })).status).toBe(200);
+  });
+
+  it("keeps the move to no computer for an admin phone that sends no companion header", async () => {
+    const { store, bot, patch } = fixture({
+      interruptAllDirectThreads: async () => {},
+      routines: () => ({ activeBotRunForBot: () => null }),
+    } as unknown as Partial<BotPatchRouteDeps>);
+    store.patchBot(bot.id, { computer: "local" });
+    const moved = await patch(bot.id, { computer: "off" }, { auth: phone() });
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(store.bot(bot.id)?.computer).toBe("off");
+    expect((await patch(bot.id, { computer: "off" }, { auth: phone(["client"]) })).status).toBe(403);
+  });
+
+  it("never gives a session more because it sends the companion header", async () => {
+    const { store, bot, patch } = fixture({ levelOf: () => "view" } as Partial<BotPatchRouteDeps>);
+    const viewer = await patch(bot.id, { pinned: true }, { auth: session(["client"]), headers: { "x-seira-companion": "1" } });
+    expect(viewer.status).toBe(403);
+    expect(viewer.body.error).toBe('forbidden: you can view this bot, not change "pinned"');
+    const admin = await patch(bot.id, { vpsAlias: "gamma-vps" }, { auth: session(["admin", "client"]), headers: { "x-seira-companion": "1" } });
+    expect(admin.status).toBe(403);
+    expect(admin.body.error).toMatch(PAIRED);
+    expect(store.bot(bot.id)?.pinned).toBeFalsy();
+    expect(store.bot(bot.id)?.vpsAlias).toBeUndefined();
+  });
+
+  it("leaves a session with no mark as it was: an admin's still changes anything, a member's only what its level allows", async () => {
+    const { store, bot, patch } = fixture();
+    const member = await patch(bot.id, { approvalMode: "full" }, { auth: session(["client"]) });
+    expect(member.status).toBe(403);
+    expect(member.body.error).toMatch(/needs the admin scope/);
+    const admin = await patch(bot.id, { vpsAlias: "gamma-vps" }, { auth: session(["admin", "client"]) });
+    expect(admin.status, JSON.stringify(admin.body)).toBe(200);
+    expect(store.bot(bot.id)?.vpsAlias).toBe("gamma-vps");
   });
 });

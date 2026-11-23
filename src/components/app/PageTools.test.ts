@@ -31,7 +31,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const fetchMock = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>();
 const openExternal = vi.fn(async () => true);
 const store = { state: {}, dispatch: vi.fn(), flushBotPatches: vi.fn(async () => null) } as unknown as ReturnType<typeof useStore>;
-const LINK = "https://page000000000000000000001.mausbot.page/";
+const LINK = "https://page000000000000000000001.seira.page/";
 const LIVE: PublishedPageCard = { state: "live", title: "Pricing", pageId: "page000000000000000000001", url: LINK, usage: { pages: 1, limit: 5 } };
 
 let host: HTMLDivElement;
@@ -60,7 +60,7 @@ const button = (label: string, within: ParentNode = document) => Array.from(with
   .find((element) => element.textContent?.trim() === label || element.getAttribute("aria-label") === label)!;
 const click = (label: string, within?: ParentNode) => act(async () => { button(label, within).click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
 const chips = () => JSON.parse(host.querySelector("[data-chips]")!.getAttribute("data-chips")!) as unknown[];
-const documents = () => fetchMock.mock.calls.map(([path]) => new URL(path, "http://omb.test")).filter((url) => url.pathname.endsWith("/app"));
+const documents = () => fetchMock.mock.calls.map(([path]) => new URL(path, "http://seira.test")).filter((url) => url.pathname.endsWith("/app"));
 const posts = (ending: string) => fetchMock.mock.calls.filter(([path, init]) => path.endsWith(ending) && init?.method === "POST").map(([, init]) => JSON.parse(String(init!.body)));
 const fromFrame = (data: unknown, source: unknown) => act(async () => {
   window.dispatchEvent(new MessageEvent("message", { data, source: source as MessageEventSource }));
@@ -71,7 +71,7 @@ const PICK = { jsonrpc: "2.0", method: POINTED_METHOD, params: { tag: "button", 
 beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (path) => {
-    const url = new URL(path, "http://omb.test");
+    const url = new URL(path, "http://seira.test");
     if (url.pathname.endsWith("/app/publish")) return json(200, { ok: true, card: LIVE });
     if (url.pathname.endsWith("/unpublish")) return json(200, { ok: true, card: { ...LIVE, state: "unpublished" } });
     const rev = url.searchParams.get("rev");
@@ -129,7 +129,7 @@ describe("a bot's page in the chat", () => {
     await fromFrame(PICK, inlineFrame().contentWindow);
     expect(chips()).toEqual([]);
     await click("Point", card());
-    expect(posted).toHaveBeenCalledWith({ jsonrpc: "2.0", method: "mausbot/point", params: { on: true } }, "*");
+    expect(posted).toHaveBeenCalledWith({ jsonrpc: "2.0", method: "seira/point", params: { on: true } }, "*");
     expect(card().textContent).toContain("Click the part of the page you want changed.");
     await fromFrame(PICK, window);
     expect(chips()).toEqual([]);
@@ -146,7 +146,7 @@ describe("a bot's page in the chat", () => {
     expect(posted).toHaveBeenCalledWith(marksMessage(["main > section:nth-of-type(2) > button", "footer > a"]), "*");
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
     expect(button("Point", card()).getAttribute("aria-pressed")).toBe("false");
-    expect(posted).toHaveBeenCalledWith({ jsonrpc: "2.0", method: "mausbot/point", params: { on: false } }, "*");
+    expect(posted).toHaveBeenCalledWith({ jsonrpc: "2.0", method: "seira/point", params: { on: false } }, "*");
   });
 
   it("sends Point and the numbered outlines again to the frame a reload puts in place", async () => {
@@ -160,7 +160,7 @@ describe("a bot's page in the chat", () => {
     await act(async () => { inlineFrame().dispatchEvent(new Event("load")); });
     // The new page starts with Point off, so it is told Point is still on before it gets the outlines.
     expect(posted.mock.calls.map(([message]) => message)).toEqual([
-      { jsonrpc: "2.0", method: "mausbot/point", params: { on: true } },
+      { jsonrpc: "2.0", method: "seira/point", params: { on: true } },
       marksMessage(["main > section:nth-of-type(2) > button"]),
     ]);
   });
@@ -188,11 +188,51 @@ describe("a bot's page in the chat", () => {
     expect(button("Open in new tab", card()).disabled).toBe(true);
   });
 
+  it("hides Share and Open in new tab while pages are not offered and there is no link, and keeps them for a page that has one", async () => {
+    (store.state as { config?: unknown }).config = { pages: { offered: false } };
+    try {
+      await render(row(payload()));
+      expect(button("Share", card())).toBeUndefined();
+      expect(button("Open in new tab", card())).toBeUndefined();
+      expect(button("Point", card())).toBeDefined();
+      await render(row(payload(), LIVE));
+      expect(button("Share", card())).toBeDefined();
+      expect(button("Open in new tab", card()).disabled).toBe(false);
+    } finally {
+      delete (store.state as { config?: unknown }).config;
+    }
+  });
+
+  it("gives a refused Share for a missing sign-in a Sign in button that opens Your account, only in the desktop app", async () => {
+    const message = "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.";
+    fetchMock.mockImplementation(async (path) => {
+      if (new URL(path, "http://seira.test").pathname.endsWith("/app/publish")) return json(403, { error: message, reason: "sign_in" });
+      return json(200, botHtmlDocument({ messageId: "a1", rev: 0, html: "<p>newest</p>" }));
+    });
+    await render(row(payload()));
+    await click("Share", card());
+    await settle();
+    expect(card().textContent).toContain(message);
+    expect(button("Sign in", card())).toBeUndefined();
+    vi.stubGlobal("ogb", { openExternal, cloudAccount: {} });
+    await click("Share", card());
+    await settle();
+    await click("Sign in", card());
+    expect(store.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "account" });
+  });
+
   it("shows publish_page's link on the page it published", async () => {
     await render(row(payload(), LIVE));
     expect(card().querySelector("[data-page-link]")?.textContent).toContain("Published");
     expect(button("Open in new tab", card()).disabled).toBe(false);
     expect(fetchMock.mock.calls.some(([path]) => path.includes("/publish"))).toBe(false);
+  });
+
+  it("starts the full-screen page beside the desktop rail, not under it", async () => {
+    await render(row(payload()));
+    await click("Full screen", card());
+    expect(overlay()?.className).toContain("left-[var(--rail-beside,0px)]");
+    expect(overlay()?.className).not.toContain("inset-0");
   });
 
   it("opens Full screen over the chat, points there too, and closes on Escape or when Point ends after a pick", async () => {
@@ -227,12 +267,12 @@ describe("a bot's page in the chat", () => {
 
     act(() => setAdvancedMode(true));
     await click("Pin to sidebar", card());
-    expect(JSON.parse(localStorage.getItem("omb-web-panels")!)).toEqual([
+    expect(JSON.parse(localStorage.getItem("seira-web-panels")!)).toEqual([
       { id: "panel-1", name: "Pricing", page: { botId: "pepper", threadId: "t1", messageId: "a1" } },
     ]);
     expect(button("Unpin", card()).getAttribute("aria-pressed")).toBe("true");
     await click("Unpin", card());
-    expect(JSON.parse(localStorage.getItem("omb-web-panels")!)).toEqual([]);
+    expect(JSON.parse(localStorage.getItem("seira-web-panels")!)).toEqual([]);
 
     act(() => setWebPanels(Array.from({ length: MAX_WEB_PANELS }, (_, i) => ({ id: `p${i}`, name: `P${i}`, url: `https://p${i}.example/` }))));
     expect(button("Pin to sidebar", card()).disabled).toBe(true);
@@ -245,13 +285,13 @@ describe("a bot's page in the chat", () => {
     setAdvancedMode(true);
     await render(row(payload()));
     // Another window's write whose storage event hasn't arrived yet.
-    localStorage.setItem("omb-web-panels", JSON.stringify([{ id: "panel-9", name: "Other", url: "https://other.example/" }]));
+    localStorage.setItem("seira-web-panels", JSON.stringify([{ id: "panel-9", name: "Other", url: "https://other.example/" }]));
     await click("Pin to sidebar", card());
-    expect(JSON.parse(localStorage.getItem("omb-web-panels")!).map((panel: { name: string }) => panel.name)).toEqual(["Other", "Pricing"]);
+    expect(JSON.parse(localStorage.getItem("seira-web-panels")!).map((panel: { name: string }) => panel.name)).toEqual(["Other", "Pricing"]);
     // The other window unpins everything; Unpin here must not pin the page again.
-    localStorage.setItem("omb-web-panels", "[]");
+    localStorage.setItem("seira-web-panels", "[]");
     await click("Unpin", card());
-    expect(localStorage.getItem("omb-web-panels")).toBe("[]");
+    expect(localStorage.getItem("seira-web-panels")).toBe("[]");
     act(() => { setWebPanels([]); setAdvancedMode(false); });
   });
 

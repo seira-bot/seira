@@ -22,7 +22,7 @@ const STOPPED = "the same call failed the same way 10 times in a row: “Bash: g
 const OUTPUT = "fatal: not a git repository (or any of the parent directories): .git";
 
 it("leaves a stuck turn alone when off; on, tells it at 5 in a row and stops it only with a stop count set", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-loop-guard-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-loop-guard-"));
   // the engine holds its turn open until this file exists, and says here
   // when it has read a message steered into that turn
   const gate = join(scratch, "finish");

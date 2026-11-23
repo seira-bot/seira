@@ -31,7 +31,7 @@ describe("the exchange with the control plane", () => {
     try {
       const signIn = createEmailSignIn({
         allow: { admins: ["her@example.test"], members: ["@team.test"] },
-        env: { ...process.env, OMB_CONTROL_PLANE_URL: stub.url },
+        env: { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url },
       });
       expect(signIn.enabled()).toBe(true);
       expect(await signIn.start("nobody@example.test")).toMatchObject({ ok: false, status: 403 });
@@ -44,7 +44,7 @@ describe("the exchange with the control plane", () => {
       expect(wrong).toMatchObject({ ok: false, status: 401 });
       expect(wrong.ok ? "" : wrong.error).toMatch(/wrong or has expired/);
       expect(await signIn.verify("her@example.test", "12")).toMatchObject({ ok: false, status: 400 });
-      expect(await signIn.verify("nobody@example.test", stub.otp)).toMatchObject({ ok: false, status: 403 });
+      expect(await signIn.verify("nobody@example.test", stub.otp)).toEqual(wrong);
 
       const admin = await signIn.verify("her@example.test", stub.otp);
       expect(admin).toEqual({ ok: true, email: "her@example.test", userId: "user_stub", scopes: ["admin", "client"] });
@@ -57,19 +57,53 @@ describe("the exchange with the control plane", () => {
     }
   });
 
+  it("verify answers listed and unlisted addresses the same", async () => {
+    const stub = await startControlPlaneStub();
+    try {
+      const signIn = createEmailSignIn({
+        allow: { admins: ["her@example.test"], members: [] },
+        env: { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url },
+      });
+      const wrong = await signIn.verify("her@example.test", "00000000");
+      const callsBefore = stub.calls.length;
+      expect(wrong).toMatchObject({ ok: false, status: 401 });
+      for (const address of ["nobody@example.test", "not an email", ""]) {
+        expect(await signIn.verify(address, "00000000")).toEqual(wrong);
+        expect(await signIn.verify(address, stub.otp)).toEqual(wrong);
+      }
+      expect(stub.calls.length).toBe(callsBefore);
+      const badShape = await signIn.verify("her@example.test", "12");
+      expect(badShape).toMatchObject({ ok: false, status: 400 });
+      expect(await signIn.verify("nobody@example.test", "12")).toEqual(badShape);
+    } finally {
+      await stub.close();
+    }
+
+    const mailed = createEmailSignIn({
+      allow: { admins: ["her@example.test"], members: [] },
+      env: { SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
+      mailTransport: { sendMail: async () => undefined },
+    });
+    await mailed.start("her@example.test");
+    const wrongMailed = await mailed.verify("her@example.test", "00000000");
+    expect(wrongMailed).toMatchObject({ ok: false, status: 401 });
+    expect(await mailed.verify("nobody@example.test", "00000000")).toEqual(wrongMailed);
+    expect(await mailed.verify("nobody@example.test", "12")).toMatchObject({ ok: false, status: 400 });
+  });
+
   it("is off with an empty allow-list and says so when the sign-in service is down", async () => {
     const off = createEmailSignIn({ allow: () => ({ admins: [], members: [] }) });
     expect(off.enabled()).toBe(false);
-    const down = createEmailSignIn({ allow: { admins: ["a@b.test"], members: [] }, env: { ...process.env, OMB_CONTROL_PLANE_URL: "http://127.0.0.1:9" } });
+    const down = createEmailSignIn({ allow: { admins: ["a@b.test"], members: [] }, env: { ...process.env, SEIRA_CONTROL_PLANE_URL: "http://127.0.0.1:9" } });
     expect(await down.start("a@b.test")).toMatchObject({ ok: false, status: 502 });
   });
 
   it("is off without a mail server and without a phone account service, and on with either one", () => {
     const allow = { admins: ["a@b.test"], members: [] };
     expect(createEmailSignIn({ allow, env: {} }).enabled()).toBe(false);
-    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "ftp://nope" } }).enabled()).toBe(false);
-    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" } }).enabled()).toBe(false);
+    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
     expect(createEmailSignIn({ allow, env: {}, client: {} as ControlPlaneClient }).enabled()).toBe(true);
-    expect(createEmailSignIn({ allow, env: { OMB_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: { SEIRA_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
   });
 });

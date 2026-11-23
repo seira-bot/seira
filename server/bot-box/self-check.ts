@@ -15,6 +15,7 @@ import { BOX_PROBE_SCRIPT, BoxRunner, BOX_BROKER_PORT, BOX_EGRESS_PORT, defaultC
 import { closeSync, existsSync } from "node:fs";
 import type { BridgeTools } from "./bridge.ts";
 import { openCredentialBroker } from "./broker.ts";
+import { whichOnPath } from "./detect.ts";
 import { openBoxEgressGate } from "./egress-gate.ts";
 import { openHarnessGate } from "./harness-gate.ts";
 import type { BoxBridge, BoxMutation } from "./plan.ts";
@@ -48,7 +49,7 @@ export interface SelfCheckResult extends BoxChecks {
   error?: string;
 }
 
-const MARKER_PREFIX = "OPENMAUSBOT-BOX-CANARY-";
+const MARKER_PREFIX = "SEIRA-BOX-CANARY-";
 
 /** The host's own path out through the gate socket: whether the public internet answers at all. */
 function hostConnect(socketPath: string, target: string): Promise<string> {
@@ -66,7 +67,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   const startedAt = Date.now();
   const marker = `${MARKER_PREFIX}${randomBytes(12).toString("hex")}`;
   const root = join(options.root, `check-${randomBytes(4).toString("hex")}`);
-  const home = join(root, "home"), data = join(home, ".openmausbot"), sockets = join(root, "s");
+  const home = join(root, "home"), data = join(home, ".seira"), sockets = join(root, "s");
   const cwd = join(data, "task-workspaces", "probe", "t1"), botFolder = join(data, "workspaces", "probe");
   const otherWorkspace = join(data, "workspaces", "other"), otherTask = join(data, "task-workspaces", "other", "t2");
   for (const dir of [cwd, botFolder, otherWorkspace, otherTask, join(data, "providers"), join(data, "tools"), sockets]) mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -80,19 +81,20 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   writeFileSync(join(otherTask, "notes.md"), `other turn ${marker}`);
   writeFileSync(join(botFolder, "MEMORY.md"), "own bot");
   // An engine laid out as `npm install -g --prefix` leaves one: its bin entry a relative link into the package.
-  const engineBin = join(npmEnginesPrefix(data), "bin"), engineName = "omb-probe-engine", engineSays = "omb-probe-engine ran";
+  const engineBin = join(npmEnginesPrefix(data), "bin"), engineName = "seira-probe-engine", engineSays = "seira-probe-engine ran";
   const enginePackage = join(npmEnginesPrefix(data), "lib", "node_modules", engineName, "bin");
   for (const dir of [engineBin, enginePackage]) mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeFileSync(join(enginePackage, engineName), `#!/bin/sh\necho '${engineSays}'\n`, { mode: 0o755 });
   symlinkSync(join("..", "lib", "node_modules", engineName, "bin", engineName), join(engineBin, engineName));
   // The box's private /tmp is what is checked, so the host file goes to /tmp itself where there is one.
-  const hostTmpFile = join(existsSync("/tmp") ? "/tmp" : tmpdir(), `omb-box-check-${randomBytes(6).toString("hex")}`);
+  const hostTmpFile = join(existsSync("/tmp") ? "/tmp" : tmpdir(), `seira-box-check-${randomBytes(6).toString("hex")}`);
   writeFileSync(hostTmpFile, "host tmp");
 
   // The key the broker takes over: its own value, so a box that is never brokered (the host's network) is not counted
   // as leaking the canary when the raw key stays.
   const brokerKey = `sk-ant-${randomBytes(12).toString("hex")}`;
-  const canary = spawn("sleep", ["120"], { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", OMB_BOX_CANARY: marker }, stdio: "ignore" });
+  const canary = spawn(process.execPath, ["-e", "setTimeout(() => {}, 120_000)"], { env: { ELECTRON_RUN_AS_NODE: "1", SEIRA_BOX_CANARY: marker }, stdio: "ignore" });
+  canary.once("error", () => {});
   const answer = (req: { url?: string; headers: Record<string, string | string[] | undefined> }, res: { writeHead(code: number, headers: Record<string, string>): unknown; end(body: string): void }) => {
     // A model call must arrive with the real key, never the token (so the broker forwarded and swapped it).
     const model = req.url?.startsWith("/v1/");
@@ -114,6 +116,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   const skipped: string[] = [];
   let publicTarget: string | null = options.publicTarget === undefined ? "example.com:443" : options.publicTarget;
   if (publicTarget && (await hostConnect(egressSocket, publicTarget)) !== "200") { skipped.push("egress-public-allowed"); publicTarget = null; }
+  if (options.seccompFile && !whichOnPath("python3")) skipped.push("keyring-denied");
 
   const bridges: BoxBridge[] = [
     { name: "egress", port: BOX_EGRESS_PORT, socket: egressSocket },
@@ -133,7 +136,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
     canaryStart: canary.pid ? processStart(canary.pid) : null, serverStart: processStart("self"),
     harnessPort: serverPort, egressPort: BOX_EGRESS_PORT, privatePort, publicTarget, isolatedNet,
     // Checked whenever a filter is in the setup: the no-seccomp mutation leaves it out of the box, so the check must fail.
-    seccomp: Boolean(options.seccompFile),
+    seccomp: Boolean(options.seccompFile) && !skipped.includes("keyring-denied"),
     cpuList: existsSync("/sys/devices/system/cpu/possible"),
   };
   const wrapped = runner.wrap({
@@ -142,7 +145,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
       PATH: [engineBin, process.env.PATH].filter(Boolean).join(delimiter), HOME: home, LANG: process.env.LANG, TMPDIR: "/tmp",
       // What must not get in: a control-plane secret, a workspace credential, an operator's own setting, the CLI's
       // session token and an unlisted name, each holding the marker.
-      OMB_CLOUD_BOOTSTRAP_SECRET: marker, COMPOSIO_API_KEY: marker, OMB_SIGNIN_SMTP_URL: `smtp://user:${marker}@mail.invalid`, OPENMAUSBOT_TOKEN: marker, SOME_OTHER_SECRET: marker,
+      SEIRA_CLOUD_BOOTSTRAP_SECRET: marker, COMPOSIO_API_KEY: marker, SEIRA_SIGNIN_SMTP_URL: `smtp://user:${marker}@mail.invalid`, SEIRA_TOKEN: marker, SOME_OTHER_SECRET: marker,
       // The real-looking key the broker takes over; its upstream is the fixture server, which answers 200 only to the real key.
       ...(credentials ? { ANTHROPIC_API_KEY: brokerKey, ANTHROPIC_BASE_URL: `http://127.0.0.1:${serverPort}/v1` } : {}),
     },
@@ -150,7 +153,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   if (credentials && wrapped.token) spec.broker = { port: BOX_BROKER_PORT, token: wrapped.token, provider: "anthropic", path: "/messages", keyNames: ["ANTHROPIC_API_KEY"], marker: brokerKey };
   wrapped.env[PROBE_SPEC_ENV] = JSON.stringify(spec);
   let stdout = "", stderr = "";
-  const results = await new Promise<ProbeResult[] | string>((resolve) => {
+  const probed = await new Promise<ProbeResult[] | string>((resolve) => {
     const child = spawn(wrapped.command, wrapped.args, { env: wrapped.env, stdio: ["ignore", "pipe", "pipe", ...wrapped.extraFds] });
     for (const fd of wrapped.extraFds) try { closeSync(fd); } catch {}
     const timer = setTimeout(() => { child.kill("SIGKILL"); resolve(`the probe did not answer within ${options.timeoutMs ?? 60_000} ms`); }, options.timeoutMs ?? 60_000);
@@ -162,6 +165,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
       try { resolve((JSON.parse(stdout.trim().split("\n").at(-1) ?? "") as { results: ProbeResult[] }).results); } catch { resolve(`the probe exited with ${code}: ${stderr.slice(-400)}`); }
     });
   });
+  const results = canary.pid ? probed : "the canary process did not start";
   canary.kill("SIGKILL");
   wrapped.release();
   await Promise.all([egress.close(), harness.close(), credentials?.close(), new Promise<void>((resolve) => upstream.close(() => resolve())), new Promise<void>((resolve) => privateServer.close(() => resolve()))]);

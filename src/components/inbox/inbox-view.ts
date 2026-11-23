@@ -3,17 +3,48 @@ import type { InboxRow, InboxTab, InboxView } from "../../../shared/inbox";
 import type { NeedsYouItem } from "../../../shared/today";
 import { liveCardKind } from "../../../shared/live-approval";
 import { t } from "@/lib/i18n";
+import { isDecision, isNews } from "./inbox-kind";
 import { dismissResponse, type CardResponse } from "@/lib/card-answer";
 import { accessRequestWords, cardAnswerFor } from "../bot-access/access-card";
 
 /** The Needs you lines the inbox's card in the chat shows, the newest first. */
 export const CARD_ROWS = 3;
 
+export { isDecision, isNews };
+
 export const rowsIn = (view: InboxView | null, tab: InboxTab): InboxRow[] => (view?.rows ?? []).filter((row) => row.tab === tab);
 
-/** The inbox as one list, newest first: what waits on the person and their news; a settled line is read from where it
- * came, not listed again. */
-export const listedRows = (view: InboxView | null): InboxRow[] => (view?.rows ?? []).filter((row) => row.tab !== "done").sort((a, b) => b.at - a.at);
+/** The inbox as one list: what waits on a decision first, then news, each newest first; a settled line is read from where
+ * it came, not listed again. */
+export const listedRows = (view: InboxView | null): InboxRow[] => {
+  const open = (view?.rows ?? []).filter((row) => row.tab !== "done").sort((a, b) => b.at - a.at);
+  return [...open.filter(isDecision), ...open.filter((row) => !isDecision(row))];
+};
+
+export type InboxListItem = { kind: "row"; row: InboxRow } | { kind: "group"; key: string; rows: InboxRow[] };
+
+/** Two or more news lines of one bot in one conversation make a group, placed where its newest line would be. */
+export function inboxItems(rows: InboxRow[]): InboxListItem[] {
+  const keyOf = (row: InboxRow): string | null => (isNews(row) && row.origin?.threadId ? `${row.from.botId ?? row.from.name}\u0000${row.origin.threadId}` : null);
+  const members = new Map<string, InboxRow[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (key) members.set(key, [...(members.get(key) ?? []), row]);
+  }
+  const items: InboxListItem[] = [];
+  const placed = new Set<string>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const group = key ? members.get(key)! : null;
+    if (!key || !group || group.length < 2) { items.push({ kind: "row", row }); continue; }
+    if (placed.has(key)) continue;
+    const sorted = [...group].sort((a, b) => b.at - a.at);
+    if (sorted[0] !== row) continue;
+    placed.add(key);
+    items.push({ kind: "group", key, rows: sorted });
+  }
+  return items;
+}
 
 export function tabCounts(view: InboxView | null): Record<InboxTab, number> {
   const counts: Record<InboxTab, number> = { "needs-you": 0, info: 0, done: 0 };
@@ -21,8 +52,8 @@ export function tabCounts(view: InboxView | null): Record<InboxTab, number> {
   return counts;
 }
 
-/** What the Inbox row counts: every line waiting on the person, and news they have not read. */
-export const waitingCount = (view: InboxView | null): number => (view?.rows ?? []).filter((row) => row.tab === "needs-you" || (row.tab === "info" && row.unread)).length;
+/** What the Inbox row counts: every open decision, read or not, and news they have not read. */
+export const waitingCount = (view: InboxView | null): number => (view?.rows ?? []).filter((row) => isDecision(row) || (row.tab === "info" && row.unread)).length;
 
 /** What a team's person is told needs them beyond the inbox's lines: something to fix, or a question in their own chat. */
 export const inboxFixes = (items: readonly NeedsYouItem[] | undefined, view: InboxView | null): NeedsYouItem[] =>

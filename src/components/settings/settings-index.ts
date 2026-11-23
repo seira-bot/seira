@@ -17,7 +17,7 @@ export interface SettingsContext {
   /** main says this page is the app's home (home:page): This computer's page, or My Cloud's own page once it is home.
    * The one source for whether This app's rows (Open at login, Logs and diagnostics) and the account live here. */
   home: boolean;
-  /** a MausBot Cloud's page, personal or a team's */
+  /** a Seira Cloud's page, personal or a team's */
   cloud: boolean;
   team: boolean;
   /** this app drives another computer (paired-client mode) */
@@ -77,9 +77,9 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "installations", owner: "place", labelKey: "settings.section.workspaces", icon: Server, when: (ctx) => !ctx.client && ctx.installations,
     synonyms: ["installations", "fleet", "clients", "tenants"] },
   { id: "account", owner: "account", labelKey: "settings.page.account", when: () => true,
-    synonyms: ["account", "sign in", "log in", "log out", "sign out", "email", "organization", "mausbot cloud"] },
+    synonyms: ["account", "sign in", "log in", "log out", "sign out", "email", "organization", "seira cloud"] },
   { id: "plan", owner: "account", labelKey: "settings.page.plan", icon: CreditCard, when: (ctx) => !ctx.client && ctx.plan,
-    synonyms: ["plan", "billing", "subscription", "invoice", "receipt", "payment", "card", "upgrade", "trial", "cancel", "refund", "usage & billing", "mausbot cloud", "weekly", "limits"] },
+    synonyms: ["plan", "billing", "subscription", "invoice", "receipt", "payment", "card", "upgrade", "trial", "cancel", "refund", "usage & billing", "seira cloud", "weekly", "limits"] },
   { id: "app", owner: "app", labelKey: "settings.page.app", when: () => true,
     synonyms: ["this app", "updates", "update", "version", "help", "about", "servers", "your computers", "environments", "diagnostics", "logs", "tour"] },
   { id: "general", owner: "app", labelKey: "settings.section.general", icon: SlidersHorizontal, when: advancedOnly(() => true),
@@ -177,6 +177,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "pair", page: "phone", anchor: "pair", labelKey: "phone.pair.button", sectionKey: "phone.pair.section", topFor: ["phone", "pair", "pairing", "qr", "iphone", "android", "this server", "pair a device", "connect your phone"],
     synonyms: ["code", "mobile", "tablet", "companion", "get the phone app"] },
   { id: "paired", page: "phone", anchor: "paired", labelKey: "devices.paired", synonyms: ["devices", "remove", "revoke", "pair again"] },
+  { id: "phone-push", page: "phone", anchor: "phone-push", labelKey: "phone.push.title", topFor: ["push", "push notifications", "phone notifications"], synonyms: ["notifications", "alerts", "app closed", "locked phone"] },
   { id: "wifi", page: "phone", anchor: "reach", labelKey: "devices.route.wifi", sectionKey: "phone.reach.title", when: hereOnly, synonyms: ["wifi", "wi-fi", "lan", "local network"] },
   { id: "relay", page: "phone", anchor: "reach", labelKey: "devices.route.relay", sectionKey: "phone.reach.title", when: hereOnly, synonyms: ["anywhere", "relay", "away"] },
   { id: "keep-awake", page: "phone", anchor: "reach", labelKey: "remote.keepAwake", sectionKey: "phone.reach.title", when: hereOnly, synonyms: ["sleep", "awake", "overnight", "scheduled"] },
@@ -198,12 +199,12 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "keys", page: "ai", anchor: "ai-keys", labelKey: "settings.ai.otherServices", topFor: ["api keys", "api key"], synonyms: ["keys", "key", "openai", "anthropic", "xai", "openrouter", "router", "base url", "mistral", "groq", "cerebras", "deepseek", "opencode", "composio", "elevenlabs"] },
   { id: "backup-model", page: "ai", anchor: "backup-model", labelKey: "settings.recovery.title", sectionKey: "settings.ai.backupModel", advanced: true, synonyms: ["backup model", "fallback", "recovery"] },
   { id: "ai-pool", page: "ai", anchor: "ai-pool", labelKey: "settings.pool.title", sectionKey: "settings.ai.pool", advanced: true, synonyms: ["ai pool", "share usage", "usage limit", "balance", "spread"] },
-  { id: "routing", page: "ai", anchor: "routing", labelKey: "settings.ai.routing", advanced: true, synonyms: ["decision and extraction", "decision", "extraction", "routing", "who answers", "jev", "typesafe", "cloudflare", "workers ai"] },
-  { id: "images", page: "ai", anchor: "images", labelKey: "settings.ai.images", advanced: true, synonyms: ["image generation", "images", "generate", "picture"] },
+  { id: "routing", page: "ai", anchor: "routing", labelKey: "settings.ai.routing", advanced: true, synonyms: ["decision and extraction", "decision", "extraction", "routing", "who answers", "jev", "typesafe", "cloudflare", "workers ai", "system one", "decision key"] },
+  { id: "images", page: "ai", anchor: "images", labelKey: "settings.ai.images", advanced: true, synonyms: ["image generation", "images", "generate", "picture", "image key", "picture key", "gpt image", "nano banana"] },
   { id: "about-you", page: "bots", anchor: "about-you", labelKey: "settings.bots.aboutYou", topFor: ["name", "my name", "photo", "avatar", "picture", "profile", "profile picture", "about me"], synonyms: ["rules", "rules for every bot"] },
   { id: "away-emails", page: "bots", anchor: "about-you", labelKey: "settings.profile.awayEmails", sectionKey: "settings.bots.aboutYou", synonyms: ["away", "emails", "email me"] },
   { id: "new-bots", page: "bots", anchor: "new-bots", labelKey: "settings.bots.newBots", synonyms: ["defaults", "effort", "reasoning", "preset", "share as preset"] },
-  { id: "limits", page: "bots", anchor: "limits", labelKey: "settings.simple.more.limits", advanced: true, synonyms: ["group turns", "timeout", "tool time limit", "parallel threads", "concurrency", "keep warm"] },
+  { id: "limits", page: "bots", anchor: "limits", labelKey: "settings.simple.more.limits", advanced: true, synonyms: ["group turns", "timeout", "tool time limit", "memory for bots", "bot memory", "memory limit", "ram", "parallel threads", "concurrency", "keep warm"] },
   { id: "parallel", page: "bots", anchor: "parallel", labelKey: "settings.threads.title", sectionKey: "settings.simple.more.limits", advanced: true, synonyms: ["parallel", "threads", "concurrency"] },
   { id: "group-turns", page: "bots", anchor: "group-turns", labelKey: "settings.roomTurns.title", sectionKey: "settings.simple.more.limits", advanced: true, synonyms: ["group", "turns"] },
   { id: "skills", page: "bots", anchor: "skills", labelKey: "settings.section.skills", when: (ctx) => ctx.skills, synonyms: ["skills", "library"] },
@@ -216,6 +217,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "spending", page: "usage", labelKey: "settings.page.spending", topFor: ["spending", "cost", "costs", "tokens", "money"], synonyms: ["usage"] },
   { id: "grok-move", page: "transfer", anchor: "grok-move", labelKey: "settings.import.grokTitle", sectionKey: "settings.data.bringIn", topFor: ["grok", "grok bot", "move from"], synonyms: ["import", "bring", "another app"] },
   { id: "ai-apps", page: "transfer", anchor: "bring-in", labelKey: "settings.import.appsTitle", sectionKey: "settings.data.bringIn", synonyms: ["import", "bring", "skills", "mcp", "claude code", "codex", "cursor", "gemini"] },
+  { id: "ai-import", page: "transfer", anchor: "ai-import", labelKey: "aiImport.title", sectionKey: "settings.data.bringIn", topFor: ["move from another ai", "chatgpt", "claude.ai", "hermes", "openclaw"], synonyms: ["import", "bring", "memories", "persona", "chat history", "switch", "paste memory"] },
   { id: "backup-import", page: "transfer", anchor: "bring-in", labelKey: "backup.import", sectionKey: "settings.data.bringIn", topFor: ["restore"], synonyms: ["import", "bring", "backup", "backups", "bring back"] },
   { id: "bring-in", page: "transfer", anchor: "bring-in", labelKey: "settings.data.bringIn", synonyms: ["import", "move from", "bring"] },
   { id: "backup-export", page: "transfer", anchor: "take-out", labelKey: "backup.export", sectionKey: "settings.data.takeOut", topFor: ["backup", "backups", "export"], synonyms: ["full backup", "download"] },
@@ -225,7 +227,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "activity", page: "data", anchor: "activity", labelKey: "settings.section.activity", when: browserAdmin, topFor: ["activity", "audit", "audit log"], synonyms: ["history", "who did what"] },
   { id: "members", page: "people", anchor: "members", labelKey: "settings.people.members", synonyms: ["invite", "roles", "admins"] },
   { id: "bot-access", page: "people", anchor: "bot-access", labelKey: "settings.section.botAccess", synonyms: ["who can", "share", "permissions"] },
-  { id: "account", page: "account", labelKey: "settings.page.account", topFor: ["sign in", "log in", "log out", "sign out", "email"], synonyms: ["account", "mausbot cloud"] },
+  { id: "account", page: "account", labelKey: "settings.page.account", topFor: ["sign in", "log in", "log out", "sign out", "email"], synonyms: ["account", "seira cloud"] },
   { id: "organization", page: "account", anchor: "organization", labelKey: "settings.section.organization", when: (ctx) => ctx.organization, synonyms: ["company", "organisation", "managed"] },
   { id: "emails", page: "account", anchor: "emails", labelKey: "settings.account.emails", when: desk, synonyms: ["newsletter", "product updates", "email updates"] },
   { id: "plan", page: "plan", anchor: "plan", labelKey: "settings.page.plan", topFor: ["billing", "subscription", "invoice", "receipt", "payment", "card", "upgrade", "plan", "trial", "cancel", "cancel plan", "cancel subscription", "cancel trial", "unsubscribe", "refund"], synonyms: ["usage & billing", "manage subscription"] },
@@ -243,9 +245,10 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "light-dark", page: "appearance", anchor: "look", labelKey: "settings.theme.lightOrDark", topFor: ["dark mode", "night mode", "light mode"], synonyms: ["dark", "light", "system"] },
   { id: "theme", page: "appearance", anchor: "look", labelKey: "settings.theme.title", synonyms: ["skin", "looks", "themes"] },
   { id: "bubbles", page: "appearance", anchor: "look", labelKey: "settings.userBubbles.simpleTitle", synonyms: ["message color", "my messages", "bubbles"] },
+  { id: "text-size", page: "appearance", anchor: "look", labelKey: "settings.textSize.title", when: desk, topFor: ["text size", "font size"], synonyms: ["zoom", "bigger text", "larger text", "smaller text"] },
   { id: "tool-calls", page: "appearance", anchor: "chat", labelKey: "settings.appearance.chat", synonyms: ["tool calls", "this run", "chat width", "font", "typeface"] },
   { id: "layout", page: "appearance", anchor: "appearance", labelKey: "settings.appearance.layout", advanced: true, synonyms: ["show your computers", "rail", "window frame", "title bar", "threads", "tools layout", "pinned", "circles", "universal pins", "pinned panels"] },
-  { id: "apps", page: "overview", labelKey: "settings.search.apps", jump: "apps", synonyms: ["apps", "gmail", "slack", "calendar", "notion", "connect app", "integrations"] },
+  { id: "apps", page: "overview", labelKey: "settings.search.apps", jump: "apps", synonyms: ["apps", "gmail", "slack", "calendar", "notion", "connect app", "integrations", "treg", "twitter", "x twitter"] },
   { id: "bot-settings", page: "overview", labelKey: "settings.search.bot", jump: "bot", synonyms: ["approvals", "safety", "routines", "memory", "bot's notifications"] },
   { id: "shortcuts", page: "app", labelKey: "sidebar.menu.shortcuts", jump: "shortcuts", synonyms: ["keyboard shortcuts", "hotkeys", "cheat sheet"] },
 ];

@@ -25,7 +25,6 @@ vi.mock("@/lib/app-links", () => ({ openExternalLink: vi.fn(async () => {}) }));
 vi.mock("@/lib/mcp-servers", () => ({ updateMcpServers: vi.fn() }));
 vi.mock("./bot-panel/panel-link", () => ({ openBotSettings: fixture.openBotSettings }));
 
-import { openExternalLink } from "@/lib/app-links";
 import { McpServersPanel } from "./McpServersPanel";
 
 interface Listing { name: string; type: "http"; url: string; headerKeys: string[]; enabled: boolean; auth: "signed-in" | "needs-sign-in"; managedBy?: string }
@@ -37,6 +36,7 @@ let servers: Listing[];
 let testRequest: { resolve: (value: unknown) => void; signal?: AbortSignal } | null;
 let shown: (id: string) => boolean;
 let own: { shown(server: unknown): boolean; manage(): void } | undefined;
+let featured: HTMLElement | null;
 
 const settle = () => act(async () => { for (let turn = 0; turn < 5; turn += 1) await Promise.resolve(); });
 const card = (app: HostedApp) => host.querySelector<HTMLElement>(`[data-app-tile="${app.id}"]`)!;
@@ -50,7 +50,7 @@ async function mount() {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  const Cards = () => McpServersPanel({ hostedCards: { shown, onConnections: () => {}, ...(own ? { ownServers: own } : {}) } });
+  const Cards = () => McpServersPanel({ hostedCards: { shown, featured, onConnections: () => {}, ...(own ? { ownServers: own } : {}) } });
   await act(async () => root.render(createElement(Cards)));
   await settle();
 }
@@ -62,6 +62,7 @@ beforeEach(() => {
   servers = [];
   shown = () => true;
   own = undefined;
+  featured = null;
   fixture.store = { config: null, bots: [{ id: "atlas", name: "Atlas", hidden: false }, { id: "ghost", name: "Ghost", hidden: true }] };
   fixture.runMcpSignIn.mockResolvedValue({ phase: "succeeded", flowId: "00000000-0000-4000-8000-000000000000", authorizationUrl: null });
   fixture.api.mockImplementation((path: string, init?: RequestInit) => {
@@ -93,7 +94,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("The $label card", (app) => {
+describe.each(HOSTED_MCP_APPS)("The $label card", (app) => {
   async function connect() {
     await act(async () => button(app, "Connect").click());
     await settle();
@@ -229,71 +230,18 @@ describe.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("The $label card
   });
 });
 
-describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key card", (app) => {
-  const keyField = () => card(app).querySelector<HTMLInputElement>('input[type="password"]')!;
-  async function typeKey(value: string) {
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(keyField(), value);
-      keyField().dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  }
-  async function connectWith(value: string) {
-    await typeKey(value);
-    await act(async () => button(app, "Connect").click());
-    await settle();
-  }
-
-  it("keeps Connect off until a key is typed", async () => {
+describe("the browser sign-in cards", () => {
+  it.each(HOSTED_MCP_APPS.map((app) => app.id))("%s has no key field and no key page", async (id) => {
     await mount();
-    expect(keyField().getAttribute("aria-label")).toBe(`${app.label} API key`);
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(true);
-    await typeKey("  ");
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(true);
-    await typeKey("sk-live");
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("saves the key in a header on a server left off, never in its address, and switches it on once its tools load", async () => {
-    await mount();
-    await connectWith(" sk-live ");
-    expect(added()).toEqual([{ name: app.id, type: "http", url: app.url, headers: { Authorization: "Bearer sk-live" }, enabled: false }]);
-    expect(fixture.runMcpSignIn).not.toHaveBeenCalled();
-    expect(calls("PATCH")).toEqual([]);
-    await act(async () => testRequest!.resolve({ ok: true, tools: [{ name: "any" }] }));
-    await settle();
-    expect(calls("PATCH")).toEqual([[`/api/mcp/servers/${app.id}`, { enabled: true }]]);
-    expect(card(app).querySelector('[aria-label="Connected"]')).not.toBeNull();
+    const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
     expect(card(app).querySelector('input[type="password"]')).toBeNull();
+    expect(card(app).textContent).toContain("No API key needed");
   });
+});
 
-  it("leaves the server off and says the key was refused when the service turns it down", async () => {
-    await mount();
-    await connectWith("sk-wrong");
-    await act(async () => testRequest!.resolve({ ok: false, reason: "keys", error: "The server didn't accept the keys (HTTP 401). Check the header values." }));
-    await settle();
-    expect(card(app).querySelector('[role="alert"]')?.textContent).toBe(`${app.label} didn’t accept that key. Check it and connect again.`);
-    expect(calls("PATCH")).toEqual([]);
-    expect(card(app).querySelector('[aria-label="Connected"]')).toBeNull();
-  });
-
-  it("leaves the server off and gives the reason when its tools fail to load for anything else", async () => {
-    await mount();
-    await connectWith("sk-live");
-    await act(async () => testRequest!.resolve({ ok: false, reason: "timeout", error: "The server did not answer in time." }));
-    await settle();
-    expect(card(app).querySelector('[role="alert"]')?.textContent).toBe(`${app.label}’s tools could not be loaded with that key: The server did not answer in time. Connect again to retry.`);
-    expect(calls("PATCH")).toEqual([]);
-  });
-
-  it("replaces the key on the server it already has, under any name, instead of adding another", async () => {
-    servers = [listing(app, { name: "calls", headerKeys: ["Authorization"] })];
-    await mount();
-    await connectWith("sk-new");
-    expect(added()).toEqual([]);
-    expect(calls("PUT")).toEqual([["/api/mcp/servers/calls", { type: "http", url: app.url, headers: { Authorization: "Bearer sk-new" }, enabled: false }]]);
-  });
-
-  it("deletes the server, and with it the key, on Disconnect", async () => {
+describe("a Konektor.id server that holds a pasted key", () => {
+  it("shows as connected, and Disconnect deletes the server with its key", async () => {
+    const app = HOSTED_MCP_APPS.find((one) => one.id === "konektor")!;
     servers = [listing(app, { enabled: true, headerKeys: ["Authorization"] })];
     await mount();
     expect(card(app).querySelector('[aria-label="Connected"]')).not.toBeNull();
@@ -301,24 +249,6 @@ describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key car
     await settle();
     expect(calls("DELETE")).toEqual([[`/api/mcp/servers/${app.id}`, undefined]]);
     expect(fixture.api.mock.calls.some(([path]) => String(path).endsWith("/sign-out"))).toBe(false);
-    expect(keyField()).not.toBeNull();
-  });
-
-  it("opens the service's own page for making a key", async () => {
-    await mount();
-    await act(async () => button(app, `Get a ${app.label} key`).click());
-    expect(openExternalLink).toHaveBeenCalledWith(app.key.url);
-  });
-});
-
-describe("the Agentcard tile", () => {
-  it("draws a glyph and never an Agentcard logo, and says Agentcard keeps the cards", async () => {
-    await mount();
-    const tile = card(HOSTED_MCP_APPS.find((app) => app.id === "agentcard")!);
-    expect(tile.querySelector("img")).toBeNull();
-    expect(tile.querySelector("svg")).not.toBeNull();
-    expect(tile.textContent).toContain("Shop and pay from your own Agentcard account.");
-    expect(tile.textContent).toContain("Seira stores no card details");
   });
 });
 
@@ -336,6 +266,34 @@ describe("hiding a hosted card", () => {
   });
 });
 
+describe("the Featured place", () => {
+  it("holds every hosted card, in table order, and leaves none beside the panel", async () => {
+    featured = document.createElement("div");
+    document.body.append(featured);
+    await mount();
+    expect([...featured.querySelectorAll("[data-app-tile]")].map((tile) => tile.getAttribute("data-app-tile"))).toEqual(HOSTED_MCP_APPS.map((app) => app.id));
+    expect(host.querySelector("[data-app-tile]")).toBeNull();
+    featured.remove();
+  });
+  it("keeps the cards beside the panel without a place", async () => {
+    await mount();
+    expect(host.querySelectorAll("[data-app-tile]")).toHaveLength(HOSTED_MCP_APPS.length);
+  });
+  it("loads the servers once and signs in from a card in the place", async () => {
+    featured = document.createElement("div");
+    document.body.append(featured);
+    const app = HOSTED_MCP_APPS[0];
+    servers = [listing(app)];
+    await mount();
+    const connect = [...featured.querySelectorAll(`[data-app-tile="${app.id}"] button`)].find((element) => element.textContent?.trim() === "Connect") as HTMLButtonElement;
+    await act(async () => connect.click());
+    await settle();
+    expect(fixture.runMcpSignIn).toHaveBeenCalledOnce();
+    expect(fixture.api.mock.calls.filter(([path, init]) => path === "/api/mcp/servers" && !(init as RequestInit | undefined)?.method)).toHaveLength(1);
+    featured.remove();
+  });
+});
+
 describe("the person's own MCP servers in the Connected view", () => {
   const remote = (name: string, extra: Record<string, unknown> = {}) => ({ name, type: "http" as const, url: `https://${name}.example/mcp`, headerKeys: [], enabled: true, ...extra }) as unknown as Listing;
   const tile = (name: string) => host.querySelector<HTMLElement>(`[data-mcp-tile][data-app-tile="${name}"]`);
@@ -350,7 +308,7 @@ describe("the person's own MCP servers in the Connected view", () => {
     expect(tile("off")).toBeNull();
     expect(tile(HOSTED_MCP_APPS[0]!.id)).toBeNull();
     expect(host.querySelectorAll(`[data-app-tile="${HOSTED_MCP_APPS[0]!.id}"]`)).toHaveLength(1);
-    expect(tile("postiz")).toBeNull();
+    expect(tile("postiz")).not.toBeNull();
   });
 
   it("lists a command-line server too", async () => {

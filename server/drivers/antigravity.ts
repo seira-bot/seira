@@ -103,7 +103,8 @@ const support: AcpSupport = {
   sessionScopedApproval: true,
   resumeMethod: "resume",
   clientFileSystem: true,
-  clientReadRoots: (turn) => (turn.skillFiles ?? []).map(dirname),
+  clientReadRoots: (turn) => [...(turn.skillFiles ?? []).map(dirname), ...(turn.folders?.grants ?? []).map((grant) => grant.path)],
+  clientWriteRoots: (turn) => (turn.folders?.grants ?? []).filter((grant) => grant.write).map((grant) => grant.path),
   sanitizeToolPayload: true,
 
   resolveCommand: async (env, config, instanceId) => {
@@ -115,7 +116,7 @@ const support: AcpSupport = {
       command: runtime.executablePath,
       args: process.platform === "linux" ? ["--uid="] : [],
       env: profile.environment,
-      ro: [join(profile.directory, "omb-skills")],
+      ro: [join(profile.directory, "seira-skills")],
     };
   },
 

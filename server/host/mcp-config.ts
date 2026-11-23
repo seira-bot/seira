@@ -3,7 +3,6 @@ import { withMcpSignIn, type McpOAuthManager } from "../mcp-oauth.ts";
 import { brokeredServer, type BrokerPath } from "../bot-box/broker-probe.ts";
 import { probeMcpServer, sendsCredentials, type McpProbeOptions, type McpProbeResult } from "../mcp-probe.ts";
 import { isRemoteMcpServer, mcpServerLimitError, mcpServerNotFound, parseStoredMcpServer, type McpRunsOn, type StoredMcpServer, type StoredRemoteMcpServer } from "../mcp-registry.ts";
-import { postizKeyHeaders } from "../postiz/connection.ts";
 import type { AppConfig } from "../config.ts";
 import type { ChatAppsMcp } from "../chat-apps-mcp.ts";
 import type { CloudHomeConfig } from "../cloud-home.ts";
@@ -13,7 +12,7 @@ import type { McpKeys } from "../vault/mcp-keys.ts";
 import type { TeamConnectionsHost } from "./team-connections-host.ts";
 
 export interface McpConfigDeps {
-  cfg: Pick<AppConfig, "mcpServers" | "postiz">;
+  cfg: Pick<AppConfig, "mcpServers">;
   sessions: Pick<SessionRegistry, "isLive">;
   mcpOAuth: McpOAuthManager;
   teamConnections: Pick<TeamConnectionsHost, "personMcp" | "people">;
@@ -259,8 +258,6 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
           if (!own) return { status: 403, ...userError("serverError.mcp.testSignInFirst") };
           oauth = own.oauth;
           target = { ...target, headers: own.key ? { [own.key.header]: own.key.value } : {} };
-        } else if (!personal && isRemoteMcpServer(target)) {
-          target = { ...target, headers: { ...target.headers, ...postizKeyHeaders(cfg.postiz, name, target) } };
         }
         // Plain servers keep probing as they are saved; the app catalog is keyed by what actually runs.
         let cataloged: StoredMcpServer = parsed.server;

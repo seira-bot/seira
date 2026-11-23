@@ -33,16 +33,16 @@ const messages: Message[] = [
   said("answer", "Fathom, Fireflies and Granola are the three to look at.", 29_000, true),
 ].map((message, index, all): Message => ({ ...message, parentId: all[index - 1]?.id }));
 const bot: Bot = {
-  id: "maus", threadId: "maus-thread", name: "MausBot", title: "", description: "", color: "green",
+  id: "seira", threadId: "seira-thread", name: "Seira", title: "", description: "", color: "green",
   notifications: true, unread: false, busy: false, messages, activeLeafId: "answer", modelSelection: { instanceId: "test", model: "m" },
-  tasks: [{ threadId: "maus-thread", title: "Thread", createdAt: 1, busy: false, activity: "idle", modelSelection: { instanceId: "test", model: "m" }, approvalMode: "ask" }],
+  tasks: [{ threadId: "seira-thread", title: "Thread", createdAt: 1, busy: false, activity: "idle", modelSelection: { instanceId: "test", model: "m" }, approvalMode: "ask" }],
 };
 
 function mount(showToolCalls: boolean) {
   const state: AppState = {
     ...initialState,
     connected: true,
-    selectedId: "maus",
+    selectedId: "seira",
     bots: [bot],
     instances: [{ instanceId: "test", driverKind: "claude", displayName: "Claude", snapshot: { state: "available" } } as InstanceInfo],
     config: { features: { showToolCalls } } as unknown as AppState["config"],
@@ -75,14 +75,15 @@ describe("a finished turn in a conversation", () => {
     } finally { unmount(); }
   });
 
-  it("folds only its tool steps into one Worked-for chip when steps are shown", () => {
+  it("folds only its tool steps into one activity card when steps are shown", () => {
     vi.stubGlobal("fetch", () => new Promise(() => {}));
     const { container, unmount } = mount(true);
     try {
       expect(rows(container)).toEqual(["ask", "ack", "helper", "answer"]);
       const chips = [...transcript(container).querySelectorAll<HTMLButtonElement>("[data-activity-run] button")];
-      // In Simple mode the whole turn is one collapsed card, the same one a run of steps gets.
-      expect(chips.map((chip) => chip.textContent)).toEqual(["Worked for 29s"]);
+      // In Simple mode the whole turn is one collapsed card: its steps, then how long the turn took.
+      expect(chips).toHaveLength(1);
+      expect(chips[0]!.textContent).toMatch(/^3 steps · .*29s$/);
       flushSync(() => chips[0]!.click());
       expect(rows(container)).toEqual(["ask", "ack", "search", "fetch", "fetch-2", "helper", "answer"]);
     } finally { unmount(); }

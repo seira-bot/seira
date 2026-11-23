@@ -9,7 +9,7 @@ import { createComputerSharing } from "./computer-sharing.mjs";
 const until = async (check, what) => { for (let i = 0; i < 400; i++) { if (check()) return; await new Promise((resolve) => setTimeout(resolve, 5)); } assert.fail(`never: ${what}`); };
 
 async function fixture(t, { screen = () => false } = {}) {
-  const dir = await mkdtemp(path.join(tmpdir(), "omb-lending-accounts-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "seira-lending-accounts-"));
   const env = { id: "cloud-a", origin: "https://a.fixture.test", name: "A's Cloud", cloud: { id: "c" } };
   const f = { env, account: "acct-a", status: "connected", origin: env.origin, places: [env], polls: [], asks: [], routes: [], live: () => [...f.polls, ...f.asks].filter((signal) => !signal.aborted).length };
   const identity = { sessionId: randomUUID(), environmentId: randomUUID() };

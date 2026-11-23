@@ -27,6 +27,7 @@ import { parseOpenCodeLogLine } from "./quiet-status.ts";
 import type { ModelCatalog, ModelVariantOption, ProviderDriver, ProviderErrorCode } from "../../contracts.ts";
 import { execCliBoxed } from "../../procs.ts";
 import { userHome } from "../../env-path.ts";
+import type { TurnFolders } from "../../folder-access.ts";
 import {
   catalogFromOpenCodeSession,
   DISCOVERY_TIMEOUT_MS,
@@ -475,12 +476,12 @@ function withinFolder(path: string, folder: string): boolean {
 }
 
 /** A bot's shared or private folder: bots wrote everything there, so none of it may become OpenCode configuration. */
-export function openMausOwnsWorkingFolder(cwd: string): boolean {
+export function seiraOwnsWorkingFolder(cwd: string): boolean {
   return [join(DATA_DIR, "workspaces"), join(DATA_DIR, "task-workspaces")].some((root) =>
     withinFolder(cwd, root) && resolvePath(cwd) !== resolvePath(root));
 }
 
-/** OpenMaus folders an OpenCode bot may use without an approval card: attachments and its own shared folder.
+/** Seira folders an OpenCode bot may use without an approval card: attachments and its own shared folder.
  * Never one at or above the working folder: OpenCode reads opencode.json, .opencode/ and AGENTS.md from
  * every folder above it, so a planted file would configure later conversations. Known risk: the folder
  * rule covers writes too, so a bot can change or delete files in the attachments folder. */
@@ -605,6 +606,54 @@ function allowOwnedDirectories(env: Record<string, string | undefined>, botId: s
   env.OPENCODE_PERMISSION = JSON.stringify(permission);
 }
 
+/** Folders a turn names: each grant joins the `external_directory` allow-list; a limited turn denies every other
+ * outside folder, in Full too; a read-only grant gets `edit` deny rules in the three shapes OpenCode may match a file
+ * by (absolute, relative to the working folder, and without the leading slash). OpenCode's `bash` tool is not covered. */
+function applyFolderGrants(env: Record<string, string | undefined>, folders: TurnFolders | undefined, botId: string | undefined, cwd: string): void {
+  if (!folders || (!folders.limited && folders.grants.length === 0)) return;
+  let permission: Record<string, unknown> = {};
+  if (env.OPENCODE_PERMISSION) {
+    try {
+      const parsed = JSON.parse(env.OPENCODE_PERMISSION) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+      permission = parsed as Record<string, unknown>;
+    } catch {
+      return;
+    }
+  }
+  const objectRules = (existing: unknown): Record<string, unknown> | undefined =>
+    typeof existing === "string" ? { "*": existing }
+      : existing && typeof existing === "object" && !Array.isArray(existing) ? { ...(existing as Record<string, unknown>) } : undefined;
+  let rules = objectRules(permission.external_directory);
+  if (!rules) {
+    const configured = configuredOpenCodeFolderAction(env, cwd, env.OPENCODE_DISABLE_PROJECT_CONFIG !== "1");
+    rules = configured ? { "*": configured } : {};
+  }
+  if (folders.limited) {
+    const { "*": _outside, ...rest } = rules;
+    rules = { "*": "deny", ...rest };
+  }
+  // OpenCode evaluates rules in order and the last match wins.
+  const allowed = [...(folders.limited ? openCodeOwnedDirectories(botId, cwd) : []), ...folders.grants.map((grant) => grant.path)];
+  for (const directory of allowed) {
+    rules[directory] = "allow";
+    rules[join(directory, "*")] = "allow";
+  }
+  permission.external_directory = rules;
+  const readOnly = folders.grants.filter((grant) => !grant.write).map((grant) => grant.path);
+  if (readOnly.length) {
+    const edit = objectRules(permission.edit) ?? {};
+    for (const directory of readOnly) {
+      for (const base of [directory, relative(resolvePath(cwd), directory), directory.replace(/^[\\/]+/u, "")]) {
+        edit[join(base, "**")] = "deny";
+        edit[base] = "deny";
+      }
+    }
+    permission.edit = edit;
+  }
+  env.OPENCODE_PERMISSION = JSON.stringify(permission);
+}
+
 export function describeOpenCodeAccountError(
   code: AccountErrorCode,
   model?: string,
@@ -703,10 +752,11 @@ const support = (
       applyStandaloneSpawnEnv(OPENCODE_STANDALONE, env, config.cli);
     },
     spawnFingerprint: (env, config) => openCodeSpawnFingerprint(env, config.cli),
-    applyTurnEnv: (env, { fullAuto, botId, cwd }) => {
-      if (openMausOwnsWorkingFolder(cwd)) env.OPENCODE_DISABLE_PROJECT_CONFIG = "1";
+    applyTurnEnv: (env, { fullAuto, botId, cwd, folders }) => {
+      if (seiraOwnsWorkingFolder(cwd)) env.OPENCODE_DISABLE_PROJECT_CONFIG = "1";
       if (!fullAuto) {
         allowOwnedDirectories(env, botId, cwd);
+        applyFolderGrants(env, folders, botId, cwd);
         return;
       }
         // A wildcard alone leaves OpenCode's more-specific external-directory and read rules in place.
@@ -715,6 +765,7 @@ const support = (
         "list", "task", "lsp", "skill", "webfetch", "websearch", "codesearch",
         "todoread", "todowrite", "doom_loop",
       ].map((permission) => [permission, "allow"])));
+      applyFolderGrants(env, folders, botId, cwd);
     },
     pickAuthMethod: () => null,
     authFailure: "continue",

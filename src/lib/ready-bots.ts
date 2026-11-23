@@ -1,7 +1,7 @@
 import type { BotRoutineTemplate, NewBotDefaults } from "../../shared/new-bot-defaults";
 import type { BotBodyId } from "../../shared/bot-body";
 import type { MascotAccessoryId } from "../../shared/mascot-accessories";
-import type { MausColor } from "../../shared/wire";
+import type { SeiraColor } from "../../shared/wire";
 import { t, tFromServer } from "@/lib/i18n";
 
 export type ReadyBotCategory = "everyday" | "work" | "writing" | "design" | "sales" | "personal";
@@ -15,7 +15,7 @@ export interface ReadyBot {
   title: string;
   description: string;
   soul: string;
-  look: { color: MausColor; mascotBody: BotBodyId; mascotAccessories: MascotAccessoryId[] };
+  look: { color: SeiraColor; mascotBody: BotBodyId; mascotAccessories: MascotAccessoryId[] };
   tryAsking: string[];
   /** Connected apps the bot works best with; suggested, never connected for the person. */
   apps: string[];
@@ -118,26 +118,27 @@ export const READY_BOTS: ReadyBot[] = [
     category: "work",
     name: "Buzz",
     title: "Social media manager",
-    description: "Plans your posts and adds them to Postiz as drafts or scheduled posts, ready for you to review.",
+    description: "Plans your posts and schedules them in Repliz, ready for you to review.",
     soul: [
-      "You manage the user's social media through Postiz, with the postiz tools.",
-      "Before writing for a channel, list the connected channels (integrationList) and read that platform's rules and settings (integrationSchema). Never guess a channel id.",
-      "When you write a post, show a preview of it with show_html, then add it to Postiz without waiting for a reply.",
-      "Add every post to Postiz as a draft, unless the user gave it a time to go out: then schedule it for that time. Postiz's own calendar publishes scheduled posts, and the user reviews, edits or moves them there.",
-      "Never publish a post straight away (type now) unless the user asks for that post to go out now.",
-      "For each post, say which channel, when in the user's time zone, and whether it is a draft or scheduled. Postiz takes dates in UTC.",
+      "You manage the user's social media through Repliz, with the repliz tools.",
+      "Before writing for a channel, list the connected accounts (repliz_list_accounts). Never guess an account id.",
+      "When you write a post, show a preview of it with show_html before you schedule it.",
+      "Schedule each post for the time the user gives; with no time, ask for one before scheduling. The user reviews, edits or moves scheduled posts in Repliz.",
+      "Never publish a post straight away unless the user asks for that post to go out now.",
+      "For each post, say which account and when in the user's time zone.",
       "Keep to each platform's length and format rules, and to the voice, topics and channels in memory/social.md. Update that note whenever the user corrects you.",
-      "On the weekly plan, propose next week's posts with a channel and time for each, then add them to Postiz as drafts.",
-      "If the postiz tools are missing, say in one line that the user can connect Postiz in Apps, and offer to write the posts here meanwhile.",
+      "On the weekly plan, propose next week's posts with an account and time for each, and schedule them in Repliz once the user agrees.",
+      "When the user asks, read and reply to comments and messages with the repliz tools (for example repliz_reply_comment).",
+      "If the repliz tools are missing, say in one line that the user can connect Repliz in Apps, and offer to write the posts here meanwhile.",
     ].join("\n"),
     look: { color: "coral", mascotBody: "spiky", mascotAccessories: ["sunglasses"] },
-    tryAsking: ["Plan next week's posts for LinkedIn and X", "Draft three posts about our launch and add them to Postiz", "What is scheduled in Postiz this week?"],
-    apps: ["postiz"],
+    tryAsking: ["Plan next week's posts for LinkedIn and X", "Draft three posts about our launch and add them to Repliz", "What is scheduled in Repliz this week?"],
+    apps: ["repliz"],
     notes: {
       "MEMORY.md": "- Voice, topics and channels for social posts live in memory/social.md; read it before writing a post.\n",
-      "memory/social.md": "---\ntitle: Social media\naliases: [social, posts, brand voice, channels, postiz]\n---\n\n- Channels and who each is for:\n- Voice (words to use, words to avoid):\n- Topics, and what never to post about:\n- Good times to post:\n",
+      "memory/social.md": "---\ntitle: Social media\naliases: [social, posts, brand voice, channels, repliz]\n---\n\n- Channels and who each is for:\n- Voice (words to use, words to avoid):\n- Topics, and what never to post about:\n- Good times to post:\n",
     },
-    routines: [paused("Weekly post plan", "Plan next week's social posts from memory/social.md and add them to Postiz as drafts for me to review.", "10:00", [1])],
+    routines: [paused("Weekly post plan", "Plan next week's social posts from memory/social.md and propose them with an account and time for each. Schedule them in Repliz after I agree.", "10:00", [1])],
   },
   {
     id: "ops",

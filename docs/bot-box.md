@@ -3,15 +3,16 @@
 On a Seira Cloud home every bot turn runs in a box: the engine (Claude Code, Codex, Grok, OpenCode, the ACP agents),
 every shell command it runs, the MCP servers it starts and Seira's own helper proxies all live inside one
 unprivileged [bubblewrap](https://github.com/containers/bubblewrap) sandbox for that process's lifetime. The server,
-its database, its settings, other bots' folders and other turns' processes are not in it. Code: `server/bot-box/`.
+its database, its settings, other bots' folders and other turns' processes are not in it. On a Linux computer, only the
+turns of a bot limited to its chosen folders run in the box ([below](#on-a-linux-computer)). Code: `server/bot-box/`.
 
 ## What a boxed process sees
 
 | Inside the box | What it is |
 |---|---|
 | `/usr`, `/etc`, `/opt`, the server's own code folder, read-only | The image: engine CLIs, node, python, git, the bots' browser |
-| `HOME`, read-write | The engines' own logins and settings (`~/.claude`, `~/.codex`, `~/.grok`). On a Team Cloud this is the turn's audience's engine home instead, with the team's engine sign-in files bound into it, and the server's HOME is not there at all ([team-cloud.md](team-cloud.md#engine-homes)) |
-| the data folder (`~/.openmausbot`), **an empty private folder** | `messages.db`, `config.json`, logins, the server's sockets, every other bot's folders are not there |
+| `HOME`, read-write (an empty private folder for a bot limited to its chosen folders, [below](#chosen-folders)) | The engines' own logins and settings (`~/.claude`, `~/.codex`, `~/.grok`). On a Team Cloud this is the turn's audience's engine home instead, with the team's engine sign-in files bound into it, and the server's HOME is not there at all ([team-cloud.md](team-cloud.md#engine-homes)) |
+| the data folder (`~/.seira`), **an empty private folder** | `messages.db`, `config.json`, logins, the server's sockets, every other bot's folders are not there |
 | put back inside it: the turn's working folder and the bot's own folder (`workspaces/<bot>`), read-write | What the turn works on, and the bot's memory and skills. On a Team Cloud a turn that is not the team's has the bot's own folder read-only, and its own memory layer read-write ([team-cloud.md](team-cloud.md#the-audience-rule)) |
 | put back: this turn's permission socket (the engine's question and approval helper reaches the server through it), and, read-only, the conversation's own hook token folder (the hook helper's bearer, renewed each turn) and the files its command line names (MCP config, system prompt) | What the driver made for this one process |
 | private `/tmp`, `/var/tmp`, `/run`, `/dev`, `/proc` | Its own PID namespace: other turns' processes do not exist for it |
@@ -19,11 +20,32 @@ its database, its settings, other bots' folders and other turns' processes are n
 | a network namespace with loopback only | Two loopback ports are bridged to unix sockets from outside (below); nothing else on the machine's loopback is reachable, and there is no route out |
 
 The environment is an allow-list (`server/bot-box/env.ts`): the engine's own settings and keys, the harness capability
-tokens and a few names a shell expects. Of Seira's own `OMB_*` variables only those a bot's engine, hooks and MCP
-proxies read pass (`BOX_ENV_OMB_NAMES`); every other one an operator sets on the server, such as `OMB_SIGNIN_SMTP_URL`,
-stays out. Every `OMB_CLOUD_*` setting, the server's own placement (`OMB_DATA_DIR`, `OMB_PORT`), the CLI's session
-token and server address (`OPENMAUSBOT_TOKEN`, `OPENMAUSBOT_URL`) and the workspace credentials are refused whatever
+tokens and a few names a shell expects. Of Seira's own `SEIRA_*` variables only those a bot's engine, hooks and MCP
+proxies read pass (`BOX_ENV_SEIRA_NAMES`); every other one an operator sets on the server, such as `SEIRA_SIGNIN_SMTP_URL`,
+stays out. Every `SEIRA_CLOUD_*` setting, the server's own placement (`SEIRA_DATA_DIR`, `SEIRA_PORT`), the CLI's session
+token and server address (`SEIRA_TOKEN`, `SEIRA_URL`) and the workspace credentials are refused whatever
 a driver passed.
+
+## Chosen folders
+
+An admin can give a bot more folders, each read-only or Can change ([folder-access.md](folder-access.md)). The box
+binds each chosen folder at its real path: a Can change folder read-write, a read-only folder read-only. A read-only
+folder inside a read-write folder is bound read-only after it, and a Can change folder deeper inside that is bound
+read-write again. A chosen folder inside the data folder, or one that holds it, is left out.
+
+With **Only chosen folders** on, `HOME` is an empty private folder (`tmpfs`). The box puts back from the real `HOME`:
+
+- the engines' sign-in folders, read-write (`LIMITED_HOME_SIGN_INS` in `server/bot-box/plan.ts`);
+- program installs such as `.npm-global`, `.nvm`, `.bun` and `.cargo`, and the version folders of the Claude Code and
+  Cursor installers, read-only (`LIMITED_HOME_PROGRAMS`);
+- the git settings, read-only (`LIMITED_HOME_GIT`);
+- of Seira's own code folder, when it is in `HOME` (a checkout), only the parts the server runs, read-only
+  (`LIMITED_CODE_PARTS`);
+- the working folder, the bot's own folder and the chosen folders.
+
+Each entry is checked with `lstat` and its real path. A symbolic link that leaves `HOME` is not put back. An environment
+path inside `HOME`, or one that holds `HOME`, is dropped. The command line of an MCP server that someone configured
+gives a limited box no path its folders do not give. A change of a bot's folders gives it a new box on its next turn.
 
 ## The two gates
 
@@ -31,7 +53,8 @@ a driver passed.
   `127.0.0.1:3128` inside the box, bridged to the server's gate. `HTTPS_PROXY` and `HTTP_PROXY` point there. The gate
   resolves names itself and connects only to public addresses: this machine, the local network, link-local, the cloud
   metadata service and Fly's private network are refused by address, so neither a name nor a redirect gets around it.
-  It is the engines' twin of the browser's SOCKS gate (`server/browser/egress/`), with the same address policy.
+  It is the engines' twin of the browser's SOCKS gate (`server/browser/egress/`), with the same address policy. On a
+  Linux computer the gate uses the rules of the bots' browsers instead ([below](#on-a-linux-computer)).
 - **Harness** (`server/bot-box/harness-gate.ts`): the server's own port inside the box reaches only `/api/internal/`
   routes, which every helper calls with a per-turn capability bearer. Every other route is answered `403` by the gate
   itself, so the server is never asked.
@@ -43,20 +66,48 @@ neither bridge.
 
 An engine that signs in through a callback on `127.0.0.1` (Antigravity's Google sign-in) listens on the box's own
 loopback, which the server cannot reach. That box alone gets one more unix socket (`server/bot-box/relay.ts`), bound in
-at `/run/omb/relay.sock`: the in-box Node bridge dials out to it and keeps one connection waiting, and when someone
+at `/run/seira/relay.sock`: the in-box Node bridge dials out to it and keeps one connection waiting, and when someone
 pastes the redirect from another computer the server writes the callback's port on that connection and sends the
 request through it. Only the server ever chooses the port, the box reaches nothing new on the host, and the server never
 connects to a path inside the box.
 
 ## When it is on
 
-`server/bot-box/detect.ts`: on by default on a Cloud home (`OMB_CLOUD_ROLE=home` or `team`), off everywhere else
-unless `OMB_BOT_BOX=1`; `OMB_BOT_BOX=0` turns it off. It is never on without a working unprivileged bubblewrap: if the
-kernel refuses user namespaces or the image has no `bwrap`, the box reports `off` with the reason, and the Admin shows
-it. The cloud-home image installs `bubblewrap` and `socat` (the in-box bridges; without socat a bundled Node bridge does
-the same).
+`server/bot-box/detect.ts` chooses a scope at boot:
+
+| Where | Scope | What runs in the box |
+|---|---|---|
+| A Cloud home (`SEIRA_CLOUD_ROLE=home` or `team`), or any host with `SEIRA_BOT_BOX=1` | `all` | Every bot spawn |
+| Linux outside a Cloud home, with `SEIRA_BOT_BOX` unset | `limited` | The spawns of a turn whose bot has **Only chosen folders** on |
+
+`SEIRA_BOT_BOX=0` turns the box off. The box is never on without a working unprivileged bubblewrap: if the kernel
+refuses user namespaces or there is no `bwrap` on `PATH`, the box reports `off` with the reason, and the Admin shows it.
+Scope `limited` is also off in the Flatpak (reason `flatpak`) and on macOS and Windows (reason `not-cloud`). The
+cloud-home image installs `bubblewrap` and `socat` (the in-box bridges; without socat a bundled Node bridge does the
+same).
 
 Cost on Fly (measured, T0 build notes): about 5 ms and 3 MB per box, plus one socat per bridge.
+
+## On a Linux computer
+
+In scope `limited` the box takes the bot of a spawn from the turn that runs it. A bot without **Only chosen folders**
+runs as before: no box, and the same command line, environment, key paths, URL MCP servers, Local VM and Codex proxy
+settings. A kept engine process starts again on the bot's next turn when its limit turns on or off.
+
+A boxed turn on a computer differs from a turn on a Cloud home:
+
+- **Network.** The egress gate refuses every address of this computer, whatever the name, the port or the form of the
+  address (an IPv4-mapped IPv6 address too). The local network follows the setting of the bots' browsers
+  (`browserEngine.egress.localNetwork`): it is reachable unless that setting is `false`.
+- **Programs.** The programs in `HOME` stay trusted, and the server's `PATH` does not change.
+- **Keys.** The credential broker takes the keys of boxed spawns only.
+- **Seira's own MCP server over HTTP** (`SEIRA_OWN_MCP_HTTP=1`) is off while the box runtime runs, for every bot.
+  Engines then get it over stdio.
+- **Local VM and Docker computer use** fail early for a boxed bot only.
+- **Uploads** in a conversation are readable in the box, also when the working folder is the bot's own folder.
+
+The folder card says "Commands also see only these folders" only where the box runs. Everywhere else it keeps the note
+that a command can open other files ([folder-access.md](folder-access.md#what-it-does-not-do)).
 
 ## The self-check and the report
 
@@ -65,7 +116,8 @@ over a fixture laid out like a data folder, with a canary process and a fixture 
 could and could not do (`server/bot-box/self-check.ts`). The Admin reads the result in the signed health report and at
 `GET /api/cloud/box`: `{ box: "bwrap" | "off", checks: "23/23", failed: [], boxed, refused }`. Running the check with a
 mutation (`--mutate=bind-data,share-pid,share-net,env-all,tmp-shared`) removes one protection and must fail exactly the
-checks it guards.
+checks it guards. The canary runs on the server's own Node, so the check needs nothing else on `PATH`. The kernel
+keyring check calls `python3`; on a computer without it, the report lists that check as skipped.
 
 ## What it does not do yet
 
@@ -79,11 +131,28 @@ checks it guards.
   launcher agent-browser runs, see [team-cloud.md](team-cloud.md)); the agent-browser daemon is not boxed, and on a My
   Cloud no browser is.
 
+On a Linux computer (scope `limited`) these stay open:
+
+- **Sign-in folders.** The engines' sign-in folders (`~/.claude`, `~/.codex` and others) are shared and read-write.
+  They hold settings that run code, such as hooks, so a limited bot can change what the person's own CLI runs outside
+  the box. An engine home per bot closes this; it is not built.
+- **The bots' browser** runs outside the box. It does not read local files, except uploads.
+- **Turns with no tools**, such as keep-warm pings and compaction, run outside the box.
+- **A fake-IP proxy** (a TUN proxy that answers every name with an address in `198.18.0.0/15`) hides the real
+  destination from the gate. As for the bots' browsers, the gate treats such an address as the local network and
+  refuses Seira's own ports on it.
+- **Ubuntu 24.04 and later** can refuse unprivileged user namespaces through AppArmor. The box is then `off` with the
+  reason `userns-refused`, and the folder card keeps its note.
+- **The AppImage.** Its code is bound read-only from the mounted image. No test on a real AppImage desktop has run yet.
+- **A code folder outside `HOME`** is bound whole, read-only.
+- **Tools installed with `uv`** in `~/.local/share/uv` are not visible in the box.
+- **An MCP server that a limited bot adds** runs for every bot that uses it, also outside the box.
+
 ## The credential broker
 
 Keys stay in the server process; boxes get tokens (`server/bot-box/broker.ts`). When a bot spawn is boxed, each provider
 key in its environment (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`)
-is replaced by a per-process token (`omb_t0_…`, random, bound to the bot and the conversation, 24 h at most, revoked
+is replaced by a per-process token (`seira_t0_…`, random, bound to the bot and the conversation, 24 h at most, revoked
 when the process exits), and the provider's base URL (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GOOGLE_GEMINI_BASE_URL`)
 points at `http://127.0.0.1:18080/b/<token>/<provider>` inside the box, bridged to the broker's unix socket. The broker
 drops whatever credential header the client sent, adds the real key, and forwards to the provider's fixed upstream
@@ -95,7 +164,7 @@ reports as failed when it started gets the conversation a new token on its next 
 reconnects; the chat says the server didn't connect and that it connects again on the next message. A request for the grant
 itself goes to the upstream exactly as it was given (a server at `/mcp` is reached at `/mcp`, never `/mcp/`, which a
 Cloudflare Worker answers with 404), anything below it below that address, with the client's query beside the
-upstream's own. MCP Settings → **Test** reaches a URL server the same way where turns are boxed
+upstream's own. The **Test** button under Apps → MCP servers reaches a URL server the same way where turns are boxed
 (`server/bot-box/broker-probe.ts`): a grant made like a turn's, through the broker's socket, revoked when the test
 ends. A server that answers directly but not through the broker fails the test with "Your bots can't reach this
 server", never "Connected", and says the fault is ours. A tool call a URL server refuses with HTTP 401 is answered by the
@@ -120,15 +189,15 @@ or files, the base URL is the broker, a call with the token reaches the upstream
 | Mount namespace (bubblewrap) | every boxed process | reading the server's data folder, other bots' folders, other turns' files in `/tmp`, `/.fly`; writing anywhere but its own folders | reading HOME's engine logins (the engine's own identity); a path a driver puts back on purpose |
 | PID namespace | every boxed process | seeing, reading the environment of, or signalling another turn's or the server's processes | nothing inside the same box |
 | Network namespace + the two gates | every boxed process with its own network | reaching this machine's other listeners, the local network, link-local, metadata, Fly's private network; any route out except the egress gate; any server route except `/api/internal/*` | what the harness routes allow with a valid per-turn bearer; a public destination |
-| Environment allow-list | every boxed process | `OMB_CLOUD_*`, the server's placement, workspace credentials, any `OMB_*` setting a boxed process does not read, any unlisted name | the engines' own settings |
+| Environment allow-list | every boxed process | `SEIRA_CLOUD_*`, the server's placement, workspace credentials, any `SEIRA_*` setting a boxed process does not read, any unlisted name | the engines' own settings |
 | Credential broker (T0b) | every boxed process with its own network | holding a provider key or an MCP header; using a token after its process or conversation ends; choosing the upstream | keys with no base-URL setting (named in the report); subscription logins |
 | seccomp filter (T0c) | every boxed process on x86-64 | 34 system calls that only reach the kernel's attack surface: mount family, kernel modules, bpf, perf, userfaultfd, the kernel keyring, `open_by_handle_at`, `setns`, kexec, reboot, swap, clock setting, I/O ports (EPERM); a process of another architecture (killed) | anything an engine, shell, git, npm, python or Chrome uses: all allowed |
-| `hidepid=invisible` on the host's /proc (T0c) | the whole machine, set by the root supervisor at boot, which then starts itself again through `setpriv` without CAP_SYS_ADMIN and CAP_SETPCAP (an own server's connector grants those two only for that remount, and only to an image that drops them) | a `maus` process outside a box (the browser engine, a helper) listing or reading root's processes | `maus` processes seeing each other; a box has its own /proc anyway |
-| `/.fly` root-only (T0c) | the whole machine | a `maus` process reaching Fly's local API socket | nothing else |
+| `hidepid=invisible` on the host's /proc (T0c) | the whole machine, set by the root supervisor at boot, which then starts itself again through `setpriv` without CAP_SYS_ADMIN and CAP_SETPCAP (an own server's connector grants those two only for that remount, and only to an image that drops them) | a `seira` process outside a box (the browser engine, a helper) listing or reading root's processes | `seira` processes seeing each other; a box has its own /proc anyway |
+| `/.fly` root-only (T0c) | the whole machine | a `seira` process reaching Fly's local API socket | nothing else |
 
-Not built, and why: a **separate Linux user per bot**. The server runs as `maus` under a root supervisor and cannot
+Not built, and why: a **separate Linux user per bot**. The server runs as `seira` under a root supervisor and cannot
 switch uid; a per-bot uid needs a privileged spawn service (stdio over FIFOs, kills by proxy, file ownership across
 everything the server reads from the workspaces) which is a slice of its own, and with the user namespace the host
-sees the box as `maus` anyway. **nftables** rules would add nothing to a box with its own network namespace, and for
+sees the box as `seira` anyway. **nftables** rules would add nothing to a box with its own network namespace, and for
 the whole machine they would have to allow Fly's resolver on the private network; left for the separate-user design.
-`OMB_CLOUD_HARDEN=0` skips the two supervisor steps if a machine ever needs that.
+`SEIRA_CLOUD_HARDEN=0` skips the two supervisor steps if a machine ever needs that.

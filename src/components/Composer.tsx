@@ -13,6 +13,7 @@ import { ELEVATED_CARD, ELEVATED_FLOAT } from "./elevated";
 import { uploadDraftImage } from "@/lib/composer-uploads";
 import { intakeFilesWithNotice } from "@/lib/attach-notice";
 import { activeLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { imeComposing, sendKeyLabel, sendsMessage, useSendKey } from "@/lib/send-key";
 import { alternateSend, alternateSendLabel, useFollowUpDefault } from "@/lib/follow-up"; import { followUpChoices, resolveFollowUp, type FollowUp } from "../../shared/follow-up";
@@ -99,6 +100,7 @@ import {
   type ComposerSlashCommand,
 } from "@/lib/composer-commands";
 import { useSlashSkills } from "@/lib/use-slash-skills";
+import { useMentionTools } from "@/lib/use-mention-tools";
 import { randomUuid } from "@/lib/random-uuid";
 
 const supportsAgents = (instances: InstanceInfo[], candidate?: Bot) =>
@@ -331,6 +333,7 @@ export function Composer({
   const commandPickerOpen = commandCandidates.length > 0;
 
   const mention = mentionQueryAt(text, caret); const teammates = useTeammates(); const viewer = useViewerEmail();
+  const mentionTools = useMentionTools(group ? undefined : bot, Boolean(mention) && mention?.start !== dismissedAt);
   const candidates = useMemo(() => {
     if (!mention || mention.start === dismissedAt) return [];
     const pool: MentionChoice[] = group
@@ -341,8 +344,8 @@ export function Composer({
       : bots
           .filter((member) => member.id !== bot?.id && !member.hidden && !hiddenFromSidebar(member, viewer))
           .map((member) => ({ id: member.id, name: member.name, bot: member }));
-    return mentionChoicesForQuery([...pool, ...teammateChoices(teammates.people), DEVS_CHOICE], mention.query);
-  }, [mention, dismissedAt, bots, bot?.id, group, members, teammates, viewer]);
+    return mentionChoicesForQuery([...pool, ...(group ? [] : mentionTools), ...teammateChoices(teammates.people), DEVS_CHOICE], mention.query);
+  }, [mention, dismissedAt, bots, bot?.id, group, members, teammates, viewer, mentionTools]);
   const mentionEveryoneCount = (members ?? []).filter((member) => !member.hidden).length;
   const mentionPickerOpen = candidates.length > 0;
   const commandMotion = useMenuMotion(commandPickerOpen);
@@ -712,6 +715,7 @@ export function Composer({
       {simpleDock && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} goal={goal} teach={canLearn ? teachTask : undefined} />}
       {advanced && <button
         type="button"
+        data-ui={ui("composer.attach")}
         onClick={() => fileInput.current?.click()}
         aria-label={t("composer.attach")}
         title={t("composer.attach")}
@@ -866,7 +870,7 @@ export function Composer({
           wrapperClassName={card ? "col-span-2 mb-2" : undefined}
           inputRef={inputRef}
           maxRows={card ? 8 : 6}
-          peers={[...(group ? members ?? [] : bots.filter((member) => member.id !== bot?.id)), ...teammates.peers]}
+          peers={[...(group ? members ?? [] : bots.filter((member) => member.id !== bot?.id)), ...(group ? [] : mentionTools.map(({ name }) => ({ name }))), ...teammates.peers]}
           everyone={Boolean(group && !group.dm)}
           dir="auto"
           rows={1}

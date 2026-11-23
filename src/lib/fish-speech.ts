@@ -3,8 +3,8 @@
 import { api, ApiError } from "@/state/api";
 import { t } from "./i18n";
 
-/** `maxMs`: the longest one manual recording runs before it is heard; call turns keep their own cap. */
-type StartOptions = { endpointMs?: number; maxMs?: number };
+/** `maxMs`: the longest one manual recording runs before it is heard; call turns keep their own cap. `locale`: the language the person speaks; unset follows the conversation. */
+type StartOptions = { endpointMs?: number; maxMs?: number; locale?: string };
 export type SpeechBridge = Required<
   Pick<NonNullable<Window["ogb"]>, "speechStop" | "speechFinish" | "onSpeechTranscript" | "onSpeechEnd">
 > & { speechStart(options?: StartOptions): Promise<void> };
@@ -104,7 +104,7 @@ type Mic = { stream: MediaStream; context: AudioContext; source: MediaStreamAudi
 type Session =
   | { phase: "idle" }
   | { phase: "opening" }
-  | { phase: "listening"; mic: Mic; clip: ReturnType<typeof createClip> }
+  | { phase: "listening"; mic: Mic; clip: ReturnType<typeof createClip>; locale?: string }
   | { phase: "transcribing"; abort: AbortController };
 
 const transcriptListeners = new Set<(line: Line) => void>();
@@ -139,12 +139,12 @@ function micFailure(error: unknown): End {
   return { code: 1, reason: "microphone-failed" };
 }
 
-async function upload(gen: number, frames: Float32Array[], abort: AbortController) {
+async function upload(gen: number, frames: Float32Array[], abort: AbortController, locale?: string) {
   try {
     const { text } = await api<{ text?: string }>("/api/tts/transcribe", {
       method: "POST",
       body: encodeWav(frames),
-      headers: { "content-type": "audio/wav" },
+      headers: { "content-type": "audio/wav", ...(locale ? { "x-speech-language": locale } : {}) },
       signal: abort.signal,
       timeoutMs: UPLOAD_TIMEOUT_MS,
     });
@@ -162,7 +162,7 @@ async function upload(gen: number, frames: Float32Array[], abort: AbortControlle
 
 function finishCapture(gen: number) {
   if (gen !== generation || session.phase !== "listening") return;
-  const { mic, clip } = session;
+  const { mic, clip, locale } = session;
   release(mic);
   if (!clip.spoke) {
     session = { phase: "idle" };
@@ -170,7 +170,7 @@ function finishCapture(gen: number) {
   }
   const abort = new AbortController();
   session = { phase: "transcribing", abort };
-  void upload(gen, clip.frames(), abort);
+  void upload(gen, clip.frames(), abort, locale);
 }
 
 export const fishSpeech: SpeechBridge = {
@@ -212,7 +212,7 @@ export const fishSpeech: SpeechBridge = {
     mic.source.connect(mic.processor);
     mic.processor.connect(mic.context.destination);
     void mic.context.resume().catch(() => {});
-    session = { phase: "listening", mic, clip };
+    session = { phase: "listening", mic, clip, locale: options?.locale };
   },
   async speechStop() {
     teardown();

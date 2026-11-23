@@ -14,7 +14,7 @@ const localOrigin = require("./local-origin.cjs");
 
 const POPUP = "whats-new-2026-11", TEAMS = "teams-2026-11", GROK = "grok-move-2026-11";
 const NOON = new Date(2026, 9, 16, 12).getTime();
-const LOCAL = "http://127.0.0.1:18799", CLOUD = "https://omb-u-1.fly.dev", VPS = "https://bots.example.test";
+const LOCAL = "http://127.0.0.1:18799", CLOUD = "https://seira-u-1.fly.dev", VPS = "https://bots.example.test";
 
 test("a page on an older release keeps working with the longer list: its own ids record as before, and it never reads the new one", () => {
   let saved = { seen: [POPUP, GROK, "gone-notice"] };
@@ -213,7 +213,7 @@ test("the app language picked on any page of the window is the one every page re
 });
 
 test("main's own words read this desktop's record from its userData folder, and follow the system's language until a pick", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "omb-desktop-text-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "seira-desktop-text-"));
   try {
     const app = { getPath: name => (name === "userData" ? dir : "/elsewhere"), isReady: () => true, getLocale: () => "pt-BR" };
     const text = createDesktopText(app);
@@ -258,7 +258,7 @@ function preload(origin, { activation = false, saved = null, language = null } =
   let bridge;
   const invoked = [], synced = [], sent = [], heard = new Map();
   vm.runInNewContext(PRELOAD, {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`, "--omb-company-desktop=1"] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL}`, "--seira-company-desktop=1"] },
     location: { origin }, navigator: { userActivation: { isActive: activation } }, TextEncoder, localStorage: { getItem: () => null },
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
       ipcRenderer: { on(channel, handler) { heard.set(channel, handler); }, removeListener() {}, send(...args) { sent.push(args); },
@@ -273,7 +273,7 @@ test("the preload gives every page of the window the notices and the switch's st
     const page = preload(origin, { saved: false });
     assert.equal(typeof page.bridge.desktopNotices.state, "function", origin);
     assert.equal(page.bridge.cloudAccount, undefined, origin);
-    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-"));
+    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-") && !channel.startsWith("desktop-crash-reports:"));
     assert.deepEqual(asked(), [], "nothing is asked until analytics asks");
     assert.equal(page.bridge.desktopAnalytics.enabled(), false, "turned off on this desktop");
     assert.deepEqual(asked(), ["desktop-analytics:read"]);
@@ -284,16 +284,16 @@ test("the preload gives every page of the window the notices and the switch's st
   }
   const local = preload(LOCAL, { activation: true, saved: false });
   assert.equal(typeof local.bridge.desktopNotices.state, "function");
-  assert.deepEqual(local.synced, [], "nothing is asked until analytics asks");
+  assert.deepEqual(local.synced.filter(c => c !== "desktop-crash-reports:read"), [], "nothing is asked until analytics asks");
   assert.equal(local.bridge.desktopAnalytics.enabled(), false, "answered at once, before anything loads");
   assert.equal(local.bridge.desktopAnalytics.enabled(), false);
-  assert.deepEqual(local.synced, ["desktop-analytics:read"], "asked once a page");
+  assert.deepEqual(local.synced.filter(c => c !== "desktop-crash-reports:read"), ["desktop-analytics:read"], "asked once a page");
   await local.bridge.desktopAnalytics.set(true);
   assert.equal(local.bridge.desktopAnalytics.enabled(), true);
   assert.deepEqual(local.invoked, [["desktop-analytics:set", true]]);
   const unsaved = preload(LOCAL);
   for (let i = 0; i < 3; i++) assert.equal(unsaved.bridge.desktopAnalytics.enabled(), null);
-  assert.deepEqual(unsaved.synced, ["desktop-analytics:read"], "no choice saved yet is asked once too");
+  assert.deepEqual(unsaved.synced.filter(c => c !== "desktop-crash-reports:read"), ["desktop-analytics:read"], "no choice saved yet is asked once too");
   assert.equal(preload(LOCAL, { saved: "off" }).bridge.desktopAnalytics.enabled(), null);
   const safe = PRELOAD.match(/const REMOTE_SAFE = new Set\(\[([^\]]*)\]\)/)[1];
   assert.ok(safe.includes('"desktopNotices"')); assert.ok(safe.includes('"desktopAnalytics"'));
@@ -303,7 +303,7 @@ test("the preload gives every page of the window the app language this computer 
   for (const origin of [LOCAL, CLOUD, VPS]) {
     const page = preload(origin, { language: "de" });
     assert.deepEqual(Object.keys(page.bridge.desktopLanguage), ["choice", "set", "onChange", "shown"], origin);
-    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-"));
+    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-") && !channel.startsWith("desktop-crash-reports:"));
     assert.deepEqual(asked(), [], "nothing is asked until the language is");
     assert.equal(page.bridge.desktopLanguage.choice(), "de", origin);
     assert.equal(page.bridge.desktopLanguage.choice(), "de");
@@ -347,7 +347,7 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
   const context = vm.createContext({
     registerDesktopPrefs: value => { options = value; }, jsonFile: file => ({ read: () => file, write: () => {} }), ipcMain: {}, updatesConsent: null, cloudAccount: "the client",
     nativeText: { prefs: { kept: true }, set: code => { calls.push(["language", code]); return code === "pt-br"; }, follow: code => { calls.push(["shown", code]); return code === "de"; } }, applyNativeLanguage: () => calls.push("relabel"), talk: { relabel: () => calls.push("talk relabel") },
-    path: { join: (...parts) => parts.join("/") }, app: { getPath: () => "/user-data" }, desktopDataDir: () => "/home/.openmausbot",
+    path: { join: (...parts) => parts.join("/") }, app: { getPath: () => "/user-data" }, desktopDataDir: () => "/home/.seira",
     navigateMainWindow: async url => { calls.push(["navigate", url]); return loads; },
     senderIsLocal: localOrigin.isLocalSender, workspaceSenderAllowed: environments.workspaceSenderAllowed,
     mainWindow: { webContents: contents }, environmentsState: { environments: [{ id: "vps", name: "VPS", origin: VPS }], activeId: "vps" },
@@ -356,13 +356,15 @@ test("production wiring: main answers this computer's page, My Cloud's own page 
     cloudPageAsking: event => event.verifiedCloud ? "cloud" : null,
     serverReady: true, LOCAL_ID: "local", switchEnvironment: id => switched(id),
     process: { platform: "win32" }, windowFrameMade: false, broadcastDesktopCapabilities: async () => { broadcasts++; },
+    textSize: { current: () => 1, set: step => step },
     // main's own: a failed switch shows its dialog and resolves.
     workspaceMenuAction: async action => { try { await action(); } catch { calls.push("dialog"); } },
   });
   vm.runInContext(main.slice(start, end), context);
   assert.equal(options.prefs, context.nativeText.prefs, "the record main read before the tray and the startup screen");
+  assert.equal(options.textSize, context.textSize, "the text size the View menu moves too");
   assert.match(main, /const nativeText = createDesktopText\(app\), nativeT = nativeText\.t;/);
-  assert.equal(options.localConfig(), "/home/.openmausbot/config.json", "This computer's own workspace, whichever server the window shows");
+  assert.equal(options.localConfig(), "/home/.seira/config.json", "This computer's own workspace, whichever server the window shows");
   assert.deepEqual([options.frame.made(), options.frame.restarts], [false, true], "Windows: the frame its window was made with, until a restart");
   options.frame.changed();
   assert.equal(broadcasts, 1, "the pages hear the frame change");
@@ -419,9 +421,9 @@ test("the talk shortcut is on with ⌃⌥Space until changed, and the choice sur
 test("each server keeps its own Quick asks chat; nothing malformed is read back", () => {
   let saved = null;
   const prefs = createDesktopPrefs({ read: () => saved, write: value => { saved = structuredClone(value); } });
-  prefs.setQuickAsksChat("/Users/a/.openmausbot", { botId: "bot-1", threadId: "t-1" });
-  assert.deepEqual(createDesktopPrefs({ read: () => saved, write: () => {} }).quickAsksChat("/Users/a/.openmausbot"), { botId: "bot-1", threadId: "t-1" });
-  assert.equal(prefs.quickAsksChat("/Users/a/.openmausbot-aprs"), null);
+  prefs.setQuickAsksChat("/Users/a/.seira", { botId: "bot-1", threadId: "t-1" });
+  assert.deepEqual(createDesktopPrefs({ read: () => saved, write: () => {} }).quickAsksChat("/Users/a/.seira"), { botId: "bot-1", threadId: "t-1" });
+  assert.equal(prefs.quickAsksChat("/Users/a/.seira-aprs"), null);
   const broken = createDesktopPrefs({ read: () => ({ quickAsks: { a: { botId: "../x", threadId: "t" }, b: "t-1", c: { botId: "b", threadId: "t", extra: 1 } } }), write: () => {} });
   assert.equal(broken.quickAsksChat("a"), null);
   assert.equal(broken.quickAsksChat("b"), null);
@@ -467,4 +469,40 @@ test("Settings reads and changes the window's frame on any page of the window; o
   assert.deepEqual(await handlers.get("window-frame:set")({}, false), { on: false, restart: false }, "no window yet");
   asking = null;
   assert.throws(() => handlers.get("window-frame:set")({}, true), /only available in this app's window/);
+});
+
+test("AC-04, AC-05: crash reports default on without a record, stay off when the record cannot be read, and keep a saved choice", () => {
+  const missing = Object.assign(new Error("none"), { code: "ENOENT" });
+  assert.equal(createDesktopPrefs({ read: () => { throw missing; }, write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => ({}), write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => { throw new SyntaxError("bad json"); }, write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => "text", write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: false }), write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: "yes" }), write() {} }).crashReports(), true, "a value that is not a boolean is ignored");
+});
+
+test("AC-08, AC-10: the crash report choice is saved with the other choices and survives a restart", () => {
+  let saved = { seen: [POPUP], analytics: true };
+  const prefs = createDesktopPrefs({ read: () => saved, write: (value) => { saved = structuredClone(value); } });
+  prefs.setCrashReports(false);
+  assert.equal(saved.crashReports, false);
+  assert.deepEqual(saved.seen, [POPUP], "the other choices stay");
+  assert.equal(createDesktopPrefs({ read: () => saved, write() {} }).crashReports(), false);
+  prefs.setCrashReports(true);
+  assert.equal(saved.crashReports, true);
+  prefs.setCrashReports("x");
+  assert.equal(saved.crashReports, false, "only true turns it on");
+});
+
+test("AC-12: Glance is on until the person turns it off, and the choice survives a restart", () => {
+  let saved = { seen: [POPUP] };
+  const prefs = createDesktopPrefs({ read: () => saved, write: (value) => { saved = structuredClone(value); } });
+  assert.equal(prefs.glanceHidden(), false);
+  prefs.setGlanceHidden(true);
+  assert.equal(saved.glanceHidden, true);
+  assert.deepEqual(saved.seen, [POPUP], "the other choices stay");
+  assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).glanceHidden(), true);
+  prefs.setGlanceHidden(false);
+  assert.equal(createDesktopPrefs({ read: () => saved, write: () => {} }).glanceHidden(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ glanceHidden: "yes" }), write() {} }).glanceHidden(), false, "a value that is not a boolean is ignored");
 });

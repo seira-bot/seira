@@ -1,4 +1,4 @@
-// Pins the bytes of OpenMausBot's own prompt text a turn carries: the fixed sections of a bot's system prompt, what a
+// Pins the bytes of Seira's own prompt text a turn carries: the fixed sections of a bot's system prompt, what a
 // Claude turn appends with --append-system-prompt-file, and what a Codex turn sets as developer instructions. Each may
 // move at most 2% either way (lower a number to lock in a win); a bigger change moves its baseline by hand.
 import { describe, expect, it } from "vitest";
@@ -31,7 +31,7 @@ function directChatParts(setup: boolean): PromptPart[] {
   ];
 }
 
-const KINDS: ComputerPromptKind[] = ["vm-private", "vm-shared", "box", "vps", "local"];
+const KINDS: ComputerPromptKind[] = ["vm-private", "vm-shared", "vps", "local"];
 
 async function measured(): Promise<Record<string, number>> {
   const bytes = (text: string) => Buffer.byteLength(text, "utf8");
@@ -62,33 +62,33 @@ async function measured(): Promise<Record<string, number>> {
   };
 }
 
-/** Bytes when the budget was last set. The direct chat's stable half now also carries "computer-selection", and a bot's
+/** Bytes when the budget was last set. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
-  "reply-habits": 2046,
+  "reply-habits": 2282,
   "tool-bridge": 587,
   "sign-in": 2546,
   "chief-of-staff": 4850,
   "memory-rules": 2048,
   "setup": 2396,
-  "meetings": 294,
+  "meetings": 224,
   "computer-selection": 1263,
-  "credential": 895,
-  "routine": 2624,
-  "profile": 931,
+  "credential": 1035,
+  "routine": 2838,
+  "profile": 1097,
   "team-memory": 286,
+  // Every computer:* prompt carries 536 bytes on purpose: the free-form memory text.
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.
-  "computer:vm-private": 5559,
-  "computer:vm-shared": 5554,
-  "computer:box": 4028,
-  "computer:vps": 4672,
-  "computer:local": 4969,
-  "claude:direct-chat": 8377,
-  "claude:setup-chat": 10773,
+  "computer:vm-private": 6095,
+  "computer:vm-shared": 6090,
+  "computer:vps": 5166,
+  "computer:local": 5505,
+  "claude:direct-chat": 9023,
+  "claude:setup-chat": 11418,
   "claude:volatile-note": 178,
-  "codex:direct-chat": 8377,
-  "codex:setup-chat": 10773,
+  "codex:direct-chat": 9023,
+  "codex:setup-chat": 11418,
   "codex:resumed-instructions": 207,
   "codex:volatile-note": 91,
 };

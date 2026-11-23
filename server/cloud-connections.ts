@@ -34,14 +34,14 @@ export interface ConnectionListing {
   for?: string[];
   /** A sign-in that refreshes itself (an MCP server's own account): it moves, and this computer then forgets it. */
   signIn?: true;
-  /** Connected apps: OpenMausBot's service or the person's own Composio project, the account in a digest equal on two
+  /** Connected apps: Seira's service or the person's own Composio project, the account in a digest equal on two
    * servers exactly when they reach the same apps, and the service's installation a code is minted for. */
   mode?: ComposioIdentity["mode"];
   account?: string;
   installationId?: string;
 }
 
-/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, Boat, X
+/** What the person's own Cloud has a key for, when the key is theirs; keys for what a Cloud includes (voice, X
  * research, the decider) are not listed, since the person's own key would replace what it includes. An Anthropic key
  * goes for "Claude (API key)" alone: there it never takes over Claude bots that sign in with a Claude account. */
 interface Provider { id: string; label: string; for: string[]; config(cfg: AppConfig): Partial<AppConfig> | null }

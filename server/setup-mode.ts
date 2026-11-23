@@ -53,6 +53,7 @@ export function connectedAppsForSetup(input: {
 }
 
 const NO_APP = "so you cannot connect an app such as Gmail yourself. If the job needs one,";
+export const APPS_OFF_CLAUSE = ` Connected apps are switched off for you, ${NO_APP} ask the user to turn on Connected apps in your settings under Access, then tell you to go on; you can start the connection after that.`;
 const KEY_PLACE = "Composio project key in Settings → AI → Other services";
 
 function connectedAppsClause(apps: SetupConnectedApps): string {
@@ -62,7 +63,7 @@ function connectedAppsClause(apps: SetupConnectedApps): string {
     case "off":
       return apps.noTools
         ? ` You have no connected-app tools, ${NO_APP} ask the user to open your settings → Access → Connected apps, turn it on, connect the app with Connect an app…, and give you its tools.`
-        : ` Connected apps are switched off for you, ${NO_APP} ask the user to turn on Connected apps in your settings under Access, then tell you to go on; you can start the connection after that.`;
+        : APPS_OFF_CLAUSE;
     case "not-configured":
       if (apps.host === "cloud") return ` Connected apps come with their Seira Cloud plan but are not answering right now, ${NO_APP} say so in one sentence and suggest trying again in a few minutes.`;
       if (apps.host === "desktop") return ` Connected apps are not answering right now, ${NO_APP} say so in one sentence: restarting Seira usually brings them back, or they can add their own ${KEY_PLACE}.`;

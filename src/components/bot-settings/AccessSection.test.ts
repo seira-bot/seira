@@ -231,10 +231,10 @@ describe("AccessSection Works on", () => {
     expect(html).toContain("Cloud desktop");
     expect(html).toMatch(/aria-pressed="true"[^>]*>.*?Auto/);
 
-    fixture.config = { box: { configured: true } } as Partial<ConfigStatus>;
     const chosen = draft(makeBot({ computer: "cloud" }));
     expect(chosen.html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>(?:(?!<\/button>).)*?Cloud desktop/);
-    expect(chosen.html).toContain("Cloud backend");
+    expect(chosen.html).not.toContain("Cloud backend");
+    expect(chosen.html).not.toContain("Boat");
 
     const picker = nodes(chosen.tree).find((node) => (node.type as { name?: string }).name === "DraftWorksOn")!;
     let rendered: ReactNode = null;
@@ -253,7 +253,7 @@ describe("AccessSection Works on", () => {
   });
 
   it("says on a selectable tile of a bot not made yet what stands in its way, with no name to borrow", () => {
-    fixture.config = { box: { configured: true } } as Partial<ConfigStatus>;
+    fixture.config = {} as Partial<ConfigStatus>;
     fixture.instances = [{ instanceId: "local", capabilities: { computerMcp: true } }];
     fixture.capabilities.host = { homeDir: undefined, platform: "darwin" };
     let tree!: ReturnType<typeof AccessSection>;
@@ -285,10 +285,11 @@ describe("AccessSection Works on", () => {
     expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>(?:(?!<\/button>).)*?Auto/);
   });
 
-  it("hides the Boat or VPS choice on My Cloud, whose cloud computers are the plan's", () => {
-    expect(render(makeBot())).toContain("Cloud backend");
+  it("has no backend choice and no Boat anywhere, with or without My Cloud", () => {
+    expect(render(makeBot({ computer: "cloud" }))).not.toContain("Cloud backend");
+    expect(render(makeBot({ computer: "cloud" }))).not.toContain("Boat");
     fixture.config = { cloudHome: true } as Partial<ConfigStatus>;
-    expect(render(makeBot())).not.toContain("Cloud backend");
+    expect(render(makeBot({ computer: "cloud" }))).not.toContain("Cloud backend");
     expect(render(makeBot({ computer: "cloud" }))).not.toContain("Boat");
   });
 });
@@ -363,12 +364,10 @@ describe("a VPS bot's own server", () => {
     expect(saved).toContain("Server (SSH alias)");
     expect(saved).toContain("Leave empty to use production-vps from Settings → AI → Other services.");
     expect(saved).toContain('value="alpha-vps"');
-    expect(render(makeBot({ computer: "cloud", cloudBackend: "box" }))).not.toContain("Server (SSH alias)");
     const { BotEditorContext } = await import("./BotEditorContext");
     const { api } = await import("@/state/store");
     const drafted = renderToStaticMarkup(createElement(StoreProvider, null,
       createElement(BotEditorContext.Provider, { value: { request: api, draft: true } }, createElement(AccessSection, { bot: vpsBot, derived: makeDerived() }))));
-    expect(drafted).toContain("Self-hosted VPS");
     expect(drafted).not.toContain("Server (SSH alias)");
   });
 });
@@ -446,7 +445,7 @@ describe("working folder note", () => {
   const inFolder = (cwd: string | null, botCwd?: string) => makeBot({ ...(botCwd ? { cwd: botCwd } : {}), tasks: [{ threadId: "thread-1", cwd }] as unknown as Bot["tasks"] });
 
   it("calls a thread pinned only to a folder chosen for it, or to an earlier working folder, never to its own folder", () => {
-    for (const own of ["/data/.openmausbot/task-workspaces/bot-1/thread-1", "C:\\Users\\Ada\\.openmausbot\\task-workspaces\\bot-1\\thread-1"]) {
+    for (const own of ["/data/.seira/task-workspaces/bot-1/thread-1", "C:\\Users\\Ada\\.seira\\task-workspaces\\bot-1\\thread-1"]) {
       expect(folderCard(inFolder(own, "/projects/site"))).not.toContain("This task is pinned");
       expect(folderCard(inFolder(own))).not.toContain("This task is pinned");
     }

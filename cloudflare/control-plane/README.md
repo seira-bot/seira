@@ -1,4 +1,4 @@
-# OpenMausBot control plane
+# Seira control plane
 
 This directory is an isolated Cloudflare Worker for cloud account identity,
 installation ownership, and per-installation managed companion endpoints. It
@@ -13,7 +13,7 @@ tool output.
   messages. Authentication responses remain generic even when delivery fails;
   email addresses, OTPs, secrets, and provider errors are never logged.
 - Owner-scoped desktop installations and independently revocable
-  `omb_install_…` credentials. Account bearer tokens are never accepted as
+  `seira_install_…` credentials. Account bearer tokens are never accepted as
   installation credentials, or vice versa.
 - Exact-origin CORS, bounded JSON bodies, redacted errors, and `no-store` on
   every response.
@@ -61,7 +61,7 @@ still reads those tables.
 | Method | Path | Authentication |
 | --- | --- | --- |
 | `GET` | `/healthz` | none |
-| any | `/api/auth/*` | Better Auth |
+| any | `/api/auth/*` | Better Auth (`404` in Seira Cloud mode) |
 | `GET` | `/v1/me` | account bearer |
 | `GET`, `POST` | `/v1/installations` | account bearer |
 | `POST` | `/v1/installations/:id/credentials/rotate` | owning account bearer |
@@ -92,7 +92,7 @@ requests cannot both return credentials while one invalidates the other.
 
 ### Managed endpoint contract
 
-All three endpoint methods require `Authorization: Bearer <omb_install_…>`.
+All three endpoint methods require `Authorization: Bearer <seira_install_…>`.
 Account bearer tokens are rejected.
 
 - `GET` returns `{ "endpoint": null }` before allocation or after deletion.
@@ -113,7 +113,7 @@ Account bearer tokens are rejected.
   recoverable from GET or D1. After an idle reclaim the same call allocates a
   new tunnel behind the **same hostname**, so a paired phone keeps its
   address; it may also take back an endpoint whose reclaim is still pending.
-  The desktop app (Remote access on) and `openmausbot serve --tunnel` ask
+  The desktop app (Remote access on) and `seira serve --tunnel` ask
   `GET` every 15 minutes, even while their connector reports ready, and make
   this call when the endpoint is gone or in `error`; a `401` from `GET` (the
   90-day installation credential expired) sends them through account
@@ -167,7 +167,7 @@ Revoking an installation first revokes its local installation credentials, then
 schedules best-effort endpoint cleanup. Cloud cleanup failure cannot restore or
 delay credential revocation. Repeating the owner-scoped installation DELETE is
 safe and retries retained cleanup state. A five-minute cron also processes at
-most `OMB_CLEANUP_SWEEP_LIMIT` (code default 20, which `wrangler.jsonc` ships;
+most `SEIRA_CLEANUP_SWEEP_LIMIT` (code default 20, which `wrangler.jsonc` ships;
 it needs Workers Paid, whose per-invocation subrequest and D1 limits the
 default relies on) expired-lease rows per run when
 they are already deleting, belong to a revoked installation, or outlive a
@@ -248,7 +248,7 @@ shape.
   `send`.
 
 `collapseId` is the identifier the phone gives the notification the live
-stream would have posted (`openmaus.<threadId>.<seq>`), so a push and that
+stream would have posted (`seira.<threadId>.<seq>`), so a push and that
 notification replace each other instead of showing twice. Without one, the
 Worker uses the first 32 hex characters of SHA-256(`kind:threadId`).
 
@@ -257,12 +257,12 @@ Worker uses the first 32 hex characters of SHA-256(`kind:threadId`).
 alert`, `apns-priority: 10`, a 24-hour `apns-expiration`, `apns-topic` set to
 the bundle id, and `apns-collapse-id`. The payload is
 `{ "aps": { "alert": { "title" }, "sound": "default", "thread-id", "category",
-"interruption-level" }, "omb": { "v": 1, "kind", "botId", "botName",
-"threadId", "roomId"?, "roomName"?, "requestId"?, "pairing"? }, "body": <the same as omb> }`.
+"interruption-level" }, "seira": { "v": 1, "kind", "botId", "botName",
+"threadId", "roomId"?, "roomName"?, "requestId"?, "pairing"? }, "body": <the same as seira> }`.
 `category` is the app's `OPENMAUS_APPROVAL`, `OPENMAUS_QUESTION` or
 `OPENMAUS_UPDATE`, so the notification carries the app's buttons.
 `interruption-level` is `time-sensitive` for `approval`, `question`,
-`sign-in` and `mention`, else `active`. `body` repeats `omb` because the
+`sign-in` and `mention`, else `active`. `body` repeats `seira` because the
 phone's notification library hands the app only `body` as a remote
 notification's data.
 
@@ -285,7 +285,7 @@ end), and for a start only "attributes-type": "LiveActivityAttributes",
 remotely, "alert": { "title": <headline>, "body": <bot name>, "sound" } } }`.
 An update or an end never carries an alert. `BotActivity` and `LiveActivityAttributes` are the
 names the phone app's Live Activity is registered under (expo-widgets). For an
-FCM token: a data-only message `{ "omb_kind": "activity", "event", "bot_id",
+FCM token: a data-only message `{ "seira_kind": "activity", "event", "bot_id",
 "bot_name", "kind", "headline", "since", "link", "sent_at" }`, priority
 `HIGH` when the bot needs the person or the activity ends, else `NORMAL`.
 
@@ -296,7 +296,7 @@ cached per isolate until five minutes before it expires. Then
 `POST https://fcm.googleapis.com/v1/projects/<project_id>/messages:send` with
 a data-only message the phone's notification library presents itself:
 `{ "message": { "token", "data": { "title", "tag": <collapse id>,
-"channelId", "categoryId", "threadIdentifier": <threadId>, "body": <omb as
+"channelId", "categoryId", "threadIdentifier": <threadId>, "body": <seira as
 JSON> }, "android": { "priority": "HIGH", "ttl": "86400s" } } }`. There is no
 `message` key, so the notification shows its title and nothing else.
 `channelId` is the app's `approval_question` for approvals, questions and
@@ -355,7 +355,7 @@ A failure in one account is logged and never stops the others:
    - `inactive` (never ran), with no activation time, created at least two
      days ago; or
    - `down` with its last connection ended at least
-     `OMB_TUNNEL_OFFLINE_RECLAIM_DAYS` (default 21, minimum 1) days ago and no
+     `SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS` (default 21, minimum 1) days ago and no
      later activation.
 
    `healthy` and `degraded` tunnels, any reported connection, an unknown
@@ -389,11 +389,11 @@ A failure in one account is logged and never stops the others:
    emits `"alert": "managed_endpoint_pool_capacity"`: once an account fills it
    reports `full` for good, so page on the pool alert instead.
 
-`OMB_TUNNEL_RECLAIM` is `observe` unless set to `on` (an unset or invalid value
+`SEIRA_TUNNEL_RECLAIM` is `observe` unless set to `on` (an unset or invalid value
 observes): it logs `idle`/`eligible` counts without marking anything. Deploy in
 `observe`, check one full scan cycle of real counts, then set it to `on`.
 
-`OMB_TUNNEL_LIMIT` and `OMB_DNS_RECORD_LIMIT` (default 1000 each) are the
+`SEIRA_TUNNEL_LIMIT` and `SEIRA_DNS_RECORD_LIMIT` (default 1000 each) are the
 primary account's tunnel quota and its zone's DNS record quota; extra accounts
 carry their own. The limits drive the alerts and `/healthz`, rank accounts for
 new endpoints, and decide whether a tunnel-creation `429` is the quota. They
@@ -402,8 +402,8 @@ to Cloudflare's real quotas and raise them when Cloudflare raises a quota (a
 limit below the real quota turns a genuine rate limit at that count into a
 ten-minute capacity gate for that account and, with several accounts, makes
 the account look full, so new endpoints go elsewhere while it still has
-room). `wrangler.jsonc` sets `OMB_DNS_RECORD_LIMIT` to 3500 because the
-`openmausbot.com` zone is on Pro.
+room). `wrangler.jsonc` sets `SEIRA_DNS_RECORD_LIMIT` to 3500 because the
+`seira.bot` zone is on Pro.
 
 `GET /healthz` keeps `ok` and `service` unchanged (desktops gate hosted sign-in
 on them; a full quota must not hide sign-in or recovery) and adds a
@@ -438,7 +438,7 @@ ID):
   "reclaim": { "mode": "on", "pending": 12 },
   "accounts": [
     {
-      "hostSuffix": "openmausbot.com",
+      "hostSuffix": "seira.bot",
       "newEndpoints": true,
       "status": "full",
       "checkedAt": 1790000060000,
@@ -448,7 +448,7 @@ ID):
       "reclaimPending": 12
     },
     {
-      "hostSuffix": "mausbot.si",
+      "hostSuffix": "si.seira.bot",
       "newEndpoints": true,
       "status": "ok",
       "checkedAt": 1790000000000,
@@ -478,8 +478,8 @@ trail D1 by that long; allocation gating always reads D1.
 ### Several Cloudflare accounts
 
 The account configured by `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`,
-`COMPANION_HOST_SUFFIX`, the `CLOUDFLARE_API_TOKEN` secret, `OMB_TUNNEL_LIMIT`,
-and `OMB_DNS_RECORD_LIMIT` is the primary. Without `CLOUDFLARE_ENDPOINT_ACCOUNTS`
+`COMPANION_HOST_SUFFIX`, the `CLOUDFLARE_API_TOKEN` secret, `SEIRA_TUNNEL_LIMIT`,
+and `SEIRA_DNS_RECORD_LIMIT` is the primary. Without `CLOUDFLARE_ENDPOINT_ACCOUNTS`
 it is the only account, and endpoints behave exactly as described above.
 
 `CLOUDFLARE_ENDPOINT_ACCOUNTS` adds up to three more accounts. It is a JSON
@@ -492,9 +492,9 @@ repository:
 [
   {
     "accountId": "<32-hex Cloudflare account ID>",
-    "zoneId": "<32-hex zone ID of mausbot.si in that account>",
-    "companionHostSuffix": "mausbot.si",
-    "apiTokenSecret": "CLOUDFLARE_API_TOKEN_MAUSBOT_SI",
+    "zoneId": "<32-hex zone ID of si.seira.bot in that account>",
+    "companionHostSuffix": "si.seira.bot",
+    "apiTokenSecret": "CLOUDFLARE_API_TOKEN_SEIRA_SI",
     "tunnelLimit": 1000,
     "dnsRecordLimit": 200,
     "minAppVersion": "0.1.104"
@@ -595,9 +595,9 @@ Cloudflare. Every such refusal, with one account too, logs
 and `errorCode`; only an operator can fix the token.
 
 **Why `minAppVersion`.** Desktop releases up to 0.1.103 accept only
-`openmausbot.com` names for **Remote computer → Desktop companion** pairing
+`seira.bot` names for **Remote computer → Desktop companion** pairing
 (phones, pairing links, and Tailscale have no domain rule). The desktop app
-accepts `mausbot.si` from the release that ships this change, and from the
+accepts `si.seira.bot` from the release that ships this change, and from the
 same release it reports its version with every endpoint request; older apps
 are judged by the version they registered with. Set `minAppVersion` to that
 release so a computer on an older release keeps an address every desktop can
@@ -626,9 +626,9 @@ Tailscale still work).
    Cloudflare Tunnel → Edit and Zone → DNS → Edit. Before relying on it, you
    can prove it may write: with the token, create a tunnel
    (`POST accounts/<account id>/cfd_tunnel` with
-   `{"name": "omb-token-check", "config_src": "cloudflare"}`) and a TXT record
+   `{"name": "seira-token-check", "config_src": "cloudflare"}`) and a TXT record
    in the zone, then delete both.
-5. `wrangler secret put CLOUDFLARE_API_TOKEN_MAUSBOT_SI` (or the name you
+5. `wrangler secret put CLOUDFLARE_API_TOKEN_SEIRA_SI` (or the name you
    chose). Never put a token in `vars`, `.dev.vars.example`, logs, or CI output.
 6. Set `CLOUDFLARE_ENDPOINT_ACCOUNTS` with `dnsRecordLimit` equal to the
    zone's real quota and `minAppVersion` as above. Add the token's secret name
@@ -652,7 +652,7 @@ Tailscale still work).
 **Raising a zone's record quota.** After moving a zone to a plan with more
 DNS records (Free zones added since September 2024 allow 200, Pro 3,500),
 confirm the new quota with `GET zones/<zone id>/dns_records/usage`
-(`record_quota`), set the account's limit to it (`OMB_DNS_RECORD_LIMIT` for
+(`record_quota`), set the account's limit to it (`SEIRA_DNS_RECORD_LIMIT` for
 the primary, the entry's `dnsRecordLimit` in `CLOUDFLARE_ENDPOINT_ACCOUNTS`
 otherwise; with 3,500 records the account's 1,000 tunnels bind first), and
 deploy. Until that deploy the account looks full at its old limit and gets
@@ -661,10 +661,10 @@ no new endpoint while another account has room.
 Each account adds two Cloudflare reads to every cron run (a tunnel page and a
 DNS count), and each move two lookups in the old account. Tokens created by
 the same Cloudflare user share its 1,200 requests per five minutes. On
-Workers Free, three accounts with `OMB_CLEANUP_SWEEP_LIMIT` 3 use the whole
+Workers Free, three accounts with `SEIRA_CLEANUP_SWEEP_LIMIT` 3 use the whole
 50-subrequest budget; a fourth needs the limit at 2.
 
-### MausBot Relay
+### Seira Relay
 
 Phones reach a desktop through Seira Relay, end-to-end encrypted: the relay passes sealed bytes and can't open them
 (`companion/src/e2e/README.md`). This Worker only lets a computer onto the relay. It mints a 12-hour host token signed
@@ -696,7 +696,7 @@ old one; no identifiers) answers:
 - **Usage per day** (`migrations/0014`). `relay_daily` counts installations once per UTC day and kind: `seen` (asked
   for a token), `token` (got one), `e2e` (reported end-to-end phones), `new` (asked for the first time). It holds only
   the day, the kind and a count; `relay_adoption.first_seen_at`, `token_at` and `e2e_at` tell a request whether its
-  installation was already counted today. The stats dashboard (stats.openmausbot.com) charts it. A Worker without the
+  installation was already counted today. The stats dashboard (stats.seira.bot) charts it. A Worker without the
   migration keeps minting tokens and writing `relay_adoption`, and logs `relay_daily_schema` once per isolate.
 - **Tunnels.** From `RELAY_CAPABLE_MIN_VERSION`, a desktop at that version or later that the relay can carry (it is
   on, the computer is inside the rollout and not blocked) and that reports `legacyDevices: 0` gets `409 relay_capable`
@@ -717,7 +717,7 @@ hostname stay, so a later provisioning call returns the same address.
 | `TUNNEL_LEGACY_PHONE_CUTOFF_PERCENT` | `0` | Share of relay-served computers that give up their tunnel whatever phones are paired. Old phone apps stop connecting from outside the home network |
 | `TUNNEL_MIN_APP_VERSION` | empty | A desktop below it gets `426 update_required` and its tunnel is removed. A missing version counts as below |
 | `TUNNEL_REASON_MIN_VERSION` | empty | First desktop release that reads `tunnel` on `409 relay_capable` and keeps asking afterwards. Only from it is a full account answered with `relay_capable` |
-| `OMB_TUNNEL_RECLAIM_PREVIEW_DAYS` | empty | Dry run of idle reclaim at another offline period; counted, never acted on |
+| `SEIRA_TUNNEL_RECLAIM_PREVIEW_DAYS` | empty | Dry run of idle reclaim at another offline period; counted, never acted on |
 
 - **Proven on the relay** means: a relay token in the last two days, a phone report in the last two days with at
   least one phone on the encrypted connection and no old phone, and no old phone reported for the whole wait
@@ -741,12 +741,12 @@ hostname stay, so a later provisioning call returns the same address.
   deletes again at once, for at most two rounds, the last with `?cascade=true` (what `cloudflared tunnel delete
   --force` sends; not in the public API reference); a deleted tunnel's connector token no longer connects. Idle reclaim never does this: a tunnel that answers
   "still connected" is left, and its next attempt finds it connected and cancels.
-- **Backpressure.** A run marks at most what one cleanup sweep removes (`OMB_CLEANUP_SWEEP_LIMIT`, at most 20) minus
+- **Backpressure.** A run marks at most what one cleanup sweep removes (`SEIRA_CLEANUP_SWEEP_LIMIT`, at most 20) minus
   the rows already waiting for cleanup. While the sweep is failing or rate-limited nothing more is marked. A forced
   removal still refused as connected after its rounds does not count as waiting: it backs off (5 minutes up to 24
   hours) and retries while the sweep and the marking go on. A marked row is a final delete: its owner is answered
   `409 endpoint_busy` until the sweep has removed it.
-- **Self-hosted servers.** A server (`openmausbot serve --tunnel`, a fleet container with `OMB_INSTALLATION_CREDENTIAL`)
+- **Self-hosted servers.** A server (`seira serve --tunnel`, a fleet container with `SEIRA_INSTALLATION_CREDENTIAL`)
   has no phone relay of its own: its tunnel is its public address (web UI, the desktop app's connection to it,
   webhooks). Provisioning never answers a server `relay_capable` (no `retired`, no `full`; at the limit it gets
   `503 endpoint_capacity`), and the cron never marks a server's tunnel for `relay_proven` or `legacy_cutoff`. The
@@ -817,9 +817,13 @@ non-production scoped `CLOUDFLARE_API_TOKEN`, apply the migrations locally, and
 start Wrangler:
 
 ```sh
-pnpm --filter @openmausbot/control-plane exec wrangler d1 migrations apply DB --local --config wrangler.jsonc
-pnpm --filter @openmausbot/control-plane exec wrangler dev --config wrangler.jsonc
+pnpm --filter @seira/control-plane exec wrangler d1 migrations apply DB --local --config wrangler.jsonc
+pnpm --filter @seira/control-plane exec wrangler dev --config wrangler.jsonc
 ```
+
+`wrangler.jsonc` selects Seira Cloud accounts, which need the `seira-cloud` Worker
+at `wrangler dev` time. The test suite runs in Better Auth mode and stubs Seira
+Cloud for its own tests.
 
 Do not commit `.dev.vars`. Because `wrangler.jsonc` declares
 `secrets.required`, `wrangler dev` reads from `.dev.vars` only the names it
@@ -856,7 +860,7 @@ companion on port `8810` also does not prove managed HTTPS is ready.
 2. Check the scope of failures without exporting account or installation data:
 
    ```sh
-   pnpm --filter @openmausbot/control-plane exec wrangler d1 execute DB --remote --command "SELECT provider_account, status, last_error_code, COUNT(*) AS endpoints FROM installation_endpoints GROUP BY provider_account, status, last_error_code"
+   pnpm --filter @seira/control-plane exec wrangler d1 execute DB --remote --command "SELECT provider_account, status, last_error_code, COUNT(*) AS endpoints FROM installation_endpoints GROUP BY provider_account, status, last_error_code"
    ```
 
 3. Check **account-wide** undeleted tunnel usage in the endpoint's Cloudflare
@@ -896,6 +900,108 @@ Run it from the repository root. It uses synthetic credentials and a loopback
 server, never a real account, cloud tunnel, or the user's desktop data. It
 verifies client recovery, not live Cloudflare availability or iPhone pairing.
 
+## Seira deployment (Seira Cloud accounts)
+
+`wrangler.jsonc` configures the Seira deployment at `accounts.seira.bot`. It uses
+Seira Cloud for accounts. It does not use Better Auth.
+
+### Account mode
+
+| `ACCOUNT_SERVICE` | Behavior |
+| --- | --- |
+| `seira-cloud` | Seira Cloud checks the account bearer token. `/api/auth/*` answers `404 not_found`. |
+| empty or unset | Better Auth, with email OTP. This mode needs `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `EMAIL_FROM`, and an `EMAIL` binding. |
+| any other value | `/healthz` answers `503 misconfigured`. |
+
+`/healthz` reports `"accounts": "seira-cloud"` or `"accounts": "better-auth"`.
+
+In `seira-cloud` mode the Worker needs a `SEIRA_CLOUD` service binding to the
+`seira-cloud` Worker. For each account request it sends one `GET` to
+`/api/cloud/desktop/session` with the `omc_` token and nothing else. No version
+header goes with it, because Seira Cloud stores that header as the device's app
+version.
+
+| Seira Cloud answer | Worker answer |
+| --- | --- |
+| `200` with an account | The request goes on. |
+| `401`, or a token that is not an `omc_` token | `401 unauthorized`. A malformed token causes no call. |
+| Any other status, a network error, or a bad body | `503 account_service_unavailable`. An outage never looks like a sign-out. |
+
+The first request of an account writes a shadow row in `"user"`. Its `id` is the
+Seira Cloud account ID. Its email is `<account id>@seira-cloud.invalid`, so no
+real address enters this database. `GET /v1/me` returns the real email from
+Seira Cloud. The Worker never stores or returns the token.
+
+### Limits and blocks
+
+- `SEIRA_ENDPOINTS_PER_ACCOUNT` (default 3, 1 to 100) is the number of tunnels one
+  account holds at the same time. A first call that would create a fourth answers
+  `429 endpoint_limit` before any Cloudflare call. An installation that already
+  holds its endpoint keeps it. The count includes a provisioning claim whose lease
+  is still live, and the claim applies the limit in the same D1 statement. So
+  concurrent first calls from one account cannot pass the limit together. The
+  claim renews its lease before each Cloudflare call, so it counts until the
+  tunnel is recorded or the claim fails.
+- `account_blocks` (migration `0019`) lists blocked accounts. A block revokes the
+  account's installations and credentials and deletes their push devices. The next
+  cleanup run (five minutes at most) deletes their tunnels and DNS records. A
+  blocked account gets `403 account_blocked` on every account route.
+- Push is off in this deployment: no APNs or FCM secret exists, so the push
+  routes answer `503 push_unavailable`.
+- The relay is off (`RELAY_DISABLED` is `"1"`) and every tunnel-release switch is
+  `"0"`.
+
+### Secrets
+
+Set these three secrets. Wrangler refuses a deploy while one is missing.
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_ZONE_ID`
+
+### Deploy
+
+1. Put the Cloudflare account ID in the environment: `CLOUDFLARE_ACCOUNT_ID=<id>`.
+   `wrangler.jsonc` has no `account_id`.
+2. Apply the migrations first, including `0019`:
+   `wrangler d1 migrations apply DB --remote --config wrangler.jsonc`.
+3. Put the three secrets with `wrangler secret put <NAME> --config wrangler.jsonc`.
+4. Deploy: `wrangler deploy --config wrangler.jsonc`.
+5. Check that `GET https://accounts.seira.bot/healthz` shows `"ok": true` and
+   `"accounts": "seira-cloud"`.
+
+`pnpm control-plane:dry-run` builds the Worker without a deploy.
+
+### Abuse runbook
+
+The Seira Cloud account ID (`acc_...`) comes from Seira Cloud admin.
+
+Block an account. `<unix ms>` is the time now in milliseconds:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "INSERT INTO account_blocks (user_id, reason, created_at) VALUES ('acc_...', '...', <unix ms>)"
+```
+
+Check the block and its effect:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "SELECT * FROM account_blocks WHERE user_id = 'acc_...'"
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "SELECT id, revoked_at FROM installations WHERE owner_user_id = 'acc_...'"
+```
+
+Unblock the account:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "DELETE FROM account_blocks WHERE user_id = 'acc_...'"
+```
+
+The installations that the block revoked stay revoked. The person signs in again
+and registers a new installation.
+
 ## Production blockers
 
 The checked-in Wrangler file is intentionally non-deployable production
@@ -932,7 +1038,7 @@ Before a production deployment, an operator must:
    the APNs and FCM secrets listed under **Phone push relay**. Without them the
    push routes answer `503 push_unavailable` and nothing else changes.
 9. Deploy the Worker and verify that `GET <BETTER_AUTH_URL>/healthz` returns
-   `"ok": true` and `"service": "openmausbot-control-plane"` over HTTPS
+   `"ok": true` and `"service": "seira-control-plane"` over HTTPS
    before shipping the desktop build. Electron probes this endpoint and
    keeps new hosted onboarding hidden until it is healthy; an already signed-in
    user remains visible so cleanup and recovery are not stranded.

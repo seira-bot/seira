@@ -4,7 +4,6 @@ import { ComputerControl } from "../computer-control.ts";
 import { SHARED_LOCAL_VM_TARGET, perBotLocalVmTarget, poolLocalVmTarget, type LocalVmTarget } from "../container-computer.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { BotRecord } from "../store.ts";
-import { teamComputerOwner } from "../team-computers.ts";
 import { viewerTargetId } from "../../shared/desktop-viewer.ts";
 import { createSharedVmControl, SHARED_VM_CONTROL_KEY as DESK } from "./shared-vm-control.ts";
 
@@ -14,8 +13,6 @@ type Fixture = {
   bots?: Array<Partial<BotRecord> & { id: string }>;
   /** threadId → [botId, pinned place] */
   tasks?: Record<string, [string, string | undefined]>;
-  team?: Record<string, string>;
-  teamTurns?: Record<string, { computerId: string; botId: string }>;
   /** threadId → the settings a running turn there uses instead of the stored bot's */
   turnBots?: Record<string, Partial<BotRecord>>;
   /** threadId → the Local VM its running turn works on */
@@ -44,8 +41,6 @@ function fixture(f: Fixture = {}) {
       const stored = bots.find(bot => bot.id === botId);
       return stored ? { ...stored, ...f.turnBots?.[threadId] } : null;
     },
-    teamTurns: { get: (threadId) => f.teamTurns?.[threadId], values: () => Object.values(f.teamTurns ?? {}).values() },
-    teamComputer: (bot) => f.team?.[bot.id],
     place: (bot, threadId) => { places++; return f.tasks?.[threadId]?.[1] ?? bot.computer; },
     turnVmTargets: { get: (threadId) => f.vmTurns?.[threadId] },
     busy: () => f.busy ?? false,
@@ -72,9 +67,6 @@ const keyRows = [
   { row: "per-bot, Auto", f: { mode: "per-bot" }, thread: undefined, key: "ada" },
   { row: "pool, Auto", f: { mode: "pool" }, thread: undefined, key: "ada" },
   { row: "a Cloud home", f: { cloudHome: true }, thread: undefined, key: "ada" },
-  { row: "a team's cloud computer", f: { team: { ada: "c1" } }, thread: undefined, key: teamComputerOwner("c1") },
-  { row: "a turn on a team's cloud computer", f: { teamTurns: { t: { computerId: "c2", botId: "ada" } } }, thread: "t", key: teamComputerOwner("c2") },
-  { row: "another bot's turn on a team's cloud computer", f: { bots: [{ id: "ada" }, { id: "bea" }], teamTurns: { t: { computerId: "c2", botId: "bea" } } }, thread: "t", key: DESK },
 ] as Array<{ row: string; f: Fixture; thread?: string; key: string }>;
 
 describe("the one control key", () => {
@@ -157,17 +149,9 @@ describe("what a hold on the shared desktop reaches", () => {
     expect(vm.membersOf("cy")).toEqual(["cy"]);
   });
 
-  it("tells a change on a team's cloud computer to the bots that inherit it or run a turn on it", () => {
-    const { vm } = fixture({ bots: [{ id: "ada" }, { id: "bea" }, { id: "cy" }], team: { ada: "c1" }, teamTurns: { r: { computerId: "c1", botId: "bea" } } });
-    expect(vm.membersOf(teamComputerOwner("c1"))).toEqual(["ada", "bea"]);
-  });
-
   it.each([
     { row: "a conversation pinned to the desktop", f: { bots: [{ id: "ada", computer: "cloud" }], tasks: { t: ["ada", "vm"], c: ["ada", "cloud"] } }, key: DESK, held: true },
-    { row: "a running turn on a team's cloud computer", f: { bots: [{ id: "ada", computer: "cloud" }], tasks: { c: ["ada", "cloud"] }, teamTurns: { r: { computerId: "c2", botId: "ada" } } }, key: teamComputerOwner("c2"), held: true },
-    { row: "another bot's team turn", f: { bots: [{ id: "ada", computer: "cloud" }, { id: "bea" }], tasks: { c: ["ada", "cloud"] }, teamTurns: { r: { computerId: "c2", botId: "bea" } } }, key: teamComputerOwner("c2"), held: false },
-    { row: "a pin to the desktop of a bot on a team's cloud computer", f: { team: { ada: "c1" }, tasks: { t: ["ada", "vm"], c: ["ada", "cloud"] } }, key: DESK, held: false },
-  ] as Array<{ row: string; f: Fixture; key: string; held: boolean }>)("the bot list and broadcasts read a hold reaching $row from stored pins and team turns", ({ f, key, held }) => {
+  ] as Array<{ row: string; f: Fixture; key: string; held: boolean }>)("the bot list and broadcasts read a hold reaching $row from stored pins", ({ f, key, held }) => {
     const { control, vm, places } = fixture(f);
     control.take(key);
     expect(vm.botSnapshot("ada").held).toBe(held);
@@ -188,7 +172,6 @@ describe("what a hold on the shared desktop reaches", () => {
     { row: "the shared VM in per-bot mode", f: { mode: "per-bot" }, target: "local/shared", key: null },
     { row: "the shared VM from a conversation pinned to this computer", f: { tasks: { t: ["ada", "local"] } }, target: "local/shared", key: null },
     { row: "the shared VM from a bot set to Off", f: { bots: [{ id: "ada", computer: "off" }] }, target: "local/shared", key: null },
-    { row: "the shared VM from a bot on a team's cloud computer", f: { team: { ada: "c1" } }, target: "local/shared", key: null },
     { row: "its VPS", f: { bots: [{ id: "ada", cloudBackend: "vps" }] }, target: "vps/ada", key: "ada" },
   { row: "its VPS from a conversation Auto has not placed whose turn works on the shared VM", f: { bots: [{ id: "ada", cloudBackend: "vps" }], tasks: { t: ["ada", undefined] }, vmTurns: { t: SHARED_LOCAL_VM_TARGET } }, target: "vps/ada", key: "ada" },
     { row: "another bot's VPS", f: { bots: [{ id: "ada", cloudBackend: "vps" }, { id: "bea", cloudBackend: "vps" }] }, target: "vps/bea", key: "ada" },
@@ -241,12 +224,6 @@ describe("what a hold on the shared desktop reaches", () => {
     expect(vm.membersOf(DESK)).toEqual(["ada"]);
   });
 
-  it("the gate and the control read pause a running turn on a team's cloud computer a person holds, and no other conversation", () => {
-    const { control, vm } = fixture({ bots: [{ id: "ada", computer: "cloud" }], tasks: { c: ["ada", "cloud"] }, teamTurns: { r: { computerId: "c2", botId: "ada" } } });
-    control.take(teamComputerOwner("c2"));
-    expect([vm.snapshot("ada", "r").held, vm.snapshot("ada", "c").held]).toEqual([true, false]);
-  });
-
   it("opens the shared desktop's viewer only to a lease on the desktop key", () => {
     const { vm, bot, setMode } = fixture({ bots: [{ id: "ada" }, { id: "books", computer: "cloud" }] });
     expect(vm.leaseKey(bot("ada"))).toBe(DESK);
@@ -257,10 +234,6 @@ describe("what a hold on the shared desktop reaches", () => {
 
   it.each([
     { row: "taken on a conversation off the desktop, released without it", f: { tasks: { t: ["ada", "cloud"] } }, take: "t", release: undefined },
-    { row: "taken without a conversation, released with one on a team's cloud computer",
-      f: { bots: [{ id: "ada", computer: "cloud" }], teamTurns: { t: { computerId: "c2", botId: "ada" } } }, take: undefined, release: "t" },
-    { row: "taken during a team turn that has ended", f: { teamTurns: { t: { computerId: "c2", botId: "ada" } } }, take: "t", release: "t",
-      after: (f: Fixture) => { delete f.teamTurns!.t; } },
     { row: "taken on a conversation since re-pinned", f: { bots: [{ id: "ada", computer: "cloud" }], tasks: { t: ["ada", "vm"] } }, take: "t", release: "t",
       after: (f: Fixture) => { f.tasks!.t = ["ada", "cloud"]; } },
     { row: "taken before the bot's computer changed", f: {}, take: undefined, release: undefined,
@@ -359,9 +332,9 @@ describe("what a hold on the shared desktop reaches", () => {
     expect(vm.heldOnTarget(perBotLocalVmTarget("ada"))).toBe(true);
   });
 
-  it("treats the desktop and team keys as shared by several bots, and a bot's own key as its own", () => {
+  it("treats the desktop key as shared by several bots, and a bot's own key as its own", () => {
     const { vm } = fixture();
-    expect([vm.sharedKey(DESK), vm.sharedKey(teamComputerOwner("c1")), vm.sharedKey("ada")]).toEqual([true, true, false]);
+    expect([vm.sharedKey(DESK), vm.sharedKey("ada")]).toEqual([true, false]);
   });
 
   it("refuses moving a bot off the held desktop, not a move that keeps its key", () => {

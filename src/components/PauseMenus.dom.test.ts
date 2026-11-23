@@ -28,7 +28,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 const menu = (onRead = vi.fn()) => createElement(TeamMenuItems, { department: "Sales", onRead, onAddBots: vi.fn(), onRename: vi.fn(), onShare: vi.fn(), onDelete: vi.fn() });
 const baseFrame: ConfigStatusFrame = {
-  composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" },
+  composio: { configured: false }, vps: { configured: false, sshAlias: "" },
   rooms: { turnTimeoutMinutes: 10 }, localVm: { mode: "shared", maxInstances: 1 },
 };
 

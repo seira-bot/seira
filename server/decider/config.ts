@@ -9,6 +9,9 @@ export const OPENROUTER_MODEL_ID_MAX = 128;
 export const WORKERS_AI_ACCOUNT_ID = /^[0-9a-f]{32}$/i;
 
 const optionalText = z.string().optional();
+/** The providers a person can pick in Settings, and `off`. */
+export const DECIDER_PICKS = ["jev", "workersai", "openrouter", "custom", "included", "off"] as const;
+export type DeciderPick = (typeof DECIDER_PICKS)[number];
 export const CUSTOM_MODEL_ID_MAX = 128;
 
 /** The decision and extraction models (server/decider, server/extractor):
@@ -21,12 +24,13 @@ export const CUSTOM_MODEL_ID_MAX = 128;
  * server instead of the vendor's (operator settings with no UI);
  * `openrouterModel` is an OpenRouter model id and `openrouterApi` says
  * whether it is a chat model or one of OpenRouter's decisions models
- * (`chat` when absent); `jobs` switches each
+ * (`chat` when absent); `provider` is the person's pick in Settings (see
+ * `DeciderConfig.provider`); `jobs` switches each
  * decision on or off. Not `decisions`: that section is the authorization
  * log's retention. */
 export const deciderConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  provider: z.enum(["jev", "openrouter", "custom", "off"]).optional(),
+  provider: z.enum(DECIDER_PICKS).optional(),
   key: optionalText,
   openrouterKey: optionalText,
   customKey: optionalText,
@@ -65,13 +69,15 @@ export const deciderConfigSchema = z.object({
     .max(2048)
     .refine((value) => !value || /^https?:\/\//i.test(value), "the OpenRouter address must start with http:// or https://")
     .optional(),
-  jobs: z.object({ roomRouting: z.boolean().optional(), inboxTriage: z.boolean().optional() }).optional(),
+  jobs: z.object({ roomRouting: z.boolean().optional(), inboxTriage: z.boolean().optional(), inboxSort: z.boolean().optional() }).optional(),
 });
 
 /** The decision model; see `deciderConfigSchema`. */
 export interface DeciderConfig {
   enabled?: boolean;
-  provider?: "jev" | "openrouter" | "custom" | "off";
+  /** The pick decides first while its key is usable; without one, the fixed order decides. `custom` decides alone, `off`
+   * stops every helper model, and absent is the fixed order. */
+  provider?: DeciderPick;
   key?: string;
   customKey?: string;
   /** The gateway's root, e.g. `https://gateway.example.com/v1`: requests go to `{customBaseUrl}/systemone`, `/decisions` or `/chat/completions`. */
@@ -89,5 +95,5 @@ export interface DeciderConfig {
   workersAiAccountId?: string;
   /** An operator setting with no UI, like `baseUrl`: Workers AI's REST root, `/client/v4` included. */
   workersAiBaseUrl?: string;
-  jobs?: { roomRouting?: boolean; inboxTriage?: boolean };
+  jobs?: { roomRouting?: boolean; inboxTriage?: boolean; inboxSort?: boolean };
 }

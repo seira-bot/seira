@@ -9,7 +9,7 @@ import { LICENSE_FILES } from "./cua-linux-release.mjs";
 const temporaryDirectories = [];
 
 function fixture() {
-  const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-after-pack-"));
+  const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-"));
   temporaryDirectories.push(appOutDir);
   const resources = path.join(appOutDir, "resources");
   const cua = path.join(resources, "cua-linux-x64");
@@ -51,6 +51,14 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     }
   });
 
+  it("links the executable name that an earlier version ran from to the current executable", async () => {
+    const { appOutDir } = fixture();
+    for (let pass = 0; pass < 2; pass += 1) {
+      await afterPack({ electronPlatformName: "linux", appOutDir });
+      expect(fs.readlinkSync(path.join(appOutDir, "openmausbot"))).toBe("seira");
+    }
+  });
+
   it("fails closed when the runtime root is replaced by a symlink", async () => {
     const { appOutDir, cua } = fixture();
     const replacement = path.join(appOutDir, "replacement");
@@ -72,7 +80,27 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     const { appOutDir, cua } = fixture();
     await afterPack({ electronPlatformName: "darwin", appOutDir });
     expect(fs.lstatSync(cua).mode & 0o777).toBe(0o775);
+    expect(fs.lstatSync(path.join(appOutDir, "openmausbot"), { throwIfNoEntry: false })).toBeUndefined();
     expect(fs.lstatSync(path.join(cua, "cua-driver")).mode & 0o777).toBe(0o664);
+  });
+});
+
+describe("source map gate", () => {
+  it("fails the pack when a source map is in the packed UI or server", async () => {
+    for (const folder of ["ui/assets", "server/drivers"]) {
+      const { appOutDir, resources } = fixture();
+      fs.mkdirSync(path.join(resources, folder), { recursive: true });
+      fs.writeFileSync(path.join(resources, folder, "index.js.map"), "{}");
+      await expect(afterPack({ electronPlatformName: "win32", arch: 1, appOutDir })).rejects.toThrow(/source map files/);
+    }
+  });
+
+  it("lets a pack without maps go on to the next check", async () => {
+    const { appOutDir, resources } = fixture();
+    fs.mkdirSync(path.join(resources, "ui"), { recursive: true });
+    fs.writeFileSync(path.join(resources, "ui", "index.js"), "x");
+    fs.mkdirSync(path.join(resources, "browser-engine"));
+    await expect(afterPack({ electronPlatformName: "win32", arch: 1, appOutDir })).rejects.toThrow(/manifest\.json/);
   });
 });
 
@@ -102,7 +130,7 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
   const archs = (file) => execFileSync("/usr/bin/lipo", ["-archs", file], { encoding: "utf8" }).trim();
 
   beforeAll(() => {
-    directory = fs.mkdtempSync(path.join(os.tmpdir(), "omb-macho-"));
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), "seira-macho-"));
     fs.writeFileSync(path.join(directory, "main.c"), "int main(void) { return 0; }\n");
     for (const arch of ["arm64", "x86_64"]) {
       binaries[arch] = path.join(directory, arch);
@@ -114,7 +142,7 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
   afterAll(() => fs.rmSync(directory, { recursive: true, force: true }));
 
   function macApp() {
-    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-after-pack-mac-"));
+    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-mac-"));
     temporaryDirectories.push(appOutDir);
     const tools = path.join(appOutDir, "Seira.app", "Contents", "Resources", "android-platform-tools", "darwin");
     fs.mkdirSync(path.join(tools, "lib64"), { recursive: true });
@@ -156,5 +184,45 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
     const { appOutDir } = macApp();
     await expect(afterPack({ electronPlatformName: "darwin", arch: 4, appOutDir }))
       .rejects.toThrow(/Unsupported macOS package architecture/);
+  });
+});
+
+describe("update feed file of a macOS package", () => {
+  function macFixture() {
+    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-feed-"));
+    temporaryDirectories.push(appOutDir);
+    const resources = path.join(appOutDir, "Seira.app", "Contents", "Resources");
+    fs.mkdirSync(resources, { recursive: true });
+    fs.writeFileSync(path.join(resources, "app-update.yml"), "provider: github\n");
+    return { appOutDir, feed: path.join(resources, "app-update.yml") };
+  }
+  const withFlag = async (value, run) => {
+    const before = process.env.SEIRA_NO_UPDATE_FEED;
+    if (value === undefined) delete process.env.SEIRA_NO_UPDATE_FEED;
+    else process.env.SEIRA_NO_UPDATE_FEED = value;
+    try {
+      await run();
+    } finally {
+      if (before === undefined) delete process.env.SEIRA_NO_UPDATE_FEED;
+      else process.env.SEIRA_NO_UPDATE_FEED = before;
+    }
+  };
+
+  it("removes the file when the build asks for no update feed", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag("1", () => afterPack({ electronPlatformName: "darwin", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(false);
+  });
+
+  it("keeps the file otherwise", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag(undefined, () => afterPack({ electronPlatformName: "darwin", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(true);
+  });
+
+  it("leaves a Windows package alone even with the flag", async () => {
+    const { appOutDir, feed } = macFixture();
+    await withFlag("1", () => afterPack({ electronPlatformName: "win32", appOutDir }));
+    expect(fs.existsSync(feed)).toBe(true);
   });
 });

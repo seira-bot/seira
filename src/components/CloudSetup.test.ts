@@ -65,7 +65,7 @@ beforeEach(() => {
   f.dispatch = action => { dispatched.push(action); };
   f.state = {
     connected: true, instances: [signedOut], activeView: "chat", selectedId: "b1",
-    bots: [{ id: "b1", threadId: "t1", name: "Maus" }], routines: [],
+    bots: [{ id: "b1", threadId: "t1", name: "Seira" }], routines: [],
     config: { cloudHome: true, onboarding: { ...EMPTY_ONBOARDING } },
   };
   vi.stubGlobal("window", { ogb: { platform: "darwin" }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
@@ -227,12 +227,12 @@ it("minimizes to its progress on this device, and opens again", async () => {
   expect(html).toContain("1 of 3 done");
   expect(html).not.toContain("Give it a first job");
   expect(button("Hide setup")).toBeUndefined();
-  expect(setItem).toHaveBeenLastCalledWith("omb.cloudSetup.collapsed", "1");
+  expect(setItem).toHaveBeenLastCalledWith("seira.cloudSetup.collapsed", "1");
   expect(api).not.toHaveBeenCalledWith("/api/config", expect.anything());
   toggle();
   ({ html } = render());
   expect(html).toContain("Give it a first job");
-  expect(setItem).toHaveBeenLastCalledWith("omb.cloudSetup.collapsed", "0");
+  expect(setItem).toHaveBeenLastCalledWith("seira.cloudSetup.collapsed", "0");
 });
 
 it("says the Cloud is ready once, in the session that finished it", async () => {
@@ -277,7 +277,7 @@ it("opens the chat the job went to as the bot's row does: with threads hidden at
   f.state.instances = [ready];
   markIntentSent("b1");
   f.state.activeView = "routines";
-  f.state.bots = [{ id: "b1", threadId: "t1", mainThreadId: "main", name: "Maus",
+  f.state.bots = [{ id: "b1", threadId: "t1", mainThreadId: "main", name: "Seira",
     tasks: [{ threadId: "t1", title: "Routine report", createdAt: 1 }, { threadId: "main", title: "Set up", createdAt: 2 }] }];
   await mount();
   button("Open the chat")!.props.onClick!();

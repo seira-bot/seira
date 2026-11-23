@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export const USER_BUBBLE_COLOR_KEY = "omb-color-user-bubbles";
+export const USER_BUBBLE_COLOR_KEY = "seira-color-user-bubbles";
 
 let sessionChoice: boolean | undefined;
 const listeners = new Set<() => void>();
@@ -16,9 +16,9 @@ function storage(): Storage | undefined {
 export function readColorUserBubbles(): boolean {
   if (sessionChoice !== undefined) return sessionChoice;
   try {
-    return storage()?.getItem(USER_BUBBLE_COLOR_KEY) !== "0";
+    return storage()?.getItem(USER_BUBBLE_COLOR_KEY) === "1";
   } catch {
-    return true;
+    return false;
   }
 }
 

@@ -99,17 +99,26 @@ export function suggestedLocalName(taken: readonly string[]): string {
   for (let count = 2; ; count++) { const name = t("rail.localNumbered", { count }); if (free(name)) return name; }
 }
 
-/** A new workspace of this computer's own, from ＋: main makes it and opens it next. */
-export async function createLocal(name: string, color: CloudSwatch | null): Promise<"made" | "name" | "taken" | "failed"> {
+/** A new workspace of this computer's own, from ＋: main makes it and opens it next. "unavailable": this computer can't
+ * hold one now, and ＋ reads main's choices again. */
+export async function createLocal(name: string, color: CloudSwatch | null): Promise<"made" | "name" | "taken" | "full" | "unavailable" | "failed"> {
   const answer = await bridge()?.local?.create(name, color).catch(() => null);
   if (!answer) return "failed";
-  if (answer.outcome === "made") void refreshPlaces();
+  if (answer.outcome === "made" || answer.outcome === "unavailable") void refreshPlaces();
   return answer.outcome;
 }
 
 /** A workspace's new name or colour, from its circle's menu. */
 export async function editLocal(id: string, changes: { name: string } | { color: CloudSwatch | null }): Promise<"saved" | "name" | "taken" | "failed"> {
   const answer = await bridge()?.local?.edit(id, changes).catch(() => null);
+  if (!answer) return "failed";
+  if (answer.outcome === "saved") void refreshPlaces();
+  return answer.outcome === "saved" || answer.outcome === "name" || answer.outcome === "taken" ? answer.outcome : "failed";
+}
+
+/** A server's new name, from its circle's menu: main saves it in this app's own record and the list refreshes. */
+export async function renameServer(id: string, name: string): Promise<"saved" | "name" | "taken" | "failed"> {
+  const answer = await bridge()?.rename?.(id, name).catch(() => null);
   if (!answer) return "failed";
   if (answer.outcome === "saved") void refreshPlaces();
   return answer.outcome === "saved" || answer.outcome === "name" || answer.outcome === "taken" ? answer.outcome : "failed";

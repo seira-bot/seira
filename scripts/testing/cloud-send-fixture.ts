@@ -1,7 +1,7 @@
 // Two real servers for Send to My Cloud: this computer's, started as the desktop app starts it (its private
 // utility-process port emulated over Node's IPC, the owner's capability delivered through it), and the person's Cloud
 // home, paired the way the Admin pairs it. Main's own wiring (electron/one-home-main.mjs, which installs
-// cloud-send-main.mjs) sits between them with a fake ipcMain and a fake MausBot Cloud sign-in. Either server can be
+// cloud-send-main.mjs) sits between them with a fake ipcMain and a fake Seira Cloud sign-in. Either server can be
 // killed and started again on its own data, as an app that quits or crashes is. Disposable homes, a synthetic Claude CLI
 // and a fake 1Password SDK; no network.
 import { randomBytes } from "node:crypto";
@@ -12,19 +12,23 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createLoginHandoffClient, type ConnectionAsk } from "../../electron/cloud-logins.mjs";
 import { createCloudSend, type CloudMoveCheck, type CloudSendOutcome, type CloudSendSnapshot } from "../../electron/cloud-send.mjs";
+import { itemKey } from "../../electron/cloud-send-parts.mjs";
 import { openOwnerSession } from "../../electron/cloud-send-main.mjs";
 import { BACKGROUND_HEADERS } from "../../electron/cloud-power.mjs";
 import { installOneHome } from "../../electron/one-home-main.mjs";
 import type { OneHomeView } from "../../electron/one-home.mjs";
 import { cloudPairingSignature, cloudRequestSignature } from "../../server/cloud-home.ts";
+import type { CloudSendManifest } from "../../server/cloud-send-manifest.ts";
 import type { TeamMember } from "../../server/cloud-team.ts";
 import { bitwardenCliPath } from "../../server/host/bitwarden-cli.ts";
+import { watchAsMade } from "../../server/host/default-watch.ts";
+import type { Routine } from "../../server/routines.ts";
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
 import type { FakeBwAccount } from "../../server/testing/fake-bw.ts";
 import { freePortBlock } from "../../server/testing/ports.ts";
 
 const SERVER_DIR = fileURLToPath(new URL("../../server/", import.meta.url));
-export const CLOUD_HOST = "omb-t-5e6d7c8b9a0f.fly.dev";
+export const CLOUD_HOST = "seira-t-5e6d7c8b9a0f.fly.dev";
 const CLOUD_MACHINE_ID = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
 const EDGE = { host: CLOUD_HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", origin: `https://${CLOUD_HOST}` };
 const parse = (text: string) => { try { return JSON.parse(text); } catch { return null; } };
@@ -62,6 +66,9 @@ export interface CloudSendFixture {
   move(options?: { final?: boolean }): Promise<CloudSendOutcome>;
   /** The move's check of what arrived, through main's own wiring. */
   check(): Promise<CloudMoveCheck>;
+  /** My Cloud's manifest as a move compares it. With `since`: less a default watch My Cloud made itself after that
+   * one, as it does on its own clock once connected apps arrive. A watch this computer has still counts. */
+  cloudManifest(since?: CloudSendManifest): Promise<CloudSendManifest>;
   /** The labels of the sessions each send made, and whether each counted as someone using My Cloud. */
   sessions: Array<{ label: string; background: boolean }>;
   /** Each request main sent My Cloud's chats route: the rows of each conversation it carried. */
@@ -72,7 +79,7 @@ export interface CloudSendFixture {
   handoff(what: ConnectionAsk): Promise<any>;
   /** The one-time move (one-home.mjs), as main runs it in the app that is open now. */
   oneHome: { kick(): Promise<void>; view(): OneHomeView | null; away(): boolean };
-  /** The MausBot Cloud sign-in main reads: the Admin's word on this account's Cloud, its export of a held one, the Admin
+  /** The Seira Cloud sign-in main reads: the Admin's word on this account's Cloud, its export of a held one, the Admin
    * taking a computer's word that its move is done (when a test sets it), and the Admin's team pairing for one of the
    * account's teams (`state.teams`). */
   account: CloudSendAccount;
@@ -97,8 +104,8 @@ export interface CloudSendFixture {
   /** The Team Cloud started with `team` (docs/team-cloud.md), paired the way the Admin pairs it: a signed body with
    * the member claim, redeemed at /api/auth/pair. Null without `team`. */
   team: CloudTeamFixture | null;
-  /** Another computer of the same person, with its own server, app and MausBot Cloud sign-in, that can move to the same
-   * My Cloud. `label`: its name (OMB_ENVIRONMENT_LABEL). */
+  /** Another computer of the same person, with its own server, app and Seira Cloud sign-in, that can move to the same
+   * My Cloud. `label`: its name (SEIRA_ENVIRONMENT_LABEL). */
   addDesk(options: { label: string }): Promise<CloudSendDesk>;
   close(): Promise<void>;
 }
@@ -192,14 +199,25 @@ exports.createClient = async ({ auth }) => {
  * with an installation of its own as the desktop app registers one, My Cloud registering itself as a Cloud home does.
  * `env`: more of both servers' environment. `cloudEngine`: lines run at the start of My Cloud's synthetic Claude CLI, to
  * script its turns (fake-claude-cli.ts). Every server runs without a bot box, as CI's runners do: a box refuses the
- * synthetic CLIs in the server's HOME and hides the test's files from its turns. To box a server, set `OMB_BOT_BOX`. */
-export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswordToken = onePasswordToken, onePasswordItems = [], bitwarden, toolCalls = 0, broker, env = {}, cloudEnv = {}, cloudEngine = "", desktopEngine = "", space, cloudSignedIn = true, team }: {
+ * synthetic CLIs in the server's HOME and hides the test's files from its turns. To box a server, set `SEIRA_BOT_BOX`. */
+export async function launchCloudSendFixture(options: Parameters<typeof launch>[0]): Promise<CloudSendFixture> {
+  const children = new Set<ChildProcess>();
+  try {
+    return await launch(options, children);
+  } catch (error) {
+    // The caller gets no close() from a setup that throws, so the servers it already started stop here.
+    for (const child of children) await waitForExit(child, { signal: "SIGKILL" });
+    throw error;
+  }
+}
+
+async function launch({ onePasswordToken, cloudOnePasswordToken = onePasswordToken, onePasswordItems = [], bitwarden, toolCalls = 0, broker, env = {}, cloudEnv = {}, cloudEngine = "", desktopEngine = "", space, cloudSignedIn = true, team }: {
   onePasswordToken: string; cloudOnePasswordToken?: string; toolCalls?: number;
   /** A fake Bitwarden tool already in each server's data folder, holding this one account (no download, no network). */
   bitwarden?: FakeBwAccount;
-  /** What every server's fake 1Password vault ("Shared with OpenMausBot") holds; empty by default. */
+  /** What every server's fake 1Password vault ("Shared with Seira") holds; empty by default. */
   onePasswordItems?: readonly FakeOnePasswordItem[];
-  /** A Team Cloud too (OMB_CLOUD_ROLE=team), with its own environment and synthetic Claude CLI lines. */
+  /** A Team Cloud too (SEIRA_CLOUD_ROLE=team), with its own environment and synthetic Claude CLI lines. */
   team?: { id: string; name: string; env?: NodeJS.ProcessEnv; engine?: string; noAi?: boolean;
     /** Scopes of this checkout's node_modules (`@duckdb`) linked into the Team Cloud's native tree before it starts: the
      * server can load DuckDB at its first config broadcast, and a failed load stays failed for the server's life. */
@@ -215,19 +233,18 @@ export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswor
   space?: { disk(): unknown; grow(sizeGb: number): Promise<unknown> };
   /** False: My Cloud's own Claude is signed out, as on a new Cloud. */
   cloudSignedIn?: boolean;
-}): Promise<CloudSendFixture> {
-  const root = mkdtempSync(join(tmpdir(), "omb-cloud-send-"));
+}, children: Set<ChildProcess>): Promise<CloudSendFixture> {
+  const root = mkdtempSync(join(tmpdir(), "seira-cloud-send-"));
   const secret = randomBytes(32).toString("base64url");
   const ownerCapability = randomBytes(32).toString("base64url");
   const answers: string[] = [];
   const labels: string[] = [];
   let logs = "";
-  const children = new Set<ChildProcess>();
   const remember = async (response: Response) => { answers.push(await response.clone().text()); return response; };
 
   async function start(name: string, own: NodeJS.ProcessEnv, port: number, extra: string[] = [], ipc = false, acceptedToken = onePasswordToken, calls = 0, engine = "", signedIn = true): Promise<ChildProcess> {
     const home = join(root, name);
-    const dataDir = join(home, ".openmausbot");
+    const dataDir = join(home, ".seira");
     mkdirSync(dataDir, { recursive: true });
     if (bitwarden) installFakeBw(dataDir, bitwarden);
     const cli = join(home, "fixture-claude.mjs");
@@ -247,8 +264,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; const admin = process.env.FIXTURE_ADMIN_STAND_IN; globalThis.fetch = async (url, init) => admin && String(url).startsWith("https://cloud.example.test/") ? real(admin + String(url).slice(26), init) : String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
     const child = spawn(process.execPath, ["--import", offline, ...extra, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), OMB_BOT_BOX: "0", ...env, ...own },
+      env: { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir,
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), SEIRA_BOT_BOX: "0", ...env, ...own },
       stdio: ["ignore", "pipe", "pipe", ...(ipc ? ["ipc" as const] : [])],
     });
     children.add(child);
@@ -258,7 +275,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const deadline = Date.now() + 30_000;
     for (;;) {
       if (child.exitCode !== null) throw new Error(`${name} exited:\n${logs}`);
-      try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) return child; } catch {}
+      // Another process on this host can already listen on the port, so only this child's own pid counts as started.
+      try { if (((await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()) as { pid?: number }).pid === child.pid) return child; } catch {}
       if (Date.now() > deadline) throw new Error(`${name} did not start:\n${logs}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -277,16 +295,16 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const desktopBase = `http://127.0.0.1:${desktopPort}`;
   const desktopInstallation = broker ? await broker.install() : null;
   const startDesktop = async (dataDir?: string) => {
-    const child = await start("desktop", { OMB_DESKTOP_PARENT: "1", ...(dataDir ? { OMB_DATA_DIR: dataDir } : {}),
-      ...(broker && desktopInstallation ? { OMB_COMPOSIO_BROKER_URL: broker.url, OMB_COMPOSIO_BROKER_TOKEN: desktopInstallation.token } : {}) }, desktopPort, ["--import", parentPort], true, onePasswordToken, toolCalls, desktopEngine);
-    child.send({ type: "openmausbot:desktop-mutation-token", token: ownerCapability });
+    const child = await start("desktop", { SEIRA_DESKTOP_PARENT: "1", ...(dataDir ? { SEIRA_DATA_DIR: dataDir } : {}),
+      ...(broker && desktopInstallation ? { SEIRA_COMPOSIO_BROKER_URL: broker.url, SEIRA_COMPOSIO_BROKER_TOKEN: desktopInstallation.token } : {}) }, desktopPort, ["--import", parentPort], true, onePasswordToken, toolCalls, desktopEngine);
+    child.send({ type: "seira:desktop-mutation-token", token: ownerCapability });
     return child;
   };
   let desktop = await startDesktop();
   const cloudPort = await freePortBlock([0, 1]);
   const cloudBase = `http://127.0.0.1:${cloudPort}`;
-  const startCloud = (more: NodeJS.ProcessEnv = {}) => start("cloud", { OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: CLOUD_MACHINE_ID, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-    OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${CLOUD_HOST}`, ...(broker ? { OMB_COMPOSIO_BROKER_URL: broker.url } : {}), ...cloudEnv, ...more }, cloudPort, [], false, cloudOnePasswordToken, 0, cloudEngine, cloudSignedIn);
+  const startCloud = (more: NodeJS.ProcessEnv = {}) => start("cloud", { SEIRA_CLOUD_ROLE: "home", SEIRA_CLOUD_MACHINE_ID: CLOUD_MACHINE_ID, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+    SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${CLOUD_HOST}`, ...(broker ? { SEIRA_COMPOSIO_BROKER_URL: broker.url } : {}), ...cloudEnv, ...more }, cloudPort, [], false, cloudOnePasswordToken, 0, cloudEngine, cloudSignedIn);
   let cloud = await startCloud();
 
   const mintCode = async (label: string) => {
@@ -322,16 +340,16 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const stopOverIpc = process.platform === "win32";
     const stopOnMessage = `data:text/javascript,${encodeURIComponent('process.on("message", (message) => { if (message === "stop") process.emit("SIGTERM"); }); process.channel?.unref();')}`;
     if (team.noAi) {
-      mkdirSync(join(root, "team", ".openmausbot"), { recursive: true });
-      writeFileSync(join(root, "team", ".openmausbot", "config.json"), JSON.stringify({ instances: Object.fromEntries(["claude", "codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "grok"].map((id) => [id, { driver: "not-a-real-driver" }])) }));
+      mkdirSync(join(root, "team", ".seira"), { recursive: true });
+      writeFileSync(join(root, "team", ".seira", "config.json"), JSON.stringify({ instances: Object.fromEntries(["claude", "codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "grok"].map((id) => [id, { driver: "not-a-real-driver" }])) }));
     }
     for (const scope of team.native ?? []) {
       mkdirSync(join(root, "team", "native", "node_modules"), { recursive: true });
       symlinkSync(join(SERVER_DIR, "..", "node_modules", scope), join(root, "team", "native", "node_modules", scope), "junction");
     }
-    const startTeam = (more: NodeJS.ProcessEnv = {}) => start("team", { OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: team.id, OMB_CLOUD_TEAM_NAME: team.name,
-      OMB_CLOUD_MACHINE_ID: TEAM_MACHINE_ID, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test", OMB_CLOUD_BOOTSTRAP_SECRET: secret,
-      OMB_PUBLIC_URL: `https://${CLOUD_HOST}`, OMB_TEST_INTERNAL_CAPABILITY_KEY: CAPABILITY_KEY, ...(broker ? { OMB_COMPOSIO_BROKER_URL: broker.url } : {}), ...team.env, ...more },
+    const startTeam = (more: NodeJS.ProcessEnv = {}) => start("team", { SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: team.id, SEIRA_CLOUD_TEAM_NAME: team.name,
+      SEIRA_CLOUD_MACHINE_ID: TEAM_MACHINE_ID, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test", SEIRA_CLOUD_BOOTSTRAP_SECRET: secret,
+      SEIRA_PUBLIC_URL: `https://${CLOUD_HOST}`, SEIRA_TEST_INTERNAL_CAPABILITY_KEY: CAPABILITY_KEY, ...(broker ? { SEIRA_COMPOSIO_BROKER_URL: broker.url } : {}), ...team.env, ...more },
       teamPort, stopOverIpc ? ["--import", stopOnMessage] : [], stopOverIpc, onePasswordToken, 0, team.engine ?? "", true);
     let teamServer = await startTeam();
     const teamFetch = (path: string, init: RequestInit) => fetch(`${teamBase}${path}`, init).catch(async (error: unknown) => {
@@ -386,7 +404,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       signed: (method, path, body) => signedRequest(teamBase, method, path, body === undefined ? "" : JSON.stringify(body)),
       async capability(botId, threadId, kind) {
         // A loopback caller with the private key, as the harness mints one: never through the edge.
-        const minted = await fetch(`${teamBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-openmausbot-test-capability": CAPABILITY_KEY }, body: JSON.stringify({ botId, threadId, ...(kind ? { kind } : {}) }) });
+        const minted = await fetch(`${teamBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-seira-test-capability": CAPABILITY_KEY }, body: JSON.stringify({ botId, threadId, ...(kind ? { kind } : {}) }) });
         const answer = parse(await minted.text());
         if (minted.status !== 200 && minted.status !== 201) throw new Error(`no test capability: ${minted.status} ${JSON.stringify(answer)}`);
         return answer.token as string;
@@ -403,7 +421,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
 
   const local = async (method: string, path: string, body?: unknown) => {
     const response = await remember(await fetch(`${desktopBase}${path}`, { method, headers: {
-      "x-openmausbot-desktop-owner": ownerCapability, ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      "x-seira-desktop-owner": ownerCapability, ...(body === undefined ? {} : { "content-type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body) }));
     return { status: response.status, body: parse(await response.text()) };
   };
@@ -437,7 +455,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     if (String(url).endsWith("/api/auth/pair") && typeof init.body === "string") {
       const { label } = JSON.parse(init.body) as { label: string };
       labels.push(label);
-      sessions.push({ label, background: (init.headers as Record<string, string>)["x-omb-background"] === "1" });
+      sessions.push({ label, background: (init.headers as Record<string, string>)["x-seira-background"] === "1" });
     }
     return remember(await fetch(url, { ...init, headers: { ...init.headers as Record<string, string>, ...EDGE, ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) } }));
   };
@@ -445,7 +463,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } },
     cloudPage: (event) => (event as { page?: "local" | "cloud" })?.page ?? null,
     server: () => port,
-    localRequest: async (route, init = {}) => remember(await fetch(`${desktopBase}${route}`, { ...init, headers: { ...init.headers as Record<string, string>, "x-openmausbot-desktop-owner": ownerCapability } })),
+    localRequest: async (route, init = {}) => remember(await fetch(`${desktopBase}${route}`, { ...init, headers: { ...init.headers as Record<string, string>, "x-seira-desktop-owner": ownerCapability } })),
     home: () => ({ origin: cloudBase, grant: async () => ({ origin: cloudBase, code: await mintCode("Seira app (Cloud)") }) }),
     cookieFetch: throughEdge(owner) as typeof fetch,
     reconnect: async () => false,
@@ -482,7 +500,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   let main = wire();
   const asks = createLoginHandoffClient();
   const older = () => createCloudSend({
-    local: async (route, init) => remember(await fetch(`${desktopBase}${route}`, { method: init?.method ?? "GET", headers: { "x-openmausbot-desktop-owner": ownerCapability } })),
+    local: async (route, init) => remember(await fetch(`${desktopBase}${route}`, { method: init?.method ?? "GET", headers: { "x-seira-desktop-owner": ownerCapability } })),
     cloud: {
       origin: () => cloudBase,
       asleep: () => false,
@@ -501,13 +519,13 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const name = `desktop-${desks.length + 2}`, deskPort = await freePortBlock([0, 1]), base = `http://127.0.0.1:${deskPort}`;
     const capability = randomBytes(32).toString("base64url");
     const startIt = async () => {
-      const child = await start(name, { OMB_DESKTOP_PARENT: "1", OMB_ENVIRONMENT_LABEL: label }, deskPort, ["--import", parentPort], true, onePasswordToken, toolCalls, desktopEngine);
-      child.send({ type: "openmausbot:desktop-mutation-token", token: capability });
+      const child = await start(name, { SEIRA_DESKTOP_PARENT: "1", SEIRA_ENVIRONMENT_LABEL: label }, deskPort, ["--import", parentPort], true, onePasswordToken, toolCalls, desktopEngine);
+      child.send({ type: "seira:desktop-mutation-token", token: capability });
       return child;
     };
     let child = await startIt();
     const deskLocal: CloudSendDesk["local"] = async (method, path, body) => {
-      const response = await remember(await fetch(`${base}${path}`, { method, headers: { "x-openmausbot-desktop-owner": capability, ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      const response = await remember(await fetch(`${base}${path}`, { method, headers: { "x-seira-desktop-owner": capability, ...(body === undefined ? {} : { "content-type": "application/json" }) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) }));
       return { status: response.status, body: parse(await response.text()) };
     };
@@ -524,7 +542,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       ipcMain: { handle: () => {} },
       cloudPage: (event) => (event as { page?: "local" | "cloud" })?.page ?? null,
       server: () => ipc,
-      localRequest: async (route, init = {}) => remember(await fetch(`${base}${route}`, { ...init, headers: { ...init.headers as Record<string, string>, "x-openmausbot-desktop-owner": capability } })),
+      localRequest: async (route, init = {}) => remember(await fetch(`${base}${route}`, { ...init, headers: { ...init.headers as Record<string, string>, "x-seira-desktop-owner": capability } })),
       home: () => ({ origin: cloudBase, grant: async () => ({ origin: cloudBase, code: await mintCode("Seira app (Cloud)") }) }),
       cookieFetch: throughOwner,
       reconnect: async () => false,
@@ -561,7 +579,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     listenIt();
     desks.push({ close: () => deskMain.close() });
     return {
-      base, dataDir: join(root, name, ".openmausbot"), local: deskLocal, account: deskAccount, journalFile, spies,
+      base, dataDir: join(root, name, ".seira"), local: deskLocal, account: deskAccount, journalFile, spies,
       oneHome: { kick: () => deskMain.kick(), view: () => deskMain.view(), away: () => deskMain.away() },
       async relaunch({ kill = true } = {}) {
         deskMain.close();
@@ -591,7 +609,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     get intercept() { return fixture.intercept; },
     set intercept(hook) { fixture.intercept = hook; },
     oneHome: { kick: () => main.kick(), view: () => main.view(), away: () => main.away() },
-    desktopDataDir: join(root, "desktop", ".openmausbot"),
+    desktopDataDir: join(root, "desktop", ".seira"),
     async relaunch({ kill = true, cloud: cloudMore, dataDir } = {}) {
       main.close();
       await waitForExit(desktop, { signal: kill ? "SIGKILL" : "SIGTERM" });
@@ -607,7 +625,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     },
     handoff: (what) => asks.request(port, what as ConnectionAsk),
     async picture(bytes) {
-      const response = await fetch(`${desktopBase}/api/attachments`, { method: "POST", headers: { "x-openmausbot-desktop-owner": ownerCapability, "content-type": "image/png" }, body: bytes });
+      const response = await fetch(`${desktopBase}/api/attachments`, { method: "POST", headers: { "x-seira-desktop-owner": ownerCapability, "content-type": "image/png" }, body: bytes });
       return `/api/attachments/${((await response.json()) as { path: string }).path.split(/[\\/]/).pop()}`;
     },
     call: <T>(channel: string, page: "local" | "cloud", ...args: unknown[]) => Promise.resolve(handlers.get(channel)!({ page }, ...args)) as Promise<T>,
@@ -617,6 +635,15 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     olderCompare: () => older().compare(),
     move: (options) => main.move(options),
     check: () => main.check(),
+    async cloudManifest(since) {
+      const manifest = (await onCloud("GET", "/api/cloud-send/manifest")).body as CloudSendManifest;
+      if (!since) return manifest;
+      const routines = async (side: typeof local) => (await side("GET", "/api/routines")).body.routines as Routine[];
+      const known = new Set([...since.items.map((item) => item.key), ...(await routines(local)).map((routine) => itemKey.moved("routine", routine.id))]);
+      const made = new Set((await routines(onCloud)).filter(watchAsMade).map((routine) => itemKey.moved("routine", routine.id)).filter((key) => !known.has(key)));
+      return { ...manifest, items: manifest.items.filter((item) => !made.has(item.key)), automations: manifest.automations.filter((entry) => !made.has(entry.key)),
+        runs: manifest.runs.filter((run) => !made.has(itemKey.moved("routine", run.routine))) };
+    },
     sessions,
     chatRequests,
     team: teamFixture,

@@ -17,8 +17,9 @@ import type { LocaleKey } from "@/locales";
 import { computerName, createLocal, placeInitials, suggestedLocalName } from "@/lib/places";
 import { AddCloudFlow } from "./cloud-buy/AddCloudFlow";
 import { NewOrganization } from "./cloud-buy/NewOrganization";
-import { BackLink, FIELD, Heading, PRIMARY_WIDE } from "./cloud-buy/parts";
+import { BackLink, FIELD, Heading, LINK, PRIMARY_WIDE } from "./cloud-buy/parts";
 import { Layer, useIsTopLayer } from "./Layer";
+import { ServerInstallSheet } from "./ServerInstallSheet";
 import { SwatchRadios } from "./SwatchRadios";
 
 const PAIR_COMMAND = "npx @seira-bot/seira pair";
@@ -48,8 +49,8 @@ const TRANSPORT_KEY = { https: "connect.found.https", tailscale: "connect.found.
 /** Connect to a server: a link, or an address with the pairing code typed apart (a code pasted alone is moved to its
  * field). Main looks the address up as the person types and connects only to the server it found, opening that server's
  * own /pair page with the code. `connect`: a server of theirs that signed in with their account, not connected yet. */
-export function OwnServerLink({ onBack, onConnected, connect = null, start = null }: { onBack: (() => void) | null; onConnected: () => void; connect?: { name: string } | null;
-  start?: { address: string; locked: boolean; title: string } | null }) {
+export function OwnServerLink({ onBack, onConnected, connect = null, start = null, onInstall = null }: { onBack: (() => void) | null; onConnected: () => void; connect?: { name: string } | null;
+  start?: { address: string; locked: boolean; title: string } | null; onInstall?: (() => void) | null }) {
   const [address, setAddress] = useState(start?.address ?? "");
   const [code, setCode] = useState("");
   const [movedCode, setMovedCode] = useState(false);
@@ -134,6 +135,7 @@ export function OwnServerLink({ onBack, onConnected, connect = null, start = nul
     <div><button type="submit" data-own-server-connect disabled={busy || !address.trim() || (canProbe && !found)} className="ui-button ui-button-primary inline-flex items-center gap-2">
       {busy && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}{found ? t("connect.to", { name: found.label }) : t("rail.connect")}
     </button></div>
+    {onInstall && !connect && !start && window.ogb?.serverInstall && <div><button type="button" data-own-server-install onClick={onInstall} className={LINK}>{t("serverInstall.open")}</button></div>}
   </form>;
 }
 
@@ -191,13 +193,15 @@ function placesTaken(places: readonly RailPlace[]): { names: string[]; swatches:
   return { names, swatches: new Set(places.map((place) => place.paint?.swatch ?? CLOUD_SWATCH_ORDER.find((swatch) => place.color !== null && SWATCH_COLOR[swatch] === place.color)).filter((swatch): swatch is CloudSwatch => Boolean(swatch))) };
 }
 
+const LOCAL_PROBLEM = { taken: "rail.localTaken", full: "rail.localFull", unavailable: "rail.localUnavailable", failed: "rail.localFailed" } as const;
+
 /** A new workspace on this computer: its name (Work, Personal or Workspace 2 to start) and its colour, then main makes it
  * and opens it. A name another place here has is said at once; main says it too, for one the rail doesn't list. */
 export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly RailPlace[]; onBack: (() => void) | null; onDone: () => void }) {
   const [taken] = useState(() => placesTaken(places));
   const [name, setName] = useState(() => suggestedLocalName(taken.names));
   const [color, setColor] = useState<CloudSwatch>(() => CLOUD_SWATCH_ORDER.find((swatch) => swatch !== "slate" && !taken.swatches.has(swatch)) ?? "slate");
-  const [busy, setBusy] = useState(false), [problem, setProblem] = useState<"taken" | "failed" | null>(null);
+  const [busy, setBusy] = useState(false), [problem, setProblem] = useState<keyof typeof LOCAL_PROBLEM | null>(null);
   const shown = name.trim().replace(/\s+/g, " ");
   const clash = taken.names.some((other) => other.toLocaleLowerCase() === shown.toLocaleLowerCase());
   const create = async () => {
@@ -207,7 +211,7 @@ export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly
     const outcome = await createLocal(shown, color === "slate" ? null : color);
     setBusy(false);
     if (outcome === "made") { track("rail_add", { step: "local" }); onDone(); return; }
-    setProblem(outcome === "taken" ? "taken" : "failed");
+    setProblem(outcome === "name" ? "failed" : outcome);
   };
   return <form data-place-add="local" className="flex flex-col gap-4 px-[30px] pb-[26px] pt-7" onSubmit={(event) => { event.preventDefault(); void create(); }}>
     {onBack && <div><BackLink label={t("rail.back")} onClick={onBack} /></div>}
@@ -230,7 +234,7 @@ export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly
         <span className="block text-[13px] text-ink-secondary">{t("rail.localPreview")}</span>
       </span>
     </div>
-    {problem && <p role="alert" data-local-problem className="text-[13px] leading-relaxed text-danger">{t(problem === "taken" ? "rail.localTaken" : "rail.localFailed")}</p>}
+    {problem && <p role="alert" data-local-problem className="text-[13px] leading-relaxed text-danger">{t(LOCAL_PROBLEM[problem])}</p>}
     <button type="submit" data-local-create className={PRIMARY_WIDE} disabled={busy || !shown}>
       {busy && <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}{t("rail.localCreate")}
     </button>
@@ -248,10 +252,24 @@ export function NewLocalFromMenu() {
   </RailSheet>;
 }
 
+/** The Connect step on a sheet of its own, for a page with no rail beside it: a link, or an address and a code. */
+export function ConnectServerSheet({ onClose }: { onClose: () => void }) {
+  return <RailSheet focusKey="server" onClose={onClose}>
+    <OwnServerLink onBack={null} onConnected={onClose} />
+  </RailSheet>;
+}
+
+/** The Server menu's Connect to a server…, where no rail stands beside this computer's own page. */
+export function ConnectServerFromMenu() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => (window.ogb?.remoteClient?.active ? undefined : window.ogb?.workspaces?.onConnectServer?.(() => setOpen(true))), []);
+  return open ? <ConnectServerSheet onClose={() => setOpen(false)} /> : null;
+}
+
 export function PlaceAddSheet({ choices, places = [], connect = null, onClose, onAccount }: { choices: RailAddChoices; places?: readonly RailPlace[]; connect?: { name: string } | null; onClose: () => void; onAccount?: () => void }) {
   const server = choices.link, organization = choices.organization === true, account = choices.account === true && Boolean(onAccount), local = choices.local === true;
   const several = [local, organization, choices.cloud, server, account].filter(Boolean).length > 1;
-  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");
+  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "install" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");
   const [wide, setWide] = useState(false);
   const workspaces = window.ogb?.workspaces;
   const firstCloud = () => {
@@ -271,7 +289,8 @@ export function PlaceAddSheet({ choices, places = [], connect = null, onClose, o
       </div>
     </div>}
     {view === "local" && <NewLocalWorkspace places={places} onBack={several ? () => setView("choose") : null} onDone={onClose} />}
-    {view === "server" && <OwnServerLink onBack={several && !connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} />}
+    {view === "server" && <OwnServerLink onBack={several && !connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} onInstall={() => setView("install")} />}
+    {view === "install" && <ServerInstallSheet onBack={() => setView("server")} onConnected={onClose} />}
     {view === "cloud" && <AddCloudFlow onClose={onClose} onFirstCloud={firstCloud} onWide={setWide} onBack={several ? () => setView("choose") : null} />}
     {view === "organization" && <NewOrganization onClose={onClose} onBack={several ? () => setView("choose") : null} />}
   </RailSheet>;

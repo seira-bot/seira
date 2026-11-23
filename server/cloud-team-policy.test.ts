@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { remoteAccessPaths, startTeamPolicyClient, TEAM_POLICY_ADMIN_PATH, TEAM_POLICY_FILE, TEAM_POLICY_FRESH_MS, TEAM_POLICY_REFRESH_MS, teamManagedPolicy, teamPolicyDocumentSchema, teamPolicyFingerprint, teamPolicySignature, type TeamPolicyClient } from "./cloud-team-policy.ts";
 import { ManagedDesktopPolicy, type ManagedPolicy } from "./managed-policy.ts";
 import { excludedWorkspaceAuthPath } from "./workspace-backup-policy.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const TEAM = { id: "11111111-1111-4111-8111-111111111111", name: "Acme" };
 const doc = (limits: Record<string, unknown>) => ({ schema: 1, limits });
@@ -14,7 +15,7 @@ const dirs: string[] = [], clients: TeamPolicyClient[] = [];
 afterEach(() => { for (const client of clients.splice(0)) client.stop(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 function world(fetchImpl: (body: { loaded: { fingerprint: string } | null; problem: string | null }, init: RequestInit, url: string) => Response | Promise<Response>, options: { dataDir?: string; now?: () => number } = {}) {
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "omb-team-policy-"));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "seira-team-policy-"));
   if (!options.dataDir) dirs.push(dataDir);
   const applied: (ManagedPolicy | null)[] = [], logs: string[] = [], timers: { run: () => void; ms: number }[] = [], reports: { loaded: { fingerprint: string } | null; problem: string | null }[] = [];
   const client = startTeamPolicyClient({
@@ -32,8 +33,8 @@ function world(fetchImpl: (body: { loaded: { fingerprint: string } | null; probl
 }
 
 describe("the document", () => {
-  it("computes the fingerprint and signature exactly as openmaus-cloud's server/cloud-team-policy.ts does", () => {
-    // The same vectors are pinned in openmaus-cloud tests/cloud-team-policy.test.ts.
+  it("computes the fingerprint and signature exactly as the Cloud service does", () => {
+    // The same vectors are pinned in the Cloud service's own tests.
     expect(teamPolicyFingerprint({ schema: 1, limits: { remoteAccess: "off", allowedEngines: ["claudeAgent", "codex"] } })).toBe("8341e89f9d7fc734");
     expect(teamPolicyFingerprint({ limits: { allowedEngines: ["claudeAgent", "codex"], remoteAccess: "off" }, schema: 1 })).toBe("8341e89f9d7fc734");
     expect(teamPolicySignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"v":1,"loaded":null,"problem":null}')).toBe("ZNkIYIIuPldLp7gQ4cy7s1zQJpBiWkyP8DOyRtRz03w");
@@ -80,6 +81,7 @@ describe("the fetch", () => {
       expect(init.redirect).toBe("error");
       const headers = init.headers as Record<string, string>;
       expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamPolicySignature("s".repeat(43), "cm-test-home", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, String(init.body))}`);
+      expectBothCloudSignedNames(headers);
       return answer(document);
     });
     await client.settled();

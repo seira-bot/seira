@@ -8,6 +8,7 @@ import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
 import { cloudColor, cloudNameShown, DEFAULT_CLOUD_COLOR } from "@/lib/cloud-look";
+import { cloudSells } from "@/lib/cloud-sale";
 import { cloudAddView, offerPlan, sameTerms, startedSleeps, type CloudAddView, type CloudSignInPhase } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";
 import { welcomeOnScreen } from "@/lib/onboarding";
@@ -61,6 +62,7 @@ export function CloudAddPanel({ view, ui, actions }: { view: CloudAddView; ui: C
   switch (view.kind) {
     case "checking": return <StatusScreen kind="checking" line={null} onClose={actions.close} />;
     case "unreachable": return <StatusScreen kind="unreachable" line={t("cloudAdd.unreachable")} onRetry={actions.retry} onClose={actions.close} />;
+    case "no-plans": return <StatusScreen kind="no-plans" line={t("cloudAdd.noPlans")} onRetry={actions.retry} onClose={actions.close} />;
     case "error": return <StatusScreen kind={`error-${view.reason}`} line={t(view.reason === "rate-limited" ? "cloudAdd.rateLimited" : "cloudAdd.failed")}
       onRetry={actions.retry} onClose={actions.close} />;
     case "offer": return <ChooseScreen offer={view.offer} current={ui.current} now={ui.now} busy={ui.busy} signedOut={view.signedOut}
@@ -101,7 +103,7 @@ export function CloudAddSheet({ kind, staging, onClose, children }: { kind: Clou
     </div>
   </div>;
 }
-const OFFER_VIEWS: ReadonlyArray<CloudAddView["kind"]> = ["offer", "checking", "unreachable", "waiting", "sign-in", "signing-in"];
+const OFFER_VIEWS: ReadonlyArray<CloudAddView["kind"]> = ["offer", "checking", "unreachable", "no-plans", "waiting", "sign-in", "signing-in"];
 const FOCUSABLE = "button:not([disabled]):not([tabindex='-1']), input:not([disabled]):not([tabindex='-1']), [href], [tabindex='0']";
 const free = (state: CloudAccountState) => state.status === "connected" && state.entitlement?.plan === "free" && !state.purchase && !state.machine;
 const currentTier = (state: CloudAccountState | null | undefined) =>
@@ -109,12 +111,13 @@ const currentTier = (state: CloudAccountState | null | undefined) =>
 type AutoOpen = number | "off" | "done" | null;
 type Note = "copied" | "pay-failed" | "interest-sent" | "interest-failed" | null;
 
-export function CloudAddDialog({ now = Date.now }: { now?: () => number }) {
+export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: () => number; sells?: () => boolean }) {
   const { state, dispatch } = useStore();
   const request = state.cloudAdd;
   const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   const [offer, setOffer] = useState<CloudOffer | null | undefined>(undefined);
+  const [offerFailed, setOfferFailed] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
   const [error, setError] = useState<"failed" | "rate-limited" | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -143,12 +146,12 @@ export function CloudAddDialog({ now = Date.now }: { now?: () => number }) {
     void bridge.state().then(next => { if (active && !updated) setAccount(next); }).catch(() => {});
     return () => { active = false; unsubscribe(); };
   }, [open, bridge]);
-  const view = open ? cloudAddView(account, offer, { now: now(), error, choosing, conflict, signIn, arrived, terms }) : null;
-  const offerKey = open && view && OFFER_VIEWS.includes(view.kind) && account ? `${account.status}:${JSON.stringify(account.offer ?? null)}:${asked}` : null;
+  const view = open ? cloudAddView(account, offer, { now: now(), sells: sells(), unreachable: offerFailed, error, choosing, conflict, signIn, arrived, terms }) : null;
+  const offerKey = open && sells() && view && OFFER_VIEWS.includes(view.kind) && account ? `${account.status}:${JSON.stringify(account.offer ?? null)}:${asked}` : null;
   useEffect(() => {
     if (!offerKey || !bridge?.offer) return;
     let active = true;
-    void bridge.offer().then(next => { if (active) setOffer(next); }, () => { if (active) setOffer(null); });
+    void bridge.offer().then(next => { if (active) { setOffer(next); setOfferFailed(false); } }, () => { if (active) { setOffer(null); setOfferFailed(true); } });
     return () => { active = false; };
   }, [offerKey, bridge]);
   const defaultName = t("cloudSetup.myCloud");
@@ -363,7 +366,7 @@ export function CloudAddDialog({ now = Date.now }: { now?: () => number }) {
     },
     copyLink: () => { void bridge.copyCheckoutLink?.().then(copied => setNote(copied ? "copied" : "pay-failed"), () => setNote("pay-failed")); },
     changePlan: () => { setChosen(view.kind === "waiting" ? view.plan : chosen); setChoosing(true); setNote(null); },
-    retry: () => { setError(null); setConflict(false); setOffer(undefined); setAsked(asked + 1); },
+    retry: () => { setError(null); setConflict(false); setOffer(undefined); setOfferFailed(false); setAsked(asked + 1); },
     name: value => setLook({ typed: value, color: shownLook.color, dirty: true }),
     color: value => setLook({ typed: shownLook.typed, color: value, dirty: true }),
     openCloud,

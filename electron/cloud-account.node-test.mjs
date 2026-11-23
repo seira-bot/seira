@@ -99,10 +99,12 @@ test("a Team plan's Cloud is its team's: its setup is followed every 15 seconds,
   f.teams = team({ state: "setting_up", origin: null, pairingAvailable: false, setup: { step: "storage" } });
   let state = await f.client.refresh();
   assert.deepEqual(state.teams[0].machine, { status: "provisioning", setup: { step: "storage" } }); assert.equal(f.delay, 15_000);
-  f.teams = team({ state: "ready", status: "ready", origin: "https://omb-t-2.fly.dev", pairingAvailable: true });
+  f.teams = team({ state: "ready", status: "ready", origin: "https://seira-t-2.fly.dev", pairingAvailable: true });
   state = await f.client.refresh();
   assert.equal(state.machine, undefined); assert.equal(f.delay, 60_000, "the team's Cloud is ready: nothing is being set up");
   f.teams = undefined; await f.client.refresh(); assert.equal(f.delay, 15_000, "no team listed yet: its setup");
+  f.teams = team(null); state = await f.client.refresh();
+  assert.equal(state.teams[0].machine, null); assert.equal(f.delay, 60_000, "the team has no machine: nothing is being set up");
 });
 
 test("a connection that fails while the Admin says My Cloud can't be reached says why, from the Admin's latest word; otherwise the request's own error", async t => {
@@ -167,9 +169,9 @@ const plans = () => [
 test("what this person may buy: the session's own offer when signed in, else the public plans, read with no sign-in or cookie at most every 10 minutes", async t => {
   const f = await fixture(t);
   const asked = () => f.requests.filter(row => row.route === "/api/public/config");
-  assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1);
-  assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
-  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "OpenMausBot", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
+  await assert.rejects(f.client.offer()); assert.equal(asked().length, 1);
+  await assert.rejects(f.client.offer()); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
+  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "Seira", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
   const [first, second] = await Promise.all([f.client.offer(), f.client.offer()]);
   assert.deepEqual(first.plans.map(plan => [plan.tier, plan.amount, plan.trialDays]), [["starter", 1500, 7], ["pro", 4900, 7]]);
   assert.deepEqual([first.recommended, first.creditUsd, first.refundDays], ["pro", 5, 14]);
@@ -178,7 +180,8 @@ test("what this person may buy: the session's own offer when signed in, else the
   assert.ok(asked().every(row => row.token === undefined && row.cookie === undefined && row.method === "GET" && row.version === undefined));
   for (const publicConfig of [{ status: 200, body: { plans: "pro" } }, { status: 503, body: { error: "down" } }, { status: 403, body: "<!doctype html>Just a moment" }]) {
     f.now += 10 * 60_000; f.publicConfig = publicConfig;
-    assert.equal(await f.client.offer(), null, JSON.stringify(publicConfig));
+    if (publicConfig.status === 200) assert.equal(await f.client.offer(), null, JSON.stringify(publicConfig));
+    else await assert.rejects(f.client.offer(), JSON.stringify(publicConfig));
   }
   assert.equal(f.client.state().status, "signed-out"); assert.deepEqual(f.browsers, []);
   f.now += 10 * 60_000; f.publicConfig = { status: 200, body: { plans: plans(), trial: { days: 7 }, refundDays: 14 } };
@@ -193,11 +196,35 @@ test("what this person may buy: the session's own offer when signed in, else the
   assert.deepEqual(fallback.plans.map(plan => plan.trialDays ?? null), [null, null]); assert.equal(fallback.refundDays, 14);
 });
 
+test("the offer tells a failed ask from Seira Cloud listing no plan, and logs each change once without a token", async t => {
+  const warnings = [], f = await fixture(t, { warn: message => warnings.push(message) });
+  const next = async publicConfig => { f.now += 10 * 60_000; f.publicConfig = publicConfig; };
+  await next({ status: 503, body: { error: "down" } });
+  await assert.rejects(f.client.offer()); await assert.rejects(f.client.offer());
+  await next({ status: 403, body: "<!doctype html>Just a moment" });
+  await assert.rejects(f.client.offer());
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: [] } });
+  assert.equal(await f.client.offer(), null);
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: [] } });
+  assert.equal(await f.client.offer(), null);
+  await next({ status: 200, body: { name: "Seira", surface: "cloud", plans: plans(), refundDays: 14 } });
+  assert.ok((await f.client.offer()).plans.length);
+  await next({ status: 500, body: { error: "down" } });
+  await assert.rejects(f.client.offer());
+  assert.deepEqual(warnings, [
+    "[cloud] offer: public config failed (503)",
+    "[cloud] offer: public config failed (403)",
+    "[cloud] offer: Seira Cloud lists no plan this app can sell",
+    "[cloud] offer: public config failed (500)",
+  ]);
+  assert.ok(warnings.every(line => !/token|bearer|https?:/i.test(line)));
+});
+
 test("Dodo's own checkout page is the only checkout address ever opened", () => {
   assert.equal(checkoutDestination("https://checkout.dodopayments.com/session/cks_123?x=1"), "https://checkout.dodopayments.com/session/cks_123?x=1");
   for (const url of ["https://test.checkout.dodopayments.com/session/cks_123", "http://checkout.dodopayments.com/session/1", "https://checkout.dodopayments.com.evil.test/session/1",
     "https://user:pw@checkout.dodopayments.com/session/1", "https://checkout.dodopayments.com/session/1#x", "https://checkout.dodopayments.com/session/1#",
-    "javascript:alert(1)", "file:///etc/passwd", "openmausbot://cloud", "https://evil.example.test/", "", 42, null, `https://checkout.dodopayments.com/${"x".repeat(2100)}`]) {
+    "javascript:alert(1)", "file:///etc/passwd", "seira://cloud", "https://evil.example.test/", "", 42, null, `https://checkout.dodopayments.com/${"x".repeat(2100)}`]) {
     assert.equal(checkoutDestination(url), null, String(url));
   }
   assert.equal(checkoutDestination("https://test.checkout.dodopayments.com/session/cks_123", { fixture: true }), "https://test.checkout.dodopayments.com/session/cks_123");
@@ -467,7 +494,7 @@ test("only the Admin's own answer ends a sign-in: a 401/403 page from in between
   const f = await fixture(t); await f.connect();
   const paid = { plan: "pro", tier: "max", status: "active", expiresAt: f.now + 3 * 3600_000, version: 1 };
   f.entitlement = paid; await f.client.refresh();
-  // A firewall or bot-check page (Cloudflare serves cloud.openmausbot.com).
+  // A firewall or bot-check page (Cloudflare serves cloud.seira.bot).
   f.sessionPage = 403;
   let state = await f.client.refresh();
   assert.equal(state.status, "connected"); assert.deepEqual(state.entitlement, paid); assert.equal(state.checking, undefined);
@@ -547,7 +574,7 @@ test("invalid browser URLs are refused and cancellation cannot persist a late is
 });
 
 test("Cloud records use separate encrypted atomic storage, not plaintext or saved entitlements", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-record-"));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-record-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "cloud-account.bin"); let unlocked = true;
   // The fixture substitutes encryption; it does not use the user's keychain.
@@ -559,7 +586,7 @@ test("Cloud records use separate encrypted atomic storage, not plaintext or save
 });
 
 test("a saved Cloud sign-in is read back after a restart with Electron 43's decrypt shape ({ shouldReEncrypt, result })", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-electron43-"));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-electron43-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "cloud-account.bin");
   // Exactly what safeStorage.decryptStringAsync resolves to in Electron 43, not a bare string.
@@ -577,7 +604,7 @@ const electron43Store = (file, lock = { locked: false }, decrypt) => createCloud
 const savedSignIn = f => ({ origin: f.origin, token: accessToken, expiresAt: f.now + 86400_000, device: { id: "fixture-device" }, account: { id: "fixture-account", email: "person@example.test" } });
 
 test("a saved Cloud sign-in that can never be read is removed, and signing in again is the one next step", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-unreadable-"));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-unreadable-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "cloud-account.bin");
   for (const decrypt of [
@@ -596,7 +623,7 @@ test("a saved Cloud sign-in that can never be read is removed, and signing in ag
 });
 
 test("a locked keychain never removes the saved Cloud sign-in: it is read again, sooner then each minute, until it opens", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-locked-"));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-locked-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "cloud-account.bin"), lock = { locked: false };
   const f = await fixture(t, { store: electron43Store(file, lock) });
@@ -614,7 +641,7 @@ test("a locked keychain never removes the saved Cloud sign-in: it is read again,
 });
 
 test("a decrypt answer in a shape this app does not know is never taken for an unreadable sign-in", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-shape-"));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-shape-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "cloud-account.bin");
   const f = await fixture(t, { store: electron43Store(file, undefined, async () => ({ shouldReEncrypt: false })) });
@@ -624,7 +651,7 @@ test("a decrypt answer in a shape this app does not know is never taken for an u
 });
 
 test("cancelling during the encrypted write queues deletion after it and cannot restore the grant", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "omb-cloud-cancel-")); t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await mkdtemp(join(tmpdir(), "seira-cloud-cancel-")); t.after(() => rm(directory, { recursive: true, force: true }));
   let release, writing = false; const gate = new Promise(resolve => { release = resolve; });
   const store = createCloudAccountStore({ file: join(directory, "cloud-account.bin"), encryption: { available: async () => true,
     encrypt: async value => { writing = true; await gate; return Buffer.from(value); }, decrypt: value => value.toString() } });
@@ -639,12 +666,13 @@ test("X research access: this sign-in's own relay token, null without a plan or 
   assert.equal(await f.client.xResearchAccess(), null);
   assert.equal(f.requests.length, before);
   await f.connect();
-  const token = `omb_xd_${"a".repeat(43)}`, url = `${f.origin}/api/cloud/services/x`;
+  const token = `seira_xd_${"a".repeat(43)}`, url = `${f.origin}/api/cloud/services/x`;
   f.x = { status: 200, body: { cloudContractVersion: 1, url, token } };
   assert.deepEqual(await f.client.xResearchAccess(), { url, token });
   assert.ok(f.requests.some(r => r.route === "/api/cloud/desktop/services/x" && r.method === "POST" && r.token === `Bearer ${accessToken}`));
   f.x = { status: 402, body: { error: "subscription_inactive" } }; assert.equal(await f.client.xResearchAccess(), null);
   f.x = { status: 404, body: { error: "unsupported" } }; assert.equal(await f.client.xResearchAccess(), null);
+  f.x = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.xResearchAccess(), null);
   f.x = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/services/x", token } }; await assert.rejects(f.client.xResearchAccess(), /Invalid/);
   f.x = { status: 200, body: { cloudContractVersion: 1, url, token: "short" } }; await assert.rejects(f.client.xResearchAccess(), /Invalid/);
   f.x = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.xResearchAccess());
@@ -661,8 +689,9 @@ test("pages access: this sign-in's own pages token on any plan, null without the
   assert.deepEqual(await f.client.pagesAccess(), { url, token });
   assert.ok(f.requests.some(r => r.route === "/api/cloud/desktop/services/pages" && r.method === "POST" && r.token === `Bearer ${accessToken}`));
   f.pages = { status: 404, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
+  f.pages = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/pages/token", token } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
-  f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: `omb_xd_${"a".repeat(43)}` } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
+  f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: `seira_xd_${"a".repeat(43)}` } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
   f.pages = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.pagesAccess());
 });
 
@@ -684,7 +713,7 @@ test("My Cloud's line in the server menus says what is true now: the trial's end
 
 test("the session's teams come with a verified session, each with its Cloud; a team pairing is asked of the Admin's team route for the team's own address, and 404 means the person is no longer in it", async t => {
   const f = await fixture(t); await f.connect();
-  const origin = "https://omb-u-acme.fly.dev", code = "AAAA-BBBB-CCCC";
+  const origin = "https://seira-u-acme.fly.dev", code = "AAAA-BBBB-CCCC";
   assert.equal(f.client.state().teams, undefined, "in no team: nothing added");
   f.teams = [{ id: "team-acme", name: "Acme", role: "member", machine: { state: "ready", origin, pairingAvailable: true, status: "ready" } }, { id: "team-x", name: "Later", role: "admin", machine: null }];
   await f.client.refresh();
@@ -692,7 +721,7 @@ test("the session's teams come with a verified session, each with its Cloud; a t
   assert.equal(f.client.homeTarget(), null, "a team's Cloud is never My Cloud");
   await assert.rejects(f.client.pairTeam("team-x"), { message: "Later isn't ready to open yet." });
   await assert.rejects(f.client.pairTeam("team-nope"), { gone: true });
-  f.teamPairing = { status: 200, body: { cloudContractVersion: 1, origin, code, pairingUrl: `${origin}/pair#code=${code}`, expiresAt: f.now + 300_000, credential: "omb_pair_x" } };
+  f.teamPairing = { status: 200, body: { cloudContractVersion: 1, origin, code, pairingUrl: `${origin}/pair#code=${code}`, expiresAt: f.now + 300_000, credential: "seira_pair_x" } };
   assert.deepEqual(await f.client.pairTeam("team-acme"), { origin, code, expiresAt: f.now + 300_000 });
   const asked = f.requests.filter(request => request.route.includes("/teams/"));
   assert.deepEqual(asked.map(request => [request.route, request.method, request.token]), [["/api/cloud/desktop/teams/team-acme/pairing", "POST", `Bearer ${accessToken}`]]);

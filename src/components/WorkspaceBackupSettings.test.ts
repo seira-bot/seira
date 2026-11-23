@@ -33,7 +33,7 @@ function render(recovery: boolean | "restart" | "cloud" = false) {
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const submit = (form: Node) => form.props.onSubmit!({ preventDefault: vi.fn() });
 const change = (input: Node, value: string) => input.props.onChange!({ target: { value } });
-const summary: WorkspaceBackupSummary = { format: "openmaus.workspace-backup", version: 1, id: "archive-id", createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 9, directories: 3, bytes: 1234, bots: 2, groups: 1, threads: 4, messages: 8, warnings: ["Fixture warning"], exclusions: ["Saved account credentials and connections", "External CLI sign-ins"] };
+const summary: WorkspaceBackupSummary = { format: "seira.workspace-backup", version: 1, id: "archive-id", createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 9, directories: 3, bytes: 1234, bots: 2, groups: 1, threads: 4, messages: 8, warnings: ["Fixture warning"], exclusions: ["Saved account credentials and connections", "External CLI sign-ins"] };
 let storage: Map<string, string>;
 beforeEach(() => {
   fixture.values = []; fixture.index = 0; fixture.effects = []; fixture.api.mockReset();
@@ -70,7 +70,7 @@ describe("Settings full backups", () => {
 
   it("exports encrypted state by POST and downloads without putting the password in a URL or storage", async () => {
     await ready();
-    storage.set("omb-drafts", "private draft"); storage.set("auth-token", "not exported"); storage.set("omb-webhook-credentials", "not exported either");
+    storage.set("seira-drafts", "private draft"); storage.set("auth-token", "not exported"); storage.set("seira-webhook-credentials", "not exported either");
     open("export");
     let view = render();
     const passwords = view.nodes.filter((node) => node.type === "input" && node.props.type === "password");
@@ -84,7 +84,7 @@ describe("Settings full backups", () => {
     expect(fixture.api).toHaveBeenCalledTimes(2); // one status, one export
     const [path, init] = fixture.api.mock.calls[1];
     expect(path).toBe("/api/workspace-backup/export");
-    expect(JSON.parse(init.body)).toEqual({ password: "correct horse battery", clientState: { "omb-drafts": "private draft" } });
+    expect(JSON.parse(init.body)).toEqual({ password: "correct horse battery", clientState: { "seira-drafts": "private draft" } });
     expect(link.href).toBe("/api/workspace-backup/download/download-id");
     expect(link.click).toHaveBeenCalledOnce();
     expect([...storage.values()]).not.toContain("correct horse battery");
@@ -111,10 +111,11 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     let view = render();
     change(view.nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
-    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id", chunkBytes: 1024 }).mockResolvedValueOnce({ received: file.size }).mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
     submit(formOf("backup-import")); await flush();
-    expect(fixture.api.mock.calls[1]).toEqual(["/api/workspace-backup/upload", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file }]);
-    expect(JSON.parse(fixture.api.mock.calls[2][1].body)).toEqual({ id: "upload-id", password: "correct horse battery" });
+    expect(fixture.api.mock.calls.slice(1, 4).map(([path]) => path)).toEqual(["/api/workspace-backup/upload/start", "/api/workspace-backup/upload/upload-id/chunk?offset=0&bytes=17", "/api/workspace-backup/upload/upload-id/finish"]);
+    expect(fixture.api.mock.calls[2][1]).toMatchObject({ method: "POST", headers: { "content-type": "application/octet-stream" } });
+    expect(JSON.parse(fixture.api.mock.calls[4][1].body)).toEqual({ id: "upload-id", password: "correct horse battery" });
     view = render();
     const replace = () => render().nodes.find((node) => node.type === "button" && node.props.children === "Replace installation")!;
     expect(replace().props.disabled).toBe(true);
@@ -123,8 +124,8 @@ describe("Settings full backups", () => {
     change(confirm, "REPLACE"); expect(replace().props.disabled).toBe(false);
     fixture.api.mockResolvedValueOnce({ restartRequired: true, restoreId: "stage-id" });
     replace().props.onClick!(); await flush();
-    expect(JSON.parse(fixture.api.mock.calls[3][1].body)).toEqual({ id: "stage-id", confirmation: "REPLACE" });
-    expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(JSON.parse(fixture.api.mock.calls[5][1].body)).toEqual({ id: "stage-id", confirmation: "REPLACE" });
+    expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(render().html).toContain("Fully quit Seira");
   });
 
@@ -133,10 +134,48 @@ describe("Settings full backups", () => {
     open("import");
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [new File(["archive"], "file.seirabackup")] } });
     change(render().nodes.filter((node) => node.props.type === "password")[0], "wrong password");
-    fixture.api.mockResolvedValueOnce({ id: "upload" }).mockRejectedValueOnce(new Error("Wrong password"));
+    fixture.api.mockResolvedValueOnce({ id: "upload" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload" }).mockRejectedValueOnce(new Error("Wrong password"));
     submit(formOf("backup-import")); await flush();
     const html = render().html;
     expect(html).toContain('role="alert"'); expect(html).toContain("Wrong password"); expect(html).not.toContain("Replace installation");
+  });
+
+  it("shows an error with a Retry button when the upload fails, and the retry resumes the same upload", async () => {
+    await ready();
+    const file = new File(["archive"], "file.seirabackup");
+    open("import");
+    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
+    change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
+    const refusal = Object.assign(new Error("The backup is too large."), { status: 413 });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockRejectedValueOnce(refusal);
+    submit(formOf("backup-import")); await flush();
+    let html = render().html;
+    expect(html).toMatch(/role="alert"[^>]*>The backup is too large\./);
+    expect(html).not.toContain("Validating backup");
+    const retry = render().nodes.find((node) => node.type === "button" && node.props.type === "submit")!;
+    expect(retry.props.children).toContain("Retry");
+    fixture.api.mockResolvedValueOnce({ received: 0 }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    submit(formOf("backup-import")); await flush();
+    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload/start"))).toHaveLength(1);
+    expect(fixture.api.mock.calls.map(([path]) => path)).toContain("/api/workspace-backup/upload/upload-id");
+    expect(render().html).toContain("Validated backup");
+  });
+
+  it("shows the percent sent while the file uploads, before validation", async () => {
+    await ready();
+    const file = new File(["archive"], "file.seirabackup");
+    open("import");
+    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
+    change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery");
+    let release!: (value: unknown) => void;
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    submit(formOf("backup-import")); await flush();
+    expect(render().html).toContain("Uploading backup… 0%");
+    expect(render().html).not.toContain("Validating backup");
+    release({ received: 7 });
+    fixture.api.mockResolvedValueOnce({ id: "upload-id" }).mockResolvedValueOnce({ id: "stage-id", summary });
+    await flush();
+    expect(render().html).toContain("Validated backup");
   });
 
   it("reuploads the selected file if its upload or validated stage expires", async () => {
@@ -146,37 +185,37 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     const validate = async () => { change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery"); submit(formOf("backup-import")); await flush(); };
     const expired = Object.assign(new Error("Backup expired; upload again"), { status: 404 });
-    fixture.api.mockResolvedValueOnce({ id: "upload-old" }).mockRejectedValueOnce(expired);
+    fixture.api.mockResolvedValueOnce({ id: "upload-old" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-old" }).mockRejectedValueOnce(expired);
     await validate();
-    fixture.api.mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ id: "stage-old", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-new" }).mockResolvedValueOnce({ id: "stage-old", summary });
     await validate();
     change(render().nodes.find((node) => node.type === "input" && !node.props.type)!, "REPLACE");
     fixture.api.mockRejectedValueOnce(expired);
     render().nodes.find((node) => node.type === "button" && node.props.children === "Replace installation")!.props.onClick!(); await flush();
     expect(render().html).not.toContain("Validated backup");
-    fixture.api.mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ id: "stage-final", summary });
+    fixture.api.mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ received: 7 }).mockResolvedValueOnce({ id: "upload-final" }).mockResolvedValueOnce({ id: "stage-final", summary });
     await validate();
-    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload"))).toHaveLength(3);
+    expect(fixture.api.mock.calls.filter(([path]) => path.endsWith("/upload/start"))).toHaveLength(3);
     expect(render().html).toContain("Validated backup");
   });
 
   it("does not restore client state before restart, then replaces only the initiating browser's allowlist", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id"); storage.set("omb-drafts", "old"); storage.set("auth-token", "keep");
+    storage.set("seira-pending-workspace-restore", "stage-id"); storage.set("seira-drafts", "old"); storage.set("auth-token", "keep");
     fixture.api.mockResolvedValueOnce({ busy: true, pendingRestore: true });
     expect(render(true).html).not.toContain("Continue without restoring drafts");
     fixture.effects[0](); await flush();
     expect(render(true).html).toContain("Fully quit Seira");
     expect(render(true).html).not.toContain("Continue without restoring drafts");
-    expect(fixture.api).toHaveBeenCalledOnce(); expect(storage.get("omb-drafts")).toBe("old");
+    expect(fixture.api).toHaveBeenCalledOnce(); expect(storage.get("seira-drafts")).toBe("old");
     fixture.values = [];
-    fixture.api.mockResolvedValueOnce({ busy: false, lastRestoreId: "stage-id" }).mockResolvedValueOnce({ clientState: { "omb-drafts": "restored" } });
+    fixture.api.mockResolvedValueOnce({ busy: false, lastRestoreId: "stage-id" }).mockResolvedValueOnce({ clientState: { "seira-drafts": "restored" } });
     render(true); fixture.effects[0](); await flush();
-    expect(storage.get("omb-drafts")).toBe("restored"); expect(storage.get("auth-token")).toBe("keep");
-    expect(storage.has("omb-pending-workspace-restore")).toBe(false); expect(window.location.reload).toHaveBeenCalledOnce();
+    expect(storage.get("seira-drafts")).toBe("restored"); expect(storage.get("auth-token")).toBe("keep");
+    expect(storage.has("seira-pending-workspace-restore")).toBe(false); expect(window.location.reload).toHaveBeenCalledOnce();
   });
 
   it("on a server that restarts itself, waits instead of asking to quit, then carries on once the restore is installed", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id");
+    storage.set("seira-pending-workspace-restore", "stage-id");
     fixture.api.mockResolvedValueOnce({ busy: true, pendingRestore: true, restarts: true });
     render(true); fixture.effects[0](); await flush();
     expect(render(true).html).toContain("is restarting to finish it");
@@ -205,11 +244,11 @@ describe("Settings full backups", () => {
       expect(window.location.reload).toHaveBeenCalledOnce();
       stop();
     } finally { vi.useRealTimers(); }
-    expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
   });
 
   it("on a server that restarts itself, says so when the restart takes much longer, and keeps waiting", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id");
+    storage.set("seira-pending-workspace-restore", "stage-id");
     vi.useFakeTimers();
     try {
       expect(render("cloud").html).not.toContain("longer than usual");
@@ -220,7 +259,7 @@ describe("Settings full backups", () => {
       expect(window.location.reload).not.toHaveBeenCalled();
       stop();
     } finally { vi.useRealTimers(); }
-    expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
   });
 
   it("on a server that restarts itself, reloads to sign-in when the restored workspace does not know this browser", async () => {
@@ -238,7 +277,7 @@ describe("Settings full backups", () => {
   it("offers a real desktop restart without clearing the restore marker or drafts, once only", async () => {
     const relaunch = vi.fn().mockResolvedValue(true);
     vi.stubGlobal("window", { ...window, ogb: { relaunch } });
-    storage.set("omb-pending-workspace-restore", "stage-id"); storage.set("omb-drafts", "keep");
+    storage.set("seira-pending-workspace-restore", "stage-id"); storage.set("seira-drafts", "keep");
     fixture.api.mockResolvedValueOnce({ busy: true, pendingRestore: true });
     render(true); fixture.effects[0](); await flush();
     expect(render(true).html).toContain("Restart and restore");
@@ -248,20 +287,20 @@ describe("Settings full backups", () => {
     restart.props.onClick!(); restart.props.onClick!(); await flush();
     expect(relaunch).toHaveBeenCalledOnce();
     expect(render("restart").nodes.find(node => node.type === "button")!.props.disabled).toBe(true);
-    expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
-    expect(storage.get("omb-drafts")).toBe("keep");
+    expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-drafts")).toBe("keep");
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
   it.each([false, new Error("Fixture restart unavailable")])("keeps recovery intact and offers a retry when native restart fails (%s)", async result => {
     const relaunch = result === false ? vi.fn().mockResolvedValue(false) : vi.fn().mockRejectedValue(result);
     vi.stubGlobal("window", { ...window, ogb: { relaunch } });
-    storage.set("omb-pending-workspace-restore", "stage-id");
+    storage.set("seira-pending-workspace-restore", "stage-id");
     render("restart").nodes.find(node => node.type === "button")!.props.onClick!(); await flush();
     const view = render("restart");
     expect(view.html).toContain("Could not restart Seira");
     expect(view.nodes.find(node => node.type === "button")!.props.disabled).toBe(false);
-    expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
@@ -274,7 +313,7 @@ describe("Settings full backups", () => {
   });
 
   it("retains the server-status retry for browser recovery", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id");
+    storage.set("seira-pending-workspace-restore", "stage-id");
     fixture.api.mockResolvedValueOnce({ busy: true, pendingRestore: true });
     render(true); fixture.effects[0](); await flush();
     expect(render(true).html).toContain(">Retry<");
@@ -282,30 +321,30 @@ describe("Settings full backups", () => {
   });
 
   it("never imports a different restore's browser state", async () => {
-    storage.set("omb-pending-workspace-restore", "my-stage"); storage.set("omb-drafts", "keep");
+    storage.set("seira-pending-workspace-restore", "my-stage"); storage.set("seira-drafts", "keep");
     fixture.api.mockResolvedValueOnce({ busy: false, lastRestoreId: "another-stage" });
     render(true); fixture.effects[0](); await flush();
     expect(fixture.api).toHaveBeenCalledOnce();
     expect(render(true).html).toContain("Normal app");
-    expect(storage.get("omb-drafts")).toBe("keep");
-    expect(storage.has("omb-pending-workspace-restore")).toBe(false);
+    expect(storage.get("seira-drafts")).toBe("keep");
+    expect(storage.has("seira-pending-workspace-restore")).toBe(false);
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
   it("keeps the normal app gated and its old drafts intact on recovery failure", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id"); storage.set("omb-drafts", "keep");
+    storage.set("seira-pending-workspace-restore", "stage-id"); storage.set("seira-drafts", "keep");
     fixture.api.mockResolvedValueOnce({ busy: false, lastRestoreId: "stage-id" }).mockRejectedValueOnce(new Error("Fixture unavailable"));
     render(true); fixture.effects[0](); await flush();
     const html = render(true).html;
     expect(html).toContain("Fixture unavailable"); expect(html).toContain("Retry"); expect(html).not.toContain("Normal app");
-    expect(storage.get("omb-drafts")).toBe("keep"); expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-drafts")).toBe("keep"); expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
   it.each([401, 403])("explicitly returns to normal bootstrap after a %s without changing browser state", async (status) => {
-    storage.set("omb-pending-workspace-restore", "stage-id");
-    storage.set("omb-drafts", "keep drafts"); storage.set("omb-draft-attachments", "keep attachments");
-    storage.set("omb-skin", "keep preferences"); storage.set("auth-token", "keep session");
+    storage.set("seira-pending-workspace-restore", "stage-id");
+    storage.set("seira-drafts", "keep drafts"); storage.set("seira-draft-attachments", "keep attachments");
+    storage.set("seira-skin", "keep preferences"); storage.set("auth-token", "keep session");
     const before = new Map(storage);
     if (status === 403) fixture.api.mockResolvedValueOnce({ busy: false, lastRestoreId: "stage-id" });
     fixture.api.mockRejectedValueOnce(Object.assign(new Error("Sign-in required"), { status }));
@@ -315,7 +354,7 @@ describe("Settings full backups", () => {
     expect(view.html).not.toContain("Normal app");
     expect(storage).toEqual(before); expect(window.location.reload).not.toHaveBeenCalled();
     view.nodes.find((node) => node.type === "button" && node.props.children === "Continue without restoring drafts")!.props.onClick!();
-    before.delete("omb-pending-workspace-restore");
+    before.delete("seira-pending-workspace-restore");
     expect(storage).toEqual(before);
     expect(window.location.reload).toHaveBeenCalledOnce();
     expect(render(true).html).not.toContain("Normal app"); // bootstrap, not a direct authentication bypass
@@ -323,13 +362,13 @@ describe("Settings full backups", () => {
   });
 
   it("keeps recovery gated if its marker cannot be cleared", async () => {
-    storage.set("omb-pending-workspace-restore", "stage-id"); storage.set("omb-drafts", "keep");
+    storage.set("seira-pending-workspace-restore", "stage-id"); storage.set("seira-drafts", "keep");
     fixture.api.mockRejectedValueOnce(new Error("Sign-in required"));
     render(true); fixture.effects[0](); await flush();
     vi.spyOn(localStorage, "removeItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
     render(true).nodes.find((node) => node.type === "button" && node.props.children === "Continue without restoring drafts")!.props.onClick!();
     expect(render(true).html).toContain("Storage unavailable"); expect(render(true).html).not.toContain("Normal app");
-    expect(storage.get("omb-drafts")).toBe("keep"); expect(storage.get("omb-pending-workspace-restore")).toBe("stage-id");
+    expect(storage.get("seira-drafts")).toBe("keep"); expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 });

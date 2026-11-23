@@ -17,7 +17,7 @@ import { createLendingTarget } from "./lending-target.mjs";
 import { WORDS } from "./lending-words.mjs";
 import nativeText from "./native-text.cjs";
 
-const HOME = "https://omb-u-fixture.fly.dev", OTHER = "https://omb-c-client-a.fly.dev", TEAM = "https://omb-t-acme.fly.dev";
+const HOME = "https://seira-u-fixture.fly.dev", OTHER = "https://seira-c-client-a.fly.dev", TEAM = "https://seira-t-acme.fly.dev";
 const myCloud = { id: "my-cloud", name: "My Cloud", origin: HOME, home: true };
 const clientA = { id: "client-a", name: "Client A", origin: OTHER, cloud: { id: "c-a", role: "owner" } };
 const acme = { id: "acme", name: "Acme team", origin: TEAM, team: { id: "t-acme", role: "owner" } };
@@ -29,7 +29,7 @@ const until = async (check, what, ms = 5000) => {
 };
 
 async function scratch(t) {
-  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "omb-lend-automatically-")));
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "seira-lend-automatically-")));
   t.after(() => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   return dir;
 }

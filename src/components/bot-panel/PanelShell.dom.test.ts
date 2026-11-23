@@ -25,11 +25,12 @@ vi.mock("../DesktopCapabilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("../DesktopCapabilities")>(),
   useCaptionChrome: () => ({ dragProps: {}, padClass: "" }),
 }));
-vi.mock("../Avatar", () => ({ BotAvatar: () => null, MausAvatar: () => null }));
+vi.mock("../Avatar", () => ({ BotAvatar: () => null, SeiraAvatar: () => null }));
 vi.mock("../AvatarImageGenerator", () => ({ AvatarImageGenerator: () => null }));
 vi.mock("@/lib/use-organization-branding", () => ({ useOrganizationBranding: () => null }));
 const stub = (name: string) => (props: Record<string, unknown>) =>
   createElement("div", { [`data-stub-${name}`]: true, "data-editing-instructions": props.editingInstructions === true ? "true" : undefined });
+vi.mock("./ActivityTab", () => ({ ActivityTab: stub("activity") }));
 vi.mock("./DetailsTab", () => ({ DetailsTab: stub("details") }));
 vi.mock("./LibraryTab", () => ({ LibraryTab: stub("library") }));
 vi.mock("./ComputerTab", () => ({ ComputerTab: stub("computer") }));
@@ -171,22 +172,22 @@ describe("named links into the bot panel", () => {
 });
 
 describe("the panel's tabs", () => {
-  it("are Details, Library and Computer, opening on Details, each drawing its own tab", async () => {
+  it("are Activity, Details, Library and Computer, opening on Activity, each drawing its own tab", async () => {
     render(null);
     await settle();
     expect([...host.querySelectorAll('[role="tab"]')].map((element) => [element.getAttribute("data-panel-tab"), element.textContent]))
-      .toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
-    expect(tab()).toBe("details");
+      .toEqual([["activity", "Activity"], ["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+    expect(tab()).toBe("activity");
     const strip = host.querySelector('[role="tablist"]')!.className.split(" ");
     expect(strip).toEqual(expect.arrayContaining(["sticky", "top-0", "bg-app"]));
     expect(host.querySelector('[role="tab"]')!.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-ink/[0.05]"]));
     expect(host.querySelector('[role="tab"]')!.className.split(" ")).toEqual(expect.arrayContaining(["h-[26px]", "text-[13px]", "font-medium"]));
-    const thumb = () => host.querySelector<HTMLElement>("[data-segment-thumb]")!.style.getPropertyValue("--i");
-    expect(thumb()).toBe("0");
-    for (const id of ["library", "computer", "details"]) {
+    const thumb = () => host.querySelector<HTMLElement>("[data-segment-thumb]")!.dataset.tab;
+    expect(thumb()).toBe("activity");
+    for (const id of ["library", "computer", "details", "activity"]) {
       click(host.querySelector(`[data-panel-tab="${id}"]`));
       expect(tab()).toBe(id);
-      expect(thumb()).toBe(String(["details", "library", "computer"].indexOf(id)));
+      expect(thumb()).toBe(id);
       expect(host.querySelector(`[data-stub-${id}]`), id).not.toBeNull();
     }
   });
@@ -362,7 +363,7 @@ describe("focus around the hero", () => {
     click(avatar());
     await settle();
     expect(card()).not.toBeNull();
-    expect(document.activeElement?.getAttribute("data-avatar-tab")).toBe("bot");
+    expect(document.activeElement?.getAttribute("data-avatar-tab")).toBe("seira");
 
     const event = press(document.activeElement, "Escape");
     expect(event.defaultPrevented).toBe(true);
@@ -399,91 +400,29 @@ describe("focus around the hero", () => {
   );
 });
 
-describe("one body for every bot", () => {
-  const spikyBot: Bot = { ...bot, mascotBody: "spiky" };
-  const everywhere = () => host.querySelector("[data-avatar-body-everywhere]");
+describe("the avatar editor in the panel", () => {
   const openEditor = async (shown: Bot) => {
     flushSync(() => root.render(createElement("aside", { role: "dialog" }, createElement(BotPanel, { bot: shown, derived, linkedSection: null, onClose }))));
     await settle();
     click(host.querySelector("[data-panel-avatar]"));
     await settle();
   };
-
-  it.skipIf(PICKER_BODY_IDS.length < 2)("gives this bot's body to every other bot that wears another one", async () => {
-    fixture.bots = [spikyBot, { ...bot, id: "ada", mascotBody: "cursor" }, { ...bot, id: "bob" }, { ...bot, id: "cara", mascotBody: "spiky" }];
-    await openEditor(spikyBot);
-    expect(everywhere()?.textContent).toBe("Give this body to the other bots (2)");
-    click(everywhere());
-    expect(fixture.dispatch.mock.calls.map(([action]) => action)).toEqual([
-      { type: "updateBot", botId: "ada", patch: { mascotBody: "spiky" } },
-      { type: "updateBot", botId: "bob", patch: { mascotBody: "spiky" } },
-    ]);
-  });
-
-  it.skipIf(PICKER_BODY_IDS.length < 2)("on a Team Cloud, leaves out the bots this person may not restyle", async () => {
-    fixture.team = { admin: false, me: { email: "me@example.test" } };
-    fixture.bots = [
-      spikyBot,
-      { ...bot, id: "edits", yourAccess: "edit" },
-      { ...bot, id: "chats", yourAccess: "chat" },
-      { ...bot, id: "my-mausbot", yourAccess: "chat", defaultBot: { person: "me@example.test" } },
-      { ...bot, id: "their-mausbot", yourAccess: "chat", defaultBot: { person: "ada@example.test" } },
-    ] as Bot[];
-    await openEditor(spikyBot);
-    expect(everywhere()?.textContent).toBe("Give this body to the other bots (2)");
-    click(everywhere());
-    expect(fixture.dispatch.mock.calls.map(([action]) => action.botId)).toEqual(["edits", "my-mausbot"]);
-  });
-
-  it("is not offered once every bot wears this body, or while the bot shows a picture", async () => {
-    fixture.bots = [spikyBot, { ...bot, id: "cara", mascotBody: "spiky" }];
-    await openEditor(spikyBot);
-    expect(everywhere()).toBeNull();
-    flushSync(() => root.unmount());
-    root = createRoot(host);
-    fixture.bots = [spikyBot, { ...bot, id: "ada" }];
-    await openEditor({ ...spikyBot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
-    expect(everywhere()).toBeNull();
-  });
-});
-
-describe("cast characters in the avatar editor", () => {
-  const openEditor = async (shown: Bot) => {
-    flushSync(() => root.render(createElement("aside", { role: "dialog" }, createElement(BotPanel, { bot: shown, derived, linkedSection: null, onClose }))));
-    await settle();
-    click(host.querySelector("[data-panel-avatar]"));
-    await settle();
-  };
-  const characters = () => [...host.querySelectorAll("[data-cast-character]")];
   const patch = (derived as unknown as { patch: ReturnType<typeof vi.fn> }).patch;
 
-  it("shows ten named characters above the hair, then all 25 after the toggle", async () => {
+  it("shows three tabs and none of the old controls", async () => {
     await openEditor(bot);
-    expect(characters()).toHaveLength(10);
-    expect(characters()[0]!.textContent).toBe("Mira");
-    const group = host.querySelector('[role="group"][aria-label="Characters"]')!;
-    const hair = host.querySelector('[role="group"][aria-label="Hair"]');
-    if (hair) expect(group.compareDocumentPosition(hair) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const more = host.querySelector("[data-cast-more]")!;
-    expect(more.textContent).toBe("Show all 25 characters");
-    click(more);
-    expect(characters()).toHaveLength(25);
-    expect(more.getAttribute("aria-expanded")).toBe("true");
-    expect(more.textContent).toBe("Show fewer characters");
+    const tabs = [...host.querySelectorAll("[data-panel-avatar-editor] [role=\"tab\"]")].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Seira", "Generate", "Upload"]);
+    for (const attribute of ["data-avatar-crop", "data-avatar-reset", "data-avatar-more", "data-avatar-body-everywhere", "data-cast-character"]) {
+      expect(host.querySelector(`[${attribute}]`)).toBeNull();
+    }
   });
 
-  it("picking a character sends its whole look and the mascot crop", async () => {
+  it.skipIf(PICKER_BODY_IDS.length < 2)("picking hair over a picture shows the mascot and keeps the picture", async () => {
     patch.mockReset();
     await openEditor({ ...bot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
-    click(host.querySelector('[data-avatar-tab="bot"]'));
-    expect(characters().every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
-    click(host.querySelector('[data-cast-character="rhea"]'));
-    expect(patch).toHaveBeenCalledWith({ color: "red", mascotBody: "ponytail", mascotAccessories: ["glasses", "earring"], avatarCrop: "mascot" });
-  });
-
-  it("presses the character the bot wears", async () => {
-    await openEditor({ ...bot, color: "teal", mascotBody: "short-neat", mascotAccessories: ["glasses", "headphones"] });
-    expect(host.querySelector('[data-cast-character="bix"]')!.getAttribute("aria-pressed")).toBe("true");
-    expect(characters().filter((button) => button.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+    click(host.querySelector('[data-avatar-tab="seira"]'));
+    click(host.querySelector(`[data-avatar-hair="${PICKER_BODY_IDS[1]}"]`));
+    expect(patch).toHaveBeenCalledWith({ mascotBody: PICKER_BODY_IDS[1], avatarCrop: "mascot" });
   });
 });

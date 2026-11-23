@@ -1,0 +1,8 @@
+[
+  {
+    "uuid": "acct-1",
+    "full_name": "Test Person",
+    "email_address": "person@example.invalid",
+    "verified_phone_number": null
+  }
+]

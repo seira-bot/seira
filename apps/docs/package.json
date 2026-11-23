@@ -1,5 +1,5 @@
 {
-  "name": "@openmausbot/docs",
+  "name": "@seira/docs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,6 +7,7 @@
     "prebuild": "pnpm assets:sync",
     "predev": "pnpm assets:sync",
     "build": "next build",
+    "postbuild": "node scripts/defer-scripts.mjs",
     "dev": "next dev",
     "start": "next start",
     "types:check": "next typegen && tsc --noEmit",
@@ -19,7 +20,7 @@
     "fumadocs-mdx": "15.3.0",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.14.5",
     "lucide-react": "^1.31.0",
-    "next": "16.4.3",
+    "next": "16.4.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0"

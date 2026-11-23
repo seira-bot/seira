@@ -1,21 +1,23 @@
 import { forwardRef, memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { User } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { avatarMarks, type AvatarKind } from "@/lib/avatar-marks";
-import type { MausColor, MausMotion, MausState } from "@/lib/mascot";
+import type { SeiraColor, SeiraMotion, MascotState } from "@/lib/mascot";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import { botBodyId, type BotBodyId } from "../../shared/bot-body";
 import { mascotAccessories, type MascotAccessoryId } from "../../shared/mascot-accessories";
 import { t } from "@/lib/i18n";
+import type { PersonLook } from "../../shared/person-look";
 import { CarvedAvatar, type CarvedAvatarHandle } from "./CarvedAvatar";
 
-export type MausAvatarHandle = CarvedAvatarHandle;
+export type SeiraAvatarHandle = CarvedAvatarHandle;
 
-export type MausAvatarProps = {
-  color: MausColor;
-  state?: MausState;
+export type SeiraAvatarProps = {
+  color: SeiraColor;
+  state?: MascotState;
   size?: number;
   label?: string;
-  motion?: MausMotion;
+  motion?: SeiraMotion;
   motionKey?: number;
   gaze?: { x?: number; y?: number };
   trackPointer?: boolean;
@@ -26,16 +28,16 @@ export type MausAvatarProps = {
   kind?: AvatarKind;
 };
 
-function MausAvatarComponent({ bodyId, ...props }: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
+function SeiraAvatarComponent({ bodyId, ...props }: SeiraAvatarProps, ref: React.Ref<SeiraAvatarHandle>) {
   return <CarvedAvatar ref={ref} body={botBodyId(bodyId)} {...props} />;
 }
 
-export const MausAvatar = memo(forwardRef(MausAvatarComponent));
+export const SeiraAvatar = memo(forwardRef(SeiraAvatarComponent));
 
-export type BotAvatarProps = Omit<MausAvatarProps, "color"> & {
+export type BotAvatarProps = Omit<SeiraAvatarProps, "color"> & {
   bot: {
     name?: string;
-    color: MausColor;
+    color: SeiraColor;
     avatarUrl?: string | null;
     avatarCrop?: BotAvatarCrop;
     avatarZoom?: number;
@@ -77,7 +79,7 @@ export function BotAvatar({ bot, size = 44, label, ...mascotProps }: BotAvatarPr
 
   if (outcome !== "flatImage") {
     return (
-      <MausAvatar
+      <SeiraAvatar
         bodyId={bot.mascotBody ?? undefined}
         {...mascotProps}
         color={bot.color}
@@ -149,5 +151,31 @@ export function InitialsAvatar({
     >
       {fallback ?? initials}
     </div>
+  );
+}
+
+/** The person's own face: their photo, else the look saved for them, else a plain person. Never initials or "?". */
+export function PersonAvatar({ profile, size = 32, className }: {
+  profile?: { avatarUrl?: string; look?: PersonLook };
+  size?: number;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const url = profile?.avatarUrl;
+  const look = profile?.look;
+  if (url && failed !== url) {
+    return <img {...avatarMarks("person", "picture")} src={url} alt="" onError={() => setFailed(url)} className={cn("shrink-0 rounded-full object-cover", className)} style={{ width: size, height: size }} />;
+  }
+  if (look) {
+    return (
+      <span className={cn("flex shrink-0 items-center justify-center rounded-full", className)} style={{ width: size, height: size }}>
+        <SeiraAvatar kind="person" color={look.color} bodyId={look.mascotBody} accessories={look.mascotAccessories} state="happy" size={size} animated={false} />
+      </span>
+    );
+  }
+  return (
+    <span {...avatarMarks("person", "initials")} aria-hidden="true" className={cn("flex shrink-0 items-center justify-center rounded-full bg-raised text-ink-secondary", className)} style={{ width: size, height: size }}>
+      <User size={Math.round(size * 0.55)} aria-hidden="true" />
+    </span>
   );
 }

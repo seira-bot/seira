@@ -29,7 +29,7 @@ describe("DeviceRegistry", () => {
     const registry = new DeviceRegistry();
     const { token, device } = pair(registry);
 
-    expect(token.startsWith("omb_")).toBe(true);
+    expect(token.startsWith("seira_")).toBe(true);
     expect(registry.authenticate(token)?.id).toBe(device.id);
 
     const raw = readFileSync(join(DATA_DIR, "devices.json"), "utf8");
@@ -117,14 +117,14 @@ describe("DeviceRegistry", () => {
 
     expect(registry.authenticate(undefined)).toBeNull();
     expect(registry.authenticate("")).toBeNull();
-    expect(registry.authenticate("omb_nope")).toBeNull();
+    expect(registry.authenticate("seira_nope")).toBeNull();
     expect(registry.authenticate(token.slice(0, -1))).toBeNull();
     expect(registry.authenticate(`${token}x`)).toBeNull();
   });
 
-  it("burns the pairing window after too many wrong codes", () => {
+  it("wrong codes lock the code but not the QR token", () => {
     const registry = new DeviceRegistry();
-    const { code } = registry.openPairing();
+    const { code, token } = registry.openPairing();
     const wrong = code === "000000" ? "111111" : "000000";
 
     for (let i = 1; i < MAX_PAIRING_ATTEMPTS; i++) {
@@ -132,10 +132,61 @@ describe("DeviceRegistry", () => {
       expect(registry.pairing()).not.toBeNull();
     }
     expect(registry.redeem(wrong, "iPhone")).toMatchObject({ error: expect.stringContaining("start pairing again"), code: "pairing_too_many" });
-    expect(registry.pairing()).toBeNull();
+    expect(registry.pairing()).not.toBeNull();
 
-    expect(registry.redeem(code, "iPhone")).toMatchObject({ error: expect.stringContaining("no pairing"), code: "pairing_not_open" });
+    expect(registry.redeem(code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
     expect(registry.count()).toBe(0);
+    expect(registry.redeem(token, "iPhone")).toHaveProperty("token");
+    expect(registry.count()).toBe(1);
+  });
+
+  it("locks the code of a renewed window and of the window it replaced", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const second = registry.renewPairing();
+    const wrong = [first.code, second.code].includes("000000") ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    expect(registry.redeem(second.code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+    expect(registry.redeem(first.token, "iPhone")).toHaveProperty("token");
+  });
+
+  it("a renewal keeps the code lock", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    expect(registry.redeem(renewed.code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+    expect(registry.redeem(renewed.token, "iPhone")).toHaveProperty("token");
+  });
+
+  it("a renewal keeps the remaining attempts", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS - 2; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    const wrongAgain = renewed.code === "000000" ? "111111" : "000000";
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+  });
+
+  it("starting pairing again restores the code", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const reopened = registry.openPairing();
+    expect(registry.redeem(reopened.code, "iPhone")).toHaveProperty("token");
+  });
+
+  it("does not count a wrong token against the code", () => {
+    const registry = new DeviceRegistry();
+    const { code } = registry.openPairing();
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS + 2; i++) {
+      expect(registry.redeem("seira_pair_wrong", "iPhone")).toMatchObject({ code: "pairing_code_wrong" });
+    }
+    expect(registry.redeem(code, "iPhone")).toHaveProperty("token");
   });
 
   it("spends a code exactly once", () => {
@@ -167,7 +218,7 @@ describe("DeviceRegistry", () => {
     expect(registry.redeem(credential, "iPhone", "different-request-id")).toMatchObject({
       error: expect.stringContaining("no pairing"),
     });
-    expect(registry.redeem("omb_pair_wrong", "iPhone", requestId)).toMatchObject({
+    expect(registry.redeem("seira_pair_wrong", "iPhone", requestId)).toMatchObject({
       error: expect.stringContaining("no pairing"),
     });
   });
@@ -239,7 +290,7 @@ describe("DeviceRegistry", () => {
     const registry = new DeviceRegistry();
     const { code, token } = registry.openPairing();
 
-    expect(token).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
     expect(registry.redeem(token, "iPhone")).toHaveProperty("token");
     expect(registry.redeem(code, "iPad")).toMatchObject({
       error: expect.stringContaining("no pairing"),
@@ -395,21 +446,34 @@ describe("cleanDeviceName", () => {
 
 describe("bearerToken", () => {
   it("reads only a well-formed Bearer header", () => {
-    expect(bearerToken("Bearer omb_abc")).toBe("omb_abc");
-    expect(bearerToken("  Bearer omb_abc  ")).toBe("omb_abc");
-    expect(bearerToken("omb_abc")).toBeUndefined();
-    expect(bearerToken("Basic omb_abc")).toBeUndefined();
+    expect(bearerToken("Bearer seira_abc")).toBe("seira_abc");
+    expect(bearerToken("  Bearer seira_abc  ")).toBe("seira_abc");
+    expect(bearerToken("seira_abc")).toBeUndefined();
+    expect(bearerToken("Basic seira_abc")).toBeUndefined();
     expect(bearerToken(undefined)).toBeUndefined();
   });
 
   it("matches the scheme however it is cased", () => {
-    expect(bearerToken("bearer omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BEARER omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BeArEr omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BeArEr\tomb_abc")).toBe("omb_abc");
+    expect(bearerToken("bearer seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BEARER seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BeArEr seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BeArEr\tseira_abc")).toBe("seira_abc");
     expect(bearerToken("Bearer ")).toBeUndefined();
     expect(bearerToken("Bearer   ")).toBeUndefined();
-    expect(bearerToken("Beareromb_abc")).toBeUndefined();
+    expect(bearerToken("Bearerseira_abc")).toBeUndefined();
+  });
+
+  it("answers an attack string in under 100 ms", () => {
+    const started = performance.now();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}x\ny`)).toBeUndefined();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}`)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("keeps the token after tabs and refuses one that spans lines", () => {
+    expect(bearerToken("Bearer\t \tseira_abc")).toBe("seira_abc");
+    expect(bearerToken("Bearer a b")).toBe("a b");
+    expect(bearerToken("Bearer a\nb")).toBeUndefined();
   });
 });
 
@@ -521,7 +585,7 @@ describe("re-pairing with the token a phone already holds", () => {
     const replaced: string[] = [];
     registry.onReplaced((id) => replaced.push(id));
     const plain = repair(registry);
-    for (const unknown of [`omb_${"A".repeat(43)}`, "", 42, { token: kept.token }, null]) {
+    for (const unknown of [`seira_${"A".repeat(43)}`, "", 42, { token: kept.token }, null]) {
       const result = repair(registry, unknown);
       expect(Object.keys(result).sort()).toEqual(Object.keys(plain).sort());
       expect(Object.keys(result.device).sort()).toEqual(Object.keys(plain.device).sort());
@@ -535,7 +599,7 @@ describe("re-pairing with the token a phone already holds", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry);
     registry.openPairing();
-    expect(registry.redeem("omb_pair_wrong", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem(registry.pairing()!.code === "999999" ? "888888" : "999999", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
     expect(registry.pairing()?.attemptsLeft).toBe(MAX_PAIRING_ATTEMPTS - 1);
     expect(registry.authenticate(first.token)?.id).toBe(first.device.id);
     registry.closePairing();
@@ -560,7 +624,7 @@ describe("re-pairing with the token a phone already holds", () => {
       error: "too many paired devices — remove an old phone on your computer first",
       code: "pairing_device_limit",
     });
-    expect(registry.redeem(credential, "One too many", undefined, `omb_${"B".repeat(43)}`)).toMatchObject({ code: "pairing_device_limit" });
+    expect(registry.redeem(credential, "One too many", undefined, `seira_${"B".repeat(43)}`)).toMatchObject({ code: "pairing_device_limit" });
     expect(registry.count()).toBe(MAX_DEVICES);
   });
 

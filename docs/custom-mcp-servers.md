@@ -48,82 +48,33 @@ checks (for Cloudflare Access, a service token's `CF-Access-Client-Id` and
 `CF-Access-Client-Secret`), or paste your `claude mcp add --transport http …
 --header "…"` command and fill in the values it took from your terminal.
 
-### Whop
+### Cards for hosted services
 
-In Plugins, find **Whop** alongside Gmail, Slack and the other apps and click **Connect**. The built-in card
-uses Whop's official hosted MCP endpoint and opens Whop's browser sign-in;
-no API key, local CLI or Composio connection is needed. After successful
-sign-in and tool discovery it enables the connection. A cancelled or failed
-first setup remains off and can be retried without adding another server.
+In Plugins, find the card of the service and click **Connect**. Each card uses
+the service's hosted MCP endpoint, enables the connection after sign-in and
+tool discovery, and can be retried after a cancelled or failed first setup
+without adding another server. **Disconnect** and **Bot access** work the same
+on every card. Existing custom entries at the same HTTP endpoint are
+recognized rather than replaced.
 
-Open **Bot access** on the Whop card to reach each bot's existing Access
-settings. Bots set to use every enabled MCP server inherit the connection;
-bots with an explicit selection must include its server name. The next task
-uses the selection. Whop also appears in the **Connected** filter. **Disconnect** disables the connection and signs out;
-the saved entry remains available to reconnect. Existing custom Whop entries
-at the official HTTP endpoint are recognized rather than replaced.
-
-Whop currently requests admin access across businesses your Whop account can
-manage, and its own consequential-action confirmations still apply. See the
-[official Whop MCP documentation](https://github.com/whopio/whop-mcp-server).
-This is an optional connected tool, not a change to OMB's subscription billing.
-
-### Agentcard
-
-In Plugins, find **Agentcard** beside Whop and click **Connect**. The card uses
-Agentcard's official hosted MCP endpoint, `https://mcp.agentcard.sh/mcp`, and
-opens Agentcard's browser sign-in with your own Agentcard account. No API key
-is needed. After sign-in and tool discovery it enables the connection, and
-**Disconnect** and **Bot access** work as they do for Whop.
-
-Seira owns no cards, approvals or orders here. Agentcard keeps your cards
-and handles purchase approvals; Seira stores no card details. A bot that
-can use Agentcard can call all of its tools, including the ones that buy and
-the ones that show card details, so choose which bots get it under **Bot
-access**. Existing custom entries at the official HTTP endpoint are recognized
-rather than replaced.
-
-### Email, phone numbers and calls for your bots
-
-Four cards give bots their own email, numbers and calls on accounts you own,
-so each service bills you directly and Seira pays for none of it.
-
-| Card | Official endpoint | Connects with |
+| Card | Endpoint | Connects with |
 | --- | --- | --- |
-| **AgentMail**, email inboxes | `https://mcp.agentmail.to/mcp` | Browser sign-in |
-| **AgentPhone**, US and Canadian numbers, texts and calls | `https://mcp.agentphone.ai/mcp` | Browser sign-in |
-| **Vapi**, phone calls | `https://mcp.vapi.ai/mcp` | A private API key from the Vapi dashboard |
-| **Telnyx**, numbers in many countries, texts and calls | `https://api.telnyx.com/v2/mcp` | An API key from the Telnyx portal |
+| **Konektor.id**, WhatsApp leads, inbox, broadcasts, ads and conversion tracking | `https://mcp.konektor.id/mcp` | Browser sign-in |
+| **Biver.id**, websites: pages, sections, forms, products, checkout and domains | `https://mcp.biver.id/mcp` | Browser sign-in |
+| **Coret.id**, mind maps, sketches and pads | `https://mcp.coret.id/mcp` | Browser sign-in |
+| **Termilo.id**, bookings, services, schedules and customer messages | `https://api.termilo.id/mcp` | Browser sign-in |
+| **Citcat.id**, WhatsApp CRM: chats, contacts and sales funnel | `https://api-crm.citcat.id/api/mcp` | Browser sign-in |
+| **Repliz**, social media: comments, messages, scheduled posts and automations | `https://mcp.repliz.com/mcp` | Browser sign-in |
+| **Dalekta**, WhatsApp ads tracking: leads, closing, revenue and conversions | `https://mcp.dalekta.id/mcp` | Browser sign-in |
+| **Grupy.chat**, WhatsApp groups: AI summaries, members and join requests | `https://mcp.grupy.chat/mcp` | Browser sign-in |
 
-Vapi and Telnyx have no browser sign-in, so their cards take a pasted key. The
-key goes in the server's `Authorization: Bearer` header, never in its
-address, on a server that stays off until its tools load with that key; a
-refused key leaves it off and says why. Like every header value it is never
-shown again. **Disconnect** on a key card deletes the server and its key.
+A Konektor.id server added earlier with a pasted key keeps working and counts as
+connected. **Disconnect** deletes that server and its key. Connect again to use
+browser sign-in.
 
-Placing a call, buying a number and every Telnyx action (Telnyx reaches its
-whole API through one tool) follow **Sending on your behalf**, the same as
-sending a message. Choose which bots get each card under **Bot access**. To
-have a bot answer new mail, texts or calls, add a webhook for that bot in
-**Automations** and paste its address into the service.
-
-### BubblaV
-
-In Plugins, find **BubblaV** and click **Connect**. The card uses BubblaV's
-official hosted MCP endpoint, `https://www.bubblav.com/mcp`, and opens BubblaV's
-browser sign-in. Sign in (or create a free account), choose the one chatbot
-(website) the connection may reach, and choose **Full access** or **Read
-only**. No API key is needed. After sign-in and tool discovery it enables the
-connection, and **Disconnect** and **Bot access** work as they do for Whop.
-
-A bot that can use BubblaV reads that chatbot's reports, unanswered questions,
-conversations and leads. With **Full access** it can also add and delete
-knowledge and change the chatbot's instructions, widget, forms and webhook
-tools, so choose which bots get it under **Bot access**; **Read only** lists
-and runs only BubblaV's read-only tools. BubblaV saves the sign-in as an API
-key named **MCP Client** under **Settings → API Keys**, where revoking it ends
-the connection. The key lasts one year, then the card asks you to sign in
-again. See [BubblaV's Seira guide](https://docs.bubblav.com/user-guide/integrations/openmausbot).
+A bot that can use one of these services acts on your account there: it can
+change your pages, maps, bookings, contacts, social posts, WhatsApp messages or WhatsApp groups. Choose which bots get
+each card under **Bot access**.
 
 ### Servers that ask you to sign in
 
@@ -153,7 +104,7 @@ has nothing to work on. Background checks never do this.
   turn until someone signs in from this page. A signed-in server gets
   `Authorization: Bearer …` in place of any `Authorization` header you set,
   so every engine that reaches URL servers can use it.
-- **Tokens are kept apart.** They live in `~/.openmausbot/mcp-oauth.json`
+- **Tokens are kept apart.** They live in `~/.seira/mcp-oauth.json`
   (owner-only), never in `config.json` or an API response, and are left out of
   workspace backups. They belong to the server's address: changing the
   address or removing the server drops them. **Sign out** revokes them when
@@ -171,8 +122,8 @@ computer, where Seira is not, so sign-in comes back another way:
   the server lets apps register themselves, your browser returns to the
   address you are using Seira at, at `/mcp-oauth/callback`, and the tab
   says **Signed in. You can close this tab and return to Seira.** Nothing
-  to copy. Whop works this way. The address is the server's public address
-  (a Cloud or hosted workspace's own, a connected domain, or `OMB_PUBLIC_URL`)
+  to copy. Biver.id works this way. The address is the server's public address
+  (a Cloud or hosted workspace's own, a connected domain, or `SEIRA_PUBLIC_URL`)
   when you are on it, or the https address your browser is on when none is
   set. If you reach the server at an https address it does not list, sign-in
   returns to its listed public address instead.
@@ -191,7 +142,7 @@ in from another computer?** for an SSH tunnel or a browser elsewhere. **Open
 sign-in page** reopens the approval page if your browser blocked the first
 attempt.
 
-Keep the redirect URL private. Complete the flow in the same OMB browser/session
+Keep the redirect URL private. Complete the flow in the same Seira browser/session
 that started it, within five minutes. Cancellation or logging out ends the
 pending flow; a URL cannot be reused, and a return to the https address works
 once, for that sign-in only.
@@ -421,7 +372,7 @@ computer. Each tool call it gets names the bot and conversation that made it,
 in the call's `_meta`:
 
 ```json
-{ "_meta": { "openmausbot/caller": { "botId": "…", "threadId": "…", "verified": false } } }
+{ "_meta": { "seira/caller": { "botId": "…", "threadId": "…", "verified": false } } }
 ```
 
 It is a hint for the server's own logs or per-bot settings, never proof of
@@ -480,7 +431,7 @@ bot or team package.
 
 The switch drops the CLI flag `--strict-mcp-config` (Claude Code 1.0.60+)
 while keeping `--setting-sources project` (1.0.122+). The environment variable
-`OMB_CLAUDE_INHERIT_USER_CONFIG=1` on the Seira process remains the full
+`SEIRA_CLAUDE_INHERIT_USER_CONFIG=1` on the Seira process remains the full
 escape hatch back to the old launch: it restores everything, for every Claude
 bot, until you remove it. The harness also picks the session's compaction
 window with `--autocompact` (2.1.122+). Seira reads `claude --version`
@@ -491,7 +442,7 @@ notice with the exact command. `claude update` clears it.
 
 ## When your organization manages MCP servers
 
-If this computer is connected to an organization (Settings → Organization)
+If this computer is connected to an organization (Settings → Your account → Organization)
 and its Admin turns off custom MCP servers, only servers whose name or address
 is on the organization's approved list reach bots. Other configured servers
 stay in your list, marked **Managed by** your organization, but bots do not
@@ -517,7 +468,7 @@ its engine list. Company Codex uses its own separate home, without your
 
 ## Advanced: edit the file
 
-The same registry lives in `~/.openmausbot/config.json`:
+The same registry lives in `~/.seira/config.json`:
 
 ```json
 {
@@ -559,7 +510,7 @@ engine can mount custom MCP servers gets the enabled tools on its next task.
   `browser`, `phone`, `dweb`, `ogb`, …) so a custom entry can never shadow
   a built-in tool surface. Names are lowercase letters/digits/`_`/`-`, max
   32 chars, starting with a letter.
-- **Environment names are checked.** `OMB_*` and `OGB_*` are refused: Codex
+- **Environment names are checked.** `SEIRA_*` and `OGB_*` are refused: Codex
   hands MCP children their variables from one shared environment, and those
   names carry Seira's own routing and bearers. `ELECTRON_RUN_AS_NODE`
   is accepted as `1` only — the value Seira's own proxies use — so a
@@ -603,7 +554,7 @@ engine can mount custom MCP servers gets the enabled tools on its next task.
   `https://` address with no credentials in it; header names must be valid
   HTTP field names and values a single line.
 - **The result gate covers commands.** An oversized tool result from a stdio
-  server never reaches the model whole (`OMB_MCP_RESULT_BUDGET`, 8,000
+  server never reaches the model whole (`SEIRA_MCP_RESULT_BUDGET`, 8,000
   characters by default). A JSON result is *shaped*: the gate keeps the whole
   payload on its side, shows the model its shape (keys, array sizes, item
   keys) and the first records, and lists one read-only tool beside the

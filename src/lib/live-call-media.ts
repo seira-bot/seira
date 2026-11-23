@@ -101,6 +101,7 @@ const defaults: LiveMediaDeps = {
 let deps: LiveMediaDeps = defaults;
 
 let state: LiveMediaState = IDLE;
+let captionFrom: "you" | "bot" | null = null;
 let generation = 0;
 let microphone: MediaStream | null = null;
 let peer: RTCPeerConnection | null = null;
@@ -142,6 +143,7 @@ export function configureLiveMedia(overrides: Partial<LiveMediaDeps>): void {
 }
 
 export function resetLiveMedia(): void {
+  captionFrom = null;
   release();
   generation += 1;
   deps = defaults;
@@ -150,9 +152,9 @@ export function resetLiveMedia(): void {
   serverAttached = false;
 }
 
-export function applyCaption(current: { caption: string; heard: string }, event: { type?: unknown; delta?: unknown }): { caption: string; heard: string } {
+export function applyCaption(current: { caption: string; heard: string }, event: { type?: unknown; delta?: unknown }, from?: "you" | "bot" | null): { caption: string; heard: string } {
   const delta = typeof event.delta === "string" ? event.delta : "";
-  if (event.type === "session.output_transcript.delta") return { caption: (current.caption + delta).slice(-CAPTION_CHARS), heard: "" };
+  if (event.type === "session.output_transcript.delta") return { caption: (from === "you" ? delta : current.caption + delta).slice(-CAPTION_CHARS), heard: "" };
   if (event.type === "session.input_transcript.delta") return { caption: current.caption, heard: (current.heard + delta).slice(-HEARD_CHARS) };
   return current;
 }
@@ -196,6 +198,7 @@ export async function startLiveCall(target: { botId: string; threadId: string; p
   const mine = ++generation;
   serverAttached = false;
   const where = { botId: target.botId, threadId: target.threadId, ...(target.provider ? { provider: target.provider } : {}) };
+  captionFrom = null;
   set({ ...IDLE, phase: "starting", ...where });
   startCall(target.botId);
   try {
@@ -481,8 +484,10 @@ function onChannelMessage(raw: unknown) {
     return;
   }
   if (event.type === "session.closed") return onSessionClosed();
-  const next = applyCaption(state, event);
+  const next = applyCaption(state, event, captionFrom);
   if (next.caption === state.caption && next.heard === state.heard) return;
+  if (event.type === "session.input_transcript.delta") captionFrom = "you";
+  else if (event.type === "session.output_transcript.delta") captionFrom = "bot";
   if (event.type === "session.input_transcript.delta") showHeard(next.heard);
   else set(next);
 }

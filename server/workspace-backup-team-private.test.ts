@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { CLOUD_OUTSIDE_KEY } from "./cloud-sharing.ts";
 import { openRuntimeStore } from "./runtime/store.ts";
+import type { Workflow, WorkflowRun } from "../shared/workflows.ts";
+import { openWorkflowStore } from "./workflows/store.ts";
 import type { Assignment } from "./runtime/types.ts";
 import { createWorkspaceBackupSnapshot, stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
 import { ensureMemoryIndex } from "./message-db-memory-index.ts";
@@ -14,12 +16,12 @@ import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEA
 const BOB = "p_bobbobbobbobbobbobbob1";
 const PASSWORD = "correct horse battery staple";
 const scratch: string[] = [];
-const envBefore = process.env.OMB_CLOUD_ROLE;
+const envBefore = process.env.SEIRA_CLOUD_ROLE;
 afterEach(() => {
   for (const path of scratch.splice(0)) rmSync(path, { recursive: true, force: true });
-  if (envBefore === undefined) delete process.env.OMB_CLOUD_ROLE; else process.env.OMB_CLOUD_ROLE = envBefore;
+  if (envBefore === undefined) delete process.env.SEIRA_CLOUD_ROLE; else process.env.SEIRA_CLOUD_ROLE = envBefore;
 });
-const directory = () => { const path = mkdtempSync(join(tmpdir(), "omb-team-export-")); scratch.push(path); return path; };
+const directory = () => { const path = mkdtempSync(join(tmpdir(), "seira-team-export-")); scratch.push(path); return path; };
 const json = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value));
 const file = (path: string, text = "x") => { mkdirSync(join(path, ".."), { recursive: true }); writeFileSync(path, text); };
 
@@ -34,7 +36,7 @@ function teamData(root: string): void {
   json(join(root, "thread-starters.json"), { "bob-chat": BOB, "room-thread": BOB, "outside-thread": CLOUD_OUTSIDE_KEY });
   json(join(root, "groups.json"), [{ id: "room", threadId: "room-thread", memberIds: ["bot"], tasks: [{ threadId: "room-thread" }] }]);
   json(join(root, "bots.json"), [{ id: "bot", name: "Scout", threadId: "main", avatarUrl: "/api/attachments/avatar.png", tasks: [{ threadId: "main", title: "Scout" }, { threadId: "bob-chat", title: "Bob's" }, { threadId: "outside-thread", title: "Webhook" }] },
-    { id: "bobs-own", name: "MausBot", threadId: "bobs-own-main", defaultBot: { person: "bob@acme.test" }, tasks: [{ threadId: "bobs-own-main", title: "MausBot" }, { threadId: "bobs-inbox", title: "Inbox" }] }]);
+    { id: "bobs-own", name: "Seira", threadId: "bobs-own-main", defaultBot: { person: "bob@acme.test" }, tasks: [{ threadId: "bobs-own-main", title: "Seira" }, { threadId: "bobs-inbox", title: "Inbox" }] }]);
   json(join(root, "person-inbox.json"), { items: [{ text: "Bob's inbox line" }] });
   file(join(root, "workspaces", "bobs-own", "MEMORY.md"), "Bob's own bot's notes");
   json(join(root, "config.json"), { language: "en" });
@@ -69,6 +71,17 @@ function teamData(root: string): void {
     runtime.insert(assignment("as-team", "main"), { kind: "enqueued", at: 1_000 });
     runtime.insert(assignment("as-bob", "bob-chat"), { kind: "enqueued", at: 1_000 });
   } finally { runtime.close(); }
+  const flow = (id: string, botId: string): Workflow => ({ id, name: `Flow ${id}`, createdAt: 1, updatedAt: 1, steps: [{ id: "a", kind: "bot", botId, instruction: "Collect", position: { x: 0, y: 0 } }], connections: [] });
+  const flowRun = (runId: string, botId: string, threadId: string): WorkflowRun => ({ runId, workflowId: `wf-${botId}`, routineId: "r", workflowName: "Flow", status: "completed", graph: flow(`wf-${botId}`, botId), botIds: [botId], startStepId: "a", threads: { [botId]: threadId }, createdAt: 1, updatedAt: 1, stepRuns: [{ stepId: "a", status: "done", output: botId === "bot" ? "team output" : "Bob's workflow secret", botId }] });
+  const workflows = openWorkflowStore(root);
+  try {
+    for (const [botId, threadId] of [["bot", "main"], ["bobs-own", "bobs-own-main"]] as const) {
+      workflows.putWorkflow(flow(`wf-${botId}`, botId));
+      workflows.putRun(flowRun(`run-${botId}`, botId, threadId));
+    }
+    workflows.putWorkflow({ ...flow("wf-mixed", "bot"), updatedAt: 2 });
+    workflows.putRun({ ...flowRun("run-mixed", "bot", "bob-chat"), workflowId: "wf-mixed" });
+  } finally { workflows.close(); }
 }
 
 const table = (path: string, sql: string) => { const db = new DatabaseSync(path, { readOnly: true }); try { return db.prepare(sql).all(); } finally { db.close(); } };
@@ -86,8 +99,8 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     const root = directory();
     teamData(root);
     const files = { starters: join(root, "thread-starters.json"), groups: join(root, "groups.json"), bots: join(root, "bots.json") };
-    expect(teamPrivateThreads(files, { OMB_CLOUD_ROLE: "home" })).toBeNull();
-    const privacy = teamPrivateThreads(files, { OMB_CLOUD_ROLE: "team" })!;
+    expect(teamPrivateThreads(files, { SEIRA_CLOUD_ROLE: "home" })).toBeNull();
+    const privacy = teamPrivateThreads(files, { SEIRA_CLOUD_ROLE: "team" })!;
     expect([...privacy.threads].sort()).toEqual(["bob-chat", "bobs-inbox", "bobs-own-main"]);
     expect([...privacy.bots]).toEqual(["bobs-own"]);
     expect(omittedAsTeamPrivate("workspaces/bobs-own/MEMORY.md", privacy)).toBe(true);
@@ -124,6 +137,34 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     expect(routinesWithoutTeamPrivate(routines, bots, privacy)).toEqual({ routines: [routines.routines[2]], runs: [routines.runs[2]], ownerNotices: [] });
   });
 
+  describe("a workflow routine in a team export", () => {
+    const privacy = { threads: new Set<string>(), bots: new Set(["bobs-own"]), attachments: new Set<string>() };
+    const bots = [{ id: "bot", tasks: [] }];
+    const routines = { routines: [
+      { id: "plain", botId: "bot" },
+      { id: "mixed", botId: "bot", workflowId: "wf", workflowBotIds: ["bot", "bobs-own"], prompt: "1. Bob: private step" },
+      { id: "flow", botId: "bot", workflowId: "wf2", workflowBotIds: ["bot"] },
+    ], runs: [
+      { id: "run-plain", routineId: "plain" },
+      { id: "run-mixed", routineId: "mixed" },
+      { id: "run-flow-gone", routineId: "flow" },
+      { id: "run-flow-kept", routineId: "flow" },
+    ] };
+    const out = (removed: string[] = []) => routinesWithoutTeamPrivate(routines, bots, privacy, new Set(removed)) as typeof routines;
+
+    it("is dropped when it lists a member's own bot", () => {
+      expect(out().routines.map((routine) => routine.id)).toEqual(["plain", "flow"]);
+    });
+
+    it("loses the runs of a dropped routine", () => {
+      expect(out().runs.map((run) => run.id)).not.toContain("run-mixed");
+    });
+
+    it("loses the routine runs of workflow runs that were removed", () => {
+      expect(out(["run-flow-gone"]).runs.map((run) => run.id)).toEqual(["run-plain", "run-flow-kept"]);
+    });
+  });
+
   it("strips the private conversations' rows from the snapshot databases and rebuilds them, so no freed page keeps their words", () => {
     const root = directory();
     teamData(root);
@@ -139,8 +180,21 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     expect(textOf(messages)).toContain("team question");
   });
 
+  it("strips the workflows and runs of a member's own bot and private chats from the workflow snapshot", () => {
+    const root = directory();
+    teamData(root);
+    const workflows = join(root, "workflows.db");
+    const removed = stripTeamPrivate({ messages: join(root, "messages.db"), runtime: join(root, "runtime.db"), workflows }, { threads: new Set(["bob-chat", "bobs-inbox"]), bots: new Set(["bobs-own"]), attachments: new Set() });
+    expect(table(workflows, "SELECT id FROM workflows").map((row) => row.id).sort()).toEqual(["wf-bot", "wf-mixed"]);
+    expect([...removed].sort()).toEqual(["run-bobs-own", "run-mixed"]);
+    expect(table(workflows, "SELECT run_id AS id FROM workflow_runs").map((row) => row.id)).toEqual(["run-bot"]);
+    expect(table(workflows, "SELECT run_id AS id FROM workflow_step_runs").map((row) => row.id)).toEqual(["run-bot"]);
+    expect(textOf(workflows).toLowerCase()).not.toContain("secret");
+    expect(textOf(workflows)).toContain("team output");
+  });
+
   it("on a Team Cloud the export carries the team's things and nothing of Bob's alone; off a team everything stays", async () => {
-    process.env.OMB_CLOUD_ROLE = "team";
+    process.env.SEIRA_CLOUD_ROLE = "team";
     const root = directory();
     teamData(root);
     const team = await exported(root);
@@ -163,13 +217,17 @@ describe("what a Team Cloud's export leaves out (the private sentence: not the O
     expect(table(join(team.data, "messages.db"), "SELECT thread_id AS id FROM messages").map((row) => row.id).sort()).toEqual(["main", "outside-thread", "room-thread"]);
     expect(table(join(team.data, "runtime.db"), "SELECT id FROM assignments").map((row) => row.id)).toEqual(["as-team"]);
     expect(textOf(join(team.data, "messages.db")).toLowerCase()).not.toContain("secret");
+    expect(table(join(team.data, "workflows.db"), "SELECT run_id AS id FROM workflow_runs").map((row) => row.id)).toEqual(["run-bot"]);
+    expect(existsSync(join(team.data, "workflows.db-wal"))).toBe(false);
+    expect(textOf(join(team.data, "workflows.db")).toLowerCase()).not.toContain("secret");
 
-    process.env.OMB_CLOUD_ROLE = "home";
+    process.env.SEIRA_CLOUD_ROLE = "home";
     const own = directory();
     teamData(own);
     const home = await exported(own);
     expect(home.warnings).not.toContain(TEAM_PRIVATE_NOTE);
     expect(existsSync(join(home.data, "workspaces", `bot--member-${BOB}`, "MEMORY.md"))).toBe(true);
     expect(table(join(home.data, "messages.db"), "SELECT thread_id AS id FROM messages").map((row) => row.id).sort()).toEqual(["bob-chat", "bobs-inbox", "main", "outside-thread", "room-thread"]);
+    expect(table(join(home.data, "workflows.db"), "SELECT run_id AS id FROM workflow_runs").map((row) => row.id).sort()).toEqual(["run-bobs-own", "run-bot", "run-mixed"]);
   }, 60_000);
 });

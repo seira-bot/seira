@@ -2,36 +2,22 @@ import { createManagedDesktopStore, retryDelay, unreadableRecord } from "./manag
 import { CLOUD_MACHINE_CONNECTABLE, cloudUnreachableText, parseCloudCredit, parseCloudLanding, parseCloudOffer, parseCloudPurchase, parseCloudSummary, parseCloudTeams, parseCloudRoom, parseCloudTrial, parseCloudUsage, parsePairingGrant, parsePublicOffer, withoutTrial } from "./cloud-home.mjs";
 import { CLOUD_ID, CLOUD_SWATCHES, cleanCloudListName, ORGANIZATION_BLOCKS, otherOwnClouds, ownCloud, parseCloudList, parseCloudRenewal, parseOrganizations, releaseVersion } from "./cloud-list.mjs";
 import { planTeam, teamPlan } from "./cloud-team-plan.mjs";
-import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
+import { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, cloudOriginFor, cloudOriginOf, cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
 import { createHash } from "node:crypto";
-import { DEFAULT_CLOUD } from "./cloud-default.mjs";
 import nativeText from "./native-text.cjs";
 
 const { englishText } = nativeText;
 
-export const CLOUD_ORIGIN = "https://cloud.openmausbot.com";
-/** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with OMB_CLOUD_STAGING=1. */
-export const STAGING_CLOUD_ORIGIN = "https://omb-cloud-staging.fly.dev";
-export const SEIRA_CLOUD_ORIGIN = "https://cloud.seira.bot";
+export { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, cloudOriginOf };
 const FILES = (suffix) => ({ file: `cloud-account${suffix}.bin`, saved: `cloud-accounts${suffix}.bin`, places: `account-places${suffix}.json`, environments: `environments${suffix}.json`, sync: `cloud-sync${suffix}`, look: `cloud-home-look${suffix}.json` });
-/** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
-export function cloudOriginOf(value) {
-  if (typeof value !== "string" || value.length > 253) return null;
-  let url;
-  try { url = new URL(value); } catch { return null; }
-  if (value !== url.origin || url.username || url.password) return null;
-  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "127.0.0.1") ? value : null;
-}
 /** Which Cloud this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's entry,
  * Files' state, the Cloud's chosen name): each Cloud keeps its own, so one never reads or writes another's. The
- * environment picks it: OMB_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over OMB_CLOUD_STAGING=1, which wins
- * over the build's DEFAULT_CLOUD. An origin that is not valid is ignored. */
-export function cloudTarget(env = process.env, defaultCloud = DEFAULT_CLOUD) {
-  const asked = cloudOriginOf(env?.OMB_CLOUD_ORIGIN);
-  const origin = asked ?? (env?.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : defaultCloud === "seira" ? SEIRA_CLOUD_ORIGIN : CLOUD_ORIGIN);
-  if (origin === CLOUD_ORIGIN) return { origin, kind: "upstream", staging: false, ...FILES("") };
+ * environment picks it: SEIRA_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over SEIRA_CLOUD_STAGING=1, which wins
+ * over Seira's own Cloud. An origin that is not valid is ignored. */
+export function cloudTarget(env = process.env) {
+  const origin = cloudOriginFor(env);
   if (origin === STAGING_CLOUD_ORIGIN) return { origin, kind: "staging", staging: true, ...FILES("-staging") };
-  if (origin === SEIRA_CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
+  if (origin === CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
   return { origin, kind: "custom", staging: false, ...FILES(`-dev-${createHash("sha256").update(origin).digest("hex").slice(0, 10)}`) };
 }
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
@@ -93,7 +79,7 @@ export function checkoutDestination(value, { fixture = false, staging = false, o
  * main process chose from its own environment (`trusted`). */
 export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false, trusted = false) {
   const url = new URL(value);
-  const known = [CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, SEIRA_CLOUD_ORIGIN].includes(value);
+  const known = [CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN].includes(value);
   if (value !== url.origin || !(known || (trusted && cloudOriginOf(value)) || (fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
     throw new Error("Invalid Seira Cloud address.");
   }
@@ -123,14 +109,14 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   setTimer = setTimeout, clearTimer = clearTimeout, warn = message => console.warn(message), awaitingWake = () => false, t = englishText.t }) {
   origin = cloudOrigin(origin, fixture, trusted);
   const staging = origin === STAGING_CLOUD_ORIGIN;
-  const own = origin === CLOUD_ORIGIN || staging || (fixture && !trusted) ? null : origin;
+  const own = staging || (fixture && !trusted) ? null : origin;
   let grant = null, issued = null, cleanup = null, pending = null, cleanupNeeded = false;
   let value = { status: "signed-out", message: "restoring" }, generation = 0, timer = null, closed = false, clearing = null, refreshing = null;
   let verifiedUntil = 0, restoring = false, controller = new AbortController(), failures = 0;
   let plan = null, savedHint = null;
   /** The plan's own Cloud that Cancel and Keep act on, as the last verified session names it. */
   let renewalCloud = null;
-  let offerCache = null, offerPending = null, waking = false;
+  let offerCache = null, offerPending = null, offerOutcome = null, waking = false;
   /** The checkout this app opened, its address kept here for Reopen and Copy link: never published, never asked for again. */
   let opened = null;
   /** Another Cloud this app is buying (POST clouds): its id, name, colour and plan, and its checkout page, kept like `opened`'s. */
@@ -174,7 +160,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   // it or write it over the one taking its place, whoever asks (a window coming to the front, Settings' Refresh).
   let quiet = false;
   const current = stamp => !closed && !quiet && generation === stamp;
-  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-openmausbot-version": appVersion } : {};
+  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-seira-version": appVersion } : {};
   async function request(route, { method = "GET", body, token, signal = controller.signal, path = `/api/cloud/desktop/${route}`, timeoutMs = 20_000 } = {}) {
     const response = await fetcher(`${origin}${path}`, {
       method, redirect: "error", credentials: "omit", cache: "no-store",
@@ -320,8 +306,8 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       publish({ ...view("connected"), entitlement: access, ...(machine ? { machine } : {}), ...(teams.length ? { teams } : {}), ...(landing ? { landing } : {}), ...(purchase ? { purchase } : {}),
         ...(trial ? { trial } : {}), ...(credit ? { credit } : {}), ...(offer ? { offer } : {}), ...(usage ? { usage } : {}), ...(room ? { room } : {}), ...(renewingCloud ? { renewal } : {}),
         ...(clouds ? { clouds, addCloud: more } : {}), ...(organizations ? { organizations } : {}), ...(latest ? { latestVersion: latest } : {}), verifiedAt: now(), verifiedUntil });
-      const planCloud = teamPlan(value) ? planTeam(value)?.machine ?? null : machine;
-      const settingUp = planCloud?.status === "provisioning" || (access.status === "active" && !planCloud) || Boolean(purchase) || otherOwnClouds(clouds).some(cloud => cloud.status === "setting_up");
+      const listedTeam = planTeam(value), planCloud = teamPlan(value) ? listedTeam?.machine ?? null : machine;
+      const settingUp = planCloud?.status === "provisioning" || (access.status === "active" && !planCloud && !listedTeam) || Boolean(purchase) || otherOwnClouds(clouds).some(cloud => cloud.status === "setting_up");
       const added = adding ? clouds?.find(cloud => cloud.id === adding.cloudId) ?? null : null;
       const paying = watchingAdd() && Boolean(adding.url) && (!added || added.status === "checkout");
       const delay = (watching() && planCloud?.status !== "ready") || paying ? WATCH_REFRESH_MS : settingUp ? SETUP_REFRESH_MS : awaitingWake() ? ASLEEP_REFRESH_MS : REFRESH_MS;
@@ -594,16 +580,26 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       catch (error) { return renewalFailure(error, signedIn); }
       return { outcome: "kept", state: await refresh().catch(() => state()) };
     },
+    /** Throws when the public config cannot be read; null when Seira Cloud lists no plan this app can sell. */
     async offer() {
       const current = state();
       if (current.status === "connected" && current.offer) return current.offer;
       if (!offerCache || now() >= offerCache.until) {
+        const note = outcome => { if (outcome !== offerOutcome) { offerOutcome = outcome; if (outcome) warn(outcome); } };
         offerPending ??= request(null, { path: "/api/public/config", signal: AbortSignal.timeout(10_000) }).then(
-          config => { const offer = parsePublicOffer(config); offerCache = { value: offer, until: now() + (offer ? OFFER_MS : OFFER_RETRY_MS) }; return offer; },
-          () => { offerCache = { value: null, until: now() + OFFER_RETRY_MS }; return null; },
+          config => {
+            const offer = parsePublicOffer(config);
+            offerCache = { value: offer, until: now() + (offer ? OFFER_MS : OFFER_RETRY_MS) };
+            note(offer ? null : "[cloud] offer: Seira Cloud lists no plan this app can sell");
+          },
+          error => {
+            offerCache = { failed: true, until: now() + OFFER_RETRY_MS };
+            note(`[cloud] offer: public config failed (${Number.isInteger(error?.status) ? error.status : error?.name ?? "error"})`);
+          },
         ).finally(() => { offerPending = null; });
         await offerPending;
       }
+      if (offerCache.failed) throw new Error("Cloud offer unavailable.");
       return current.status === "connected" ? withoutTrial(offerCache.value) : offerCache.value;
     },
     /** Not now on the room card: the Admin offers this Cloud nothing more for two weeks. The Cloud is the session's own. */
@@ -633,6 +629,10 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       if (result?.ok !== true) throw new Error("Invalid Cloud response.");
     },
     homeTarget,
+    /** The signed-in session for services that sign in with the same account, or null. The token stays in main. */
+    session: () => grant && value.status === "connected"
+      ? { accountToken: grant.token, user: { id: grant.account.id, email: grant.account.email.trim().toLowerCase() } }
+      : null,
     /** The Admin's last verified word on a Cloud whose plan sleeps, kept while a re-check fails; null for any other. */
     power: () => (value.status === "connected" ? value.machine?.power ?? null : null),
     /** The same for the Cloud at `origin`: My Cloud's `cloud.power`, or another's from the Clouds list (contract v1, Oct 30). */
@@ -900,30 +900,30 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     /** This sign-in's own X research relay access while its plan is paid:
      * `{ url, token }` for the local server (electron/included-x.mjs), or null
      * when there is no sign-in, the Admin says the plan is not active (402) or
-     * it does not offer X research (404). Never kept on disk. The relay must
+     * it does not offer X research (404 or 501). Never kept on disk. The relay must
      * be on the Cloud's own origin: the token goes nowhere else. */
     async xResearchAccess() {
       const current = grant;
       if (!current) return null;
       let result;
       try { result = await request("services/x", { method: "POST", body: {}, token: current.token }); }
-      catch (error) { if (error?.status === 402 || error?.status === 404) return null; throw error; }
+      catch (error) { if (error?.status === 402 || error?.status === 404 || error?.status === 501) return null; throw error; }
       let relay = null;
       try { relay = typeof result?.url === "string" ? new URL(result.url) : null; } catch { relay = null; }
-      if (result?.cloudContractVersion !== 1 || !relay || relay.origin !== origin || typeof result.token !== "string" || !/^omb_xd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
+      if (result?.cloudContractVersion !== 1 || !relay || relay.origin !== origin || typeof result.token !== "string" || !/^seira_xd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
         throw new Error("Invalid Cloud X research response.");
       }
       return { url: result.url, token: result.token };
     },
     /** This sign-in's own pages token, for any plan: `{ url, token }` for the local server (electron/included-pages.mjs),
-     * or null when there is no sign-in or the Admin does not offer pages yet (404). Never kept on disk. The token route
+     * or null when there is no sign-in or the Admin does not offer pages (404 or 501). Never kept on disk. The token route
      * must be on the Cloud's own origin: the token goes nowhere else. */
     async pagesAccess() {
       const current = grant;
       if (!current) return null;
       let result;
       try { result = await request("services/pages", { method: "POST", body: {}, token: current.token }); }
-      catch (error) { if (error?.status === 404) return null; throw error; }
+      catch (error) { if (error?.status === 404 || error?.status === 501) return null; throw error; }
       let target = null;
       try { target = typeof result?.url === "string" ? new URL(result.url) : null; } catch { target = null; }
       if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {

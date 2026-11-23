@@ -40,7 +40,7 @@ let frames: Array<{ id: number; run: FrameRequestCallback }> = [];
 let nextFrame = 1;
 
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude")], config: { box: { configured: true } } as AppState["config"] } as AppState,
+  state: { ...initialState, instances: [engine("claude")], config: {} as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
   refreshInstances: async () => {},

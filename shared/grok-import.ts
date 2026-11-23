@@ -1,10 +1,11 @@
 // Moving a Grok Bot here. Grok Bot keeps a Bot's setup in its own cloud account and has no export button, so the Bot
 // writes its own: the person pastes GROK_EXPORT_PROMPT into its chat and brings back what it wrote. That text becomes an
-// ordinary openmaus.package v2, so the package rules apply (skills off, routines paused, no model, no keys, no grants).
+// ordinary seira.package v2, so the package rules apply (skills off, routines paused, no model, no keys, no grants).
 // Pure text: the renderer and the server both read it.
 //
 // The export's shape, the repairs for what a chat window does to it and its credential refusal adapt an MIT-licensed
 // importer; see NOTICE.
+import { currentFormat } from "../electron/legacy-names.mjs";
 import {
   AGENT_MAX_SKILLS, PACKAGE_FORMAT, PACKAGE_MAX_CONNECTIONS, PACKAGE_V2_VERSION, SEED_FILE_MAX_BYTES,
   parsePackageDocument, utf8Bytes, type PackageDocument, type PackageRoutineSchedule,
@@ -15,12 +16,12 @@ import { normalizeCronSchedule } from "./routine-schedule.ts";
 import { parseSkillMd, scanSkillText, SKILL_FILE_MAX_BYTES, yamlFrontmatterValue } from "./skill-md.ts";
 
 export const GROK_EXPORT_FORMAT = "grok-bot-export";
-const OLD_EXPORT_FORMAT = "openmaus.grok/1";
+const OLD_EXPORT_FORMAT = "seira.grok/1";
 /** How the file the Bot writes is named, one per Bot. */
 export const GROK_EXPORT_FILE = /^grok-bot-export[^/\\]*\.(?:json|md|txt)$/i;
 export const GROK_EXPORT_MAX_CHARS = 4 * 1024 * 1024;
 const MAX_ROUTINES = 50;
-const BOT_COLORS = ["green", "blue", "red", "orange", "purple", "cyan", "pink", "yellow", "teal", "coral"] as const;
+export const BOT_COLORS = ["green", "blue", "red", "orange", "purple", "cyan", "pink", "yellow", "teal", "coral"] as const;
 /** Failed brace matches before a reply stops being searched: each one scans to the end of the text. */
 const MAX_UNBALANCED = 50;
 
@@ -103,7 +104,7 @@ function oneLine(value: string): string {
   }
   return out.replace(/\s+/g, " ").trim();
 }
-const clip = (value: string, max: number) => (value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`);
+export const clip = (value: string, max: number) => (value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`);
 
 const CREDENTIAL_KEY = /(?:^|_)(?:api_?key|apikey|token|secret|passwd|passphrase|credentials?|auth|authorization|bearer|cookies?|private_?key|access_?key|session_?(?:id|key|token))(?:_|$)|key$/i;
 /** Named value slots of an app: their values are never read, so their names are listed rather than refused. */
@@ -177,7 +178,7 @@ function bracedObjects(text: string): string[] {
 }
 
 const isExportDocument = (value: unknown): value is Record<string, unknown> =>
-  isRecord(value) && (value.format === GROK_EXPORT_FORMAT || value.format === OLD_EXPORT_FORMAT || Array.isArray(value.bots));
+  isRecord(value) && (value.format === GROK_EXPORT_FORMAT || currentFormat(value.format) === OLD_EXPORT_FORMAT || Array.isArray(value.bots));
 const looksLikeBot = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) && Boolean(str(value.name)) && ["instructions", "memories", "user_facts", "skills", "routines", "apps"].some((key) => key in value);
 
@@ -207,7 +208,7 @@ function readApp(app: unknown): GrokApp[] {
   }] : [];
 }
 
-/** The current shape, and the fields the earlier openmaus.grok/1 prompt asked for. */
+/** The current shape, and the fields the earlier seira.grok/1 prompt asked for. */
 function readBot(bot: Record<string, unknown>): GrokBot {
   return {
     name: oneLine(first(bot.name)),
@@ -313,7 +314,7 @@ export function grokExportDocument(bots: readonly GrokBot[]): Record<string, unk
 const slug = (value: string, max: number) =>
   value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max).replace(/-+$/, "");
 
-function uniqueSlug(value: string, fallback: string, taken: Set<string>, max = 64): string {
+export function uniqueSlug(value: string, fallback: string, taken: Set<string>, max = 64): string {
   const base = slug(value, max - 3) || fallback;
   let candidate = base;
   for (let n = 2; taken.has(candidate); n += 1) candidate = `${base}-${n}`;
@@ -437,7 +438,7 @@ function eventNotes(name: string, routines: readonly GrokRoutine[]): string {
     ...sections].join("\n");
 }
 
-/** One Grok Bot as one bot in an openmaus.package v2 file, and how much of it comes over. `takenServers` holds server names
+/** One Grok Bot as one bot in a seira.package v2 file, and how much of it comes over. `takenServers` holds server names
  * already here: one of those is skipped, never overwritten or shared. */
 export function grokMovePlan(bot: GrokBot, options: { timeZone?: string; takenServers?: ReadonlySet<string> } = {}): GrokMovePlan {
   const timeZone = options.timeZone?.trim() || "UTC";
@@ -481,7 +482,7 @@ export function grokMovePlan(bot: GrokBot, options: { timeZone?: string; takenSe
       name: jobName,
       agent: agentKey,
       prompt: `${routine.instruction}${usesSkills.length ? `\n\nUse these skills: ${usesSkills.join(", ")}.` : ""}`.slice(0, 20_000),
-      runOn: "maus",
+      runOn: "seira",
       schedule,
       durationMinutes: 30,
       enabledAfterInstall: false,

@@ -182,8 +182,8 @@ Forks must change the route, the repository variable, and the rate-limit namespa
 2. `pnpm bugs:test` runs the tests.
 
 The tests use a fake GitHub API and a fake D1 database. They need no network and no secrets.
-CI runs both commands in the workflow `.github/workflows/bug-reports.yml`.
-That workflow starts only when this folder changes.
+CI runs both commands in the job `worker (bug-reports)` of `.github/workflows/ci.yml`.
+That job runs only when a change can affect this Worker.
 
 ## Try it with the app
 
@@ -210,7 +210,7 @@ To see a real issue, use a test repository and a test GitHub App.
    `pnpm exec wrangler d1 migrations apply seira-bug-reports --local --config cloudflare/bug-reports/wrangler.jsonc`
 3. Start the Worker:
    `pnpm exec wrangler dev --config cloudflare/bug-reports/wrangler.jsonc`
-4. Start the app with `OMB_BUG_REPORT_URL=http://127.0.0.1:8787/api/bug-reports`. The app accepts `https` or loopback `http`.
+4. Start the app with `SEIRA_BUG_REPORT_URL=http://127.0.0.1:8787/api/bug-reports`. The app accepts `https` or loopback `http`.
 5. Send a report with `@devs` in a conversation. Check the issue in the test repository.
    In dry-run mode, send a report with `curl` and read `issue`, `joined`, and `dryRun` in the answer:
    ```bash

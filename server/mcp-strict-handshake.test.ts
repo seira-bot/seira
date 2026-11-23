@@ -93,14 +93,14 @@ describe("strict initialize fixture", () => {
     expect(fake.initializes).toEqual([SCHEMA_VALIDATION, CODEX]);
   });
 
-  it("accepts OMB's own client, which sends the minimal handshake", async () => {
+  it("accepts Seira's own client, which sends the minimal handshake", async () => {
     fake = await startFakeHttpMcp({ strictInitialize: "http-400", tools: TOOLS });
     const client = new RemoteMcpClient({ type: "http", url: fake.url, headers: {} });
-    await client.initialize("OpenMausBot", AbortSignal.timeout(5_000));
+    await client.initialize("Seira", AbortSignal.timeout(5_000));
     const listed = await client.request("tools/list", {}, AbortSignal.timeout(5_000)) as { tools: Array<{ name: string }> };
     expect(listed.tools.map((tool) => tool.name)).toEqual(["report", "campaigns"]);
     await client.close();
-    expect(fake.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "OpenMausBot", version: "1" } }]);
+    expect(fake.initializes).toEqual([{ protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Seira", version: "1" } }]);
   });
 
   it.each([
@@ -108,7 +108,7 @@ describe("strict initialize fixture", () => {
     ["Claude Code", CLAUDE],
     ["Grok", GROK],
     ["schemaValidation", SCHEMA_VALIDATION],
-  ])("serves %s's handshake through OMB's stdio proxy, forwarding none of its fields", async (_name, handshake) => {
+  ])("serves %s's handshake through Seira's stdio proxy, forwarding none of its fields", async (_name, handshake) => {
     fake = await startFakeHttpMcp({ strictInitialize: "http-400", tools: TOOLS });
     const descriptor = mcpStdioServer({ type: "http", url: fake.url, headers: {} })!;
     child = spawn(descriptor.command, ["--experimental-strip-types", "--no-warnings", ...descriptor.args!], { stdio: "pipe", env: { ...process.env, ...descriptor.env } });

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { launchVerificationServer, type VerificationServer } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
-const ENTRY = join(import.meta.dirname, "openmausbot.ts");
+const ENTRY = join(import.meta.dirname, "seira.ts");
 
 interface Ran { code: number | null; stdout: string; stderr: string }
 
@@ -17,14 +17,14 @@ let dir: string;
 function cli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<Ran> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--experimental-strip-types", ENTRY, ...args], {
-      env: { ...process.env, OPENMAUSBOT_TOKEN: "", OMB_PORT: "", OPENMAUSBOT_URL: session.info.url, ...env },
+      env: { ...process.env, SEIRA_TOKEN: "", SEIRA_PORT: "", SEIRA_URL: session.info.url, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
-    const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error(`openmausbot ${args.join(" ")} did not finish: ${stderr}`)); }, 90_000);
+    const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error(`seira ${args.join(" ")} did not finish: ${stderr}`)); }, 90_000);
     child.on("error", reject);
     child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
   });
@@ -34,8 +34,8 @@ const botsNow = async () => json(await cli(["bots", "--json"])).bots as any[];
 
 beforeAll(async () => {
   // A port range of its own (19975-19999), and a scripted fake engine.
-  session = await launchVerificationServer({ ...process.env, OMB_TEST_PORTS: "19975-19999" }, undefined, undefined, undefined, undefined, { scripted: true });
-  dir = mkdtempSync(join(tmpdir(), "omb-headless-cli-"));
+  session = await launchVerificationServer({ ...process.env, SEIRA_TEST_PORTS: "19975-19999" }, undefined, undefined, undefined, undefined, { scripted: true });
+  dir = mkdtempSync(join(tmpdir(), "seira-headless-cli-"));
 }, 60_000);
 
 afterAll(async () => {
@@ -43,7 +43,7 @@ afterAll(async () => {
   if (dir) await removeTempDir(dir);
 });
 
-describe("openmausbot headless: team apply → run --wait job → export", () => {
+describe("seira headless: team apply → run --wait job → export", () => {
   let model: string;
   let lead: any;
   let priya: any;
@@ -214,17 +214,21 @@ rooms:
 
   it("stops a job whose teammate hangs when its time runs out, the teammate included", async () => {
     const never = join(dir, "never-opened");
+    const holding = join(dir, "priya-holding");
     writeFileSync(join(session.info.dataDir, "room-plan.json"), JSON.stringify({
       [lead.id]: { turns: [{}, {}, { steps: [{ arguments: { bot_ids: [priya.id], message: "Hold the line until told." } }], reply: "Asked Priya to hold." }] },
-      [priya.id]: { turns: [{}, { readyFile: join(dir, "priya-holding"), gateFile: never, reply: "Released." }] },
+      [priya.id]: { turns: [{}, { readyFile: holding, gateFile: never, reply: "Released." }] },
     }));
-    const run = await cli(["run", "Room Lead", "Hold the line.", "--timeout", "4s", "--on-timeout", "stop", "--json"]);
+    // The time limit starts only when Priya hangs. On a busy runner her turn needs seconds to get to the hang.
+    const sent = await cli(["run", "Room Lead", "Hold the line.", "--wait", "none", "--json"]);
+    expect(sent.code, sent.stderr).toBe(0);
+    const { threadId, since } = json(sent);
+    await expect.poll(() => existsSync(holding), { timeout: 30_000, interval: 100 }).toBe(true);
+    const run = await cli(["wait", "--thread", threadId, "--since", String(since), "--timeout", "1s", "--on-timeout", "stop", "--json"]);
     expect(run.code, `${run.stderr}\n${run.stdout}`).toBe(4);
-    const result = json(run);
-    expect(existsSync(join(dir, "priya-holding"))).toBe(true);
-    expect(result).toMatchObject({ ok: false, exitCode: 4, status: "timed-out", stopped: [{ botName: "Priya" }] });
+    expect(json(run)).toMatchObject({ status: "timed-out", stopped: [{ botName: "Priya" }] });
     await expect.poll(async () => {
-      const after = json(await cli(["wait", "--thread", result.threadId, "--since", String(result.since), "--json"]));
+      const after = json(await cli(["wait", "--thread", threadId, "--since", String(since), "--json"]));
       return { state: after.state, nodes: after.job.nodes.map((node: any) => [node.botName, node.status]) };
     }, { timeout: 20_000, interval: 500 }).toEqual({ state: "failed", nodes: [["Room Lead", "cancelled"], ["Priya", "cancelled"]] });
     await expect.poll(async () => (await botsNow()).find((bot) => bot.id === priya.id)?.busy, { timeout: 20_000, interval: 500 }).toBe(false);

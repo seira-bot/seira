@@ -20,6 +20,7 @@ import {
   PHONE_UNUSED_RELEASE_MS,
   resolveCompanionControlPlaneURL,
 } from "./companion-account-service.mjs";
+import { createDesktopControlPlaneClient, resolveDesktopControlPlaneURL } from "./desktop-control-plane.mjs";
 import {
   MANAGED_COMPANION_ENDPOINT_FIELD,
   MANAGED_COMPANION_ORIGIN_VERSION,
@@ -32,9 +33,9 @@ const UUID = "11111111-1111-4111-8111-111111111111";
 const INSTALLATION_ID = "22222222-2222-4222-8222-222222222222";
 const DUPLICATE_INSTALLATION_ID = "33333333-3333-4333-8333-333333333333";
 const ACCOUNT_TOKEN = `signed.${"a".repeat(80)}`;
-const INSTALLATION_CREDENTIAL = `omb_install_${"b".repeat(22)}.${"c".repeat(43)}`;
+const INSTALLATION_CREDENTIAL = `seira_install_${"b".repeat(22)}.${"c".repeat(43)}`;
 const CONNECTOR_TOKEN = `eyJ${"d".repeat(100)}`;
-const ENDPOINT = "https://c-opaque.openmausbot.com";
+const ENDPOINT = "https://c-opaque.seira.bot";
 
 function credentialStore(initial = {}) {
   let document = structuredClone(initial);
@@ -117,19 +118,19 @@ describe("Companion account service", () => {
     expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: {} })).toBe("");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: "https://accounts.openmausbot.com" },
-    })).toBe("https://accounts.openmausbot.com");
+      environment: { SEIRA_CONTROL_PLANE_URL: "https://accounts.seira.bot" },
+    })).toBe("https://accounts.seira.bot");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: false,
-      environment: { OMB_CONTROL_PLANE_URL: "http://127.0.0.1:8787/" },
+      environment: { SEIRA_CONTROL_PLANE_URL: "http://127.0.0.1:8787/" },
     })).toBe("http://127.0.0.1:8787");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: "http://accounts.openmausbot.com" },
+      environment: { SEIRA_CONTROL_PLANE_URL: "http://accounts.seira.bot" },
     })).toBe("");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: new String("https://accounts.openmausbot.com") },
+      environment: { SEIRA_CONTROL_PLANE_URL: new String("https://accounts.seira.bot") },
     })).toBe("");
     expect(resolveCompanionControlPlaneURL({ isPackaged: false, environment: {} })).toBe("");
   });
@@ -200,6 +201,106 @@ describe("Companion account service", () => {
 
     await expect(service.state()).resolves.toMatchObject({ available: false });
     await expect(service.state()).resolves.toEqual({ available: true, status: "signed-out" });
+  });
+
+  it("signs in with the Seira Cloud session the app already holds, with no email code", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service, store } = serviceFixture({ cloudSession: { current: () => session } });
+
+    await expect(service.useCloudSession()).resolves.toMatchObject({ status: "ready", email: "ada@example.com" });
+
+    expect(client.requestOTP).not.toHaveBeenCalled();
+    expect(client.verifyOTP).not.toHaveBeenCalled();
+    expect(client.ensureInstallation).toHaveBeenCalledWith(expect.objectContaining({ accountToken: ACCOUNT_TOKEN }));
+    expect(store.read()[MANAGED_COMPANION_ENDPOINT_FIELD]).toBe(ENDPOINT);
+  });
+
+  it("does nothing when the app holds no Seira Cloud session", async () => {
+    const { client, service } = serviceFixture({ cloudSession: { current: () => null } });
+
+    await expect(service.useCloudSession()).resolves.toMatchObject({ status: "signed-out" });
+
+    expect(client.ensureInstallation).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat the sign-in when an account is already stored", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ initial: signedCredentials(), cloudSession: { current: () => session } });
+
+    await service.useCloudSession();
+
+    expect(client.ensureInstallation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Seira Cloud session alive when phone access signs out", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ cloudSession: { current: () => session } });
+    await service.useCloudSession();
+
+    await service.signOut();
+
+    expect(client.revokeInstallation).toHaveBeenCalled();
+    expect(client.signOut).not.toHaveBeenCalled();
+  });
+
+  it("still signs out a session that phone access created itself", async () => {
+    const { client, service } = serviceFixture();
+    await service.verifyCode("ada@example.com", "12345678");
+
+    await service.signOut();
+
+    expect(client.signOut).toHaveBeenCalledWith(ACCOUNT_TOKEN);
+  });
+
+  it("uses the renewed Seira Cloud token when it retries", async () => {
+    const renewed = `omc_${"r".repeat(43)}`;
+    let session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ cloudSession: { current: () => session } });
+    await service.useCloudSession();
+    session = { ...session, accountToken: renewed };
+
+    await service.retry();
+
+    expect(client.ensureInstallation).toHaveBeenLastCalledWith(expect.objectContaining({ accountToken: renewed }));
+  });
+
+  it("turns desktop phone access on with the server tunnel gate", () => {
+    const live = ["site", "serverTunnel"];
+    expect(resolveDesktopControlPlaneURL({ isPackaged: true, environment: {}, live })).toBe("https://accounts.seira.bot");
+    expect(resolveDesktopControlPlaneURL({ isPackaged: true, environment: {}, live: ["site"] })).toBe("");
+    expect(resolveDesktopControlPlaneURL({ isPackaged: false, environment: {}, live })).toBe("");
+    expect(resolveDesktopControlPlaneURL({
+      isPackaged: true,
+      environment: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" },
+      live: ["site"],
+    })).toBe("https://cp.example.test");
+    expect(resolveDesktopControlPlaneURL({
+      isPackaged: true,
+      environment: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" },
+      live,
+    })).toBe("");
+  });
+
+  it("builds the desktop phone access client only with a control plane and a valid Seira Cloud origin", () => {
+    const identity = { deviceName: "Fixture", platform: "linux", appVersion: "1.0.0" };
+    const environment = { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" };
+    const origin = "https://cloud.example.test";
+    expect(createDesktopControlPlaneClient({ isPackaged: false, environment: {}, origin, identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin: "https://cloud.example.test/path", identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin, identity })?.origin).toBe("https://cp.example.test");
+  });
+
+  it("checks the control plane a second time before it gives up on a typed code", async () => {
+    const health = vi
+      .fn()
+      .mockRejectedValueOnce(new ControlPlaneError("network_unavailable"))
+      .mockResolvedValue(true);
+    const client = readyClient({ health });
+    const { service } = serviceFixture({ client, healthCacheMs: 0 });
+
+    await expect(service.verifyCode("ada@example.com", "12345678")).resolves.toMatchObject({ status: "ready" });
+    expect(health).toHaveBeenCalledTimes(2);
+    expect(client.verifyOTP).toHaveBeenCalledOnce();
   });
 
   it("shows a specific rate-limit message instead of the generic secure-access error", async () => {
@@ -1399,7 +1500,7 @@ function onDemandFixture({ initial = signedCredentials(), client = readyClient()
 describe("Companion account on demand", () => {
   it("reads the need from the running companion, and anything unclear as can't tell", () => {
     const answer = (overrides) => ({ enabled: true, devices: [], pairing: null, ...overrides });
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: LAUNCH_AT };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: LAUNCH_AT };
     expect(managedEndpointNeed(answer({ devices: [{ id: "phone-1", name: "Ada" }] }))).toBe(true);
     expect(managedEndpointNeed(answer({ pairing }))).toBe(true);
     expect(managedEndpointNeed(answer())).toBe(false);
@@ -1419,7 +1520,7 @@ describe("Companion account on demand", () => {
   it("needs a tunnel only for an old phone seen this month once the encrypted connection is on", () => {
     const now = LAUNCH_AT;
     const on = (devices, extra = {}) => ({ enabled: true, devices, pairing: null, e2e: { enabled: true }, ...extra });
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: now };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: now };
     expect(managedEndpointNeed(on([{ id: "old", lastSeenAt: now - HOUR_MS }]), now)).toBe(true);
     expect(managedEndpointNeed(on([{ id: "new", lastSeenAt: now, e2eAt: now - HOUR_MS }]), now)).toBe(false);
     expect(managedEndpointNeed(on([{ id: "stale", lastSeenAt: now - 31 * 24 * HOUR_MS }]), now)).toBe("unused");
@@ -1858,7 +1959,7 @@ describe("Companion account on demand", () => {
     expect(managedEndpointNeed(answer([old, phone(now - DAY_MS, "phone-2")]), now)).toBe(true);
     expect(managedEndpointNeed(answer([old], { connectedDeviceIds: ["phone-1"] }), now)).toBe(true);
     expect(managedEndpointNeed(answer([old], { connectedDeviceIds: ["phone-2"] }), now)).toBe("unused");
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: now };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: now };
     expect(managedEndpointNeed(answer([old], { pairing }), now)).toBe(true);
     expect(managedEndpointNeed(answer([]), now)).toBe(false);
     for (const unknown of [undefined, null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, String(now - 90 * DAY_MS), now + DAY_MS]) {
@@ -2494,5 +2595,61 @@ describe("A stored address the control plane no longer holds", () => {
     await settle();
     for (const call of ["getEndpoint", "ensureInstallation", "ensureEndpoint"]) expect(client[call]).not.toHaveBeenCalled();
     signedOut.service.dispose();
+  });
+});
+
+describe("Renewing the installation credential", () => {
+  const withoutCredential = () => {
+    const initial = signedCredentials();
+    delete initial[COMPANION_INSTALLATION_CREDENTIAL_FIELD];
+    delete initial[COMPANION_INSTALLATION_ID_FIELD];
+    return initial;
+  };
+
+  it("stores a new credential, tells the relay once, and sends no endpoint request", async () => {
+    const installationChanged = vi.fn();
+    const client = readyClient({ getEndpoint: vi.fn(async () => ({})) });
+    const { service, store } = serviceFixture({ initial: withoutCredential(), client, installationChanged });
+
+    await service.renewInstallation();
+
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(1);
+    expect(client.ensureInstallation.mock.calls[0][0]).toMatchObject({ currentCredential: "" });
+    expect(store.read()[COMPANION_INSTALLATION_CREDENTIAL_FIELD]).toBe(INSTALLATION_CREDENTIAL);
+    expect(installationChanged).toHaveBeenCalledTimes(1);
+    for (const call of ["ensureEndpoint", "getEndpoint", "deleteEndpoint"]) expect(client[call]).not.toHaveBeenCalled();
+  });
+
+  it("sends no request again within the renewal interval, and one after it", async () => {
+    let time = 1_000_000;
+    const { client, service } = serviceFixture({ initial: withoutCredential(), now: () => time, renewIntervalMs: 10 * 60_000 });
+
+    await service.renewInstallation();
+    await service.renewInstallation();
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(1);
+
+    time += 10 * 60_000 + 1;
+    await service.renewInstallation();
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives the signed-out state when the control plane refuses the account token", async () => {
+    const client = readyClient({
+      ensureInstallation: vi.fn(async () => {
+        throw new ControlPlaneError("unauthorized", 401);
+      }),
+    });
+    const { service } = serviceFixture({ initial: withoutCredential(), client });
+
+    await expect(service.renewInstallation()).resolves.toMatchObject({ status: "signed-out" });
+  });
+
+  it("sends no request when no account is stored", async () => {
+    const client = readyClient({ getEndpoint: vi.fn(async () => ({})) });
+    const { service } = serviceFixture({ initial: {}, client });
+
+    await service.renewInstallation();
+
+    for (const call of ["ensureInstallation", "ensureEndpoint", "getEndpoint", "deleteEndpoint"]) expect(client[call]).not.toHaveBeenCalled();
   });
 });

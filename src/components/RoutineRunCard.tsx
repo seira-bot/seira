@@ -5,6 +5,7 @@ import { routineDateTime } from "@/lib/routine-display";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { useShowThreads } from "@/lib/thread-preferences";
+import { stepsWorkflowId } from "@/lib/workflow-run";
 import { liveCardKind } from "../../shared/live-approval";
 import type { AutomationLine, RoutineRunCardData } from "../../shared/routine-run";
 import { formatTime, openThread, useStore, type Message } from "@/state/store";
@@ -54,9 +55,11 @@ export function hasRoutineExecutionTask(
 export function RoutineRunCard({
   message,
   onOpen,
+  onSteps,
 }: {
   message: Message;
   onOpen?: () => void;
+  onSteps?: () => void;
 }) {
   const run = message.routineRun;
   if (!run) {
@@ -119,6 +122,16 @@ export function RoutineRunCard({
             <ArrowRight aria-hidden="true" size={13} />
           </button>
         )}
+        {onSteps && (
+          <button
+            type="button"
+            onClick={onSteps}
+            aria-label={t("routines.run.actionFor", { action: t("workflow.run.showSteps"), name: run.routineName })}
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold text-ink-secondary transition-colors hover:bg-inset hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            {t("workflow.run.showSteps")}
+          </button>
+        )}
       </div>
     </section>
   );
@@ -128,6 +141,7 @@ export function RoutineRunRow({ message, botId }: { message: Message; botId: str
   const { state, dispatch } = useStore();
   const showThreads = useShowThreads();
   const executionThreadId = message.routineRun?.executionThreadId;
+  const workflowId = stepsWorkflowId(state.routineRuns.find((candidate) => candidate.id === message.routineRun?.runId));
   const canOpen = executionThreadId && state.bots.some((candidate) =>
     candidate.threadId === executionThreadId || hasRoutineExecutionTask(candidate.tasks, executionThreadId)
   );
@@ -137,6 +151,7 @@ export function RoutineRunRow({ message, botId }: { message: Message; botId: str
       onOpen={canOpen && executionThreadId
         ? () => openThread(dispatch, { botId, threadId: executionThreadId }, state, showThreads)
         : undefined}
+      onSteps={workflowId ? () => dispatch({ type: "showRoutines", view: "workflows", workflowId, workflowRunId: message.routineRun!.runId }) : undefined}
     />
   );
 }

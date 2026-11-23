@@ -21,7 +21,7 @@ const bot = (id: string, extra: Partial<BotRecord> = {}): BotRecord => ({
 
 const TEAMS: LibraryTeamRoles[] = [{ name: "Inbox Follow-up", summary: "Recover quiet sales threads.", roles: [{ name: "Scout", title: "Researcher" }] }];
 
-async function serve(caller: BotRecord, library: () => Promise<LibraryTeamRoles[]>, team: { teams?: string[]; bots?: BotRecord[] } = {}) {
+async function serve(caller: BotRecord, library: () => Promise<LibraryTeamRoles[]>, team: { teams?: string[]; bots?: BotRecord[]; suggest?: (input: unknown) => void } = {}) {
   const state = { caller: caller as BotRecord | null, active: true };
   const routes = [createInternalChiefTeamRoutes({
     bot: () => state.caller,
@@ -31,6 +31,7 @@ async function serve(caller: BotRecord, library: () => Promise<LibraryTeamRoles[
     instances: async () => [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", snapshot: { state: "available" },
       models: { default: "sonnet", options: [] }, capabilities: { effortLevels: ["low", "high"] } }],
     library,
+    ...(team.suggest ? { suggest: team.suggest } : {}),
   })];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -48,7 +49,11 @@ async function serve(caller: BotRecord, library: () => Promise<LibraryTeamRoles[
     const response = await fetch(`${base}${path}`);
     return { status: response.status, body: await response.json() as Record<string, unknown> };
   };
-  return { state, get };
+  const post = async (path: string, body: unknown) => {
+    const response = await fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: response.status, body: await response.json() as Record<string, unknown> };
+  };
+  return { state, get, post };
 }
 
 describe("what a Chief of Staff reads about its team", () => {
@@ -107,6 +112,19 @@ describe("what a Chief of Staff reads about its team", () => {
       ],
       instances: [{ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", state: "available", effortLevels: ["low", "high"] }],
     });
+  });
+
+  it("posts a team suggestion for an active Chief only, and a bad one is a 400 that creates nothing", async () => {
+    const suggest = vi.fn();
+    const body = { department: "Bakery", summary: "x", bots: [{ name: "Baker", role: "Orders", job: "Tracks orders." }], first_task: "Plan the week" };
+    const chief = await serve(bot("chief", { chiefOfStaff: true }), async () => TEAMS, { suggest });
+    expect((await chief.post("/api/internal/team-suggestion", body)).status).toBe(201);
+    expect(suggest).toHaveBeenCalledWith(expect.objectContaining({ department: "Bakery", firstTask: "Plan the week" }));
+    expect((await chief.post("/api/internal/team-suggestion", { department: "Bakery", bots: [] })).status).toBe(400);
+    expect(suggest).toHaveBeenCalledOnce();
+    const helper = await serve(bot("helper"), async () => TEAMS, { suggest });
+    expect((await helper.post("/api/internal/team-suggestion", body)).status).toBe(403);
+    expect(suggest).toHaveBeenCalledOnce();
   });
 
   it("leaves every other route to the next handler", async () => {

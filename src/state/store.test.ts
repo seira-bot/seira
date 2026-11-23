@@ -138,7 +138,7 @@ describe("composer thread approval persistence", () => {
 
 describe("independent bot threads", () => {
   const bot: Bot = {
-    id: "thread-bot", threadId: "first", name: "Maus", title: "Helper", description: "",
+    id: "thread-bot", threadId: "first", name: "Seira", title: "Helper", description: "",
     notifications: true, color: "green", unread: true, busy: true, activity: "waiting-on-you",
     modelSelection: { instanceId: "default", model: "default-model" }, approvalMode: "ask", alwaysAllow: [],
     messages: [{ id: "first-message", role: "user", kind: "text", text: "First conversation", at: 1 }],
@@ -205,6 +205,16 @@ describe("independent bot threads", () => {
     expect(cleared.bots[0]?.liveVoice).toBeUndefined();
   });
 
+  it("a frame without callSpeed or callLanguage clears them, and updateBot sets them", () => {
+    const set = reducer(start(), { type: "updateBot", botId: bot.id, patch: { callSpeed: 1.15, callLanguage: "id" } });
+    expect(set.bots[0]).toMatchObject({ callSpeed: 1.15, callLanguage: "id" });
+    const framed = reducer(set, { type: "botPatched", bot: { ...bot, callSpeed: 1.15, callLanguage: "id" } });
+    expect(framed.bots[0]).toMatchObject({ callSpeed: 1.15, callLanguage: "id" });
+    const cleared = reducer(framed, { type: "botPatched", bot: { ...bot } });
+    expect(cleared.bots[0]?.callSpeed).toBeUndefined();
+    expect(cleared.bots[0]?.callLanguage).toBeUndefined();
+  });
+
   it("a thread-switch snapshot without liveVoice clears the bot's own call voice", () => {
     const voiced = reducer(start(), { type: "botPatched", bot: { ...bot, liveVoice: "marin" } });
     const full = { ...bot, threadId: "second", activeLeafId: null, tasks: bot.tasks!.slice(1), messages: [] };
@@ -218,6 +228,23 @@ describe("independent bot threads", () => {
     const switched = reducer(voiced, { type: "taskSwitched", bot: { ...bot, threadId: "second", messages: [] } });
     expect(switched.bots[0]).toMatchObject({ threadId: "second" });
     expect(switched.bots[0]?.liveVoice).toBeUndefined();
+  });
+
+  const appGrants = {
+    connectorTools: { gmail: { tools: ["GMAIL_SEND_EMAIL"] } },
+    connectorScopes: { apps: { gmail: "read" as const } },
+    mcpServers: ["notes"],
+  };
+
+  it.each(Object.keys(appGrants) as Array<keyof typeof appGrants>)("a frame without %s clears the stale grant", (field) => {
+    const granted = reducer(start(), { type: "botPatched", bot: { ...bot, ...appGrants } });
+    expect(granted.bots[0]?.[field]).toEqual(appGrants[field]);
+    const { [field]: _cleared, ...frame } = { ...bot, ...appGrants };
+    expect(reducer(granted, { type: "botPatched", bot: frame }).bots[0]?.[field]).toBeUndefined();
+    const switched = reducer(granted, { type: "botPatched", bot: { ...frame, threadId: "second", tasks: bot.tasks!.slice(1), messages: [] } });
+    expect(switched.bots[0]).toMatchObject({ threadId: "second" });
+    expect(switched.bots[0]?.[field]).toBeUndefined();
+    expect(reducer(granted, { type: "taskSwitched", bot: { ...frame, threadId: "second", messages: [] } }).bots[0]?.[field]).toBeUndefined();
   });
 
   it("keeps background bot frames from switching the visible transcript or clearing unread", () => {
@@ -423,7 +450,7 @@ describe("connector grants persistence", () => {
   const announcement = () => ({
     id: "bot-1",
     threadId: "thread-1",
-    name: "Maus",
+    name: "Seira",
     title: "Helper",
     description: "",
     notifications: true,
@@ -454,7 +481,7 @@ describe("trusted approval-mode persistence", () => {
   const announcement = (approvalMode: Bot["approvalMode"] = "ask") => ({
     id: "bot-1",
     threadId: "thread-1",
-    name: "Maus",
+    name: "Seira",
     title: "Helper",
     description: "",
     notifications: true,
@@ -1060,11 +1087,9 @@ describe("config status frames", () => {
   it("keeps every saved key's hint through a live config update, so a masked key never empties", () => {
     const status = configStatusFromFrame({
       openai: { configured: true, last4: "a1b2" },
-      box: { configured: true, last4: "c3d4" },
       savedKeys: { ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } },
     } as ConfigStatusFrame);
     expect(status.openai).toEqual({ configured: true, last4: "a1b2" });
-    expect(status.box).toEqual({ configured: true, last4: "c3d4" });
     expect(status.savedKeys).toEqual({ ttsKey: { configured: true, last4: "e5f6" }, openaiLiveKey: { configured: false } });
   });
 
@@ -1073,7 +1098,6 @@ describe("config status frames", () => {
       configStatusFromFrame({
         xai: { configured: true },
         composio: { configured: true, mode: "managed" },
-        box: { configured: false },
         vps: { configured: true, sshAlias: "homelab" },
         rooms: { turnTimeoutMinutes: 20 },
         mcp: { callTimeoutMinutes: 30 },
@@ -1087,7 +1111,6 @@ describe("config status frames", () => {
     ).toEqual({
       xai: { configured: true },
       composio: { configured: true, mode: "managed" },
-      box: { configured: false },
       vps: { configured: true, sshAlias: "homelab" },
       rooms: { turnTimeoutMinutes: 20 },
       mcp: { callTimeoutMinutes: 30 },
@@ -1166,7 +1189,6 @@ describe("task rename", () => {
 describe("config status", () => {
   const config = configStatusFromFrame({
     composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 5 },
     mcp: { callTimeoutMinutes: 10 },
@@ -1468,6 +1490,13 @@ describe("routine receipt retention", () => {
     expect(plain.routinesFocus).toEqual({ section: "logs", view: undefined, botId: undefined, routineId: undefined, runStatus: undefined, nonce: 2 });
   });
 
+  it("opens a workflow and one of its runs in the Workflows view", () => {
+    const opened = reducer(initialState, { type: "showRoutines", view: "workflows", workflowId: "wf-1", workflowRunId: "run-1" });
+    expect(opened.routinesFocus).toEqual({
+      section: undefined, view: "workflows", botId: undefined, routineId: undefined, runStatus: undefined, workflowId: "wf-1", workflowRunId: "run-1", nonce: 1,
+    });
+  });
+
   it("leaves the bulk-seen sweep to the server's emitted receipts", () => {
     expect(reducer(initialState, { type: "markAllRoutineRunsSeen" })).toBe(initialState);
   });
@@ -1487,7 +1516,7 @@ describe("routine receipt retention", () => {
     routineName: "Check inbox",
     target: "bot",
     botId: "echo",
-    runOn: "maus",
+    runOn: "seira",
     scheduledFor,
     status,
     manual: false,
@@ -2584,7 +2613,6 @@ describe("activity panel", () => {
 describe("live config frames", () => {
   const baseFrame: ConfigStatusFrame = {
     composio: { configured: false },
-    box: { configured: false },
     vps: { configured: false, sshAlias: "" },
     rooms: { turnTimeoutMinutes: 10 },
     mcp: { callTimeoutMinutes: 10 },
@@ -2603,7 +2631,7 @@ describe("live config frames", () => {
     expect(configStatusFromFrame(baseFrame)).not.toHaveProperty("team");
   });
 
-  it("keeps an OMB Cloud home's flag through live config refreshes, and adds none elsewhere", () => {
+  it("keeps a Seira Cloud home's flag through live config refreshes, and adds none elsewhere", () => {
     expect(configStatusFromFrame({ ...baseFrame, cloudHome: true }).cloudHome).toBe(true);
     expect(configStatusFromFrame({ ...baseFrame, awakeLimit: 3, pausedBots: ["scout"] })).toMatchObject({ awakeLimit: 3, pausedBots: ["scout"] });
     expect(configStatusFromFrame(baseFrame)).not.toHaveProperty("pausedBots");
@@ -3280,7 +3308,7 @@ describe("notifications feed", () => {
 
 describe("a routine's answer and its broadcast", () => {
   it("applies whichever arrives first and never steps back to an older edit", () => {
-    const routine = { id: "r1", name: "Daily", prompt: "Summarize", target: "bot", botId: "b1", runOn: "maus", enabled: true,
+    const routine = { id: "r1", name: "Daily", prompt: "Summarize", target: "bot", botId: "b1", runOn: "seira", enabled: true,
       schedule: { type: "daily", time: "09:00", weekdays: [1] }, durationMinutes: 30, nextRunAt: 5, createdAt: 1, updatedAt: 10 } as AppState["routines"][number];
     const paused = { ...routine, enabled: false, nextRunAt: null, updatedAt: 11 };
     const resumed = { ...routine, updatedAt: 12 };

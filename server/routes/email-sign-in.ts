@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { EmailSignIn } from "../account-signin.ts";
 import { json, readBody } from "../harness/http.ts";
-import { labelFromUserAgent, requestOrigin, requestSource, serializeSessionCookie } from "../request-auth.ts";
+import { labelFromUserAgent, requestOrigin, requestSource, sessionCookieHeaders } from "../request-auth.ts";
 import { cookieMaxAgeSeconds, type SessionRegistry } from "../sessions.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 
@@ -41,7 +41,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   const body = await readBody(req);
   const email = typeof body?.email === "string" ? body.email : "";
   if (path === "/api/auth/email/start") {
-    const started = await emailSignIn.start(email, deps.target(req));
+    const started = await emailSignIn.start(email, deps.target(req), source);
     if (!started.ok) {
       if (started.status === 403) sessions.noteFailure(source);
       json(res, started.status, refusalBody(started));
@@ -54,7 +54,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   const label = typeof body?.label === "string" ? body.label : "";
   const verified = await emailSignIn.verify(email, code);
   if (!verified.ok) {
-    if (verified.status === 401 || verified.status === 403) sessions.noteFailure(source);
+    if (verified.status === 401 || verified.status === 403 || verified.status === 429) sessions.noteFailure(source);
     console.warn(`email sign-in refused from ${source}: ${verified.error}`);
     json(res, verified.status, refusalBody(verified));
     return true;
@@ -62,7 +62,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   sessions.clearFailures(source);
   const issued = sessions.issue({ label: label.trim() || labelFromUserAgent(req.headers["user-agent"]), scopes: verified.scopes, userId: verified.userId, email: verified.email });
   const secure = requestOrigin(req)?.startsWith("https://") === true;
-  res.setHeader("set-cookie", serializeSessionCookie(deps.cookieName, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
+  res.setHeader("set-cookie", sessionCookieHeaders(deps.cookieName, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
   json(res, 200, { session: issued.session, environment: deps.environment() });
   return true;
 }

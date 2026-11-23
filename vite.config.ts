@@ -15,7 +15,7 @@ const { version } = JSON.parse(
 ) as { version: string };
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const workers = Number(process.env.OMB_VITEST_WORKERS) || 1;
+const workers = Number(process.env.SEIRA_VITEST_WORKERS) || 1;
 const page = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 
 /** The window's rail of places loads /rail: rail.html, its own small page, in development as from the server. */
@@ -47,6 +47,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), railPage()],
   build: {
     rollupOptions: { input: { index: page("./index.html"), rail: page("./rail.html") } },
+    // Only a build that can send crash reports makes maps. `hidden` writes no reference to the map into the bundle,
+    // and scripts/crash-report-symbols.mjs uploads the maps and deletes them before the package is made.
+    ...(process.env.SEIRA_CRASH_REPORT_URL ? { sourcemap: "hidden" as const } : {}),
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),
@@ -54,7 +57,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include,
-    // OMB_VITEST_E2E=host (CI's Windows and macOS shards) leaves the e2e files that run on Linux only.
+    // SEIRA_VITEST_E2E=host (CI's Windows and macOS shards) leaves the e2e files that run on Linux only.
     exclude: [...configDefaults.exclude, ...(hostE2eOnly() ? portableE2eFiles(root, include) : [])],
     setupFiles: ["server/testing/setup.ts", "src/testing/all-locales.ts"],
     // Deletes the throwaway folders of an earlier run that was killed before its own cleanup ran.
@@ -81,7 +84,7 @@ export default defineConfig({
     // IPv4 explicitly — a bare ::1 bind makes localhost a coin-flip for
     // clients that resolve IPv4 first
     host: "127.0.0.1",
-    port: Number(process.env.OMB_UI_PORT) || 5199,
+    port: Number(process.env.SEIRA_UI_PORT) || 5199,
     // Build and packager output lands inside the repo. Its HTML files must not
     // reload the dev page, and on Windows the Vite 7 watcher crashes the dev
     // server with EBUSY when it watches a binary a prepare script holds open.
@@ -93,10 +96,10 @@ export default defineConfig({
     proxy: {
       "/api": {
         ws: true,
-        target: `http://127.0.0.1:${process.env.OMB_PORT || process.env.OGB_PORT || 8799}`,
+        target: `http://127.0.0.1:${process.env.SEIRA_PORT || process.env.OGB_PORT || 8799}`,
       },
-      "/.well-known/openmausbot/environment": {
-        target: `http://127.0.0.1:${process.env.OMB_PORT || process.env.OGB_PORT || 8799}`,
+      "/.well-known/seira/environment": {
+        target: `http://127.0.0.1:${process.env.SEIRA_PORT || process.env.OGB_PORT || 8799}`,
       },
     },
   },

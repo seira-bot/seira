@@ -20,7 +20,7 @@ member handoff.
 
 Prepare the managed desktop image on an explicitly selected Podman test machine.
 Build the renderer (`node node_modules/vite/bin/vite.js build`), set
-`OMB_VERIFY_PODMAN` to the absolute executable path and `OMB_VERIFY_MACHINE` to that connection,
+`SEIRA_VERIFY_PODMAN` to the absolute executable path and `SEIRA_VERIFY_MACHINE` to that connection,
 then run:
 
 ```sh
@@ -33,7 +33,7 @@ creates only fixture-specific desktop targets and removes them afterward.
 Do not substitute a live application URL or data directory. The JSON receipt
 records the exact MCP target for each speaker, the computer-off case, and
 revocation of each settled speaker's computer capability. It is written to
-`.omb-scratch/verification-logs/group-vm-routing.json` only after cleanup succeeds.
+`.seira-scratch/verification-logs/group-vm-routing.json` only after cleanup succeeds.
 The script removes the previous dump before every send and requires every Goal,
 including computer-off, to settle. Cleanup errors fail the run.
 
@@ -60,13 +60,13 @@ targeted.
 Direct-turn regressions additionally send two different requests through a
 Local VM-pinned conversation while the bot default is Cloud, checking the
 actual MCP descriptor, prompt, matching preview surface, and capability expiry.
-A channel member's explicit This computer and Cloud (Boat or VPS) destinations
+A channel member's explicit This computer and Cloud (VPS) destinations
 mount exactly as its bot thread mounts them: the same checks, the same
 control gate, and the same consent boundary for waking or creating a cloud
 computer. The fixture proves the host descriptor reaches the speaker behind a
 working gate that closes when the turn settles, that a missing CUA driver is
 reported instead of dispatching without the promised tools, and that a Cloud
-speaker wakes its own archived Boat, runs there, and gives it back for the next
+speaker wakes its own archived VPS computer, runs there, and gives it back for the next
 turn. The VPS mount shares the bot-thread code path but has no channel fixture
 yet. Channels still have no conversation pin and no Auto fallback to the host.
 
@@ -75,7 +75,7 @@ tool discovers ready, startable, and provisionable destinations without mutating
 them. Selecting one ends the old turn, immediately blocks its previous computer
 and browser capabilities, and resumes the original request with fresh tools and
 one user-history entry. Auto prefers a ready destination over creating a cloud
-computer. The fake Boat boundary verifies wake, create, reuse, and a computer
+computer. The fake VPS boundary verifies wake, create, reuse, and a computer
 disappearing between discovery and dispatch; no real paid computer is created.
 Stop, provider failure, Off, a new queued request, and rejected in-flight manual
 surface changes have regression coverage. The VPS fixture separately proves
@@ -83,7 +83,7 @@ starting a stopped container and creating a missing one only after selection.
 
 One limit remains explicit: a stopped Local VM is not destructively rebuilt to
 make selection succeed. Every engine keeps its own model on Cloud, with the
-Boat as its computer tools; no engine runs a turn on Boat's own agent.
+VPS as its computer tools.
 
 Run the regression coverage without a container engine:
 

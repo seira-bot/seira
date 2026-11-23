@@ -14,7 +14,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
-    state: { ...original.initialState, config: fixture.showToolCalls ? { features: { showToolCalls: true } } : null,
+    state: { ...original.initialState, config: { features: { showToolCalls: fixture.showToolCalls } },
       instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test" } as InstanceInfo] },
     dispatch: fixture.dispatch,
   }) };

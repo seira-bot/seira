@@ -17,7 +17,7 @@ const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 60_000;
 /** What the Cloud marks a held answer with while it goes to sleep (server/cloud-power.ts). */
 const POWER_HEADER = "x-omb-cloud-power";
-const BACKGROUND_HEADER = "x-omb-background";
+const BACKGROUND_HEADER = "x-seira-background";
 /** One file may take this long to cross. */
 const FILE_MS = 10 * 60_000;
 

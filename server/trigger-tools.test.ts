@@ -8,15 +8,15 @@ import { addHeldSecretScrubber, redactSecretsInText } from "./redact.ts";
 
 const now = Date.parse("2026-10-17T10:00:00Z");
 const routine = (id: string, botId: string, prompt = "Summarize the inbox."): Routine => ({
-  id, name: `Routine ${id}`, prompt, target: "bot", botId, runOn: "maus", enabled: true,
+  id, name: `Routine ${id}`, prompt, target: "bot", botId, runOn: "seira", enabled: true,
   schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, durationMinutes: 30, nextRunAt: now + 3_600_000, createdAt: now, updatedAt: now,
 });
 const webhook = (id: string, botId: string): WebhookTrigger => ({
-  id, endpointId: `wh_${id}`, name: `Hook ${id}`, prompt: "Draft a reply.", botId, runOn: "maus", enabled: true,
+  id, endpointId: `wh_${id}`, name: `Hook ${id}`, prompt: "Draft a reply.", botId, runOn: "seira", enabled: true,
   createdAt: now, updatedAt: now, deliveryCount: 2, lastReceivedAt: now - 60_000,
 });
 const run = (id: string, routineId: string, botId: string, output = "done"): RoutineRun => ({
-  id, routineId, routineName: routineId, target: "bot", botId, runOn: "maus", scheduledFor: now, status: "completed", manual: false, output, createdAt: now,
+  id, routineId, routineName: routineId, target: "bot", botId, runOn: "seira", scheduledFor: now, status: "completed", manual: false, output, createdAt: now,
 });
 
 describe("listTriggers", () => {
@@ -35,6 +35,14 @@ describe("listTriggers", () => {
     const full = listTriggers({ ...input, triggerId: "r1" }).trigger!;
     expect(full).toMatchObject({ instructions: prompt, instructionsTruncated: false, instructionsRedacted: false });
     expect(listTriggers({ ...input, triggerId: "r1", botId: "bot-b" })).not.toHaveProperty("trigger");
+  });
+
+  it("names the workflow a routine runs, and leaves the field off a routine that has none", () => {
+    const linked = { ...routine("r1", "bot-a"), workflowId: "wf1" };
+    const input = { botId: "bot-a", routines: [linked, routine("r2", "bot-a")], webhooks: [], appTriggers: [], runs: [], timeZone: "UTC", now };
+    const listed = listTriggers({ ...input, workflowName: (id) => (id === "wf1" ? "Morning round" : undefined) }).triggers!;
+    expect(listed.find((one) => one.id === "r1")).toMatchObject({ workflow: { id: "wf1", name: "Morning round" } });
+    expect(listed.find((one) => one.id === "r2")).not.toHaveProperty("workflow");
   });
 
   it("redacts the entire detailed instruction text, including held secrets beyond the preview", () => {

@@ -12,6 +12,8 @@
 
 <h3>Your own team of AI agents in one chat app.</h3>
 
+<p>Seira is a free, open source desktop app for Windows and Linux. It runs Claude Code, Codex, Gemini, and more than 25 other AI agents as a team of bots in one chat.</p>
+
 Give each bot a job. Watch it work. Approve the steps that matter.<br>
 Seira runs on your computer and uses the AI plans that you already have.
 
@@ -21,15 +23,20 @@ Seira runs on your computer and uses the AI plans that you already have.
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0E1116?style=flat-square"></a>
   <img alt="Platforms: Windows, Linux, and macOS" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-0E1116?style=flat-square">
   <img alt="Engines: Claude, Codex, Gemini, Grok, and more than 25 others" src="https://img.shields.io/badge/engines-Claude%20%C2%B7%20Codex%20%C2%B7%20Gemini%20%C2%B7%20Grok%20%C2%B7%2025%2B-E11D48?style=flat-square">
+  <a href="https://discord.gg/wAAgETJpFS"><img alt="Join the Seira Discord server" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?style=flat-square&logo=discord&logoColor=white"></a>
+  <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="https://img.shields.io/badge/WhatsApp-follow%20the%20channel-25D366?style=flat-square&logo=whatsapp&logoColor=white"></a>
 </p>
 
 <p>
   <a href="https://seira.bot"><b>Website</b></a> ·
+  <a href="https://docs.seira.bot"><b>Docs</b></a> ·
+  <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><b>Android app</b></a> ·
   <a href="#quick-start"><b>Quick start</b></a> ·
   <a href="#features"><b>Features</b></a> ·
   <a href="#engines"><b>Engines</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#documentation"><b>Documentation</b></a> ·
+  <a href="#faq"><b>FAQ</b></a> ·
   <a href="#contributing"><b>Contributing</b></a>
 </p>
 
@@ -39,6 +46,7 @@ Seira runs on your computer and uses the AI plans that you already have.
 > Seira is in early development.
 > Download it for Windows or Linux from the [latest release](https://github.com/seira-bot/seira/releases/latest),
 > run the server with [`npx @seira-bot/seira`](#run-it-on-a-server), or [build it from source](#build-from-source).
+> The [Seira Android app](https://play.google.com/store/apps/details?id=bot.seira.companion) on Google Play pairs your phone with Seira on your computer.
 
 ## Why Seira
 
@@ -98,7 +106,7 @@ The model picker shows each engine that is ready.
 | API and plan engines | Grok, Mistral, Groq, Cerebras, MiniMax, Greenference, ModelGo, Meta Muse, Muse Code, and any OpenAI-compatible endpoint |
 
 To add an ACP program or an endpoint that is not in this list, see [docs/custom-engines.md](docs/custom-engines.md).
-To use a custom build of an agent program, set it in **Settings → Engines**.
+To use a custom build of an agent program, set it in **Settings → AI → Providers**.
 
 ## Meet Seira
 
@@ -151,7 +159,7 @@ flowchart LR
     BUS -- "one SSE stream" --> UI
     REG --> CLI & ACP & API
     CLI & ACP -- "permission requests" --> BROKER
-    server -- "Boat API" --> BOAT[("Cloud computer")]
+    server -- "SSH" --> VPS[("Your VPS")]
     server -- "Composio" --> APPS[("Gmail · Slack · GitHub · …")]
 ```
 
@@ -194,6 +202,12 @@ Download the app from the [latest release](https://github.com/seira-bot/seira/re
 The app updates itself. Each release also has a `SHA256SUMS` file for each system, to check your download.
 There is no macOS download yet. On macOS, run the server with Node, or build Seira from source.
 
+### Android phone
+
+Install [Seira: AI bot companion](https://play.google.com/store/apps/details?id=bot.seira.companion) from Google Play.
+It pairs with Seira on your computer. On the phone, you read your bots, answer approvals, and send tasks.
+Your bots, keys, and chats stay on the computer.
+
 ### Run it on a server
 
 The npm package [`@seira-bot/seira`](https://www.npmjs.com/package/@seira-bot/seira) is the same server without the desktop shell.
@@ -201,7 +215,7 @@ It needs Node.js 24 or later.
 
 ```sh
 npx @seira-bot/seira setup              # once: AI access and a default model
-npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url, --tunnel
+npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url
 ```
 
 The server prints a pairing link. Open it in your browser or on your phone.
@@ -229,6 +243,10 @@ pnpm dev           # app on http://127.0.0.1:5199
 pnpm dev:desktop   # Electron shell; keep the two commands above running
 ```
 
+On Windows, a run from source shows **Seira (dev)** on the taskbar.
+Its pin opens Seira only while `pnpm dev:server` and `pnpm dev` run.
+The Start menu entry and a pin that always opens Seira come from the installer.
+
 ### Optional keys
 
 Local chat works without these keys.
@@ -237,12 +255,10 @@ To turn on an integration, paste its key in **App Settings** (the gear at the bo
 | Key | What it turns on | Where to get it |
 |---|---|---|
 | Composio project key (`ak_…`) | Gmail, GitHub, Slack, Notion, and other apps for your bots | [docs/composio.md](docs/composio.md) |
-| Boat API key | An isolated remote Linux computer with a desktop and a terminal for each bot | [Boat API keys](https://docs.boat.dev/api-keys) |
 | ElevenLabs key | Spoken replies and calls | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
 | Fish Audio key | Spoken replies and calls with Fish Audio voices | [Fish Audio API keys](https://fish.audio/app/api-keys/) |
 
-Composio and Boat are third-party services with their own accounts and terms.
-Boat is a paid service after its trial, and a cloud computer can cost money.
+Composio is a third-party service with its own account and terms. A bot's cloud computer is your own VPS ([docs/byo-vps.md](docs/byo-vps.md)); it needs no key here.
 
 ### Check and build
 
@@ -271,7 +287,7 @@ pnpm package:linux   # Linux x64: AppImage, Debian package, snap, and the verifi
 | Capability | macOS | Windows x64 | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland |
 |---|---|---|---|---|
 | Packaged app, harness server inside, local engines | Supported | Supported | Beta | Beta |
-| Composio and Boat cloud computers | Supported | Supported | Beta | Beta |
+| Composio and your own VPS as a cloud computer | Supported | Supported | Beta | Beta |
 | Preview of the local screen | Supported | Not available | Beta | Beta |
 | Bot control of this computer | Supported | Supported | Beta, after you opt in | Off for safety |
 | Dictation on the device | Supported | Not available | Planned | Planned |
@@ -291,9 +307,13 @@ They are anonymous and never include keys, names, addresses, or conversations.
 > [!IMPORTANT]
 > This repository has no analytics key.
 > A build made without `VITE_SEIRA_POSTHOG_TOKEN` has no analytics switch in Settings and sends nothing.
-> A build made with a key sends analytics until you turn off **Settings → General → Usage analytics**.
+> A build made with a key sends analytics until you turn off **Usage analytics** in **Settings → General → Privacy**.
 
 ## Documentation
+
+The full documentation is at [docs.seira.bot](https://docs.seira.bot).
+It covers installation, engines, approvals, self-hosting, and the phone app.
+These guides are in this repository:
 
 | Topic | Guide |
 |---|---|
@@ -309,9 +329,49 @@ They are anonymous and never include keys, names, addresses, or conversations.
 | Feature switches | [docs/feature-flags.md](docs/feature-flags.md) |
 | Other model providers | [apps/docs/…/model-providers.mdx](apps/docs/content/docs/providers/model-providers.mdx) |
 
+## FAQ
+
+<details>
+<summary><b>What is Seira?</b></summary>
+<br>
+Seira is a free, open source desktop app for Windows and Linux. It runs Claude Code, Codex, Gemini, and more than 25 other AI agents as a team of bots in one chat. Give each bot a job, watch it work, and approve the steps that matter.
+</details>
+
+<details>
+<summary><b>Is Seira free?</b></summary>
+<br>
+Yes. Seira is free and open source under the Apache License 2.0. Your AI plans, and any paid service that you add, keep their own prices.
+</details>
+
+<details>
+<summary><b>Do I need a new AI account or an API key?</b></summary>
+<br>
+No. Bots use the AI tools that you already have, with your own sign-in. You can also add an API key for an engine that uses one.
+</details>
+
+<details>
+<summary><b>Which AI agents does Seira support?</b></summary>
+<br>
+Seira has more than 30 engines. They include Claude Code, Codex, Gemini, Grok, Cursor, GitHub Copilot, and OpenCode. You can add your own ACP program or OpenAI-compatible endpoint. See <a href="#engines">Engines</a>.
+</details>
+
+<details>
+<summary><b>Where do my chats and files go?</b></summary>
+<br>
+Chats and files stay on your computer. A bot sends your message to the AI service that it uses. A bot uses your computer only after you turn it on. Commands and file edits show as cards that you allow or deny.
+</details>
+
+<details>
+<summary><b>Is there a phone app?</b></summary>
+<br>
+Yes. <a href="https://play.google.com/store/apps/details?id=bot.seira.companion">Seira: AI bot companion</a> is on Google Play. It pairs with Seira on your computer. On the phone, you read your bots, answer approvals, and send tasks. The computer keeps the bots, keys, and chats.
+</details>
+
 ## Contributing
 
 Issues and pull requests are welcome.
+Join the [Seira Discord server](https://discord.gg/wAAgETJpFS) to ask questions and meet other users.
+Follow the [Seira channel on WhatsApp](https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G) for new releases, new features, and tips.
 [CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
 and [DESIGN.md](DESIGN.md) holds the design rules.
 

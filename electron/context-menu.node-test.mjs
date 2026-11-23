@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import { contextMenuTemplate, createMediaDownloads, fileLink, mediaCopyName, mediaLink, savedName } from "./context-menu.mjs";
 
-const CLOUD = "https://bright-otter.mausbot.cloud";
+const CLOUD = "https://bright-otter.cloud.seira.bot";
 const VIDEO = `${CLOUD}/api/threads/t1/messages/m1/file?media=${"a".repeat(43)}`;
 const editFlags = { canUndo: false, canRedo: false, canCut: false, canCopy: false, canPaste: false, canSelectAll: true };
 const base = { mediaType: "none", srcURL: "", hasImageContents: false, linkURL: "", isEditable: false, misspelledWord: "", dictionarySuggestions: [], selectionText: "", x: 12, y: 34, editFlags, pageURL: `${CLOUD}/` };
@@ -17,7 +17,6 @@ function harness() {
   const webContents = {
     copyImageAt: (x, y) => calls.push(["copyImageAt", x, y]),
     downloadURL: (url) => calls.push(["downloadURL", url]),
-    reload: () => calls.push(["reload"]),
     replaceMisspelling: (word) => calls.push(["replaceMisspelling", word]),
     paste: () => calls.push(["paste"]),
   };
@@ -53,9 +52,9 @@ test("a video or audio player offers Save As and Open in Default App for its str
   assert.deepEqual(labels(menu({ mediaType: "audio", srcURL: `blob:${CLOUD}/0f8e` })), ["Save Audio As…", "Open in Default App"]);
 });
 
-test("media the session cannot download falls back to the plain menu instead of a dead right-click", () => {
+test("media the session cannot download opens no menu", () => {
   const { menu } = harness();
-  assert.deepEqual(labels(menu({ mediaType: "video", srcURL: "file:///etc/passwd" })), ["Copy", "Select All", "---", "Reload"]);
+  assert.deepEqual(labels(menu({ mediaType: "video", srcURL: "file:///etc/passwd" })), []);
   assert.deepEqual(labels(menu({ mediaType: "image", hasImageContents: true, srcURL: "" })), ["Copy Image"]);
 });
 
@@ -69,7 +68,7 @@ test("a link keeps Copy Link and the text menu, and gains Save Link As only when
   assert.deepEqual(labels(menu({ linkURL: "https://example.com/about" })).slice(0, 2), ["Copy Link", "---"]);
   assert.equal(fileLink("https://example.com/index.html"), false);
   assert.equal(fileLink(`${CLOUD}/api/threads/t1/messages/m1/file`), true);
-  assert.equal(fileLink("openmausbot://bot/abc.def"), false);
+  assert.equal(fileLink("seira://bot/abc.def"), false);
   assert.equal(fileLink("mailto:someone@example.com"), false);
 });
 
@@ -98,17 +97,14 @@ test("an editable field and a spelling mistake keep the existing menu", () => {
   assert.deepEqual(labels(menu({ selectionText: "words" })).at(-1), "Select All");
 });
 
-test("a plain spot answers with Copy, Select All and Reload", () => {
-  const { calls, menu } = harness();
-  const items = menu({});
-  assert.deepEqual(labels(items), ["Copy", "Select All", "---", "Reload"]);
-  assert.equal(items[0].enabled, false);
-  click(items, "Reload");
-  assert.deepEqual(calls, [["reload"]]);
+test("a plain spot with no text, link or media opens no menu", () => {
+  const { menu } = harness();
+  assert.deepEqual(menu({}), []);
+  assert.deepEqual(menu({ mediaType: "canvas" }), []);
 });
 
 function scratch() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-context-menu-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-context-menu-"));
   return { dir, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 

@@ -9,7 +9,7 @@ of Linux desktop on your own server instead of this machine, see [byo-vps.md](by
 - The native Electron window and embedded Seira server on GNOME Xorg and GNOME Wayland.
 - Local Claude, Codex, Grok, Gemini, and other configured agent CLIs.
 - Chat, streaming turns, approvals, bot-to-bot communication, and local data storage.
-- Composio connected apps and Boat cloud computers.
+- Composio connected apps and your own VPS as a cloud computer.
 - External documentation and OAuth links in the default browser.
 - An explicit, view-only local screen preview on GNOME Xorg and GNOME Wayland. The Wayland path uses the
   native portal chooser and keeps the selected PipeWire stream open until the user stops sharing.
@@ -75,7 +75,7 @@ sudo apt install ./Seira-amd64.deb
 Then open **Seira** from the GNOME application launcher. To remove it:
 
 ```sh
-sudo apt remove openmausbot
+sudo apt remove seira
 ```
 
 The portable AppImage does not install system files:
@@ -101,7 +101,7 @@ pnpm package:arch
 sudo pacman -U release/Seira-<version>-x64.pacman
 ```
 
-Replace `<version>` with the built version (for example, `0.1.149`). Then launch `openmausbot` from the application launcher or command line.
+Replace `<version>` with the built version (for example, `0.1.149`). Then launch `seira` from the application launcher or command line.
 
 #### Portable AppImage
 A minimal Arch install lacks the FUSE helper and some desktop libraries the AppImage needs, so install them first:
@@ -126,7 +126,7 @@ The app checks for updates in the background and downloads them by itself. Nothi
   root-only folder and checked against the checksum in the update feed first; a file that does not match is
   refused and nothing is installed. Closing the prompt leaves the update ready to try again. If the session cannot
   show a prompt (SSH, no desktop, no `pkexec`), the app falls back to copying the `sudo apt-get install` command
-  and opening a terminal, and says why. Set `OMB_UPDATE_INSTALL=terminal` to always use the terminal.
+  and opening a terminal, and says why. Set `SEIRA_UPDATE_INSTALL=terminal` to always use the terminal.
 - **AppImage.** The update replaces the AppImage when you restart; no password is needed.
 - **rpm and pacman packages** still use the terminal hand-off.
 - **Snap and Flatpak.** The store updates the app. Seira does not check, download or install updates itself, and
@@ -157,8 +157,9 @@ not open: it shows a message that points to the Debian package, and it never sta
 the `.deb` instead; do not add `--no-sandbox`, disable AppArmor globally, change the user-namespace setting, or
 allowlist arbitrary executables under your home directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
-Application data remains local in `~/.openmausbot`. Electron browser data and window state use the normal XDG
-configuration directory (`~/.config/openmausbot` unless the environment overrides it).
+Application data remains local in `~/.seira`. Electron browser data and window state use the normal XDG
+configuration directory (`~/.config/Seira` unless the environment overrides it). The first start after an update from
+a version that used `~/.config/openmausbot` copies that folder once and leaves the old folder as it was.
 
 ## Develop the desktop shell
 
@@ -174,7 +175,7 @@ For a package-shaped build without creating `.deb` or AppImage artifacts:
 
 ```sh
 pnpm package:linux:dir
-./release/linux-unpacked/openmausbot
+./release/linux-unpacked/seira
 ```
 
 ## Agent CLI discovery
@@ -195,7 +196,7 @@ It also probes the login shell in the background. If a CLI still is not detected
 path before launching the app from a terminal and verify it there:
 
 ```sh
-OMB_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
+SEIRA_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
 ```
 
 Restart Seira after installing or signing in to a CLI.
@@ -207,6 +208,8 @@ commands. See `packaging/flatpak/README.md` for the build steps and the permissi
 
 - Agent programs (`claude`, `codex` and the others) stay on the host. The server starts them through
   `flatpak-spawn --host`, so install them on the host first.
+- The Flatpak keeps its data in `~/.seira`, the same folder as the AppImage and the Debian package.
+  Do not run two of these packages at the same time.
 - Local control of the computer is off in the Flatpak.
 - The bundled bot browser, the computer-tools bundle and the tunnel program are not part of the Flatpak.
 
@@ -239,8 +242,8 @@ to **This computer**. No driver download, terminal command, `chmod`, or daemon s
 starts with `--no-overlay`, so Cua's decorative full-screen X11 cursor surface is never created. Seira also
 uses Electron software rendering when the NVIDIA driver is loaded, to avoid the reproduced NVIDIA/libGLES
 GPU-process failure that could leave an invisible focused app window receiving input. Other GPUs keep hardware
-acceleration, because software rendering costs about a CPU core while the window animates. Set `OMB_LINUX_GPU=off`
-to force software rendering or `OMB_LINUX_GPU=on` to force the GPU.
+acceleration, because software rendering costs about a CPU core while the window animates. Set `SEIRA_LINUX_GPU=off`
+to force software rendering or `SEIRA_LINUX_GPU=on` to force the GPU.
 
 Cua actions use a private logical cursor. With the decorative overlay disabled, `move_cursor` does not move the
 user's physical pointer; approved click and typing actions still target the requested window, while the user's own
@@ -347,22 +350,55 @@ pnpm smoke:linux-package
 The verifier checks `.deb` metadata, desktop identity, the exact dormant Cua resource tree and provenance,
 SquashFS/DEB directory modes, runtime path policy, and matching binary hashes across all artifacts. The local smoke
 launches the unpacked app and AppImage without `--no-sandbox`; CI first reproduces a `0.1.7` in-place DEB upgrade and
-then runs the same smoke against `/opt/Seira/openmausbot`. These lanes prove the embedded server and UI are
+then runs the same smoke against `/opt/Seira/seira`. These lanes prove the embedded server and UI are
 usable while an optional Composio broker stalls, verify that an old local-control opt-in is cleared, and assert that
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.
+
+## Memory for bots
+
+All bot work on this computer runs under one memory limit. The limit keeps your other apps and Seira itself running
+when a bot starts a heavy task, such as a full test suite, a build, containers, or a video render.
+
+- Each engine starts in its own systemd user scope, under one slice for all bots. The slice has the memory limit, no
+  swap, and a CPU quota of all CPUs but one, so tools that count CPUs start fewer workers.
+- The default limit is the computer's memory less the larger of 3 GB and a quarter of it: 5 GB of 8 GB, 12 GB of
+  16 GB, and 24 GB of 32 GB.
+- To change it, open **Settings → You and your bots → Limits**, find **Memory for bots**, and enter a number of GB.
+  Leave the field empty for Auto. The new value applies to the next task that a bot starts.
+- When a program goes over the limit, the kernel stops that program and nothing else. The bot is told in the same
+  turn to try again with fewer parallel workers, and the chat shows one line.
+- On Linux, while the memory for bots is full, a new task waits and starts by itself when there is room. Windows and
+  macOS do not wait.
+- Without a systemd user session or a memory controller for user programs (some containers and old WSL setups), a watchdog keeps bot work under the same
+  limit. The watchdog looks every 5 seconds, so it is slower than the kernel.
+- The installed app and a development copy use different slices, one for each data folder.
+- The Flatpak package runs engines on the host, outside the slice.
+
+These environment variables change the defaults for the app's server:
+
+| Variable | Value | Effect |
+| --- | --- | --- |
+| `SEIRA_BOT_MEMORY_MAX_MB` | a number | The limit in MB, at least 1024. A smaller number is raised to 1024. Settings shows it and cannot change it. |
+| `SEIRA_BOT_MEMORY_MAX_MB` | `off` or `0` | No limit for bot work. |
+| `SEIRA_BOT_MEMORY_FENCE` | `off` | No slice. |
+| `SEIRA_BOT_MEMORY_FENCE` | `on` | The slice also on a Linux server that is not the desktop app. |
+| `SEIRA_TURNS_MAX_RUNNING` | `off` | New tasks never wait for memory. |
+
+The health report names the protection in force (`slice`, `watchdog`, or `none`) and the limit in GB. The
+[verification recipe](verification/bot-memory-fence.md) shows how to check each part on a real systemd host.
 
 ## Troubleshooting
 
 ### An agent CLI is missing
 
 Run the CLI directly in a terminal, finish its sign-in flow, then restart Seira. If it lives outside the
-common directories above, use `OMB_EXTRA_PATH` while testing and report the install location so it can be
+common directories above, use `SEIRA_EXTRA_PATH` while testing and report the install location so it can be
 considered for automatic discovery.
 
 ### A bot needs computer tools
 
-Choose **Cloud** (Boat) and add a Boat token in App Settings, or use Local VM. Linux **This computer** remains disabled
+Choose **Cloud** after setting up your VPS ([byo-vps.md](byo-vps.md)), or use Local VM. Linux **This computer** remains disabled
 on Wayland. On Xorg, enable it from the **Local control** card first.
 
 ### Local control is not ready

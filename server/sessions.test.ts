@@ -23,6 +23,7 @@ import {
   SESSION_MAX_AGE_MS,
   cookieMaxAgeSeconds,
   daysMs,
+  isPairedDeviceSession,
 } from "./sessions.ts";
 import { userError } from "./user-errors.ts";
 
@@ -32,7 +33,7 @@ let registry: SessionRegistry;
 const file = () => join(dir, "sessions.json");
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "omb-sessions-"));
+  dir = mkdtempSync(join(tmpdir(), "seira-sessions-"));
   clock = 1_700_000_000_000;
   registry = new SessionRegistry({ file: file(), now: () => clock });
 });
@@ -41,10 +42,10 @@ afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: tr
 describe("the native-app encoding of a pairing window", () => {
   it("redeems the same window as the typed code, and consumes it", () => {
     const { code, credential } = registry.openPairing({ label: "Pixel" });
-    // The Android companion's parser demands the 9-character prefix plus exactly 43 base64url characters (Connection.kt).
-    expect(credential.startsWith("omb_pair_")).toBe(true);
-    expect(credential.length).toBe(52);
-    expect(credential.slice("omb_pair_".length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // The phone apps read both prefixes: the old 9-character one and the Seira 11-character one, then 43 base64url characters.
+    expect(credential.startsWith("seira_pair_")).toBe(true);
+    expect(credential.length).toBe(54);
+    expect(credential.slice("seira_pair_".length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     const paired = registry.exchange({ code: credential, label: "Pixel", source: "10.0.0.9" });
     expect(paired.ok).toBe(true);
@@ -54,8 +55,8 @@ describe("the native-app encoding of a pairing window", () => {
 
   it("never normalizes a credential", () => {
     // A credential containing every symbol normalizePairingCode folds (0, 1, _ and -): it must be hashed exactly as presented.
-    const trap = "omb_pair_0123456789-_abcdefghijklmnopqrstuvwxyzABCDE";
-    expect(trap.length).toBe(52);
+    const trap = "seira_pair_0123456789-_abcdefghijklmnopqrstuvwxyzABCDE";
+    expect(trap.length).toBe(54);
     expect(normalizePairingCode(trap)).not.toBe(trap);
     expect(isPairingCredential(trap)).toBe(true);
 
@@ -93,7 +94,7 @@ describe("the native-app encoding of a pairing window", () => {
   });
 });
 
-describe("a browser sign-in window (an OMB Cloud page's \"Use in your browser\")", () => {
+describe("a browser sign-in window (a Seira Cloud page's \"Use in your browser\")", () => {
   it("is redeemed only by a browser sign-in, only by its credential, and only once", () => {
     const { code, credential } = registry.openPairing({ scopes: ["admin", "client"], label: "Web browser", browser: true });
     expect(registry.exchange({ code: credential, label: "", source: "10.0.0.5" }).ok).toBe(false);
@@ -199,7 +200,7 @@ describe("pairing codes", () => {
     expect(pairingRequest({ tokenTtlMs: SESSION_MAX_AGE_MS })).toEqual({ tokenTtlMs: SESSION_MAX_AGE_MS });
     expect(pairingRequest(null)).toEqual({});
     for (const ttlMs of [86_400_001, 59_999, 1.5e6 + 0.5, "24h"]) expect(pairingRequest({ ttlMs }), String(ttlMs)).toMatchObject({ error: expect.stringContaining("24 hours") });
-    expect(pairingRequest({ tokenTtlMs: SESSION_MAX_AGE_MS + 1 })).toMatchObject({ error: expect.stringContaining("OMB_SESSION_MAX_DAYS") });
+    expect(pairingRequest({ tokenTtlMs: SESSION_MAX_AGE_MS + 1 })).toMatchObject({ error: expect.stringContaining("SEIRA_SESSION_MAX_DAYS") });
   });
 
   it("locks a source out after repeated failures, and forgets on success", () => {
@@ -255,7 +256,7 @@ describe("pairing codes", () => {
   });
 
   it("explains a code of the wrong kind and does not count it as a guess", () => {
-    for (const [input, key, code] of [["1234 5678", "serverError.pair.emailCode", "pairing_email_code"], ["123456", "serverError.pair.oldCode", "pairing_old_code"], [`omb_sess_${"a".repeat(43)}`, "serverError.pair.scriptKey", "pairing_script_key"]] as const) {
+    for (const [input, key, code] of [["1234 5678", "serverError.pair.emailCode", "pairing_email_code"], ["123456", "serverError.pair.oldCode", "pairing_old_code"], [`seira_sess_${"a".repeat(43)}`, "serverError.pair.scriptKey", "pairing_script_key"]] as const) {
       for (let i = 0; i < PAIRING_LOCKOUT.failures + 1; i++) {
         const refused = registry.exchange({ code: input, label: "", source: "mixed-up" });
         expect(refused).toMatchObject({ ok: false, status: 400, code, errorKey: key });
@@ -266,9 +267,9 @@ describe("pairing codes", () => {
 
   it("takes the code or the credential out of a pasted link", () => {
     const a = registry.openPairing();
-    expect(registry.exchange({ code: `https://maus.example.com/pair#code=${formatPairingCode(a.code)}`, label: "", source: "s" }).ok).toBe(true);
+    expect(registry.exchange({ code: `https://seira.example.com/pair#code=${formatPairingCode(a.code)}`, label: "", source: "s" }).ok).toBe(true);
     const b = registry.openPairing();
-    expect(registry.exchange({ code: `openmausbot://pair?address=https%3A%2F%2Fmaus.example.com&token=${b.credential}`, label: "", source: "s" }).ok).toBe(true);
+    expect(registry.exchange({ code: `seira://pair?address=https%3A%2F%2Fseira.example.com&token=${b.credential}`, label: "", source: "s" }).ok).toBe(true);
   });
 
   it("answers a lost-response retry with the same session for a minute, keyed on the client's attempt id", () => {
@@ -568,7 +569,7 @@ describe("sessions", () => {
     if (process.platform !== "win32") expect(statSync(file()).mode & 0o777).toBe(0o600); // Windows has no POSIX modes
     const reloaded = new SessionRegistry({ file: file(), now: () => clock });
     expect(reloaded.authenticate(token)?.id).toBe(session.id);
-    expect(reloaded.authenticate("omb_sess_nope")).toBeNull();
+    expect(reloaded.authenticate("seira_sess_nope")).toBeNull();
   });
 
   it("names each device's person when asked, and leaves it out when that is just the label", () => {
@@ -712,7 +713,7 @@ describe("stream tickets", () => {
   });
 });
 
-describe("admin scope only (an OMB Cloud home is personal: server/cloud-owner.ts)", () => {
+describe("admin scope only (a Seira Cloud home is personal: server/cloud-owner.ts)", () => {
   const PERSONAL = "My Cloud is personal: only your own devices can connect.";
   it("opens, redeems, issues and accepts nothing without admin scope; the owner's devices are unaffected", () => {
     // Made before the rule applies (as a stored session is at boot).
@@ -754,14 +755,14 @@ describe("a member's own phone on a Team Cloud", () => {
   const HOUR = 60 * 60_000;
   /** Ada's session from the Admin's signed pairing, as the desktop gets it. */
   const fromAdmin = (member: { email: string; role: "owner" | "admin" | "member" } = ADA) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member });
+    const { code } = registry.openPairing({ scopes: ["client"], member, device: "computer" });
     const paired = registry.exchange({ code, label: "Desktop", source: "a" });
     if (!paired.ok) throw new Error(paired.error);
     return registry.authenticate(paired.token)!;
   };
   /** A code Ada made from that session, redeemed by her phone. */
   const phoneOf = (session: { email?: string; teamRole?: "owner" | "admin" | "member"; createdAt: number; memberCheckedAt?: number }) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt });
+    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt, device: "phone" });
     const paired = registry.exchange({ code, label: "Ada's phone", source: "p" });
     if (!paired.ok) throw new Error(paired.error);
     return paired;
@@ -834,5 +835,69 @@ describe("a member's own phone on a Team Cloud", () => {
     const later = phoneOf(fromAdmin());
     clock = registry.authenticate(later.token)!.expiresAt;
     expect(registry.memberPhones(), "an ended phone is not listed").toEqual([]);
+  });
+
+  it("counts her phone as a paired device even without the phone mark, and never the app's own sign-in", () => {
+    const desktop = fromAdmin();
+    const phone = registry.authenticate(phoneOf(desktop).token)!;
+    expect(isPairedDeviceSession(phone)).toBe(true);
+    expect(isPairedDeviceSession({ ...phone, pairedDevice: undefined })).toBe(true);
+    expect(isPairedDeviceSession(desktop)).toBe(false);
+  });
+});
+
+describe("the paired-device mark on a session's pairing record", () => {
+  const redeem = (opened: { device?: "phone" | "computer"; browser?: boolean; tokenTtlMs?: number }, input: { attemptId?: string; browser?: boolean; cookie?: boolean } = {}) => {
+    const pairing = registry.openPairing(opened);
+    const result = registry.exchange({ code: opened.browser ? pairing.credential : pairing.code, label: "Device", source: "10.0.0.7", ...input });
+    if (!result.ok) throw new Error(result.error);
+    return registry.record(result.session.id)!;
+  };
+
+  it("marks a session from a pairing opened for no one in particular, unless a browser takes it as a cookie", () => {
+    expect(redeem({}).pairedDevice, "redeemed without a cookie").toBe(true);
+    expect(redeem({}, { attemptId: "pair-request-0001" }).pairedDevice, "with a retry id").toBe(true);
+    expect(redeem({}, { cookie: true }).pairedDevice, "a browser's cookie").toBeUndefined();
+  });
+
+  it("marks every session a phone's pairing opens, even into a cookie", () => {
+    expect(redeem({ device: "phone" }).pairedDevice).toBe(true);
+    expect(redeem({ device: "phone" }, { attemptId: "3f2c9a1e-5b7d-4c8e-9f01-23456789abcd" }).pairedDevice).toBe(true);
+    expect(redeem({ device: "phone" }, { cookie: true }).pairedDevice).toBe(true);
+  });
+
+  it("leaves a session from a computer's pairing or a browser sign-in unmarked", () => {
+    expect(redeem({ device: "computer" }).pairedDevice, "a computer's code").toBeUndefined();
+    expect(redeem({ device: "computer" }, { attemptId: "pair-request-0001" }).pairedDevice, "with the desktop app's retry id").toBeUndefined();
+    expect(redeem({ browser: true }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in").toBeUndefined();
+    expect(redeem({ browser: true, device: "phone" }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in asked for a phone").toBeUndefined();
+  });
+
+  it("leaves an access token unmarked whatever its client says, unless a phone opened its code", () => {
+    const day = 24 * 3_600_000;
+    const token = redeem({ tokenTtlMs: day });
+    expect(token.token, "an access token").toBe(true);
+    expect(token.pairedDevice, "a client that names no device").toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "computer" }).pairedDevice).toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "phone" }).pairedDevice, "a code a phone opened").toBe(true);
+  });
+
+  it("takes who the code is for from the pairing request and nothing else", () => {
+    expect(pairingRequest({ device: "phone", scopes: ["client"] })).toEqual({ scopes: ["client"], device: "phone" });
+    expect(pairingRequest({ device: "computer" })).toEqual({ device: "computer" });
+    expect(pairingRequest({ device: true })).toEqual({});
+    expect(pairingRequest({ device: "desktop" })).toEqual({});
+  });
+
+  it("keeps the mark when the registry reads its file again, and reads an older record unmarked", () => {
+    const phone = redeem({ device: "phone" });
+    const desktop = redeem({ device: "computer" });
+    registry.close();
+    const saved = JSON.parse(readFileSync(file(), "utf8"));
+    expect(saved.sessions.find((s: { id: string }) => s.id === phone.id).pairedDevice).toBe(true);
+    expect(saved.sessions.find((s: { id: string }) => s.id === desktop.id)).not.toHaveProperty("pairedDevice");
+    registry = new SessionRegistry({ file: file(), now: () => clock });
+    expect(isPairedDeviceSession(registry.record(phone.id)!)).toBe(true);
+    expect(isPairedDeviceSession(registry.record(desktop.id)!)).toBe(false);
   });
 });

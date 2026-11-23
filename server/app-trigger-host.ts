@@ -40,6 +40,7 @@ export interface AppTriggerHostDeps {
   emit: (frame: Record<string, unknown>) => void;
   audit: (row: { threadId: string; requestId: string; botId: string; botName: string; tool: string; summary: string }) => void;
   broker?: AppTriggerBroker;
+  workflowName?: (workflowId: string) => string | undefined;
 }
 
 export interface InternalTriggerContext {
@@ -149,11 +150,12 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
         const patch: AppTriggerPatch = {
           ...(typeof body.name === "string" ? { name: body.name } : {}),
           ...(typeof body.prompt === "string" ? { prompt: body.prompt } : {}),
-          ...(body.runOn === "maus" || body.runOn === "cloud" ? { runOn: body.runOn } : {}),
+          ...(body.runOn === "seira" || body.runOn === "cloud" ? { runOn: body.runOn } : {}),
           ...(body.filter === null || (body.filter && typeof body.filter === "object") ? { filter: body.filter as never } : {}),
           ...(body.config && typeof body.config === "object" ? { config: body.config as Record<string, unknown> } : {}),
           ...(typeof body.enabled === "boolean" ? { enabled: body.enabled } : {}),
           ...(typeof body.sameConversation === "boolean" ? { sameConversation: body.sameConversation } : {}),
+          ...(body.confirmPlace === true ? { confirmPlace: true as const } : {}),
         };
         const trigger = await manager.update(id, patch);
         return trigger ? json(res, 200, { trigger }) : json(res, 404, { error: "no such automation" });
@@ -184,7 +186,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     const ownerId = target.forBot?.botId ?? context.from.id;
     const listing = listTriggers({
       botId: ownerId, triggerId: url.searchParams.get("triggerId") ?? undefined, routines: deps.routines().listRoutines().filter((routine) => context.routineShown?.(routine) ?? true),
-      webhooks: deps.webhooks.list(), appTriggers: manager.list(), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(),
+      webhooks: deps.webhooks.list(), appTriggers: manager.list(), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(), workflowName: deps.workflowName,
     });
     const shown = listing.trigger;
     if (url.searchParams.get("includeAddress") !== "1" || !shown) return json(res, 200, listing);

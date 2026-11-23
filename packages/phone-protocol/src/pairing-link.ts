@@ -1,6 +1,9 @@
-// The one `openmausbot://pair` link builder, read by the Android and iOS
+// The one `<scheme>://pair` link builder, read by the Android and iOS
 // scanners (`PairingInvite.parse`). Every value is written with
 // encodeURIComponent, so a space is `%20`.
+
+import { isPairingCredentialShape } from "./pairing-code.ts";
+import { sentWireName } from "./wire-names.ts";
 
 export type CompanionEndpointKind = "hosted" | "tailnet" | "lan" | "bonjour";
 
@@ -18,7 +21,7 @@ export interface PairingE2EDescriptor {
 }
 
 const B64U_FIELD = /^[A-Za-z0-9_-]+$/;
-const RELAY_HOST = /^relay[1-9][0-9]?\.openmausbot\.com$/;
+const RELAY_HOST = /^relay[1-9][0-9]?\.seira\.bot$/;
 
 /** The QR's `e2e` value, or null for anything a phone would refuse: then the link goes out without it, as from a
  * computer without the encrypted connection. A QR never says "local": a restriction is set per phone, later. */
@@ -174,7 +177,7 @@ export function phonePairingLink({
   e2e,
 }: PhonePairingLinkOptions): string | null {
   const dial = linkAddress(address, port);
-  if (!dial || !/^omb_pair_[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  if (!dial || !isPairingCredentialShape(token)) return null;
   if (code !== undefined && !/^\d{6}$/.test(code)) return null;
 
   const fields: Array<[string, string]> = [["address", dial], ["token", token]];
@@ -194,5 +197,23 @@ export function phonePairingLink({
   const descriptor = encodePairingE2E(e2e);
   if (descriptor) fields.push(["e2e", descriptor]);
 
-  return `openmausbot://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
+  return `${sentWireName("linkScheme")}://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
+}
+
+export interface ServerPairingLinkOptions {
+  /** The origin the link opens first: the server's primary route. */
+  base: string;
+  code: string;
+  /** Every route the server has. The link carries them only when there are two or more. */
+  endpoints?: CompanionEndpoint[];
+}
+
+/** The link a server hands out for a typed code: `<base>/pair#code=<code>`, plus `&endpoints=<base64url JSON>` when the
+ * server has two or more https routes. The browser page reads only the code; the phone apps read the routes. Null when
+ * `base` is not a plain http(s) origin. */
+export function serverPairingLink({ base, code, endpoints }: ServerPairingLinkOptions): string | null {
+  const origin = /^https?:\/\//i.test(base.trim()) ? linkAddress(base, undefined) : null;
+  if (!origin || !code) return null;
+  const routes = qrEndpoints(endpoints);
+  return `${origin}/pair#code=${code}${routes.length >= 2 ? `&endpoints=${encodeEndpoints(routes)}` : ""}`;
 }

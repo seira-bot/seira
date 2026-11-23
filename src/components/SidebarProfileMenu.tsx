@@ -23,7 +23,6 @@ import {
   Rocket,
   Settings as SettingsIcon,
   Smartphone,
-  UserRound,
   UsersRound,
   Zap,
 } from "lucide-react";
@@ -33,9 +32,11 @@ import { accountLine, useAccountSummary } from "./settings/account-summary";
 import { usePhonePlaceState, type PhonePlaceState } from "./settings/phone-status";
 import { useSettingsPlace } from "./settings/settings-place";
 import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./AccountMove";
-import { InitialsAvatar } from "./Avatar";
+import { PersonAvatar } from "./Avatar";
 import { SignOutConfirm } from "./settings/SignOutConfirm";
 import { AboutDialog } from "./AboutDialog";
+import { ReleaseNotesPopup } from "./whats-new/ReleaseNotesPopup";
+import { whatsNewMenuAction, type ReleaseNotesView } from "@/lib/release-notes";
 import { CloudTile } from "./cloud-buy/parts";
 import { usageBridge } from "./CloudUsageMeter";
 import { useCloudPlanSnapshot } from "./CloudTrialNotice";
@@ -46,16 +47,19 @@ import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { api, useStore, type Action, type AppSettingsSection } from "@/state/store";
-import { serverCheckPhase, serverUpdateRow, type ServerUpdateCheck, type ServerUpdatePhase } from "@/lib/server-update";
+import { serverCheckPhase, serverUpdateRow, type ServerUpdateCheck, type ServerUpdatePhase, type ServerUpdateStatus } from "@/lib/server-update";
+import { unlessRefused } from "@/lib/admin-scope";
 import type { CloudAccountBridge, CloudAccountState } from "../../electron/cloud-account.mjs";
 import { updaterMessage, useUpdaterState, type UpdaterState } from "@/lib/updater";
+import { DESKTOP_DOWNLOAD_URL } from "../../shared/computer-ask";
 import { productName } from "../lib/brand";
 import { cloudColor } from "@/lib/cloud-look";
 import { cn } from "@/lib/cn";
 import { meterPercent, resetLine } from "@/lib/usage-meter";
 import type { CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
-import { FEEDBACK_URL, HELP_CENTER_URL, RELEASES_URL, appVersion, openExternalLink } from "@/lib/app-links";
+import { ui } from "@/lib/ui-anchor";
+import { FEEDBACK_URL, HELP_CENTER_URL, appVersion, desktopAppVersion, openExternalLink } from "@/lib/app-links";
 import { pageIsThisComputer } from "@/lib/companion-bridge";
 import { cloudPlanLabel } from "@/lib/cloud-plan";
 import { shortcutLabel } from "./ShortcutHint";
@@ -68,19 +72,6 @@ import {
   type CloudPhoneDestination,
   type PhoneDestination,
 } from "@/lib/phone-pairing";
-
-export function profileInitials(profile?: { name?: string; email?: string }): string {
-  const name = profile?.name?.trim();
-  if (name) {
-    const words = name.split(/\s+/);
-    return words
-      .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
-      .join("");
-  }
-  const email = profile?.email?.trim();
-  return email ? email[0]!.toUpperCase() : "?";
-}
 
 export function profileLabel(profile?: { name?: string; email?: string }): string {
   return profile?.name?.trim() || profile?.email?.trim() || t("sidebar.profile.you");
@@ -130,7 +121,7 @@ export function updateLabel(phase: UpdatePhase, state: UpdaterState | null): str
     case "up-to-date":
       return t("sidebar.update.upToDate");
     default:
-      return t("sidebar.update.check");
+      return state?.downloadOnly ? t("sidebar.update.downloadOnly") : t("sidebar.update.check");
   }
 }
 
@@ -160,20 +151,39 @@ interface UpdateEntry {
   label: string;
   source?: "desktop" | "server";
   installMode?: string;
+  selfInstall?: boolean;
+  onRaisedSelect?: () => void;
 }
 
-/** The update a Simple account menu raises to its top row: one waiting to be installed, or one that failed. */
-export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode"> | null): { label: string; action: string } | null {
+export interface UpdateTop {
+  label: string;
+  action: string;
+  onSelect?: () => void;
+}
+
+/** The update a Simple account menu raises to its top row: one waiting to be installed, or one that failed. A server
+ * release that the server cannot install by itself is only available, and the row leads to how to update it. */
+export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode" | "selfInstall" | "onRaisedSelect"> | null): UpdateTop | null {
   const ready = () => t("sidebar.update.readyShort");
   if (entry?.source === "desktop") {
     if (entry.phase === "downloaded") return { label: ready(), action: t(entry.installMode === "handoff" ? "sidebar.update.installAction" : "sidebar.update.restartAction") };
     if (entry.phase === "error") return { label: t("sidebar.update.failedShort"), action: t("sidebar.update.retryAction") };
   }
   if (entry?.source === "server") {
-    if (entry.phase === "available") return { label: ready(), action: t("sidebar.update.installAction") };
+    if (entry.phase === "available") {
+      const top = entry.selfInstall
+        ? { label: ready(), action: t("sidebar.update.installAction") }
+        : { label: t("sidebar.update.availableShort"), action: t("sidebar.update.howAction") };
+      return entry.onRaisedSelect ? { ...top, onSelect: entry.onRaisedSelect } : top;
+    }
     if (entry.phase === "reload") return { label: ready(), action: t("sidebar.update.restartAction") };
   }
   return null;
+}
+
+/** "You're up to date" only for a check the person just asked for, and only when a check finished after the click. */
+export function upToDateAfterClick(state: UpdaterState | null, checkedAt: number, now: number): boolean {
+  return checkedAt > 0 && state?.status === "idle" && (state.upToDateAt ?? 0) >= checkedAt && now - checkedAt < 3000;
 }
 
 export function useUpdateItem(): UpdateEntry | null {
@@ -185,7 +195,7 @@ export function useUpdateItem(): UpdateEntry | null {
 
   useEffect(() => setPending(false), [status]);
 
-  const upToDate = Boolean(checkedAt) && (!state || state.status === "idle") && Date.now() - checkedAt < 3000;
+  const upToDate = upToDateAfterClick(state, checkedAt, Date.now());
   useEffect(() => {
     if (!upToDate) return;
     const timer = setTimeout(() => setCheckedAt(0), 3000);
@@ -215,6 +225,7 @@ export function useUpdateItem(): UpdateEntry | null {
           setPending(true);
           return void updater.install();
         }
+        if (state.downloadOnly) return void openExternalLink(DESKTOP_DOWNLOAD_URL);
         setCheckedAt(Date.now());
         void updater.check();
       },
@@ -224,8 +235,10 @@ export function useUpdateItem(): UpdateEntry | null {
 
 /** Without the packaged app's updater the server cannot replace itself, so the row says whether a newer release exists and how to install it. */
 export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
+  const { dispatch } = useStore();
   const [phase, setPhase] = useState<ServerUpdatePhase>("idle");
   const [check, setCheck] = useState<ServerUpdateCheck | null>(null);
+  const [selfInstall, setSelfInstall] = useState(false);
   const otherServer = useOtherServerName(enabled);
 
   useEffect(() => {
@@ -236,11 +249,14 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
 
   if (!enabled) return null;
   const row = serverUpdateRow(phase, check, appVersion(), otherServer);
+  const settingsShowsServerUpdate = !pageIsThisComputer() && window.ogb?.remoteClient?.active !== true;
   return {
     phase,
     pending: false,
     label: row.label,
     source: "server",
+    selfInstall,
+    ...(settingsShowsServerUpdate ? { onRaisedSelect: () => dispatch({ type: "toggleAppSettings", open: true, section: "overview" }) } : {}),
     item: {
       key: "update",
       label: row.label,
@@ -255,8 +271,12 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
         if (phase === "reload") return window.location.reload();
         setPhase("checking");
         void api<ServerUpdateCheck>("/api/updates/check", { timeoutMs: 20_000 })
-          .then((next) => {
+          .then(async (next) => {
+            const status = next.available && next.install !== "desktop" && next.install !== "managed"
+              ? await unlessRefused("/api/updates/server", () => api<ServerUpdateStatus>("/api/updates/server", { timeoutMs: 20_000 }), null).catch(() => null)
+              : null;
             setCheck(next);
+            setSelfInstall(status?.mode === "button");
             setPhase(serverCheckPhase(next));
           })
           .catch(() => setPhase("error"));
@@ -325,8 +345,8 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
   return [
     { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
-    ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
-    ...(onPublishedApps ? [{ key: "published-apps", label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
+    ...(onFiles ? [{ key: "files", ui: ui("sidebar.files"), label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
+    ...(onPublishedApps ? [{ key: "published-apps", ui: ui("sidebar.published-apps"), label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
     ...(onTeamFiles ? [{ key: "team-files", label: t("sidebar.nav.teamFiles"), icon: <FolderTree size={16} />, active: activeView === "team-files", onSelect: onTeamFiles }] : []),
     ...(archived?.count ? [{ key: "archived", label: t("sidebar.archived.title"), icon: <Archive size={16} />, value: String(archived.count), onSelect: archived.open }] : []),
   ];
@@ -458,7 +478,7 @@ export function profileMenuItems({
 }: {
   phone: SidebarMenuItem | null;
   update: SidebarMenuItem | null;
-  updateTop?: { label: string; action: string } | null;
+  updateTop?: UpdateTop | null;
   /** the move to My Cloud's own rows, first of all (AccountMove) */
   move?: SidebarMenuItem[];
   header: AccountHeader;
@@ -487,6 +507,7 @@ export function profileMenuItems({
     subtitle: undefined,
     attention: false,
     trailing: <span className="ui-button ui-button-sm ui-button-primary pointer-events-none flex h-6 shrink-0 items-center rounded-full px-2.5 text-[12px] font-medium">{updateTop.action}</span>,
+    ...(updateTop.onSelect ? { onSelect: updateTop.onSelect, keepOpen: false } : {}),
   } : null;
   const help: SidebarMenuItem[] = [
     { key: "help", label: t("sidebar.menu.help"), icon: <HelpCircle size={16} />, onSelect: onHelp },
@@ -497,7 +518,7 @@ export function profileMenuItems({
     { key: "about", label: t("sidebar.menu.aboutApp", { app: productName() }), icon: <Info size={16} />, separatorBefore: !(update && !raised), onSelect: onAbout },
   ];
   const account: SidebarMenuItem = { key: "account", label: header.name, subtitle: header.line, icon: header.avatar, large: true, chevron: true, onSelect: header.onOpen };
-  const settings: SidebarMenuItem = { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={16} />, trailing: settingsKeyHint(), onSelect: onSettings };
+  const settings: SidebarMenuItem = { key: "settings", ui: ui("sidebar.settings"), label: t("sidebar.menu.settings"), icon: <SettingsIcon size={16} />, trailing: settingsKeyHint(), onSelect: onSettings };
   const support: SidebarMenuItem = { key: "support", label: t("sidebar.menu.helpShort"), icon: <LifeBuoy size={16} />, submenu: help, onSelect: () => {} };
   const news: SidebarMenuItem | null = announcements ? { key: "announcements", label: t("announcements.title"), icon: <Megaphone size={16} />, active: announcements.active,
     attention: announcements.unread, onSelect: announcements.onSelect } : null;
@@ -557,6 +578,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   } : null;
   const update = desktopUpdate ?? elsewhereUpdate ?? serverUpdate;
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [notesView, setNotesView] = useState<ReleaseNotesView | null>(null);
   const [signingOut, setSigningOut] = useState<"desktop" | "browser" | null>(null);
   const [session, setSession] = useState<SessionState | null>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
@@ -593,7 +615,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     header: {
       name,
       line: accountLine({ ...summary, email: summary.email ?? (summary.plan ? profile?.email ?? null : null) }, { browser: !desktop, place: place.name, openSource }),
-      avatar: <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={32} fontSize={13} className="bg-ink/[0.08]" />,
+      avatar: <PersonAvatar profile={profile} size={32} />,
       onOpen: () => openSettings("account"),
     },
     plan: planHere ? { key: "plan", label: t("settings.page.plan"), ...(planLine ? { subtitle: planLine } : {}), icon: <CreditCard size={16} />, onSelect: () => openSettings("plan") } : null,
@@ -621,9 +643,13 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     onAbout: () => setAboutOpen(true),
     onHelp: () => void openExternalLink(HELP_CENTER_URL),
     onFeedback: () => void openExternalLink(FEEDBACK_URL),
-    onWhatsNew: () => void openExternalLink(RELEASES_URL),
+    onWhatsNew: () => {
+      const action = whatsNewMenuAction(desktopAppVersion());
+      if (action.kind === "popup") setNotesView(action.view);
+      else void openExternalLink(action.url);
+    },
     announcements: { unread: news.unread, active: state.activeView === "announcements", onSelect: () => dispatch({ type: "showAnnouncements" }) },
-    // Every Sign out asks first: "Sign out of MausBot?" and what keeps running.
+    // Every Sign out asks first: "Sign out of Seira?" and what keeps running.
     signOut: accounts.view?.active ? null
       : !desktop && session?.kind === "session" ? () => setSigningOut("browser")
       : desktop && !remote && window.ogb?.cloudAccount && summary.signedIn ? () => setSigningOut("desktop")
@@ -633,8 +659,6 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   });
   const noteworthy = update && updateNoteworthy(update.phase, update.pending) && !updateHasButton(update.phase);
   const needsYou = account?.automationsNeedYou === true;
-  const initials = profileInitials(profile);
-  const nameless = simple && initials === "?" ? <UserRound size={18} strokeWidth={1.75} aria-hidden /> : undefined;
   const label = accountLabel(name, { automationsNeedYou: needsYou, update: simple && noteworthy && update ? update.label : null, move: move.kind, announcements: news.unread });
   const dot = accountDot({ automationsNeedYou: needsYou, update: noteworthy ? (update.phase === "error" ? "failed" : "news") : null, move: move.kind, announcements: news.unread });
   // Advanced's full row has its own update badge: its avatar's dot is the move's and the announcements' alone.
@@ -647,14 +671,14 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         items={items}
         ariaLabel={name}
         onOpenChange={setMenuOpen}
-        triggerClassName={named && simple ? "min-w-0 flex-1 rounded-lg" : iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
+        triggerClassName={named && simple ? "w-full min-w-0 rounded-lg" : iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
         triggerTitle={iconOnly || simple ? label : undefined}
         triggerLabel={label}
         triggerTour={account?.place.switchable ? "server-switcher" : undefined}
         renderTrigger={({ open }) => simple && named ? (
-          <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
+          <span ref={triggerRef} data-sidebar-account="" data-ui={ui("sidebar.account")} className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
             <span className="relative flex shrink-0">
-              <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={28} fallback={nameless} fontSize={11} />
+              <PersonAvatar profile={profile} size={28} />
               {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
             </span>
             <span className="min-w-0 flex-1 truncate text-start text-[13px] font-medium text-ink">{name}</span>
@@ -662,10 +686,10 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         ) : simple ? (
           <span
             ref={triggerRef}
-            data-sidebar-account=""
+            data-sidebar-account="" data-ui={ui("sidebar.account")}
             className={cn("relative flex size-9 items-center justify-center rounded-full ring-2 transition-shadow", open ? "ring-ink/15" : "ring-transparent hover:ring-ink/10")}
           >
-            <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={36} fallback={nameless} fontSize={14} className="ring-1 ring-inset ring-ink/[0.04]" />
+            <PersonAvatar profile={profile} size={36} className="ring-1 ring-inset ring-ink/[0.04]" />
             {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
           </span>
         ) : iconOnly ? (
@@ -678,7 +702,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
               open ? "bg-raised" : "hover:bg-raised/50",
             )}
           >
-            <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={rail ? 30 : circle ? 26 : 28} />
+            <PersonAvatar profile={profile} size={rail ? 30 : circle ? 26 : 28} />
             {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute end-1 top-1 size-2.5 rounded-full ring-2 ring-app", DOT_COLOR[dot])} />}
           </span>
         ) : (
@@ -690,7 +714,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
             )}
           >
             <span className="relative flex shrink-0">
-              <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={28} />
+              <PersonAvatar profile={profile} size={28} />
               {moveDot && <span aria-hidden data-account-dot={moveDot} className={cn("absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-app", DOT_COLOR[moveDot])} />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
@@ -713,6 +737,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         )}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {notesView && <ReleaseNotesPopup view={notesView} onDone={() => setNotesView(null)} onAllChanges={() => {}} />}
       {signingOut && <SignOutConfirm browser={signingOut === "browser"} here={signingOut === "browser" ? place.name : t("rail.thisComputer")}
         cloud={signingOut === "desktop" && summary.plan ? t("cloudSetup.myCloud") : null} onClose={() => setSigningOut(null)}
         onConfirm={() => signingOut === "browser"

@@ -1,9 +1,10 @@
-// Who this server publishes pages as: the MausBot account it is signed in to. One mechanism on every surface: ask the
+// Who this server publishes pages as: the Seira account it is signed in to. One mechanism on every surface: ask the
 // Admin for a short-lived upload token, then send the page to the pages Worker with it. Only the credential differs:
 //   a Cloud home signs its request with the bootstrap secret it already shares with the Admin;
 //   a desktop's main process fetches its sign-in's own pages token and hands it over on the private parent port.
 // Neither is ever written to config, sent to a client, or given to an engine. No Cloudflare credential is held here.
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { cloudSignedHeaders } from "../cloud-signed-headers.ts";
 
 export const PAGES_TOKEN_PATH = "/api/cloud/pages/token";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -12,7 +13,7 @@ export type PagesAccess =
   | { kind: "desktop"; url: string; token: string }
   | { kind: "home"; url: string; machineId: string; secret: string };
 
-/** Must match openmaus-cloud server/cloud-pages.ts `homeSignature`: each Admin route signs over a label of its own
+/** Must match the Cloud service's home signature: each Admin route signs over a label of its own
  * (`omb-pages-v1` for page tokens, `omb-community-v1` for community submissions). */
 export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "omb-pages-v1"): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
@@ -23,12 +24,7 @@ export function pagesHomeSignature(secret: string, machineId: string, timestamp:
 export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "omb-pages-v1"): Record<string, string> {
   if (access.kind === "desktop") return { authorization: `Bearer ${access.token}` };
   const timestamp = String(Math.floor(now / 1000)), nonce = randomBytes(18).toString("base64url");
-  return {
-    "x-omb-cloud-machine": access.machineId,
-    "x-omb-cloud-timestamp": timestamp,
-    "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
-  };
+  return cloudSignedHeaders({ machineId: access.machineId, timestamp, nonce, signature: `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}` });
 }
 
 let desktopPages: { url: string; token: string } | null = null;
@@ -46,10 +42,10 @@ function adminUrl(value: unknown): string | null {
   }
 }
 
-/** `{ type: "openmausbot:included-pages", access: { url, token } | null }` from the desktop's main process. True when it
+/** `{ type: "seira:included-pages", access: { url, token } | null }` from the desktop's main process. True when it
  * was one (then applied), false for any other message; a malformed one throws and changes nothing. */
 export function applyIncludedPagesMessage(message: unknown): boolean {
-  if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== "openmausbot:included-pages") return false;
+  if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== "seira:included-pages") return false;
   const access = (message as { access?: unknown }).access;
   if (access === null) {
     desktopPages = null;
@@ -69,8 +65,13 @@ export function pagesNotOffered(home: unknown): boolean {
   return !home && !desktopPages && desktopPagesNotOffered;
 }
 
-/** A Cloud home's own credential, else a signed-in desktop's; null when this server is signed in to no MausBot account. */
+/** A Cloud home's own credential, else a signed-in desktop's; null when this server is signed in to no Seira account. */
 export function pagesAccess(home: { adminOrigin: string; machineId: string; bootstrapSecret: string } | null): PagesAccess | null {
   if (home) return { kind: "home", url: `${home.adminOrigin}${PAGES_TOKEN_PATH}`, machineId: home.machineId, secret: home.bootstrapSecret };
   return desktopPages ? { kind: "desktop", ...desktopPages } : null;
+}
+
+/** Whether this server can offer page links at all: not on a self-hosted server, and not when the signed-in desktop's Admin offers none. */
+export function pagesOffered(home: unknown, selfHosted: boolean): boolean {
+  return !selfHosted && !pagesNotOffered(home);
 }

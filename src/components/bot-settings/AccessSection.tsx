@@ -13,10 +13,10 @@ import { placeBlocked, placeFacts, placeHasIssue, placeViewFor, usePlaceSeat, ty
 import { shortPath } from "@/lib/short-path";
 import { isOwnThreadFolder } from "../../../shared/thread-folder";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
-import { CloudBackendPicker } from "../CloudBackendPicker";
 import { placeManagedBy, worksOnChoices, WorksOnGrid, worksOnSelected, type WorksOnMode } from "../WorksOnGrid";
 import { Switch } from "../SettingsPrimitives";
 import { PhoneAppsCard } from "./PhoneAppsCard";
+import { BotFolderAccess } from "../bot-panel/BotFolderAccess";
 import { ProposalStatus } from "./ProposalStatus";
 import { ToolGroupsCard } from "./ToolGroupsCard";
 import { ToolSelectionCard } from "./ToolSelectionCard";
@@ -36,6 +36,7 @@ import { inputCls } from "./field";
 import { openKeySettings } from "../keys/key-focus";
 import { KeysLink } from "../keys/KeysLink";
 import type { ConnectorScope, ConnectorScopes } from "../../../shared/connector-scopes";
+import { accountName } from "@/lib/connector-account-label";
 import type { ConnectorAccount } from "@/lib/connector-status";
 import type { useBotSettingsDerived } from "./useBotSettingsDerived";
 
@@ -632,10 +633,6 @@ export function CloudPreference({ bot, patch }: { bot: Bot; patch: ReturnType<ty
           {t("botAccess.cloud.autoDescription")}
         </div>
       )}
-      <CloudBackendPicker
-        value={bot.cloudBackend ?? "box"}
-        onChange={(backend) => patch({ cloudBackend: backend })}
-      />
       {/* A saved bot only: a new bot starts on the default server, and new-bot defaults never name one. */}
       {bot.cloudBackend === "vps" && !draft && <VpsAliasField bot={bot} />}
       {!bot.computer && bot.cloudBackend === "vps" && (
@@ -671,7 +668,7 @@ function DraftWorksOn({ bot, patch, seat }: { bot: Bot; patch: ReturnType<typeof
         reason: localReason ?? t("computer.unavailableLocal"),
       },
     }));
-    const managedBy = placeManagedBy(mode, bot.cloudBackend, state.config?.managedPolicy);
+    const managedBy = placeManagedBy(mode, state.config?.managedPolicy);
     return {
       mode, labelKey, descriptionKey, Icon, view, managedBy,
       selected: worksOnSelected(mode, bot.computer, capabilities),
@@ -752,6 +749,7 @@ export function AccessSection({
       </div>}
 
       {shows("folder") && <WorkingFolder bot={bot} />}
+      {shows("folder") && <BotFolderAccess bot={bot} variant="card" />}
 
       {shows("apps") && <div className="rounded-xl bg-card p-4">
         <div className="flex items-center justify-between gap-4">
@@ -970,12 +968,12 @@ export function ConnectorScopesControl({ connectedSlugs, labels = {}, accounts =
         {scopes?.apps[slug] && ((accounts[slug]?.length ?? 0) > 1 || scopes.accounts?.[slug]) && <fieldset className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
           <legend className="sr-only">{t("botAccess.scopes.accountsLabel")}</legend>
           <span aria-hidden className="text-[12px] text-ink-secondary">{t("botAccess.scopes.accountsLabel")}</span>
-          {(accounts[slug] ?? []).map((account) => {
+          {(accounts[slug] ?? []).map((account, index) => {
             const allowed = allowedIds(slug);
             const on = allowed.includes(account.id);
             return <label key={account.id} className="flex items-center gap-1.5 text-[12px] text-ink">
               <input type="checkbox" checked={on} disabled={on && allowed.length === 1} onChange={(event) => setAccount(slug, account.id, event.target.checked)} />
-              {account.alias ?? account.id}
+              {accountName(account, index)}
             </label>;
           })}
         </fieldset>}

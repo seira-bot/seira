@@ -9,25 +9,48 @@ TypeSafe's [Jev](https://typesafe.ai) (the default), a model of your choice
 on [OpenRouter](https://openrouter.ai), and a custom endpoint of your own that
 speaks System One or OpenAI Decisions.
 
-Everything is in **Settings › AI › Routing and extraction** (Advanced mode): the
-Cloudflare Workers AI card, the Jev/OpenRouter/Custom endpoint picker under
-**Another key**, for OpenRouter the model, for a custom endpoint its base URL,
-model ID and protocol, one master switch, each key with **Save** and
-**Test**, and a switch for room routing (**Who answers in rooms**). Each
-provider keeps its own key. Picking **Custom endpoint** makes it the only one
-that decides; picking Jev or OpenRouter does not choose whose key decides: the
-fixed order below does. To use Workers AI or OpenRouter while a
-Jev key is saved, clear the Jev key (an `OMB_JEV_API_KEY` in the environment
-replaces the saved one, so remove it too). OpenRouter needs no key here when
-you already saved one under **Settings → API keys**: the decision model uses
-that one.
+Everything is in **Settings › AI › Routing and extraction** (Advanced mode).
+The section reads from top to bottom:
 
-With **Custom endpoint** picked, only the custom endpoint decides, and nothing
-does until its base URL and key are saved; any other key saved stays unused
-until another provider is picked. Otherwise, with several keys saved, one fixed
-order picks whose key decides: your own Jev key, then your own Workers AI key,
-then Cloud's included decisions, then OpenRouter. A custom endpoint's key is
-not part of that order.
+1. **What it decides**: one master switch (**Use fast decisions and
+   extraction**) and a switch for room routing (**Who answers in rooms**). The
+   line under the master switch says whose key makes decisions and whose key
+   reads.
+2. **Provider**: one list with one row for each provider: **Included with your
+   Cloud plan** (only when your Cloud plan gives decisions), **Cloudflare
+   Workers AI (free tier)**, **TypeSafe Jev**, **OpenRouter** and **Custom
+   endpoint**. A row with a saved key shows **Saved**.
+3. **The picked provider's card**: only the fields of that provider. For
+   Workers AI, the account ID and the token. For Jev, the key. For OpenRouter,
+   the model and the key. For a custom endpoint, its base URL, model ID,
+   protocol and key. The card ends with one status line, **Test** and
+   **Save**. **Included with your Cloud plan** has no key and no **Save**.
+
+Each provider keeps its own key, so picking another provider does not clear a
+saved key. OpenRouter needs no key here when you already saved one under
+**Settings → AI → Other services**: the decision model uses that one.
+
+### Whose key decides
+
+The provider you pick decides first, when its key is saved and usable. When
+it is not, one fixed order picks whose key decides: your own Jev key, then
+your own Workers AI key, then Cloud's included decisions, then OpenRouter. So
+you can pick a provider before you save its key, and decisions keep working
+with another key until you do.
+
+**Custom endpoint** is different: with it picked, only the custom endpoint
+decides, and nothing decides until its base URL and key are saved. A custom
+endpoint's key is never part of the fixed order.
+
+An `SEIRA_JEV_API_KEY` in the environment replaces the Jev key saved here.
+
+**One change from earlier versions.** Before, picking OpenRouter did not
+choose whose key decides: a saved Jev or Workers AI key still came first. Now,
+when OpenRouter is picked and an OpenRouter key is usable (one saved here, or
+the one under **Settings → AI → Other services**), OpenRouter decides first. If
+you picked OpenRouter earlier and want your Jev key to decide again, pick
+**TypeSafe Jev**. Every other earlier setting decides with the same key as
+before.
 
 ## Cloudflare Workers AI (free tier)
 
@@ -43,8 +66,8 @@ extraction model the inbox uses (see
    then **Create API Token**, and copy it. A custom token needs both
    **Workers AI - Read** and **Workers AI - Edit**.
 
-Paste both into the **Cloudflare Workers AI (free tier)** card and choose
-**Save**. The token alone is refused: it must come with its account ID.
+Pick **Cloudflare Workers AI (free tier)**, paste both into its card and
+choose **Save**. The token alone is refused: it must come with its account ID.
 Saving checks the token and switches the decision model on. Once it is saved,
 **Test** with no new token pasted also checks extraction: *Cloudflare answered
 in … ms. Extraction works too.*
@@ -117,7 +140,7 @@ above 1.5 seconds, rooms would fall back to the lead, so pick a faster one.
 
 **Who answers in rooms.** A room whose responder is set to **Auto (Jev)** asks
 the decision model who should answer each message that @mentions nobody; the
-key that decides follows the order above. The responder setting keeps the name
+key that decides follows "Whose key decides" above. The responder setting keeps the name
 **Auto (Jev)** under any provider. The question offers
 the room's active bots, each described by name, title and description, plus
 "several members". The state it reads is the room's name, its people, the last
@@ -165,7 +188,7 @@ account is out of credits for a 402.
 ## What is logged
 
 Each call that reaches the model adds one row to
-`~/.openmausbot/decider-log/YYYY-MM.ndjson` (mode 0600). This is separate
+`~/.seira/decider-log/YYYY-MM.ndjson` (mode 0600). This is separate
 from the approvals log in `decisions/`.
 
 ```json
@@ -186,16 +209,16 @@ The log stays on this machine: workspace backups leave it out.
 
 - **Desktop app:** in the operating system's encrypted store
   (`credentials.bin`), like the other workspace keys. The server receives the
-  Jev key as `OMB_JEV_API_KEY`, the OpenRouter key as
-  `OMB_OPENROUTER_DECIDER_KEY`, the Workers AI token as
-  `OMB_WORKERS_AI_TOKEN` and a custom endpoint's key as
-  `OMB_CUSTOM_DECIDER_KEY` at start-up; `config.json` keeps only an empty
+  Jev key as `SEIRA_JEV_API_KEY`, the OpenRouter key as
+  `SEIRA_OPENROUTER_DECIDER_KEY`, the Workers AI token as
+  `SEIRA_WORKERS_AI_TOKEN` and a custom endpoint's key as
+  `SEIRA_CUSTOM_DECIDER_KEY` at start-up; `config.json` keeps only an empty
   placeholder.
 - **Server or browser use:** in the server's own `config.json` (mode 0600),
   under `decider.key` (Jev), `decider.openrouterKey` (OpenRouter),
   `decider.workersAiToken` (Workers AI) or `decider.customKey` (a custom
-  endpoint). `OMB_JEV_API_KEY`, `OMB_OPENROUTER_DECIDER_KEY`,
-  `OMB_WORKERS_AI_TOKEN` and `OMB_CUSTOM_DECIDER_KEY` override them.
+  endpoint). `SEIRA_JEV_API_KEY`, `SEIRA_OPENROUTER_DECIDER_KEY`,
+  `SEIRA_WORKERS_AI_TOKEN` and `SEIRA_CUSTOM_DECIDER_KEY` override them.
 - **A custom endpoint's base URL, model ID and protocol are not secrets.**
   They are kept in `config.json` and shown back in Settings.
 - **The Cloudflare account ID is not a secret.** It is kept in `config.json`
@@ -203,11 +226,11 @@ The log stays on this machine: workspace backups leave it out.
 - **The OpenRouter key is shared with your OpenRouter models.** The decision
   model uses the first of these it finds:
   1. a key saved here, in **Settings › AI › Routing and extraction**
-     (`decider.openrouterKey` or `OMB_OPENROUTER_DECIDER_KEY`): the optional
+     (`decider.openrouterKey` or `SEIRA_OPENROUTER_DECIDER_KEY`): the optional
      "use a different key" override, which wins so a key saved before
      sharing keeps working;
-  2. the OpenRouter key under **Settings → API keys** (`openrouter.key` or
-     `OMB_OPENROUTER_API_KEY`);
+  2. the OpenRouter key under **Settings → AI → Other services** (`openrouter.key` or
+     `SEIRA_OPENROUTER_API_KEY`);
   3. none: it is off until one is saved.
 
   With the shared key, Settings says **Using your OpenRouter API key** and links
@@ -222,7 +245,7 @@ The log stays on this machine: workspace backups leave it out.
   until a key is saved again.
 - **Cloud Pro:** decisions are included, with no key to paste. With no key of
   the person's own, the Cloud home uses its relay token
-  (`OMB_CLOUD_DECIDER_TOKEN`), sent only to the Admin's relay, never to Jev or
+  (`SEIRA_CLOUD_DECIDER_TOKEN`), sent only to the Admin's relay, never to Jev or
   `baseUrl`, and only for the requests the relay accepts: room routing, inbox
   triage, a bot's own `decide` call and the key check, plus extraction for inbox
   reading, a bot's own `extract` call and the extraction key check (other jobs
@@ -230,9 +253,11 @@ The log stays on this machine: workspace backups leave it out.
   plan**, and the master switch is on until someone switches it off. A Jev or
   Workers AI key saved here wins for decisions (for reading, only a Workers AI
   key does); clearing it falls back to the included decisions. For decisions the
-  relay speaks Jev's API only, so the included decisions are Jev's, and they
-  come before an OpenRouter key whichever provider is selected. See
-  [cloud-pro.md](cloud-pro.md), "Included Boat computers, voice and decisions".
+  relay speaks Jev's API only, so the included decisions are Jev's. Pick
+  **Included with your Cloud plan** to make them decide first, even while a key
+  of your own is saved. Otherwise they come before an OpenRouter key, unless
+  OpenRouter is picked and its key is usable. See
+  [cloud-pro.md](cloud-pro.md), "Included voice and decisions".
 
 The keys are write-only: `GET /api/config` reports only whether one is saved,
 the provider and model, the Workers AI account ID (not a secret), and which
@@ -276,13 +301,31 @@ bot's own engine. Pause the watch to stop that (see
 routing off stops only the decision request: the bots' own engines still
 receive the room's lines.
 
+## Sorting the Inbox
+
+The `inboxSort` job reads each new message that a bot sends you with
+`message_person`. It decides if the message asks you to decide, approve,
+choose, or do something yourself. A message that does is marked "Looks like it
+needs your decision" and is listed before the news. It stays in the Inbox count
+until you close it, read or not.
+
+Choose **Not a decision** on a wrong mark. Seira removes the mark and sends that
+text to the model as a counter-example in the next sort. Seira keeps the last 10.
+
+The job sends the sender's name, the message text (up to 1,200 characters) and
+your counter-examples to the provider whose key decides.
+
+The job never adds a line to the Inbox. If it is off, times out, or fails, the
+message stays as news. Cloud's included account does not take this job. Add
+your own decision-model key to use it. To turn it off, set
+`"jobs": { "inboxSort": false }` in `config.json`.
+
 ## Turning it off
 
-Switch off **Use fast decisions and extraction** (**Use OpenRouter for fast
-decisions** when OpenRouter's key decides) to stop every decision. Clearing a
-key hands over to the next key in the order above (another key of yours,
-Cloud's included decisions, or the OpenRouter key under **Settings → API
-keys**); decisions stop only when no key is left. To keep the decision model
+Switch off **Use fast decisions and extraction** to stop every decision.
+Clearing a key hands over to the next key in the order above (another key of yours,
+Cloud's included decisions, or the OpenRouter key under **Settings → AI → Other
+services**); decisions stop only when no key is left. To keep the decision model
 on but stop room routing, switch off **Who answers in rooms**. To stop one
 room asking, set its responder to a lead, **Everyone responds** or **Only when
 mentioned**.
@@ -306,12 +349,17 @@ mentioned**.
   "customBaseUrl": "https://gateway.example.com/v1",
   "customModel": "<decision-model-id>",
   "customApi": "systemone",
-  "jobs": { "roomRouting": true, "inboxTriage": true }
+  "jobs": { "roomRouting": true, "inboxTriage": true, "inboxSort": true }
 }
 ```
 
-`provider` is `"jev"`, `"openrouter"`, `"custom"` or `"off"`. A config with no
-`provider` is Jev, so existing files keep working unchanged. `openrouterKey` is
+`provider` is the provider picked in Settings: `"workersai"`, `"jev"`,
+`"openrouter"`, `"custom"`, `"included"` or `"off"`. The picked provider's key
+decides first when it is usable; then the fixed order in "Whose key decides"
+applies. A config with no `provider` is Jev, so existing files keep working
+unchanged. A version of Seira older than this one does not read
+`"workersai"` or `"included"`: pick Jev or OpenRouter before you go back to
+one. `openrouterKey` is
 optional: left empty, the decision model uses the top-level `openrouter.key`.
 
 `baseUrl` points at a Jev-compatible server instead of TypeSafe's. It has no
@@ -325,7 +373,7 @@ a decisions one). Settings sets it from the model picked, and saving a model
 without it makes it `chat`. `openrouterBaseUrl` points at another
 OpenRouter-compatible server instead of OpenRouter, with the same
 https-or-loopback rule and no Settings UI; only `openrouterKey` is sent there,
-never the key from **Settings → API keys**. A chat model's requests go to
+never the key from **Settings → AI → Other services**. A chat model's requests go to
 `{openrouterBaseUrl}/chat/completions` with `temperature: 0`, a strict JSON
 schema, and `provider.require_parameters`; no `reasoning` option is sent. A
 decisions model's go to `/alpha/decisions` beside it (for the default base,
@@ -350,9 +398,9 @@ Requests go to
 
 `server/decider/room-routing.eval.test.ts` replays 53 labelled room messages
 (`server/decider/fixtures/room-routing.json`) against the live model. It is
-skipped unless `OMB_JEV_LIVE_EVAL=1` is set with a key, and costs about
+skipped unless `SEIRA_JEV_LIVE_EVAL=1` is set with a key, and costs about
 $0.002 per run. The same eval runs against OpenRouter with
-`OMB_OPENROUTER_LIVE_EVAL=1` and `OMB_OPENROUTER_DECIDER_KEY`, using the
-model in `OMB_OPENROUTER_EVAL_MODEL` (else the default); the cost depends on
+`SEIRA_OPENROUTER_LIVE_EVAL=1` and `SEIRA_OPENROUTER_DECIDER_KEY`, using the
+model in `SEIRA_OPENROUTER_EVAL_MODEL` (else the default); the cost depends on
 the model. It is the check for whether a model's own probabilities hold up at
 the 0.6 threshold.

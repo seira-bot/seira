@@ -8,6 +8,7 @@ import { isIP } from "node:net";
 import { BOT_PROFILE_PATCH_FIELDS } from "./bot-profile.ts";
 import type { Scope, SessionRecord, SessionRegistry } from "./sessions.ts";
 import { denyReason as companionDenial, isCompanionNotice } from "../companion/src/routes.ts";
+import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
 
 /** `owner`: the machine's owner. `service`: a shared server where every bot's shell is a loopback caller too,
  * so loopback without a session may reach only SERVICE_ALLOW. */
@@ -68,7 +69,7 @@ export function ownerOrAdmin(auth: RequestAuth): boolean {
   return auth.kind === "loopback" ? auth.trust !== "service" : auth.scopes.includes("admin");
 }
 
-/** Packaged desktop: `owner`. Else OMB_LOOPBACK_TRUST=owner|service; unset, a hosted workspace (any OMB_ADMIN_*)
+/** Packaged desktop: `owner`. Else SEIRA_LOOPBACK_TRUST=owner|service; unset, a hosted workspace (any SEIRA_ADMIN_*)
  * gets `service` and a headless server `owner`. Any other value fails closed. `localBrowsers`: see localBrowserTrust. */
 export function resolveLoopbackTrust(input: {
   env?: NodeJS.ProcessEnv;
@@ -86,25 +87,25 @@ export function resolveLoopbackTrust(input: {
 }
 
 function loopbackTrust(input: Parameters<typeof resolveLoopbackTrust>[0]): { trust: LoopbackTrust; reason: string; warning?: string } {
-  const raw = (input.env ?? process.env).OMB_LOOPBACK_TRUST;
+  const raw = (input.env ?? process.env).SEIRA_LOOPBACK_TRUST;
   const requested = raw?.trim().toLowerCase();
   if (input.cloudHome) {
-    return { trust: "service", reason: "Seira Cloud home", ...(raw !== undefined && requested !== "service" ? { warning: "OMB_LOOPBACK_TRUST is ignored on a Seira Cloud home: a local request is always a service" } : {}) };
+    return { trust: "service", reason: "Seira Cloud home", ...(raw !== undefined && requested !== "service" ? { warning: "SEIRA_LOOPBACK_TRUST is ignored on a Seira Cloud home: a local request is always a service" } : {}) };
   }
   if (input.desktopManaged) {
-    return { trust: "owner", reason: "desktop app", ...(raw !== undefined ? { warning: "OMB_LOOPBACK_TRUST is ignored in the desktop app" } : {}) };
+    return { trust: "owner", reason: "desktop app", ...(raw !== undefined ? { warning: "SEIRA_LOOPBACK_TRUST is ignored in the desktop app" } : {}) };
   }
   if (requested === "owner" || requested === "service") {
     return {
       trust: requested,
-      reason: "OMB_LOOPBACK_TRUST",
+      reason: "SEIRA_LOOPBACK_TRUST",
       ...(requested === "owner" && input.hostedWorkspace
-        ? { warning: "OMB_LOOPBACK_TRUST=owner on a shared workspace: every bot's shell can change settings and approve cards as the owner" }
+        ? { warning: "SEIRA_LOOPBACK_TRUST=owner on a shared workspace: every bot's shell can change settings and approve cards as the owner" }
         : {}),
     };
   }
   if (raw !== undefined && requested !== "") {
-    return { trust: "service", reason: "OMB_LOOPBACK_TRUST", warning: `OMB_LOOPBACK_TRUST="${raw.replace(/[^\w.-]/g, "").slice(0, 40)}" is not owner or service; using service` };
+    return { trust: "service", reason: "SEIRA_LOOPBACK_TRUST", warning: `SEIRA_LOOPBACK_TRUST="${raw.replace(/[^\w.-]/g, "").slice(0, 40)}" is not owner or service; using service` };
   }
   if (input.hostedWorkspace) return { trust: "service", reason: "hosted workspace" };
   return { trust: "owner", reason: "self-hosted default" };
@@ -143,7 +144,7 @@ export function fromBrowser(req: IncomingMessage): boolean {
   return headerValue(headers.upgrade)?.toLowerCase() === "websocket" && headers.origin !== undefined;
 }
 
-const LOCAL_BROWSER_TRUST = "OMB_DEV_TRUST_LOCAL_BROWSER";
+const LOCAL_BROWSER_TRUST = "SEIRA_DEV_TRUST_LOCAL_BROWSER";
 
 /** Development only: a server run from a source checkout (`pnpm dev:server`, test fixtures) lets this machine's browsers in
  * as before, because Vite's dev proxy forwards them; a packaged, bundled, hosted or service-trust server ignores it. */
@@ -208,7 +209,7 @@ export function ipcPeer(req: IncomingMessage): boolean {
 
 let legacyOrigins: ReadonlySet<string> = new Set();
 
-/** A Cloud home that moved to another provider (OMB_CLOUD_LEGACY_ORIGINS): its old address forwards here with Host
+/** A Cloud home that moved to another provider (SEIRA_CLOUD_LEGACY_ORIGINS): its old address forwards here with Host
  * rewritten to this home's own name, so a page or client still on the old address sends that address as its Origin.
  * Security: only these exact origins count as this server's own besides its Host's; X-Forwarded-Host, which any client
  * writes, is never read. */
@@ -245,7 +246,43 @@ export function requestSource(req: IncomingMessage): string {
   // Only the LAST hop was written by the trusted same-machine proxy.
   const hops = viaLocalProxy ? (headerValue(req.headers["x-forwarded-for"]) ?? "").split(",").map((h) => h.trim()).filter(Boolean) : [];
   const forwarded = hops.length ? hops[hops.length - 1] : undefined;
-  return sanitizeSource(forwarded || peer);
+  return sanitizeSource(sourceKey(forwarded || peer));
+}
+
+const HEX_GROUP = /^[0-9a-f]{1,4}$/i;
+
+/** The eight 16-bit groups of an IPv6 address, or null when the text is not one. */
+function ipv6Groups(address: string): number[] | null {
+  const text = address.replace(/^\[|\]$/g, "").split("%")[0]!;
+  if (!text.includes(":") || text.length > 45) return null;
+  const parts = text.split(":");
+  const last = parts[parts.length - 1]!;
+  if (last.includes(".")) {
+    const octets = last.split(".");
+    if (octets.length !== 4 || !octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)) return null;
+    const [a, b, c, d] = octets.map(Number) as [number, number, number, number];
+    parts.splice(-1, 1, ((a << 8) | b).toString(16), ((c << 8) | d).toString(16));
+  }
+  const halves = parts.join(":").split("::");
+  if (halves.length > 2) return null;
+  const groupsOf = (half: string) => (half === "" ? [] : half.split(":"));
+  const head = groupsOf(halves[0]!);
+  const tail = halves.length === 2 ? groupsOf(halves[1]!) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...head, ...Array.from({ length: halves.length === 2 ? missing : 0 }, () => "0"), ...tail];
+  return groups.every((group) => HEX_GROUP.test(group)) ? groups.map((group) => Number.parseInt(group, 16)) : null;
+}
+
+/** One subscriber holds a whole /64, so an IPv6 source is its /64 prefix. An IPv4-mapped address is its IPv4 address. */
+function sourceKey(address: string): string {
+  const groups = ipv6Groups(address);
+  if (!groups) return address;
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    return `${groups[6]! >> 8}.${groups[6]! & 255}.${groups[7]! >> 8}.${groups[7]! & 255}`;
+  }
+  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return "::1";
+  return `${groups.slice(0, 4).map((group) => group.toString(16)).join(":")}::`;
 }
 
 /** Bounded and address-shaped, so a hostile header cannot put control characters in logs or grow the lockout map. */
@@ -284,21 +321,48 @@ export function bearerToken(header: string | string[] | undefined): string | und
 
 /** Cookies are scoped by host, not port; the environment id stops a reinstalled server reading its predecessor's cookie. */
 export function sessionCookieName(port: number, environmentId: string): string {
-  return `omb_session_${port}_${environmentId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}`;
+  return `seira_session_${port}_${environmentId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}`;
 }
 
+const HOST_PREFIX = "__Host-";
+
+/** On https the cookie is `__Host-<name>`: the browser then accepts it only with `Secure` and `Path=/`, and without a
+ * `Domain`, so a sibling host cannot set or replace it. */
 export function serializeSessionCookie(
   name: string,
   token: string,
   options: { secure: boolean; maxAgeSeconds: number },
 ): string {
-  const parts = [`${name}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${options.maxAgeSeconds}`];
+  const parts = [`${options.secure ? HOST_PREFIX : ""}${name}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${options.maxAgeSeconds}`];
   if (options.secure) parts.push("Secure");
   return parts.join("; ");
 }
 
+/** On https the unprefixed cookie of an earlier version is cleared at the same time. */
+export function sessionCookieHeaders(name: string, token: string, options: { secure: boolean; maxAgeSeconds: number }): string[] {
+  const issued = serializeSessionCookie(name, token, options);
+  return options.secure ? [issued, clearSessionCookie(name)] : [issued];
+}
+
 export function clearSessionCookie(name: string): string {
   return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+/** Both names, so a person signed in on either version leaves signed out. */
+export function clearSessionCookies(name: string): string[] {
+  return [clearSessionCookie(name), `${HOST_PREFIX}${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`];
+}
+
+/** On https only the `__Host-` cookie counts: a sibling host can set the unprefixed name, never the prefixed one.
+ * On plain http the `__Host-` cookie wins and the unprefixed name counts when it is absent. */
+export function presentedSessionCookie(cookieHeader: string | undefined, name: string, secure: boolean): string | undefined {
+  const cookies = parseCookies(cookieHeader);
+  const prefixed = cookies.get(`${HOST_PREFIX}${name}`);
+  return secure ? prefixed : prefixed ?? cookies.get(name);
+}
+
+export function requestIsHttps(req: IncomingMessage): boolean {
+  return requestOrigin(req)?.startsWith("https://") === true;
 }
 
 /** What a `client` session may do. Default deny: a new route is admin-only until listed here. */
@@ -330,6 +394,7 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/phones\/self\/jobs\/[\w-]+\/(?:lease|result)$/ },
   // This phone's own push registrations, alerts and Live Activities, keyed by its session (routes/phone-push.ts).
   { methods: ["GET", "PUT", "DELETE"], path: /^\/api\/push\/(?:device|activity)$/ },
+  { methods: ["GET"], path: /^\/api\/companion\/endpoints$/ },
   { methods: ["GET"], path: /^\/api\/health$/ },
   { methods: ["GET"], path: /^\/api\/edition$/ },
   { methods: ["GET"], path: /^\/api\/brand$/ },
@@ -432,12 +497,25 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
+  // workflows: steps name bots and instructions only; each route checks that the person sees every bot
+  { methods: ["GET", "POST"], path: /^\/api\/workflows$/ },
+  { methods: ["GET", "PATCH", "DELETE"], path: /^\/api\/workflows\/[\w-]+$/ },
+  { methods: ["GET"], path: /^\/api\/workflows\/[\w-]+\/runs$/ },
+  { methods: ["GET"], path: /^\/api\/workflow-runs\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/workflow-runs\/[\w-]+\/steps\/[\w-]+\/run-again$/ },
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/workflow-draft$/ },
   // webhook list is secret-free; creating or rotating one is not
   { methods: ["GET"], path: /^\/api\/webhooks$/ },
   // app-event automations: the list carries no credential; creating or changing one is the owner's
   { methods: ["GET"], path: /^\/api\/app-triggers$/ },
   // counts and lines from the threads this viewer can see; engine and app fixes only for an admin
   { methods: ["GET"], path: /^\/api\/today$/ },
+  // how often this server's bots called each app in the last week, from the threads this viewer can see
+  { methods: ["GET"], path: /^\/api\/apps\/usage$/ },
+  // cards from the work this viewer can see, in four columns
+  { methods: ["GET"], path: /^\/api\/board$/ },
+  // moving one Needs you card to Done: the handler lets only someone who can chat with the card's bot do it
+  { methods: ["POST"], path: /^\/api\/board\/close$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
   { methods: ["GET"], path: /^\/api\/config$/ },
   // a person's own "About you" on a Team Cloud
@@ -472,8 +550,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/needs-you$/ },
   // a person's own inbox: its lines, how many wait, and one of them read or done; the handler serves the session's own alone
   { methods: ["GET"], path: /^\/api\/inbox(?:\/count)?$/ },
-  { methods: ["POST"], path: /^\/api\/inbox\/read-all$/ },
-  { methods: ["POST"], path: /^\/api\/inbox\/[\w-]+\/(?:read|done)$/ },
+  { methods: ["POST"], path: /^\/api\/inbox\/(?:read-all|done-all|summary|summary\/hide|summarizer)$/ },
+  { methods: ["POST"], path: /^\/api\/inbox\/[\w-]+\/(?:read|done|not-decision)$/ },
   // who a Team Cloud bot can report to, and handing over a bot the member owns: the handler checks who may
   { methods: ["GET"], path: /^\/api\/team\/people$/ },
   // the workspace's banner picture: everyone signed in here sees it; changing it (PUT, DELETE) is an admin's
@@ -522,20 +600,20 @@ const CLIENT_BOT_PATCH_FIELDS = new Set([
 const SHARED_LOOK_FIELDS = new Set([
   "color", "mascotExpression", "mascotBody", "mascotFaceColor", "mascotAccessories", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY",
 ]);
-/** `ownMausBot`: the session's own MausBot on a Team Cloud, which its member may also rename. `teamMember`: a Team Cloud
+/** `ownSeira`: the session's own Seira on a Team Cloud, which its member may also rename. `teamMember`: a Team Cloud
  * member's session, which changes no other bot's look. */
-export function clientBotPatchViolation(body: unknown, ownMausBot = false, teamMember = false): string | null {
+export function clientBotPatchViolation(body: unknown, ownSeira = false, teamMember = false): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
   for (const key of Object.keys(body)) {
-    if (ownMausBot && key === "name") continue;
-    if (!CLIENT_BOT_PATCH_FIELDS.has(key) || (teamMember && !ownMausBot && SHARED_LOOK_FIELDS.has(key))) return key;
+    if (ownSeira && key === "name") continue;
+    if (!CLIENT_BOT_PATCH_FIELDS.has(key) || (teamMember && !ownSeira && SHARED_LOOK_FIELDS.has(key))) return key;
   }
   return null;
 }
 
 /** All a paired device or a Team Cloud move-in may give a bot it makes or brings in: who the bot is, how it looks, its
  * own playbooks, projects and library skills, and which of this place's models it runs on. Everything else (what it may
- * do and reach, where it runs, its department, whom it answers to or directs, whether it is the MausBot or a package's
+ * do and reach, where it runs, its department, whom it answers to or directs, whether it is the Seira or a package's
  * bot) only an admin on the host sets. */
 const BOT_PROFILE_SETTINGS: ReadonlySet<string> = new Set([
   ...CLIENT_BOT_PATCH_FIELDS, ...BOT_PROFILE_PATCH_FIELDS, "hidden",
@@ -560,8 +638,8 @@ const EDITOR_BOT_PATCH_FIELDS: ReadonlySet<string> = new Set([
 /** A member who can only view a bot marks it read, nothing else. */
 const VIEWER_BOT_PATCH_FIELDS: ReadonlySet<string> = new Set(["unread"]);
 
-export function memberBotPatchViolation(body: unknown, level: "view" | "chat" | "edit", ownMausBot = false, teamMember = false): string | null {
-  if (level === "chat") return clientBotPatchViolation(body, ownMausBot, teamMember);
+export function memberBotPatchViolation(body: unknown, level: "view" | "chat" | "edit", ownSeira = false, teamMember = false): string | null {
+  if (level === "chat") return clientBotPatchViolation(body, ownSeira, teamMember);
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
   const allowed = level === "edit" ? EDITOR_BOT_PATCH_FIELDS : VIEWER_BOT_PATCH_FIELDS;
   return Object.keys(body).find((key) => !allowed.has(key)) ?? null;
@@ -577,7 +655,7 @@ export function memberBotCreateViolation(body: Record<string, unknown>): string 
 }
 
 /** Same for a room: name and reading state, never its folder or who answers. */
-const CLIENT_GROUP_PATCH_FIELDS = new Set(["name", "bulletin", "unread", "pinnedMessageId", "section", "turnTimeoutMinutes"]);
+const CLIENT_GROUP_PATCH_FIELDS = new Set(["name", "bulletin", "unread", "pinnedMessageId", "section", "turnTimeoutMinutes", "avatarUrl"]);
 export function clientGroupPatchViolation(body: unknown): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
   for (const key of Object.keys(body)) if (!CLIENT_GROUP_PATCH_FIELDS.has(key)) return key;
@@ -605,10 +683,10 @@ export interface ResolveOptions {
   scopeRefusal?(method: string, path: string): string | null;
 }
 
-const CLI_OWNER_HEADER = "x-openmausbot-cli-owner";
+const CLI_OWNER_HEADER = "x-seira-cli-owner";
 const CLI_OWNER_ROUTE = /^\/api\/auth\/pairing$/;
 
-const DESKTOP_OWNER_HEADER = "x-openmausbot-desktop-owner";
+const DESKTOP_OWNER_HEADER = "x-seira-desktop-owner";
 
 function mutatingPublicRoute(method: string, path: string): boolean {
   const upper = method.toUpperCase();
@@ -649,11 +727,11 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
 
   // A presented session credential wins over the loopback rule.
   const bearer = bearerToken(req.headers.authorization);
-  const cookie = parseCookies(headerValue(req.headers.cookie)).get(options.cookieName);
+  const cookie = presentedSessionCookie(headerValue(req.headers.cookie), options.cookieName, requestIsHttps(req));
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
   let session: SessionRecord | null = null;
   let via: "bearer" | "cookie" | "ticket" | null = null;
-  if (bearer?.startsWith("omb_sess_")) {
+  if (bearer && acceptedWireNames("sessionTokenPrefix").some((prefix) => bearer.startsWith(prefix))) {
     session = options.sessions.authenticate(bearer);
     via = "bearer";
   } else if (ticket) {
@@ -693,15 +771,15 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
   const proxied = isProxied(req);
   const loopback = !proxied && isLoopbackHost(headerValue(req.headers.host)) && isAllowedOrigin(headerValue(req.headers.origin));
   if (loopback) {
-    const companionToken = headerValue(req.headers["x-openmausbot-companion-auth"]);
+    const companionToken = headerValue(req.headers["x-seira-companion-auth"]);
     if (companionToken && options.loopbackMutationToken !== undefined) {
       if (
         !secureTokenMatch(companionToken, options.companionMutationToken ?? "") ||
-        req.headers["x-openmausbot-companion"] !== "1" ||
-        !/^[\w-]{1,128}$/.test(headerValue(req.headers["x-openmausbot-companion-device"]) ?? "") ||
+        req.headers["x-seira-companion"] !== "1" ||
+        !/^[\w-]{1,128}$/.test(headerValue(req.headers["x-seira-companion-device"]) ?? "") ||
         (companionDenial({ path, method, authenticated: true }) && !isCompanionNotice(method, path))
       ) return deny(403, "forbidden: invalid companion request");
-      return { auth: { kind: "loopback", scopes: LOOPBACK_SCOPES, companionDevice: headerValue(req.headers["x-openmausbot-companion-device"]) }, status: 401, error: "" };
+      return { auth: { kind: "loopback", scopes: LOOPBACK_SCOPES, companionDevice: headerValue(req.headers["x-seira-companion-device"]) }, status: 401, error: "" };
     }
     const desktopOwner = options.loopbackMutationToken !== undefined &&
       secureTokenMatch(headerValue(req.headers[DESKTOP_OWNER_HEADER]), options.loopbackMutationToken) && fromOwnPage(req);

@@ -10,10 +10,10 @@ import { runControlSeira } from "../control-seira.ts";
 import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
 
 (enabled ? it : it.skip)("coordinates from the real composer and opens the exact child task from its existing inline receipt", async () => {
-  const temporary = mkdtempSync(join(tmpdir(), "omb-direct-ui-plan-"));
+  const temporary = mkdtempSync(join(tmpdir(), "seira-direct-ui-plan-"));
   const planPath = join(temporary, "plan.json");
   writeFileSync(planPath, "{}");
   const child = spawn(process.execPath, ["--experimental-strip-types", "scripts/control-seira.ts", "ui", "launch"], {

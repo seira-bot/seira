@@ -77,10 +77,10 @@ describe("a starred model", () => {
     toggleFavoriteModel("claude", "haiku-5");
     forgetFavoriteModelsForTest();
     expect(favoriteModels().has(favoriteKey("claude", "haiku-5"))).toBe(true);
-    stored.set("omb-favorite-models", "{not json");
+    stored.set("seira-favorite-models", "{not json");
     forgetFavoriteModelsForTest();
     expect(favoriteModels().size).toBe(0);
-    stored.set("omb-favorite-models", JSON.stringify({ a: 1 }));
+    stored.set("seira-favorite-models", JSON.stringify({ a: 1 }));
     forgetFavoriteModelsForTest();
     expect(favoriteModels().size).toBe(0);
   });
@@ -351,5 +351,32 @@ describe("custom Claude endpoint", () => {
 
   it("lists the endpoint's own models and none of Claude's", () => {
     expect(rows(menu([endpoint]), 0)).toEqual(["deepseek-chat", "deepseek-reasoner"]);
+  });
+});
+
+describe("a provider that cannot start a task", () => {
+  const signedOut = { ...cursor, snapshot: { state: "available" as const, version: "1", authenticated: false } };
+  const order = (built: Menu) => built.groups.map((group) => group.instance.instanceId);
+
+  it("is listed after the providers that can, with the reason it gives", () => {
+    const built = menu([signedOut, codex, claude()]);
+    expect(order(built)).toEqual(["claude", "codex", "cursor"]);
+    expect(built.groups.map((group) => group.health.usable)).toEqual([true, true, false]);
+    expect(built.groups[2]!.health.reason).toBeTruthy();
+  });
+
+  it("does not stay first when it is the one the bot uses", () => {
+    const built = menu([claude(), signedOut], { selection: { instanceId: "cursor", model: "auto" } });
+    expect(order(built)).toEqual(["claude", "cursor"]);
+  });
+
+  it("keeps the bot's own provider first while it works", () => {
+    const built = menu([claude(), codex], { selection: { instanceId: "codex", model: "gpt-5.6" } });
+    expect(order(built)).toEqual(["codex", "claude"]);
+  });
+
+  it("follows the health the picker passes, such as a usage limit", () => {
+    const built = menu([claude(), codex], { health: (one) => ({ usable: one.instanceId !== "claude", reason: "at its limit" }) });
+    expect(order(built)).toEqual(["codex", "claude"]);
   });
 });

@@ -6,6 +6,7 @@ import type { AppConfig } from "../config.ts";
 import clefWire from "./fixtures/workers-ai-clef.json" with { type: "json" };
 import relayFixtures from "./fixtures/relay-seams.json" with { type: "json" };
 import { createDecider, deciderAccount, deciderReady, deciderSavePatch, describeDecider } from "./index.ts";
+import { inboxSortRequest } from "./inbox-sort.ts";
 import { inboxTriageRequest } from "./inbox-triage.ts";
 import { jevRequestBody, RELAY_SEAM_HEADER } from "./jev.ts";
 import { relayAccepts } from "./relay.ts";
@@ -18,7 +19,7 @@ const ACCOUNT = "0123456789abcdef0123456789abcdef";
 const OR_KEY = "sk-or-v1-order-key-0123456789";
 const SHARED = "sk-or-v1-order-shared-0123456789";
 const RELAY = "https://cloud.example.test/api/cloud/services/decider";
-const INCLUDED = "omb_decide_order_included_token_0123456789";
+const INCLUDED = "seira_decide_order_included_token_0123456789";
 const CF_RUN = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/@cf/cloudflare`;
 
 type FetchMock = ReturnType<typeof vi.fn<typeof fetch>>;
@@ -37,8 +38,8 @@ const sent = (fetchImpl: FetchMock, index = 0) => {
 };
 const decider = (config: AppConfig, fetchImpl: FetchMock) => createDecider({ config: () => config, fetch: fetchImpl as unknown as typeof fetch });
 const cloud = () => {
-  vi.stubEnv("OMB_CLOUD_DECIDER_URL", RELAY);
-  vi.stubEnv("OMB_CLOUD_DECIDER_TOKEN", INCLUDED);
+  vi.stubEnv("SEIRA_CLOUD_DECIDER_URL", RELAY);
+  vi.stubEnv("SEIRA_CLOUD_DECIDER_TOKEN", INCLUDED);
 };
 
 afterEach(() => vi.unstubAllEnvs());
@@ -105,6 +106,74 @@ describe("the order: own Jev, own Workers AI, Cloud's included relay, OpenRouter
   });
 });
 
+describe("the person's pick decides first while its key is usable; without one, the order above decides", () => {
+  type Key = "jev" | "workersai" | "openrouter" | "shared";
+  const KEYS: Key[] = ["jev", "workersai", "openrouter", "shared"];
+  const withKeys = (keys: readonly Key[], provider?: string): AppConfig => ({
+    ...(keys.includes("shared") ? { openrouter: { key: SHARED } } : {}),
+    decider: {
+      enabled: true,
+      ...(provider ? { provider: provider as never } : {}),
+      ...(keys.includes("jev") ? { key: JEV_KEY } : {}),
+      ...(keys.includes("workersai") ? { workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } : {}),
+      ...(keys.includes("openrouter") ? { openrouterKey: OR_KEY } : {}),
+    },
+  });
+  // Every mix of keys, on Cloud and on a desktop.
+  const mixes = KEYS.reduce<Key[][]>((sets, key) => [...sets, ...sets.map((set) => [...set, key])], [[]]);
+  const each = (check: (keys: Key[]) => void) => {
+    for (const onCloud of [false, true]) {
+      if (onCloud) cloud(); else vi.unstubAllEnvs();
+      for (const keys of mixes) check(keys);
+    }
+  };
+
+  it("an older saved value (none, jev, off) gives the account the old order gave, for every mix of keys", () => {
+    each((keys) => {
+      const before = deciderAccount(withKeys(keys));
+      for (const old of ["jev", "off"]) expect(deciderAccount(withKeys(keys, old)), `${old} with ${keys.join("+") || "no key"}`).toEqual(before);
+    });
+  });
+
+  it("an older saved custom endpoint still decides alone: with nothing set up, no other key stands in", () => {
+    each((keys) => expect(deciderAccount(withKeys(keys, "custom"))).toBeNull());
+  });
+
+  it("a saved OpenRouter pick gives the old account while no OpenRouter key is usable", () => {
+    each((keys) => {
+      if (keys.includes("openrouter") || keys.includes("shared")) return;
+      expect(deciderAccount(withKeys(keys, "openrouter"))).toEqual(deciderAccount(withKeys(keys)));
+    });
+  });
+
+  it("the one change: a saved OpenRouter pick with a usable OpenRouter key decides first", () => {
+    cloud();
+    expect(deciderAccount(withKeys(["jev", "workersai", "openrouter"], "openrouter"))).toMatchObject({ provider: "openrouter", keySource: "own" });
+    expect(deciderAccount(withKeys(["jev", "shared"], "openrouter"))).toMatchObject({ provider: "openrouter", keySource: "shared" });
+  });
+
+  it("a picked Cloudflare key decides before a saved Jev key, and Cloud's plan before both", async () => {
+    expect(deciderAccount(withKeys(["jev", "workersai"], "workersai"))?.provider).toBe("workersai");
+    expect(deciderAccount(withKeys(["jev"], "workersai"))?.provider).toBe("jev");
+    // Off Cloud, a pick of the plan's decisions has nothing to give: the order decides.
+    expect(deciderAccount(withKeys(["jev", "workersai"], "included"))?.provider).toBe("jev");
+    cloud();
+    const fetchImpl = anyYes();
+    await expect(decider(withKeys(["jev", "workersai"], "included"), fetchImpl).testKey()).resolves.toMatchObject({ ok: true, provider: "jev" });
+    expect(sent(fetchImpl)).toMatchObject({ url: `${RELAY}/v1/systemone`, auth: `Bearer ${INCLUDED}` });
+  });
+
+  it("Settings is told the pick, and whether the plan's decisions can be picked while another key decides", () => {
+    expect(describeDecider(withKeys(["jev"], "workersai"))).toMatchObject({ provider: "jev", chosen: "workersai", configured: true });
+    expect(describeDecider(withKeys(["jev"]))).not.toHaveProperty("chosen");
+    expect(describeDecider(withKeys(["jev"]))).not.toHaveProperty("includedAvailable");
+    cloud();
+    expect(describeDecider(withKeys(["jev"]))).toMatchObject({ provider: "jev", includedAvailable: true });
+    expect(describeDecider(withKeys([], "included"))).toMatchObject({ provider: "jev", chosen: "included", included: true });
+    expect(describeDecider(withKeys([], "included"))).not.toHaveProperty("includedAvailable");
+  });
+});
+
 describe("Clef on Workers AI", () => {
   const config: AppConfig = { decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } };
 
@@ -159,7 +228,7 @@ describe("Clef on Workers AI", () => {
   });
 });
 
-/** The relay sees the wire body; OMB builds it from its own question shape. */
+/** The relay sees the wire body; Seira builds it from its own question shape. */
 function fromWire(body: { state: unknown; questions: Record<string, { type: string; instructions: string; criteria?: unknown }> }) {
   const questions = Object.fromEntries(Object.entries(body.questions).map(([id, wire]): [string, DeciderQuestion] => {
     if (wire.type === "choice") return [id, { type: "choice", instructions: wire.instructions, options: wire.criteria as Record<string, string> }];
@@ -174,7 +243,7 @@ describe("the relay's seams, from the fixtures shared with Cloud's Admin", () =>
   it.each(relayFixtures.cases.map((fixture) => [fixture.name, fixture] as const))("%s", (_name, fixture) => {
     const { state, questions } = fromWire(fixture.body as never);
     expect(relayAccepts(fixture.seam as DeciderSeam, state, questions)).toBe(fixture.accepts);
-    // The fixture is exactly what OMB puts on the wire.
+    // The fixture is exactly what Seira puts on the wire.
     expect(jevRequestBody(state, questions)).toEqual(fixture.body);
   });
 
@@ -200,6 +269,19 @@ describe("the relay's seams, from the fixtures shared with Cloud's Admin", () =>
     await expect(d.choose("inboxTriage", { ...triage.state, body: "the whole email" }, triage.question)).resolves.toEqual({ ok: false, reason: "misconfigured" });
     await expect(d.yesNo("botDecide", "", "Is it?")).resolves.toEqual({ ok: false, reason: "misconfigured" });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("the included account alone never sorts the Inbox: inboxSort is no relay seam, so it fails open without a call", async () => {
+    cloud();
+    const fetchImpl = vi.fn<typeof fetch>(async () => json({ answers: {} }));
+    expect(deciderReady({}, "inboxSort")).toBe(false);
+    expect(deciderReady({}, "inboxTriage")).toBe(true);
+    expect(deciderAccount({}, "inboxSort")).toBeNull();
+    const asked = inboxSortRequest({ from: "Eli", message: "Approve the launch?" });
+    await expect(decider({}, fetchImpl).choose("inboxSort", asked.state, asked.question)).resolves.toEqual({ ok: false, reason: "no_key" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(deciderReady({ decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } }, "inboxSort")).toBe(true);
+    expect(deciderReady({ decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT, jobs: { inboxSort: false } } }, "inboxSort")).toBe(false);
   });
 
   it("the relay's 413 is too large, said plainly and called once: it is never retried", async () => {

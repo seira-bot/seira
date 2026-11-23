@@ -23,13 +23,13 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on any of these rulesets, and its token can only read
   the repository (see [CI](ci.md)).
-- A new push to `main` cancels the older `main` CI run that is still going
-  (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
-  the release pull request, or on the run of the newest `main` commit. A
-  cancelled run of an older commit is not a failure.
+- A newer push to `main` can replace a `main` CI run that still waits for a
+  runner (see [CI](ci.md#runs-on-main-and-in-the-merge-queue)). A cancelled
+  run proves nothing about the released tree. Step 4 runs a preflight that needs a successful `CI` run for
+  that tree.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
-`Server image` workflow after the release (step 7). The npm package
+`Server image` workflow after the release (step 8). The npm package
 `@seira-bot/seira` comes from the `npm publish` workflow (see
 [Publish to npm](#publish-to-npm)).
 
@@ -79,6 +79,8 @@ download the update and then reject it.
 
 Add an entry for the new version to `RELEASE_NOTES` in `src/lib/release-notes.ts`,
 with its strings in `en.json` and `pt-br.json`. A version with no entry shows no popup.
+`src/lib/release-notes.test.ts` fails until the newest entry matches the `package.json` version.
+The profile menu's What's new opens the same notes.
 
 ```sh
 git switch -c release/v<version> origin/main
@@ -110,7 +112,7 @@ Then package:
 
 ```sh
 export NODE_OPTIONS=--max-old-space-size=6144
-export TMPDIR="$PWD/.omb-scratch/tmp" && mkdir -p "$TMPDIR"
+export TMPDIR="$PWD/.seira-scratch/tmp" && mkdir -p "$TMPDIR"
 pnpm package:linux
 ```
 
@@ -143,7 +145,7 @@ Then put the files to upload, and the copies with stable names, in their own
 folder. Keep `release/` as the build wrote it.
 
 ```sh
-mkdir -p .omb-scratch/linux-upload && cd .omb-scratch/linux-upload
+mkdir -p .seira-scratch/linux-upload && cd .seira-scratch/linux-upload
 cp ../../release/Seira-<version>-x86_64.AppImage ../../release/Seira-<version>-amd64.deb ../../release/latest-linux.yml .
 cp Seira-<version>-x86_64.AppImage Seira.AppImage
 cp Seira-<version>-amd64.deb Seira-amd64.deb
@@ -163,21 +165,48 @@ cd ../..
   the AppImage in an Ubuntu 24.04 VM with the stock settings. Each `RESULT`
   line records one check.
 
-### 4. Merge, tag, and publish
+### 4. Merge, tag, and create the draft
 
 ```sh
 gh pr merge <pr number> --squash
 git fetch origin
+node scripts/release-preflight.mjs --sha <merge commit sha> --version <version>
 git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
-cd .omb-scratch/linux-upload
-gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
+node scripts/release-preflight.mjs --tag v<version>
+cd .seira-scratch/linux-upload
+gh release create v<version> --verify-tag --draft --title "Seira v<version>" --generate-notes
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
   Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
+
+The release stays a draft until step 7. Attach every file
+with the upload command, never with `gh release upload`. The script uploads
+the feeds (`latest*.yml`) last, so installed apps never read a feed whose file
+is still uploading. It uploads one file at a time and stops at the first
+failure. Before it uploads a feed, it checks that every file that a feed or a
+`SHA256SUMS-*.txt` file names is an uploaded asset of the same size. The
+`check` command runs the same check at any time. It only reads from GitHub.
+Do not publish the release when a check fails. The preflight cannot see
+assets, because it runs before the release exists.
 
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
+
+The preflight reads GitHub with `gh api` and changes nothing. It ignores the
+check runs of Dependabot update runs and lists them as notes. Stop when it
+exits with a failure.
+
+- It checks that the tag and the `package.json` version are the same, that
+  the commit is on `main`, and that no check on the commit failed or is still
+  running.
+- It checks that a successful `CI` run proves the tree of the release commit.
+  A cancelled run does not prove it. It also checks that `main` is green.
+- When the CI proof is missing, start CI on the tag with
+  `gh workflow run ci.yml --ref v<version>`. Wait for the run to succeed.
+  Then run the preflight again.
 
 ### Publish the Flatpak repo
 
@@ -189,14 +218,17 @@ settings and the recovery steps.
 ```sh
 git switch --detach v<version>
 scripts/linux-store/publish-flatpak.sh v<version>
-gh release upload v<version> release/Seira-<version>-x86_64.flatpak --repo seira-bot/seira
+node scripts/release-assets.mjs upload v<version> release/Seira-<version>-x86_64.flatpak
 ```
 
 - Use `--init-repo` for the first publish only.
 - The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
 - The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
+- Attach the bundle to the draft release before step 7. The `publish` command refuses a release without it.
 
 ### 5. Build and attach the Windows installer
+
+Attach the files to the draft release. Do not publish the release yet.
 
 The `Package Windows` workflow (`.github/workflows/package-windows.yml`)
 builds the installer from a tag on a GitHub-hosted Windows runner. Before it
@@ -208,6 +240,9 @@ uploads anything:
   `publisherName`;
 - it makes sure that `latest.yml` names the installer with the correct
   SHA-512 and size.
+- it builds the bot memory helper `seira-job-fence.exe` with MinGW-w64
+  (`pnpm build:job-fence`), and makes sure that the app folder and the Store
+  package contain it, and that it passes an exit code on.
 
 It uploads the five Windows assets as one workflow artifact. It uploads the
 Microsoft Store package as a second artifact (see
@@ -218,12 +253,13 @@ token can only read the repository.
 gh workflow run package-windows.yml --repo seira-bot/seira -f ref=v<version>
 gh run list --repo seira-bot/seira --workflow package-windows.yml --limit 1
 gh run watch <run id> --repo seira-bot/seira --exit-status
-mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -232,8 +268,11 @@ gh release upload v<version> --repo seira-bot/seira \
   [CI](ci.md#repository-settings-for-actions)).
 - The artifact stays for 14 days. Upload it before then, or run the workflow
   again.
-- Upload all five files together. A release with the installer but without
-  `latest.yml` leaves every installed Windows app on its old version.
+- Upload all five files in one upload command. The script uploads `latest.yml`
+  last, so installed apps never read a feed whose file is still uploading. A
+  release with the installer but without `latest.yml` leaves every installed
+  Windows app on its old version.
+- Run `check` after the upload. It must print no `FAIL` line.
 
 #### The installer is not signed
 
@@ -241,6 +280,10 @@ Seira has no Windows code-signing certificate. When a person opens the
 installer, Microsoft Defender SmartScreen shows "Windows protected your PC"
 and "Unknown publisher". To continue, the person selects **More info**, then
 **Run anyway**. Say this in the release notes.
+
+The bot memory helper `resources/job-fence/seira-job-fence.exe` is not
+signed either. It is inside the installer and the Store package, not a
+separate release asset. The Store signs the whole package.
 
 Do not add `publisherName` or signing settings to `electron-builder.yml`
 without a certificate. electron-updater checks the update signature only when
@@ -263,7 +306,7 @@ sha256sum -c SHA256SUMS-windows-x64-store.txt
 Before it uploads the package, the workflow extracts it and checks that:
 
 - the manifest names the display name and the publisher display name of Seira;
-- the manifest declares the `openmausbot` protocol, the `runFullTrust`
+- the manifest declares the `seira` protocol, the `runFullTrust`
   capability, and a start-up task that is off by default;
 - the package version is the mapped version (see below);
 - each logo in `build/appx/` is in the package with the same SHA-256, and no
@@ -293,7 +336,7 @@ Rules for the package:
 ### 6. Build and attach the macOS apps
 
 Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set.
+are set. Attach the files to the draft release.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -324,15 +367,16 @@ gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
 # A person who is not a maintainer: open the run page, select "Review deployments",
 # and ask a maintainer to approve "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
-mkdir -p .omb-scratch/macos && cd .omb-scratch/macos
+mkdir -p .seira-scratch/macos && cd .seira-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
 sha256sum -c SHA256SUMS-mac.txt
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-arm64.dmg Seira-<version>-x64.dmg \
   Seira-<version>-arm64.zip Seira-<version>-x64.zip \
   Seira-<version>-arm64.dmg.blockmap Seira-<version>-x64.dmg.blockmap \
   Seira-<version>-arm64.zip.blockmap Seira-<version>-x64.zip.blockmap \
   latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -341,8 +385,11 @@ gh release upload v<version> --repo seira-bot/seira \
   workflow stops at a gate. Build `v0.1.171` or later.
 - The artifact stays for 14 days. Upload it before then, or run the workflow
   again.
-- Upload all twelve files together. A release with the apps but without
-  `latest-mac.yml` leaves every installed macOS app on its old version.
+- Upload all twelve files in one upload command. The script uploads
+  `latest-mac.yml` last, so installed apps never read a feed whose file is
+  still uploading. A release with the apps but without `latest-mac.yml` leaves
+  every installed macOS app on its old version.
+- Run `check` after the upload. It must print no `FAIL` line.
 
 #### An artifact named NOT-FOR-RELEASE
 
@@ -350,7 +397,8 @@ When the `release` environment has none of the Apple secrets, the workflow
 still builds and runs every gate that needs no Apple account. The apps then
 have an ad-hoc signature and no notarization, and the artifact is named
 `seira-<version>-macos-NOT-FOR-RELEASE`. It holds the four packages and
-`NOT-FOR-RELEASE.txt`, with no update feed and no block maps.
+`NOT-FOR-RELEASE.txt`, with no update feed and no block maps. The apps carry no update
+feed file, so a gate checks that it is absent, and they never check for updates.
 
 - Use it only to test the build. macOS blocks these apps when they come from
   a download.
@@ -359,7 +407,26 @@ have an ad-hoc signature and no notarization, and the artifact is named
 When only some of the five secrets are set, the workflow stops before it
 builds, so a missing secret never gives an unsigned build by mistake.
 
-### 7. Publish the server image
+### 7. Publish the release
+
+```sh
+node scripts/release-assets.mjs publish v<version>
+```
+
+The command makes the draft release public and marks it as the latest release.
+
+- It refuses when a Linux or Windows asset is missing. The release stays a draft.
+- The Linux assets include the Flatpak bundle `Seira-<version>-x86_64.flatpak`.
+- It refuses when the release has any macOS file and a macOS asset is missing.
+- It refuses when `check` finds a problem. The release stays a draft.
+- It runs `check` again after it publishes the release.
+- Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
+- A published release without the Windows assets makes installed Windows apps fail their update check.
+- It also breaks the `Seira-setup.exe` download link.
+- Do not publish with `gh release edit` or the GitHub web page.
+- Do this step before step 8. The server image workflow fails while the release is still a draft.
+
+### 8. Publish the server image
 
 The `Server image` workflow (`.github/workflows/server-image.yml`) builds the
 server image from the tag for `linux/amd64` and `linux/arm64`, each on its own
@@ -385,25 +452,29 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 - A person who is not a maintainer cannot re-run a failed publish job alone.
   An approval from an earlier attempt does not count. Re-run all jobs, or ask a
   maintainer to re-run.
-- Publish the GitHub release first. The workflow refuses a tag that is not a
+- Publish the GitHub release first (step 7). The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
   `org.opencontainers.image.version` must be `v<version>`.
+- The same run also publishes `ghcr.io/seira-bot/seira-cloud-home` for `linux/amd64` only, with the same tags.
+  Its label `org.opencontainers.image.version` is `<version>`, without the `v`. The publish job summary prints its digest.
 - The package must be public, or a server cannot pull it. An organization
   admin sets this once in the package settings on GitHub.
 
-### 8. Check what users download
+### 9. Check what users download
 
 ```sh
-mkdir -p .omb-scratch/release-check && cd .omb-scratch/release-check
+mkdir -p .seira-scratch/release-check && cd .seira-scratch/release-check
 gh release download v<version> --repo seira-bot/seira
 sha256sum -c SHA256SUMS-linux-x64.txt
 sha256sum -c SHA256SUMS-windows-x64.txt
 sha256sum -c SHA256SUMS-mac.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
-Each check must print `OK`. If a check fails, delete the release assets and
-upload them again. Never edit an asset in place.
+Each check must print `OK`, and the `check` command must print no `FAIL`
+line. If a check fails, delete the release assets and upload them again. Never
+edit an asset in place.
 
 ## Publish to npm
 
@@ -415,7 +486,7 @@ environment through the GitHub OIDC token.
 It starts in one of two ways:
 
 ```sh
-# Automatic: it starts when a maintainer publishes the GitHub release (step 4).
+# Automatic: it starts when a maintainer publishes the GitHub release (step 7).
 # By hand, from main:
 gh workflow run npm-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run watch <run id> --repo seira-bot/seira --exit-status
@@ -541,3 +612,14 @@ The Linux package stages a pinned engine and Chromium Headless Shell before
 packaging. See [browser packaging](browser-packaging.md) for update ownership,
 license provenance, and Linux sandbox limits. A build with missing browser
 resources must fail. Do not ship a package that downloads them on first use.
+
+## Milestones
+
+Each release has a milestone with the name of its tag, for example `v0.1.189`.
+The workflow `milestones.yml` puts each merged pull request into the milestone of the next release.
+It also puts the issues that the pull request closes into that milestone.
+The pull request that changes `version` in `package.json` goes into the milestone of that version.
+A published release closes its milestone and opens the milestone of the next patch version.
+The workflow never replaces a milestone that a person set.
+A maintainer has no step to do.
+To plan an open issue for a release, set its milestone by hand.

@@ -61,6 +61,7 @@ export function createAuth(
         async sendVerificationOTP(input) {
           await sendOTPEmail({
             async send(message) {
+              if (!env.EMAIL) throw new Error("EMAIL binding is missing");
               await env.EMAIL.send(message);
             },
           }, config.emailFrom, input, requestId);
@@ -90,7 +91,7 @@ export async function deleteExpiredVerifications(auth: ControlPlaneAuth): Promis
 export async function accountSession(request: Request, auth: ControlPlaneAuth) {
   const authorization = request.headers.get("authorization");
   const match = authorization?.match(/^Bearer\s+([^\s]+)$/i);
-  if (!match || match[1].startsWith("omb_install_")) return null;
+  if (!match || match[1].startsWith("seira_install_")) return null;
 
   return auth.api.getSession({
     headers: new Headers({ authorization: `Bearer ${match[1]}` }),

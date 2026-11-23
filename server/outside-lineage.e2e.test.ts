@@ -1,9 +1,9 @@
 // Work that came in from outside stays with that work, on a real Team Cloud, a personal Cloud someone else has used and a
 // desktop, with the fake engine: the level each turn really got, read from what the engine was started with.
 import { randomBytes } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
@@ -14,12 +14,19 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
 const tag = randomBytes(6).toString("hex");
-const dump = join(tmpdir(), `outside-${tag}.json`), release = join(tmpdir(), `outside-${tag}.release`), failing = join(tmpdir(), `outside-${tag}.fail`), notes = join(tmpdir(), `outside-${tag}.notes`),
+// Every engine process keeps its latest turn in a file of its own here: a turn that starts at the same moment as the one a
+// test waits for, in this test or one a test before left running, never hides it.
+const turns = join(tmpdir(), `outside-${tag}.turns`), release = join(tmpdir(), `outside-${tag}.release`), failing = join(tmpdir(), `outside-${tag}.fail`), notes = join(tmpdir(), `outside-${tag}.notes`),
   holding = join(tmpdir(), `outside-${tag}.holding`), held = join(tmpdir(), `outside-${tag}.held`);
-const engine = `const { existsSync: __has } = await import("node:fs"); process.env.FAKE_CLAUDE_MODE = __has(${JSON.stringify(failing)}) ? "exit-early" : "hang"; process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(dump)}; process.env.FAKE_CLAUDE_RELEASE = __has(${JSON.stringify(holding)}) ? ${JSON.stringify(held)} : ${JSON.stringify(release)}; process.env.FAKE_CLAUDE_TEXT_FILE = ${JSON.stringify(notes)}; process.env.FAKE_CLAUDE_TEXT_DUMP = ${JSON.stringify(`${notes}.dump`)};`;
+const engine = `const { existsSync: __has } = await import("node:fs"); process.env.FAKE_CLAUDE_MODE = __has(${JSON.stringify(failing)}) ? "exit-early" : "hang"; process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(turns + sep)} + process.pid + ".json"; process.env.FAKE_CLAUDE_RELEASE = __has(${JSON.stringify(holding)}) ? ${JSON.stringify(held)} : ${JSON.stringify(release)}; process.env.FAKE_CLAUDE_TEXT_FILE = ${JSON.stringify(notes)}; process.env.FAKE_CLAUDE_TEXT_DUMP = ${JSON.stringify(`${notes}.dump`)};`;
 const KEY = randomBytes(16).toString("hex");
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const read = () => { try { return JSON.parse(readFileSync(dump, "utf8")); } catch { return null; } };
+mkdirSync(turns, { recursive: true });
+/** Each process's latest turn, newest first. A file being written is still a .tmp one. */
+const captures = (): any[] => readdirSync(turns).filter((name) => name.endsWith(".json")).flatMap((name) => {
+  try { const path = join(turns, name); return [{ at: statSync(path).mtimeMs, turn: JSON.parse(readFileSync(path, "utf8")) }]; } catch { return []; }
+}).sort((a, b) => b.at - a.at).map((one) => one.turn);
+const forgetTurns = () => { for (const name of readdirSync(turns)) if (name.endsWith(".json")) rmSync(join(turns, name), { force: true }); };
 async function until<V>(what: string, fn: () => Promise<V> | V, ms = hostTimeout(30_000)): Promise<V> {
   const end = Date.now() + ms;
   for (;;) {
@@ -29,7 +36,7 @@ async function until<V>(what: string, fn: () => Promise<V> | V, ms = hostTimeout
     await sleep(100);
   }
 }
-const said = (marker: string, where: "prompt" | "systemPrompt" = "prompt") => { const turn = read(); return turn && JSON.stringify(turn[where] ?? "").includes(marker) ? turn : null; };
+const said = (marker: string, where: "prompt" | "systemPrompt" = "prompt") => captures().find((turn) => JSON.stringify(turn[where] ?? "").includes(marker)) ?? null;
 const turnWith = (marker: string, where: "prompt" | "systemPrompt" = "prompt") => until(`a turn with ${marker}`, () => said(marker, where));
 const confined = (turn: { argv: string[] }) => turn.argv.includes("--restricted");
 const skillNamed = (name: string) => ({ name, description: "Write the digest.", source: "local:test", enabled: true, text: `---\nname: ${name}\ndescription: Write the digest.\n---\n\nWrite the digest.\n` });
@@ -37,7 +44,7 @@ const atFull = (turn: { argv: string[] }) => turn.argv[turn.argv.indexOf("--perm
 
 let fx: CloudSendFixture, team: CloudTeamFixture, ada: string;
 beforeAll(async () => {
-  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-${randomBytes(8).toString("hex")}`, cloudEngine: engine, desktopEngine: engine, env: { OMB_TEST_INTERNAL_CAPABILITY_KEY: KEY },
+  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-${randomBytes(8).toString("hex")}`, cloudEngine: engine, desktopEngine: engine, env: { SEIRA_TEST_INTERNAL_CAPABILITY_KEY: KEY },
     team: { id: "team-acme-1", name: "Acme", engine } });
   team = fx.team!;
   ada = (await team.pair({ email: "ada@acme.test", role: "admin" })).token!;
@@ -46,7 +53,8 @@ afterAll(async () => {
   writeFileSync(release, "");
   await sleep(500);
   await fx?.close?.();
-  for (const file of [dump, release, failing, notes, `${notes}.dump`, holding, held]) rmSync(file, { force: true });
+  for (const file of [release, failing, notes, `${notes}.dump`, holding, held]) rmSync(file, { force: true });
+  rmSync(turns, { recursive: true, force: true });
 });
 
 const newBot = async (name: string, level = "full") => {
@@ -81,7 +89,8 @@ const finish = async (...ids: string[]) => {
   writeFileSync(release, ""); writeFileSync(held, "");
   await idle(...ids);
   await sleep(300);
-  for (const file of [release, held, holding, dump]) rmSync(file, { force: true });
+  for (const file of [release, held, holding]) rmSync(file, { force: true });
+  forgetTurns();
 };
 const linesOf = async (threadId: string) => (await team.as(ada, "GET", `/api/threads/${threadId}/messages?limit=200`)).body.messages as any[];
 /** The webhook's turn is running on `bot`. */
@@ -211,7 +220,7 @@ describe("a Team Cloud", () => {
     const chief = await newChief("Failure chief");
     const mate = await newBot("Failure mate");
     const hook = await hookOn(mate.id, "Failure hook");
-    rmSync(dump, { force: true });
+    forgetTurns();
     writeFileSync(failing, "");
     await deliver(hook, "marker-failure");
     const run = await until("the run to fail", async () => { const one = await runOf(hook); return one && ["failed", "missed"].includes(one.status) ? one : null; }, hostTimeout(60_000));
@@ -313,6 +322,9 @@ describe("a Team Cloud", () => {
     const named = await internal(chief.id, thread, "/api/internal/coordinate-bots", { botIds: [mate.id], message: "line-as-answer", answers: handed.body.receipts[0].requestId });
     expect(named.body.receipts[0].outcome).toBe("failed");
     expect(JSON.stringify(await linesOf(work))).not.toContain("line-as-answer");
+    // The mate's result wakes the Chief after both turns end: that turn runs in this test, not in the next one.
+    writeFileSync(release, "");
+    await turnWith("Your downstream room requests have settled");
     await finish(chief.id, mate.id);
   }, hostTimeout(120_000));
 
@@ -343,7 +355,7 @@ describe("a Team Cloud", () => {
     writeFileSync(notes, JSON.stringify({ facts: [{ text: "fact-from-a-chat", kind: "decision" }] }));
     expect((await team.as(ada, "PUT", "/api/config", { memory: { captureQuietMs: 1_000 } })).status).toBe(200);
     const saved = (botId: string) => {
-      const root = join(team.home, ".openmausbot", "workspaces");
+      const root = join(team.home, ".seira", "workspaces");
       return readdirSync(root).filter((name) => name.startsWith(botId)).flatMap((name) => {
         const logs = join(root, name, "memory", "log");
         return [join(root, name, "MEMORY.md"), ...(existsSync(logs) ? readdirSync(logs).map((file) => join(logs, file)) : [])];
@@ -442,7 +454,7 @@ describe("a Team Cloud", () => {
     expect(confined(await turnWith("work-across-restart"))).toBe(true);
     expect((await internal(scout.id, thread, "/api/internal/coordinate-bots", { botIds: [mate.id], message: "work-queued-at-restart", reply: "none" }, capability)).status).toBe(200);
     const child = sent.body.receipts[0].threadId as string;
-    rmSync(dump, { force: true });
+    forgetTurns();
     await team.relaunch();
     ada = (await team.pair({ email: "ada@acme.test", role: "admin" })).token!;
     writeFileSync(held, "");
@@ -460,7 +472,7 @@ describe("a Team Cloud", () => {
     const scout = await newBot("Earlier bot");
     const { thread } = await webhookTurn(scout.id, "Earlier hook", "marker-earlier");
     await finish(scout.id);
-    const dataDir = join(team.home, ".openmausbot");
+    const dataDir = join(team.home, ".seira");
     const { bots } = readRegistry(dataDir);
     const marked = bots.flatMap((bot: any) => bot.tasks ?? []).filter((task: any) => task.outside === true);
     expect(marked.length).toBeGreaterThan(0);
@@ -501,7 +513,7 @@ describe("a Team Cloud", () => {
 
 describe("a personal Cloud only its owner has used", () => {
   it("runs a webhook at the bot's level, and keeps what a routine it made hands on confined after that work ends", async () => {
-    rmSync(dump, { force: true });
+    forgetTurns();
     const cloud = fx.onCloud;
     const scout = (await cloud("POST", "/api/bots", { name: "Solo scout" })).body.bot;
     const mate = (await cloud("POST", "/api/bots", { name: "Solo mate" })).body.bot;
@@ -511,7 +523,7 @@ describe("a personal Cloud only its owner has used", () => {
     expect((await fetch(`${receiver}/hooks/${hook.webhook.endpointId}/${encodeURIComponent(hook.credential.secret)}`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": randomBytes(6).toString("hex") }, body: JSON.stringify({ text: "marker-solo" }) })).status).toBe(202);
     const webhook = await turnWith("marker-solo");
     expect(confined(webhook)).toBe(false);
-    const capabilityFor = async (botId: string, threadId: string) => ((await (await fetch(`${fx.cloudBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-openmausbot-test-capability": KEY }, body: JSON.stringify({ botId, threadId }) })).json()) as any).token as string;
+    const capabilityFor = async (botId: string, threadId: string) => ((await (await fetch(`${fx.cloudBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-seira-test-capability": KEY }, body: JSON.stringify({ botId, threadId }) })).json()) as any).token as string;
     const call = async (from: string, path: string, body: object) => {
       const response = await fetch(`${fx.cloudBase}${path}?fromBotId=${scout.id}`, { method: "POST", headers: { authorization: `Bearer ${await capabilityFor(scout.id, from)}`, "content-type": "application/json" }, body: JSON.stringify({ fromBotId: scout.id, fromThreadId: from, ...body }) });
       return { status: response.status, body: await response.json().catch(() => null) as any };
@@ -527,13 +539,13 @@ describe("a personal Cloud only its owner has used", () => {
     writeFileSync(release, "");
     await sleep(2_500);
     rmSync(release, { force: true });
-    rmSync(dump, { force: true });
+    forgetTurns();
     expect((await cloud("POST", `/api/bots/${mate.id}/messages`, { text: "owner-line-solo", threadId: handed.body.receipts[0].threadId })).status).toBe(202);
     expect(confined(await turnWith("owner-line-solo"))).toBe(true);
     writeFileSync(release, "");
     await sleep(1_500);
     rmSync(release, { force: true });
-    rmSync(dump, { force: true });
+    forgetTurns();
     const second = await call(runThread, "/api/internal/trigger-requests", { action: "create", kind: "schedule", forBotId: mate.id,
       routine: { name: "Solo second", instructions: "solo-new-routine", schedule: { type: "once", at: new Date(Date.now() + 6_000).toISOString() } } });
     expect(second.body?.state).toBe("applied");
@@ -546,7 +558,7 @@ describe("a personal Cloud only its owner has used", () => {
 
 describe("a personal Cloud someone else has used", () => {
   it("keeps a confined turn out of the owner's conversations and their room's instructions", async () => {
-    rmSync(dump, { force: true });
+    forgetTurns();
     const cloud = fx.onCloud;
     const chief = (await cloud("POST", "/api/bots", { name: "Chief" })).body.bot;
     expect((await cloud("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true })).status).toBe(200);
@@ -554,7 +566,7 @@ describe("a personal Cloud someone else has used", () => {
     expect((await cloud("PATCH", `/api/bots/${mate.id}`, { approvalMode: "full", applyToAllThreads: true })).status).toBe(200);
     const room = (await cloud("POST", "/api/groups", { name: "Owner's room", memberIds: [chief.id, mate.id], setup: { bulletin: "as it was", defaultResponder: { kind: "member", botId: mate.id } } })).body.group;
     const theirs = (await cloud("POST", `/api/bots/${chief.id}/tasks`, { title: "Left behind" })).body.task.threadId as string;
-    const capabilityFor = async (botId: string, threadId: string) => ((await (await fetch(`${fx.cloudBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-openmausbot-test-capability": KEY }, body: JSON.stringify({ botId, threadId }) })).json()) as any).token as string;
+    const capabilityFor = async (botId: string, threadId: string) => ((await (await fetch(`${fx.cloudBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-seira-test-capability": KEY }, body: JSON.stringify({ botId, threadId }) })).json()) as any).token as string;
     const call = async (capability: string, from: string, path: string, body: object) => {
       const response = await fetch(`${fx.cloudBase}${path}?fromBotId=${chief.id}`, { method: "POST", headers: { authorization: `Bearer ${capability}`, "content-type": "application/json" }, body: JSON.stringify({ fromBotId: chief.id, fromThreadId: from, ...body }) });
       return { status: response.status, body: await response.json().catch(() => null) as any };
@@ -569,8 +581,9 @@ describe("a personal Cloud someone else has used", () => {
     await turnWith("before-mark");
     writeFileSync(release, "");
     await sleep(1_500);
-    for (const file of [release, dump]) rmSync(file, { force: true });
-    markLeftBehind(join(fx.root, "cloud", ".openmausbot"), { threadIds: [theirs] });
+    rmSync(release, { force: true });
+    forgetTurns();
+    markLeftBehind(join(fx.root, "cloud", ".seira"), { threadIds: [theirs] });
     await fx.relaunch({ kill: false, cloud: {} });
     expect((await cloud("POST", `/api/bots/${chief.id}/messages`, { text: "their-line", threadId: theirs })).status).toBe(202);
     expect(confined(await turnWith("their-line"))).toBe(true);
@@ -602,7 +615,7 @@ describe("a personal Cloud someone else has used", () => {
     writeFileSync(release, "");
     await sleep(2_000);
     rmSync(release, { force: true });
-    rmSync(dump, { force: true });
+    forgetTurns();
   }, hostTimeout(180_000));
 });
 
@@ -619,7 +632,8 @@ describe("a desktop", () => {
     expect(JSON.stringify(turn.prompt)).not.toContain("The user ran your desk-digest skill");
     writeFileSync(release, "");
     await sleep(1_500);
-    for (const file of [release, dump]) rmSync(file, { force: true });
+    rmSync(release, { force: true });
+    forgetTurns();
   }, hostTimeout(120_000));
 
   it("brings no level down from a webhook's Chief: the teammate keeps its own", async () => {
@@ -633,7 +647,7 @@ describe("a desktop", () => {
     expect((await fetch(`http://127.0.0.1:${port}/hooks/${hook.webhook.endpointId}/${encodeURIComponent(hook.credential.secret)}`, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": randomBytes(6).toString("hex") }, body: JSON.stringify({ text: "marker-desktop" }) })).status).toBe(202);
     expect(atFull(await turnWith("marker-desktop"))).toBe(true);
     const thread = ((await local("GET", "/api/routines")).body.runs as any[]).find((run) => run.webhookId === hook.webhook.id).threadId as string;
-    const minted = await (await fetch(`${fx.desktopBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-openmausbot-test-capability": KEY }, body: JSON.stringify({ botId: chief.id, threadId: thread }) })).json() as any;
+    const minted = await (await fetch(`${fx.desktopBase}/api/testing/internal-capability`, { method: "POST", headers: { "content-type": "application/json", "x-seira-test-capability": KEY }, body: JSON.stringify({ botId: chief.id, threadId: thread }) })).json() as any;
     const sent = await fetch(`${fx.desktopBase}/api/internal/coordinate-bots?fromBotId=${chief.id}`, { method: "POST", headers: { authorization: `Bearer ${minted.token}`, "content-type": "application/json" }, body: JSON.stringify({ fromBotId: chief.id, fromThreadId: thread, botIds: [mate.id], message: "brief-desktop", reply: "none" }) });
     expect(sent.status).toBe(200);
     expect(atFull(await turnWith("brief-desktop"))).toBe(false);

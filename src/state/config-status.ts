@@ -4,6 +4,7 @@ import type { ImageComplexity, ImageProvider } from "../../shared/image-generati
 import type { ToolGroup } from "../../shared/tool-groups";
 import type { OnboardingStatus } from "@/lib/onboarding";
 import type { ModelSelection } from "./store";
+import type { PersonLook } from "../../shared/person-look";
 
 /** A saved credential: whether it is set and, for admins, its last four characters. The key itself never comes back. */
 export interface SavedKey { configured: boolean; last4?: string }
@@ -24,15 +25,15 @@ export interface ConfigStatus {
   modelgo?: SavedKey;
   deepseek?: SavedKey;
   meta?: SavedKey;
-  /** X research comes with MausBot Cloud plans: `included` while this server holds the plan's relay credential;
+  /** X research comes with Seira Cloud plans: `included` while this server holds the plan's relay credential;
    * `unavailable` when the Admin said no to this desktop's paid sign-in. */
   xResearch?: { included: boolean; unavailable?: boolean };
+  /** False when this account has no page links to offer: the page's Share is hidden. */
+  pages?: { offered: boolean };
   /** The built-in tool groups this workspace has, the ones a bot's Settings offer to turn off. */
   toolGroups?: ToolGroup[];
   /** The person's own treg key for research: configured or not, never the key. */
   treg?: SavedKey;
-  /** The Postiz organisation API key, and the Postiz server it belongs to when it is not Postiz Cloud. */
-  postiz?: SavedKey & { url?: string };
   /** `everyClaudeBot`: the key runs every Claude bot, not only "Claude (API key)". */
   anthropic?: SavedKey & { everyClaudeBot?: boolean };
   openai?: SavedKey;
@@ -51,18 +52,20 @@ export interface ConfigStatus {
   budgets?: { monthlyUsd?: number; warnAtPercent?: number };
   billing?: { currency?: string; prices?: Record<string, { inputPerMillion: number; outputPerMillion: number; cachedInputPerMillion?: number }> };
   composio: SavedKey & { mode?: "managed" | "self-hosted" | "unavailable" };
-  /** `included`: cloud computers come with Cloud Pro, no key is saved. */
-  box: SavedKey & { included?: boolean };
   vps: { configured: boolean; sshAlias: string };
   rooms: { turnTimeoutMinutes: number };
   /** Per-call ceiling (minutes) for a bot's MCP tools. Absent from servers
    * older than the setting; read it with mcpCallTimeoutMinutes(). */
   mcp?: { callTimeoutMinutes: number };
+  /** The memory all bot work on this computer shares. Absent where the server
+   * offers no protection. `gb` null means Auto; `envGb` not null means the
+   * limit was fixed when the app started. */
+  botMemory?: { gb: number | null; autoGb: number; machineGb: number; protection: "slice" | "job" | "watchdog" | "none"; envGb: number | null };
   /** Workspace defaults for new bots; absent effort = no level is sent. */
   newBots?: { effort?: EffortLevel };
   /** This Cloud is on the Starter plan, as the Admin last said; absent or false otherwise. */
   cloudStarter?: boolean;
-  /** The most bots this Cloud's plan makes, its MausBot aside. Sent only by servers that capped Starter's bots; absent otherwise. */
+  /** The most bots this Cloud's plan makes, its Seira aside. Sent only by servers that capped Starter's bots; absent otherwise. */
   botLimit?: number;
   /** A task on this Cloud is waiting for memory right now. */
   waitingForRoom?: boolean;
@@ -113,9 +116,11 @@ export interface ConfigStatus {
    * the one under Settings → API keys); `sharedKey`: that one is on file. */
   decider?: {
     provider: "jev" | "workersai" | "openrouter" | "custom" | "gemini";
-    /** Jev, when the person picked it but the shared OpenRouter key decides until a Jev key is saved; OpenRouter, when
-     * it was picked but a saved Gemini key decides until an OpenRouter key is saved. */
-    chosen?: "jev" | "openrouter";
+    /** The provider the person picked under Routing, whenever one is saved; another key may decide until its key is saved. */
+    chosen?: "jev" | "workersai" | "openrouter" | "custom" | "included";
+    /** Cloud's included decisions can be picked here while another key decides (`included` says they decide now).
+     * Absent from older servers. */
+    includedAvailable?: boolean;
     /** The OpenRouter or custom model in use; present only while that is the provider. */
     model?: string;
     /** The custom endpoint's protocol, or the OpenRouter API. */
@@ -152,13 +157,19 @@ export interface ConfigStatus {
     customUrl?: string;
     customModel?: string;
     openaiConfigured?: boolean;
+    /** OpenAI images use the main OpenAI key: no image key of their own is saved. */
+    openaiShared?: boolean;
+    /** Codex has a ChatGPT sign-in of its own on this computer; never its token. */
+    codexSignedIn?: boolean;
+    /** That sign-in's ChatGPT plan, such as "plus" or "free"; null when unknown. */
+    codexPlan?: string | null;
     xaiConfigured?: boolean;
     customKeyConfigured?: boolean;
     geminiConfigured?: boolean;
     openrouterConfigured?: boolean;
   };
   /** who's using the app — collected in onboarding, shown in the sidebar */
-  profile?: { name: string; email: string; aboutMe?: string; avatarUrl?: string };
+  profile?: { name: string; email: string; aboutMe?: string; avatarUrl?: string; look?: PersonLook };
   /** Rules every bot follows, ahead of its department's context and its own instructions; sent to admins only. */
   everyBotRules?: string;
   /** UI language override; "" (or absent) follows the system language. */
@@ -166,7 +177,7 @@ export interface ConfigStatus {
   /** What a paired phone calls this computer; "" uses the default. */
   computerName?: string;
   /** Opt-in flags. Absent means off. */
-  features?: { skillAuthoring: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; claudeUserMcp?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; savedSteps?: boolean; savedStepsHere?: boolean; usbPhoneTakeover?: boolean };
+  features?: { skillAuthoring: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; claudeUserMcp?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; savedSteps?: boolean; savedStepsHere?: boolean; usbPhoneTakeover?: boolean; phonePush?: boolean };
   /** First-run progress: whether the welcome tour was finished and which
    * one-time hints were dismissed. Server-owned so it follows the workspace. */
   onboarding?: OnboardingStatus;
@@ -178,10 +189,10 @@ export interface ConfigStatus {
   /** The enrolled organisation's read-only desktop policy; null when this
    * desktop is not enrolled or its Admin sends no policy. */
   managedPolicy?: ManagedPolicySummary | null;
-  /** This server is an OMB Cloud home: it offers no "this computer" and no
+  /** This server is a Seira Cloud home: it offers no "this computer" and no
    * Local VM (server/cloud-home.ts). Absent everywhere else. */
   cloudHome?: boolean;
-  /** A Team Cloud: the team this server is the home of, and the Plan page (MausBot Cloud) where its people and plan
+  /** A Team Cloud: the team this server is the home of, and the Plan page (Seira Cloud) where its people and plan
    * are managed. Absent everywhere else. */
   team?: { id: string; name: string; cloudPage?: string };
 }
@@ -206,7 +217,7 @@ export interface BrowserEngineSummary {
   installable?: boolean;
   version?: string;
   /** The browser the engine starts, e.g. "Google Chrome 153 (installed)", or while Chrome for Testing downloads,
-   * "Chrome for Testing 153.0.8010.47 (downloading: 52 of 182 MB)". */
+   * "Chrome for Testing 158.0.8127.36 (downloading: 52 of 191 MB)". */
   chrome?: string;
   installing?: boolean;
   installError?: string;
@@ -217,10 +228,10 @@ export interface BrowserEngineSummary {
   myChromeOn?: { name: string; device: "PC" | "Mac" | "computer"; online: boolean };
   /** On My Cloud with no computer lending Chrome: it can be lent from the desktop app. */
   myChromeLendable?: true;
-  /** browserEngine.engine: "chrome" when the bots' browsers run on OpenMausBot's own Chrome driver. */
+  /** browserEngine.engine: "chrome" when the bots' browsers run on Seira's own Chrome driver. */
   engine?: "agent-browser" | "chrome";
   /** Self-hosted servers only: whether bots' browsers may open this server's own sites and its local network
-   * (browserEngine.egress.localNetwork, off by default). Absent on the desktop and on MausBot Cloud. */
+   * (browserEngine.egress.localNetwork, off by default). Absent on the desktop and on Seira Cloud. */
   serverSites?: boolean;
   /** Whether an owner-configured SOCKS5 upstream is active; the endpoint is never exposed in config status. */
   proxyConfigured?: boolean;

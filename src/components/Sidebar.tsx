@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderInput, FolderPlus, LayoutTemplate, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, Plus, Search, SquarePen, TextQuote, Trash2, Users, X } from "lucide-react";
 import { sidebarState } from "./sidebar-state"; import { sameFields, useStoreDispatch, useStoreSelector } from "@/state/store-select"; import { useStoreRef } from "@/state/store-ref"; import { sameDrawnBots } from "@/lib/drawn-bots";
-import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
+import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
 import { ADV_ACTIONS_PAD_1, ADV_ACTIONS_PAD_3, AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { formatRowTime } from "./sidebar-row-time"; import { BotRowPreview } from "./SidebarBotRowPreview";
@@ -17,13 +17,13 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
-import { activeLocale, t } from "@/lib/i18n"; import { isBotHeld } from "@/lib/bot-pause";
+import { activeLocale, t } from "@/lib/i18n"; import { ui } from "@/lib/ui-anchor"; import { isBotHeld } from "@/lib/bot-pause";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
-import { RoomMark, StackedMauses } from "./StackedMauses";
+import { RoomMark, StackedSeiras } from "./StackedSeiras"; import { RoomPictureMenuItems } from "./RoomPictureMenuItems";
 import { SimpleRoomStack, SimpleRoomText } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
@@ -52,6 +52,7 @@ import {
   PINNED_THREADS_SECTION_ID,
   TOOLS_SECTION_ID,
   activeBotsFirst,
+  departmentsShown,
   partitionSidebarBots,
   partitionSidebarGroups,
   pinnedCircleThreadListVisible,
@@ -83,13 +84,13 @@ import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
 import { SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
 import { PHONE_TOP_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill } from "./SidebarSimpleTop";
-import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleSearchPill, SimpleTopSlot } from "./SidebarSimpleNav";
+import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleBoardRow, SimpleSearchPill, SimpleTopSlot } from "./SidebarSimpleNav";
 import { isSidebarToggle } from "@/lib/keyboard-shortcuts";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useBotUnread } from "./unread-notice";
 import { attentionHasRunningWork, attentionJumpAction, attentionUnpinAction, crossBotAttentionThreads, crossBotPinnedThreads, runningRoutineRun, SidebarBotActivity, sidebarBotActivityTasks, sidebarBotStatus } from "./SidebarBotActivity";
-import { SidebarNoBots, SidebarTileGrid } from "./SidebarTiles";
+import { SidebarNoBots, SidebarSectionTiles, SidebarTileGrid } from "./SidebarTiles";
 import { BotContextMenu } from "./SidebarBotMenu";
 export { BotContextMenu };
 import { AvatarActivityDot, AvatarCornerDot, RowDot, RowStatusText, rowSelectedSurface, rowSurface } from "./SidebarRowMarkers";
@@ -98,7 +99,7 @@ import { AvatarActivityDot, AvatarCornerDot, RowDot, RowStatusText, rowSelectedS
 import { SidebarAttentionPanel } from "./SidebarAttentionPanel";
 import { SidebarPinnedThreadsPanel } from "./SidebarPinnedThreadsPanel";
 import { useLiveMedia } from "@/lib/live-call-media";
-import { LiveCallPill, liveBadgeFor } from "./LiveCallPill";
+import { liveBadgeFor } from "@/lib/call-session";
 import { ShortcutHint } from "./ShortcutHint";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { useAdvancedMode } from "@/lib/interface-mode";
@@ -175,6 +176,7 @@ export const GroupListItem = memo(function GroupListItem({
     <div className={cn("group relative", railTile && "mx-auto w-[54px]")}>
     <button
       data-sidebar-group-row={group.id}
+      data-ui={ui("sidebar.group")}
       aria-current={selected && !expanded ? "page" : undefined}
       onClick={() => dispatch({ type: "select", id: group.id })}
       onContextMenu={(e) => {
@@ -201,9 +203,9 @@ export const GroupListItem = memo(function GroupListItem({
       aria-label={density === "icons" ? group.name : undefined}
     >
       {advThread ? <AdvancedThreadText bot={members[0]} name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} /> : advRow ? <>
-        <AdvancedRoomStack members={members} />
+        <AdvancedRoomStack members={members} picture={group.avatarUrl} />
         <AdvancedRoomText name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} />
-      </> : simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
+      </> : simpleRow ? <SimpleRoomStack members={members} picture={group.dm ? null : group.avatarUrl} /> : group.dm ? <StackedSeiras members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} picture={group.avatarUrl} />}
       {advRow ? null : simpleRow ? <SimpleRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} /> : (
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className="flex items-baseline justify-between gap-2">
@@ -249,10 +251,8 @@ function RoomContextMenu({
   const dispatch = useStoreDispatch(), store = useStoreRef();
   const remoteClient = window.ogb?.remoteClient?.active === true;
   const group = useStoreSelector((s) => shown ? s.groups.find((g) => g.id === shown.groupId) : undefined);
-  const [renaming, setRenaming] = useState(false);
-  const [describing, setDescribing] = useState(false);
-  const [draft, setDraft] = useState(group?.name ?? "");
-  const [descriptionDraft, setDescriptionDraft] = useState(group?.description ?? "");
+  const [renaming, setRenaming] = useState(false), [describing, setDescribing] = useState(false);
+  const [draft, setDraft] = useState(group?.name ?? ""), [descriptionDraft, setDescriptionDraft] = useState(group?.description ?? "");
 
   useEffect(() => {
     if (!menu) return;
@@ -410,6 +410,7 @@ function RoomContextMenu({
           {t("sidebar.room.setDescription")}
         </button>
       )}
+      {!remoteClient && !renaming && !describing && !isBotChat && <RoomPictureMenuItems group={group} onClose={onClose} />}
       {!remoteClient && !isBotChat && (
         <button
           role="menuitem"
@@ -863,7 +864,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         }
         aria-busy={deleting || undefined} aria-keyshortcuts={drag ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
         aria-current={selected && !expanded && !renaming ? "page" : undefined}
-        data-sidebar-bot-row={bot.id} data-look="sidebar-bot"
+        data-sidebar-bot-row={bot.id} data-ui={ui("sidebar.bots")} data-look="sidebar-bot"
         title={renaming ? undefined : tooltip}
         onClick={onSelect}
         onKeyDown={(event) => {
@@ -1099,7 +1100,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   }) };
   const { botChats, sectionedRooms, unsectionedRooms } = partitionSidebarGroups(visibleGroups);
 
-  const sectionNames: string[] = [...(state.sections ?? []).filter((name) => !q || name.toLowerCase().includes(q.toLowerCase())), ...botDrag.pending];
+  const sectionNames: string[] = [...departmentsShown((state.sections ?? []).filter((name) => !q || name.toLowerCase().includes(q.toLowerCase())), { pinned: primary ? [...pinnedBots, primary] : pinnedBots, unpinned: [...sectionChiefs, ...sectionedBots], rooms: sectionedRooms, keep: botDrag.pending }), ...botDrag.pending];
   for (const bot of sectionedBots) {
     if (!sectionNames.includes(bot.section!)) sectionNames.push(bot.section!);
   }
@@ -1114,13 +1115,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     ...(pinnedBots.length > 0 && !universalPins && !simpleDesk ? [PINNED_SECTION_ID] : []),
     ...(unsectionedRooms.length > 0 ? [CHANNELS_SECTION_ID] : []),
     ...(botChats.length > 0 ? [BOT_CHATS_SECTION_ID] : []),
-    ...(unsectionedBots.length > 0 || drops.slot ? [BOTS_SECTION_ID] : []),
+    ...((unsectionedBots.length > 0 && !simpleDesk) || drops.slot ? [BOTS_SECTION_ID] : []),
     ...sectionNames.map(userSectionId),
   ];
   const layout = sections.arrange(naturalSectionIds);
   const sectionIds = layout.sectionIds;
   const showPinnedCircleThreads = !simpleDesk && pinnedCircleThreadListVisible(pinnedCircles, density, pinnedBots.length);
-  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0);
+  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0 || unsectionedBots.length > 0);
   const { interactive: layoutInteractive, collapsed: sectionCollapsed, toggle: toggleSection } = sections;
   const archivedBots = state.bots.filter((bot) => bot.hidden && !bot.movedTo);
   const archivedEntry = remoteClient ? undefined : { count: archivedBots.length, open: () => setArchivedBotsOpen(true) };
@@ -1140,6 +1141,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     <div ref={plusMenuRef} className="contents">
     <button
       ref={importReturnRef}
+      data-ui={ui("sidebar.new")}
       onClick={() => setPlusOpen((o) => !o)}
       aria-label={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
       className={phone ? PHONE_TOP_BUTTON : deskLook ? SIMPLE_NEW_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : cn(
@@ -1162,6 +1164,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               setPlusOpen(false);
               setNewChatOpen(true);
             }}
+            data-ui={ui("sidebar.new-chat")}
             role="menuitem"
             className={plusItem}
           >
@@ -1171,6 +1174,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           {!advanced && plusBot && <><button role="menuitem" className={plusItem} onClick={() => { setPlusOpen(false); dispatch({ type: "newTask", botId: plusBot.id }); }}><SquarePen size={16} className="shrink-0 text-ink-secondary" /><span className="min-w-0 truncate" title={plusBot.name}>{t("sidebar.newConversationWith", { name: plusBot.name })}</span></button><div role="separator" className={MENU_ITEM_SEPARATOR} /></>}
           {(teamSettingsAllowed !== false || state.config?.team) && <button
             onClick={() => { setPlusOpen(false); dispatch({ type: "newBot" }); }}
+            data-ui={ui("sidebar.new-bot")}
             role="menuitem"
             className={plusItem}
           >
@@ -1183,17 +1187,19 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               setPlusOpen(false);
               setNewRoom(true);
             }}
+            data-ui={ui("sidebar.new-group")}
             role="menuitem"
             className={plusItem}
           >
             <Users size={16} className="text-ink-secondary" />{t("sidebar.newChannel.title")}
           </button>
-          {!remoteClient && teamSettingsAllowed !== false && <button onClick={() => { setPlusOpen(false); setNewTeam(true); }} role="menuitem" className={plusItem}>
+          {!remoteClient && teamSettingsAllowed !== false && <button onClick={() => { setPlusOpen(false); setNewTeam(true); }} data-ui={ui("sidebar.add-department")} role="menuitem" className={plusItem}>
             <FolderPlus size={16} className="text-ink-secondary" />{t("sidebar.addDepartment")}
           </button>}
           {!remoteClient && <>
           {teamSettingsAllowed !== false && <button
             onClick={() => { setPlusOpen(false); setTeamLibraryOpen(true); }}
+            data-ui={ui("sidebar.templates")}
             role="menuitem"
             className={plusItem}
           >
@@ -1314,7 +1320,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           />
         </div>
       </div>}
-      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced || advDesk} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}{!q && deskLook && <SimpleAutomationsRow />}
+      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced || advDesk} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}{!q && deskLook && <><SimpleBoardRow /><SimpleAutomationsRow /></>}
       {universalPins && pinnedBots.length > 0 && !simpleDesk && (
         <div
           data-sidebar-universal-pins=""
@@ -1356,7 +1362,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onToggle={layoutInteractive ? () => toggleSection(PINNED_THREADS_SECTION_ID) : undefined}
         />
       )}
-      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
+      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} others={unsectionedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
       {simpleDesk && !tiles && <SidebarNoBots />}
       </GlassBar>
 
@@ -1392,7 +1398,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               id === PINNED_SECTION_ID
                 ? pinnedBots
                 : id === BOTS_SECTION_ID
-                  ? unsectionedBots
+                  ? (simpleDesk ? [] : unsectionedBots)
                   : sectionName
                     ? sectionedBots.filter((bot) => bot.section === sectionName)
                     : [];
@@ -1447,7 +1453,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                 {!collapsed && (
                   <>
                     {id === BOTS_SECTION_ID && drops.slot}
-                    {sectionChiefItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
+                    {simpleDesk && sectionName ? <SidebarSectionTiles bots={[...sectionChiefItems, ...sectionBotItems]} row={botRow} /> : sectionChiefItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
                     {sectionGroupItems.map((group) => roomDrag.wrap(group.id, (
                       <GroupListItem
                         key={group.id}
@@ -1465,7 +1471,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                         row={botRow}
                         listItem={BotListItem}
                       />
-                    ) : sectionBotItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
+                    ) : simpleDesk && sectionName ? null : sectionBotItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
                     {!remoteClient && sectionName && layoutInteractive && !drops.naming(sectionName) && ((!simple && !advDesk) || sectionChiefItems.length + sectionGroupItems.length + sectionBotItems.length === 0) && (
                       <button onClick={() => setMoveToTeam(sectionName)} aria-label={t(state.bots.some(bot => !bot.hidden && bot.section?.trim() === sectionName) ? "team.manageBotsIn" : "team.addBotsTo", { name: sectionName })}
                         className="mx-3 my-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-ink-secondary hover:bg-raised hover:text-ink">
@@ -1494,12 +1500,6 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       </p>
 
       <GlassBar edge="bottom">
-      <LiveCallPill
-        currentBotId={state.activeView === "chat" ? state.selectedId : null}
-        onOpen={(botId, threadId) => openThread(dispatch, { botId, threadId }, state, showThreads)}
-        iconOnly={density === "icons"}
-      />
-
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}

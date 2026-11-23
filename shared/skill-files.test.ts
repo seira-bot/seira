@@ -10,7 +10,7 @@ const KEY = `sk-ant-api03-${"A".repeat(40)}`;
 
 function withFiles(files: Array<{ path: string; content: string }>) {
   return {
-    format: "openmaus.package", version: 2,
+    format: "seira.package", version: 2,
     package: {
       id: "reporter", release: "1.0.0", name: "Reporter", tagline: "Writes reports.", summary: "Writes reports.", category: "Community",
       author: { name: "Seira user" }, license: "Unspecified", outcomes: ["Reports."], setupMinutes: 2,

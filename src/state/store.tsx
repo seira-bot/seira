@@ -15,7 +15,7 @@ import type { NotificationLogEntry } from "../../shared/notification";
 import { isNotificationFeedAction, reduceNotificationFeed, type NotificationFeedAction } from "./notification-feed";
 import { bumpThreadUpdatedAt, mergeTaskStamps, rewindThreadUpdatedAt } from "./thread-stamps";
 import { botOpensTo, closeTrayUnlessShown, closeUnpinnedTray, openBot, openThread, visibleNotificationThread, withRememberedTrayPin } from "./thread-navigation";
-import { patchGroupTask } from "./thread-edits"; import { unreadBeyondFrame, wholeBotFrame } from "./bot-thread-frame";
+import { patchGroupTask } from "./thread-edits"; import { clearedWhenAbsent, unreadBeyondFrame, wholeBotFrame } from "./bot-thread-frame";
 import type { EngineInstall } from "./engine-install";
 import { optimisticMessageId, optimisticUserMessage, sendArrived, sendReconciled } from "./optimistic-send";
 import { patchedGroups, roomAnswers, snapshotPatch } from "./room-frames";
@@ -26,7 +26,7 @@ export { awayFromMainThread, botOpensTo, markedThread, openBot, openBotRow, open
 import type { TurnDigest } from "../../shared/digest";
 import type { ToolScope } from "../../shared/tool-scope";
 import type { ModelVariantOption, RuntimeEvent } from "../../shared/runtime-events";
-import type { MausColor, MausMotion } from "@/lib/mascot";
+import type { SeiraColor, SeiraMotion } from "@/lib/mascot";
 import type { BotAvatarCrop } from "../../shared/bot-avatar";
 import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode";
 import { askResetBridge, desktopCapabilitiesNow } from "@/lib/desktop"; import { isBotLimitRefusal, showCreatedPaused, stoppedAtBotLimit } from "@/lib/bot-limit";
@@ -72,7 +72,7 @@ import { unlessRefused } from "@/lib/admin-scope";
 import { olderRunsSince, ROUTINE_RUNS_WINDOW_MS, trimRoutineRuns, withOlderRoutineRuns } from "./routine-runs";
 import { reconcileSnapshotQueues, rememberConsumedQueueId, replaceBotQueues } from "./queue-receipts";
 
-export type { MausColor } from "@/lib/mascot";
+export type { SeiraColor } from "@/lib/mascot";
 export type { RoutineRunCardData } from "../../shared/routine-run";
 
 export interface OptionCardData extends Pick<WireOptionCard, "fixedOptions" | "lendingLift" | "webhookRequest" | "appTriggerRequest" | "yourComputer" | "computerAsk" | "waitRequest" | "stopped" | "accessRequest" | "mcpRequest" | "appSettingRequest" | "summaryCode" | "summaryParams"> {
@@ -114,7 +114,7 @@ export type SecretRequestCardData = Omit<import("../../shared/wire").SecretReque
 
 export type ComputerControlState = { held: boolean; helpReason: string | null; help?: import("../../shared/wire").ComputerHelpRef | null };
 
-export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "settingsCard" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy"> {
+export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "settingsCard" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy" | "teamAsk" | "teamRequest" | "teamSuggestion" | "teamIntro" | "handoff"> {
   id: string;
   role: "bot" | "user";
   kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
@@ -130,7 +130,7 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   goalRun?: GroupGoalRunCardData; burst?: BurstCardData;
   call?: import("../../shared/wire").LiveCallRecord;
   channelMode?: "chat" | "goal";
-  tool?: { name: string; ok?: boolean; spoken?: string; setup?: boolean; claudeUpdate?: boolean; place?: PlaceRow; limitResetsAt?: number; partial?: boolean; summary?: string; input?: string; output?: string ; itemId?: string; outputPath?: string; fullResult?: boolean; clipped?: boolean; nameCode?: string; nameParams?: Record<string, string | number>; summaryCode?: string; summaryParams?: Record<string, string | number>; rescue?: import("../../shared/first-reply-rescue").FirstReplyRescue; step?: import("../../shared/turn-progress").LiveStep; whose?: { person: string; app: string }; label?: string; problem?: string; bugReportUrl?: string };
+  tool?: { name: string; ok?: boolean; spoken?: string; setup?: boolean; claudeUpdate?: boolean; place?: PlaceRow; limitResetsAt?: number; partial?: boolean; notice?: true; summary?: string; input?: string; output?: string ; itemId?: string; outputPath?: string; fullResult?: boolean; clipped?: boolean; nameCode?: string; nameParams?: Record<string, string | number>; summaryCode?: string; summaryParams?: Record<string, string | number>; rescue?: import("../../shared/first-reply-rescue").FirstReplyRescue; step?: import("../../shared/turn-progress").LiveStep; whose?: { person: string; app: string }; label?: string; problem?: string; bugReportUrl?: string };
   steered?: boolean;
   via?: "api" | "call";
   callId?: string;
@@ -146,12 +146,12 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   parentId?: string | null;
   replyToId?: string;
   sendId?: string;
-  from?: { botId: string; name: string; color: MausColor };
+  from?: { botId: string; name: string; color: SeiraColor };
   peerAsk?: { botId: string; name: string; unattended?: boolean };
   roomRequest?: { id: string; phase: "request" | "result" };
   reactions?: import("../../shared/wire").WireMessage["reactions"];
   reaction?: string;
-  comm?: { groupId: string; threadId?: string; withBotId: string; withName: string; withColor: MausColor };
+  comm?: { groupId: string; threadId?: string; withBotId: string; withName: string; withColor: SeiraColor };
   threadRef?: { botId: string; threadId: string; title: string };
   dataResult?: import("../../shared/wire").WireMessage["dataResult"];
   queued?: boolean;
@@ -160,7 +160,7 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
 
 export type GroupDefaultResponder = import("../../shared/wire").GroupDefaultResponder;
 
-export interface Group extends Pick<WireGroup, "memberContext" | "queue" | "chiefAbsent" | "farMembers" | "turnsPerMember"> {
+export interface Group extends Pick<WireGroup, "memberContext" | "queue" | "chiefAbsent" | "farMembers" | "turnsPerMember" | "avatarUrl"> {
   usage?: GroupThreadUsage | null;
   id: string;
   threadId: string;
@@ -272,7 +272,7 @@ export interface TaskUsage {
   context?: { tokens: number; window?: number };
 }
 
-export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" | "mascotAccessories" | "access" | "yourAccess" | "onlyPeopleAdded"> {
+export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" | "mascotAccessories" | "access" | "yourAccess" | "onlyPeopleAdded" | "folderAccess" | "callSpeed" | "callLanguage"> {
   toolScope?: ToolScope;
   waitingForTeammates?: boolean;
   id: string;
@@ -286,7 +286,7 @@ export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" |
   soul?: string;
   soulDrift?: boolean;
   notifications: boolean;
-  color: MausColor;
+  color: SeiraColor;
   mascotExpression?: string | null;
   mascotBody?: BotBodyId | null;
   avatarUrl?: string | null;
@@ -508,13 +508,13 @@ export interface AppState {
   liveCallVersion: number;
   liveCallLookupSeq: number;
   selectedId: string;
-  activeView: "chat" | "team-map" | "routines" | "files" | "web-panel" | "published-apps" | "team-files" | "announcements";
+  activeView: "chat" | "team-map" | "routines" | "files" | "web-panel" | "published-apps" | "team-files" | "announcements" | "board";
   /** Folders a finished move left on this computer, for Files to offer sharing. */
   filesSuggest: string[] | null; webPanelId?: string;
   routines: Routine[];
   routineRuns: RoutineRun[];
   routinesLoadState: "loading" | "ready" | "error"; routineRunsSince: number | null;
-  routinesFocus: { section?: "schedule" | "logs"; view?: "calendar" | "list"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter; nonce: number };
+  routinesFocus: { section?: "schedule" | "logs"; view?: "calendar" | "list" | "workflows"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter; workflowId?: string; workflowRunId?: string; nonce: number };
   webhooks: WebhookTrigger[];
   webhookAttempts: WebhookAttempt[];
   webhookIngress: WebhookIngressStatus | null;
@@ -561,7 +561,7 @@ export interface AppState {
   mascotMotion: {
     botId: string;
     nonce: number;
-    kind: Exclude<MausMotion, "none">;
+    kind: Exclude<SeiraMotion, "none">;
   } | null;
   pendingQueued: Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason; sender?: ResolvedSender }>>;
   consumedQueueIds: Record<string, true>;
@@ -590,8 +590,8 @@ export type Action =
   | { type: "sections"; sections: string[] }
   | { type: "botsOrdered"; botIds: string[] } | { type: "groupsOrdered"; groupIds: string[] }
   | { type: "sectionDeleted"; section: string; sections: string[] }
-  | { type: "showRoutines"; section?: "schedule" | "logs"; view?: "calendar" | "list"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter }
-  | { type: "showTeamMap" } | { type: "showPublishedApps" } | { type: "showTeamFiles" } | { type: "showAnnouncements" } | { type: "showWebPanel"; id: string }
+  | { type: "showRoutines"; section?: "schedule" | "logs"; view?: "calendar" | "list" | "workflows"; botId?: string; routineId?: string; runStatus?: RoutineRunStatusFilter; workflowId?: string; workflowRunId?: string }
+  | { type: "showTeamMap" } | { type: "showPublishedApps" } | { type: "showBoard" } | { type: "showTeamFiles" } | { type: "showAnnouncements" } | { type: "showWebPanel"; id: string }
   | { type: "showFiles"; suggest?: string[] }
   | { type: "showChat" }
   | { type: "routinesHydrated"; routines: Routine[]; runs: RoutineRun[]; since?: number }
@@ -635,7 +635,7 @@ export type Action =
   | {
       type: "patchGroup";
       groupId: string;
-      patch: Partial<Pick<Group, "name" | "bulletin" | "description" | "memberIds" | "defaultResponder" | "turnsPerMember" | "pinnedMessageId" | "section">>;
+      patch: Partial<Pick<Group, "name" | "bulletin" | "description" | "avatarUrl" | "memberIds" | "defaultResponder" | "turnsPerMember" | "pinnedMessageId" | "section">>;
     }
   | { type: "deleteGroup"; groupId: string }
   | { type: "newGroupTask"; groupId: string }
@@ -690,9 +690,10 @@ export type Action =
       alwaysAllow?: { botId: string; key: string };
       always?: boolean;
       rememberCommand?: boolean;
+      onSent?: () => void;
       onError?: (message: string) => void;
     }
-  | { type: "newTask"; botId: string; projectId?: string; cwd?: string; onCreated?: () => void; onError?: (message: string) => void }
+  | { type: "newTask"; botId: string; projectId?: string; cwd?: string; continueFrom?: string; onCreated?: () => void; onError?: (message: string) => void }
   | { type: "switchTask"; botId: string; threadId: string; whole?: true }
   | { type: "switchTaskFailed"; botId: string; threadId: string }
   | { type: "taskSwitched"; bot: Bot }
@@ -791,7 +792,7 @@ function updateBot(state: AppState, botId: string, fn: (b: Bot) => Bot): AppStat
 function withMascotMotion(
   state: AppState,
   botId: string,
-  kind: Exclude<MausMotion, "none">,
+  kind: Exclude<SeiraMotion, "none">,
 ): AppState {
   return {
     ...state,
@@ -930,7 +931,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         activeView: "routines",
-        routinesFocus: { section: action.section, view: action.view, botId: action.botId, routineId: action.routineId, runStatus: action.runStatus, nonce: state.routinesFocus.nonce + 1 },
+        routinesFocus: { section: action.section, view: action.view, botId: action.botId, routineId: action.routineId, runStatus: action.runStatus, workflowId: action.workflowId, workflowRunId: action.workflowRunId, nonce: state.routinesFocus.nonce + 1 },
         settingsOpen: false,
         computerOpen: false,
         inspectorOpen: false,
@@ -945,10 +946,10 @@ export function reducer(state: AppState, action: Action): AppState {
     case "forkPanelMessage": case "forkPanelActive": case "closeForkPanel":
       return reduceForkPanel(state, action);
     case "showTeamMap":
-    case "showFiles": case "showWebPanel": case "showPublishedApps": case "showTeamFiles": case "showAnnouncements":
+    case "showFiles": case "showWebPanel": case "showPublishedApps": case "showBoard": case "showTeamFiles": case "showAnnouncements":
       return {
         ...state,
-        activeView: action.type === "showFiles" ? "files" : action.type === "showWebPanel" ? "web-panel" : action.type === "showPublishedApps" ? "published-apps" : action.type === "showTeamFiles" ? "team-files" : action.type === "showAnnouncements" ? "announcements" : "team-map",
+        activeView: action.type === "showFiles" ? "files" : action.type === "showWebPanel" ? "web-panel" : action.type === "showPublishedApps" ? "published-apps" : action.type === "showBoard" ? "board" : action.type === "showTeamFiles" ? "team-files" : action.type === "showAnnouncements" ? "announcements" : "team-map",
         filesSuggest: action.type === "showFiles" && action.suggest?.length ? action.suggest : null, webPanelId: action.type === "showWebPanel" ? action.id : state.webPanelId,
         settingsOpen: false, computerOpen: false, inspectorOpen: false, activityOpen: false, appSettingsOpen: false, pluginsOpen: false,
       };
@@ -1145,7 +1146,7 @@ export function reducer(state: AppState, action: Action): AppState {
       if ((switchedThread || (before.awaitingThreadSnapshot && action.bot.threadId === before.threadId)) &&
           Array.isArray(action.bot.messages)) {
         // The slim deletion broadcast can beat the full snapshot; later duplicate snapshots must not overwrite newer messages.
-        return reducer(switching, { type: "taskSwitched", bot: { ...before, ...action.bot, computer: action.bot.computer, section: action.bot.section, toolScope: action.bot.toolScope, managedSections: action.bot.managedSections, messages: action.bot.messages, browserProfile: action.bot.browserProfile, vpsAlias: action.bot.vpsAlias, phoneApps: action.bot.phoneApps, onlyPeopleAdded: action.bot.onlyPeopleAdded, liveVoice: action.bot.liveVoice } });
+        return reducer(switching, { type: "taskSwitched", bot: { ...before, ...action.bot, ...clearedWhenAbsent(action.bot), messages: action.bot.messages } });
       }
       const patched = updateBot(switching, action.bot.id, (b) => ({
         ...b,
@@ -1153,12 +1154,7 @@ export function reducer(state: AppState, action: Action): AppState {
         threadId: switchedThread ? action.bot.threadId : b.threadId,
         activeLeafId: switchedThread ? null : b.activeLeafId,
         awaitingThreadSnapshot: switchedThread || b.awaitingThreadSnapshot,
-        // Complete frames omit cleared optional fields; copy them so the spread cannot keep stale values.
-        browserProfile: action.bot.browserProfile,
-        computer: action.bot.computer,
-        toolScope: action.bot.toolScope,
-        section: action.bot.section, managedSections: action.bot.managedSections,
-        vpsAlias: action.bot.vpsAlias, phoneApps: action.bot.phoneApps, onlyPeopleAdded: action.bot.onlyPeopleAdded, liveVoice: action.bot.liveVoice,
+        ...clearedWhenAbsent(action.bot),
         tasks: action.bot.tasks ? mergeTaskStamps(b.tasks, action.bot.tasks) : b.tasks,
         // Old approvals must never be sent to the replacement thread while its transcript loads.
         messages: switchedThread ? [] : b.messages,
@@ -1709,9 +1705,7 @@ export function reducer(state: AppState, action: Action): AppState {
       let switched = updateBot(bumpTranscriptGeneration(state, action.bot.threadId), action.bot.id, (bot) => ({
         ...bot,
         ...action.bot,
-        computer: action.bot.computer,
-        toolScope: action.bot.toolScope, managedSections: action.bot.managedSections,
-        vpsAlias: action.bot.vpsAlias, liveVoice: action.bot.liveVoice,
+        ...clearedWhenAbsent(action.bot),
         messages: action.bot.messages ?? [],
         hasMore: action.bot.hasMore,
         awaitingThreadSnapshot: false,
@@ -2184,7 +2178,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const wrapped: React.Dispatch<Action> = (action) => {
-      store.flushFrames(); if (["select", "newTask", "switchTask", "newGroupTask", "switchGroupTask", "showChat", "showRoutines", "showTeamMap", "showFiles", "showWebPanel", "showPublishedApps", "showTeamFiles", "showAnnouncements"].includes(action.type)) selectionRevision.current++;
+      store.flushFrames(); if (["select", "newTask", "switchTask", "newGroupTask", "switchGroupTask", "showChat", "showRoutines", "showTeamMap", "showFiles", "showWebPanel", "showPublishedApps", "showBoard", "showTeamFiles", "showAnnouncements"].includes(action.type)) selectionRevision.current++;
       // Pin before any await or optimistic state change.
       action = pinBotThreadAction(action, stateRef.current.bots);
       if (action.type === "taskSwitched") action = { ...action, bot: withTaskWrites(action.bot) as Bot };
@@ -2454,6 +2448,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (response?.settlementPending && typeof response.message === "string") {
                 showError(new Error(response.message));
               }
+              action.onSent?.();
             })
             .catch((error) => {
               // A failed settings flush or grant save stops the response so work never resumes under a stale approval level.
@@ -2748,7 +2743,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : Promise.resolve();
           void ready.then(() => api<{ bot: Bot }>(action.type === "newTask"
             ? `/api/bots/${action.botId}/tasks`
-            : `/api/bots/${action.botId}/tasks/${action.threadId}${action.whole ? "" : `?messages=${SWITCH_MESSAGE_COUNT}`}`, { method: "POST", body: JSON.stringify(action.type === "newTask" ? { projectId: action.projectId, cwd: action.cwd } : {}) }))
+            : `/api/bots/${action.botId}/tasks/${action.threadId}${action.whole ? "" : `?messages=${SWITCH_MESSAGE_COUNT}`}`, { method: "POST", body: JSON.stringify(action.type === "newTask" ? { projectId: action.projectId, cwd: action.cwd, continueFrom: action.continueFrom } : {}) }))
             .then((r) => {
               if (action.type === "newTask") { settle(null); action.onCreated?.(); }
               if (navigation.get(action.botId) !== revision) return;

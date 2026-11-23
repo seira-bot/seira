@@ -1,8 +1,8 @@
-// The bots' browser tools: OpenMausBot's agent_browser_* names over T3 Code's preview tool semantics.
+// The bots' browser tools: Seira's agent_browser_* names over T3 Code's preview tool semantics.
 //
 // Adapted from pingdotgg/t3code@00cdceb1 apps/server/src/mcp/toolkits/preview/tools.ts and
 // packages/contracts/src/previewAutomation.ts, MIT License, Copyright (c) 2026 T3 Tools Inc. (full text in
-// third_party/t3-code/LICENSE); modified: zod schemas under OpenMausBot's tool names, refs instead of Playwright
+// third_party/t3-code/LICENSE); modified: zod schemas under Seira's tool names, refs instead of Playwright
 // locators, and the names agent-browser advertised accepted as aliases.
 import { z } from "zod";
 
@@ -220,7 +220,7 @@ export type ParsedCall = { ok: true; call: ToolCall } | { ok: false; error: stri
 export function parseToolCall(rawName: unknown, rawArgs: unknown): ParsedCall {
   if (typeof rawName !== "string") return { ok: false, error: "The tool call has no name." };
   const given: Args = rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs) ? rawArgs as Args : {};
-  const alias = ALIASES[rawName];
+  const alias = Object.hasOwn(ALIASES, rawName) ? ALIASES[rawName] : undefined;
   const translated = alias ? alias(given) : TOOL_NAMES.has(rawName) ? { name: rawName as ToolName, args: given } : null;
   if (!translated) return { ok: false, error: `There is no browser tool named ${rawName}.` };
   const args = Object.fromEntries(Object.entries(oldArguments(translated.name, translated.args)).filter(([key]) => !OLD_ONLY.has(key)));

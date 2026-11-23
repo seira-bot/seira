@@ -76,6 +76,8 @@ it("connects in one tap, on the sign-in page, and shows when it's done", async (
   await act(async () => { await vi.advanceTimersByTimeAsync(5_100); });
   await settle();
   expect(chip("slack")!.getAttribute("aria-label")).toBe("Slack · Connected");
+  const { takeAppConnections } = await import("@/lib/app-connected");
+  expect(takeAppConnections()).toEqual([{ slug: "slack", app: "Slack" }]);
 });
 
 it("says why when the sign-in can't start and lets the person try again", async () => {

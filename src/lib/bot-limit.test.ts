@@ -70,7 +70,7 @@ describe("the popup's other plan limits", () => {
   });
 
   it("counts for the awake limit the bots the bot limit counts, the chief of staff aside", () => {
-    const bots = [{ id: "a" }, { id: "maus", defaultBot: {} }, { id: "chief", chiefOfStaff: true }, { id: "old", hidden: true }, { id: "b" }];
+    const bots = [{ id: "a" }, { id: "seira", defaultBot: {} }, { id: "chief", chiefOfStaff: true }, { id: "old", hidden: true }, { id: "b" }];
     expect(awakeCandidates(bots).map((bot) => bot.id)).toEqual(["a", "b"]);
   });
 });

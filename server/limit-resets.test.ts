@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { codexLimitResetsAt } from "./drivers/codex-errors.ts";
 import { engineLimitFromUsage, LimitResetClock, nearLimitNote, UNNAMED_LIMIT_MS } from "./limit-resets.ts";
 import type { RuntimeEvent } from "../shared/runtime-events.ts";
-import { parseClaudeUsage, parseCodexUsage, parseOpenCodeUsage, planAccountsFromInstances, type PlanProviderRow, type PlanUsageReport, type PlanWindows } from "./plan-usage.ts";
+import { parseClaudeUsage, parseCodexUsage, parseGrokUsage, parseOpenCodeUsage, planAccountsFromInstances, type PlanProviderRow, type PlanUsageReport, type PlanWindows } from "./plan-usage.ts";
 
 const NOW = Date.parse("2026-10-19T10:00:00Z");
 const HOUR = 3_600_000;
@@ -59,6 +59,52 @@ describe("a Claude account's usage", () => {
   });
 });
 
+describe("two accounts of one provider", () => {
+  const named = (id: string, windows: PlanProviderRow) => ({ ...windows, id, name: id });
+  const accounts = planAccountsFromInstances({
+    nana: { driver: "claudeAgent", displayName: "nana", config: { configDir: "/accounts/nana" } },
+    affan: { driver: "claudeAgent", displayName: "affan", config: { configDir: "/accounts/affan" } },
+  });
+  const both = report(
+    named("nana", claude([1, NOW + 2 * HOUR], [99, NOW + 50 * HOUR])),
+    named("affan", claude([60, NOW + 4 * HOUR], [10, NOW + 90 * HOUR])),
+  );
+
+  it("keeps each account's own windows and resets", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW });
+    instance.noteUsage(both);
+    const [nana, affan] = instance.report().engines;
+    expect(nana).toMatchObject({ engine: "nana", name: "nana", usedPercent: 99, resetsAt: NOW + 50 * HOUR });
+    expect(affan).toMatchObject({ engine: "affan", name: "affan", usedPercent: 60, resetsAt: NOW + 4 * HOUR });
+    expect(nana!.windows!.map((entry) => entry.resetsAt)).toEqual([NOW + 2 * HOUR, NOW + 50 * HOUR]);
+    expect(affan!.windows!.map((entry) => entry.resetsAt)).toEqual([NOW + 4 * HOUR, NOW + 90 * HOUR]);
+  });
+
+  it("holds only the account a refusal came from", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW });
+    instance.noteUsage(both);
+    instance.noteRefusal("nana", NOW + 3 * HOUR);
+    expect(instance.blockedUntil("nana")).toBe(NOW + 3 * HOUR);
+    expect(instance.blockedUntil("affan")).toBeNull();
+    expect(instance.report().engines.find((limit) => limit.engine === "affan")).toMatchObject({ blocked: false, usedPercent: 60 });
+  });
+
+  it("names the address each account is signed in with, and none for an account that gives none", () => {
+    const emails: Record<string, string> = { nana: "nana@example.com" };
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW, email: (engine) => emails[engine] });
+    instance.noteUsage(both);
+    const [nana, affan] = instance.report().engines;
+    expect(nana!.email).toBe("nana@example.com");
+    expect(affan).not.toHaveProperty("email");
+  });
+
+  it("names the address of an account a refusal holds before its usage was read", () => {
+    const instance = new LimitResetClock({ accounts: () => accounts, now: () => NOW, email: () => "affan@example.com" });
+    instance.noteRefusal("affan", NOW + HOUR);
+    expect(instance.report().engines[0]).toMatchObject({ engine: "affan", email: "affan@example.com", blocked: true });
+  });
+});
+
 describe("engineLimitFromUsage", () => {
   it("takes Claude's fullest window and its reset when nothing is at the limit", () => {
     expect(engineLimitFromUsage(claude([92, NOW + 2 * HOUR], [40, NOW + 50 * HOUR]))).toEqual({
@@ -79,7 +125,7 @@ describe("engineLimitFromUsage", () => {
     expect(engineLimitFromUsage(opencode)).toMatchObject({
       engine: "opencodeGo", name: "OpenCode", driver: "opencode", window: "weekly", usedPercent: 55, resetsAt: NOW + 4 * 24 * HOUR, blocked: false,
     });
-    expect(engineLimitFromUsage(opencode)?.windows?.map((window) => window.window)).toEqual(["5-hour", "weekly"]);
+    expect(engineLimitFromUsage(opencode)?.windows?.map((window) => window.window)).toEqual(["5-hour", "weekly", "monthly"]);
   });
 
   it("waits for the latest reset of every window at its limit, and knows no time when one has none", () => {
@@ -127,11 +173,56 @@ describe("engineLimitFromUsage", () => {
   });
 });
 
+describe("the monthly window", () => {
+  const grok = (credits: Record<string, unknown>) => row("grok", "grok", parseGrokUsage({ config: credits }));
+  const month = { type: "MONTH", end: iso(NOW + 20 * 24 * HOUR) };
+  const go = (rolling: number, monthly: number) => row("opencodeGo", "opencode", parseOpenCodeUsage({ usage: {
+    rolling: { percent: rolling, resetsAt: iso(NOW + 3 * HOUR) },
+    weekly: { percent: 8, resetsAt: iso(NOW + 5 * 24 * HOUR) },
+    monthly: { percent: monthly, resetsAt: iso(NOW + 20 * 24 * HOUR) },
+  } }));
+
+  it("lets a Grok month with no other window decide, and a Codex 30-day window too", () => {
+    expect(engineLimitFromUsage(grok({ creditUsagePercent: 40, currentPeriod: month }))).toMatchObject({
+      window: "monthly", usedPercent: 40, resetsAt: NOW + 20 * 24 * HOUR, blocked: false, windows: [{ window: "monthly", usedPercent: 40, resetsAt: NOW + 20 * 24 * HOUR }],
+    });
+    expect(engineLimitFromUsage(grok({ creditUsagePercent: 100, currentPeriod: month }))).toMatchObject({ window: "monthly", blocked: true, resetsAt: NOW + 20 * 24 * HOUR });
+    const codexMonth = row("codex", "codex", parseCodexUsage({ rate_limit: { primary_window: { used_percent: 30, limit_window_seconds: 30 * 86400, reset_at: Math.floor((NOW + 9 * 24 * HOUR) / 1000) } } }));
+    expect(engineLimitFromUsage(codexMonth)).toMatchObject({ window: "monthly", usedPercent: 30 });
+  });
+
+  it("only shows a month that sits beside a weekly window, and never blocks on it", () => {
+    const weeklyWithMonth = row("grok", "grok", parseGrokUsage(
+      { config: { creditUsagePercent: 8, currentPeriod: { type: "WEEK", end: iso(NOW + 3 * 24 * HOUR) } } },
+      { config: { onDemandCap: { val: 100 }, onDemandUsed: { val: 100 }, currentPeriod: month } },
+    ));
+    expect(engineLimitFromUsage(weeklyWithMonth)).toMatchObject({
+      window: "weekly", usedPercent: 8, blocked: false,
+      windows: [{ window: "weekly", usedPercent: 8, resetsAt: NOW + 3 * 24 * HOUR }, { window: "monthly", usedPercent: 100, resetsAt: NOW + 20 * 24 * HOUR }],
+    });
+  });
+
+  it("blocks OpenCode Go until its month resets when the month is full", () => {
+    expect(engineLimitFromUsage(go(3, 100))).toMatchObject({ window: "monthly", usedPercent: 100, blocked: true, resetsAt: NOW + 20 * 24 * HOUR });
+    expect(engineLimitFromUsage(go(3, 60))).toMatchObject({ window: "monthly", usedPercent: 60, blocked: false });
+    const goAccounts = [{ id: "opencodeGo", name: "OpenCode", driver: "opencode" as const, environment: {} }];
+    const instance = new LimitResetClock({ accounts: () => goAccounts, now: () => NOW });
+    instance.noteUsage(report(go(3, 100)));
+    expect(instance.blockedUntil("opencodeGo", "opencode-go/kimi-k2")).toBe(NOW + 20 * 24 * HOUR);
+    expect(instance.limit("opencodeGo")).toMatchObject({ window: "monthly", blocked: true });
+  });
+
+  it("does not take Claude's monthly spend for a monthly window", () => {
+    const enterprise = row("claude", "claude", parseClaudeUsage({ extra_usage: { is_enabled: true, used_credits: 100, monthly_limit: 5_000, utilization: 2, currency: "USD" } }));
+    expect(engineLimitFromUsage(enterprise)?.windows).toEqual([]);
+  });
+});
+
 describe("LimitResetClock", () => {
   const dirs: string[] = [];
   afterEach(() => {
     vi.useRealTimers();
-    delete process.env.OMB_TEST_PLAN_USAGE_FILE;
+    delete process.env.SEIRA_TEST_PLAN_USAGE_FILE;
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
   const accounts = [{ id: "claude", name: "Claude", driver: "claude" as const, environment: {} }];
@@ -217,10 +308,10 @@ describe("LimitResetClock", () => {
     await instance.ensureFresh();
     expect(load).toHaveBeenCalledTimes(2);
 
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-fixture-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-fixture-"));
     dirs.push(dir);
-    process.env.OMB_TEST_PLAN_USAGE_FILE = join(dir, "usage.json");
-    writeFileSync(process.env.OMB_TEST_PLAN_USAGE_FILE, JSON.stringify(report(claude([91, NOW + 5 * HOUR], [1, NOW + 90 * HOUR]))));
+    process.env.SEIRA_TEST_PLAN_USAGE_FILE = join(dir, "usage.json");
+    writeFileSync(process.env.SEIRA_TEST_PLAN_USAGE_FILE, JSON.stringify(report(claude([91, NOW + 5 * HOUR], [1, NOW + 90 * HOUR]))));
     const fixture = clock().instance;
     await fixture.refresh(true);
     expect(fixture.limit("claude")).toMatchObject({ usedPercent: 91, resetsAt: NOW + 5 * HOUR });
@@ -297,6 +388,7 @@ describe("nearLimitNote", () => {
     expect(nearLimitNote(limit, "Claude", "UTC")).toBe(" Claude's usage limit is 92% used; it resets Mon 3:40 PM (UTC).");
     expect(nearLimitNote({ ...limit, usedPercent: 89 }, "Claude", "UTC")).toBe("");
     expect(nearLimitNote(undefined, "Claude", "UTC")).toBe("");
+    expect(nearLimitNote({ ...limit, window: "monthly" }, "Claude", "UTC")).toContain("Claude's monthly limit is 92% used");
   });
 });
 
@@ -363,7 +455,7 @@ describe("LimitResetClock and the turns that follow a refusal", () => {
   });
 
   it("keeps a refusal's hold through a restart, so a new conversation does not go to the limited engine first", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-holds-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-holds-"));
     try {
       const file = join(dir, "limit-holds.json");
       let now = NOW;
@@ -398,7 +490,7 @@ describe("LimitResetClock and the turns that follow a refusal", () => {
 
   it("ends a Codex hold once fresh usage shows room and no window resetting at the hold's time, as after a plan upgrade", () => {
     const codexAccounts = [{ id: "codex", name: "Codex", driver: "codex" as const, environment: {} }];
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-holds-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-holds-"));
     try {
       const file = join(dir, "limit-holds.json");
       const boot = () => new LimitResetClock({ accounts: () => codexAccounts, now: () => NOW, file });
@@ -428,7 +520,7 @@ describe("LimitResetClock and the turns that follow a refusal", () => {
   });
 
   it("still ignores a usage read from before the refusal after a restart, including a hold saved without its start", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-held-at-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-held-at-"));
     try {
       const file = join(dir, "limit-holds.json");
       let now = NOW;

@@ -1,6 +1,6 @@
 ---
 name: social-posts
-description: "Show how a social post will look on each platform, with show_html: Instagram (with carousels), LinkedIn (with document carousels), X, Threads, Facebook, TikTok, Reels and Shorts. Use whenever you write a social post, whether or not Postiz is connected."
+description: "Show how a social post will look on each platform, with show_html: Instagram (with carousels), LinkedIn (with document carousels), X, Threads, Facebook, TikTok, Reels and Shorts. Use whenever you write a social post."
 ---
 
 # Social post previews
@@ -88,5 +88,4 @@ From each platform's own docs. The cards note these quietly; nothing is ever blo
 | Reels | As Instagram | 9:16 recommended; 3 seconds to 15 minutes |
 | Shorts | | Square or vertical; up to 3 minutes |
 
-When Postiz is connected, its `integrationSchema` is the authority for that channel's rules; follow it where it differs.
 The preview is a close likeness, not a pixel match: say so if the person asks.

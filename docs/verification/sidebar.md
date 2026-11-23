@@ -21,8 +21,8 @@ in `src/components/SidebarBotListItem.test.ts` checks dialog semantics/copy,
 chief labels, role badges, and working/waiting indicators. The interaction checks
 above are manual browser verification, not assertions made by those unit tests.
 This fixture covers the sidebar confirmation and bot-row result only; it does
-not exercise Settings > Computers deletion or provider completion polling.
-Those paths are covered by the computer-section and server Boat inventory tests.
+not exercise Settings → Desktops & browser → Desktops deletion or provider completion polling.
+Those paths are covered by the computer-section and server inventory tests.
 
 ## Mark all of a bot's conversations as read
 
@@ -59,7 +59,7 @@ were not exercised by this browser check.
 
 ## Section deletion
 
-Run `OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/team-lifecycle-ui.e2e.test.ts --maxWorkers=1`.
+Run `SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-lifecycle-ui.e2e.test.ts --maxWorkers=1`.
 The test launches its own isolated server and real renderer; never point it at
 the user's live workspace. It retains the Team map lifecycle checks and also
 checks deletion directly from a sidebar section header:
@@ -79,7 +79,7 @@ The fixture reports its log path and keeps a snapshot and screenshot on failure.
 `src/components/SidebarSectionHeader.test.ts` separately checks that the optional
 delete control coexists with the context menu and does not replace or nest inside
 the collapse button. Server safeguards still reject deletion during active work,
-with an assigned team computer, or when moving the Chief would conflict with
+or when moving the Chief would conflict with
 General's Chief; see [Teams](teams.md) for those lifecycle checks.
 
 ## Activity, quieter rows, and notification preference

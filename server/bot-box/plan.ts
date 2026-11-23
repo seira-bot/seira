@@ -9,7 +9,7 @@
 //     sign-ins bound into it, so no other audience's transcripts are there;
 //   - put back inside that empty folder: this turn's working folder, the bot's own folder (workspaces/<bot>) and what the
 //     caller names (the turn's permission socket, a read-only file the command line points at); and, read-only, the
-//     bot's own SOUL.md (bots/<bot>/SOUL.md, which it may read but never write) and the engines OpenMausBot installed
+//     bot's own SOUL.md (bots/<bot>/SOUL.md, which it may read but never write) and the engines Seira installed
 //     there, whole, since npm's bin links point into the prefix by relative paths; on a Team Cloud a turn that is not the
 //     team's has the bot's own folder read-only and of a process its conversations share only those it may read
 //     (BoxAudience);
@@ -19,10 +19,12 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
+import { homeProgramCandidates } from "../env-path.ts";
+import type { TurnFolders } from "../folder-access.ts";
 
 export type BoxNet = "isolated" | "shared";
 
@@ -41,7 +43,7 @@ export interface BoxSetup {
   home: string;
   /** Folders of code the box may read: the server's own files, the bots' browser. */
   codeRoots: readonly string[];
-  /** Folders of engine code OpenMausBot installed in the data folder, read-only at their own paths; absent ones are skipped. */
+  /** Folders of engine code Seira installed in the data folder, read-only at their own paths; absent ones are skipped. */
   engineRoots: readonly string[];
   /** Host unix sockets bridged to loopback ports inside the box, when the box has its own network. */
   bridges: readonly BoxBridge[];
@@ -62,7 +64,7 @@ export interface BoxRequest {
   /** The environment the caller built for the process; the plan keeps only the allowed names (env.ts). */
   env: Record<string, string | undefined>;
   /** Names of `env` this process keeps although the allow-list or the workspace-credential deny would drop them: the keys
-   * the person saved for this engine. Never a never-list or `OMB_` name. */
+   * the person saved for this engine. Never a never-list or `SEIRA_` name. */
   allowEnv?: readonly string[];
   /** More read-write paths: a permission socket, a browser profile. */
   rw?: readonly string[];
@@ -80,7 +82,7 @@ export interface BoxRequest {
   /** Files bound read-write over their names in `home`: the team's engine sign-ins. */
   shared?: ReadonlyArray<{ source: string; target: string }>;
   /** The command, its arguments and its environment are a server someone configured (an MCP server a bot may have
-   * added), not ones OpenMausBot built. Security: none of them puts anything of the data folder in the box but the
+   * added), not ones Seira built. Security: none of them puts anything of the data folder in the box but the
    * bot's own folders, so an environment value naming a folder there is not made writable. */
   configured?: boolean;
   /** A host unix socket the box dials out to, so the server can reach a port the engine listens on inside the box's own
@@ -92,6 +94,10 @@ export interface BoxRequest {
   conversationBot?: string;
   /** On a Team Cloud: what the conversation's audience gives the box of the bot's team things (BoxAudience). */
   audience?: BoxAudience;
+  /** The bot's folder list for this turn. Each grant is bound at its own path, read-only grants after every read-write
+   * line. `limited` also hides the rest of the server's HOME (not with `home`, which already replaces it). Absent: the
+   * box is the same as without folder settings. */
+  folders?: TurnFolders;
 }
 
 /** On a Team Cloud, what one conversation's boxes get of what is the team's (docs/team-cloud.md, "The audience rule"):
@@ -127,9 +133,9 @@ export interface BoxPlan {
   botId: string | null;
 }
 
-export const IN_BOX_SOCKET_DIR = "/run/omb";
+export const IN_BOX_SOCKET_DIR = "/run/seira";
 export const RELAY_SOCKET_NAME = "relay";
-export const BOX_HOSTNAME = "omb-box";
+export const BOX_HOSTNAME = "seira-box";
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** `child` is `parent` or below it. */
@@ -170,6 +176,121 @@ export const CPU_LIST_FILES = ["/sys/devices/system/cpu/possible", "/sys/devices
 
 /** Folders the box always has its own copy of, so no setting may put the host's back. */
 const PRIVATE_INSIDE = ["/tmp", "/var/tmp", "/run", "/dev", "/proc"];
+
+/** Engine sign-in folders and files in HOME that a limited box still has read-write (the same set as ENGINE_FOLDERS in
+ * server/engine-homes/layout.ts). */
+export const LIMITED_HOME_SIGN_INS = [".claude", ".claude.json", ".codex", ".grok", ".kimi-code", ".dsh", ".factory",
+  ".config/muse", ".config/opencode", ".local/share/opencode", ".gemini", ".pi/agent"] as const;
+
+/** Program installs in HOME that a limited box has read-only. Whole roots, not their bin folders: npm's and nvm's bin
+ * links point into the install by relative paths. */
+export const LIMITED_HOME_PROGRAMS = [".local/bin", ".npm-global", ".nvm", ".volta", ".bun", ".asdf", ".local/share/mise", ".deno",
+  ".cargo", ".opencode", "bin", ".local/share/claude/versions", ".local/share/cursor-agent/versions"] as const;
+
+/** Git settings a limited box reads, so commits and clones keep working. */
+export const LIMITED_HOME_GIT = [".gitconfig", ".config/git"] as const;
+
+/** Of a code root in HOME, what a limited box reads: the server's code, its packages and a Node install's programs.
+ * Security: never the whole root, which can be a checkout with its env files and history, or `~/.local` with
+ * `~/.local/share`. */
+export const LIMITED_CODE_PARTS = ["server", "shared", "node_modules", "packages", "skills", "package.json", "bin", "lib"] as const;
+
+function realPathOf(path: string): string {
+  try { return realpathSync(path); } catch { return resolve(path); }
+}
+
+/** Every link that resolving the absolute `path` passes, by its real name, and last the real path it ends at, as the
+ * system resolves it: a `..` after a link goes up from where the link leads. Null for a relative path, a link loop, or
+ * an end that differs from the system's own. A part that is not there is taken as named. */
+export function linksOnTheWay(path: string): string[] | null {
+  if (!isAbsolute(path)) return null;
+  const steps: string[] = [];
+  const pending = path.split(sep).filter(Boolean);
+  let current = parse(path).root, links = 0;
+  while (pending.length > 0) {
+    const part = pending.shift()!;
+    if (part === ".") continue;
+    if (part === "..") { current = dirname(current); continue; }
+    const next = join(current, part);
+    let target: string | null = null;
+    try { if (lstatSync(next).isSymbolicLink()) target = readlinkSync(next); } catch {}
+    if (target === null) { current = next; continue; }
+    if (++links > 40) return null;
+    steps.push(next);
+    pending.unshift(...target.split(sep).filter(Boolean));
+    if (isAbsolute(target)) current = parse(target).root;
+  }
+  let real: string | null = null;
+  try { real = realpathSync.native(path); } catch {}
+  if (real !== null && real !== current) return null;
+  return [...steps, current];
+}
+
+/** Of HOME, the real path of the entry `name` when it is no link, has none on the way and is apart from the data folder. */
+function namedInHome(home: string, dataDir: string): (name: string) => string | null {
+  const homeDir = resolve(home), data = resolve(dataDir);
+  const realHome = realPathOf(homeDir), realData = realPathOf(data);
+  return (name) => {
+    const path = join(homeDir, name);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return null;
+      const real = realpathSync(path);
+      if (real !== join(realHome, name) || under(real, realData) || under(realData, real) || under(path, data) || under(data, path)) return null;
+      return real;
+    } catch { return null; }
+  };
+}
+
+/** The program folders on the server's PATH in the sign-in folders of a limited box, as named in HOME. */
+export interface SignInPrograms {
+  /** The program folders, and each folder there that a link in them passes. A limited box has them read-only. */
+  readOnly: string[];
+  /** The sign-in folders with a program folder, or a folder such a link passes, that cannot be bound read-only. */
+  locked: string[];
+}
+
+/** Security: a limited box writes its sign-in folders, except these program folders. A box must never have one of them
+ * writable, or it could leave a program there for the server to run later, also after a restart. */
+export function signInPrograms(home: string, dataDir: string): SignInPrograms {
+  const homeDir = resolve(home), atName = namedInHome(homeDir, dataDir);
+  const signIns = LIMITED_HOME_SIGN_INS.flatMap((name) => { const real = atName(name); return real ? [{ name, path: join(homeDir, name), real }] : []; });
+  const readOnly = new Set<string>(), locked = new Set<string>();
+  for (const dir of homeProgramCandidates(homeDir)) {
+    const signIn = signIns.find((one) => dir !== one.path && under(dir, one.path));
+    if (!signIn) continue;
+    const realDir = atName(relative(homeDir, dir));
+    if (!realDir) { locked.add(signIn.path); continue; }
+    readOnly.add(dir);
+    let entries: string[] = [];
+    try { entries = readdirSync(dir); } catch {}
+    for (const entry of entries) {
+      const steps = linksOnTheWay(join(dir, entry));
+      if (!steps) { locked.add(signIn.path); continue; }
+      for (const step of steps) {
+        const holder = signIns.find((one) => step !== one.real && under(step, one.real));
+        if (!holder || under(step, realDir)) continue;
+        const name = join(holder.name, relative(holder.real, step).split(sep)[0]!);
+        if (atName(name)) readOnly.add(join(homeDir, name));
+        else locked.add(holder.path);
+      }
+    }
+  }
+  return { readOnly: [...readOnly], locked: [...locked] };
+}
+
+/** Makes each program folder that is missing in a sign-in folder, so that a limited box can have it read-only. */
+export function makeSignInProgramFolders(home: string, dataDir: string): void {
+  const homeDir = resolve(home), atName = namedInHome(homeDir, dataDir);
+  for (const dir of homeProgramCandidates(homeDir)) {
+    let name: string | undefined = LIMITED_HOME_SIGN_INS.find((one) => dir !== join(homeDir, one) && under(dir, join(homeDir, one)));
+    if (!name || !atName(name)) continue;
+    for (const part of relative(join(homeDir, name), dir).split(sep)) {
+      name = join(name, part);
+      try { mkdirSync(join(homeDir, name), { mode: 0o700 }); } catch {}
+      if (!atName(name)) break;
+    }
+  }
+}
 
 function assertReadOnlySource(source: string): void {
   try {
@@ -215,7 +336,46 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   // HOME first; the data folder is replaced by an empty one right after, so the lines below put back only what is named.
   // An engine home lives in the data folder, so it goes back after that.
   const ownHome = request.home ? resolve(request.home) : null;
-  if (!ownHome) rw(home);
+  const limited = !ownHome && request.folders?.limited === true;
+  const keptSignIns: string[] = [], boundSignIns: string[] = [];
+  let programs: SignInPrograms | null = null;
+  const realHome = realPathOf(home), realData = realPathOf(dataDir);
+  /** A path that is HOME, or holds it (the server's data folder too): in a limited box nothing may bind it. */
+  const holdsHome = (path: string) => under(realHome, path) || under(home, path) || under(realData, path) || under(dataDir, path);
+  // Security: bubblewrap binds through links. A folder's entry is bound only when it is not a link and is where its name
+  // says, so a link to HOME or to the data folder gives nothing back.
+  const boundAsNamed = (folder: string, realFolder: string, name: string): string | null => {
+    const path = join(folder, name);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return null;
+      const real = realpathSync(path);
+      if (real !== join(realFolder, name) || holdsHome(real) || under(real, realData) || under(path, dataDir)) return null;
+      return real;
+    } catch { return null; }
+  };
+  if (limited) {
+    // A private empty HOME, with back only what an engine needs to run and sign in.
+    mounts.push({ kind: "tmpfs", target: home });
+    const entry = (name: string) => boundAsNamed(home, realHome, name);
+    for (const name of [...LIMITED_HOME_PROGRAMS, ...LIMITED_HOME_GIT]) {
+      const real = entry(name);
+      if (!real) continue;
+      mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
+    }
+    programs = signInPrograms(home, dataDir);
+    for (const name of LIMITED_HOME_SIGN_INS) {
+      const real = entry(name);
+      if (!real) continue;
+      boundSignIns.push(join(home, name));
+      if (programs.locked.includes(join(home, name))) {
+        mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
+        continue;
+      }
+      mounts.push({ kind: "bind", source: real, target: join(home, name), optional: true });
+      writable.push(join(home, name));
+      keptSignIns.push(join(home, name));
+    }
+  } else if (!ownHome) rw(home);
   const dataInsideHome = under(dataDir, home);
   if (!mutate.has("bind-data")) {
     if (dataInsideHome) mounts.push({ kind: "tmpfs", target: dataDir });
@@ -223,6 +383,22 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     rw(dataDir);
   }
   if (ownHome) rw(ownHome);
+  // Code the lines above hid is bound again read-only: an AppImage's mount in /tmp whole, of an install or checkout in a
+  // limited box's HOME only LIMITED_CODE_PARTS; never a root that holds HOME or the data folder.
+  // Security: HOME is checked before /tmp and /run, because HOME itself can sit under one of them.
+  for (const root of setup.codeRoots) {
+    const code = resolve(root);
+    if (holdsHome(code) || holdsHome(realPathOf(code)) || under(code, dataDir)) continue;
+    const inHome = under(code, home) || under(code, realHome);
+    if (limited && inHome) {
+      for (const part of LIMITED_CODE_PARTS) {
+        const real = boundAsNamed(code, realPathOf(code), part);
+        if (real) mounts.push({ kind: "ro", source: real, target: join(code, part) });
+      }
+    } else if ((!inHome || ownHome) && PRIVATE_INSIDE.some((base) => under(code, base) && code !== base)) {
+      mounts.push({ kind: "ro", source: code, target: code });
+    }
+  }
   const dataHidden = !mutate.has("bind-data");
   /** A path is already readable and writable through an earlier line (and not hidden by the data folder's tmpfs). */
   const covered = (path: string) => (ownHome !== null && under(path, ownHome)) || (writable.some((root) => under(path, root)) && !(dataHidden && under(path, dataDir)));
@@ -253,14 +429,33 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     rw(join(dataDir, "workspaces"));
     rw(join(dataDir, "task-workspaces"));
   }
+  // Security: a grant never gives back the data folder, or a folder that holds it, whatever the caller was given.
+  const grants = (request.folders?.grants ?? []).map((grant) => ({ path: resolve(grant.path), write: grant.write }))
+    .filter((grant) => !under(grant.path, dataDir) && !under(dataDir, grant.path));
   for (const name of PATH_ENV_NAMES) {
     const value = request.env[name];
     // A temp folder stays the box's own private one; anything else the engine writes is put back.
     if (!value || !isAbsolute(value) || covered(resolve(value)) || PRIVATE_INSIDE.some((base) => under(resolve(value), base))) continue;
+    // A limited box does not give HOME back through an environment path: only a sign-in folder, a program folder (already
+    // there) or a grant may hold it, and nothing may hold HOME itself.
+    if (limited) {
+      const path = resolve(value), real = realPathOf(path);
+      if (holdsHome(real) || holdsHome(path)) continue;
+      const inside = (base: string) => under(path, base) || under(real, realPathOf(base));
+      if ((under(real, realHome) || under(path, home)) && !keptSignIns.some(inside) && !grants.some((grant) => inside(grant.path))) continue;
+    }
     if (request.configured && (under(resolve(value), dataDir) || under(dataDir, resolve(value))) && !ownFolders.some((folder) => under(resolve(value), folder))) continue;
     rw(resolve(value));
   }
-  for (const path of request.rw ?? []) if (!covered(resolve(path))) rw(resolve(path));
+  for (const path of request.rw ?? []) {
+    if (limited && (holdsHome(realPathOf(resolve(path))) || holdsHome(resolve(path)))) continue;
+    if (!covered(resolve(path))) rw(resolve(path));
+  }
+  for (const grant of grants) {
+    if (!grant.write) continue;
+    mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
+    if (!writable.includes(grant.path)) writable.push(grant.path);
+  }
   if (ownHome) {
     for (const file of request.shared ?? []) {
       if (under(resolve(file.target), ownHome)) mounts.push({ kind: "bind", source: resolve(file.source), target: resolve(file.target), optional: true });
@@ -276,6 +471,9 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     const shown = scoped ? [...scoped.rw, ...scoped.ro].filter((id) => ID.test(id)).map((id) => boxUploadsDir(dataDir, threads!, id))
       : [threads ? join(dataDir, "box-uploads", threads) : boxUploadsDir(dataDir, ids.botId, ids.threadId)];
     for (const folder of shown) mounts.push({ kind: "ro", source: folder, target: folder, optional: true });
+  } else if (limited && botId && ID.test(botId) && request.threadId && ID.test(request.threadId)) {
+    const folder = boxUploadsDir(dataDir, botId, request.threadId);
+    mounts.push({ kind: "ro", source: folder, target: folder, optional: true });
   }
   // The team's conversations a non-team shared process may read, and the team's folder, after every read-write line too.
   for (const id of scoped?.ro ?? []) {
@@ -302,11 +500,28 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     // when the caller named it in `ro`, or when it is in a bot's folder: this box's bot's, or any bot's where the caller
     // gave no bot (a configured server's program lives in the folder of the bot that added it).
     if (!named.has(full) && (under(full, dataDir) || under(dataDir, full)) && !covered(full) && !inBotFolder(full)) continue;
+    // Security: nor does a configured server's command line give a limited box anything its folders do not.
+    if (limited && request.configured && !named.has(full)) continue;
     // Code and the system are already there; a file under HOME or /tmp the command line names is put back read-only.
     if ((!asked.has(full) && covered(full)) || readOnly.has(full)) continue;
     if (["/usr", "/etc", "/opt", "/var/lib", ...setup.codeRoots, ...setup.engineRoots].some((base) => under(full, resolve(base)))) continue;
     readOnly.add(full);
     mounts.push({ kind: "ro", source: full, target: full, optional: true });
+  }
+
+  // The bot's read-only grants go after every read-write line, so they win over a writable HOME or parent. Shallow to
+  // deep: a can-change grant inside a read-only one is bound read-write again, as the deeper grant wins.
+  const askedReadOnly = grants.filter((grant) => !grant.write);
+  const depth = (path: string) => path.split(sep).filter(Boolean).length;
+  for (const grant of [...grants].sort((a, b) => depth(a.path) - depth(b.path) || Number(b.write) - Number(a.write))) {
+    if (!grant.write) mounts.push({ kind: "ro", source: grant.path, target: grant.path, optional: true });
+    else if (askedReadOnly.some((outer) => outer.path !== grant.path && under(grant.path, outer.path))) mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
+  }
+  // Security: after their sign-in folders and every grant, so that no box has a program folder of a sign-in writable.
+  if (programs) {
+    for (const path of [...programs.locked, ...programs.readOnly]) {
+      if (boundSignIns.some((signIn) => under(path, signIn))) mounts.push({ kind: "ro", source: realPathOf(path), target: path, optional: true });
+    }
   }
 
   // The team's shared folder, at one path in every box: its own line, as nothing else is bound there.

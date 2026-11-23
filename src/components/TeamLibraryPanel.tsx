@@ -1,6 +1,7 @@
 import { track } from "@/lib/analytics";
 import { t } from "@/lib/i18n";
 import { addTemplate } from "@/lib/template-add";
+import { grantImportedApps, requiredAppsOf, type ImportApp } from "@/lib/import-apps";
 import { templateDetailsOf } from "@/lib/template-details";
 import { orgCardAction, orgPackagePreview, type OrgLibraryListing, type OrgLibraryPackage } from "@/lib/org-library";
 import type { PackageDocument } from "../../shared/package-format";
@@ -13,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { catalogCopy, catalogMatches, type TeamCatalog, type TeamCatalogEntry } from "@/lib/team-catalog";
 
+import { botsForApps } from "./AppGrantPrompt";
+import { ImportAppChoices } from "./ImportAppChoices";
 import { ReadyBotGallery } from "./ReadyBotGallery";
 import { OrgLibraryTab } from "./TeamLibraryPanelOrg";
 import { SeiraCharacter } from "./seira-character";
@@ -26,7 +29,7 @@ export interface TeamImportResult {
 }
 
 /** What the preview is of: a community team (its file, added as a file) or a package from the organization's library. */
-type Pending = { details: TemplateDetails; manifest: unknown; org?: undefined } | { details: TemplateDetails; manifest?: undefined; org: OrgLibraryPackage };
+type Pending = { details: TemplateDetails; apps: ImportApp[] } & ({ manifest: unknown; org?: undefined } | { manifest?: undefined; org: OrgLibraryPackage });
 
 function TeamGlyph() {
   return (
@@ -47,7 +50,7 @@ export function TeamLibraryPanel({
   onImported: (result: TeamImportResult) => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [catalog, setCatalog] = useState<TeamCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -55,6 +58,8 @@ export function TeamLibraryPanel({
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [importing, setImporting] = useState(false);
+  const [chosenApps, setChosenApps] = useState<string[]>([]);
+  useEffect(() => setChosenApps([]), [pending]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [nestedDialog, setNestedDialog] = useState(false);
@@ -135,7 +140,7 @@ export function TeamLibraryPanel({
     setError("");
     try {
       const manifest: unknown = await api(`/api/team-library/teams/${entry.slug}`);
-      setPending({ details: templateDetailsOf(manifest), manifest });
+      setPending({ details: templateDetailsOf(manifest), manifest, apps: requiredAppsOf(manifest) });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -148,6 +153,7 @@ export function TeamLibraryPanel({
     setError("");
     try {
       const response = await addTemplate(manifest, dispatch);
+      grantImportedApps(botsForApps(response.bots, state.instances), chosenApps, dispatch);
       track("team_imported", { members: response.bots.length, source: "library", mode: "add", format: "package" });
       onImported({
         name,
@@ -168,7 +174,7 @@ export function TeamLibraryPanel({
     try {
       // SAFETY: this endpoint is owned by the app and returns the verified release.
       const preview = (await api(`/api/org-library/packages/${entry.packageId}`)) as { document: PackageDocument };
-      setPending({ details: orgPackagePreview(preview.document), org: entry });
+      setPending({ details: orgPackagePreview(preview.document), org: entry, apps: requiredAppsOf(preview.document) });
       setError("");
     } catch (cause) {
       setOrgError(cause instanceof Error ? cause.message : String(cause));
@@ -190,6 +196,7 @@ export function TeamLibraryPanel({
         body: JSON.stringify({ packageId: entry.packageId }),
       })) as { alreadyAdded: boolean; bots?: Bot[]; groups?: Group[]; routines?: Routine[]; connections?: unknown[] };
       for (const bot of response.bots ?? []) dispatch({ type: "botAdded", bot });
+      grantImportedApps(botsForApps(response.bots ?? [], state.instances), chosenApps, dispatch);
       for (const group of response.groups ?? []) dispatch({ type: "groupPatched", group });
       for (const routine of response.routines ?? []) dispatch({ type: "routinePatched", routine });
       const first = response.bots?.find((bot) => !bot.hidden);
@@ -280,7 +287,10 @@ export function TeamLibraryPanel({
         {pending ? (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4 sm:px-8">
-              <div className="max-w-2xl"><TemplateDetailsBody details={pending.details} /></div>
+              <div className="max-w-2xl">
+                <TemplateDetailsBody details={pending.details} />
+                <ImportAppChoices apps={pending.apps} chosen={chosenApps} onChange={setChosenApps} />
+              </div>
               {error && <div role="alert" className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</div>}
             </div>
             <footer className="flex items-center justify-end gap-3 border-t border-hairline/35 px-6 py-4 sm:px-8">

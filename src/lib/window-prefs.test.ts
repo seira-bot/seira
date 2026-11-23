@@ -16,9 +16,9 @@ afterEach(() => {
 describe("window preferences", () => {
   it("applies a frame with the preference's setter and ignores a value the schema refuses", async () => {
     applyWindowPref({ kind: "window-pref", id: "general.sendKey", value: "mod-enter" });
-    expect(values.get("omb-send-key")).toBe("mod-enter");
+    expect(values.get("seira-send-key")).toBe("mod-enter");
     applyWindowPref({ kind: "window-pref", id: "general.sendKey", value: "space" });
-    expect(values.get("omb-send-key")).toBe("mod-enter");
+    expect(values.get("seira-send-key")).toBe("mod-enter");
     applyWindowPref({ kind: "window-pref", id: "general.notificationSounds", value: false });
     applyWindowPref({ kind: "window-pref", id: "appearance.pinnedCircles", value: true });
     expect(await windowPrefValues()).toMatchObject({ "general.sendKey": "mod-enter", "general.notificationSounds": false, "appearance.pinnedCircles": true });
@@ -42,6 +42,22 @@ describe("window preferences", () => {
     const values = await windowPrefValues();
     expect(values).not.toHaveProperty("remote.relay");
     expect(values).not.toHaveProperty("general.openAtLogin");
+  });
+
+  it("AC-10 sets the text size through the desktop bridge, reads it back, and refuses a value that is not a step", async () => {
+    let step = 1;
+    const set = vi.fn(async (next: number) => { step = next; return step; });
+    vi.stubGlobal("window", { ogb: { textSize: { get: async () => step, set, onChange: () => () => {} } } });
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: 1.75 });
+    expect(set).toHaveBeenCalledWith(1.75);
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: 1.3 });
+    applyWindowPref({ kind: "window-pref", id: "appearance.textSize", value: "1.5" });
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(await windowPrefValues()).toMatchObject({ "appearance.textSize": 1.75 });
+  });
+
+  it("leaves the text size out where the desktop bridge is absent", async () => {
+    expect(await windowPrefValues()).not.toHaveProperty("appearance.textSize");
   });
 
   it("reads and switches a remote route through the companion bridge on this computer's page", async () => {

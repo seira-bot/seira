@@ -48,7 +48,7 @@ const FAKE_SIGNIN = join(dirname(fileURLToPath(import.meta.url)), "..", "testing
 const scratch: string[] = [];
 
 function fakeRuntime(startupDelayMs = 0): { directory: string; executable: string; harness: string } {
-  const directory = mkdtempSync(join(tmpdir(), "omb-antigravity-acp-"));
+  const directory = mkdtempSync(join(tmpdir(), "seira-antigravity-acp-"));
   scratch.push(directory);
   const executable = join(directory, "fake-antigravity.ts");
   const harness = join(directory, process.platform === "win32" ? "localharness_external.exe" : "localharness_external");
@@ -575,7 +575,7 @@ describe("official Antigravity runtime", () => {
     const outside = join(fake.directory, "outside");
     mkdirSync(profileDirectory);
     mkdirSync(outside);
-    symlinkSync(outside, join(profileDirectory, "omb-skills"), process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(outside, join(profileDirectory, "seira-skills"), process.platform === "win32" ? "junction" : "dir");
     await expect(prepareAntigravityProfile({ instanceId: "linked-staging", runtime, baseEnv: {}, profileDirectory }))
       .rejects.toThrow("Antigravity staging path must be a real directory.");
     expect(readdirSync(outside)).toEqual([]);
@@ -632,7 +632,7 @@ describe("official Antigravity runtime", () => {
   }, 20_000);
 
   it("rejects a download redirected to insecure HTTP", async () => {
-    const baseDir = mkdtempSync(join(tmpdir(), "omb-antigravity-insecure-"));
+    const baseDir = mkdtempSync(join(tmpdir(), "seira-antigravity-insecure-"));
     scratch.push(baseDir);
     const asset: AntigravityReleaseAsset = {
       version: "insecure-test",
@@ -652,7 +652,7 @@ describe("official Antigravity runtime", () => {
   });
 
   it("coalesces, verifies, extracts, and reuses a pinned download without touching another install", async () => {
-    const baseDir = mkdtempSync(join(tmpdir(), "omb-antigravity-install-"));
+    const baseDir = mkdtempSync(join(tmpdir(), "seira-antigravity-install-"));
     scratch.push(baseDir);
     const versions = join(baseDir, "tools", "antigravity-acp", `${process.platform}-${process.arch}`, "versions");
     const otherStaging = join(versions, ".install-other-active", "runtime");
@@ -812,7 +812,7 @@ describe("Antigravity OAuth validation", () => {
   });
 
   it("reads the sign-in link from either announcement Google makes", () => {
-    expect(authorizationUrlFromLine(`__OPENMAUS_ANTIGRAVITY_AUTH_URL__${JSON.stringify(authorizationUrl)}`))
+    expect(authorizationUrlFromLine(`__SEIRA_ANTIGRAVITY_AUTH_URL__${JSON.stringify(authorizationUrl)}`))
       .toBe(authorizationUrl);
     expect(authorizationUrlFromLine(`${ANTIGRAVITY_AUTH_PREFIX}${authorizationUrl}`)).toBe(authorizationUrl);
   });
@@ -820,7 +820,7 @@ describe("Antigravity OAuth validation", () => {
   it("ignores ordinary server logs, including ones quoting a link", () => {
     expect(authorizationUrlFromLine("I0905 11:02:06.473720 8283299200 main.py:80] Starting AGY ACP Server...")).toBeNull();
     expect(authorizationUrlFromLine(`I0905 credential_manager.py:553] ${ANTIGRAVITY_AUTH_PREFIX}${authorizationUrl}`)).toBeNull();
-    expect(authorizationUrlFromLine("__OPENMAUS_ANTIGRAVITY_AUTH_URL__not-json")).toBeNull();
+    expect(authorizationUrlFromLine("__SEIRA_ANTIGRAVITY_AUTH_URL__not-json")).toBeNull();
     expect(authorizationUrlFromLine("")).toBeNull();
   });
 
@@ -962,7 +962,7 @@ describe("Antigravity driver over shared ACP", () => {
     expect(events.at(-1)).toMatchObject({ type: "turn.completed", ok: true });
     const prompt = JSON.parse(readFileSync(`${dump}.prompt.json`, "utf8"));
     const stagedFile = JSON.parse(prompt[0].text.slice(5)) as string;
-    expect(stagedFile.startsWith(join(realpathSync.native(antigravityProfileDirectory(instanceId)), "omb-skills") + (process.platform === "win32" ? "\\" : "/"))).toBe(true);
+    expect(stagedFile.startsWith(join(realpathSync.native(antigravityProfileDirectory(instanceId)), "seira-skills") + (process.platform === "win32" ? "\\" : "/"))).toBe(true);
     expect(readFileSync(stagedFile, "utf8")).toBe("Read references/guide.md.");
     expect(readFileSync(join(dirname(stagedFile), "references", "guide.md"), "utf8")).toBe("Reviewed instructions");
     await fileRequestsFinished;
@@ -972,7 +972,7 @@ describe("Antigravity driver over shared ACP", () => {
     expect(replies.get("token-read").error.message).toContain("outside");
     const dumpState = JSON.parse(readFileSync(dump, "utf8"));
     const turnSpawn = vi.mocked(procs.spawnCli).mock.calls.find((call) => call[2].cwd === fake.directory);
-    expect(turnSpawn?.[2].box).toMatchObject({ ro: [join(antigravityProfileDirectory(instanceId), "omb-skills")] });
+    expect(turnSpawn?.[2].box).toMatchObject({ ro: [join(antigravityProfileDirectory(instanceId), "seira-skills")] });
     expect(dumpState.argv).toEqual(process.platform === "linux" ? ["--uid="] : []);
     expect(dumpState.env.GEMINI_HOME).toBe(antigravityProfileDirectory(instanceId));
     expect(dumpState.env.GEMINI_API_KEY).toBeUndefined();
@@ -988,6 +988,73 @@ describe("Antigravity driver over shared ACP", () => {
     // Checked on every OS, so the macOS and Linux runs prove the dump carries TEMP.
     const expectedTemp = process.platform === "win32" ? antigravityTempDir(DATA_DIR, instanceId) : fake.directory;
     expect([dumpState.env.TEMP, dumpState.env.TMP]).toEqual([expectedTemp, expectedTemp]);
+  });
+
+  it.each([true, false])("lets file requests reach a turn's folders only as granted (folders set: %s)", async (withFolders) => {
+    ensureDirs();
+    const fake = fakeRuntime();
+    const instanceId = "antigravity-folders";
+    const tokenDirectory = join(antigravityProfileDirectory(instanceId), "antigravity-acp");
+    mkdirSync(tokenDirectory, { recursive: true });
+    writeFileSync(join(tokenDirectory, "acp_token.json"), "{}", { mode: 0o600 });
+    const grants = realpathSync.native(mkdtempSync(join(tmpdir(), "seira-ag-folders-")));
+    const readOnly = join(grants, "ro"), canChange = join(grants, "rw");
+    mkdirSync(readOnly); mkdirSync(canChange);
+    writeFileSync(join(readOnly, "a.txt"), "read only");
+    writeFileSync(join(canChange, "b.txt"), "can change");
+    const calls = [
+      { id: "ro-read", method: "fs/read_text_file", path: join(readOnly, "a.txt") },
+      { id: "rw-read", method: "fs/read_text_file", path: join(canChange, "b.txt") },
+      { id: "rw-write", method: "fs/write_text_file", path: join(canChange, "new.txt"), content: "written" },
+      { id: "ro-write", method: "fs/write_text_file", path: join(readOnly, "new.txt"), content: "refused" },
+    ];
+    const replies = new Map<string, any>();
+    let received!: () => void;
+    const finished = new Promise<void>((resolve) => { received = resolve; });
+    const spawn = procs.spawnCli;
+    vi.spyOn(procs, "spawnCli").mockImplementation((...args) => {
+      const child = spawn(...args);
+      const write = child.stdin.write.bind(child.stdin);
+      vi.spyOn(child.stdin, "write").mockImplementation((...writeArgs) => {
+        const message = JSON.parse(String(writeArgs[0]));
+        if (message.method === "session/prompt") {
+          for (const call of calls) child.stdout.emit("data", Buffer.from(JSON.stringify({
+            jsonrpc: "2.0", id: call.id, method: call.method, params: { sessionId: message.params.sessionId, path: call.path, content: (call as any).content },
+          }) + "\n"));
+        } else if (calls.some((call) => call.id === message.id)) {
+          replies.set(message.id, message);
+          if (replies.size === calls.length) received();
+        }
+        return write(...writeArgs);
+      });
+      return child;
+    });
+    try {
+      instance = await AntigravityDriver.create({
+        instanceId, displayName: "Antigravity Folders",
+        environment: { FAKE_ACP_AUTH_METHOD: "oauth-personal", FAKE_ACP_MODELS: "gemini-3.8-flash", FAKE_ACP_MODES: "default,yolo,auto_edit", TEMP: fake.directory, TMP: fake.directory },
+        enabled: true, config: { cli: fake.executable, fullAuto: false },
+      });
+      recorder = recordEvents(instance.adapter);
+      const { turnId } = await instance.adapter.sendTurn({
+        threadId: "thread-folders", text: "go", approvalMode: "ask", resumeCursor: "fake-acp-session", model: "gemini-3.8-flash", cwd: fake.directory,
+        ...(withFolders ? { folders: { limited: true, grants: [{ path: readOnly, write: false }, { path: canChange, write: true }] } } : {}),
+      });
+      await recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId);
+      await finished;
+      expect(replies.get("ro-write").error.message).toContain("outside");
+      if (withFolders) {
+        expect(replies.get("ro-read").result).toEqual({ content: "read only" });
+        expect(replies.get("rw-read").result).toEqual({ content: "can change" });
+        expect(replies.get("rw-write").result).toEqual({});
+        expect(readFileSync(join(canChange, "new.txt"), "utf8")).toBe("written");
+      } else {
+        for (const id of ["ro-read", "rw-read", "rw-write"]) expect(replies.get(id).error.message).toContain("outside");
+      }
+      expect(existsSync(join(readOnly, "new.txt"))).toBe(false);
+    } finally {
+      await removeTempDir(grants);
+    }
   });
 
   const legacyPickTurn = async (instanceId: string, sessionModels: string, model: string) => {
@@ -1065,7 +1132,7 @@ describe("Antigravity driver over shared ACP", () => {
     expect(normalizeAntigravityTurn({ ...turn, model: "gemini-4-argon-high" }, ["gemini-3.8-flash"])).toEqual({ ...turn, model: "gemini-4-argon-high" });
   });
 
-  it("keeps one process across approval and model changes, starting on OMB's model", async () => {
+  it("keeps one process across approval and model changes, starting on Seira's model", async () => {
     ensureDirs();
     const fake = fakeRuntime();
     const dump = join(fake.directory, "dump.json");
@@ -1139,7 +1206,7 @@ describe("Antigravity driver over shared ACP", () => {
       return { done, events: recorder!.events.filter((event) => event.turnId === turnId) };
     };
     expect((await run("thread-known", "gemini-3.8-flash-low")).done).toMatchObject({ ok: true });
-    // a tier-locked model, and OMB's static default the account lacks
+    // a tier-locked model, and Seira's static default the account lacks
     for (const [index, model] of ["gemini-3.8-pro-high", STATIC_ANTIGRAVITY_MODELS.default].entries()) {
       const { done, events } = await run(`thread-unavailable-${index}`, model);
       expect(done).toMatchObject({ ok: false });

@@ -6,12 +6,13 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 
 import { BotAvatar } from "./Avatar";
+import { RoomPicture } from "./RoomPicture";
 import { RowStatusText } from "./SidebarRowMarkers";
 
 /** A group chat's two avatars, 22px each, on the corners of a 32px box. */
-export function AdvancedRoomStack({ members }: { members: Bot[] }) {
+export function AdvancedRoomStack({ members, picture }: { members: Bot[]; picture?: string | null }) {
   const shown = members.slice(0, 2);
-  return (
+  const faces = (
     <div data-room-stack="" className="relative size-8 shrink-0">
       {shown.length === 0 && <Users size={20} aria-hidden="true" className="absolute inset-1.5 text-ink-secondary" />}
       {shown.map((member, index) => (
@@ -21,6 +22,7 @@ export function AdvancedRoomStack({ members }: { members: Bot[] }) {
       ))}
     </div>
   );
+  return <RoomPicture url={picture} size={32} fallback={faces} />;
 }
 
 /** A group chat row's text: 14px title, 12px time, a one-line 13px preview and an accent dot while unread. */

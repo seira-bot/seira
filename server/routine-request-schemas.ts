@@ -1,5 +1,6 @@
 // The shapes a routine request takes: the tool input a bot sends, and the normalized operation a card stores.
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 
 import { normalizeCronSchedule } from "../shared/routine-schedule.ts";
 import type { JsonValue } from "./schema.ts";
@@ -44,19 +45,20 @@ export const routineToolDefinitionSchema = z.object({
   name: z.string().max(80),
   instructions: z.string().max(20_000),
   schedule: routineToolScheduleSchema,
-  runOn: z.enum(["maus", "cloud"]).optional(),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])).optional(),
   durationMinutes: z.number().optional(),
   timeoutMinutes: z.number().nullable().optional(),
   continuity: z.boolean().optional(),
   sameConversation: z.boolean().optional(),
   overlap: z.enum(["skip", "queue"]).optional(),
   runOnStartup: z.boolean().optional(),
+  workflowId: z.string().min(1).max(128).optional(),
 }).strict();
 
 export const routineToolChangesSchema = routineToolDefinitionSchema
-  .omit({ timeoutMinutes: true })
+  .omit({ timeoutMinutes: true, workflowId: true })
   .partial()
-  .extend({ timeoutMinutes: z.number().nullable().optional() })
+  .extend({ timeoutMinutes: z.number().nullable().optional(), workflowId: z.string().min(1).max(128).nullable().optional() })
   .strict()
   .refine(
   (changes) => Object.values(changes).some((value) => value !== undefined),
@@ -174,19 +176,21 @@ export const storedDefinitionSchema = z.object({
   name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(20_000),
   schedule: storedScheduleSchema,
-  runOn: z.enum(["maus", "cloud"]),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])),
   durationMinutes: z.number().int().min(5).max(240),
   timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
   continuity: z.boolean().optional(),
   sameConversation: z.boolean().optional(),
   overlap: z.enum(["skip", "queue"]).optional(),
   runOnStartup: z.boolean().optional(),
+  workflowId: z.string().min(1).max(128).optional(),
 }).strict();
 export const storedChangesSchema = storedDefinitionSchema
-  .omit({ schedule: true, timeoutMinutes: true })
+  .omit({ schedule: true, timeoutMinutes: true, workflowId: true })
   .partial()
   .extend({
     schedule: storedScheduleChangesSchema.optional(),
+    workflowId: z.string().min(1).max(128).nullable().optional(),
     timeoutMinutes: z.number().int().min(5).max(1_440).nullable().optional(),
   })
   .strict()

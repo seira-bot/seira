@@ -1,4 +1,4 @@
-// Email sign-in through the OpenMausBot control plane, or through the server's own mail server when OMB_SIGNIN_SMTP_URL is
+// Email sign-in through the Seira control plane, or through the server's own mail server when SEIRA_SIGNIN_SMTP_URL is
 // set: the code exchange is server-side, so a browser only talks to this server, and a server with an empty allow-list
 // does not expose the routes. The result is an ordinary local session.
 import { resolveCompanionControlPlaneURL } from "../electron/companion-account-service.mjs";
@@ -38,12 +38,16 @@ export type SignInFailure = { ok: false; status: number } & UserError;
 
 export interface EmailSignIn {
   enabled(): boolean;
-  /** `target`: the host the code signs in to, for the email's subject. */
-  start(email: string, target?: string | null): Promise<{ ok: true } | SignInFailure>;
+  /** `target`: the host the code signs in to, for the email's subject. `source`: who asked, for the limit on codes. */
+  start(email: string, target?: string | null, source?: string): Promise<{ ok: true } | SignInFailure>;
   verify(email: string, code: string): Promise<{ ok: true; email: string; userId: string; scopes: Scope[] } | SignInFailure>;
 }
 
 const NOT_WELCOME: SignInFailure = { ok: false, status: 403, ...userError("serverError.email.notAllowed") };
+const CODE_WRONG: SignInFailure = { ok: false, status: 401, ...userError("serverError.email.codeWrong") };
+const CODE_FORMAT: SignInFailure = { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
+
+const codeShapeOk = (code: string): boolean => code.length <= 32 && /^\d{8}$/.test(code.replace(/[\s-]/g, ""));
 
 export function createEmailSignIn(options: {
   allow: SignInAllowList | (() => SignInAllowList);
@@ -54,16 +58,16 @@ export function createEmailSignIn(options: {
 }): EmailSignIn {
   const env = options.env ?? process.env;
   const allow = () => (typeof options.allow === "function" ? options.allow() : options.allow);
-  const smtpUrl = env.OMB_SIGNIN_SMTP_URL?.trim();
+  const smtpUrl = env.SEIRA_SIGNIN_SMTP_URL?.trim();
   if (smtpUrl) {
-    return mailedSignIn(allow, createSignInMail({ url: smtpUrl, from: env.OMB_SIGNIN_SMTP_FROM,
+    return mailedSignIn(allow, createSignInMail({ url: smtpUrl, from: env.SEIRA_SIGNIN_SMTP_FROM,
       ...(options.mailTransport ? { transport: options.mailTransport } : {}) }));
   }
   let client: ControlPlaneClient | null = options.client ?? null;
   const controlPlane = (): ControlPlaneClient => {
     if (client) return client;
     const url = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-    if (!url) throw new Error("OMB_CONTROL_PLANE_URL is set but is not an https address");
+    if (!url) throw new Error("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
     client = createControlPlaneClient({ baseURL: url, fetchImpl: options.fetchImpl });
     return client;
   };
@@ -81,8 +85,9 @@ export function createEmailSignIn(options: {
       return { ok: true };
     },
     async verify(rawEmail, code) {
+      if (!codeShapeOk(code)) return CODE_FORMAT;
       const email = normalizeAccountEmail(rawEmail);
-      if (!email || !allowedScopes(email, allow())) return NOT_WELCOME;
+      if (!email || !allowedScopes(email, allow())) return CODE_WRONG;
       let verified: { accountToken: string; user: { id: string; email: string } };
       try {
         verified = await controlPlane().verifyOTP(email, code);
@@ -113,12 +118,12 @@ export function createEmailSignIn(options: {
 function mailedSignIn(allow: () => SignInAllowList, mail: SignInMail): EmailSignIn {
   return {
     enabled: () => signInEnabled(allow()),
-    async start(rawEmail, target) {
+    async start(rawEmail, target, source) {
       const email = normalizeAccountEmail(rawEmail);
       if (!email) return { ok: false, status: 400, ...userError("serverError.email.invalid") };
       if (!allowedScopes(email, allow())) return NOT_WELCOME;
       try {
-        if ((await mail.send(email, target)) === "tooSoon") return { ok: false, status: 429, ...userError("serverError.email.tooMany") };
+        if ((await mail.send(email, target, source)) === "tooSoon") return { ok: false, status: 429, ...userError("serverError.email.tooMany") };
       } catch (error) {
         console.warn(`sign-in code not sent: ${error instanceof Error ? error.message : String(error)}`);
         return { ok: false, status: 502, ...userError("serverError.email.unavailable", { detail: error instanceof SignInMailError ? error.message : "the mail server refused it" }) };
@@ -126,8 +131,9 @@ function mailedSignIn(allow: () => SignInAllowList, mail: SignInMail): EmailSign
       return { ok: true };
     },
     async verify(rawEmail, code) {
+      if (!codeShapeOk(code)) return CODE_FORMAT;
       const email = normalizeAccountEmail(rawEmail);
-      if (!email || !allowedScopes(email, allow())) return NOT_WELCOME;
+      if (!email || !allowedScopes(email, allow())) return CODE_WRONG;
       const checked = mail.check(email, code);
       if (checked === "format") return { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
       if (checked === "tooMany") return { ok: false, status: 429, ...userError("serverError.email.tooMany") };

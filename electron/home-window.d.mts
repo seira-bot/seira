@@ -1,6 +1,6 @@
 /** What this computer's screen says while the window can't show the place. `reason`: the Admin's words on why My Cloud
  * doesn't answer, in English; `cause`: the same as a code the page says in its own language; `machine`: a plan
- * problem's state; `other`: another MausBot Cloud account is signed in; `name`: the team whose Cloud is being opened
+ * problem's state; `other`: another Seira Cloud account is signed in; `name`: the team whose Cloud is being opened
  * or the server of the person's own a frozen copy goes back to (absent for My Cloud). */
 export type HomeView = { name?: string } & (
   | { screen: "opening" | "waking" | "moving" }
@@ -24,7 +24,7 @@ export interface HomeBridge {
   retry(): Promise<HomeView>;
   /** This computer's screen only, once the person said yes there: the Cloud it shows leaves their list (absent: an older app). */
   remove?(): Promise<import("./cloud-account.mjs").CloudRemoveOutcome>;
-  /** This device's MausBot Cloud sign-in, again; on My Cloud's page only from the person's click. */
+  /** This device's Seira Cloud sign-in, again; on My Cloud's page only from the person's click. */
   signIn(): Promise<void>;
   /** My Cloud's own page only: its session ended, so the app signs it in again by itself. */
   repair(): Promise<void>;
@@ -65,7 +65,7 @@ export declare const NAME_RETRY_MS: readonly number[];
 export function nameNotFound(code: number): boolean;
 export function createReadyClock(input?: { store?: { read(): unknown; write(value: unknown): void } | null; now?(): number }): { seen(state: unknown): void; fresh(origin: string | null): boolean };
 export function splashText(status: "opening" | "waking", name?: string | null, t?: (key: string, params?: Record<string, string | number>) => string): string;
-export function placeOf(input: { ask?: HomeAsk; remembered?: RememberedPlace; state?: any }): { kind: "cloud"; left?: string | null } | { kind: "team" | "own"; id: string; name: string; role: string | null; origin: string | null; machine: any };
+export function placeOf(input: { ask?: HomeAsk; remembered?: RememberedPlace; state?: any }): { kind: "cloud"; left?: string | null; noCloud?: true } | { kind: "team" | "own"; id: string; name: string; role: string | null; origin: string | null; machine: any };
 
 export function homeOf(input: { journal?: any; frozenCloud?: string | true | null; state?: any }): Home;
 export function noWayHome(worked: Home, state?: any): boolean;

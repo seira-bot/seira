@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 
+import { createCleanWorkspace, profilesDir } from "./clean-workspace.mjs";
 import { parseCloudList } from "./cloud-list.mjs";
 import { addCloudView, createAddedCloudNotice, installCloudRail, railPlaces } from "./cloud-rail.mjs";
 import { otherCloudSnapshot } from "./cloud-plan-ipc.mjs";
+import { createLocalProfiles, createProfileRegistry, PROFILES_FILE } from "./local-profiles.mjs";
 
-const HOME = "https://omb-u-1a2b3c4d5e6f.fly.dev", CLIENT_A = "https://omb-c-a.fly.dev", TEAM = "https://omb-t-acme.fly.dev", VPS = "https://bots.example.test";
+const HOME = "https://seira-u-1a2b3c4d5e6f.fly.dev", CLIENT_A = "https://seira-c-a.fly.dev", TEAM = "https://seira-t-acme.fly.dev", VPS = "https://bots.example.test";
 const LOCAL = "http://127.0.0.1:8799";
 const entry = (over = {}) => ({ id: "c-a", name: "Client A", color: "green", role: "owner", tier: "pro", runsOn: "cloud", status: "ready", origin: CLIENT_A,
   teamId: null, primary: false, ...over });
@@ -275,7 +279,7 @@ test("“{name}” is ready, once per Cloud this app bought, unless its sheet sh
 });
 
 test("a Cloud of your own that ended is marked, and its menu offers Remove from list only when the Admin says so; a running Cloud or a team's never does", () => {
-  const OLD = "https://omb-c-old.fly.dev";
+  const OLD = "https://seira-c-old.fly.dev";
   const withOld = (over = {}) => saved("home", [{ id: "old", kind: "remote", name: "Old", origin: OLD, cloud: { id: "c-old", role: "owner" } }, ...(over.extra ?? [])]);
   const clouds = parseCloudList([PRIMARY, entry(), entry({ id: "c-old", name: "Old", color: null, status: "ended", origin: OLD, deleteAfter: 1_800_000_000_000, removable: true }),
     entry({ id: "c-team", name: "Acme", color: "amber", teamId: "team-acme", role: "owner", origin: TEAM, status: "ended", removable: true })]);
@@ -288,7 +292,7 @@ test("a Cloud of your own that ended is marked, and its menu offers Remove from 
 });
 
 test("My Cloud that ended and was removed from the list leaves the rail; while it is listed it is a circle that opens its own screen", () => {
-  const OLD = "https://omb-u-old.fly.dev";
+  const OLD = "https://seira-u-old.fly.dev";
   const before = { activeId: "local", environments: [{ id: "mine", kind: "remote", name: "My Cloud", origin: OLD, home: true }, { id: "a", kind: "remote", name: "Client A", origin: CLIENT_A, cloud: { id: "c-a", role: "owner" } }] };
   const ended = entry({ id: "c-home", name: "My Cloud", color: null, origin: OLD, primary: true, status: "ended", deleteAfter: 1_800_000_000_000, removable: true });
   const listed = railPlaces({ saved: before, home: null, mine: OLD, state: session({ machine: { status: "stopped", origin: OLD }, teams: [], clouds: parseCloudList([ended, entry()]) }) });
@@ -302,7 +306,7 @@ test("My Cloud that ended and was removed from the list leaves the rail; while i
 });
 
 test("Remove from list from a circle's menu: only the rail's own page, only a circle main listed as removable, and by main's own word for the Cloud", async () => {
-  const OLD = "https://omb-c-old.fly.dev", hidden = [];
+  const OLD = "https://seira-c-old.fly.dev", hidden = [];
   const clouds = parseCloudList([PRIMARY, entry(), entry({ id: "c-old", name: "Old", status: "ended", origin: OLD, removable: true })]);
   const savedOld = saved("home", [{ id: "old", kind: "remote", name: "Old", origin: OLD, cloud: { id: "c-old", role: "owner" } }]);
   const account = { state: () => session({ clouds }), offer: async () => null, hideCloud: async (id) => { hidden.push(id); return { outcome: "removed" }; } };
@@ -355,7 +359,7 @@ const PRELOAD = readFileSync(new URL("./preload.cjs", import.meta.url), "utf8");
 function preload(origin, { activation = false } = {}) {
   let bridge; const invoked = [];
   vm.runInNewContext(PRELOAD, {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`, "--omb-company-desktop=1"] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL}`, "--seira-company-desktop=1"] },
     location: { origin }, navigator: { userActivation: { isActive: activation } }, TextEncoder, localStorage: { getItem: () => null }, queueMicrotask,
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
       ipcRenderer: { on() {}, removeListener() {}, send() {}, sendSync: () => null, invoke: (...args) => { invoked.push(args); return Promise.resolve(); } } }),
@@ -365,7 +369,7 @@ function preload(origin, { activation = false } = {}) {
 
 test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle, ＋ and checkout open only from the person's click", async () => {
   const page = preload(HOME);
-  assert.deepEqual(Object.keys(page.bridge.workspaces), ["state", "menu", "line", "places", "open", "add", "probe", "look", "color", "recolor", "remove", "makeHome", "homeOffers", "onChanged", "local", "onNewLocal"]);
+  assert.deepEqual(Object.keys(page.bridge.workspaces), ["state", "menu", "line", "places", "open", "add", "probe", "look", "color", "recolor", "remove", "rename", "makeHome", "homeOffers", "onChanged", "local", "onNewLocal", "onConnectServer"]);
   assert.deepEqual(Object.keys(page.bridge.cloudAdd), ["state", "start", "reopen", "copyLink", "open", "interest", "sheet", "organization"]);
   await page.bridge.workspaces.places();
   await page.bridge.cloudAdd.state();
@@ -379,6 +383,7 @@ test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle,
   await assert.rejects(page.bridge.workspaces.color("rose"), /Choose a color/, "a page changes its place's colour only from the person's click");
   await assert.rejects(page.bridge.workspaces.recolor("vps", "rose"), /Choose a color/);
   await assert.rejects(page.bridge.workspaces.remove("old"), /Choose Remove from list/, "Remove from list only from the person's click");
+  await assert.rejects(page.bridge.workspaces.rename("vps", "Studio"), /Choose Rename/, "a new name only from the person's click");
   await assert.rejects(page.bridge.workspaces.makeHome("vps"), /Choose Make my home/, "a move starts only from the person's click");
   await assert.rejects(page.bridge.workspaces.local.create("Work", "rose"), /Choose a name/, "a workspace of this computer's own only from the person's click");
   await assert.rejects(page.bridge.workspaces.local.edit("profile:work", { name: "Office" }), /Choose a change/);
@@ -391,9 +396,10 @@ test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle,
   await clicked.bridge.cloudAdd.start("pro", "Client B", null);
   await clicked.bridge.workspaces.color("rose");
   await clicked.bridge.workspaces.color(null);
+  await clicked.bridge.workspaces.rename({ toString: () => "vps" }, { toString: () => "Studio" });
   await clicked.bridge.cloudAdd.organization({ toString: () => "Client C" }, null);
   assert.deepEqual(clicked.invoked, [["workspaces:open", "a"], ["workspaces:add", "link"], ["cloud-add:start", "pro", "Client B", null], ["workspaces:color", "rose"], ["workspaces:color", null],
-    ["cloud-add:organization", "Client C", null]]);
+    ["workspaces:rename", "vps", "Studio"], ["cloud-add:organization", "Client C", null]]);
   await clicked.bridge.cloudAdd.start("team", "Studio", "blue", { toString: () => "app_whats_new_team" });
   assert.deepEqual(clicked.invoked.at(-1), ["cloud-add:start", "team", "Studio", "blue", "app_whats_new_team"], "a source travels as plain text");
   assert.equal(page.bridge.cloudAccount, undefined, "never the account bridge");
@@ -418,6 +424,20 @@ test("Remove from list on a server saved by hand: main forgets it here, by its o
   assert.deepEqual(forgotten, ["vps"], "never a Cloud, a team's Cloud or this computer's own");
   assert.deepEqual(await rail({ forget: async () => false }).call("workspaces:remove", "vps"), { outcome: "failed" });
   assert.deepEqual(await rail().call("workspaces:remove", "vps"), { outcome: "unsupported" }, "a main without forget says so");
+});
+
+test("Rename on a server saved by hand: main saves the name by its own word for which one, only for the rail's page, never a Cloud or this computer", async () => {
+  const renamed = [];
+  const installed = rail({ renameServer: async (id, name) => { renamed.push([id, name]); return { outcome: name === "Dup" ? "taken" : "saved" }; } });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", "Branch office"), { outcome: "saved" });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", "Dup"), { outcome: "taken" });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", { toString: () => "x" }), { outcome: "saved" });
+  assert.deepEqual(renamed, [["vps", "Branch office"], ["vps", "Dup"], ["vps", ""]], "only plain text reaches main");
+  for (const id of ["home", "a", "acme", "lab", "local", "profile:work"]) await assert.rejects(installed.call("workspaces:rename", id, "X"), /isn't here/, id);
+  assert.equal(renamed.length, 3, "never a Cloud, a team's Cloud or this computer's own");
+  installed.w.lists = false;
+  assert.throws(() => installed.call("workspaces:rename", "vps", "X"), /only available/, "a place's page, even this computer's own, never renames from the rail");
+  assert.deepEqual(await rail().call("workspaces:rename", "vps", "X"), { outcome: "unsupported" }, "a main without rename says so");
 });
 
 test("a place with inbox lines waiting says so on its circle, this computer's too; the Admin's payment problem still does", () => {
@@ -506,5 +526,49 @@ test("＋'s new workspace and a workspace's menu: only while main offers it, onl
   r.w.trusted = false;
   assert.throws(() => r.call("workspaces:local-new", "Notes", null), /only available/, "a Cloud's page never makes one");
   creatable = false; r.w.trusted = true;
-  assert.throws(() => r.call("workspaces:local-new", "Notes", null), /isn't something to add/);
+  assert.deepEqual(await r.call("workspaces:local-new", "Notes", null), { outcome: "unavailable" }, "main's no is an answer the sheet can say");
+  assert.equal(made.length, 3, "nothing made");
+});
+
+/** The window on a server saved by hand, with this computer's real workspaces (local-profiles.mjs) behind ＋. */
+function onSavedServer(t) {
+  const parent = mkdtempSync(join(tmpdir(), "rail-saved-"));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const dataDir = join(parent, ".seira");
+  mkdirSync(dataDir);
+  const w = { home: "local", opened: [], running: dataDir };
+  const clean = createCleanWorkspace({ dataDir: () => dataDir, running: () => w.running, swap: async (dir) => { w.running = dir; return { ok: true }; } });
+  w.local = createLocalProfiles({ registry: createProfileRegistry({ dataDir: () => dataDir }), clean, dataDir: () => dataDir, home: () => w.home,
+    window: { openProfile: async () => false, profile: () => null, showCloud: async () => {} }, showLocal: () => {}, onLocal: () => false,
+    busy: async () => null, trash: async () => {}, reserved: () => "This PC", changed: () => w.r.installed.changed() });
+  const onScreen = { activeId: "vps", environments: [{ id: "vps", kind: "remote", name: "Office", origin: VPS }] };
+  w.r = rail({ local: w.local, openProfile: async (id) => { w.opened.push(id); }, add: { choices: () => ({ cloud: false, link: true, address: true }) },
+    places: () => railPlaces({ saved: onScreen, home: null, state: null, profiles: w.local.places({ activeLocal: false }) }) });
+  w.file = join(profilesDir(dataDir), PROFILES_FILE);
+  return w;
+}
+
+test("a server saved by hand on screen: ＋'s new workspace on this computer is made, listed on the rail and opened next", async (t) => {
+  const w = onSavedServer(t);
+  const before = await w.r.call("workspaces:places");
+  assert.deepEqual(before.places.map(place => [place.id, place.active ?? false]), [["local", false], ["vps", true]]);
+  assert.equal(before.add.local, true);
+  assert.deepEqual(await w.r.call("workspaces:local-new", "Work", "green"), { outcome: "made", id: "work" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(existsSync(w.file), true, "this computer's list of workspaces is written");
+  assert.deepEqual((await w.r.call("workspaces:places")).places.map(place => place.id), ["local", "profile:work", "vps"]);
+  assert.deepEqual(w.opened, ["work"]);
+  assert.ok(w.r.sent.includes("rail:workspaces:changed"), "the rail reads its list again");
+});
+
+test("a server saved by hand on screen, once this computer can't hold a new workspace: Create says so, nothing is made, and ＋ stops offering it", async (t) => {
+  const w = onSavedServer(t);
+  assert.equal((await w.r.call("workspaces:places")).add.local, true, "the sheet opened while it could");
+  w.home = null;
+  const told = w.r.sent.length;
+  assert.deepEqual(await w.r.call("workspaces:local-new", "Work", "green"), { outcome: "unavailable" });
+  assert.equal(existsSync(w.file), false, "nothing written");
+  assert.deepEqual(w.opened, []);
+  assert.deepEqual(w.r.sent.slice(told), ["page:workspaces:changed", "rail:workspaces:changed"], "the rail and the page beside it read main's choices again");
+  assert.equal((await w.r.call("workspaces:places")).add.local, false);
 });

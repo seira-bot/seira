@@ -35,7 +35,6 @@ vi.mock("@/lib/connector-oauth", () => ({
 vi.mock("@/lib/product-events", () => ({ connectorConnect: vi.fn() }));
 vi.mock("./McpServersPanel", () => ({ McpServersPanel: () => null }));
 vi.mock("./XCard", () => ({ X_CARD_SEARCH: "x", XCard: () => null }));
-vi.mock("./PostizCard", () => ({ PostizCard: () => null }));
 vi.mock("./EmailCard", () => ({ EmailCard: () => null }));
 vi.mock("./Avatar", () => ({ BotAvatar: () => null }));
 
@@ -79,7 +78,7 @@ describe("disconnecting an app account", () => {
     expect(nativeConfirm).not.toHaveBeenCalled();
     expect(deletes()).toEqual([]);
     const dialog = document.body.querySelector("[role=alertdialog]");
-    expect(dialog?.textContent).toContain("“work” (ca_old)");
+    expect(dialog?.textContent).toContain("“work”");
     expect(dialog?.textContent).toContain("Only this Apollo account will be revoked");
     await act(async () => { byLabel(dialog!, "Disconnect")!.click(); });
     await flush();

@@ -1,7 +1,7 @@
 # Verifying Seira
 
 Seira has one development control surface: `pnpm control:seira`. It runs
-the published `openmausbot` verbs (docs/headless-cli.md), which call the MCP
+the published `seira` verbs (docs/headless-cli.md), which call the MCP
 tools in `scripts/mcp-server.ts`, so verification uses the same URL
 validation, task pinning, bounded transcripts, wait states, and redaction as
 external MCP clients and scripts.
@@ -24,11 +24,19 @@ that exact child. The parent shell and the user's Seira data are
 untouched. Only `FAKE_CLAUDE_*` variables cross from the launcher's
 environment into that child, so a recipe can script the fake engine's mode,
 replies and tool calls without writing a wrapper CLI. Live calls add one
-exception: `OMB_OPENAI_LIVE_URL` crosses when it is a loopback
+exception: `SEIRA_OPENAI_LIVE_URL` crosses when it is a loopback
 `http://127.0.0.1:PORT` (the fake GPT-Live that
 `node --experimental-strip-types server/testing/fake-openai-live.ts` prints),
-and `OMB_OPENAI_LIVE_KEY` crosses only with it, so that key can only ever
+and `SEIRA_OPENAI_LIVE_KEY` crosses only with it, so that key can only ever
 reach the fake.
+
+On Linux, `SEIRA_VERIFY_BOT_BOX=1` adds a folder that holds only a link to
+bubblewrap to the child's PATH. The fixture then starts the bot box for the
+bots limited to chosen folders ([folder access](../folder-access.md)). The
+rest of the PATH stays sealed. The child's temporary folder moves out of the
+data folder to a folder beside it, as on a desktop, because the box hides a
+file that a command line names inside the data folder. The launcher removes
+both folders when it stops.
 
 Pass the printed URL explicitly from a second terminal:
 
@@ -53,7 +61,7 @@ Use only mapped, tested commands:
 - [OpenCode model variants through ACP](opencode-variants.md)
 - [Bot setup, model scope, and file continuity](bot-continuity.md)
 - [Reviewed Chief team setup and scoped deletion](team-setup.md)
-- [Seira, everyone's helper](mausbot.md)
+- [Seira, everyone's helper](seira.md)
 - [Profile proposal and credential-card lifecycle](proposal-cards.md)
 - [Full Access without duplicate approvals](full-access.md)
 - [Bots changing app settings, and the guards Full access cannot skip](app-settings.md)
@@ -61,12 +69,14 @@ Use only mapped, tested commands:
 - [Exact command allowlist UI and saved rules](command-allowlist.md)
 - [The safety floor: a never-list no grant can allow](safety-floor.md)
 - [Waiting for an occupied desktop](computer-wait.md)
+- [One memory limit for all bot work on Linux](bot-memory-fence.md)
 - [Chat UI, driven headlessly](chat-ui.md)
 - [Computer panel focus hand-off](computer-panel-focus.md)
 - [Taking control of a bot's computer](take-control.md)
 - [Saved steps: repeating a computer task without AI](saved-steps.md)
 - [Native dictation retention and send-to-stop](dictation.md)
 - [Proactive routines and the brief](proactive-routines.md)
+- [Workflows on a canvas](workflows.md)
 - [Waits: tell me when, with no AI while waiting](waits.md)
 - [A new Cloud's first hour](first-hour.md)
 - [Chat widgets](widgets.md)
@@ -107,6 +117,7 @@ Use only mapped, tested commands:
 - [Bounded built-in tool results](tool-results.md)
 - [Memory: recall, upkeep and the tidy-up](memory-layer.md)
 - [Spend cap and sell prices](spend-cap.md)
+- [Moving from another AI: the import hub](ai-import.md)
 
 `control-seira ui` ([Chat UI, driven headlessly](chat-ui.md)) drives the real
 renderer in a headless Chrome by accessible name, so composer sends, transcript
@@ -126,6 +137,11 @@ reply box and the Quick asks chat by hand on a packaged side-by-side build; the
 control surface cannot drive a global shortcut or the microphone, so it is not
 in the map above.
 
+The [Glance recipe](glance.md) checks the visor at the top of the screen (the
+tray icon on Linux Wayland) by hand on a packaged side-by-side build; the
+control surface cannot drive window placement, focus or the system tray, so it
+is not in the map above.
+
 The [move to My Cloud fixture](cloud-send.md) runs this computer's server and a
 Cloud home with the desktop's own wiring between them, and runs and checks the
 one-time move as main does.
@@ -138,21 +154,6 @@ lent to that server by itself, and none of it for a server shared with others.
 The [MCP sign-in fixture](mcp-sign-in.md) checks remote sign-in, callback URL
 paste-back, MCP tools and logout cancellation through the real settings panel
 and a synthetic OAuth provider in a disposable workspace.
-
-The [Whop fixture](whop.md) checks its one-click setup, cancellation, denied
-consent, discovery failures, reconnect and disconnect using that same registry
-and a synthetic provider, without accessing a real Whop account.
-
-The [bot contact cards fixture](bot-contact-cards.md) checks the AgentMail,
-AgentPhone, Vapi and Telnyx cards: a pasted key that is refused, replaced and
-deleted on Disconnect, kept in a header and out of every listing, against a
-loopback stand-in for Vapi.
-
-The [Postiz fixture](postiz.md) checks the Apps page's Postiz card in the Social
-category: Postiz Cloud's sign-in and an API key for a person's own Postiz, the
-bot's turn getting the `postiz` tools with the token kept out of every answer,
-transcript and log, plain refusals, revocation and disconnect, against loopback
-stand-ins for Postiz.
 
 The [X card fixture](x-connector.md) checks the Apps page's X card: a plan's
 included calls with the month's use, the person's own treg key (saved, tested,

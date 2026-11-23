@@ -188,16 +188,16 @@ function voiceLine(characters: number): string {
   const hours = Math.round(minutes / 6) / 10;
   return hours === 1 ? t("cloudBuy.plan.voiceHour") : t("cloudBuy.plan.voiceHours", { hours: amount(hours) });
 }
-/** The same rows in the same order on every card, every number from the Admin's allowances. */
+/** The same rows in the same order on every card, every number from the Admin's allowances; an allowance of zero has no row. */
 export function planCardRows(a: CloudPlanAllowances): CloudPlanCardRow[] {
   const cpus = a.cpuKind === "shared" ? t("cloudBuy.plan.cpusShared", { count: a.cpus }) : t("cloudBuy.plan.cpus", { count: a.cpus });
   return [
     { key: "power", text: a.sleeps ? t("cloudBuy.sleeps") : t("cloudBuy.row.alwaysOn") },
-    { key: "desktops", text: t("cloudBuy.row.desktops"), note: t("cloudBuy.plan.limit", { count: a.computers }) },
-    { key: "hours", text: t("cloudAdd.hours", { hours: amount(a.computerHours) }) },
+    ...(a.computers > 0 ? [{ key: "desktops" as const, text: t("cloudBuy.row.desktops"), note: t("cloudBuy.plan.limit", { count: a.computers }) }] : []),
+    ...(a.computerHours > 0 ? [{ key: "hours" as const, text: t("cloudAdd.hours", { hours: amount(a.computerHours) }) }] : []),
     { key: "machine", text: t("cloudBuy.row.machine", { cpus, memory: gb(a.memoryMb) }), ...(a.swapMb ? { note: t("cloudBuy.row.swap", { swap: gb(a.swapMb) }) } : {}) },
     { key: "storage", text: a.maxDiskGb > a.diskGb ? t("cloudBuy.row.storageGrows", { gb: a.diskGb, max: a.maxDiskGb }) : t("cloudBuy.row.storage", { gb: a.diskGb }) },
-    { key: "voice", text: voiceLine(a.voiceCharacters) },
+    ...(a.voiceCharacters > 0 ? [{ key: "voice" as const, text: voiceLine(a.voiceCharacters) }] : []),
     ...(a.snapshotDays ? [{ key: "backups" as const, text: t("cloudBuy.row.backups", { days: a.snapshotDays }) }] : []),
   ];
 }
@@ -309,6 +309,7 @@ export function startedSleeps(started: CloudStarted, offer: CloudOffer | null | 
 export type CloudAddView =
   | { kind: "checking" }
   | { kind: "unreachable" }
+  | { kind: "no-plans" }
   | { kind: "error"; reason: "failed" | "rate-limited" }
   | { kind: "offer"; offer: CloudOffer; signedOut: boolean; notice: "code-expired" | "signin-ended" | "preparing" | "terms" | null }
   | { kind: "sign-in"; phase: CloudSignInPhase }
@@ -323,17 +324,21 @@ export type CloudAddView =
   | { kind: "settings" };
 
 function teamCloudView(team: ReturnType<typeof planTeam>): CloudAddView {
-  const machine = team?.machine ?? null;
-  if (!team || !machine || machine.status === "provisioning") {
-    return { kind: "team-starting", team: team?.name ?? null, step: machine?.setup?.step ?? null, slow: machine?.setup?.slow === true };
-  }
-  return machine.status === "ready" ? { kind: "team-ready", team: { id: team.id, name: team.name } } : { kind: "settings" };
+  if (!team) return { kind: "checking" };
+  const machine = team.machine ?? null;
+  if (machine?.status === "provisioning") return { kind: "team-starting", team: team.name, step: machine.setup?.step ?? null, slow: machine.setup?.slow === true };
+  return machine?.status === "ready" ? { kind: "team-ready", team: { id: team.id, name: team.name } } : { kind: "settings" };
 }
 
 /** The one state → view function of the buying sheet: every Cloud state is one message and one next step. */
 export function cloudAddView(account: CloudAccountState | null | undefined, offer: CloudOffer | null | undefined,
-  { now, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
-    now: number; error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
+  { now, sells = true, unreachable = false, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
+    now: number;
+    /** Whether this build sells a Cloud: when it does not, signed in with no Cloud there is nothing to choose, so Settings is the next step. */
+    sells?: boolean;
+    /** The offer could not be read; with a null offer, Seira Cloud answered but lists no plan. */
+    unreachable?: boolean;
+    error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
     /** Signed in here to an account whose own terms differ from those shown: Choose says so. */
     terms?: boolean;
     /** Signed in from this sheet just now: a ready Cloud is theirs to open, not a second one to ask for. */
@@ -361,8 +366,9 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
     }
     case "signed-out": case "free": {
       if (error) return { kind: "error", reason: error };
+      if (!sells) return { kind: "settings" };
       if (offer === undefined) return { kind: "checking" };
-      if (offer === null) return { kind: "unreachable" };
+      if (offer === null) return { kind: unreachable ? "unreachable" : "no-plans" };
       const opened = account?.checkout ?? null;
       if (signIn && !opened && (view.kind === "signed-out" || signIn.step === "done")) return { kind: "sign-in", phase: signIn };
       const open = offer.checkout && offer.checkout.openUntil > now ? offer.checkout : null;

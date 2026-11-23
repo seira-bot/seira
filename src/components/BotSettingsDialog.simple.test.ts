@@ -5,10 +5,6 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Routine } from "@/lib/routines";
 import type { MemoryDoc } from "@/lib/memory";
 import type { Bot, BotSettingsSection, InstanceInfo } from "@/state/store";
-import { AVATAR_FOCUS_CENTER, AVATAR_ZOOM_MIN } from "../../shared/bot-avatar";
-import { PICKER_BODY_IDS } from "../../shared/bot-body";
-import { MASCOT_ACCESSORY_IDS } from "../../shared/mascot-accessories";
-import { bodyName } from "@/lib/mascot-names";
 import type { ManagedSkill } from "./bot-settings/SkillsSection";
 import type { McpServerSummary } from "@/lib/mcp-servers";
 import type { BotApps } from "./bot-settings/useBotApps";
@@ -123,7 +119,9 @@ vi.mock("@/state/store", async (importOriginal) => {
 });
 
 const { BotSettingsDialog } = await import("./BotSettingsDialog");
+vi.mock("./bot-panel/ActivityTab", () => ({ ActivityTab: () => null }));
 const { BotPanel } = await import("./bot-panel/PanelShell");
+const { ActivityTab } = await import("./bot-panel/ActivityTab");
 const { AdvancedPanel } = await import("./bot-panel/AdvancedPanel");
 const { PanelHero } = await import("./bot-panel/PanelHero");
 const { AvatarEditorCard } = await import("./bot-panel/AvatarEditorCard");
@@ -148,9 +146,7 @@ const { ModelSection } = await import("./bot-settings/ModelSection");
 const { RoutineList } = await import("./routines/RoutineList");
 const { RoutineEditor } = await import("./RoutinesPage");
 const { SignedInSites } = await import("./SignedInSites");
-const { AvatarImageGenerator } = await import("./AvatarImageGenerator");
-const { AvatarFraming } = await import("./avatar-editing");
-const { MascotAccessoryPicker } = await import("./MascotAccessoryPicker");
+const { AvatarEditor } = await import("./avatar/AvatarEditor");
 const { Switch } = await import("./SettingsPrimitives");
 const { OrgSkillsCard } = await import("./bot-settings/OrgSkillsCard");
 const { PackageProvenance } = await import("./bot-settings/PackageProvenance");
@@ -238,7 +234,7 @@ const rowValue = (rendered: Rendered, page: string) => find(rendered, "data-pane
 const skill = (name: string, enabled: boolean, origin?: ManagedSkill["origin"]): ManagedSkill =>
   ({ name, description: `${name} helper`, enabled, source: "github:x/y", warnings: [], ...(origin ? { origin } : {}) });
 const routine = (extra: Partial<Routine> = {}): Routine => ({
-  id: "r1", name: "Morning brief", prompt: "Brief me", target: "bot", botId: "scout", runOn: "maus", enabled: true,
+  id: "r1", name: "Morning brief", prompt: "Brief me", target: "bot", botId: "scout", runOn: "seira", enabled: true,
   schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, durationMinutes: 15,
   nextRunAt: Date.UTC(2099, 0, 5, 9), createdAt: 1, updatedAt: 1, ...extra,
 });
@@ -288,7 +284,7 @@ beforeEach(() => {
 });
 
 describe("the bot panel in Simple mode", () => {
-  it("has Share, a gear for Bot settings and a close button on top, the hero, and three tabs: Details, Library, Computer", () => {
+  it("has Share, a gear for Bot settings and a close button on top, the hero, and four tabs: Activity, Details, Library, Computer", () => {
     const bot = makeBot();
     const rendered = panel(bot);
     expect(ofType(rendered, ChatShareMenu)!.props.bot).toBe(bot);
@@ -300,15 +296,15 @@ describe("the bot panel in Simple mode", () => {
     expect(hero.props.bot).toBe(bot);
     expect(hero.props.patch).toBe(patch);
     const tabs = [...rendered.html.matchAll(/data-panel-tab="(\w+)"[^>]*>([^<]+)<\/button>/g)].map((match) => [match[1], match[2]]);
-    expect(tabs).toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
-    expect(shown(rendered)).toEqual({ tab: "details", page: undefined });
-    expect(ofType(rendered, DetailsTab)!.props.bot).toBe(bot);
+    expect(tabs).toEqual([["activity", "Activity"], ["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+    expect(shown(rendered)).toEqual({ tab: "activity", page: undefined });
+    expect(ofType(rendered, ActivityTab)!.props.bot).toBe(bot);
     expect(rendered.html).toContain('id="bot-settings-title"');
   });
 
   it("switches tabs", () => {
     const bot = makeBot();
-    for (const [tab, type] of [["computer", ComputerTab], ["library", LibraryTab], ["details", DetailsTab]] as const) {
+    for (const [tab, type] of [["computer", ComputerTab], ["library", LibraryTab], ["details", DetailsTab], ["activity", ActivityTab]] as const) {
       click(find(panel(bot), "data-panel-tab", tab));
       const rendered = panel(bot);
       expect(shown(rendered).tab).toBe(tab);
@@ -334,6 +330,7 @@ describe("the bot panel in Simple mode", () => {
 
   it("drills into a page with its intro and back, naming where Back goes", () => {
     const bot = makeBot();
+    click(find(panel(bot), "data-panel-tab", "details"));
     (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
     const page = panel(bot);
     expect(shown(page)).toEqual({ tab: undefined, page: "routines" });
@@ -355,6 +352,7 @@ describe("the bot panel in Simple mode", () => {
 
   it("goes back on Escape from a page, and leaves Escape to the dialog on a tab", () => {
     const bot = makeBot();
+    click(find(panel(bot), "data-panel-tab", "details"));
     (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
     const event = key(panel(bot).nodes[0]!, "Escape");
     expect(event.stopPropagation).toHaveBeenCalled();
@@ -427,7 +425,7 @@ describe("the bot panel in Simple mode", () => {
     const bot = makeBot();
     expect(switches(panel(bot).html)).toBe(0);
     expect(panel(bot).html).not.toContain('aria-label="Work until done"');
-    for (const tab of ["library", "computer"]) {
+    for (const tab of ["details", "library", "computer"]) {
       click(find(panel(bot), "data-panel-tab", tab));
       const rendered = panel(bot);
       expect(switches(rendered.html), tab).toBe(0);
@@ -515,126 +513,10 @@ describe("the hero", () => {
 describe("the avatar editor", () => {
   const editor = (bot: Bot) => capture(() => AvatarEditorCard({ bot, activeState: "idle", onPatch: patch, onClose }));
 
-  it("shows the hair of the picker, twelve colors, twelve accessories, and the faces behind More looks", () => {
+  it("wraps the shared avatar editor and passes it the bot, its state and its patch", () => {
     const bot = makeBot();
-    const rendered = editor(bot);
-    const hairs = PICKER_BODY_IDS.length > 1 ? PICKER_BODY_IDS.length : 0;
-    expect(rendered.html.match(/aria-label="Use the [\w ]+ hair"/g)?.length ?? 0).toBe(hairs);
-    expect(rendered.html).not.toContain("Use the Cursor body");
-    expect(rendered.html).not.toContain(">Halloween<");
-    expect(rendered.html).not.toContain(">Diwali<");
-    expect(rendered.html.match(/aria-label="Use \w+ mascot color"/g)).toHaveLength(12);
-    expect(has(rendered, "data-avatar-face", "idle")).toBe(false);
-    const second = ([...PICKER_BODY_IDS] as string[])[1];
-    if (hairs && second) {
-      expect(find(rendered, "aria-label", "Use the Seira hair").props["aria-pressed"]).toBe(true);
-      click(find(rendered, "aria-label", `Use the ${bodyName(second as (typeof PICKER_BODY_IDS)[number])} hair`));
-      expect(patch).toHaveBeenLastCalledWith({ mascotBody: second });
-    }
-    click(find(rendered, "aria-label", "Use blue mascot color"));
-    expect(patch).toHaveBeenLastCalledWith({ color: "blue" });
-    expect(find(rendered, "aria-label", "Use silver mascot color").props.title).toBe("Silver");
-    click(find(rendered, "aria-label", "Use silver mascot color"));
-    expect(patch).toHaveBeenLastCalledWith({ color: "silver" });
-    expect(find(rendered, "aria-label", "Use chrome mascot color").props.title).toBe("Chrome");
-    click(find(rendered, "aria-label", "Use chrome mascot color"));
-    expect(patch).toHaveBeenLastCalledWith({ color: "chrome" });
-
-    const more = find(rendered, "data-avatar-more");
-    expect(more.props["aria-expanded"]).toBe(false);
-    expect(rendered.html).toContain(">More looks<");
-    click(more);
-    const open = editor(bot);
-    expect(find(open, "data-avatar-more").props["aria-expanded"]).toBe(true);
-    expect(find(open, "data-avatar-face", "idle").props["aria-pressed"]).toBe(true);
-    click(find(open, "data-avatar-face", "proud"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotExpression: "proud" });
-    expect(open.html).toContain(">Proud<");
-  });
-
-  it("reads an old body as Seira's hair and does not count it as a different hair", () => {
-    if (PICKER_BODY_IDS.length < 2) return;
-    const bot = makeBot({ mascotBody: "cursor" });
-    fixture.storeState = {
-      ...fixture.storeState,
-      bots: [bot, makeBot({ id: "pumpkin", mascotBody: "pumpkin" }), makeBot({ id: "bob", mascotBody: "bob" })],
-    };
-    const rendered = editor(bot);
-    expect(find(rendered, "aria-label", "Use the Seira hair").props["aria-pressed"]).toBe(true);
-    expect(rendered.html).toContain("Give this body to the other bots (1)");
-    click(find(rendered, "data-avatar-body-everywhere"));
-    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "updateBot", botId: "bob", patch: { mascotBody: "seira" } });
-    expect(fixture.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ botId: "pumpkin" }));
-  });
-
-  it("puts accessories on and takes them off, one in each slot and at most three", () => {
-    const picker = (bot: Bot) => {
-      const props = ofType(editor(bot), MascotAccessoryPicker)!.props as Parameters<typeof MascotAccessoryPicker>[0];
-      return { nodes: nodes(MascotAccessoryPicker(props)) };
-    };
-    const rendered = picker(makeBot());
-    expect(rendered.nodes.filter((node) => node.props["data-avatar-accessory"] !== undefined)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
-    expect(find(rendered, "aria-label", "Wear Glasses").props["aria-pressed"]).toBe(false);
-    click(find(rendered, "aria-label", "Wear Glasses"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["glasses"] });
-
-    const wearing = picker(makeBot({ mascotAccessories: ["glasses", "cap"] }));
-    expect(find(wearing, "aria-label", "Wear Glasses").props["aria-pressed"]).toBe(true);
-    click(find(wearing, "aria-label", "Wear Glasses"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["cap"] });
-    click(find(wearing, "aria-label", "Wear Sunglasses"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["cap", "sunglasses"] });
-    click(find(wearing, "aria-label", "Wear Ribbon"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["glasses", "cap", "ribbon"] });
-
-    const full = picker(makeBot({ mascotAccessories: ["glasses", "cap", "ribbon"] }));
-    click(find(full, "aria-label", "Wear Scarf"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["cap", "ribbon", "scarf"] });
-  });
-
-  it("opens More looks at once for a chosen face", () => {
-    expect(find(editor(makeBot({ mascotExpression: "proud" })), "data-avatar-more").props["aria-expanded"]).toBe(true);
-    fresh();
-    expect(find(editor(makeBot()), "data-avatar-more").props["aria-expanded"]).toBe(false);
-  });
-
-  it("switches back to the mascot when a color is picked over a picture", () => {
-    const bot = makeBot({ avatarUrl: "/api/attachments/cat.webp", avatarCrop: "circle" });
-    click(find(editor(bot), "data-avatar-tab", "bot"));
-    click(find(editor(bot), "aria-label", "Use blue mascot color"));
-    expect(patch).toHaveBeenLastCalledWith({ color: "blue", avatarCrop: "mascot" });
-  });
-
-  it("resets the mascot as the Advanced card does", () => {
-    click(find(editor(makeBot()), "data-avatar-reset"));
-    expect(patch).toHaveBeenLastCalledWith({ avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "seira", mascotFaceColor: null, mascotAccessories: null });
-  });
-
-  it("generates with the shared generator, and uploads with shape and framing", () => {
-    const bot = makeBot();
-    click(find(editor(bot), "data-avatar-tab", "generate"));
-    const generate = editor(bot);
-    expect(ofType(generate, AvatarImageGenerator)!.props.botLabel).toBe("Researcher");
-
-    click(find(generate, "data-avatar-tab", "upload"));
-    const upload = editor(bot);
-    expect(upload.html).toContain("Drop a picture here, or choose one");
-    expect(upload.html).toContain("PNG, JPEG, GIF, or WebP · up to 10 MB");
-    expect(segment(upload, "data-avatar-crop").options.map((option) => [option.value, option.disabled])).toEqual([
-      ["circle", true], ["rounded", true], ["square", true],
-    ]);
-    expect(ofType(upload, AvatarFraming)).toBeUndefined();
-
-    fresh();
-    const pictured = makeBot({ avatarUrl: "/api/attachments/cat.webp", avatarCrop: "circle" });
-    const withImage = editor(pictured);
-    expect(find(withImage, "data-avatar-tab", "upload").props["aria-selected"]).toBe(true);
-    expect(ofType(withImage, AvatarFraming)!.props.bot).toBe(pictured);
-    expect(segment(withImage, "data-avatar-crop").value).toBe("circle");
-    segment(withImage, "data-avatar-crop").onChange("square");
-    expect(patch).toHaveBeenLastCalledWith({ avatarCrop: "square" });
-    click(find(withImage, "aria-label", "Remove custom avatar image"));
-    expect(patch).toHaveBeenLastCalledWith({ avatarUrl: null, avatarCrop: "mascot", avatarZoom: AVATAR_ZOOM_MIN, avatarFocusX: AVATAR_FOCUS_CENTER, avatarFocusY: AVATAR_FOCUS_CENTER });
+    const props = ofType(editor(bot), AvatarEditor)!.props;
+    expect(props).toMatchObject({ bot, activeState: "idle", variant: "popover", onPatch: patch });
   });
 
   it("closes on Escape without letting the dialog close settings", () => {
@@ -1009,7 +891,7 @@ describe("the Computer tab", () => {
     const setItem = vi.fn();
     vi.stubGlobal("localStorage", { getItem: () => null, setItem });
     click(find(rendered, "data-panel-action", "open-computer"));
-    expect(setItem).toHaveBeenLastCalledWith("omb-computer-panel-view:scout", "computer");
+    expect(setItem).toHaveBeenLastCalledWith("seira-computer-panel-view:scout", "computer");
     expect((fixture.dispatch as ReturnType<typeof vi.fn>).mock.calls.slice(-2)).toEqual([
       [{ type: "toggleSettings", open: false }],
       [{ type: "toggleComputer", open: true }],

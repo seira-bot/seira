@@ -1,8 +1,7 @@
 # Waits: tell me when, with no AI while waiting
 
 A wait is a condition a bot sets up once ("tell me when report.txt is there"); plain server
-code checks it on a timer, and no model runs until it fires. See the
-[design](../superpowers/specs/2026-10-27-waits-design.md).
+code checks it on a timer, and no model runs until it fires.
 
 ## Automated checks
 
@@ -77,7 +76,7 @@ follow-up when the requested condition already holds.
 ## Earlier fixture transcript
 
 2026-10-28, Node 24, branch `feat/bot-waits` at `4fc4ef0bb`, fixture log
-`/var/folders/7b/15jj691d4tj_7vq99cqvwgbr0000gn/T/openmausbot-verification-evidence/server-1793162265419-23568.log`.
+`/var/folders/7b/15jj691d4tj_7vq99cqvwgbr0000gn/T/seira-verification-evidence/server-1793162265419-23568.log`.
 The lines below record the original continuation refusal. They are abridged to
 selected message fields, and `<W>` stands for the temp dir.
 

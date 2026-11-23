@@ -28,7 +28,7 @@ const navigation = { "sec-fetch-site": "none", "sec-fetch-mode": "navigate", "se
 
 describe("a browser on a self-hosted server's own machine", () => {
   it("is refused until it signs in once with a pairing code, while the CLI keeps working", async () => {
-    const fixture = await launchVerificationServer({ OMB_DEV_TRUST_LOCAL_BROWSER: "0" });
+    const fixture = await launchVerificationServer({ SEIRA_DEV_TRUST_LOCAL_BROWSER: "0" });
     const url = fixture.info.url;
     try {
       for (const headers of [fromPage(url), otherPage, navigation]) {
@@ -43,7 +43,7 @@ describe("a browser on a self-hosted server's own machine", () => {
       });
       expect(socket.status).toBe(401);
       // Public routes still answer a stranger: the sign-in page needs them.
-      expect(await raw(url, "/api/health", fromPage(url)).then((answer) => JSON.parse(answer.body))).toEqual({ app: "openmausbot" });
+      expect(await raw(url, "/api/health", fromPage(url)).then((answer) => JSON.parse(answer.body))).toEqual({ app: "seira", legacyApp: "openmausbot" });
 
       // The CLI is Node's fetch, which sends Sec-Fetch-Mode alone.
       const cli = await fetch(`${url}/api/bots`);
@@ -59,6 +59,21 @@ describe("a browser on a self-hosted server's own machine", () => {
       expect(JSON.parse(signedIn.body).bots).toHaveLength(1);
       // The cookie is for this page only: another page on this machine still gets nothing.
       expect((await raw(url, "/api/bots", { ...otherPage, cookie })).status).toBe(403);
+    } finally {
+      await fixture.close();
+    }
+  }, 60_000);
+
+  it("shows a stranger only the brand and where it came from", async () => {
+    const fixture = await launchVerificationServer({ SEIRA_DEV_TRUST_LOCAL_BROWSER: "0" });
+    const url = fixture.info.url;
+    try {
+      const answer = await raw(url, "/api/brand", fromPage(url));
+      expect(answer.status).toBe(200);
+      const body = JSON.parse(answer.body);
+      expect(Object.keys(body).sort()).toEqual(["brand", "source"]);
+      expect(body).not.toHaveProperty("file");
+      expect(body).not.toHaveProperty("notice");
     } finally {
       await fixture.close();
     }

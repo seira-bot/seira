@@ -11,7 +11,7 @@ const settledYet = async (promise) => { let done = false; void promise.then(() =
 
 /** One Cloud of the person's own, lent to, whose answer to a disconnect is held (`hold`) until the test lets it go, or fails (`fail`). */
 async function fixture(t, { screen = () => false } = {}) {
-  const dir = await mkdtemp(path.join(tmpdir(), "omb-lending-goodbyes-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "seira-lending-goodbyes-"));
   const env = { id: "cloud-a", origin: "https://a.fixture.test", name: "A's Cloud", cloud: { id: "c" } };
   const identity = { sessionId: randomUUID(), environmentId: randomUUID() };
   const f = { env, status: "connected", polls: 0, disconnects: 0, hold: false, fail: false, answer: Promise.withResolvers() };

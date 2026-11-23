@@ -1,7 +1,7 @@
 # Team Clouds: the `team` role and the audience rule
 
 A **Team Cloud** is one Cloud machine several people use: the shared home of a team's bots. The Admin
-(openmaus-cloud, `docs/team-cloud.md` there) makes it, invites people and signs each person's pairing. This page is the
+(the Seira Cloud service) makes it, invites people and signs each person's pairing. This page is the
 machine's side: what the `team` role changes against a My Cloud ([cloud-pro.md](cloud-pro.md)), and the one rule that
 keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes that rule hold against a bot with a shell.
 
@@ -30,7 +30,7 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   device also says it as a sentence: *"Your chats in Acme are private. Only you can see them: not other members, not
   Acme's admins."* The server marks such a conversation `private: true` on the wire (`WireTask.private`). When you leave
   the team (or are removed), your private chats and everything only yours there are deleted, never handed to an admin
-  (below). The Owner's export of the team's machine (the workspace backup, `OMB_CLOUD_EXPORT_ONLY`) leaves them out too
+  (below). The Owner's export of the team's machine (the workspace backup, `SEIRA_CLOUD_EXPORT_ONLY`) leaves them out too
   (`server/workspace-backup-team-private.ts`): no private conversation, none of its work folders or files only it used, no
   routine that lives in one nor any run that names one, no member's memory layer, no member's own Seira, their inbox
   or anything under `people/`. Restoring such an export gives a team back everything but those.
@@ -59,13 +59,13 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   remembers about you (the bot panel's What it remembers, `/api/bots/<bot>/memory/mine`); nobody else can. "About you" is yours alone: `GET`/`PUT /api/me`
   (the app's Profile on a team), read into your own conversations only.
 - **Profile.** "You" is the person signed in: your own name, picture and About you (`people/<person>/profile.json` and
-  `about.json`, `GET`/`PUT /api/me`), with the address of your verified sign-in, which nothing here changes. Settings →
-  Profile saves yours only (an older app's `PUT /api/config` `profile` lands on the caller's own too), and `GET
+  `about.json`, `GET`/`PUT /api/me`), with the address of your verified sign-in, which nothing here changes. Settings → You and your bots → About
+  you saves yours only (an older app's `PUT /api/config` `profile` lands on the caller's own too), and `GET
   /api/config` and every config frame on your stream carry yours. Your lines, cards and reactions carry your name; a bot
   names you in your private chat, each speaker on a group chat's lines, and a routine's run its writer. config.json's one
   `profile` is nobody's on a team: it is never shown or read as anyone, and when the person whose address it names signs
   in it becomes theirs (filling only what they have not set) and is cleared. When the desktop app opens a team, the name
-  and picture of that computer's own Settings → Profile fill what the person's team profile lacks (`PUT /api/me` with
+  and picture of that computer's own Settings → You and your bots → About you fill what the person's team profile lacks (`PUT /api/me` with
   `fillEmpty: true`, the picture uploaded first as their own attachment): each field once (`GET /api/me` lists the
   `seeded` ones), never over what they set on the team and never again after they clear it there. Nothing else goes up.
   **A teammate's name and picture are visible to everyone in the team, like any team app. About you and everything
@@ -106,7 +106,7 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   member signed in to in their chat never opens signed in for another member. The live view shows the browser of the
   conversation it is opened from, to whoever may read that conversation (a member's own browser to that member alone);
   with no conversation named (a phone) it is the person's own. Every Chrome runs in its own box (below).
-- **Phones.** Settings → *Open on your phone* (and *Connect your phone* in the account menu) shows a code made for the
+- **Phones.** Settings → Phone & devices (*Open on your phone*) (and *Connect your phone* in the account menu) shows a code made for the
   person signed in. The phone app scans it as any `/pair#code=` link and gets that person's session: their address,
   their role, their chats, never another member's. The phone stays signed in while it is used: the Cloud's roster check
   (below, "Signed in without a desktop") asks the Admin about its person, as the desktop's re-pairing always did. Under the code,
@@ -188,7 +188,7 @@ with who asked, and its news stays out of the owner's list. See [Verifying the I
 
 ## Rules
 
-The team's rules live on the Admin (openmaus-cloud `docs/team-cloud.md` "Rules"): one document, `{ schema: 1, limits }`, that
+The team's rules live on the Admin: one document, `{ schema: 1, limits }`, that
 only restricts. `server/cloud-team-policy.ts` fetches it at boot, every 5 minutes and when the Admin's signed `POST
 /api/cloud/team/policy-changed` nudges it, signed with the bootstrap secret (`POST /api/cloud/machines/team-policy`), and each
 request reports the fingerprint in force here. A change applies without a restart. A turn already running keeps its engine
@@ -220,17 +220,17 @@ process restarts without what is now blocked.
 
 ## The role
 
-`OMB_CLOUD_ROLE=team` with `OMB_CLOUD_TEAM_ID` (the Admin's id) and `OMB_CLOUD_TEAM_NAME` (1 to 80 characters), beside
-the usual Cloud home contract (`OMB_CLOUD_MACHINE_ID`, `OMB_CLOUD_ADMIN_URL`, `OMB_CLOUD_BOOTSTRAP_SECRET`,
-`OMB_PUBLIC_URL`). Everything else is a Cloud home: the signed routes (`/api/cloud/pairing`, `/api/cloud/health`,
-`/api/cloud/power`, `/api/cloud/box`), the launcher, the box, the broker, `OMB_CLOUD_EXPORT_ONLY=1`.
+`SEIRA_CLOUD_ROLE=team` with `SEIRA_CLOUD_TEAM_ID` (the Admin's id) and `SEIRA_CLOUD_TEAM_NAME` (1 to 80 characters), beside
+the usual Cloud home contract (`SEIRA_CLOUD_MACHINE_ID`, `SEIRA_CLOUD_ADMIN_URL`, `SEIRA_CLOUD_BOOTSTRAP_SECRET`,
+`SEIRA_PUBLIC_URL`). Everything else is a Cloud home: the signed routes (`/api/cloud/pairing`, `/api/cloud/health`,
+`/api/cloud/power`, `/api/cloud/box`), the launcher, the box, the broker, `SEIRA_CLOUD_EXPORT_ONLY=1`.
 
 What the role turns off: the personal settlement (`cloud-owner.ts`: no session is revoked at boot, no owner key, no
 earlier-owner adoption), lending a Mac (nobody's Mac serves a team), the guest confinement of a My Cloud (a member's turn
 runs at the bot's own level inside the box; only what came in from outside, a webhook, runs confined), and the "only the
 owner" card rule (whoever started a conversation, or an Admin, answers its cards, as on a hosted workspace).
 
-`OMB_CLOUD_TEAM_LANGUAGE` (optional, one of the app's locales: `de`, `pt-br`…) is the team's default language, set on
+`SEIRA_CLOUD_TEAM_LANGUAGE` (optional, one of the app's locales: `de`, `pt-br`…) is the team's default language, set on
 the Admin's Team admin → Settings. It is this server's language while its own settings set none (the app's words and the
 language new bots start in); a value that isn't a locale is ignored, never refused.
 
@@ -246,7 +246,7 @@ What came in from outside (a webhook, an app's event) is confined, and the conve
 
 ## Team admin: the Admin's signed read
 
-The Admin's Team admin pages (openmaus-cloud docs/team-cloud.md "Team admin") show a team's Super admin and Admins what
+The Admin's Team admin pages show a team's Super admin and Admins what
 this server shares with every bot. It exists only on a Team Cloud.
 
 - `GET /api/cloud/team/admin`, signed like `/api/cloud/health` → `{ v: 1, apps: { available, services: [{ slug, status,
@@ -304,7 +304,7 @@ this server shares with every bot. It exists only on a Team Cloud.
   toward the person's and the team's totals (`server/host/private-records.ts`). What a person changes on their own
   Seira is never recorded in admin activity.
 - For a business sign-in (Claude or ChatGPT on this server), the Admin opens this server's own pages signed in as that
-  admin (a browser sign-in with the member's claim) at `/?connect=ai` (or `apps`, `mcp`, `keys`, and `bots` for Settings → Bot access, which opens for an admin only).
+  admin (a browser sign-in with the member's claim) at `/?connect=ai` (or `apps`, `mcp`, `keys`, and `bots` for Settings → People → Bot access, which opens for an admin only).
 
 ## Connections: the team's or each person's
 
@@ -545,7 +545,7 @@ routes.
 **Each Chrome in a box.** On a Team Cloud with the bot box on, the Chrome launcher agent-browser runs starts every
 Chrome inside bubblewrap (`net: "shared"`, as the browser's own gate filters its traffic): the system read-only, private
 `/tmp` (its HOME), the seccomp filter, and of the disk only the profile it was started on (`--user-data-dir`). A file a
-turn uploads is linked into that profile's `omb-uploads/` first. The agent-browser daemon itself stays outside: it
+turn uploads is linked into that profile's `seira-uploads/` first. The agent-browser daemon itself stays outside: it
 holds the session's saved-state key and talks to the server's runtime by its own socket and pid files.
 
 On a My Cloud and on a desktop there is one person: every audience is the team's, every layer is the bot's own folder,
@@ -634,7 +634,7 @@ none, and the person can hide it.
   *"Shared · everyone in this group chat can see"* (`TeamAudienceLabel`).
 - **The switch follows a conversation the person asked for**: another bot or group chat, a conversation opened by
   name (a notification, a link, search, a list), one they just made. That, and pressing the switch, are the only things
-  that keep a side as their choice (`localStorage`, `omb.team-side.<team>.<address>`, per person and team on the
+  that keep a side as their choice (`localStorage`, `seira.team-side.<team>.<address>`, per person and team on the
   device; Just me until they choose Team).
 - **A conversation that came on screen unasked is never kept.** The first conversation a page shows, one the app opened
   as it started (before it knew this is a team's Cloud), or the bot's own pick changing because a teammate opened
@@ -1055,7 +1055,7 @@ On a My Cloud and on a desktop there is one person: no People list, no presence,
 ## When you are away
 
 A member who has no live stream on the team (no app or phone open on it) is away, and three things reach them by one
-email, which the Admin sends (openmaus-cloud docs/team-cloud.md "When you are away"): a teammate or bot mentioned them
+email, which the Admin sends: a teammate or bot mentioned them
 or passed them a message; a question, approval or sign-in waits on their answer (routed to them, or in their own private
 chat) for at least 5 minutes; work they asked for in a shared chat or group chat, or a routine's report routed to them,
 finished or failed. The first thing opens a 10-minute window and everything in it goes in one email; finished work is
@@ -1122,11 +1122,11 @@ opens the team's page on the Cloud site (`/cloud/team/<id>`), not a chat. Nothin
 
 ## The desktop app and a team it was invited to
 
-- **`openmausbot://team/<team id>`** (the join page's Open in the Seira app; `electron/team-join.mjs`): the id only. Main
+- **`seira://team/<team id>`** (the join page's Open in the Seira app; `electron/team-join.mjs`): the id only. Main
   opens the team as the verified session lists it: signed in as the same address it reads the session again at once and
   opens the team; signed out it starts its own browser sign-in and opens the team once signed in; signed in as someone
   the team isn't listed for, main's own dialog says so and offers to sign in with another address (Add another account:
-  the one in use stays signed in). A link left waiting is dropped after 30 minutes. `openmausbot://cloud` is unchanged.
+  the one in use stays signed in). A link left waiting is dropped after 30 minutes. `seira://cloud` is unchanged.
 - **Landing** (`landing` in the Admin's session: no Cloud of the account's own, invited into a team): the window moves to the
   team only on a sign-in this app just saw, the first on this device (`team-landing.json` keeps the accounts signed in here
   and the teams opened here), with no place of the person's own on screen (My Cloud, a remembered place); then once. Any

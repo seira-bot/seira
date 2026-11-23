@@ -1,4 +1,5 @@
 // The hosted connector never reaches the LAN listener on :8810, only this guardian-owned gateway to the exact sidecar's socket.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -8,7 +9,7 @@ import { randomUUID } from "node:crypto";
 export const MANAGED_COMPANION_ORIGIN_HOST = "127.0.0.1";
 export const MANAGED_COMPANION_ORIGIN_PORT = 8812;
 
-const RUNTIME_PREFIX = "omb-companion-origin-";
+const RUNTIME_PREFIX = "seira-companion-origin-";
 const SOCKET_NAME = "origin.sock";
 
 const currentUserId = () => {
@@ -21,7 +22,7 @@ export function validCompanionOriginTarget(target, platform = process.platform) 
   if (!Number.isSafeInteger(target?.pid) || target.pid <= 0) return false;
   if (Object.prototype.toString.call(target?.socketPath) !== "[object String]") return false;
   if (platform === "win32") {
-    return /^\\\\\.\\pipe\\openmausbot-companion-origin-[1-9][0-9]*-[0-9a-f-]{36}$/i.test(
+    return /^\\\\\.\\pipe\\seira-companion-origin-[1-9][0-9]*-[0-9a-f-]{36}$/i.test(
       target.socketPath,
     );
   }
@@ -43,7 +44,7 @@ export function createCompanionOriginEndpoint({
   if (platform === "win32") {
     return Object.freeze({
       pid: processId,
-      socketPath: `\\\\.\\pipe\\openmausbot-companion-origin-${processId}-${identifier()}`,
+      socketPath: `\\\\.\\pipe\\seira-companion-origin-${processId}-${identifier()}`,
       directory: null,
     });
   }
@@ -149,7 +150,7 @@ export function companionOriginHealth(
         response.on("end", () => {
           if (response.statusCode !== 200) return finish(false);
           try {
-            finish(JSON.parse(Buffer.concat(chunks).toString("utf8"))?.app === "openmausbot");
+            finish(acceptedWireNames("healthApp").includes(JSON.parse(Buffer.concat(chunks).toString("utf8"))?.app));
           } catch {
             finish(false);
           }
@@ -180,6 +181,17 @@ function unavailable(response) {
   response.end(body);
 }
 
+function invalidRequest(response) {
+  const body = JSON.stringify({ error: "invalid request" });
+  response.writeHead(400, {
+    "cache-control": "private, no-store",
+    connection: "close",
+    "content-length": Buffer.byteLength(body),
+    "content-type": "application/json",
+  });
+  response.end(body);
+}
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -202,6 +214,8 @@ function endToEndHeaders(headers = {}) {
     Object.entries(headers).filter(([name, value]) => value !== undefined && !blocked.has(name.toLowerCase())),
   );
 }
+
+const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function upgradeHeaders(headers = {}) {
   if (String(headers.upgrade ?? "").toLowerCase() !== "websocket") return null;
@@ -255,9 +269,20 @@ export function createCompanionOriginGateway({
 
   const server = createServer((incoming, outgoing) => {
     if (!accepting || !isTargetAlive(target)) return unavailable(outgoing);
+    const bodiless = METHODS_WITHOUT_BODY.has(incoming.method);
+    if (bodiless && incoming.headers["transfer-encoding"] !== undefined) {
+      incoming.resume();
+      return invalidRequest(outgoing);
+    }
+    const headers = endToEndHeaders(incoming.headers);
+    if (bodiless) delete headers["content-length"];
+    else if (!/^(?:0|[1-9]\d*)$/.test(String(headers["content-length"] ?? ""))) {
+      delete headers["content-length"];
+      if (incoming.headers["transfer-encoding"] !== undefined) headers["transfer-encoding"] = "chunked";
+    }
     const upstream = request(
       {
-        headers: endToEndHeaders(incoming.headers),
+        headers,
         method: incoming.method,
         path: incoming.url,
         socketPath: target.socketPath,
@@ -283,7 +308,12 @@ export function createCompanionOriginGateway({
     upstream.once("error", () => unavailable(outgoing));
     incoming.once("aborted", () => upstream.destroy());
     outgoing.once("close", () => upstream.destroy());
-    incoming.pipe(upstream);
+    if (bodiless) {
+      incoming.resume();
+      upstream.end();
+    } else {
+      incoming.pipe(upstream);
+    }
   });
   server.on("upgrade", (incoming, socket, head) => {
     // Node removes its own error listener from a socket it hands to `upgrade`.

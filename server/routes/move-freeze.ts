@@ -25,7 +25,7 @@ const thawBody = z.object({ automations: z.literal("off").optional() });
 
 export function createMoveFreezeRoutes({ freeze, busy, restart, automationsOff, platform = process.platform }: MoveFreezeRouteDeps): RouteHandler {
   return async ({ req, res, path, method, auth, json, readBody }) => {
-    // Health still answers: without it the companion tells the phone OpenMausBot isn't ready here, and the phone keeps
+    // Health still answers: without it the companion tells the phone Seira isn't ready here, and the phone keeps
     // trying instead of reading the reason.
     if (auth.kind === "loopback" && auth.companionDevice && freeze.frozen() && freeze.lifts() && !(method === "GET" && path === "/api/health")) {
       const place = freeze.place();

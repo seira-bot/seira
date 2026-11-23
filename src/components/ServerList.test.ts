@@ -17,8 +17,8 @@ const workspaces = { probe: vi.fn(async () => ({ outcome: "problem", problem: "u
 const saved = {
   localOrigin: "http://127.0.0.1:1", remote: false, packaged: true, activeId: "local",
   environments: [
-    { id: "cloud", name: "My Cloud", origin: "https://omb-u-1.fly.dev", home: true, kind: "remote" as const },
-    { id: "vps", name: "hetzner-1", origin: "https://maus.example.com", kind: "remote" as const },
+    { id: "cloud", name: "My Cloud", origin: "https://seira-u-1.fly.dev", home: true, kind: "remote" as const },
+    { id: "vps", name: "hetzner-1", origin: "https://seira.example.com", kind: "remote" as const },
     { id: "mini", name: "office-mini", origin: "http://192.168.1.50:8799", kind: "remote" as const },
     { id: "mac", name: "Mac at home", origin: "https://mac.tail1234.ts.net", kind: "remote" as const },
     { id: "open", name: "old box", origin: "http://203.0.113.9:8799", kind: "remote" as const },
@@ -53,7 +53,7 @@ it("each saved server says how it is reached and how it is doing, with one thing
   await mount();
   expect(row("cloud").querySelector("[data-server-where]")?.textContent).toBe("Managed by Seira");
   expect(buttonIn(row("cloud"), "Remove My Cloud"), "My Cloud has no Remove").toBeUndefined();
-  expect(row("vps").querySelector("[data-server-where]")?.textContent).toBe("maus.example.com · HTTPS");
+  expect(row("vps").querySelector("[data-server-where]")?.textContent).toBe("seira.example.com · HTTPS");
   expect(row("mini").querySelector("[data-server-where]")?.textContent).toBe("192.168.1.50:8799 · Private network, not encrypted");
   expect(row("mac").querySelector("[data-server-where]")?.textContent).toBe("mac.tail1234.ts.net · Tailscale");
   expect(row("vps").querySelector("[data-server-state]"), "a connected server needs no line").toBeNull();
@@ -76,7 +76,7 @@ it("the update note shows only for a server behind this app, with the command th
   expect(updateCommand("npx", "0.1.147")).toBe("npx @seira-bot/seira@0.1.147 serve");
   expect(updateCommand(null, "0.1.147")).toBe("npx @seira-bot/seira@0.1.147 serve");
   expect(updateCommand("global", "0.1.147")).toBe("npm install -g @seira-bot/seira@0.1.147");
-  expect(updateCommand("podman-service", "0.1.147")).toBe("~/.local/share/openmausbot/update.sh");
+  expect(updateCommand("podman-service", "0.1.147")).toBe("~/.local/share/seira/update.sh");
 });
 
 it("Pair again opens the Connect sheet with the address locked and the code field ready; Remove only asks main", async () => {
@@ -132,4 +132,40 @@ it("a server of the person's own has \"Share this computer\" with its switch; Ch
 
   await render([{ id: "vps", enabled: true, connected: false, paused: true }]);
   expect(row("vps").querySelector("[data-server-share]")?.textContent).toContain("Paused: hetzner-1's bots can't use this computer until you resume.");
+});
+
+it("Rename shows only for a server connected by hand: the field starts with its name, refusals say why, and a saved name closes it", async () => {
+  const onRename = vi.fn(async (_id: string, _name: string) => "saved" as "saved" | "name" | "taken" | "gone" | "failed");
+  root = createRoot(host);
+  await act(async () => { root!.render(createElement(ServerList, { ...props, onRename })); });
+  await act(async () => { await Promise.resolve(); });
+  expect(host.querySelector('[data-server-rename="cloud"]'), "My Cloud's name is the Admin's").toBeNull();
+  expect(host.querySelector('[data-server-rename="local"]')).toBeNull();
+  expect(host.querySelectorAll("[data-server-rename]")).toHaveLength(4);
+  await click(host.querySelector('[data-server-rename="vps"]'));
+  const field = row("vps").querySelector<HTMLInputElement>("[data-server-rename-form] input")!;
+  expect([field.value, field.maxLength]).toEqual(["hetzner-1", 60]);
+  const type = async (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const submit = () => act(async () => { row("vps").querySelector<HTMLFormElement>("[data-server-rename-form]")!.requestSubmit(); await Promise.resolve(); await Promise.resolve(); });
+  await type("  Studio  ");
+  for (const [outcome, text] of [["taken", "Another place here has that name. Choose another."], ["name", "Use a name of 1 to 60 characters."], ["failed", "That didn't work. Try again in a moment."]] as const) {
+    onRename.mockResolvedValueOnce(outcome);
+    await submit();
+    expect(row("vps").querySelector("[data-server-rename-form] [role='alert']")?.textContent, outcome).toBe(text);
+  }
+  await submit();
+  expect(onRename.mock.calls, "by the row's id, the trimmed name").toEqual([["vps", "Studio"], ["vps", "Studio"], ["vps", "Studio"], ["vps", "Studio"]]);
+  expect(row("vps").querySelector("[data-server-rename-form]"), "saved: the field closes").toBeNull();
+  await click(host.querySelector('[data-server-rename="vps"]'));
+  await act(async () => { row("vps").querySelector("[data-server-rename-form] input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(row("vps").querySelector("[data-server-rename-form]"), "Escape leaves the name as it was").toBeNull();
+  expect(onRename).toHaveBeenCalledTimes(4);
+});
+
+it("without a rename from main, the list offers no Rename", async () => {
+  await mount();
+  expect(host.querySelector("[data-server-rename]")).toBeNull();
 });

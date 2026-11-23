@@ -3,7 +3,7 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { buildErrorPage, showBootFailure } from "./error-pages.mjs";
+import { buildErrorPage, rendererRecoveryPage, showBootFailure } from "./error-pages.mjs";
 import nativeText from "./native-text.cjs";
 
 const page = (url) => decodeURIComponent(url.slice("data:text/html;charset=utf-8,".length));
@@ -61,4 +61,17 @@ test("the launch failure box: a server that stopped answering keeps the app open
   ]);
   assert.notEqual(shown[0][0], shown[1][0]);
   assert.ok(shown[1][1].includes("/data"));
+});
+
+test("AC-02: the recovery page has a Reload link in the same window, in the app's language, with no technical words", () => {
+  const html = page(rendererRecoveryPage({ retryUrl: 'http://127.0.0.1:8799/a?b=1&c="2"' }));
+  assert.match(html, /<h2[^>]*>Seira's window stopped working<\/h2>/u);
+  assert.ok(html.includes("The window closed several times. Your bots keep running."));
+  assert.ok(html.includes('<a href="http://127.0.0.1:8799/a?b=1&amp;c=&quot;2&quot;"'));
+  assert.ok(!html.includes("target="));
+  assert.match(html, />Reload<\/a>/u);
+  assert.ok(!/renderer/iu.test(html));
+  assert.match(html, /<img src="data:image\/png;base64,/u);
+  const pt = page(rendererRecoveryPage({ retryUrl: "http://127.0.0.1:8799" }, nativeText.createNativeText({ saved: "pt-br" })));
+  assert.ok(pt.includes(">Recarregar</a>"));
 });

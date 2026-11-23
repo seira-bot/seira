@@ -19,6 +19,7 @@ import {
   responseError,
   type ConnectedAccountResponse,
 } from "./composio-project.ts";
+import { applyAccountIdentity, brokerAccountsSchema, publicAccount, revokeOnRemoval } from "./composio-account-identity.ts";
 import { MULTI_ACCOUNT_CONFIG, authConfigRefusal, ensureProjectSession, projectApiKey, raiseAccountCap, sessionForToolkit } from "./composio-session.ts";
 import { authConfigUseLine, needsOwnAuth, noManagedAuthToolkit, withNoManagedAuthNote } from "./connector-auth-config-hint.ts";
 import type { ToolkitCard } from "../shared/toolkit-card.ts";
@@ -35,18 +36,21 @@ import {
 } from "./connector-advertisement.ts";
 import { connectedAppGrantSlugs, serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts";
 import { parseMcpResponse, withToolsListFallback } from "./connector-tools-list.ts";
+import { ownAuthToolkits } from "./composio-own-auth.ts";
 import { brokerAccess, managedComposioBrokerOff, type BrokerAccess } from "./composio-broker-access.ts";
 export { applyManagedBrokerMessage, brokerAccess, setManagedBrokerAccess, type BrokerAccess } from "./composio-broker-access.ts";
 export { prepareProjectSession, trustedSessionMcpUrl } from "./composio-session.ts";
 
 function toolkitBase() {
-  return (process.env.OMB_COMPOSIO_TOOLKITS_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3`).replace(/\/$/, "");
+  return (process.env.SEIRA_COMPOSIO_TOOLKITS_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3`).replace(/\/$/, "");
 }
 
 export interface ConnectedAccountSummary {
   id: string;
   alias?: string;
   status: string;
+  displayName?: string;
+  duplicateOf?: string;
 }
 
 export interface ConnectorServiceState {
@@ -65,7 +69,7 @@ const connectorServiceSchema = z.object({
   connected: z.boolean(),
   pending: z.boolean().optional(),
   status: z.string().optional(),
-  accounts: z.array(z.object({ id: z.string(), alias: z.string().optional(), status: z.string() })).optional(),
+  accounts: brokerAccountsSchema.optional(),
 });
 const connectorServicesResponseSchema = z.object({ services: z.record(z.string(), connectorServiceSchema).optional(), complete: z.boolean().optional() });
 const removalResponseSchema = z.object({ removed: z.number() });
@@ -148,23 +152,23 @@ export function configured(cfg: AppConfig): boolean {
   return connectionMode(cfg) !== "unavailable";
 }
 
-/** "unreadable": the desktop shell set OMB_CREDENTIAL_STORE=unavailable, so the UI keeps its list instead of wiping it. */
+/** "unreadable": the desktop shell set SEIRA_CREDENTIAL_STORE=unavailable, so the UI keeps its list instead of wiping it. */
 export type ConnectorAvailability = "configured" | "unconfigured" | "unreadable";
 
 export function connectorAvailability(
   cfg: AppConfig,
-  storeState: string | undefined = process.env.OMB_CREDENTIAL_STORE,
+  storeState: string | undefined = process.env.SEIRA_CREDENTIAL_STORE,
 ): ConnectorAvailability {
   if (configured(cfg)) return "configured";
   return storeState === "unavailable" ? "unreadable" : "unconfigured";
 }
 
-/** Only a host the managed service comes with (the desktop app, OMB_DESKTOP_PARENT=1, or a Cloud home) calls a missing one an outage. */
+/** Only a host the managed service comes with (the desktop app, SEIRA_DESKTOP_PARENT=1, or a Cloud home) calls a missing one an outage. */
 export type ConnectorSetup = "ready" | "needs-setup" | "service-unavailable";
 
 export function connectorSetup(
   cfg: AppConfig,
-  managedHost: boolean = process.env.OMB_DESKTOP_PARENT === "1",
+  managedHost: boolean = process.env.SEIRA_DESKTOP_PARENT === "1",
 ): ConnectorSetup {
   if (configured(cfg)) return "ready";
   return managedHost && !managedComposioBrokerOff() ? "service-unavailable" : "needs-setup";
@@ -243,13 +247,13 @@ export async function mcpIntegration(
     env: {
       ELECTRON_RUN_AS_NODE: "1",
       // The bridge gets only this boot's loopback token; project and broker credentials never leave the harness.
-      OMB_CONNECTOR_UPSTREAM_URL: `${context.harnessUrl}/api/internal/connectors/mcp`,
-      OMB_CONNECTOR_UPSTREAM_HEADERS: JSON.stringify({ authorization: `Bearer ${context.commsToken}` }),
-      OMB_HARNESS_URL: context.harnessUrl,
+      SEIRA_CONNECTOR_UPSTREAM_URL: `${context.harnessUrl}/api/internal/connectors/mcp`,
+      SEIRA_CONNECTOR_UPSTREAM_HEADERS: JSON.stringify({ authorization: `Bearer ${context.commsToken}` }),
+      SEIRA_HARNESS_URL: context.harnessUrl,
       // A name apart from the agents proxy token: Codex flattens all mounted MCP env into one environment.
-      OMB_CONNECTOR_TOKEN: context.commsToken,
-      OMB_BOT_ID: context.botId,
-      OMB_THREAD_ID: context.threadId,
+      SEIRA_CONNECTOR_TOKEN: context.commsToken,
+      SEIRA_BOT_ID: context.botId,
+      SEIRA_THREAD_ID: context.threadId,
       ...(allowlist?.env ? { [CONNECTOR_ALLOWED_TOOLS_ENV]: allowlist.env } : {}),
       ...(serviceSlugs?.env ? { [CONNECTOR_SERVICE_SLUGS_ENV]: serviceSlugs.env } : {}),
     },
@@ -347,14 +351,15 @@ async function listSessionToolkits(
 
 function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]) {
   const requested = new Set(slugs.map(canonicalToolkitSlug));
-  const bySlug = new Map<string, Array<ConnectedAccountSummary & { updatedAt: string }>>();
+  const bySlug = new Map<string, Array<ConnectedAccountSummary & { createdAt: string; updatedAt: string }>>();
   for (const account of accounts) {
     const slug = account.toolkit?.slug ? canonicalToolkitSlug(account.toolkit.slug) : "";
     if (!slug || (requested.size && !requested.has(slug)) || !validAccountId(account.id)) continue;
     const alias = account.alias?.trim() ?? "";
-    const summary: ConnectedAccountSummary & { updatedAt: string } = {
+    const summary: ConnectedAccountSummary & { createdAt: string; updatedAt: string } = {
       id: account.id,
       status: account.status || "UNKNOWN",
+      createdAt: account.created_at ?? "",
       updatedAt: account.updated_at ?? "",
     };
     if (printableAliasSchema.safeParse(alias).success) summary.alias = alias;
@@ -362,14 +367,8 @@ function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]
     list.push(summary);
     bySlug.set(slug, list);
   }
-  for (const list of bySlug.values()) list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const list of bySlug.values()) { applyAccountIdentity(list, accounts); list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); }
   return bySlug;
-}
-
-function publicAccount({ id, alias, status }: ConnectedAccountSummary): ConnectedAccountSummary {
-  const account: ConnectedAccountSummary = { id, status };
-  if (alias) account.alias = alias;
-  return account;
 }
 
 function serviceStateFromAccounts(
@@ -585,12 +584,12 @@ async function collectConnectorTools(cfg: AppConfig): Promise<Record<string, Con
   const candidates = await connectedServiceSlugs(cfg);
   const initialize = await relayMcp(cfg, {
     jsonrpc: "2.0",
-    id: "omb-grants-initialize",
+    id: "seira-grants-initialize",
     method: "initialize",
     params: {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      clientInfo: { name: "openmausbot-grant-editor", version: "1" },
+      clientInfo: { name: "seira-grant-editor", version: "1" },
     },
   });
   if (initialize.status !== 200) {
@@ -607,14 +606,14 @@ async function collectConnectorTools(cfg: AppConfig): Promise<Record<string, Con
   for (let page = 0; page < TOOLS_LIST_PAGES_MAX; page += 1) {
     const list = await relayMcp(cfg, {
       jsonrpc: "2.0",
-      id: "omb-grants-tools",
+      id: "seira-grants-tools",
       method: "tools/list",
       params: cursor ? { cursor } : {},
     }, transportSessionId);
     if (list.status !== 200) {
       throw new Error(await responseErrorFromBytes(list.status, list.bytes));
     }
-    const frame = parseMcpResponse(new TextDecoder().decode(list.bytes), "omb-grants-tools");
+    const frame = parseMcpResponse(new TextDecoder().decode(list.bytes), "seira-grants-tools");
     const error = frame && typeof frame.error === "object" && frame.error !== null
       ? (frame.error as { message?: unknown }).message
       : undefined;
@@ -727,7 +726,9 @@ export async function removeService(cfg: AppConfig, slug: string, as?: BrokerAcc
   const body = toolkitPageSchema.parse(await list.json());
   const id = body.items?.find((item) => item.slug && canonicalToolkitSlug(item.slug) === toolkit)?.connected_account?.id;
   if (!id) return { removed: 0 };
-  await deleteConnectedAccount(apiKey, id);
+  const userId = session.config?.user_id ?? cfg.composio?.userId;
+  const listed = userId ? await listConnectedAccounts(apiKey, userId, [toolkit]).catch(() => null) : null;
+  await deleteConnectedAccount(apiKey, id, { revoke: listed !== null && revokeOnRemoval(listed, toolkit, id) });
   return { removed: 1 };
 }
 
@@ -754,7 +755,7 @@ export async function removeAccount(cfg: AppConfig, slug: string, accountId: str
       && canonicalToolkitSlug(account.toolkit.slug) === toolkit
   );
   if (!owned) return { removed: 0 };
-  await deleteConnectedAccount(apiKey, accountId);
+  await deleteConnectedAccount(apiKey, accountId, { revoke: revokeOnRemoval(accounts, toolkit, accountId) });
   return { removed: 1 };
 }
 
@@ -805,9 +806,9 @@ export async function authorizeService(cfg: AppConfig, slug: string, requestedAl
   const serviceAccounts = accounts.filter((account) =>
     account.toolkit?.slug !== undefined && canonicalToolkitSlug(account.toolkit.slug) === toolkit
   );
-  const plan = planAccountLink(toolkit, serviceAccounts, alias, MULTI_ACCOUNT_CONFIG.max_accounts_per_toolkit, () => `omb-retry-${randomUUID()}`);
+  const plan = planAccountLink(toolkit, serviceAccounts, alias, MULTI_ACCOUNT_CONFIG.max_accounts_per_toolkit, () => `seira-retry-${randomUUID()}`);
   if (!plan.ok) throw inputError(plan.error, plan.status);
-  for (const id of plan.replace) await deleteConnectedAccount(apiKey, id);
+  for (const id of plan.replace) await deleteConnectedAccount(apiKey, id, { revoke: revokeOnRemoval(serviceAccounts, toolkit, id) });
   await raiseAccountCap(apiKey, session);
   const linkRequest: AccountLinkRequest = plan.alias ? { toolkit, alias: plan.alias } : { toolkit };
   const link = (sessionId: string) =>
@@ -912,6 +913,7 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
     return { cards: toolkitCache.cards, source: "api", pagination: toolkitCache.pagination };
   }
   if (backendKey || broker) {
+    const ownAuth = backendKey ? ownAuthToolkits(backendKey) : Promise.resolve(new Set<string>());
     try {
       const items: any[] = [];
       const seenCursors = new Set<string>();
@@ -977,16 +979,20 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
         cursor = next;
       }
       if (items.length) {
-        const cards: ToolkitCard[] = items.map((t: any) => ({
-          slug: canonicalToolkitSlug(String(t.slug ?? t.key ?? t.name ?? "")),
-          label: t.name ?? t.slug ?? "",
-          blurb: (t.meta?.description ?? t.description ?? "").slice(0, 90),
-          logo: t.meta?.logo ?? t.logo ?? null,
-          noAuth: t.no_auth === true,
-          ...(needsOwnAuth(t) ? { needsOwnAuth: true } : {}),
-          domain: null,
-          ...(toolkitCategories(t.meta?.categories) ? { categories: toolkitCategories(t.meta?.categories) } : {}),
-        }));
+        const own = await ownAuth;
+        const cards: ToolkitCard[] = items.map((t: any) => {
+          const slug = canonicalToolkitSlug(String(t.slug ?? t.key ?? t.name ?? ""));
+          return {
+            slug,
+            label: t.name ?? t.slug ?? "",
+            blurb: (t.meta?.description ?? t.description ?? "").slice(0, 90),
+            logo: t.meta?.logo ?? t.logo ?? null,
+            noAuth: t.no_auth === true,
+            ...(needsOwnAuth(t) && !own.has(slug) ? { needsOwnAuth: true } : {}),
+            domain: null,
+            ...(toolkitCategories(t.meta?.categories) ? { categories: toolkitCategories(t.meta?.categories) } : {}),
+          };
+        });
         const uniqueCards = cards.filter(
           (card, index) => card.slug && cards.findIndex((candidate) => candidate.slug === card.slug) === index,
         );

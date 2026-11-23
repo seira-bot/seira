@@ -138,7 +138,7 @@ export async function ReleaseChangelog() {
             <h2>
               {version} — {displayDate(release.published_at!)}
             </h2>
-            <ReactMarkdown components={markdownComponents}>
+            <ReactMarkdown components={markdownComponents} skipHtml>
               {releaseNotes(release)}
             </ReactMarkdown>
             <p>

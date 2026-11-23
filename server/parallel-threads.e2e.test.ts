@@ -9,20 +9,19 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { cloudPairingSignature, cloudRequestSignature } from "./cloud-home.ts";
-import { CONTROL_BUSY } from "./control-client.ts";
 import { BROWSER_HANDED_OVER, browserBusyText } from "./host/browser-seats.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 import { isTitleCall } from "./testing/title-call.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 type Role = "desktop" | "home" | "team";
 const TEAM = { id: "team-7f3a", name: "Acme" };
 
 class Fixture {
-  home = mkdtempSync(join(tmpdir(), "omb-parallel-"));
-  dataDir = join(this.home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-parallel-"));
+  dataDir = join(this.home, ".seira");
   gates = join(this.home, "gates");
   base = "";
   log = "";
@@ -105,13 +104,13 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-ac
     this.base = `http://127.0.0.1:${port}`;
     const prelude = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
     const roleEnv = this.role === "desktop" ? {} : {
-      OMB_CLOUD_ROLE: this.role, OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-      OMB_CLOUD_BOOTSTRAP_SECRET: this.secret, OMB_PUBLIC_URL: `https://${HOST}`,
-      ...(this.role === "team" ? { OMB_CLOUD_TEAM_ID: TEAM.id, OMB_CLOUD_TEAM_NAME: TEAM.name } : {}),
+      SEIRA_CLOUD_ROLE: this.role, SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      SEIRA_CLOUD_BOOTSTRAP_SECRET: this.secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
+      ...(this.role === "team" ? { SEIRA_CLOUD_TEAM_ID: TEAM.id, SEIRA_CLOUD_TEAM_NAME: TEAM.name } : {}),
     };
     this.child = spawn(process.execPath, ["--import", prelude, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH, HOME: this.home, USERPROFILE: this.home, OMB_DATA_DIR: this.dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), ...roleEnv, ...this.extraEnv },
+      env: { PATH: process.env.PATH, HOME: this.home, USERPROFILE: this.home, SEIRA_DATA_DIR: this.dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), ...roleEnv, ...this.extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.child.stdout?.on("data", (chunk) => { this.log += chunk; });
@@ -249,7 +248,7 @@ function inertBrowser(dir: string) {
   ].join("\n"), { mode: 0o755 });
   return browser;
 }
-const browse = (f: Fixture, threadId: string) => internal(f, "/api/internal/browser/mcp", f.servers(threadId).browser.env.OMB_MCP_TOKEN_BROWSER, {
+const browse = (f: Fixture, threadId: string) => internal(f, "/api/internal/browser/mcp", f.servers(threadId).browser.env.SEIRA_MCP_TOKEN_BROWSER, {
   method: "tools/call", params: { name: "agent_browser_snapshot", arguments: {} },
 });
 
@@ -259,7 +258,7 @@ describe.skipIf(process.platform === "win32").each(["desktop", "home"] as const)
   afterEach(async () => { await f?.stop(); });
   const running = async (env: Record<string, string>) => {
     f = new Fixture(role);
-    f.extraEnv = { OMB_AGENT_BROWSER_PATH: inertBrowser(f.home), OMB_COMPUTER_CALL_WAIT_MS: "500", ...env };
+    f.extraEnv = { SEIRA_AGENT_BROWSER_PATH: inertBrowser(f.home), SEIRA_COMPUTER_CALL_WAIT_MS: "500", ...env };
     await f.start();
     const { botId, threads } = await botWithThreads(f, CLAUDE, 2);
     await send(f, botId, threads[0]!, "First job");
@@ -284,7 +283,7 @@ describe.skipIf(process.platform === "win32").each(["desktop", "home"] as const)
   }, 90_000);
 
   it("hand the browser over once its holder has stopped using it, and the holder does not act on a page it did not open", async () => {
-    const { botId, threads } = await running({ OMB_BROWSER_IDLE_HANDOVER_MS: "200", OMB_COMPUTER_CALL_WAIT_MS: "5000" });
+    const { botId, threads } = await running({ SEIRA_BROWSER_IDLE_HANDOVER_MS: "200", SEIRA_COMPUTER_CALL_WAIT_MS: "5000" });
     expect((await browse(f, threads[0]!)).body.result.isError).toBeFalsy();
     expect((await browse(f, threads[1]!)).body.result.isError, "taken from a holder that went quiet, with both turns still running").toBeFalsy();
     expect((await busyThreads(f, botId)).sort()).toEqual([...threads].sort());
@@ -295,76 +294,6 @@ describe.skipIf(process.platform === "win32").each(["desktop", "home"] as const)
   }, 90_000);
 });
 
-// One relay stands in for the Admin's Boat proxy; a picture stands in for the desktop.
-const FRAME = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
-describe.each(["desktop", "team"] as const)("two threads of a bot on the team's shared computer on a %s server", (role) => {
-  let f: Fixture;
-  const servers: Server[] = [];
-  afterEach(async () => {
-    await f?.stop();
-    for (const server of servers.splice(0)) { server.closeAllConnections(); server.close(); }
-  });
-
-  it("both run from the start, and only the one that reaches for the screen second waits, saying so", async () => {
-    const boxes: Array<{ id: string; state: string; name?: string }> = [];
-    const relay = createServer((req, res) => {
-      const path = new URL(req.url ?? "/", "http://relay.test").pathname.replace(/^\/relay\/api\/box\/v1/, "");
-      let raw = "";
-      req.on("data", (chunk) => { raw += chunk; });
-      req.on("end", () => {
-        const answer = (status: number, payload: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(payload)); };
-        if (path === "/boxes" && req.method === "GET") return answer(200, { ok: true, boxes, pageInfo: { nextCursor: null } });
-        if (path === "/boxes" && req.method === "POST") { const box = { id: "bx_23456789", state: "ready" }; boxes.push(box); return answer(201, { ok: true, box }); }
-        const [, id = "", verb = ""] = /^\/boxes\/([^/]+)(?:\/(.+))?$/.exec(path) ?? [];
-        const box = boxes.find((candidate) => candidate.id === id);
-        if (!box) return answer(404, { ok: false, code: "not_found", message: "Not found" });
-        if (!verb && req.method === "PATCH") { box.name = JSON.parse(raw).name; return answer(200, { ok: true, box }); }
-        if (!verb && req.method === "GET") return answer(200, { ok: true, box });
-        if (verb === "desktop") return answer(200, { desktopUrl: `https://desktop.invalid/${box.id}` });
-        if (verb === "commands") return answer(200, { exitCode: 0, stdout: "captured", stderr: "" });
-        if (verb === "artifacts") { res.writeHead(200, { "content-type": "image/jpeg", "content-length": String(FRAME.length) }); return res.end(FRAME); }
-        return answer(404, { ok: false, code: "not_found", message: "Not found" });
-      });
-    });
-    servers.push(relay);
-    await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
-    const relayBase = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`;
-    f = new Fixture(role);
-    f.extraEnv = { OMB_BOAT_API: `${relayBase}/own-key-must-not-be-used`, OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, OMB_CLOUD_BOAT_TOKEN: "box_omb_fixture", OMB_COMPUTER_CALL_WAIT_MS: "500" };
-    await f.start();
-    const requestId = randomUUID();
-    const made = await f.api("POST", "/api/team-computers", { requestId, name: "Ops desktop", acknowledgeCost: true });
-    expect(made.status, JSON.stringify(made.body)).toBe(201);
-    const { botId, threads } = await botWithThreads(f, CLAUDE, 2);
-    expect((await f.api("PATCH", `/api/bots/${botId}`, { section: "Ops" })).status).toBe(200);
-    const assigned = await f.api("PATCH", `/api/team-computers/${requestId}`, { section: "Ops", acknowledgeSharedAccess: true });
-    expect(assigned.status, JSON.stringify(assigned.body)).toBe(200);
-
-    await send(f, botId, threads[0]!, "First job");
-    await send(f, botId, threads[1]!, "Second job");
-    await expect.poll(() => f.claudeTurnsStarted(), { timeout: 20_000, interval: 50 }).toBe(2);
-    expect((await busyThreads(f, botId)).sort(), "neither has touched the computer, so neither waited for it").toEqual([...threads].sort());
-    expect((await rows(f, threads[1]!)).filter((name) => name.startsWith("Waiting for its turn"))).toEqual([]);
-
-    const screenshot = (threadId: string) => {
-      const env = f.servers(threadId).computer.env;
-      return internal(f, "/api/internal/computer/mcp", env.OMB_MCP_TOKEN_COMPUTER, { method: "tools/call", params: { name: "screenshot", arguments: {} } });
-    };
-    let first = await screenshot(threads[0]!);
-    for (let attempt = 0; attempt < 40 && first.body.result?.isError; attempt++) first = await screenshot(threads[0]!);
-    expect(first.body.result.isError, JSON.stringify(first.body)).toBeFalsy();
-    const second = await screenshot(threads[1]!);
-    expect(second.body.result).toEqual({ isError: true, content: [{ type: "text", text: CONTROL_BUSY }] });
-    expect((await rows(f, threads[1]!)).find((name) => name.startsWith("Waiting for its turn on this computer")), "the person sees why").toContain("Scout is running");
-    expect((await busyThreads(f, botId)).sort()).toEqual([...threads].sort());
-
-    f.finish(threads[0]!);
-    await expect.poll(async () => (await screenshot(threads[1]!)).body.result.isError, { timeout: 30_000, interval: 200 }).toBeFalsy();
-    f.release();
-    await expect.poll(async () => (await botRow(f, botId)).busy, { timeout: 20_000, interval: 100 }).toBe(false);
-  }, 120_000);
-});
-
 describe("a Starter Cloud", () => {
   let f: Fixture;
   const started = (threadId: string) => f.claudeDumps().some((file) => basename(f.dump(file).cwd) === threadId);
@@ -372,8 +301,8 @@ describe("a Starter Cloud", () => {
   /** What the bot's own turn calls as start_thread, on the turn's own capability. */
   const startThread = async (fromThread: string, title: string, toBotId?: string) => {
     const agents = f.servers(fromThread).agents;
-    const env = agents.env.OMB_GATE_UPSTREAM ? JSON.parse(agents.env.OMB_GATE_UPSTREAM).env : agents.env;
-    return internal(f, "/api/internal/threads", env.OMB_COMMS_TOKEN, { title, message: `Work on ${title}`, ...(toBotId ? { toBotId } : {}) });
+    const env = agents.env.SEIRA_GATE_UPSTREAM ? JSON.parse(agents.env.SEIRA_GATE_UPSTREAM).env : agents.env;
+    return internal(f, "/api/internal/threads", env.SEIRA_COMMS_TOKEN, { title, message: `Work on ${title}`, ...(toBotId ? { toBotId } : {}) });
   };
   const ownThread = async (botId: string, title: string) => {
     await expect.poll(async () => (await botRow(f, botId)).tasks.find((task: any) => task.title === title)?.threadId, { timeout: 20_000, interval: 50 }).toBeTruthy();
@@ -420,7 +349,7 @@ describe("a Starter Cloud", () => {
     await whenStarted(main!);
     f.finish(main!);
     await expect.poll(() => busyThreads(f, botId), { timeout: 20_000, interval: 100 }).toEqual([]);
-    const created = await f.api("POST", "/api/routines", { name: "Slot holder", prompt: "Write the digest.", target: "bot", botId, runOn: "maus", enabled: true, schedule: { type: "daily", time: "23:00" } });
+    const created = await f.api("POST", "/api/routines", { name: "Slot holder", prompt: "Write the digest.", target: "bot", botId, runOn: "seira", enabled: true, schedule: { type: "daily", time: "23:00" } });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const run = (await f.api("POST", `/api/routines/${created.body.routine.id}/run`)).body.run;
     await expect.poll(async () => (await f.api("GET", "/api/routines")).body.runs.find((candidate: any) => candidate.id === run.id)?.status, { timeout: 20_000, interval: 100 }).toBe("running");
@@ -513,7 +442,7 @@ describe("a Starter Cloud", () => {
     await whenStarted(threads[1]!);
     const refused = await f.api("POST", `/api/bots/${botId}/messages/guarded`, { threadId: threads[0], sendId: randomUUID(), text: "From a script", expectedActiveLeafId: null, expectedApprovalMode: "ask" });
     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
-    const created = await f.api("POST", "/api/routines", { name: "Digest", prompt: "Write the digest.", target: "bot", botId, runOn: "maus", enabled: true, schedule: { type: "daily", time: "23:00" } });
+    const created = await f.api("POST", "/api/routines", { name: "Digest", prompt: "Write the digest.", target: "bot", botId, runOn: "seira", enabled: true, schedule: { type: "daily", time: "23:00" } });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const run = (await f.api("POST", `/api/routines/${created.body.routine.id}/run`)).body.run;
     const state = async () => (await f.api("GET", "/api/routines")).body.runs.find((candidate: any) => candidate.id === run.id);

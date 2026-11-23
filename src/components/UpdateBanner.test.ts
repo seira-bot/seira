@@ -24,7 +24,7 @@ const OTHER = "https://bots.example.test";
 function serverPageBridge(origin: string, answered: boolean) {
   let bridge: unknown;
   vm.runInNewContext(readFileSync(new URL("../../electron/preload.cjs", import.meta.url), "utf8"), {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL}`] },
     location: { origin }, navigator: { userActivation: { isActive: false } },
     TextEncoder, localStorage: { getItem: () => null },
     require: () => ({

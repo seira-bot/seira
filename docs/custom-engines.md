@@ -1,7 +1,7 @@
 # Bring your own engine
 
 Two zero-code ways to run Seira bots on an engine the app doesn't ship.
-Both live in `~/.openmausbot/config.json` under `"instances"`; restart the app
+Both live in `~/.seira/config.json` under `"instances"`; restart the app
 after editing (instance entries are read at boot).
 
 ## Provider icons
@@ -41,7 +41,7 @@ instance at it:
 ```
 
 - **`config.cli`** is the whole command, args included (`"npx -y some-agent acp"`
-  works). You can also set it from the app: Settings → Engines → *Set CLI…* on
+  works). You can also set it from the app: Settings → AI → Providers, then *Set CLI…* on
   the instance's row. An instance without a command shows up with exactly that
   hint instead of failing at first message.
 - **Sign in first.** The driver has no auth flow of its own — run the CLI once
@@ -166,9 +166,9 @@ entry:
   `model` as a custom option either way.
 - OpenAI-compatible instances support structured tools and image input. With a
   model that accepts both, the harness can mount the approved host, Local VM,
-  VPS, Boat cloud or built-in browser tools and return their screenshots to the model.
+  VPS or built-in browser tools and return their screenshots to the model.
   The existing platform, computer-selection and approval checks still apply.
-  Boat turns retain the selected API model in direct chats, rooms and cloud
+  Cloud (VPS) turns retain the selected API model in direct chats, rooms and
   routines, as they do for every engine with computer tools.
 - Set `config.tools` to `false` for a model without tool support. Image support
   also depends on the chosen model; the driver cannot add vision to a text-only

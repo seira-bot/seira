@@ -1,5 +1,5 @@
-// A stand-in for cloudflare/control-plane for `seira login` and `serve --tunnel` tests: the routes
-// the desktop's client uses, accepting only credentials it issued, recording every call.
+// A stand-in for cloudflare/control-plane for `seira login` and `serve --tunnel` tests, and for cloudflare/push-relay for
+// phone push tests: the routes the clients use, accepting only credentials it issued, recording every call.
 import { randomBytes, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 
@@ -21,10 +21,16 @@ export interface ControlPlaneStub {
   connectorToken: string;
   /** "METHOD /path", in order. */
   calls: string[];
+  /** The JSON bodies of the Seira Cloud sign-in calls (`accounts: "seira-cloud"`), in order. */
+  cloudBodies: Array<{ path: string; body: Record<string, unknown> }>;
+  /** The Seira Cloud account id the stub signs in. */
+  cloudAccountId: string;
   /** The bodies of the push relay's calls, in order (`/v1/installations/self/push/*`). */
   pushes: Array<{ path: string; body: Record<string, unknown> }>;
   /** The next push-relay answers, used in order; then 200/202/204 as the real relay answers. */
   pushAnswers: Array<{ status: number; error?: string }>;
+  /** The next answers to an endpoint provision (`POST /v1/installations/self/endpoint`), used in order; then 200. */
+  endpointAnswers: Array<{ status: number; error: string; retryAfterSeconds?: number }>;
   installations: Map<string, StubInstallation>;
   /** An installation the control plane already knows (as a fleet creates one): returns its credential. */
   seedInstallation(name?: string): string;
@@ -35,7 +41,7 @@ export interface ControlPlaneStub {
 
 const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
 
-const newCredential = () => `omb_install_${randomBytes(16).toString("base64url")}.${randomBytes(32).toString("base64url")}`;
+const newCredential = () => `seira_install_${randomBytes(16).toString("base64url")}.${randomBytes(32).toString("base64url")}`;
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   let raw = "";
@@ -44,17 +50,22 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {};
 }
 
-export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string } = {}): Promise<ControlPlaneStub> {
+/** `accounts: "seira-cloud"`: /healthz says so, and the stub also plays Seira Cloud's email-code sign-in (same origin). */
+export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string; accounts?: "seira-cloud" } = {}): Promise<ControlPlaneStub> {
   const otp = options.otp ?? "24681357";
-  const endpointUrl = options.endpointUrl ?? "https://c-stub.openmausbot.invalid";
+  const endpointUrl = options.endpointUrl ?? "https://c-00000000000000000000000000000000.seira.run";
   const connectorToken = `stub-connector-${randomBytes(48).toString("base64url")}`;
   let issuedConnectorToken = connectorToken;
   let reclaimedUntilProvision: string | null = null;
   const accountTokens = new Set<string>();
   const installations = new Map<string, StubInstallation>();
   const calls: string[] = [];
+  const cloudBodies: ControlPlaneStub["cloudBodies"] = [];
+  const cloudAccountId = "acct_cloud_stub";
+  const cloudAttempt = randomBytes(32).toString("base64url");
   const pushes: ControlPlaneStub["pushes"] = [];
   const pushAnswers: ControlPlaneStub["pushAnswers"] = [];
+  const endpointAnswers: ControlPlaneStub["endpointAnswers"] = [];
   const pushDevices = new Map<string, Set<string>>();
   const publicView = (inst: StubInstallation) => ({
     id: inst.id,
@@ -89,7 +100,19 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     const byCredential = () => [...installations.values()].find((inst) => inst.credential === bearer) ?? null;
     const account = accountTokens.has(bearer);
 
-    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "openmausbot-control-plane" });
+    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "seira-control-plane", ...(options.accounts ? { accounts: options.accounts } : {}) });
+    if (options.accounts === "seira-cloud" && path.startsWith("/api/cloud/")) {
+      if (method === "DELETE" && path === "/api/cloud/desktop/session") return send(204);
+      const body = await readJson(req);
+      cloudBodies.push({ path, body });
+      if (path === "/api/cloud/app/sign-in/start") return send(200, { cloudContractVersion: 1, attempt: cloudAttempt, expiresIn: 600, resendAfter: 30, signupOpen: true });
+      if (path === "/api/cloud/app/sign-in/verify") {
+        if (body.attempt !== cloudAttempt || body.code !== otp) return send(400, { error: "invalid_code" });
+        const token = `omc_${randomBytes(32).toString("base64url")}`;
+        accountTokens.add(token);
+        return send(200, { accessToken: token, expiresAt: Date.now() + NINETY_DAYS, device: { id: "device_stub" }, account: { id: cloudAccountId, email: "milind@example.test" } });
+      }
+    }
     if (method === "POST" && path === "/api/auth/email-otp/send-verification-otp") {
       await readJson(req);
       return send(200, { success: true });
@@ -131,6 +154,20 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
       inst.credential = newCredential();
       return send(201, { credential: inst.credential, createdAt: Date.now(), credentialExpiresAt: Date.now() + NINETY_DAYS });
     }
+    if (path === "/v1/push/enroll" && method === "POST") {
+      const body = await readJson(req);
+      if (req.headers.origin) return send(403, { error: "forbidden" });
+      if (body.v !== 1) return send(400, { error: "invalid_request" });
+      const inst: StubInstallation = { id: randomUUID(), clientInstanceId: randomUUID(), name: "push relay", platform: "unknown", appVersion: null, credential: newCredential() };
+      installations.set(inst.id, inst);
+      return send(201, { installationId: inst.id, credential: inst.credential, expiresAt: Date.now() + NINETY_DAYS });
+    }
+    if (path === "/v1/installations/self/credentials/rotate" && method === "POST") {
+      const inst = byCredential();
+      if (!inst) return send(401, { error: "unauthorized" });
+      inst.credential = newCredential();
+      return send(200, { credential: inst.credential, expiresAt: Date.now() + NINETY_DAYS });
+    }
     if (path === "/v1/installations/self" && method === "GET") {
       const inst = byCredential();
       return inst ? send(200, { installation: publicView(inst), credentialExpiresAt: Date.now() + NINETY_DAYS }) : send(401, { error: "unauthorized" });
@@ -141,6 +178,8 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
       if (method === "GET") return send(200, { endpoint: reclaimedUntilProvision ? null : endpoint() });
       if (method === "POST") {
         const body = await readJson(req);
+        const refusal = endpointAnswers.shift();
+        if (refusal) return send(refusal.status, { error: refusal.error }, refusal.retryAfterSeconds ? { "retry-after": String(refusal.retryAfterSeconds) } : {});
         if (typeof body.appVersion === "string") inst.appVersion = body.appVersion;
         if (typeof body.kind === "string") inst.kind = body.kind;
         if (reclaimedUntilProvision) issuedConnectorToken = reclaimedUntilProvision;
@@ -181,8 +220,11 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     endpointUrl,
     connectorToken,
     calls,
+    cloudBodies,
+    cloudAccountId,
     pushes,
     pushAnswers,
+    endpointAnswers,
     installations,
     seedInstallation: (name = "fleet box") => {
       const inst: StubInstallation = { id: randomUUID(), clientInstanceId: randomUUID(), name, platform: "linux", appVersion: null, credential: newCredential() };

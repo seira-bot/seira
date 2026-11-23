@@ -12,8 +12,6 @@ export interface AgentsConversation {
   bot: NonNullable<Parameters<typeof roleToolEnv>[0]> & { id: string; computer?: string; memoryEnabled?: boolean; xResearch?: boolean; toolsOff?: readonly string[] };
   /** A room's thread: rooms refuse widgets, pages and a computer pick. */
   room: boolean;
-  /** The bot works on its team's cloud computer, so it has no computer of its own to pick. */
-  teamComputer: boolean;
   /** Only bots or automation drive it (`botDrivenConversation`): no turn in it is a person's own message to pick a computer for. */
   botDriven?: boolean;
   /** `x`: a research credential is held (a treg key or a plan's); `research`: research works for it too; `appHosting`:
@@ -37,23 +35,23 @@ export function agentsServerEnv(conversation: AgentsConversation, turn: AgentsTu
   const { bot, host } = conversation;
   return {
     ...AGENTS_PROXY_ENV,
-    OMB_HARNESS_URL: harnessUrl,
-    OMB_BOT_ID: bot.id,
-    OMB_THREAD_ID: conversation.threadId,
-    OMB_COMMS_TOKEN: bearer(turn),
-    OMB_SKILL_AUTHORING_ENABLED: flag(host.skillAuthoring),
-    OMB_MEMORY_ENABLED: flag(bot.memoryEnabled !== false),
-    OMB_SHARED_COMPUTERS_ENABLED: flag(host.sharedComputers),
-    OMB_CLOUD_HOME: flag(host.cloudHome), OMB_TEAM_PEOPLE: flag(host.team), OMB_ROOM: flag(conversation.room),
-    OMB_VOICE_NOTES: flag(host.voiceNotes),
-    OMB_X_RESEARCH: flag(host.x && bot.xResearch !== false),
-    OMB_RESEARCH: flag(host.x && host.research && bot.xResearch !== false),
+    SEIRA_HARNESS_URL: harnessUrl,
+    SEIRA_BOT_ID: bot.id,
+    SEIRA_THREAD_ID: conversation.threadId,
+    SEIRA_COMMS_TOKEN: bearer(turn),
+    SEIRA_SKILL_AUTHORING_ENABLED: flag(host.skillAuthoring),
+    SEIRA_MEMORY_ENABLED: flag(bot.memoryEnabled !== false),
+    SEIRA_SHARED_COMPUTERS_ENABLED: flag(host.sharedComputers),
+    SEIRA_CLOUD_HOME: flag(host.cloudHome), SEIRA_TEAM_PEOPLE: flag(host.team), SEIRA_ROOM: flag(conversation.room),
+    SEIRA_VOICE_NOTES: flag(host.voiceNotes),
+    SEIRA_X_RESEARCH: flag(host.x && bot.xResearch !== false),
+    SEIRA_RESEARCH: flag(host.x && host.research && bot.xResearch !== false),
     ...roleToolEnv(bot),
-    OMB_IMAGE_GENERATION: flag(host.imageGeneration),
-    OMB_MEETINGS: flag(host.meetings === true && !conversation.room),
-    OMB_APP_HOSTING: flag(host.appHosting === true),
-    OMB_COMPUTER_SELECTION: flag(!conversation.room && bot.computer !== "off" && !conversation.teamComputer && !conversation.botDriven),
-    OMB_LOCAL_VM: flag(host.localVm),
+    SEIRA_IMAGE_GENERATION: flag(host.imageGeneration),
+    SEIRA_MEETINGS: flag(host.meetings === true && !conversation.room),
+    SEIRA_APP_HOSTING: flag(host.appHosting === true),
+    SEIRA_COMPUTER_SELECTION: flag(!conversation.room && bot.computer !== "off" && !conversation.botDriven),
+    SEIRA_LOCAL_VM: flag(host.localVm),
     [TOOLS_OFF_ENV]: (bot.toolsOff ?? []).join(","),
   };
 }

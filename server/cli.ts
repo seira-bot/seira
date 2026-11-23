@@ -1,21 +1,20 @@
-// `openmausbot` on the command line: run the server anywhere and pair devices to it.
+// `seira` on the command line: run the server anywhere and pair devices to it.
 //
-//   seira setup [--data-dir ~/.openmausbot]
+//   seira setup [--data-dir ~/.seira]
 //   seira start [serve options]
-//   seira serve [--port 8799] [--data-dir ~/.openmausbot] [--label "cab mini"]
-//                     [--public-url https://host] [--tailscale | --tunnel | --domain HOST] [--relay] [--no-pair]
-//   seira pair  [--label "My MacBook"] [--client] [--public-url https://host]
+//   seira serve [--port 8799] [--data-dir ~/.seira] [--label "cab mini"]
+//                     [--public-url https://host] [--tailscale] [--tunnel] [--domain HOST] [--relay] [--no-pair]
+//   seira pair  [--label "My MacBook"] [--client] [--computer] [--public-url https://host]
 //   seira sessions [revoke <id>]
 //   seira status
-//   seira login [--email you@example.com] [--relay]
+//   seira login [--email you@example.com] [--relay] [--events]
 //   seira logout
 //   seira run | send | wait | doctor | team apply | export | …
 //
-// This module only exports: openmausbot.ts runs main(), so bundling this file into other entries never runs it twice.
+// This module only exports: seira.ts runs main(), so bundling this file into other entries never runs it twice.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs"; import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
@@ -34,39 +33,27 @@ import { runServiceCommand } from "./service-cli.ts";
 import { runSentinelCli } from "./sentinel/cli.ts";
 import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
-import { startFleetAgent } from "./fleet-agent.ts";
-import { fleetLayout } from "./fleet.ts";
-import { clearLeftoverTailscaleServe, explainTailscaleFailure, tailnetListenFallback, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { startFleetAgent } from "./fleet-agent.ts"; import { fleetLayout } from "./fleet.ts";
+import { migrateBeforeFirstWrite } from "./cli-data-move.ts";
+import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, explainTailscaleFailure, pickTailscaleHttpsPort, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { listeningPorts, systemProbe } from "./headless/host-doctor.ts";
+import { laptopLinesHere } from "./cli-devices.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
-import { normalizePhoneOrigin, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
+import { normalizePhoneOrigin, phoneNotReadyLines, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
 import { browserSignInLines, desktopOwnedRefusal, formatSessions, pairingBlock, RELAY_NOT_WITH_TUNNEL, relayPairingBlock, showRelayPairing } from "./cli-pairing.ts";
 import { cliCommand, cliPrefix } from "./cli-invocation.ts";
+import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
 import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
+import { restoreInProgress } from "./restore-progress.ts";
+import { runningServerLine } from "./data-dir-lease.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
-import {
-  cleanupTunnelOrigin,
-  createTunnelAccount,
-  createTunnelOrigin,
-  describeTunnelAccount,
-  describeTunnelState,
-  ensureCloudflared,
-  FLEET_CREDENTIAL_ENV,
-  fleetAccess,
-  fleetCredential,
-  guardianEntry,
-  startTunnel,
-  tunnelAccess,
-  type CompanionOriginEndpoint,
-  type ManagedTunnelAccess,
-  type RunningTunnel,
-  type TunnelAccount,
-  type TunnelRecovery,
-} from "./tunnel.ts";
-
+import { cleanupTunnelOrigin, controlPlaneProblem, createTunnelAccount, describeTunnelAccount, describeTunnelState, FLEET_CREDENTIAL_ENV, fleetCredential, startTunnel, type RunningTunnel } from "./tunnel.ts";
+import { planTunnel, type TunnelPlan } from "./cli-tunnel-plan.ts";
+import { acceptedWireNames, sentWireName } from "../electron/phone-wire-names.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export interface CliOptions {
@@ -82,6 +69,8 @@ export interface CliOptions {
   relay?: boolean;
   /** `serve --lan`: every private address of this machine, plain http, each connection held to private ends. */
   lan?: boolean;
+  /** `serve --access-log`: the server writes one line for each request it answers. */
+  accessLog?: boolean;
   client: boolean;
   pair: boolean;
   revoke?: string;
@@ -92,6 +81,8 @@ export interface CliOptions {
   serviceAction?: "install" | "uninstall";
   sentinel?: boolean;
   email?: string;
+  /** `login --events`: the sign-in an installer drives. Standard output carries only `::seira ask code EMAIL` lines, and the code arrives on standard input as `code 12345678`. */
+  events?: boolean;
   /** `browser install [--with-deps]` */
   browserAction?: "install" | "status";
   /** `fleet init|create|list|users|suspend|resume|delete|upgrade|agent` */
@@ -118,6 +109,8 @@ export interface CliOptions {
   open?: boolean;
   guided?: boolean;
   phone?: "ios" | "android";
+  /** `pair --computer`: a code for `seira connect` on another computer, without a phone's limits. */
+  computer?: boolean;
   /** `pair --ttl 24h`: how long the code stays open. */
   pairTtlMs?: number;
 }
@@ -132,8 +125,8 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
   const options: CliOptions = {
     command: command === "--help" || command === "-h" ? "help" : command === "--version" || command === "-v" ? "version" : command === "devices" ? "sessions" : (command as CliOptions["command"]),
-    port: Number(env.OMB_PORT || 8799),
-    dataDir: env.OMB_DATA_DIR || join(homedir(), ".openmausbot"),
+    port: Number(env.SEIRA_PORT || 8799),
+    dataDir: env.SEIRA_DATA_DIR || join(homedir(), ".seira"),
     tailscale: false,
     tunnel: false,
     client: false,
@@ -157,6 +150,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       else if (arg === "--public-url") options.publicUrl = value().replace(/\/+$/, "");
       else if (arg === "--tailscale") options.tailscale = true;
       else if (arg === "--lan") options.lan = true;
+      else if (arg === "--access-log") options.accessLog = true;
       else if (arg === "--domain") {
         const domain = normalizeDomainOption(value());
         if (typeof domain !== "string") return domain;
@@ -171,6 +165,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
         else if (options.command === "pair") options.phone = "ios";
         else return { error: "--phone takes ios or android" };
       }
+      else if (options.command === "pair" && arg === "--computer") options.computer = true;
       else if (options.command === "pair" && arg === "--ttl") options.pairTtlMs = parseDuration(value(), "--ttl", { min: 60_000 });
       else if (arg === "--help" || arg === "-h") options.command = "help";
       else if (arg === "--no-pair") options.pair = false;
@@ -178,6 +173,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       else if (arg === "--local") options.local = true;
       else if (arg === "--json") options.json = true;
       else if (arg === "--email") options.email = value();
+      else if (options.command === "login" && arg === "--events") options.events = true;
       else if (options.command === "sessions" && (arg === "revoke" || arg === "list")) { if (arg === "revoke") options.revoke = value(); }
       else if (options.command === "access" && !options.accessAction && (arg === "list" || arg === "add" || arg === "remove")) {
         options.accessAction = arg;
@@ -212,11 +208,13 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65_535) return { error: "--port must be 1-65535" };
   const publicUrlRefusal = options.publicUrl ? publicUrlProblem(options.publicUrl) : null;
   if (publicUrlRefusal) return { error: publicUrlRefusal };
-  if (options.tunnel && (options.tailscale || options.relay)) return { error: options.relay ? "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" : "choose one of --tailscale (your tailnet) and --tunnel (a public address)" };
+  if (options.tunnel && options.relay) return { error: "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" };
+  if (options.computer && options.phone) return { error: "choose one of --computer and --phone" };
   if (options.command === "access" && !options.accessAction) return { error: "access needs one of: list, add EMAIL [--chat-only], remove EMAIL" };
   if (options.command === "service" && !options.serviceAction) return { error: "service needs one of: install [the same options as serve], uninstall" };
   if (options.domain && (options.tailscale || options.tunnel || options.publicUrl)) return { error: "--domain already gives the server its address; drop --tailscale, --tunnel and --public-url" };
   if (options.local && (options.tailscale || options.tunnel || options.publicUrl || options.lan || options.relay)) return { error: "--local cannot be combined with a remote-access option" };
+  if (options.events && !options.email) return { error: "--events needs --email" };
   if (options.command === "browser" && !options.browserAction) return { error: "browser needs an action: install or status" };
   if (options.command === "fleet") {
     if (!options.fleetAction) return { error: "fleet needs one of: init --domain HOST [--operator USER], create NAME --admin EMAIL, list, users NAME add|remove EMAIL, suspend NAME, resume NAME, delete NAME --yes, upgrade, agent" };
@@ -254,14 +252,14 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 let serveOwnerToken: string | undefined;
 
 async function api(port: number, path: string, init: { method?: string; body?: string } = {}): Promise<{ status: number; body: any }> {
-  // x-openmausbot-cli names the tool in the activity log; on loopback it grants nothing.
-  const headers: Record<string, string> = { "content-type": "application/json", "x-openmausbot-cli": "1", ...(serveOwnerToken ? { "x-openmausbot-cli-owner": serveOwnerToken } : {}) };
+  // x-seira-cli names the tool in the activity log; on loopback it grants nothing.
+  const headers: Record<string, string> = { "content-type": "application/json", "x-seira-cli": "1", ...(serveOwnerToken ? { "x-seira-cli-owner": serveOwnerToken } : {}) };
   const res = await fetch(`http://127.0.0.1:${port}${path}`, { method: init.method, body: init.body, headers, signal: AbortSignal.timeout(3000) });
   const body: unknown = await res.json().catch(() => ({}));
   return { status: res.status, body };
 }
 
-export const SERVICE_TRUST_HELP = "This server does not treat commands on this computer as its owner (OMB_LOOPBACK_TRUST=service, or a hosted workspace), so it will not pair devices or list sessions for them. Sign in as an admin and use Settings → Phone & devices, let people sign in with their email (seira access add you@example.com), or restart the server with OMB_LOOPBACK_TRUST=owner.";
+export const SERVICE_TRUST_HELP = "This server does not treat commands on this computer as its owner (SEIRA_LOOPBACK_TRUST=service, or a hosted workspace), so it will not pair devices or list sessions for them. Sign in as an admin and use Settings → Phone & devices, let people sign in with their email (seira access add you@example.com), or restart the server with SEIRA_LOOPBACK_TRUST=owner.";
 
 function refusedAsService(status: number, body: any): boolean {
   return status === 403 && typeof body?.error === "string" && /shared server|Sign in through the workspace portal/.test(body.error);
@@ -270,7 +268,7 @@ function refusedAsService(status: number, body: any): boolean {
 async function serverUp(port: number, pid?: number): Promise<boolean> {
   try {
     const { status, body } = await api(port, "/api/health");
-    return status === 200 && body?.app === "openmausbot" && (pid === undefined || body.pid === pid);
+    return status === 200 && !!body && acceptedWireNames("healthApp").includes(body.app) && (pid === undefined || body.pid === pid);
   } catch { return false; }
 }
 
@@ -278,9 +276,9 @@ async function serverUp(port: number, pid?: number): Promise<boolean> {
 export async function isWorkspaceRunning(options: CliOptions): Promise<boolean> {
   try {
     const { status, body } = await api(options.port, "/api/health");
-    if (status !== 200 || body?.app !== "openmausbot") return false;
+    if (status !== 200 || !acceptedWireNames("healthApp").includes(body?.app)) return false;
     const expected = readFileSync(join(options.dataDir, "environment-id"), "utf8").trim();
-    const descriptor = await api(options.port, "/.well-known/openmausbot/environment");
+    const descriptor = await api(options.port, sentWireName("environmentPath"));
     return /^[0-9a-f-]{36}$/i.test(expected) && descriptor.status === 200 && descriptor.body?.environmentId === expected;
   } catch { return false; }
 }
@@ -299,8 +297,8 @@ export async function openDashboard(port: number, env = process.env): Promise<bo
   });
 }
 
-/** Something already answers there as a MausBot server (before this one has started). */
-const answersAsMausBot = async (origin: string) => typeof (await fetch(`${origin}/.well-known/openmausbot/environment`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
+/** Something already answers there as a Seira server (before this one has started). */
+const answersAsSeira = async (origin: string) => typeof (await fetch(`${origin}${sentWireName("environmentPath")}`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
 
 /** Its public descriptor must identify this exact server; never sends a pairing code or credential. */
 export async function verifyPhoneEndpoint(port: number, origin: string): Promise<boolean> {
@@ -315,7 +313,7 @@ export function applyStartupPreferences(options: CliOptions, saved: AppConfig["c
   }
   return {
     ...options,
-    tunnel: saved.access === "tunnel", tailscale: saved.access === "tailscale",
+    tunnel: saved.access === "tunnel", tailscale: saved.access === "tailscale" || (saved.access === "tunnel" && saved.tailscale === true),
     publicUrl: saved.access === "public-url" ? saved.publicUrl : undefined,
     phone: saved.access === "local" ? undefined : saved.phone,
   };
@@ -326,18 +324,17 @@ function startupPreferences(options: CliOptions): NonNullable<AppConfig["cliStar
   const publicUrl = access === "public-url" ? normalizePhoneOrigin(options.publicUrl!) : null;
   if (access === "public-url" && !publicUrl) throw new Error("Use an HTTPS origin without a password, path or query for saved phone access. The address was not saved.");
   return {
-    access,
+    access, ...(access === "tunnel" && options.tailscale ? { tailscale: true } : {}),
     ...(publicUrl ? { publicUrl } : {}),
     ...(!options.local && options.phone ? { phone: options.phone } : {}),
   };
 }
 
-async function showPhonePairing(options: CliOptions, origin: string | undefined, log: (line: string) => void): Promise<boolean> {
+async function showPhonePairing(options: CliOptions, origin: string | undefined, log: (line: string) => void, tailscaleWhy: string | null = null): Promise<boolean> {
   if (options.relay) return showRelayPairing({ tty: process.stdout.isTTY === true, status: async () => (await api(options.port, "/api/auth/pairing")).body?.relay, mint: () => mintPairing(options.port, { client: true, label: options.label ?? (options.phone === "android" ? "Android" : "iPhone / iPad"), phone: options.phone ?? "ios" }), log, prefix: cliPrefix() });
   const ready = !!origin && await verifyPhoneEndpoint(options.port, origin);
   if (!ready) {
-    log("Phone access is not reachable yet. Seira is ready on this computer; no phone pairing code was created.");
-    log(`Check the HTTPS connection, then run ${cliCommand("pair")} again with the same --data-dir and --port.`);
+    for (const line of phoneNotReadyLines(tailscaleWhy, cliCommand("pair"))) log(line);
     return false;
   }
   for (const line of phonePairingInstructions(options.phone ?? "ios", { origin: origin!, ready })) log(line);
@@ -346,18 +343,19 @@ async function showPhonePairing(options: CliOptions, origin: string | undefined,
   return true;
 }
 
-async function mintPairing(port: number, options: { label?: string; client?: boolean; publicUrl?: string; phone?: "ios" | "android"; guided?: boolean; ttlMs?: number }): Promise<string> {
+async function mintPairing(port: number, options: { label?: string; client?: boolean; publicUrl?: string; phone?: "ios" | "android"; computer?: boolean; guided?: boolean; ttlMs?: number }): Promise<string> {
   const chatOnly = Boolean(options.client || options.phone);
-  const request = { ...(options.label ? { label: options.label } : {}), ...(chatOnly ? { scopes: ["client"] } : {}), ...(options.ttlMs ? { ttlMs: options.ttlMs } : {}) };
+  const device = options.phone ? "phone" : options.computer ? "computer" : null;
+  const request = { ...(options.label ? { label: options.label } : {}), ...(chatOnly ? { scopes: ["client"] } : {}), ...(options.ttlMs ? { ttlMs: options.ttlMs } : {}), ...(device ? { device } : {}) };
   const { status, body } = await api(port, "/api/auth/pairing", { method: "POST", body: JSON.stringify(request) });
   const refusal = refusedAsService(status, body) ? SERVICE_TRUST_HELP : desktopOwnedRefusal(status, body);
   if (refusal || status !== 200) throw new Error(refusal ?? `server refused to mint a pairing code: ${typeof body?.error === "string" ? body.error : status}`);
   const reachable = options.publicUrl && !isLoopbackHost(new URL(options.publicUrl).hostname) ? options.publicUrl : null;
-  const link = reachable ? `${reachable}/pair#code=${body.code}` : typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null;
-  const invite = (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null) ?? (typeof body.inviteUrl === "string" ? body.inviteUrl : null);
+  const link = (typeof body.url === "string" && body.url.includes("&endpoints=") && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null) ?? (reachable ? `${reachable}/pair#code=${body.code}` : typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null);
+  const invite = (typeof body.inviteUrl === "string" && body.inviteUrl.includes("endpoints=") ? body.inviteUrl : null) ?? (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null) ?? (typeof body.inviteUrl === "string" ? body.inviteUrl : null);
   const local = localLinkBase(options.publicUrl ?? null, port);
   if (options.guided) return browserSignInLines(`${local.base}/pair#code=${body.code}`, body.code, body.expiresAt);
-  return relayPairingBlock(body, chatOnly, cliPrefix()) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, prefix: cliPrefix() });
+  return (options.computer ? null : relayPairingBlock(body, chatOnly, cliPrefix())) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, computer: options.computer, prefix: cliPrefix() });
 }
 
 /** Never asks anything: the running server's own address (its routes) goes in the link. */
@@ -368,7 +366,7 @@ export async function runPair(options: CliOptions): Promise<number> {
   }
   const advertised = await api(options.port, "/api/auth/pairing").catch(() => ({ status: 0, body: {} as any }));
   const origin = options.publicUrl ?? (typeof advertised.body?.publicUrl === "string" ? advertised.body.publicUrl : undefined);
-  console.log(await mintPairing(options.port, { label: options.label, client: options.client, publicUrl: origin, phone: options.phone, ttlMs: options.pairTtlMs }));
+  console.log(await mintPairing(options.port, { label: options.label, client: options.client, publicUrl: origin, phone: options.phone, computer: options.computer, ttlMs: options.pairTtlMs }));
   if (origin && origin.startsWith("https:") && !isLoopbackHost(new URL(origin).hostname)) {
     const reach = await checkReach(options.port, origin);
     if (!reach.ok) for (const line of [...reachLines("public-url", origin, options.port, cliPrefix(), reach), "The code works once the address answers."]) console.log(line);
@@ -417,7 +415,7 @@ export async function runSessions(options: CliOptions): Promise<number> {
 }
 
 export async function runStatus(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
-  const body: any = await fetch(`http://127.0.0.1:${options.port}/.well-known/openmausbot/environment`).then((r) => r.json()).catch(() => null);
+  const body: any = await fetch(`http://127.0.0.1:${options.port}${sentWireName("environmentPath")}`).then((r) => r.json()).catch(() => null);
   if (body && options.json) io.log(JSON.stringify(body, null, 2));
   if (!body) io.error(`No Seira server is running here. Start it: ${cliCommand("serve")}`);
   if (body && !options.json) {
@@ -434,7 +432,7 @@ export async function runStatus(options: CliOptions, io: CliIo = defaultIo()): P
   return body ? 0 : 1;
 }
 
-/** Edits the sign-in allow-list in config.json, server live or stopped (read per request); OMB_SIGNIN_EMAILS wins when it names someone. */
+/** Edits the sign-in allow-list in config.json, server live or stopped (read per request); SEIRA_SIGNIN_EMAILS wins when it names someone. */
 export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
   const file = join(options.dataDir, "config.json");
   let raw: Record<string, unknown> = {};
@@ -475,7 +473,7 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
     }
     for (const entry of admins) io.log(`${entry.padEnd(40)} full access`);
     for (const entry of members) io.log(`${entry.padEnd(40)} chat and approvals`);
-    if (overridden) io.log("(OMB_SIGNIN_EMAILS / OMB_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs)");
+    if (overridden) io.log("(SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs)");
     return 0;
   }
   const entry = (options.email ?? "").trim().toLowerCase();
@@ -495,24 +493,22 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
   }
   await write(options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) });
   io.log(`${entry} can sign in at /pair with an emailed code (${options.chatOnly ? "chat and approvals" : "full access"})`);
-  if (overridden) io.log("note: OMB_SIGNIN_EMAILS / OMB_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
+  if (overridden) io.log("note: SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
   return 0;
 }
 
-export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
+export async function runLogin(options: CliOptions, io: CliIo = defaultIo(), events?: LoginEvents): Promise<number> {
   const account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), relayOnly: options.relay === true });
   if (fleetCredential()) io.log(`note: ${FLEET_CREDENTIAL_ENV} is set, so serve --tunnel will use that credential rather than this account`);
   if (account.credentials.status === "unavailable") {
     io.error(`${account.credentials.file} exists but could not be read; fix or remove it, then try again`);
     return 1;
   }
-  if (!account.controlPlane) {
-    io.error("OMB_CONTROL_PLANE_URL is set but is not an https address");
-    return 1;
-  }
+  const problem = controlPlaneProblem(process.env, options.relay === true ? "relay" : "tunnel");
+  if (problem) { io.error(problem); return 1; }
   const existing = describeTunnelAccount(account.credentials.read());
   if (existing.address) io.log(`already signed in as ${existing.email ?? "?"} (${existing.address}); signing in again refreshes it`);
-  const email = (options.email ?? (await io.ask("Email for your Seira account: "))).trim();
+  const email = (options.email ?? (events ? "" : await io.ask("Email for your Seira account: "))).trim();
   if (!email) {
     io.error(`an email address is needed: ${cliCommand("login --email you@example.com")}`);
     return 1;
@@ -523,17 +519,44 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     io.error(`could not send a sign-in code: ${message(error)}`);
     return 1;
   }
-  const code = (await io.ask(`Enter the 8-digit code we emailed to ${email}: `)).trim();
   let state;
-  try {
-    state = await account.service.verifyCode(email, code);
-  } catch (error) {
-    io.error(`sign-in failed: ${message(error)}`);
-    return 1;
+  if (events) {
+    for (let attempt = 1; attempt <= CODE_ATTEMPTS && !state; attempt += 1) {
+      events.ask(email);
+      const given = await readCodeLine(events);
+      if (given === null) {
+        io.error("No sign-in code was given.");
+        return 1;
+      }
+      try {
+        state = await account.service.verifyCode(email, given);
+      } catch (error) {
+        io.error(`sign-in failed: ${message(error)}`);
+      }
+    }
+    if (!state) return 1;
+  } else {
+    const code = (await io.ask(`Enter the 8-digit code we emailed to ${email}: `)).trim();
+    try {
+      state = await account.service.verifyCode(email, code);
+    } catch (error) {
+      io.error(`sign-in failed: ${message(error)}`);
+      return 1;
+    }
   }
   const signedIn = describeTunnelAccount(account.credentials.read());
   if (!signedIn.address && !(options.relay && signedIn.installationId)) {
-    io.error(`signed in, but no public address was issued${state.message ? `: ${state.message}` : ""}`);
+    if (!signedIn.email) {
+      io.error(`sign-in failed${state.message ? `: ${state.message}` : ""}`);
+      return 1;
+    }
+    // FR-221: the sign-in stays; only the address is missing, and serve --tunnel asks for it again at each start.
+    io.log(`Signed in as ${signedIn.email}.`);
+    io.error(`No public address this time${state.message ? `: ${state.message}` : "."}`);
+    if (!events) {
+      io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
+      io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
+    }
     return 1;
   }
   io.log(`Signed in as ${signedIn.email ?? email}.`);
@@ -614,62 +637,15 @@ export function serverEntry(here = HERE): { command: string; args: string[]; sta
   return { command: process.execPath, args: ["--experimental-strip-types", source], staticDir, skillsDir: existsSync(join(root, "skills")) ? join(root, "skills") : null };
 }
 
-interface TunnelPlan {
-  access: ManagedTunnelAccess;
-  binary: string;
-  guardian: string;
-  origin: CompanionOriginEndpoint;
-  account: TunnelAccount | null;
-}
-
-/** Fails closed: never a silent fallback to a local-only server. */
-async function planTunnel(options: CliOptions, log: (line: string) => void, recovery: TunnelRecovery): Promise<TunnelPlan | { error: string }> {
-  let access: ManagedTunnelAccess | null = null;
-  let account: TunnelAccount | null = null;
-  const fail = (error: string) => {
-    account?.service.dispose();
-    return { error };
-  };
-  const credential = fleetCredential();
-  if (credential) {
-    log(`tunnel: using the installation credential from ${FLEET_CREDENTIAL_ENV}`);
-    try {
-      access = await fleetAccess({ credential, version: reportableServerVersion() });
-    } catch (error) {
-      return { error: `--tunnel: ${message(error)}` };
-    }
-  } else {
-    account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), recovery, log: (line) => log(`tunnel: ${line}`) });
-    if (account.credentials.status === "unavailable") return fail(`${account.credentials.file} exists but could not be read; fix or remove it`);
-    if (!describeTunnelAccount(account.credentials.read()).email) {
-      return fail(`no account on this machine yet: run ${cliCommand("login")} first, then ${cliCommand("serve --tunnel")}`);
-    }
-    try {
-      const state = await account.service.retry();
-      const saved = tunnelAccess(account.credentials.read()) !== null;
-      if (state.status === "signed-out") log(`tunnel: the sign-in on this machine expired; run ${cliCommand("login")} to renew it${saved ? " (serving the saved address until then)" : ""}`);
-      else if (state.message) log(`tunnel: ${state.message}${saved ? " Serving the saved address for now." : ""}`);
-    } catch (error) {
-      log(`tunnel: control plane not reachable right now (${message(error)}); using the saved address`);
-    }
-    access = tunnelAccess(account.credentials.read());
-    if (!access) return fail(`this machine has no public address; run ${cliCommand("login")} again`);
-  }
-  let binary: string;
-  try {
-    binary = await ensureCloudflared({ dataDir: options.dataDir, log });
-  } catch (error) {
-    return fail(`--tunnel: ${message(error)}`);
-  }
-  const guardian = guardianEntry();
-  if (!guardian) return fail("--tunnel: the connector guardian is missing from this install");
-  return { access, binary, guardian, origin: createTunnelOrigin(), account };
-}
-
 export async function runServe(options: CliOptions, log: (line: string) => void = console.log): Promise<number> {
   const { browserEngineStatus, describeBrowserEngine } = await import("./browser-engine.ts");
   if (await serverUp(options.port)) {
     console.error(`something already answers on http://127.0.0.1:${options.port}; use ${cliCommand("pair")} against it, or --port for a second server`);
+    return 1;
+  }
+  const running = runningServerLine(options.dataDir);
+  if (running) {
+    console.error(running);
     return 1;
   }
   let publicUrl = options.publicUrl ?? (options.local ? undefined : envPublicUrl(process.env, log));
@@ -691,9 +667,14 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       console.error(planned.error);
       return 1;
     }
-    plan = planned;
-    if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
-    publicUrl = plan.access.endpoint;
+    if ("unavailable" in planned) {
+      log(`tunnel: ${planned.unavailable}`);
+      log(`tunnel: no public address this time, so this server runs without one. Start ${cliCommand("serve --tunnel")} again later to get one.`);
+    } else {
+      plan = planned;
+      if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
+      publicUrl = plan.access.endpoint;
+    }
   }
   let caddyBinary: string | null = null;
   if (options.domain) {
@@ -709,27 +690,29 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   if (!entry.staticDir) log("note: no built UI found next to the server; the API runs but browsers get no page (build with `pnpm exec vite build`)");
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    OMB_DATA_DIR: options.dataDir,
-    OMB_PORT: String(options.port),
-    OMB_WEBHOOK_PORT: process.env.OMB_WEBHOOK_PORT || String(options.port + 1), ...(options.relay ? { OMB_PHONE_RELAY: "1" } : {}),
+    SEIRA_DATA_DIR: options.dataDir,
+    SEIRA_PORT: String(options.port),
+    SEIRA_WEBHOOK_PORT: process.env.SEIRA_WEBHOOK_PORT || String(options.port + 1), ...(options.relay ? { SEIRA_PHONE_RELAY: "1" } : {}),
   };
-  if (options.local) delete env.OMB_PUBLIC_URL;
+  if (options.local) delete env.SEIRA_PUBLIC_URL;
   // The per-launch secret goes over stdin, not the environment that every engine the server starts inherits.
   const serviceTrust = resolveLoopbackTrust({ env, desktopManaged: false, hostedWorkspace: hostedWorkspaceConfigured(env) }).trust === "service";
   const ownerToken = serviceTrust ? randomBytes(32).toString("base64url") : undefined;
-  if (ownerToken) env.OMB_CLI_OWNER_STDIN = "1";
-  else delete env.OMB_CLI_OWNER_STDIN;
-  if (entry.staticDir) env.OMB_STATIC_DIR = entry.staticDir;
-  if (entry.skillsDir && !process.env.OMB_SKILLS_DIR) env.OMB_SKILLS_DIR = entry.skillsDir;
-  if (options.label && !process.env.OMB_ENVIRONMENT_LABEL) env.OMB_ENVIRONMENT_LABEL = options.label;
-  if (plan) Object.assign(env, { OMB_TUNNEL_SOCKET: plan.origin.socketPath, OMB_SERVES_TUNNEL: "1" });
+  if (ownerToken) env.SEIRA_CLI_OWNER_STDIN = "1";
+  else delete env.SEIRA_CLI_OWNER_STDIN;
+  if (entry.staticDir) env.SEIRA_STATIC_DIR = entry.staticDir;
+  if (entry.skillsDir && !process.env.SEIRA_SKILLS_DIR) env.SEIRA_SKILLS_DIR = entry.skillsDir;
+  if (options.label && !process.env.SEIRA_ENVIRONMENT_LABEL) env.SEIRA_ENVIRONMENT_LABEL = options.label;
+  if (plan) Object.assign(env, { SEIRA_TUNNEL_SOCKET: plan.origin.socketPath, SEIRA_SERVES_TUNNEL: "1" });
   const lanRefusal = options.lan ? lanProblem() : null;
   if (lanRefusal) log(lanRefusal);
-  if (options.lan && !lanRefusal) env.OMB_LAN = "1";
-  else delete env.OMB_LAN;
+  if (options.lan && !lanRefusal) env.SEIRA_LAN = "1";
+  else delete env.SEIRA_LAN;
+  if (options.accessLog) env.SEIRA_ACCESS_LOG = "1";
   let logPath: string | undefined;
   let logFd: number | undefined;
   let tailscaleShare: { origin: string; stop(): Promise<void> } | null = null;
+  let tailscaleWhy: string | null = null;
   let startupCancelled = false;
   const cancelStartup = () => { startupCancelled = true; };
   process.on("SIGINT", cancelStartup);
@@ -744,15 +727,18 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log("\nStarting your workspace…");
     }
     if (tailscale) {
-      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, otherServer: answersAsMausBot });
+      const httpsPort = pickTailscaleHttpsPort(listeningPorts(systemProbe()));
+      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPort: httpsPort.port, otherServer: answersAsSeira });
       const listening = "failure" in served ? tailnetListenFallback(served.failure, tailscale, options.port) : null;
+      if (listening && "failure" in served) tailscaleWhy = explainTailscaleFailure(served.failure);
+      else if (httpsPort.line) log(httpsPort.line);
       tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : served;
       if (startupCancelled || !tailscaleShare) throw startupCancelled ? new SetupCancelled() : new Error(`--tailscale: ${explainTailscaleFailure("failure" in served ? served.failure : "unknown")}`);
-      Object.assign(env, listening?.env); publicUrl = tailscaleShare.origin;
-      log(listening?.line ?? `tailscale: serving https://${tailscale.dnsName} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
+      Object.assign(env, listening?.env); if (plan) env.SEIRA_PHONE_ROUTES = [tailscaleShare.origin, ...phoneRoutesFromEnv(process.env)].join(","); else publicUrl = tailscaleShare.origin;
+      log(listening?.line ?? `tailscale: serving ${tailscaleShare.origin} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
     }
     if (startupCancelled) throw new SetupCancelled();
-    if (publicUrl) env.OMB_PUBLIC_URL = publicUrl;
+    if (publicUrl) env.SEIRA_PUBLIC_URL = publicUrl;
     child = spawn(entry.command, entry.args, { env, stdio: [ownerToken ? "pipe" : "ignore", logFd ?? "inherit", logFd ?? "inherit"] });
     if (ownerToken) {
       child.stdin?.on("error", () => {});
@@ -805,9 +791,13 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   process.on("SIGTERM", onSignal);
 
   try {
-    const deadline = Date.now() + 60_000;
+    let deadline = Date.now() + 60_000, restoreNoticeAt = 0;
     while (Date.now() < deadline && exited === null && !stopping) {
       if (await serverUp(options.port, child.pid)) break;
+      if (restoreInProgress(options.dataDir)) {
+        deadline = Date.now() + 60_000;
+        if (Date.now() >= restoreNoticeAt) { log(restoreNoticeAt ? "Seira is still restoring your backup. Keep this running." : "Seira is restoring your backup. This can take several minutes. Keep this running."); restoreNoticeAt = Date.now() + 30_000; }
+      }
       await new Promise((r) => setTimeout(r, 250));
     }
     if (exited !== null) {
@@ -823,7 +813,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
     if (stopping || exited !== null) return await childExit;
     if (options.domain && caddyBinary) {
       try {
-        caddy = await startCaddy({ binary: caddyBinary, dataDir: options.dataDir, domain: options.domain, appPort: options.port, webhookPort: Number(env.OMB_WEBHOOK_PORT), log });
+        caddy = await startCaddy({ binary: caddyBinary, dataDir: options.dataDir, domain: options.domain, appPort: options.port, webhookPort: Number(env.SEIRA_WEBHOOK_PORT), log });
         log(`https: Caddy serves ${publicUrl} → http://127.0.0.1:${options.port}; it gets the certificate from Let's Encrypt once DNS for ${options.domain} points at this machine`);
         void caddy.exited.then((code) => {
           if (!stopping) log(`caddy: stopped (exit ${code ?? "signal"}); ${publicUrl} is no longer served. Stop and start the server again.`);
@@ -848,8 +838,8 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       void plan.account?.service.restore().catch(() => undefined);
     }
     const prefix = cliPrefix();
-    const described = await api(options.port, "/.well-known/openmausbot/environment").catch(() => null);
-    const route: Route | null = plan ? "tunnel" : options.domain ? "domain" : tailscaleShare ? "tailscale" : publicUrl ? "public-url" : env.OMB_LAN === "1" ? "lan" : null;
+    const described = await api(options.port, sentWireName("environmentPath")).catch(() => null);
+    const route: Route | null = plan ? "tunnel" : options.domain ? "domain" : tailscaleShare ? "tailscale" : publicUrl ? "public-url" : env.SEIRA_LAN === "1" ? "lan" : null;
     const origin = route === "lan" ? lanUrl(options.port, env) : publicUrl ?? null;
     log("");
     log(`Seira ${serverVersion()} · server "${described?.body?.label ?? options.label ?? "this machine"}"`);
@@ -862,11 +852,11 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log(describeBrowserEngine(browserEngineStatus({ dataDir: options.dataDir })));
     }
     const reach = route && origin && route !== "lan" ? await waitForReach(options.port, origin, route === "public-url" ? 3_000 : 15_000) : undefined;
-    if (route && origin) for (const line of reachLines(route, origin, options.port, prefix, reach)) log(line);
+    if (route && origin) for (const line of reachLines(route, origin, options.port, prefix, reach, tailscale?.addresses)) log(line);
     const interactive = process.stdout.isTTY === true;
     if (options.pair && (options.phone || options.relay)) {
       log("");
-      if (!stopping && exited === null) await showPhonePairing(options, publicUrl, log).catch((error: unknown) => log(`no pairing code: ${message(error)}`));
+      if (!stopping && exited === null) await showPhonePairing(options, publicUrl, log, tailscaleWhy).catch((error: unknown) => log(`no pairing code: ${message(error)}`));
     } else if (options.pair && (options.guided || ((route || serviceTrust) && interactive))) {
       log("");
       try {
@@ -882,6 +872,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log(`Get a pairing code: ${prefix} pair`);
     }
     if (serviceTrust && !(options.pair && interactive)) log(`This shared server takes no pairing commands from this machine. Let people sign in with their email: ${prefix} access add you@example.com`);
+    if (interactive && !options.guided) for (const line of laptopLinesHere(options.port, prefix)) log(line);
     if (interactive && !options.guided) log(`New code later   ${prefix} pair\nStop with Ctrl+C`);
     if (options.guided) log(`\nKeep this terminal open while using your bots. Ctrl+C stops the server, not your saved work.\nNext time: ${prefix} · Change AI or phone setup: ${prefix} setup · Pair another device: ${prefix} pair`);
     return await childExit;
@@ -917,7 +908,7 @@ export async function runOnboardingCommand(
     io.error(`Setup needs an interactive terminal. Run ${cliCommand("setup")} in a terminal, or start unattended with ${cliCommand("serve")}.`);
     return 1;
   }
-  process.env.OMB_DATA_DIR = options.dataDir;
+  process.env.SEIRA_DATA_DIR = options.dataDir;
   if (options.command !== "setup" && await (flow.running ?? isWorkspaceRunning)(options)) {
     if (options.local || options.tunnel || options.tailscale || options.publicUrl) {
       io.error("This workspace is already running. Stop it before changing local or remote access; the current connection was not changed.");
@@ -947,6 +938,7 @@ export async function runOnboardingCommand(
     if (interactive && options.pair && !options.local && (options.command === "setup" || !saved)) {
       io.log("\nOne optional step: connect your phone. You can skip this and start chatting here.");
       const result = await (flow.phoneSetup ?? runPhoneSetup)(launch, prompts, {
+        tailscaleProblem: tailscaleHttpsProblem,
         accountReady: (value) => !!describeTunnelAccount(createTunnelAccount({ dataDir: value.dataDir, version: reportableServerVersion() }).credentials.read()).email,
         login: (value, ui) => runLogin(value, {
           log: ui.log, error: ui.log,
@@ -958,7 +950,7 @@ export async function runOnboardingCommand(
     }
     if (options.command === "setup") {
       io.log(`\nAll set. Start with: ${cliPrefix()}`);
-      if (options.dataDir !== join(homedir(), ".openmausbot") || options.port !== 8799) {
+      if (options.dataDir !== join(homedir(), ".seira") || options.port !== 8799) {
         io.log(`Use the same --data-dir (${options.dataDir}) and --port (${options.port}) options when starting.`);
       }
       return 0;
@@ -973,6 +965,7 @@ export async function runOnboardingCommand(
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
+  migrateBeforeFirstWrite(argv);
   if (argv[0] === "sentinel") return runSentinelCli(argv.slice(1));
   if (argv[0] === "config") return runConfigCli(argv.slice(1));
   if (HEADLESS_VERB_NAMES.has(argv[0] ?? "") || (argv[0] === "help" && HEADLESS_VERB_NAMES.has(argv[1] ?? ""))) return (await import("./headless/main.ts")).runHeadless(argv);
@@ -981,7 +974,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     console.error(`${options.error}\nAll commands and options: ${cliCommand("--help")}`);
     return 2;
   }
-  process.env.OMB_DATA_DIR = options.dataDir;
+  process.env.SEIRA_DATA_DIR = options.dataDir;
   switch (options.command) {
     case "setup":
     case "start":
@@ -994,8 +987,15 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return runSessions(options);
     case "status":
       return runStatus(options);
-    case "login":
-      return runLogin(options);
+    case "login": {
+      if (!options.events) return runLogin(options);
+      const events = stdinLoginEvents();
+      try {
+        return await runLogin(options, { log: (line) => console.error(line), error: (line) => console.error(line), ask: async () => "" }, events);
+      } finally {
+        events.close();
+      }
+    }
     case "access":
       return runAccess(options);
     case "service":
@@ -1011,7 +1011,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           group: options.group,
           node: process.execPath,
           script: process.argv[1] ?? "",
-          licenseKey: options.licenseKey ?? process.env.OMB_LICENSE_KEY,
+          licenseKey: options.licenseKey ?? process.env.SEIRA_LICENSE_KEY,
         }, { log: (line) => console.log(line) });
         await new Promise<void>((resolveStop) => {
           for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => resolveStop());
@@ -1028,7 +1028,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         brandFile: options.brandFile,
         anthropicKeyFile: options.anthropicKeyFile,
         cap: options.cap,
-        licenseKey: options.licenseKey ?? process.env.OMB_LICENSE_KEY,
+        licenseKey: options.licenseKey ?? process.env.SEIRA_LICENSE_KEY,
         memory: options.memory,
         dryRun: options.dryRun ?? false,
         yes: options.yes ?? false,

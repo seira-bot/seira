@@ -7,7 +7,7 @@
 import type { LimitResetRepeat } from "./limit-reset.ts";
 import type { RoutineCronSchedule } from "./routine-schedule.ts";
 
-export type RoutineRequestRunOn = "maus" | "cloud";
+export type RoutineRequestRunOn = "seira" | "cloud";
 
 export interface RoutineRequestIntervalWindow {
   start: string;
@@ -59,16 +59,20 @@ export interface RoutineRequestDefinition {
   continuity?: boolean;
   /** Skip by default, or keep at most one scheduled run waiting. */
   overlap?: "skip" | "queue";
-  /** Also run once each time OpenMausBot starts. Repeating routines only. */
+  /** Also run once each time Seira starts. Repeating routines only. */
   runOnStartup?: boolean;
   /** Each run continues the conversation the run before worked in. */
   sameConversation?: boolean;
+  /** The saved workflow the routine runs; its instructions are the workflow's steps. */
+  workflowId?: string;
 }
 
 export type RoutineRequestChanges =
-  & Omit<Partial<RoutineRequestDefinition>, "schedule" | "timeoutMinutes">
+  & Omit<Partial<RoutineRequestDefinition>, "schedule" | "timeoutMinutes" | "workflowId">
   & {
     schedule?: RoutineRequestScheduleChanges;
+    /** A workflow id links the routine to it; `null` unlinks it. */
+    workflowId?: string | null;
     /** `null` removes an existing safety cap. */
     timeoutMinutes?: number | null;
   };

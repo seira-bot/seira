@@ -10,8 +10,8 @@ import type { TurnDigest } from "./digest.ts";
 import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
 import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
-import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts";
-import type { SetupCardFields } from "./setup-card.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
+import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts"; import type { FolderAccessField, WireFolderAccess, WireFolderGrant } from "./folder-access.ts"; export type { WireFolderAccess, WireFolderGrant };
+import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
 import type { AppEventAttempt, AppTrigger, AppTriggerRequestCardData, AppTriggerService } from "./app-triggers.ts";
@@ -28,7 +28,7 @@ import type { AppFromRef, AppPayload, AppPointedRef } from "./app.ts";
 import type { GroupGoalRunCardData } from "./group-goal-run.ts"; import type { BurstCardData } from "./burst.ts";
 import type { RuntimeEvent } from "./runtime-events.ts";
 import type { NotificationLogEntry } from "./notification.ts";
-import type { Routine, RoutineRun } from "./routines.ts";
+import type { Routine, RoutineRun } from "./routines.ts"; import type { WorkflowFrame } from "./workflows.ts";
 import type { WebhookAttempt, WebhookTrigger } from "./webhooks.ts";
 import type { PublishedPageCard } from "./published-page.ts";
 import type { InboxItem, InboxTask } from "./inbox.ts";
@@ -38,7 +38,7 @@ import type { CompanionEndpointsSnapshot } from "./responses.ts";
 /** What a team bot's main chat is called, beside each person's own chats. */
 export const SHARED_CHAT_TITLE = "Shared chat";
 
-export type { LiveCallRecord, LiveCallState, LiveCallStatus, LiveClient, LiveElevenLabsSession, LiveElevenLabsTransport, LiveEndReason, LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken, LiveFishTransport, LiveGeminiSession, LiveGeminiTransport, LiveKeySource, LiveProvider, LiveSettings } from "./live-call-wire.ts";
+export type { LiveCallRecord, LiveCallState, LiveCallStatus, LiveClient, LiveElevenLabsOverrides, LiveElevenLabsSession, LiveElevenLabsTransport, LiveEndReason, LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken, LiveFishTransport, LiveGeminiSession, LiveGeminiTransport, LiveKeySource, LiveProvider, LiveSettings } from "./live-call-wire.ts";
 export type { ForkOrigin, TaskClosedBy, TaskOpenedBy } from "./task-provenance.ts";
 export type { AuthPairResponse, AuthSessionResponse, BotCreateResponse, BotsResponse, BotUpdateResponse, CompanionE2EDescriptor, CompanionEndpointsSnapshot, InstancesResponse, LoopbackSessionResponse, PairedDevice, PairedSession, PairRequest, PairResponse, RoomCreateResponse, RoomTaskCreateResponse, RoomTaskUpdateResponse, RoomUpdateResponse, SearchHit, SearchResponse, SignedInSessionResponse, TaskResponse, WireComputerControl, WireInstance, WireMessagePage, WireModelOption } from "./responses.ts";
 
@@ -61,24 +61,24 @@ export interface ModelSelection {
   variant?: string;
 }
 
-/** Which cloud computer backs computer: "cloud"; absent means Boat. */
+/** Which cloud computer backs computer: "cloud". Only "vps" is in use; released phone apps also know "box". */
 export type CloudBackend = "box" | "vps";
 
 /** A place a bot can act. `cloud` covers both cloud backends. */
 export type Surface = "cloud" | "vm" | "local" | "browser";
 
-export const MAUS_COLOR_NAMES = [
+export const SEIRA_COLOR_NAMES = [
   "green", "blue", "red", "orange", "purple", "cyan", "pink",
   "yellow", "teal", "coral", "silver", "chrome",
 ] as const;
-export type MausColor = (typeof MAUS_COLOR_NAMES)[number];
+export type SeiraColor = (typeof SEIRA_COLOR_NAMES)[number];
 
-export function isMausColor(value: unknown): value is MausColor {
-  return typeof value === "string" && (MAUS_COLOR_NAMES as readonly string[]).includes(value);
+export function isSeiraColor(value: unknown): value is SeiraColor {
+  return typeof value === "string" && (SEIRA_COLOR_NAMES as readonly string[]).includes(value);
 }
 
 /** The face a bot rests on, as one of the engine's state names. */
-export type MausExpression = string;
+export type SeiraExpression = string;
 
 /** What the bot is doing right now, as the harness sees it. `parked.computer`
  * is task-level only: a turn that settled at the computer wait ceiling and
@@ -259,7 +259,7 @@ export const helperModelAllowed = (bot: { helperModel?: unknown }): boolean => b
 
 /** A bot as a client may see it. avatarUrl is always present (null when the
  * bot has none). */
-export interface WireBot extends DefaultBotFields, BotAccessFields {
+export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccessField {
   waitingForTeammates?: boolean;
   id: string;
   /** The task selected in the UI; running turns keep their own thread id. */
@@ -280,8 +280,8 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   /** The SOUL.md mirror differed from soul at the last turn dispatch. */
   soulDrift?: boolean;
   notifications: boolean;
-  color: MausColor;
-  mascotExpression?: MausExpression | null;
+  color: SeiraColor;
+  mascotExpression?: SeiraExpression | null;
   mascotBody?: BotBodyId | null;
   /** Overrides both eyes and mouth. Absent or null preserves the body's default inks. */
   mascotFaceColor?: MascotFaceColor | null;
@@ -304,7 +304,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   modelSelection: ModelSelection;
   /** where the bot works ("Works on"). Unset = auto. */
   computer?: Surface | "off";
-  /** Which cloud computer backs computer: "cloud"; absent means Boat. */
+  /** Which cloud computer backs computer: "cloud". */
   cloudBackend?: CloudBackend;
   /** Auto mode may prepare/start this bot's managed VPS container. */
   autoStartVps?: boolean;
@@ -325,7 +325,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   replyStyle?: ReplyStyle;
   /** This bot's own voice id, so a room of bots doesn't sound like one person. */
   voice?: string;
-  /** This bot's own Live call voice, a GPT-Live or Gemini Live voice id; absent, or not the call provider's, uses the app's. */ liveVoice?: string;
+  /** This bot's own Live call voice, a GPT-Live or Gemini Live voice id; absent, or not the call provider's, uses the app's. */ liveVoice?: string; /** Call speech speed 0.5–2.0, clamped by each provider; absent: 1. */ callSpeed?: number; /** Call language: a BCP-47 tag from the call language list, or "auto"; absent follows the conversation. */ callLanguage?: string;
   /** Whether this bot may send voice notes. Absent/true = allowed; false
    * hides the tool and refuses the route even with a voice configured. */
   voiceNotes?: boolean; /** The harness speaks each reply as a voice note; absent follows the installation's `tts.everyReply`. */ voiceNoteEveryReply?: boolean;
@@ -436,7 +436,7 @@ export type CardAnswerer = (
 export const EXCERPT_SUMMARY_HEADER = "Historical excerpts in chronological order; newer corrections override older requests. These excerpts may omit earlier details.";
 
 /** One transcript line, serialized as stored. */
-export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, WaitLineField, BugReportField {
+export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, TeamSuggestionFields, WaitLineField, BugReportField {
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";
@@ -494,8 +494,8 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
     clipped?: boolean;
     /** Words the harness wrote for what the call did, shown in place of `name`; `name` stays the tool's own. */
     label?: string;
-    /** error rows: the reply came back; only a step the turn ran failed or wasn't allowed. */
-    partial?: boolean;
+    /** error rows: the reply came back (partial), or the turn ran and the row only says what it ran without (notice). */
+    partial?: boolean; notice?: true;
   };
   /** A bot line a "post" webhook wrote: whoever called the webhook chose
    * its words. On a room line this also carries `from`, so the room renders
@@ -520,7 +520,7 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   relayed?: boolean;
   /** A user line a routine, webhook, room coordination or another bot's
    * message started a turn with: the person did not write it. */
-  automated?: boolean;
+  automated?: boolean; /** The line Seira puts at the start of a continued chat: the summary of the earlier chat, for the bot to read. */ handoff?: { threadId: string; title: string };
   /** Which person sent this user message, when the workspace has more than
    * one. Absent reads as the profile name. */
   sender?: ResolvedSender;
@@ -725,7 +725,7 @@ export interface SecretRequestCardData {
   };
   placeholder: string;
   helpUrl: string;
-  /** A custom secret's use: "ref", OpenMausBot's own tools only; "file", the bot's commands; "email", the Email connector, never a bot. */ delivery?: SecretDelivery | "email";
+  /** A custom secret's use: "ref", Seira's own tools only; "file", the bot's commands; "email", the Email connector, never a bot. */ delivery?: SecretDelivery | "email";
   /** An email card: the mailbox it is for, when known; off a phone the person can change it on the card. */ address?: string;
   /** An email card: the incoming server that took the password, once it did, while sending is still being checked. */
   emailReading?: string;
@@ -854,7 +854,7 @@ export interface WireGroup {
   /** Short one-line description shown under the room name; distinct from
    * the bulletin (long-form instructions) and any member bot's title.
    * null = explicitly cleared, so a client's shallow merge drops a stale value. */
-  description?: string | null;
+  description?: string | null; /** The room's own picture: a stored image attachment URL, shown in place of the member avatars. null = explicitly cleared, so a client's shallow merge drops a stale value. */ avatarUrl?: string | null;
   unread: boolean;
   /** The newest message on screen the last time the person read this
    * conversation. The New divider goes after it. */
@@ -968,7 +968,7 @@ export type ServerFrame =
   | { kind: "group.deleted"; groupId: string }
   | { kind: "routine"; routine: Routine }
   | { kind: "routine.deleted"; routineId: string }
-  | { kind: "routine.run"; run: RoutineRun }
+  | { kind: "routine.run"; run: RoutineRun } | WorkflowFrame
   | { kind: "webhook"; webhook: WebhookTrigger }
   | { kind: "webhook.attempt"; attempt: WebhookAttempt }
   | { kind: "webhook.deleted"; webhookId: string }

@@ -7,47 +7,48 @@ export const CREDENTIAL_ENV_NAMES = [
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "CEREBRAS_API_KEY",
-  "OMB_GROQ_API_KEY",
-  "OMB_GREENFERENCE_API_KEY",
-  "OMB_MODELGO_API_KEY",
-  "OMB_META_API_KEY",
-  "OMB_DEEPSEEK_API_KEY",
-  "OMB_ANTHROPIC_API_KEY",
-  "OMB_ANTHROPIC_API_URL",
-  "OMB_HOSTED_MODEL_TOKEN",
-  "OMB_HOSTED_MODELS",
+  "SEIRA_GROQ_API_KEY",
+  "SEIRA_GREENFERENCE_API_KEY",
+  "SEIRA_MODELGO_API_KEY",
+  "SEIRA_META_API_KEY",
+  "SEIRA_DEEPSEEK_API_KEY",
+  "SEIRA_ANTHROPIC_API_KEY",
+  "SEIRA_ANTHROPIC_API_URL",
+  "SEIRA_HOSTED_MODEL_TOKEN",
+  "SEIRA_HOSTED_MODELS",
   "OPENAI_COMPAT_API_KEY",
   "OPENAI_COMPAT_URL",
-  "OMB_OPENAI_API_KEY",
-  "OMB_OPENROUTER_API_KEY",
+  "SEIRA_OPENAI_API_KEY",
+  "SEIRA_OPENROUTER_API_KEY",
   "BOX_TOKEN",
   "OPENCODE_API_KEY",
-  "OMB_TTS_KEY",
-  "OMB_FISH_AUDIO_API_KEY",
-  "OMB_GEMINI_API_KEY",
-  "OMB_JEV_API_KEY",
-  "OMB_OPENROUTER_DECIDER_KEY",
-  "OMB_WORKERS_AI_TOKEN",
-  "OMB_CUSTOM_DECIDER_KEY",
-  "OMB_OPENAI_IMAGE_KEY",
-  "OMB_CUSTOM_IMAGE_KEY",
-  "OMB_GEMINI_IMAGE_KEY",
-  "OMB_OPENAI_LIVE_KEY",
-  "OMB_TREG_KEY",
-  "OMB_POSTIZ_API_KEY",
+  "SEIRA_TTS_KEY",
+  "SEIRA_FISH_AUDIO_API_KEY",
+  "SEIRA_GEMINI_API_KEY",
+  "SEIRA_JEV_API_KEY",
+  "SEIRA_OPENROUTER_DECIDER_KEY",
+  "SEIRA_WORKERS_AI_TOKEN",
+  "SEIRA_CUSTOM_DECIDER_KEY",
+  "SEIRA_OPENAI_IMAGE_KEY",
+  "SEIRA_CUSTOM_IMAGE_KEY",
+  "SEIRA_GEMINI_IMAGE_KEY",
+  "SEIRA_OPENAI_LIVE_KEY",
+  "SEIRA_TREG_KEY",
+  // Retired: still stripped, because an old environment can still set it.
+  "SEIRA_POSTIZ_API_KEY",
   "COMPOSIO_API_KEY",
-  "OMB_COMPOSIO_BROKER_TOKEN",
-  "OMB_CLOUD_BOAT_TOKEN",
-  "OMB_CLOUD_VOICE_TOKEN",
-  "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN",
-  "OMB_CLOUD_X_TOKEN",
-  "OMB_CLOUD_HOSTING_TOKEN",
-  "OMB_CLOUD_CONNECTED_APPS_GRANT",
+  "SEIRA_COMPOSIO_BROKER_TOKEN",
+  "SEIRA_CLOUD_BOAT_TOKEN",
+  "SEIRA_CLOUD_VOICE_TOKEN",
+  "SEIRA_CLOUD_DECIDER_TOKEN",
+  "SEIRA_CLOUD_AI_TOKEN",
+  "SEIRA_CLOUD_X_TOKEN",
+  "SEIRA_CLOUD_HOSTING_TOKEN",
+  "SEIRA_CLOUD_CONNECTED_APPS_GRANT",
   // Private even though they are not traditional API credentials.
-  "OMB_BROWSER_CONNECTION",
-  "OMB_USER_DATA",
-  "OMB_BOAT_API",
+  "SEIRA_BROWSER_CONNECTION",
+  "SEIRA_USER_DATA",
+  "SEIRA_BOAT_API",
 ];
 
 // Kept in parity with server/redact.ts: unmistakable token formats are masked wherever they appear, keyed or not.
@@ -142,7 +143,7 @@ export function readSafeLogTail(logPath, maxBytes = 256 * 1024, platform = proce
 }
 
 // Metadata only: no URL, title, error message, command line or absolute path reaches the public export.
-const PROCESS_GONE_REASONS = new Set([
+export const PROCESS_GONE_REASONS = new Set([
   "abnormal-exit",
   "clean-exit",
   "crashed",
@@ -161,7 +162,7 @@ const CHILD_PROCESS_TYPES = new Set([
   "Zygote",
 ]);
 const MAIN_FAILURE_ORIGINS = new Set(["uncaughtException", "unhandledRejection"]);
-const ERROR_NAMES = new Set([
+export const ERROR_NAMES = new Set([
   "AggregateError",
   "Error",
   "EvalError",
@@ -172,7 +173,21 @@ const ERROR_NAMES = new Set([
   "URIError",
 ]);
 
-function known(value, allowed, fallback = "unknown") {
+/** The kinds a crash report can have: the only values that reach desktop-crashes.log and the report id list. */
+export const CRASH_REPORT_KINDS = new Set([
+  "hang",
+  "main-error",
+  "native",
+  "page-boundary",
+  "renderer-error",
+  "renderer-rejection",
+  "renderer-stuck",
+  "server-exit",
+  "server-turn",
+]);
+const REPORT_ID = /^[0-9a-f]{32}$/;
+
+export function known(value, allowed, fallback = "unknown") {
   return typeof value === "string" && allowed.has(value) ? value.replaceAll(" ", "-") : fallback;
 }
 
@@ -202,6 +217,14 @@ export function formatDesktopCrashRecord(event = {}) {
       if (reason === "clean-exit") return null;
       const type = known(event.type, CHILD_PROCESS_TYPES);
       return `event=child-process-gone type=${type} reason=${reason} exitCode=${exitCode(event.exitCode)}`;
+    }
+    if (event.kind === "renderer-stuck") {
+      const code = Number.isSafeInteger(event.exitCode) ? `${event.exitCode} hex=0x${(event.exitCode >>> 0).toString(16)}` : "unknown";
+      return `event=renderer-stuck reason=${known(event.reason, PROCESS_GONE_REASONS)} exitCode=${code} next=${event.next === "dialog" ? "dialog" : "page"}`;
+    }
+    if (event.kind === "crash-report") {
+      if (typeof event.id !== "string" || !REPORT_ID.test(event.id) || !CRASH_REPORT_KINDS.has(event.reportKind)) return null;
+      return `event=crash-report id=${event.id} kind=${event.reportKind}`;
     }
     if (event.kind === "main") {
       const origin = known(event.origin, MAIN_FAILURE_ORIGINS, "uncaughtException");
@@ -278,6 +301,7 @@ export function buildDiagnosticsReport({
   updaterLogTail,
   logTail,
   performance,
+  crashReportIds,
   now = new Date().toISOString(),
 } = {}) {
   const lines = [];
@@ -316,6 +340,11 @@ export function buildDiagnosticsReport({
     lines.push("(no desktop crash events available)");
   }
   lines.push("");
+  lines.push("## Crash report ids");
+  const reportIds = Array.isArray(crashReportIds) ? crashReportIds.filter((id) => typeof id === "string" && REPORT_ID.test(id)) : [];
+  if (reportIds.length) for (const id of reportIds) lines.push(`id=${id}`);
+  else lines.push("(no crash reports sent in the last 7 days)");
+  lines.push("");
   lines.push(logTail && logTail.trim() ? "## Server log tail — known credential patterns auto-masked" : "## Server log tail");
   if (logTail && logTail.trim()) {
     for (const line of redactSecretsInLine(logTail).split(/\r?\n/)) lines.push(line);
@@ -336,7 +365,7 @@ export function buildDiagnosticsReport({
 export function diagnosticsFileName(date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
   return (
-    `openmausbot-diagnostics-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `seira-diagnostics-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
     `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.txt`
   );
 }

@@ -1,16 +1,16 @@
-// Real model acceptance through the full, isolated OpenMausBot server.
+// Real model acceptance through the full, isolated Seira server.
 // The prompts contain goals only, never tool names or execution advice.
 import { copyFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi } from "./testing/preview-fixture.ts";
 
-const cli = process.env.OMB_VERIFY_CODEX_CLI;
-const auth = process.env.OMB_VERIFY_CODEX_AUTH;
-const binaryPath = process.env.OMB_VERIFY_BROWSER_BINARY;
-const executablePath = process.env.OMB_VERIFY_BROWSER_CHROME;
-const output = process.env.OMB_VERIFY_OUTPUT;
-const models = (process.env.OMB_VERIFY_MODELS ?? "gpt-5.6-luna").split(",").map(model => model.trim()).filter(Boolean);
+const cli = process.env.SEIRA_VERIFY_CODEX_CLI;
+const auth = process.env.SEIRA_VERIFY_CODEX_AUTH;
+const binaryPath = process.env.SEIRA_VERIFY_BROWSER_BINARY;
+const executablePath = process.env.SEIRA_VERIFY_BROWSER_CHROME;
+const output = process.env.SEIRA_VERIFY_OUTPUT;
+const models = (process.env.SEIRA_VERIFY_MODELS ?? "gpt-5.6-luna").split(",").map(model => model.trim()).filter(Boolean);
 if (!models.length) throw new Error("Choose at least one acceptance model.");
 if (!cli || !auth || !binaryPath || !executablePath || !output) throw new Error("Set explicit CLI, sign-in, browser binaries and output directory. Uses real model quota.");
 mkdirSync(output, { recursive: true });

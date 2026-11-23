@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pickSuggestion, TeamSuggestionError } from "../../shared/team-suggestion.ts";
+import { currentFormat } from "../../electron/legacy-names.mjs";
 import { MAX_TEAM_BACKUP_BYTES } from "../../shared/team-backup.ts";
 import type { BotVisibility, WireBot, WireGroup } from "../../shared/wire.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
@@ -19,7 +21,9 @@ import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import { createTeamBackup, importTeamBackup } from "../team-backup.ts";
 import { fetchGithubTeam, fetchLibraryTeam, fetchTeamCatalog } from "../team-library.ts";
 import { parseTeamManifest } from "../team-manifest.ts";
-import type { RequestAuth } from "../request-auth.ts";
+import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
+import { conversationLanguage } from "../server-lines.ts";
+import { askForTeam, openSuggestion, settleSuggestion } from "../team-request.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface TeamRouteDeps {
@@ -36,11 +40,19 @@ export interface TeamRouteDeps {
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
   /** On a Team Cloud: false for someone else's private chat, which a team backup never carries. */
   threadShown?(auth: RequestAuth): (threadId: string) => boolean;
-  /** On a Team Cloud: false for someone else's own MausBot, which no export carries. */
+  /** On a Team Cloud: false for someone else's own Seira, which no export carries. */
   botShown?(auth: RequestAuth): (botId: string) => boolean;
   /** On a Team Cloud: false for a routine that lives in someone else's private chat, which no export carries. */
   routineShown?(auth: RequestAuth): (routine: Routine) => boolean;
 }
+
+const THREAD_ID = /^[\w-]{1,128}$/;
+const SUGGESTION_PICK = z.object({
+  threadId: z.string().regex(THREAD_ID),
+  keep: z.array(z.string().max(80)).max(20).optional(),
+  names: z.record(z.string().max(80), z.string().max(300)).optional(),
+  department: z.string().max(300).optional(),
+}).strict();
 
 export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
   const routinesFor = (auth: RequestAuth): Routine[] => {
@@ -49,6 +61,20 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
     return shown ? all.filter(shown) : all;
   };
   const { store, broadcast, publicBot, publicGroupState, groupWithThread, defaultSelection, packageImportDeps } = deps;
+  const added = (imported: PackageImportResult) => ({
+    name: imported.name,
+    section: imported.section,
+    bots: imported.bots.map((bot) => publicBot(store.bot(bot.id) ?? bot)),
+    group: imported.group,
+    groups: imported.groups.map((created) => ({ ...created, messages: [] })),
+    routines: imported.routines,
+    offeredSkills: imported.offeredSkills,
+    connections: imported.connections,
+    skipped: imported.skipped,
+    brief: imported.brief,
+    notes: imported.notes,
+    presets: imported.presets ?? [],
+  });
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
     const routines = deps.routines();
@@ -58,7 +84,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if (body?.format !== "backup") return json(res, 400, { error: "Only backups are exported here. Share a bot or a department as a template instead." });
       const botShown = deps.botShown?.(auth), exportable = botShown ? store.bots.filter((bot) => botShown(bot.id)) : store.bots;
       const profileName = deps.authorName(auth);
-      const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : profileName ? `${profileName}'s Team` : "My OpenMaus Team";
+      const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : profileName ? `${profileName}'s Team` : "My Seira Team";
       if (exportable.length === 0) return json(res, 400, { error: "Create a bot before exporting your team" });
       try {
         return json(res, 200, createTeamBackup(store, routinesFor(auth), name, deps.threadShown?.(auth)));
@@ -176,7 +202,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
         importVisibility = parsed.visibility;
       }
       const body = await readBody(req, MAX_TEAM_BACKUP_BYTES);
-      if (body?.format === "openmaus.backup") {
+      if (currentFormat(body?.format) === "seira.backup") {
         if (importMode !== "add") return json(res, 400, { error: "Import backups alongside your existing bots; project mode is only for templates" });
         try {
           const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth) });
@@ -217,20 +243,54 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
         if (error instanceof PackageImportError) return json(res, error.status, { error: error.message, code: error.code });
         throw error;
       }
-      return json(res, 201, {
-        name: imported.name,
-        section: imported.section,
-        bots: imported.bots.map((bot) => publicBot(store.bot(bot.id) ?? bot)),
-        group: imported.group,
-        groups: imported.groups.map((created) => ({ ...created, messages: [] })),
-        routines: imported.routines,
-        offeredSkills: imported.offeredSkills,
-        connections: imported.connections,
-        skipped: imported.skipped,
-        brief: imported.brief,
-        notes: imported.notes,
-        presets: imported.presets ?? [],
-      });
+      return json(res, 201, added(imported));
+    }
+    m = path.match(/^\/api\/bots\/([\w-]+)\/team-ask$/);
+    if (m && method === "POST") {
+      const body = await readBody(req, 2048);
+      const threadId = typeof body?.threadId === "string" && THREAD_ID.test(body.threadId) ? body.threadId : "";
+      if (!threadId) return json(res, 400, { error: "threadId is required" });
+      if (!ownerOrAdmin(auth)) return json(res, 403, { error: "Only an admin can create or skip a suggested team." });
+      const shown = deps.threadShown?.(auth);
+      if (shown && !shown(threadId)) return json(res, 404, { error: "This conversation was not found." });
+      const message = askForTeam(store, m[1]!, threadId, conversationLanguage(threadId));
+      return message ? json(res, 200, { message }) : json(res, 404, { error: "This conversation was not found." });
+    }
+    m = path.match(/^\/api\/teams\/suggestion\/([\w-]{1,128})(\/skip)?$/);
+    if (m && method === "POST") {
+      if (!ownerOrAdmin(auth)) return json(res, 403, { error: "Only an admin can create or skip a suggested team." });
+      const parsed = SUGGESTION_PICK.safeParse(await readBody(req, 64 * 1024));
+      if (!parsed.success) return json(res, 400, { error: "Send the conversation and the bots to keep." });
+      const { threadId, ...pick } = parsed.data;
+      const shown = deps.threadShown?.(auth);
+      if (shown && !shown(threadId)) return json(res, 404, { error: "This conversation was not found." });
+      const language = conversationLanguage(threadId);
+      const open = openSuggestion(store, threadId, m[1]!);
+      if (!open) return json(res, 409, { error: "This suggestion is no longer open." });
+      if (m[2]) {
+        settleSuggestion(store, threadId, open, "skipped", language);
+        return json(res, 200, { ok: true });
+      }
+      let document: PackageDocument;
+      try {
+        document = pickSuggestion(open.suggestion.document, pick);
+      } catch (error) {
+        if (error instanceof TeamSuggestionError) return json(res, 400, { error: error.message });
+        throw error;
+      }
+      const importDeps = { ...packageImportDeps(await defaultSelection()), ...teamCreator(auth) };
+      let imported: PackageImportResult;
+      try {
+        const result = importPackageDocument(document, { mode: "add", cwd: null, trust: "file" }, importDeps);
+        if (result.alreadyAdded) return json(res, 409, { error: "This team is already here." });
+        imported = result;
+      } catch (error) {
+        if (error instanceof PackageImportError) return json(res, error.status, { error: error.message, code: error.code });
+        throw error;
+      }
+      const intro = settleSuggestion(store, threadId, open, "created", language,
+        { department: imported.section || imported.name, document, bots: imported.bots });
+      return json(res, 201, { ...added(imported), ...(intro ? { intro } : {}) });
     }
     return PASS;
   };

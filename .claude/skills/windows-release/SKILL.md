@@ -6,9 +6,9 @@ description: Build, check, and attach the Seira Windows x64 installer and its up
 # Windows release
 
 The full release guide is [`docs/releasing.md`](../../../docs/releasing.md).
-This skill covers its step 5 and the Windows update problems.
+This skill covers its steps 5 and 7 and the Windows update problems.
 A release goes only to [`seira-bot/seira`](https://github.com/seira-bot/seira/releases).
-Never upload a Seira build to an OpenMausBot repository.
+Never upload a Seira build to a Seira repository.
 
 ## Before you start
 
@@ -40,7 +40,7 @@ Before it uploads, the workflow does these checks. When one fails, the run fails
 ## 2. Download and check
 
 ```sh
-mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
 ```
@@ -48,15 +48,23 @@ sha256sum -c SHA256SUMS-windows-x64.txt
 Each line must print `OK`. The artifact stays for 14 days. After that, run the
 workflow again.
 
-## 3. Attach to the release
+## 3. Attach to the draft release
 
-Attach all five files to the same release as the Linux and macOS files:
+Attach all five files to the same draft release as the Linux and macOS files. Do not publish the release yet:
 
 ```sh
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
+
+The script uploads feeds (`latest*.yml`) last, so installed apps never read a
+feed whose file is still uploading. It uploads one file at a time. Before it
+uploads `latest.yml`, it checks that every file that a feed or a checksum file
+names is an uploaded asset of the same size. Never attach the files with
+`gh release upload`: it uploads small files, such as `latest.yml`, before the
+installer is complete.
 
 | File | Who uses it |
 | --- | --- |
@@ -70,8 +78,20 @@ gh release upload v<version> --repo seira-bot/seira \
   edit `latest.yml`. Do not use a `latest.yml` from an earlier build.
 - Never replace an asset in place. If an asset is wrong, delete the assets of
   the release and upload all five again.
-- Then do step 8 of `docs/releasing.md`: download the release and check every
+- Run `check` after the upload and again after the release is published. It
+  must print no `FAIL` line.
+- Then do step 9 of `docs/releasing.md`: download the release and check every
   checksum file.
+
+## 4. Publish
+
+Publish only after the Linux files are on the draft release. Add the macOS files when the release has any.
+
+```sh
+node ../../scripts/release-assets.mjs publish v<version>
+```
+
+The command refuses and keeps the draft when a required file is missing or `check` fails. Never publish with `gh release edit` or the GitHub web page.
 
 ## Microsoft Store package
 
@@ -92,21 +112,24 @@ release. Upload it to Partner Center by hand. The Store signs it.
 
 A release without `latest.yml` leaves every installed Windows app on its old
 version. A background update check that fails shows no message, so the user
-gets no warning. Attach the Windows files to each release. If you cannot, say in the
-release notes that Windows stays on the earlier version.
+gets no warning. Attach the Windows files to each release. The `publish` command
+refuses a release without them. If you cannot attach them, keep the release a
+draft.
 
 ## A Windows user says that the app does not update
 
 Find the cause in this order:
 
-1. Open the release of the newest version. It must have all five files. If
-   `latest.yml` is missing, attach the files of step 3.
-2. Download `latest.yml` and the installer from the release. The `path`, the
-   SHA-512, and the size in `latest.yml` must match the installer. If they do
-   not match, delete the five assets and attach the workflow files again.
+1. Run `node scripts/release-assets.mjs check v<version>` for the newest
+   version. The release must have all five files. If `latest.yml` is missing,
+   attach the files of step 3.
+2. Read the same `check` output. Each file that `latest.yml` names must be an
+   uploaded asset with the same size. If a line says `FAIL`, delete the five
+   assets and attach the workflow files again with the upload command. To
+   compare the SHA-512, download `latest.yml` and the installer.
 3. Ask for `updater.log` from the log folder of the app:
-   `%APPDATA%\openmausbot\logs`. The folder keeps its upstream name.
-4. Ask where the user installed the app from. An OpenMausBot installer from
+   `%APPDATA%\Seira\logs`. Version 0.1.182 and earlier use `%APPDATA%\openmausbot\logs`.
+4. Ask where the user installed the app from. A Seira installer from
    the upstream project reads the upstream releases. It never updates to Seira.
    The user must install `Seira-setup.exe` once.
 

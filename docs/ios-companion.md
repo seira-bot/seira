@@ -13,8 +13,8 @@ it keeps working while the computer is off.
 
 1. Install Seira on your phone from the App Store or Google Play.
 2. In the desktop app, open the menu under your name and choose **Connect
-   your phone · to your Cloud (always on)**. (**Settings → Seira Cloud → Use
-   My Cloud on your phone** does the same.) The app opens your Cloud in its
+   your phone · to your Cloud (always on)**. (**Settings → Phone & devices** on the Cloud's own
+   page does the same.) The app opens your Cloud in its
    window, at the Cloud's phone pairing.
 3. Choose **Create pairing code** and scan the QR code with the phone app.
 
@@ -42,8 +42,7 @@ The first version includes:
 - Bot and room lists, paged transcripts, sending, interruption, and unread
   state.
 - Approvals and questions, including narrow “always allow” grants.
-- Resumable SSE, streamed reply text, reconnect hydration, and an opt-in live
-  Boat computer view. The loopback-only VPS SSH viewer remains desktop-only.
+- Resumable SSE, streamed reply text, reconnect hydration. The loopback-only VPS SSH viewer remains desktop-only.
 - On-demand stills of a bot's Local VM, idle or working, for a phone the
   computer owner has allowed computer access.
 - Markdown rendering and Keychain storage for the phone's pairing trust.
@@ -143,7 +142,7 @@ harness API:
   If an API payload changes, regenerate the fixtures with
   `node scripts/capture-companion-fixtures.mjs` and review the diff.
 
-The sidecar keeps its device registry in `~/.openmausbot/devices.json`. That is
+The sidecar keeps its device registry in `~/.seira/devices.json`. That is
 security state owned by the network boundary, not transcript data, so it does
 not belong in the message database.
 
@@ -252,8 +251,8 @@ and the LAN port are sent as they always were.
    computer, manual address, or six-digit code.
 5. Revoking the phone on the Mac removes its access and lets it pair again.
 
-To add another Mac, open **Settings → Computers → Connect another computer**
-on the iPhone and scan that Mac's QR. The existing computer stays usable if
+To add another Mac, open the iPhone app's **Settings → Computers → Connect another computer**
+and scan that Mac's QR. The existing computer stays usable if
 the new pairing fails or is cancelled. Switching computers replaces the live
 event stream and in-memory chat state, but keeps every saved pairing; removing
 one computer deletes only that computer's Keychain credential from the phone.
@@ -276,7 +275,7 @@ HTTPS route; the iPhone always uses the same QR trust flow.
 
 This is Password AutoFill, not a password-vault integration. A native
 `SecureField` marked as a password lets the user explicitly choose Apple
-Passwords or any enabled third-party AutoFill provider. OpenMausMobile does
+Passwords or any enabled third-party AutoFill provider. SeiraMobile does
 not enumerate a vault, receive a provider token, or save the entered value in
 its own Keychain.
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 
+import { pendingAppConnections, subscribeAppConnected, takeAppConnections } from "@/lib/app-connected";
 import { appSwitchPatch, botAppScope } from "@/lib/bot-app-access";
 import type { ConnectorStatus } from "@/lib/connector-status";
 import { t } from "@/lib/i18n";
@@ -78,6 +79,59 @@ function connectedAppSlugs(status: Record<string, ConnectorStatus>, emailConnect
   return emailConnected && !slugs.includes(EMAIL_SLUG) ? [...slugs, EMAIL_SLUG] : slugs;
 }
 
+type AppAllowList = { allowAll: boolean; allowlist: readonly string[] } | undefined;
+
+function grantConnectedApp({ admin, bots, allowed, startingBot, write, slug, app }: {
+  admin: boolean | null;
+  bots: Bot[];
+  allowed: AppAllowList;
+  startingBot: string | null;
+  write: (bot: Bot, slug: string, on: boolean) => void;
+  slug: string;
+  app: string;
+}) {
+  if (admin !== true || !bots.length) return;
+  if (allowed && !allowed.allowAll && !allowed.allowlist.includes(slug)) return;
+  let without = 0;
+  for (const bot of bots) {
+    if (botAppScope(bot, slug) !== null) continue;
+    if (bot.composio !== false || bot.id === startingBot) write(bot, slug, true);
+    else without += 1;
+  }
+  const text = without === 0 ? t("apps.botsCanUse", { app })
+    : without === 1 ? t("apps.botsCannotUseOne", { app })
+    : t("apps.botsCannotUse", { app, count: without });
+  showAppGrantNotice({ slug, text });
+}
+
+/** Mounted once, beside the notice: gives an app connected from a chat card to the bots that may use it. */
+export function AppGrantHost() {
+  const { state, dispatch } = useStore();
+  const admin = useOwnerOrAdmin();
+  const pending = useSyncExternalStore(subscribeAppConnected, pendingAppConnections, () => 0);
+  const latest = useRef({ admin, state, dispatch });
+  latest.current = { admin, state, dispatch };
+  useEffect(() => {
+    if (!pending || admin === null) return;
+    const { admin: isAdmin, state: current, dispatch: send } = latest.current;
+    for (const { slug, app } of takeAppConnections()) {
+      grantConnectedApp({
+        admin: isAdmin,
+        bots: botsForApps(current.bots, current.instances),
+        allowed: current.config?.managedPolicy?.apps,
+        startingBot: null,
+        write: (bot, appSlug, on) => {
+          const patch = appSwitchPatch(bot, [appSlug], appSlug, on);
+          if (Object.keys(patch).length > 0) send({ type: "updateBot", botId: bot.id, patch });
+        },
+        slug,
+        app,
+      });
+    }
+  }, [pending, admin]);
+  return null;
+}
+
 /** Security: only an owner or admin's connection gives an app to bots, and only they can change which bots use it. A bot
  * whose apps are off stays off, unless the connection was started from that bot. */
 export function useAppGrants({ status, emailConnected, inventoryReady }: { status: Record<string, ConnectorStatus>; emailConnected: boolean | null; inventoryReady: boolean }) {
@@ -106,17 +160,7 @@ export function useAppGrants({ status, emailConnected, inventoryReady }: { statu
 
   const appConnected = useCallback((slug: string, app: string) => {
     const now = latest.current;
-    if (now.admin !== true || !now.bots.length) return;
-    if (now.allowed && !now.allowed.allowAll && !now.allowed.allowlist.includes(slug)) return;
-    let using = 0;
-    for (const bot of now.bots) {
-      if (botAppScope(bot, slug) !== null) using += 1;
-      else if (bot.composio !== false || bot.id === now.startingBot) {
-        now.write(bot, slug, true);
-        using += 1;
-      }
-    }
-    showAppGrantNotice({ slug, text: t(using ? "apps.botsCanUse" : "apps.noBotsUse", { app }) });
+    grantConnectedApp({ ...now, slug, app });
   }, []);
   const dismiss = useCallback(() => setChanging(null), []);
 

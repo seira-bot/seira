@@ -1,9 +1,12 @@
 import { BookmarkPlus, Code, Copy, Eye, Pencil, Pin, PinOff, RefreshCw, Reply, Square, Volume2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
-import { useContext } from "react";
-import type { ConfigStatus, Group, Message, useStore } from "@/state/store";
+import { ui } from "@/lib/ui-anchor";
+import { useContext, type Dispatch } from "react";
+import type { Action, ConfigStatus, Group, Message, useStore } from "@/state/store";
 import { ACTION_ICON, type MessageMenuItem } from "@/components/MessageActions";
+import { drawWorkflowItem, finishedReply } from "@/components/workflow/draw-workflow";
+import { useWorkflowsUnavailable } from "@/state/workflows";
 import { useSpeakAction } from "@/components/SpeakButton";
 import { openConversationDialog, TEAM_MEMORY_ITEM, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
 
@@ -62,6 +65,7 @@ export function useBotMessageMenu({
   onToggleRaw,
   onRegenerate,
   pin,
+  draw,
 }: {
   text: string;
   botId?: string;
@@ -76,7 +80,10 @@ export function useBotMessageMenu({
   onToggleRaw: () => void;
   onRegenerate?: () => void;
   pin?: PinAction;
+  /** Offers "Draw as workflow" on a finished reply. */
+  draw?: { threadId: string; reply: Message; dispatch: Dispatch<Action> };
 }): MessageMenuItem[] {
+  const workflowsOff = useWorkflowsUnavailable();
   const speak = useSpeakAction({ text, botId, messageId, voiceId, tts, localVoice });
   const teamMemory = useTeamMemoryItem(text, messageId, botId, threadId);
   const items: MessageMenuItem[] = [];
@@ -99,7 +106,8 @@ export function useBotMessageMenu({
       onSelect: onToggleRaw,
     });
   }
-  if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate });
+  if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate, ui: ui("message.regenerate") });
+  if (draw && !workflowsOff && finishedReply(draw.reply)) items.push(drawWorkflowItem(draw));
   items.push(...teamMemory, ...pinItem(pin), idItem(messageId));
   return items;
 }

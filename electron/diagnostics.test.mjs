@@ -45,7 +45,6 @@ describe("buildDiagnosticsReport", () => {
       appInfo,
       configSummary: {
         xai: { configured: true },
-        box: { configured: false },
         rooms: { turnTimeoutMinutes: 5 },
       },
       logTail: "",
@@ -54,7 +53,6 @@ describe("buildDiagnosticsReport", () => {
     expect(report).toContain("platform=darwin");
     expect(report).toContain("arch=arm64");
     expect(report).toContain("xai.configured=true");
-    expect(report).toContain("box.configured=false");
     expect(report).toContain("rooms.turnTimeoutMinutes=5");
     expect(report).toContain("(no desktop crash events available)");
     expect(report).toContain("(server log unavailable)");
@@ -108,7 +106,7 @@ describe("buildDiagnosticsReport", () => {
 
   it("masks JSON credential fields and cookies in updater HTTP dumps", () => {
     const redacted = redactSecretsInLine([
-      '{"OMB_COMPOSIO_BROKER_TOKEN":"opaque-broker-value","password":"opaque-password-value"}',
+      '{"SEIRA_COMPOSIO_BROKER_TOKEN":"opaque-broker-value","password":"opaque-password-value"}',
       '{"Cookie":"session=private-cookie; tracking=private-tracker"}',
       "Cookie: session=private-session; tracking=private-tracking",
     ].join("\n"));
@@ -124,7 +122,7 @@ describe("buildDiagnosticsReport", () => {
     const report = buildDiagnosticsReport({
       appInfo,
       configSummary: { groq: { configured: true } },
-      logTail: `Groq HTTP 401: invalid key ${key}\nspawn env OMB_GROQ_API_KEY=${workspaceKey}`,
+      logTail: `Groq HTTP 401: invalid key ${key}\nspawn env SEIRA_GROQ_API_KEY=${workspaceKey}`,
       updaterLogTail: `upstream rejected ${otherKey}`,
     });
     for (const secret of [key, otherKey, workspaceKey]) expect(report).not.toContain(secret);
@@ -193,7 +191,7 @@ describe("buildDiagnosticsReport", () => {
       appInfo,
       configSummary: {},
       logTail: "server ready",
-      logPath: "/Users/ada/Library/Logs/OpenMausBot/server.log",
+      logPath: "/Users/ada/Library/Logs/Seira/server.log",
     });
     expect(report).toContain("## Server log tail");
     expect(report).not.toContain("/Users/ada");
@@ -296,6 +294,13 @@ describe("formatDesktopCrashRecord", () => {
     ).toBe("event=child-process-gone type=GPU reason=oom exitCode=34");
   });
 
+  it("records a stopped recovery with the exit code in decimal and hex", () => {
+    expect(formatDesktopCrashRecord({ kind: "renderer-stuck", reason: "launch-failed", exitCode: -36861, next: "dialog", url: "https://example.test/?token=x" })).toBe(
+      "event=renderer-stuck reason=launch-failed exitCode=-36861 hex=0xffff7003 next=dialog",
+    );
+    expect(formatDesktopCrashRecord({ kind: "renderer-stuck", reason: "canary", next: "other" })).toBe("event=renderer-stuck reason=unknown exitCode=unknown next=page");
+  });
+
   it("omits normal clean exits", () => {
     expect(formatDesktopCrashRecord({ kind: "renderer", reason: "clean-exit" })).toBeNull();
     expect(formatDesktopCrashRecord({ kind: "child", reason: "clean-exit" })).toBeNull();
@@ -306,7 +311,7 @@ describe("formatDesktopCrashRecord", () => {
     error.stack = [
       "TypeError: secret user text from C:\\Users\\Ada\\private.txt",
       "secret-client.ts:1:1",
-      "    at boot (file:///C:/Users/Ada/OpenMausBot/electron/main.mjs:412:7)",
+      "    at boot (file:///C:/Users/Ada/Seira/electron/main.mjs:412:7)",
     ].join("\n");
     const record = formatDesktopCrashRecord({ kind: "main", origin: "unhandledRejection", error });
     expect(record).toBe("event=main-process-failure origin=unhandledRejection error=TypeError");
@@ -398,7 +403,7 @@ describe("decodeLogTail", () => {
 
 describe("readSafeLogTail", () => {
   it("exports only a bounded complete-line updater tail from an isolated log fixture", () => {
-    const directory = mkdtempSync(join(tmpdir(), "openmausbot-updater-diagnostics-"));
+    const directory = mkdtempSync(join(tmpdir(), "seira-updater-diagnostics-"));
     try {
       const log = join(directory, "updater.log");
       const tail = "[info] update staged\n[error] https://updates.example.test/app.zip?jwt=private-query-token\n";
@@ -417,7 +422,7 @@ describe("readSafeLogTail", () => {
   });
 
   it("reads a bounded tail from a regular app-owned log", () => {
-    const directory = mkdtempSync(join(tmpdir(), "openmausbot-log-tail-"));
+    const directory = mkdtempSync(join(tmpdir(), "seira-log-tail-"));
     try {
       const log = join(directory, "server.log");
       writeFileSync(log, "partial-secret\nfirst\nsecond\n", { mode: 0o600 });
@@ -428,7 +433,7 @@ describe("readSafeLogTail", () => {
   });
 
   it.skipIf(process.platform === "win32")("rejects a log-path symlink", () => {
-    const directory = mkdtempSync(join(tmpdir(), "openmausbot-log-symlink-"));
+    const directory = mkdtempSync(join(tmpdir(), "seira-log-symlink-"));
     try {
       const privateFile = join(directory, "private.txt");
       const log = join(directory, "desktop-crashes.log");
@@ -442,15 +447,15 @@ describe("readSafeLogTail", () => {
 });
 
 describe("diagnosticsFileName", () => {
-  it("uses openmausbot-diagnostics-YYYYMMDD-HHmmss.txt", () => {
+  it("uses seira-diagnostics-YYYYMMDD-HHmmss.txt", () => {
     expect(diagnosticsFileName(new Date(2026, 7, 22, 16, 5, 9))).toBe(
-      "openmausbot-diagnostics-20260822-160509.txt",
+      "seira-diagnostics-20260822-160509.txt",
     );
   });
 });
 
 it("appends a crash line, truncates a full log, and refuses a hard-linked one", () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-crash-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-crash-"));
   const file = join(dir, "logs", "desktop-crashes.log");
   appendDesktopCrashRecord(file, 64, "first crash");
   expect(readFileSync(file, "utf8")).toMatch(/^\[.+\] first crash\n$/);
@@ -460,4 +465,21 @@ it("appends a crash line, truncates a full log, and refuses a hard-linked one", 
   appendDesktopCrashRecord(file, 1_000, "third crash");
   expect(readFileSync(file, "utf8")).not.toContain("third crash");
   rmSync(dir, { recursive: true, force: true });
+});
+
+describe("crash report log line and ids (AC-25, AC-26)", () => {
+  const ID = "0123456789abcdef0123456789abcdef";
+  it("writes one line with the id and the kind, and drops anything else", () => {
+    expect(formatDesktopCrashRecord({ kind: "crash-report", id: ID, reportKind: "main-error", message: "secret words" })).toBe(`event=crash-report id=${ID} kind=main-error`);
+    for (const bad of [{ id: "../x", reportKind: "native" }, { id: ID, reportKind: "made-up" }, { id: 5, reportKind: "native" }, { reportKind: "native" }]) {
+      expect(formatDesktopCrashRecord({ kind: "crash-report", ...bad })).toBeNull();
+    }
+  });
+  it("lists the ids sent in the last 7 days, and says so when there are none", () => {
+    const report = buildDiagnosticsReport({ crashReportIds: [ID, "not an id", 7, null] });
+    expect(report).toContain(`## Crash report ids\nid=${ID}\n`);
+    expect(report).not.toContain("not an id");
+    expect(buildDiagnosticsReport({ crashReportIds: [] })).toContain("## Crash report ids\n(no crash reports sent in the last 7 days)");
+    expect(buildDiagnosticsReport({})).toContain("(no crash reports sent in the last 7 days)");
+  });
 });

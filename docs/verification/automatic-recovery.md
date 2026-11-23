@@ -2,7 +2,7 @@
 
 A bot's own backups (Model → Backup models for this bot in Advanced, Bot
 settings → Backup AIs in Simple) are used in order with no switch: choosing one
-turns it on for that bot. Settings → General → Automatic recovery is off by
+turns it on for that bot. Settings → AI → Backup model → Automatic recovery is off by
 default; turned on with one backup engine/model, it covers every bot that has
 no backups of its own. The same lists also feed the usage-limit takeover
 (`server/host/limit-takeover.ts`), which never needed the switch: at a usage
@@ -16,7 +16,7 @@ Only its structured synthetic `authentication_failed` API-error frame followed
 by an error result with no new cost qualifies. The driver waits for its process
 tree to stop before reporting that refusal. Recovery skips
 other models on the same engine instance, since they share the failed sign-in.
-OMB tries the backup in the same thread with the canonical conversation.
+Seira tries the backup in the same thread with the canonical conversation.
 The thread keeps the backup selection; bot defaults and sibling threads do not
 change. A visible activity line explains the switch.
 

@@ -3,7 +3,7 @@
 // identifier, only the phone that holds no live event stream; signing a phone out unregisters its token; a phone whose
 // stream closes gets the next one. A second server with phone push left off keeps nothing and calls nobody.
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,8 +30,8 @@ let off: Fixture;
 const streams: SseRecorder[] = [];
 
 async function boot(env: Record<string, string>): Promise<Fixture> {
-  const home = mkdtempSync(join(tmpdir(), "omb-phone-push-"));
-  const data = join(home, ".openmausbot");
+  const home = mkdtempSync(join(tmpdir(), "seira-phone-push-"));
+  const data = join(home, ".seira");
   mkdirSync(data, { recursive: true });
   writeFileSync(join(data, "config.json"), JSON.stringify({
     features: { smartSetupChoices: false },
@@ -50,8 +50,8 @@ async function boot(env: Record<string, string>): Promise<Fixture> {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
+      SEIRA_PORT: String(port),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -81,7 +81,7 @@ const pair = async (fixture: Fixture, label: string) => {
   const opened = await api(fixture, "POST", "/api/auth/pairing", { label, scopes: ["admin", "client"] });
   expect(opened.status).toBe(200);
   const paired = await api(fixture, "POST", "/api/auth/pair", { code: opened.body.code });
-  expect(paired.body.token).toMatch(/^omb_sess_/u);
+  expect(paired.body.token).toMatch(/^seira_sess_/u);
   return paired.body as { token: string; session: { id: string } };
 };
 
@@ -93,15 +93,15 @@ const createBot = async (fixture: Fixture, name: string, instanceId: string, mod
 };
 
 const sends = () => stub.pushes.filter((push) => push.path.endsWith("/send"));
+const enrolls = () => stub.calls.filter((call) => call === "POST /v1/push/enroll");
 
 beforeAll(async () => {
   chmodSync(FAKE_CLAUDE, 0o755);
   chmodSync(FAKE_ACP, 0o755);
   stub = await startControlPlaneStub();
-  const credential = stub.seedInstallation("phone push fixture");
   [on, off] = await Promise.all([
-    boot({ OMB_PHONE_PUSH: "1", OMB_CONTROL_PLANE_URL: stub.url, OMB_PUSH_CREDENTIAL: credential }),
-    boot({ OMB_CONTROL_PLANE_URL: stub.url, OMB_PUSH_CREDENTIAL: credential }),
+    boot({ SEIRA_PHONE_PUSH: "1", SEIRA_PUSH_RELAY_URL: stub.url }),
+    boot({ SEIRA_PUSH_RELAY_URL: stub.url }),
   ]);
 }, 60_000);
 
@@ -121,6 +121,8 @@ describe("phone push left off", () => {
     expect(await api(off, "PUT", "/api/push/device", { platform: "apns", token: APNS_A }, phone.token)).toEqual({ status: 200, body: { push: "off", relay: "off", device: null } });
     expect(await api(off, "GET", "/api/push/device", undefined, phone.token)).toEqual({ status: 200, body: { push: "off", device: null } });
     expect(stub.pushes).toEqual([]);
+    expect(enrolls()).toEqual([]);
+    expect(existsSync(join(off.home, ".seira", "push-relay.json"))).toBe(false);
   });
 });
 
@@ -136,6 +138,11 @@ describe("phone push switched on", () => {
       { v: 1, platform: "apns", token: APNS_A, environment: "sandbox" },
       { v: 1, platform: "fcm", token: FCM_B },
     ]);
+    expect(enrolls()).toHaveLength(1);
+    const saved = join(on.home, ".seira", "push-relay.json");
+    const { credential } = JSON.parse(readFileSync(saved, "utf8")) as { credential: string };
+    expect([...stub.installations.values()].some((installation) => installation.credential === credential)).toBe(true);
+    if (process.platform !== "win32") expect(statSync(saved).mode & 0o777).toBe(0o600);
 
     const streamA = await openSse(`${on.base}/api/events`, { authorization: `Bearer ${phoneA.token}`, origin: on.base });
     streams.push(streamA);
@@ -174,6 +181,8 @@ describe("phone push switched on", () => {
     await expect.poll(() => sends().length, { timeout: 30_000 }).toBe(3);
     expect(sends()[2]!.body).toMatchObject({ token: APNS_A, pairing: "pair-tag-aaaa", notification: { kind: "done", title: "Herald finished" } });
     expect(on.stderr()).not.toContain(FCM_B);
+    expect(on.stderr()).not.toContain(credential);
+    expect(enrolls()).toHaveLength(1);
   }, 120_000);
 });
 
@@ -184,7 +193,7 @@ describe("Live Activities by push", () => {
     const pip = await createBot(on, "Pip", "slow", "claude-sonnet-5");
     expect((await api(on, "PUT", "/api/push/device", { platform: "apns", token: "c3".repeat(32) }, phone.token)).status).toBe(200);
     const registered = await api(on, "PUT", "/api/push/activity", {
-      scheme: "openmausbot",
+      scheme: "seira",
       headlines: { needsYou: "{name} braucht dich", working: "{name} arbeitet" },
       statuses: { working: "Arbeitet", needsYou: { approval: "Braucht deine Freigabe", question: "Hat eine Frage", signIn: "Braucht deine Anmeldung", other: "Braucht dich" } },
       activities: [{ botId: pip.id, token: ACTIVITY }],
@@ -204,7 +213,7 @@ describe("Live Activities by push", () => {
       token: ACTIVITY,
       event: "update",
       activity: {
-        botId: pip.id, botName: "Pip", kind: "working", headline: "Pip arbeitet", since: expect.any(Number), link: `openmausbot://chat/${pip.threadId}`, color: "#7C5CFF", gradient: ["#B9A9FF", "#7C5CFF"], body: "round",
+        botId: pip.id, botName: "Pip", kind: "working", headline: "Pip arbeitet", since: expect.any(Number), link: `seira://chat/${pip.threadId}`, color: "#7C5CFF", gradient: ["#B9A9FF", "#7C5CFF"], body: "round",
         version: 1, ask: "other", status: "Arbeitet", waiting: 0,
       },
     });

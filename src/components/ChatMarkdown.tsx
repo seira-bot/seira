@@ -29,6 +29,7 @@ import { MarkdownImagePreview, MessageFolderFiles, OutsideWorkspaceFile, saveFai
 import { ThreadLink, ThreadRefsContext, threadLinkFromProps, type ThreadRefsValue } from "./ThreadRefs";
 import { MarkdownTable } from "./MarkdownTable";
 import { CodeBlock, CodePlate, codeHash } from "./CodeBlock";
+import { InlineCode, InsideLinkContext } from "./InlineCode";
 export { CodeBlock, HIGHLIGHT_CACHE_MAX, HIGHLIGHT_CACHE_MAX_CHARS, HIGHLIGHT_MAX_CHARS, type CodeBlockProps } from "./CodeBlock";
 import { FilePreviewButton } from "./FilePreviewButton";
 import { SaveIconButton, useHtmlPreview } from "./HtmlFilePreview";
@@ -233,7 +234,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
           theme: scheme === "light" ? "default" : "dark",
           fontFamily: MERMAID_FONT,
         });
-        return module.default.render(`omb-mermaid-${mermaidRenderId}`, code);
+        return module.default.render(`seira-mermaid-${mermaidRenderId}`, code);
       })
       .then((out) => {
         if (!alive) return;
@@ -444,7 +445,7 @@ const CURRENCY_DOLLAR = /(?<![$\p{L}\p{N}])(?:R|US|AU|A|CA|C|NZ|HK|SG|S|MX|NT|BZ
 function escapeLiteralDollars(text: string): string {
   const display: string[] = [];
   const hidden = text
-    .replace(/\$\$[\s\S]*?\$\$/g, (math) => `\u0000OMB_MATH_${display.push(math) - 1}\u0000`)
+    .replace(/\$\$[\s\S]*?\$\$/g, (math) => `\u0000SEIRA_MATH_${display.push(math) - 1}\u0000`)
     .replace(CURRENCY_DOLLAR, (sign) => `${sign.slice(0, -1)}\\$`);
   const literal = new Set<number>();
   const singles: number[] = [];
@@ -467,7 +468,7 @@ function escapeLiteralDollars(text: string): string {
   let escaped = "";
   for (let i = 0; i < hidden.length; i++) escaped += literal.has(i) ? "\\$" : hidden[i];
   display.forEach((math, index) => {
-    escaped = escaped.split(`\u0000OMB_MATH_${index}\u0000`).join(math);
+    escaped = escaped.split(`\u0000SEIRA_MATH_${index}\u0000`).join(math);
   });
   return escaped;
 }
@@ -475,7 +476,7 @@ function escapeLiteralDollars(text: string): string {
 export function normalizeMathDelimiters(text: string, imageOffsets?: Map<number, number>): string {
   const protectedCode: Array<{ value: string; sourceOffset: number }> = [];
   const protect = (value: string, sourceOffset: number): string => {
-    const token = `\u0000OMB_CODE_${protectedCode.length}\u0000`;
+    const token = `\u0000SEIRA_CODE_${protectedCode.length}\u0000`;
     protectedCode.push({ value, sourceOffset });
     return token;
   };
@@ -506,7 +507,7 @@ export function normalizeMathDelimiters(text: string, imageOffsets?: Map<number,
   normalized = escapeLiteralDollars(normalized);
   let shift = 0;
   // oxlint-disable-next-line no-control-regex -- restore opaque code and image sentinels
-  normalized = normalized.replace(/\u0000OMB_CODE_(\d+)\u0000/g, (token, index: string, at: number) => {
+  normalized = normalized.replace(/\u0000SEIRA_CODE_(\d+)\u0000/g, (token, index: string, at: number) => {
     const part = protectedCode[Number(index)];
     if (!part) return token;
     const { value, sourceOffset } = part;
@@ -638,7 +639,11 @@ function MarkdownImage(props: ComponentProps<"img"> & ExtraProps) {
   );
 }
 
-function MarkdownLink({ href, children, ...rest }: { href?: string; children?: ReactNode }) {
+function MarkdownLink(props: { href?: string; children?: ReactNode }) {
+  return <InsideLinkContext value={true}><MarkdownLinkBody {...props} /></InsideLinkContext>;
+}
+
+function MarkdownLinkBody({ href, children, ...rest }: { href?: string; children?: ReactNode }) {
   // SAFETY: react-markdown hands hast data-* attributes through as string props
   const props = rest as Record<string, unknown>;
   const { threads, currentBotId, message, delivered, originals } = useContext(MessageScopeContext);
@@ -683,11 +688,7 @@ function MarkdownLink({ href, children, ...rest }: { href?: string; children?: R
 const MARKDOWN_COMPONENTS: Components = {
   pre: MarkdownCode,
   img: MarkdownImage,
-  code({ children }: { children?: ReactNode }) {
-    return (
-      <code dir="ltr" className="ui-code-chip break-words [unicode-bidi:isolate]">{children}</code>
-    );
-  },
+  code: InlineCode,
   span(props) {
     // SAFETY: react-markdown hands hast data-* attributes through as string props
     const link = threadLinkFromProps(props as Record<string, unknown>);
@@ -748,7 +749,7 @@ const MARKDOWN_COMPONENTS: Components = {
 };
 
 // A thread link is "#" directly before a title, or an app link. A heading's "## " never reaches the plugin as text.
-const MAY_LINK_THREAD = /#[^\s#]|openmausbot/i;
+const MAY_LINK_THREAD = /#[^\s#]|seira/i;
 const NO_THREAD_REFS: ThreadRefsValue = { threads: [] };
 
 // One plugin list for everything every message shares; a message adds mentions only when it has an "@" and thread

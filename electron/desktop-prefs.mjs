@@ -1,6 +1,6 @@
 // What this desktop keeps whatever page its window shows, whichever port its own page is served on: the notices someone
 // closed, its usage-analytics switch, the app's language, its answer to the product-updates email question, whether
-// the person hid the window's rail of places and whether they turned the window's frame off.
+// the person hid the window's rail of places, whether they turned Glance off, whether they turned the window's frame off and the size of the app's text.
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { DEFAULT_TALK_KEY, isTalkKey } from "./talk-keys.mjs";
 import { createUpdatesList, updatesListOrigin, withUpstreamFallback } from "./updates-list.mjs";
 import { createUpdatesConsent, parseUpdatesConsent, registerUpdatesConsent } from "./updates-consent.mjs";
 import { accountFullName } from "./system-name.mjs";
+import { isTextSize, normalizeTextSize } from "./text-size.mjs";
 
 export { DESKTOP_PORTS } from "./desktop-ports.mjs";
 /** The only notices a page may record, so no page can write anything else into the file. */
@@ -64,13 +65,16 @@ function parse(raw) {
     ? Object.fromEntries(Object.entries(record.quickAsks).flatMap(([server, chat]) => { const parsed = parseChat(chat); return parsed ? [[server, parsed]] : []; }))
     : {};
   return { seen, ...(typeof record.analytics === "boolean" ? { analytics: record.analytics } : {}),
+    ...(typeof record.crashReports === "boolean" ? { crashReports: record.crashReports } : {}),
     ...(isLanguage(record.language) ? { language: record.language } : {}),
     ...(typeof record.installId === "string" && INSTALL_ID.test(record.installId) ? { installId: record.installId } : {}),
     ...(updatesConsent ? { updatesConsent } : {}),
     ...(typeof record.talkShortcut === "boolean" ? { talkShortcut: record.talkShortcut } : {}),
     ...(isTalkKey(record.talkKey) ? { talkKey: record.talkKey } : {}),
     ...(typeof record.railHidden === "boolean" ? { railHidden: record.railHidden } : {}),
+    ...(typeof record.glanceHidden === "boolean" ? { glanceHidden: record.glanceHidden } : {}),
     ...(typeof record.windowFrame === "boolean" ? { windowFrame: record.windowFrame } : {}),
+    ...(isTextSize(record.textSize) ? { textSize: record.textSize } : {}),
     ...(Object.keys(quickAsks).length ? { quickAsks } : {}) };
 }
 
@@ -89,11 +93,12 @@ export function relabelDesktop({ menu, trays, window, title, badge }) {
 
 /** A record that cannot be written is still kept for this launch. */
 export function createDesktopPrefs({ read, write }) {
-  let record = null;
+  let record = null, unreadable = false;
   const current = () => {
     if (record) return record;
     let raw = null;
-    try { raw = read(); } catch {}
+    try { raw = read(); } catch (error) { unreadable = error?.code !== "ENOENT"; }
+    if (raw !== null && (typeof raw !== "object" || Array.isArray(raw))) unreadable = true;
     return (record = parse(raw));
   };
   const save = next => { record = next; try { write(next); } catch {} };
@@ -111,6 +116,9 @@ export function createDesktopPrefs({ read, write }) {
     /** null until a choice is saved. */
     analytics: () => current().analytics ?? null,
     setAnalytics(enabled) { save({ ...current(), analytics: enabled === true }); },
+    /** On for a computer that never chose; off while the saved record exists but cannot be read, until the person chooses. */
+    crashReports: () => current().crashReports ?? !unreadable,
+    setCrashReports(enabled) { save({ ...current(), crashReports: enabled === true }); },
     /** null until a language is picked; "" is a pick too: follow the system. */
     language: () => current().language ?? null,
     setLanguage(language) {
@@ -155,6 +163,19 @@ export function createDesktopPrefs({ read, write }) {
       const railHidden = hidden === true;
       if ((current().railHidden === true) !== railHidden) save({ ...current(), railHidden });
     },
+    /** Glance (the visor or tray icon that shows what bots do) is shown until the person turns it off. */
+    glanceHidden: () => current().glanceHidden === true,
+    setGlanceHidden(hidden) {
+      const glanceHidden = hidden === true;
+      if ((current().glanceHidden === true) !== glanceHidden) save({ ...current(), glanceHidden });
+    },
+    /** One of TEXT_SIZE_STEPS, 1 (100 %) until the person picks another; the same for every server's page. */
+    textSize: () => normalizeTextSize(current().textSize),
+    setTextSize(step) {
+      if (!isTextSize(step)) return false;
+      if (current().textSize !== step) save({ ...current(), textSize: step });
+      return true;
+    },
     /** The window draws its own frame until the person turns it off. */
     windowFrame: () => current().windowFrame !== false,
     setWindowFrame(on) {
@@ -165,16 +186,16 @@ export function createDesktopPrefs({ read, write }) {
 }
 
 /**
- * `cloudAccount()`: the MausBot Cloud sign-in client, for the product-updates question (updates-consent.mjs), which is
+ * `cloudAccount()`: the Seira Cloud sign-in client, for the product-updates question (updates-consent.mjs), which is
  * asked where Cloud offers are (`cloudOffered`); without it nothing is asked and null is returned.
  * `page(event)`: "local" for this computer's page, "cloud" for My Cloud's own page as main verifies it, "server" for
  * another saved server open in this desktop's window, null for anything else. `cloudOffered()`: this desktop sells
- * MausBot Cloud, asked once its Cloud sign-in is restored. `localConfig()`: This computer's own workspace's config.json.
+ * Seira Cloud, asked once its Cloud sign-in is restored. `localConfig()`: This computer's own workspace's config.json.
  * `languageChanged(language, sender)`: tells this desktop's other pages the language picked on one of them;
  * `onLanguage(language)`: tells main, which draws its menus, tray and dialogs in it. `onShown(language, sender)`: the
  * language a page of the window shows, which main's words follow while nothing is picked. `prefs`: the record main reads too.
  */
-export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, updatesList = null, now = Date.now, systemName = accountFullName }) {
+export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, textSize = null, updatesList = null, now = Date.now, systemName = accountFullName }) {
   let prefs = given ?? null;
   const store = () => prefs ??= createDesktopPrefs({ read, write });
   const from = (channel, pages, handler) => (event, ...args) => {
@@ -229,6 +250,10 @@ export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page,
     try { frame?.changed(); } catch {}
     return frameState();
   }));
+  if (textSize) {
+    ipcMain.handle("text-size:get", from("text-size:get", ANY, () => textSize.current()));
+    ipcMain.handle("text-size:set", from("text-size:set", ANY, (_, step) => textSize.set(step)));
+  }
   if (!cloudAccount) return null;
   const list = updatesList ?? createUpdatesList({ origin: updatesListOrigin() });
   const consent = createUpdatesConsent({ prefs: { installId: () => store().installId(), updatesConsent: () => store().updatesConsent(), setUpdatesConsent: value => store().setUpdatesConsent(value) },

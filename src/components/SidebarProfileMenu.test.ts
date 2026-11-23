@@ -8,7 +8,6 @@ import {
   phoneDevicesSubtitle,
   placeMenuItems,
   planUsageSummary,
-  profileInitials,
   profileMenuItems,
   resetsIn,
   simpleUpdateTop,
@@ -37,26 +36,9 @@ import type { UpdaterState } from "@/lib/updater";
 import type { SidebarMenuItem } from "./SidebarPopoverMenu";
 import { moveMenuItems } from "./AccountMove";
 import { moveLine } from "@/lib/cloud-send";
-import { InitialsAvatar } from "./Avatar";
+import { PersonAvatar } from "./Avatar";
 
 const state = (patch: Partial<UpdaterState>): UpdaterState => ({ status: "idle", ...patch }) as UpdaterState;
-
-describe("profileInitials", () => {
-  it("takes the first letter of the first two words", () => {
-    expect(profileInitials({ name: "Milind Soni" })).toBe("MS");
-    expect(profileInitials({ name: "Ada Byron Lovelace" })).toBe("AB");
-  });
-
-  it("falls back to the email, then to a placeholder", () => {
-    expect(profileInitials({ email: "you@x.dev" })).toBe("Y");
-    expect(profileInitials({})).toBe("?");
-    expect(profileInitials(undefined)).toBe("?");
-  });
-
-  it("ignores whitespace-only names", () => {
-    expect(profileInitials({ name: "   ", email: "you@x.dev" })).toBe("Y");
-  });
-});
 
 describe("profileLabel", () => {
   it("prefers the name, then the email, then You", () => {
@@ -73,7 +55,6 @@ describe("the sidebar profile for a signed-in visitor", () => {
       null,
     );
     expect(profileLabel(visible)).toBe("You");
-    expect(profileInitials(visible)).toBe("?");
     expect(visible?.avatarUrl).toBeUndefined();
   });
 
@@ -83,7 +64,6 @@ describe("the sidebar profile for a signed-in visitor", () => {
       { kind: "session", id: "s", label: "Ada's iPad", email: "ada@example.test", scopes: ["client"], expiresAt: 1 },
     );
     expect(profileLabel(visible)).toBe("ada@example.test");
-    expect(profileInitials(visible)).toBe("A");
     expect(visible?.avatarUrl).toBeUndefined();
   });
 });
@@ -424,11 +404,34 @@ describe("Simple mode's account menu", () => {
     expect(simpleUpdateTop({ source: "desktop", phase: "downloaded" })).toEqual({ label: "Update ready", action: "Restart" });
     expect(simpleUpdateTop({ source: "desktop", phase: "downloaded", installMode: "handoff" })).toEqual({ label: "Update ready", action: "Install" });
     expect(simpleUpdateTop({ source: "desktop", phase: "error" })).toEqual({ label: "Update failed", action: "Retry" });
-    expect(simpleUpdateTop({ source: "server", phase: "available" })).toEqual({ label: "Update ready", action: "Install" });
+    expect(simpleUpdateTop({ source: "server", phase: "available", selfInstall: true })).toEqual({ label: "Update ready", action: "Install" });
     expect(simpleUpdateTop({ source: "server", phase: "reload" })).toEqual({ label: "Update ready", action: "Restart" });
     for (const phase of ["idle", "checking", "downloading", "up-to-date"] as const) expect(simpleUpdateTop({ source: "desktop", phase })).toBeNull();
     expect(simpleUpdateTop({ source: "server", phase: "error" })).toBeNull();
     expect(simpleUpdateTop(null)).toBeNull();
+  });
+
+  it("says a server update that the server cannot install by itself is only available, and leads to how to update it", () => {
+    for (const install of [{}, { selfInstall: false }]) {
+      expect(simpleUpdateTop({ source: "server", phase: "available", ...install })).toEqual({ label: "Server update available", action: "How to update" });
+    }
+    const openSettings = vi.fn();
+    expect(simpleUpdateTop({ source: "server", phase: "available", onRaisedSelect: openSettings })).toEqual({ label: "Server update available", action: "How to update", onSelect: openSettings });
+    expect(simpleUpdateTop({ source: "server", phase: "available", selfInstall: true, onRaisedSelect: openSettings })).toEqual({ label: "Update ready", action: "Install", onSelect: openSettings });
+    expect(simpleUpdateTop({ source: "desktop", phase: "downloaded", onRaisedSelect: openSettings })).toEqual({ label: "Update ready", action: "Restart" });
+  });
+
+  it("gives the raised row its own action and closes the menu, and keeps the row's own action otherwise", () => {
+    const openNotes = vi.fn(), openSettings = vi.fn();
+    const update = { key: "update", label: "Version 0.1.185 available (release notes)", keepOpen: true, onSelect: openNotes };
+    const [raised] = build({ update, updateTop: { label: "Server update available", action: "How to update", onSelect: openSettings } });
+    expect(raised).toMatchObject({ label: "Server update available", keepOpen: false });
+    expect(renderToStaticMarkup(createElement("div", null, raised!.trailing))).toContain(">How to update</span>");
+    raised!.onSelect();
+    expect(openSettings).toHaveBeenCalledOnce();
+    expect(openNotes).not.toHaveBeenCalled();
+    const [plain] = build({ update, updateTop: { label: "Update ready", action: "Restart" } });
+    expect(plain).toMatchObject({ keepOpen: true, onSelect: openNotes });
   });
 
   it("adds Files once My Cloud's files are ready and Archived bots while there are any, after Team map", () => {
@@ -512,13 +515,14 @@ describe("Simple mode's account menu", () => {
     expect(groups(build({ simple: undefined }))).toEqual([["account"], ["phone-devices", "settings", "plan"], ["support"]]);
   });
 
-  it("draws a person instead of a question mark for someone with no name, at the trigger's own size", () => {
-    const glyph = createElement("svg", { "data-glyph": "" });
-    const nameless = renderToStaticMarkup(createElement(InitialsAvatar, { initials: profileInitials({}), size: 36, fallback: glyph, fontSize: 14 }));
-    expect(nameless).toContain("data-glyph");
+  it("draws the saved look, or a plain person, never a question mark, at the trigger's own size", () => {
+    const look = { mascotBody: "bob" as const, mascotAccessories: ["glasses" as const], color: "teal" as const };
+    const wearing = renderToStaticMarkup(createElement(PersonAvatar, { profile: { look }, size: 36 }));
+    expect(wearing).toContain('data-avatar="mascot"');
+    expect(wearing).toContain("width:36px");
+    const nameless = renderToStaticMarkup(createElement(PersonAvatar, { profile: undefined, size: 36 }));
+    expect(nameless).toContain("<svg");
     expect(nameless).not.toContain("?");
-    expect(nameless).toContain("font-size:14px");
-    expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL", size: 50 }))).toContain("font-size:19px");
   });
 
   it("marks Automations open and needing attention, and Team map plain", () => {

@@ -27,14 +27,13 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("./CloudScreenPreview", () => ({ CloudScreenPreview: () => null }));
 vi.mock("./AndroidDevicePanel", () => ({ AndroidDevicePanel: () => null, useAndroidUsbDevices: () => ({ devices: fixture.android ? [{ serial: "p1" }] : [] }) }));
 vi.mock("./BrowserPanel", () => ({ BrowserPanel: ({ page }: { page?: unknown }) => { fixture.page = page; return null; } }));
-vi.mock("./CloudBackendPicker", () => ({ CloudBackendPicker: () => null }));
 vi.mock("./bot-settings/RoutinesSection", () => ({ RoutinesSection: () => null }));
 vi.mock("./data/DataPanel", () => ({ DataPanel: () => createElement("div", { "data-testid": "data-panel" }) }));
 vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: async (path: string) => {
     if (path.startsWith("/api/bots/scout/computer/control")) return { held: false, helpReason: null };
-    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "box", configured: true, box: { boxId: "bx_23456789", state: "ready" } };
+    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "vps", configured: true };
     return {};
   },
 }));
@@ -59,8 +58,7 @@ const makeBot = (patch: Partial<Bot> = {}): Bot => ({
 
 let root: Root | null = null;
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { box: { configured: true },
-    ...(fixture.browser ? { features: { browser: true }, browserEngine: { kind: "engine" } } : {}) } as AppState["config"] } as AppState,
+  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: (fixture.browser ? { features: { browser: true }, browserEngine: { kind: "engine" } } : {}) as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
   refreshInstances: async () => {},
@@ -142,7 +140,7 @@ describe("Computer panel tab", () => {
     fixture.browser = true;
     await open(makeBot());
     expect(selected()).toBe("Screen");
-    const PAGE = "https://abcdefghijklmnopqrstuvwxyz.mausbot.page/";
+    const PAGE = "https://abcdefghijklmnopqrstuvwxyz.seira.page/";
     flushSync(() => requestPanelPage("scout", PAGE));
     await settle();
     expect(selected()).toBe("Browser");

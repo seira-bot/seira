@@ -7,7 +7,8 @@
 // https://docs.composio.dev/reference/api-reference/auth-configs/getAuthConfigs
 // https://docs.composio.dev/reference/api-reference/auth-configs/patchAuthConfigsByNanoid
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -18,7 +19,7 @@ import { DATA_DIR } from "./config.ts";
 export const DEFAULT_BACKEND_ORIGIN = "https://backend.composio.dev";
 
 export function apiBase() {
-  return (process.env.OMB_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
+  return (process.env.SEIRA_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
 }
 
 export function projectHeaders(apiKey: string, json = false) {
@@ -98,7 +99,7 @@ export interface AuthConfigChoice {
 }
 
 export interface ProjectAuthConfigs {
-  /** Toolkit -> the config OpenMausBot uses for it: the one a bot named while it stays usable, else the most recently created. */
+  /** Toolkit -> the config Seira uses for it: the one a bot named while it stays usable, else the most recently created. */
   choices: Record<string, AuthConfigChoice>;
   /** The choices a Session can name now, being on for Tool Router. */
   configs: AuthConfigMap;
@@ -279,7 +280,7 @@ export async function keepAuthConfigPick(apiKey: string, toolkit: string, id: st
   const project = projectFingerprint(apiKey);
   authConfigPicks(project);
   picks = { ...picks, [project]: { ...picks?.[project], [toolkit]: id } };
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   writeFileAtomic(picksFile(), `${JSON.stringify({ version: 1, projects: picks }, null, 2)}\n`, { mode: 0o600 });
   forgetProjectAuthConfigs(apiKey);
 }
@@ -289,7 +290,9 @@ const connectedAccountResponseSchema = z.object({
   user_id: z.string().optional(),
   alias: z.string().nullable().optional(),
   status: z.string().optional(),
+  created_at: z.string().nullable().optional().catch(undefined),
   updated_at: z.string().optional(),
+  state: z.unknown().optional(),
   toolkit: z.object({ slug: z.string().optional() }).optional(),
 });
 export type ConnectedAccountResponse = z.infer<typeof connectedAccountResponseSchema>;
@@ -339,9 +342,9 @@ export async function listConnectedAccounts(
   throw new Error("Composio account inventory exceeded the pagination safety limit");
 }
 
-export async function deleteConnectedAccount(apiKey: string, id: string) {
+export async function deleteConnectedAccount(apiKey: string, id: string, options: { revoke?: boolean } = {}) {
   const removed = await fetch(
-    `${apiBase()}/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=true`,
+    `${apiBase()}/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=${options.revoke ?? true}`,
     { method: "DELETE", headers: projectHeaders(apiKey), signal: AbortSignal.timeout(30_000) },
   );
   if (!removed.ok) throw new Error(await responseError(removed, `Composio disconnect: HTTP ${removed.status}`));

@@ -22,7 +22,10 @@ export const AFTER_RESET_MS = 60_000;
 /** From this share of a window used, an engine is shown as near its limit. */
 export const NEAR_LIMIT_PERCENT = 90;
 
-export type LimitWindowName = "5-hour" | "weekly" | "other";
+export const LIMIT_WINDOW_NAMES = ["5-hour", "weekly", "monthly", "other"] as const;
+
+/** A name this build does not know (from a newer server) is shown as "other". */
+export type LimitWindowName = (typeof LIMIT_WINDOW_NAMES)[number];
 
 /** One usage window as the engine reported it. */
 export interface LimitWindowUsage {
@@ -33,13 +36,15 @@ export interface LimitWindowUsage {
   resetsAt: number | null;
 }
 
-/** One engine's usage limit as OpenMausBot knows it now. */
+/** One engine's usage limit as Seira knows it now. */
 export interface EngineLimit {
   /** Engine instance id. */
   engine: string;
   /** The engine's display name ("Claude", "Codex", or the instance's own name). */
   name: string;
   driver: "claude" | "codex" | "grok" | "opencode";
+  /** The address the account is signed in with, when its own sign-in says one. */
+  email?: string;
   /** The window that decides the reset: the fullest, or the one refusing work. */
   window: LimitWindowName | null;
   /** 0–100, or null when the engine reported no window. */

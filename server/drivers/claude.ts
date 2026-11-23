@@ -14,6 +14,7 @@ import { boxAudienceKey, brokerSocketPath, describeSpawnFailure, execCli, killCl
 import { cliToLaunch, cliVersionProbe } from "../cli-version-probe.ts";
 import { claudeAuthStatus } from "./claude-auth-status.ts";
 import { projectMcpServers } from "./claude-project-mcp.ts";
+import { claudeFolderArgs, claudeFolderKey, claudeFolderLimitRefusal, claudeFolderPermissions } from "./claude-folder-access.ts";
 import { botSettingsFor, folderSettingsEnv, withBotSettings } from "./claude-bot-settings.ts"; import { claudeHookSettings } from "./claude-hooks.ts";
 import { claudeBilling, claudeCallUsage } from "./claude-billing.ts";
 import { claudeAuthFailure, claudeAuthRecovery, claudeOAuthExpired } from "./claude-auth-recovery.ts"; import { AWS_CREDENTIAL_ENV_KEYS, bedrockResultError, withBedrockCredentialError } from "./claude-bedrock-aws.ts";
@@ -40,7 +41,7 @@ import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
 import { newEventId, newId } from "../contracts.ts";
 import { askInputSummary, commandSummary, toolDetailPreview } from "../tool-summary.ts";
-import { classifyError, computeBackoff, interruptibleDelay, mayResendTurn, USAGE_LIMIT } from "./retry.ts";
+import { contextOverflow } from "./engine-errors.ts"; import { classifyError, computeBackoff, interruptibleDelay, mayResendTurn, USAGE_LIMIT } from "./retry.ts";
 import { claudeApiError, claudeApiErrorMessage, claudeLimitError, claudeLimitFacts, claudeLimitRefusal, claudeUsageLimit, claudeVersionTooOld, type ClaudeLimit } from "./claude-limits.ts";
 import { createOrgModelBlocks, modelSwapNotice, withOrgBlocks } from "./claude-model-access.ts";
 import { engineHomes } from "../engine-homes/engine-homes.ts";
@@ -61,7 +62,7 @@ import { BACKGROUND_CALL_TIMEOUT_MS, backgroundCallArgs, spawnBackgroundCall } f
 import { permissionLaunchCwd, shellRequest } from "./permission-command.ts"; import { readToolPaths } from "../own-file-reads.ts";
 import { SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
-import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
+import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
 import {
   ASK_USER_QUESTION_TOOL,
   ASK_USER_TOOL,
@@ -139,7 +140,7 @@ function claudeEnvironment(
 /** Escape hatch: the bot inherits this machine's Claude Code setup (MCP servers, connectors,
  * skills, agents, hooks, personal CLAUDE.md). */
 function inheritsUserConfig(env: NodeJS.ProcessEnv): boolean {
-  return env.OMB_CLAUDE_INHERIT_USER_CONFIG === "1";
+  return env.SEIRA_CLAUDE_INHERIT_USER_CONFIG === "1";
 }
 
 export function claudeInheritWarning(env: NodeJS.ProcessEnv): ProviderSnapshot["warning"] | undefined {
@@ -147,7 +148,7 @@ export function claudeInheritWarning(env: NodeJS.ProcessEnv): ProviderSnapshot["
   return {
     title: "Bots inherit this machine's Claude Code setup",
     message:
-      "OMB_CLAUDE_INHERIT_USER_CONFIG=1 is set on the Seira process, so every Claude bot also loads this " +
+      "SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 is set on the Seira process, so every Claude bot also loads this " +
       "computer's own MCP servers, connectors, skills, hooks and personal CLAUDE.md on every turn — often thousands " +
       "of extra tokens per model call, and tools nobody gave the bot. Unless a bot genuinely needs a server from " +
       "your user-scope Claude config, remove the variable and restart; add the server under the Apps panel → MCP servers " +
@@ -180,10 +181,10 @@ export function readClaudeAuthSettings(
   }
 }
 
-/** OMB_CLAUDE_AUTOCOMPACT: a token count, "auto" (the CLI's own window) or "off". The CLI rejects
+/** SEIRA_CLAUDE_AUTOCOMPACT: a token count, "auto" (the CLI's own window) or "off". The CLI rejects
  * a window outside 100k-1M as an argument error, so a configured value is clamped. */
 export function autoCompactWindow(env: NodeJS.ProcessEnv): string | null {
-  const raw = (env.OMB_CLAUDE_AUTOCOMPACT ?? "").trim().toLowerCase();
+  const raw = (env.SEIRA_CLAUDE_AUTOCOMPACT ?? "").trim().toLowerCase();
   if (raw === "off") return null;
   if (raw === "auto") return "auto";
   const parsed = raw ? Number(raw) : DEFAULT_AUTOCOMPACT_TOKENS;
@@ -322,8 +323,8 @@ const HOOK_HELPER_PATH = SPAWNED_PROXIES.hook;
 const NODE_ENV_FLAG = { ELECTRON_RUN_AS_NODE: "1" };
 
 /** The launch folders (MCP config, system prompt) are named after this process: one that is cut off at exit goes with the process or the next start. */
-const MCP_FOLDER_PREFIX = "omb-mcp-";
-const SYSTEM_FOLDER_PREFIX = "omb-system-";
+const MCP_FOLDER_PREFIX = "seira-mcp-";
+const SYSTEM_FOLDER_PREFIX = "seira-system-";
 
 function makeLaunchFolder(prefix: string, name: string): string {
   sweepOrphanedTempFoldersOnce(prefix);
@@ -433,7 +434,7 @@ export function brokerSocketCandidates(threadId: string, botId?: string, account
       .update(`${DATA_DIR}\0${process.pid}\0${botId ?? ""}\0${threadId}${account ? `\0${account}` : ""}`)
       .digest("hex")
       .slice(0, 16);
-    return [base, join(tmpdir(), `omb-perm-${scope}.sock`)];
+    return [base, join(tmpdir(), `seira-perm-${scope}.sock`)];
   }
   return [
     base,
@@ -771,7 +772,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       claudeEnvironment(config.managed ? undefined : model, { ...process.env, ...input.environment }, config.configDir, input.environment, Boolean(config.endpointModels), config.bedrock === true);
     const catalogEnv = environment();
     if (inheritsUserConfig(catalogEnv)) {
-      console.error(`claude (${instanceId}): OMB_CLAUDE_INHERIT_USER_CONFIG=1 — bots inherit this machine's Claude Code MCP servers, skills, hooks and CLAUDE.md on every turn; remove it unless a bot needs a user-scope server`);
+      console.error(`claude (${instanceId}): SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 — bots inherit this machine's Claude Code MCP servers, skills, hooks and CLAUDE.md on every turn; remove it unless a bot needs a user-scope server`);
     }
     let cliVersion: ClaudeCliVersion | null = null;
     let cliVersionChecked = false;
@@ -988,11 +989,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
             await killCliTree(stopped.child)) await stopped.closed;
         if (active.has(threadId)) throw new Error("a turn is already running on this thread");
       }
-      const permissionMode = turn.approvalMode === undefined
+      const permissionMode = refuseRootFullAccess(turn.approvalMode === undefined
         ? config.permissionMode
         : turn.approvalMode === "full" ? "bypassPermissions"
           : turn.approvalMode === "auto" ? "auto"
-            : turn.approvalMode === "edits" ? "acceptEdits" : "default";
+            : turn.approvalMode === "edits" ? "acceptEdits" : "default");
       const controlsHost = turn.integrations?.localComputer?.scope === "local-computer";
       if (controlsHost && permissionMode === "bypassPermissions" && turn.approvalMode !== "full") {
         throw new Error("local computer control requires the interactive approval broker");
@@ -1031,6 +1032,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (turn.guestConfined && !claudeCliSupports(turnCliVersion, "--restricted")) {
         throw new Error(withWhy("This Claude Code is too old to run this turn without a shell. Update Claude Code.", turn.confinedWhy));
       }
+      const folderRefusal = claudeFolderLimitRefusal(turn.folders, turnCliVersion);
+      if (folderRefusal) throw new Error(folderRefusal);
       const replaysUserMessages = turnCliVersion === null || versionAtLeast(turnCliVersion, CLAUDE_REPLAY_FLOOR);
       if (replaysUserMessages) args.push("--replay-user-messages");
       const isolated = !inheritsUserConfig(turnEnvironment); const projectSettingsOnly = isolated && claudeCliSupports(turnCliVersion, "--setting-sources");
@@ -1045,6 +1048,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         if (projectSettingsOnly) args.push("--setting-sources", "project");
         if (turn.userSkillsDir) args.push("--add-dir", turn.userSkillsDir);
       }
+      args.push(...claudeFolderArgs(turn.folders));
       const compactWindow = autoCompactWindow(turnEnvironment);
       const passedAutocompact = Boolean(compactWindow) && ownCli && cliHasAutocompact === true; if (compactWindow && passedAutocompact) args.push("--autocompact", compactWindow);
       // --resume keeps the recorded system prompt, so every turn refreshes it.
@@ -1132,7 +1136,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (permissionMode !== "bypassPermissions") {
         args.push("--permission-prompt-tool", "mcp__ogb__approve");
       }
-      const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { OMB_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
+      const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { SEIRA_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
       mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
       allowed.push("mcp__ogb", ...gateQueryTools(mcpServers));
       // A guest pre-allows only harness tools; anything else (the browser can open file:) asks.
@@ -1155,8 +1159,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (hooks && hookTokenPath) {
         mkdirSync(dirname(hookTokenPath), { recursive: true, mode: 0o700 });
         writeFileAtomicIfChanged(hookTokenPath, hooks.token, { mode: 0o600, durable: false });
-        env.OMB_HOOK_URL = hooks.url;
-        env.OMB_HOOK_TOKEN_FILE = hookTokenPath;
+        env.SEIRA_HOOK_URL = hooks.url;
+        env.SEIRA_HOOK_TOKEN_FILE = hookTokenPath;
         // in the packaged app process.execPath is Electron — run the helper as node
         if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = "1";
       }
@@ -1166,6 +1170,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (isolated) own.claudeMdExcludes = [join(homedir(), ".claude", "CLAUDE.md")];
       if (hooks) own.hooks = claudeHookSettings(HOOK_HELPER_PATH);
       if (turn.guestConfined) own.permissions = GUEST_CLAUDE_PERMISSIONS;
+      const folderPermissions = claudeFolderPermissions(turn.folders);
+      if (folderPermissions) own.permissions = withBotSettings((own.permissions ?? {}) as Record<string, unknown>, folderPermissions);
       // Approvals and browser credentials expire at the turn boundary; native background workers and cron jobs must not outlive it.
       env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS = env.CLAUDE_CODE_DISABLE_CRON = "1";
       // Never for a guest: --restricted leaves project settings out, and a hook is a command. The MCP output limit comes after, so one the bot set there is kept.
@@ -1186,6 +1192,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         base: env.ANTHROPIC_BASE_URL ?? null,
         configDir: env.CLAUDE_CONFIG_DIR ?? null,
         hooks: Boolean(hooks), box: boxAudienceKey(cwd),
+        folders: claudeFolderKey(turn.folders),
         toolSearch, mcpOutputTokens: env.MAX_MCP_OUTPUT_TOKENS ?? null,
         botSettings: createHash("sha256").update(JSON.stringify(botSettings)).digest("hex"),
         // Rotating an account's key/helper must not reuse the old process.
@@ -1611,7 +1618,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
                   : session.turn?.updateRequired
                     ? "update_required"
                     : o.is_error === true
-                      ? o.terminal_reason ?? (typeof o.subtype === "string" && o.subtype !== "success" ? o.subtype : null) ?? o.stop_reason ?? null
+                      ? contextOverflow(claudeResultError(o)) ? "context_full" : o.terminal_reason ?? (typeof o.subtype === "string" && o.subtype !== "success" ? o.subtype : null) ?? o.stop_reason ?? null
                       : o.stop_reason ?? o.terminal_reason ?? null,
               cost: o.total_cost_usd ?? null,
               ...(o.usage
@@ -1714,7 +1721,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
           const message = `claude exited ${code} before result${session.stderr ? `: ${session.stderr.trim().slice(-300)}` : ""}`;
           const verdict = classifyError({ exitCode: code, stderr: message });
           const endedBeforeTurn = session.turn.awaitingInit === true || (refusedAutocompact && !session.turn.sawStreamDelta && session.turn.answered !== true);
-          if (!retry.cancelled && !stoppedForRoom(threadId, session.child.pid) && mayResendTurn({ endedBeforeTurn, exitCode: code, transient: verdict.transient,
+          if (!retry.cancelled && !claudeRootRefusal(session.stderr) && !stoppedForRoom(threadId, session.child.pid) && mayResendTurn({ endedBeforeTurn, exitCode: code, transient: verdict.transient,
             streamed: session.turn.sawStreamDelta, answered: session.turn.answered === true, attempt: retry.attempt })) {
             // `active` stays: an interrupt during the backoff reaches stop() and cancels the retry.
             const failedBroker = session.broker;
@@ -1781,7 +1788,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
             promptSubmitted: session.sawInit,
             producedOutput: session.turn.sawStreamDelta,
           });
-          if (mayReplay(resumeFailure) && !retry.cancelled) {
+          if (mayReplay(resumeFailure) && !retry.cancelled && !claudeRootRefusal(session.stderr)) {
             // Without this line a refused --resume looks like an ordinary new session in the logs.
             console.error(`claude (${instanceId}): could not resume session ${sessionId} for thread ${threadId}, starting a new one: ${redactSecretsInText(session.resumeRefusal ?? message)}`);
             const recovery = recoveryPromptFor({
@@ -1815,7 +1822,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
           emit({
             ...base(threadId, currentTurnId()),
             type: "runtime.error",
-            message,
+            message: claudeRootRefusal(session.stderr) ? ROOT_FULL_ACCESS_TEXT : message,
           });
           settle(false, "exit_before_result");
         }

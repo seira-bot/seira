@@ -189,7 +189,7 @@ describe("Settings → Engines → setup cards", () => {
     expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Remove<");
   });
 
-  it("offers Sign out for a signed-in Antigravity account, including the first one", () => {
+  it("gives a signed-in Antigravity account its provider menu, including the first one", () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("navigator", { userAgent: "Linux" });
     fixture.bots = [];
@@ -199,13 +199,9 @@ describe("Settings → Engines → setup cards", () => {
       authentication: { method: "callback-url", signOut },
     });
     fixture.instances = [account("antigravity", true, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Sign out<");
+    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain('data-provider-menu="antigravity"');
     fixture.instances = [account("antigravity-work", true, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Sign out<");
-    fixture.instances = [account("antigravity", false, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).not.toContain(">Sign out<");
-    fixture.instances = [account("antigravity", true, false)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).not.toContain(">Sign out<");
+    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain('data-provider-menu="antigravity-work"');
   });
 
   it("shows every Company provider as read-only while preserving personal controls", () => {
@@ -253,14 +249,14 @@ describe("Settings → Engines → setup cards", () => {
       instanceId: "claude", displayName: "Claude", driverKind: "claudeAgent", cliDefault: "claude",
       snapshot: {
         state: "available", authenticated: true,
-        warning: { title: "Bots inherit this machine's Claude Code setup", message: "OMB_CLAUDE_INHERIT_USER_CONFIG=1 is set." },
+        warning: { title: "Bots inherit this machine's Claude Code setup", message: "SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 is set." },
       },
       models: { default: "model", options: [] },
     }];
     const html = renderToStaticMarkup(createElement(EnginesSettings));
     expect(html).toContain("data-engine-warning-notice");
     expect(html).toContain("Bots inherit this machine&#x27;s Claude Code setup");
-    expect(html).toContain("OMB_CLAUDE_INHERIT_USER_CONFIG=1 is set.");
+    expect(html).toContain("SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 is set.");
     expect(html).not.toContain("data-engine-update-notice");
     delete fixture.instances[0].snapshot.warning;
     expect(renderToStaticMarkup(createElement(EnginesSettings))).not.toContain("data-engine-warning-notice");
@@ -417,7 +413,7 @@ describe("Settings → Engines → Claude accounts", () => {
   });
 
   it("keeps the default account and signs out only a signed-in account the server can sign out", () => {
-    expect(accountActions("claude", claude("claude", "Personal", true))).toEqual({ signOut: true, remove: false, hide: false });
+    expect(accountActions("claude", claude("claude", "Personal", true))).toEqual({ signOut: true, remove: false, hide: true });
     expect(accountActions("claude", claude("claude-work", "Work", false))).toEqual({ signOut: false, remove: true, hide: false });
     expect(accountActions("claude", claude("claude-work", "Work", true, { authentication: { method: "paste-code", signOut: false } }))).toEqual({ signOut: false, remove: true, hide: false });
     expect(renderClaude(claude("claude-work", "Work", true))).toContain(">Remove<");

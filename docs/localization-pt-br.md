@@ -183,13 +183,12 @@ These stay unchanged in every pt-BR string.
 
 | Name | Why |
 |---|---|
-| Seira, Seira | Product names. Never write `OMB` or `T3` (`vocabulary.test.ts`). |
+| Seira, Seira | Product names. Never write `Seira` or `T3` (`vocabulary.test.ts`). |
 | Seira Cloud | Product name. `vocabulary.test.ts` requires it verbatim in every translation whose English contains it. Never write `Seira Cloud` or `Seira Pro`. Treat it as masculine: “o Seira Cloud”. |
 | Cloud (short for Seira Cloud) | Product name, masculine: “o Cloud”, “no Cloud”. The generic sky-and-servers cloud is `nuvem`: “desktop na nuvem”. |
-| Boat | Name of a third-party provider. Write it only where the English says Boat; the test fails otherwise. |
-| Jev, Maus, Grok Bot | Names of product features or characters. |
+| Jev, Seira, Grok Bot | Names of product features or characters. |
 | Claude, Claude Code, ChatGPT, Codex, Grok, Gemini, Cursor, OpenCode, Antigravity, OpenAI, Anthropic, xAI, OpenRouter, Ollama, Groq, Cerebras | Third-party product and company names. |
-| Slack, Discord, Telegram, WhatsApp, Gmail, Notion, GitHub, Chrome, Tailscale, Cloudflare Tunnel, Docker, Podman, Whop, Product Hunt | Third-party product names. |
+| Slack, Discord, Telegram, WhatsApp, Gmail, Notion, GitHub, Chrome, Tailscale, Cloudflare Tunnel, Docker, Podman, Product Hunt | Third-party product names. |
 | Admin, and labels inside the Admin console | The Admin console is not localized, so pointers keep its English labels. |
 | `SKILL.md`, `MEMORY.md`, `config.toml`, `.seirabackup`, commands, paths, URLs, environment variables, keyboard keys | Code and file names. |
 | MCP, API, CLI, URL, HTTPS, DNS, SSH, USB, ID, CSV, PNG, JPEG | Standard abbreviations. Use `IA` for AI, never `AI`. |
@@ -243,7 +242,7 @@ the whole catalog in the same change.
 | instructions | instruções | “standing instructions” → “instruções permanentes”. |
 | Live | Ao vivo | |
 | Local VM | VM local | Technical screens only. Everyday screens: “desktop privado”. |
-| Logins (saved site logins) | Logins | A single one is `login`. “Settings → Logins” → “Configurações → Logins”. |
+| Logins (saved site logins) | Logins | A single one is `login`. |
 | Marketplace | Marketplace | Masculine. |
 | model | modelo | AI model. Template is also `modelo` (see template). |
 | model provider | provedor de modelos | “provider” alone → `provedor`. |

@@ -4,17 +4,17 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 
 import { launchVerificationServer } from "../scripts/control-seira.ts";
-import { startFakePostiz, type FakePostiz } from "./testing/fake-postiz.ts";
+import { startFakeOauthMcp, type FakeOauthMcp } from "./testing/fake-oauth-mcp.ts";
 
 /** A real server with the fake Claude engine held mid-turn until the gate opens, a stand-in OAuth provider, and Iris's
  * turn that has added the provider's server and called sign_in. */
 async function onSignInCard(run: (f: {
   api: (method: string, path: string, body?: unknown, expected?: number, token?: string) => Promise<any>;
-  dump: () => any; provider: FakePostiz; url: string; serverUrl: string; iris: { id: string; threadId: string };
+  dump: () => any; provider: FakeOauthMcp; url: string; serverUrl: string; iris: { id: string; threadId: string };
   messages: () => Promise<any[]>; card: () => Promise<any>; endTurn: () => Promise<void>;
 }) => Promise<void>) {
-  const provider = await startFakePostiz();
-  const scratch = mkdtempSync(join(tmpdir(), "omb-mcp-sign-in-"));
+  const provider = await startFakeOauthMcp();
+  const scratch = mkdtempSync(join(tmpdir(), "seira-mcp-sign-in-"));
   const gate = join(scratch, "finish");
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate });
   const api = async (method: string, path: string, body?: unknown, expected = 200, token?: string) => {
@@ -30,14 +30,14 @@ async function onSignInCard(run: (f: {
   try {
     const iris = (await api("POST", "/api/bots", { name: "Iris" }, 201)).bot;
     const messages = async () => (await api("GET", `/api/threads/${iris.threadId}/messages`)).messages as any[];
-    await api("POST", `/api/bots/${iris.id}/messages`, { threadId: iris.threadId, text: "Connect Postiz", sendId: "mcp-sign-in-e2e-send-0001" }, 202);
+    await api("POST", `/api/bots/${iris.id}/messages`, { threadId: iris.threadId, text: "Connect Acme", sendId: "mcp-sign-in-e2e-send-0001" }, 202);
     let first: any;
-    await expect.poll(() => { first = dump(); return JSON.stringify(first?.prompt ?? "").includes("Connect Postiz"); }, { timeout: 20_000 }).toBe(true);
-    const token: string = first.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    await expect.poll(() => { first = dump(); return JSON.stringify(first?.prompt ?? "").includes("Connect Acme"); }, { timeout: 20_000 }).toBe(true);
+    const token: string = first.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const serverUrl = `${provider.url}/mcp-oauth-dynamic`;
-    const added = await api("POST", "/api/internal/mcp-servers", { action: "add", name: "postiz", type: "http", url: serverUrl }, 201, token);
-    expect(added.text).toContain("Test: needs sign-in. Call mcp_server with action sign_in and name postiz, then end your turn.");
-    const asked = await api("POST", "/api/internal/mcp-servers", { action: "sign_in", name: "postiz" }, 202, token);
+    const added = await api("POST", "/api/internal/mcp-servers", { action: "add", name: "acme", type: "http", url: serverUrl }, 201, token);
+    expect(added.text).toContain("Test: needs sign-in. Call mcp_server with action sign_in and name acme, then end your turn.");
+    const asked = await api("POST", "/api/internal/mcp-servers", { action: "sign_in", name: "acme" }, 202, token);
     expect(asked.text).toContain("End this turn and wait");
     let shown: any;
     const card = async () => {
@@ -59,8 +59,8 @@ async function onSignInCard(run: (f: {
 it("a bot adds an OAuth server and asks the person to sign in; they sign in on the provider's page and the bot carries on by itself with the server's tools", () => onSignInCard(async ({ api, dump, provider, url, serverUrl, iris, messages, card, endTurn }) => {
   await endTurn();
   const shown = await card();
-  expect(shown.connector).toMatchObject({ slug: "postiz", label: "Postiz", status: "required" });
-  expect(shown.text).toBe("Postiz's MCP server needs a sign-in. Open this conversation in Seira to sign in.");
+  expect(shown.connector).toMatchObject({ slug: "acme", label: "Acme", status: "required" });
+  expect(shown.text).toBe("Acme's MCP server needs a sign-in. Open this conversation in Seira to sign in.");
 
   const window = await api("POST", "/api/auth/pairing", { scopes: ["client"] });
   const paired = await (await fetch(`${url}/api/auth/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: window.code }) })).json() as { token: string };
@@ -68,7 +68,7 @@ it("a bot adds an OAuth server and asks the person to sign in; they sign in on t
   const member = await fetch(`${url}${cardPath}/authorize`, {
     method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${paired.token}` }, body: JSON.stringify({ threadId: iris.threadId }),
   });
-  expect({ status: member.status, body: await member.json() }).toEqual({ status: 409, body: { error: "Only an admin of this installation can sign in to Postiz." } });
+  expect({ status: member.status, body: await member.json() }).toEqual({ status: 409, body: { error: "Only an admin of this installation can sign in to Acme." } });
   expect(provider.counts.register).toBe(0);
 
   const { url: link } = await api("POST", `${cardPath}/authorize`, { threadId: iris.threadId });
@@ -77,8 +77,8 @@ it("a bot adds an OAuth server and asks the person to sign in; they sign in on t
   expect(await page.text()).toBe("Signed in. You can close this tab and return to Seira.");
 
   let resumed: any;
-  await expect.poll(() => { resumed = dump(); return JSON.stringify(resumed?.prompt ?? "").includes("the person signed in to postiz"); }, { timeout: 20_000 }).toBe(true);
-  expect(resumed.mcpConfig.mcpServers.postiz, "the resumed turn has the server, signed in").toMatchObject({ url: serverUrl, headers: { Authorization: `Bearer ${provider.issued[0]}` } });
+  await expect.poll(() => { resumed = dump(); return JSON.stringify(resumed?.prompt ?? "").includes("the person signed in to acme"); }, { timeout: 20_000 }).toBe(true);
+  expect(resumed.mcpConfig.mcpServers.acme, "the resumed turn has the server, signed in").toMatchObject({ url: serverUrl, headers: { Authorization: `Bearer ${provider.issued[0]}` } });
   await expect.poll(async () => (await messages()).find((message) => message.id === shown.id)?.connector, { timeout: 20_000 })
     .toMatchObject({ status: "connected", resumed: true });
   const transcript = JSON.stringify(await messages());

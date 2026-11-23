@@ -17,15 +17,29 @@ Seira separates its network surfaces by trust level.
 
 Never forward the harness port yourself. A self-hosted server is reached through one of `seira serve`'s ways in:
 
-- `--public-url https://…`: your own cloudflared tunnel, Caddy or nginx in front;
+- `--public-url https://…`: your own Cloudflare Tunnel, Caddy or nginx in front;
 - `--domain HOST`: a managed Caddy that gets the certificate;
 - `--tailscale`: your tailnet, with Tailscale's HTTPS when the tailnet has certificates turned on, otherwise plain http on this machine's own tailnet address;
 - `--lan`: this network only, plain http. It listens on every address, but answers only connections whose two ends are both private;
-- `--tunnel`: a free Seira web address.
 
 Each prints one pairing link; paste it into the desktop app under **＋ → Connect to a server**. The app accepts plain http only on private networks: LAN addresses, Tailscale's 100.64/10 and `*.ts.net`, and `*.local`.
 
 A loopback request counts as the owner only when it really comes from this machine; a LAN client that writes `Host: 127.0.0.1` is still a stranger. For webhook delivery, proxy only the dedicated webhook receiver. Never forward the main harness port to the public internet.
+
+## See which requests reach the server
+
+When you debug a tunnel, a tailnet address or a port, turn on the access log. The server then writes one line for each request it answers, to its normal log:
+
+```sh
+npx @seira-bot/seira serve --access-log
+# or: SEIRA_ACCESS_LOG=1 npx @seira-bot/seira serve
+```
+
+```text
+access 2026-11-23T09:15:02.481Z GET /api/health 200 3ms via=local
+```
+
+A line holds the time, the method, the path, the status, the duration and the way in: `tunnel` for the phone tunnel, `local` for every other connection. It never holds the query string, a cookie, a header or a body. The log is off unless you turn it on.
 
 ## Port overrides
 

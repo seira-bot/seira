@@ -292,6 +292,22 @@ describe("the inbox as its panel lists it", () => {
   };
   const tabs = (f: ReturnType<typeof fixture>) => Object.fromEntries((f.team.inbox.view(key(BEN.email))?.rows ?? []).map((row) => [row.text, row.tab]));
 
+  it("marks the named lines of news done, or with no ids all news, and leaves an open ask", () => {
+    const f = fixture();
+    f.team.pass("scout", "cleo-private", "Ben", "First news.");
+    f.team.pass("reporter", "rep-main", "Ben", "Second news.");
+    f.team.pass("scout", "cleo-private", "Ben", "Third news.");
+    askOf(f, "rep-shared", approve("req-1"));
+    const me = key(BEN.email);
+    const rows = f.team.inbox.view(me)!.rows;
+    const first = rows.find((row) => row.text === "First news.")!, ask = rows.find((row) => row.kind === "ask")!;
+    expect(f.team.inbox.markDoneMany(me, [first.id, ask.id, "nope"])).toBe(1);
+    expect(f.team.inbox.markDoneMany(key(CLEO.email), [rows.find((row) => row.text === "Second news.")!.id]), "only its own person").toBe(0);
+    expect(f.team.inbox.markDoneMany(me)).toBe(2);
+    expect(tabs(f)).toEqual({ "First news.": "done", "Second news.": "done", "Third news.": "done", "Run: rm -rf ./build": "needs-you" });
+    expect(f.team.inbox.markDoneMany(me)).toBe(0);
+  });
+
   it("puts an open ask under Needs you, news under For your info, and what is settled or done under Done", () => {
     const f = fixture();
     f.team.pass("scout", "cleo-private", "Ben", "Can you review the deck?");

@@ -11,7 +11,7 @@ import viteConfig from "../../vite.config.ts";
 import { VITEST_SHARDS } from "../ci-scope.mjs";
 import { DurationSequencer, SHARD_WEIGHTS_FILE, loadPlatformShardWeights, loadShardWeights, planShards, weightKey } from "./duration-sequencer.ts";
 import { isPortableE2e } from "./host-e2e.ts";
-import { buildWeights, mergePlatformWeights, parseVitestLog, RUNNER_PLATFORMS } from "./update-shard-weights.mjs";
+import { buildWeights, jobPlatform, mergePlatformWeights, parseVitestLog, RUNNER_PLATFORMS } from "./update-shard-weights.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const WEIGHTS = loadShardWeights(ROOT);
@@ -107,19 +107,19 @@ describe("vitest shard balance", () => {
 
   it("logs its split, and annotates a CI run whose weights match no files", async () => {
     vi.stubEnv("GITHUB_ACTIONS", "true");
-    // The Windows and macOS CI shards run this file with OMB_VITEST_E2E=host.
-    vi.stubEnv("OMB_VITEST_E2E", "");
+    // The Windows and macOS CI shards run this file with SEIRA_VITEST_E2E=host.
+    vi.stubEnv("SEIRA_VITEST_E2E", "");
     const lines: string[] = [];
     await new DurationSequencer(context(2, 4, (line) => lines.push(line))).shard(specs(FILES));
     expect(lines).toEqual([expect.stringMatching(new RegExp(`^duration-sequencer: shard 2/4 runs \\d+ of ${FILES.length} files, ~\\d+s recorded; ${Object.keys(WEIGHTS).length} of ${Object.keys(WEIGHTS).length} weighted files found$`))]);
 
     lines.length = 0;
-    vi.stubEnv("OMB_VITEST_E2E", "host");
+    vi.stubEnv("SEIRA_VITEST_E2E", "host");
     const hostFiles = FILES.filter((file) => !isPortableE2e(file));
     const hostWeighted = Object.keys(WEIGHTS).filter((file) => !isPortableE2e(file)).length;
     await new DurationSequencer(context(1, 4, (line) => lines.push(line))).shard(specs(hostFiles));
     expect(lines).toEqual([expect.stringMatching(new RegExp(`; ${hostWeighted} of ${hostWeighted} weighted files found$`))]);
-    vi.stubEnv("OMB_VITEST_E2E", "");
+    vi.stubEnv("SEIRA_VITEST_E2E", "");
 
     lines.length = 0;
     const elsewhere = FILES.map((file) => ({ moduleId: path.join(ROOT, "..", "elsewhere", file) }) as TestSpecification);
@@ -127,7 +127,7 @@ describe("vitest shard balance", () => {
     expect(lines[1]).toMatch(/^::warning title=duration-sequencer::Only 0 of \d+ weighted test files were found/);
 
     lines.length = 0;
-    vi.stubEnv("OMB_VITEST_SUBSET", "src/ scripts/generate-locale.test.mjs");
+    vi.stubEnv("SEIRA_VITEST_SUBSET", "src/ scripts/generate-locale.test.mjs");
     await new DurationSequencer(context(1, 2, (line) => lines.push(line))).shard(specs(FILES.filter((file) => file.startsWith("src/"))));
     expect(lines).toEqual([expect.stringMatching(/^duration-sequencer: shard 1\/2 runs \d+ of \d+ files/)]);
   });
@@ -148,6 +148,14 @@ describe("update-shard-weights", () => {
       "scripts/testing/cloud-preview.e2e.test.ts": 0,
       "server/c.test.ts": 9,
     });
+  });
+
+  it("finds a vitest job's platform by its platform name or its runner name", () => {
+    expect(jobPlatform("vitest (linux, shard 3/8)")).toBe("linux");
+    expect(jobPlatform("vitest (ubuntu-latest, shard 3/8)")).toBe("linux");
+    expect(jobPlatform("vitest (windows-latest, shard 4/4)")).toBe("win32");
+    expect(jobPlatform("vitest (solaris, shard 1/2)")).toBeUndefined();
+    expect(jobPlatform("build")).toBeUndefined();
   });
 
   it("rebuilds the platforms a run sampled and keeps the others", () => {

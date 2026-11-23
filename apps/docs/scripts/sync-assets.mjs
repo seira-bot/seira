@@ -24,3 +24,6 @@ for (const name of used) {
 }
 
 await copyFile(iconSource, iconTarget);
+for (const name of ['app-icon-192.png', 'app-icon-512.png', 'apple-touch-icon.png']) {
+  await copyFile(fileURLToPath(new URL(`../../../public/${name}`, import.meta.url)), fileURLToPath(new URL(`../public/${name}`, import.meta.url)));
+}

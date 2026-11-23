@@ -35,6 +35,7 @@ const render = () => flushSync(() => root.render(createElement(BotEditorStore, {
   children: createElement(Sidebar, { open: true, onClose: () => {} }),
 })));
 const openMenu = () => flushSync(() => document.querySelector<HTMLButtonElement>('button[aria-label="Actions for Pepper"]')!.click());
+const openTileMenu = () => flushSync(() => document.querySelector('[data-sidebar-bot-row="pepper"]')!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })));
 const menuItem = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) => button.textContent === label);
 
 beforeEach(() => {
@@ -86,7 +87,7 @@ describe("working folder through the rendered sidebar", () => {
   it("keeps new-thread folder creation out of Simple mode", () => {
     access.advanced = false;
     render();
-    openMenu();
+    openTileMenu();
     expect(menuItem("New thread")).toBeDefined();
     expect(menuItem("New thread in a working folder…")).toBeUndefined();
   });

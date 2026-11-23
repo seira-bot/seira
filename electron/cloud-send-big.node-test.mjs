@@ -5,7 +5,7 @@ import { createCloudSend } from "./cloud-send.mjs";
 import { STALL_MS } from "./cloud-send-check.mjs";
 import { createOneHome } from "./one-home.mjs";
 
-const CLOUD = "https://omb-u-1.fly.dev";
+const CLOUD = "https://seira-u-1.fly.dev";
 const BOTS = 100, CHATS_PER_BOT = 30, ROWS = 40, LONG = 12_000, ATTACHMENTS = 6_000, FILES_PER_BOT = 20, FILE_BYTES = 5 * 1024 ** 2;
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
 const reply = (status, body) => ({ status, ok: status < 400, body });

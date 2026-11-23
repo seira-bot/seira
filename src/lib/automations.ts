@@ -2,6 +2,7 @@
 // store's schedules (routines), webhooks and runs, so the Automations page, its panel and the chat card never disagree.
 import { cronPresetText, cronText } from "@/lib/cron-text";
 import { clockOptions } from "@/lib/clock-time";
+import { listOf } from "@/lib/cloud-send";
 import { activeLocale, t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { ROUTINE_HANDOFF_WAIT, isCountedSkip, isRoutineProblemRun, type Routine, type RoutineRun, type RoutineSchedule } from "@/lib/routines";
@@ -37,6 +38,7 @@ export interface Automation {
   readsAndDrafts?: boolean;
   /** Its newest runs in a row whose cloud desktop did not start, while its scheduled runs are spaced out for it. */
   noStartStreak?: number;
+  workflowId?: string;
 }
 
 const runTime = (run: RoutineRun) => run.startedAt ?? run.scheduledFor ?? run.createdAt;
@@ -52,6 +54,7 @@ export function automationsFrom(sources: { routines: readonly Routine[]; webhook
       schedule: routine.schedule, nextRunAt: routine.enabled ? routine.nextRunAt : null, runs: runsOf(routine.id),
       ...(routine.checkedAt !== undefined ? { checkedAt: routine.checkedAt } : {}), ...(routine.checkTrouble ? { checkTrouble: routine.checkTrouble, ...(routine.checkTroubleCode ? { checkTroubleCode: routine.checkTroubleCode } : {}) } : {}),
       ...(routine.access === "read-and-draft" ? { readsAndDrafts: true } : {}), ...(routine.noStartStreak ? { noStartStreak: routine.noStartStreak } : {}),
+      ...(routine.workflowId ? { workflowId: routine.workflowId } : {}),
     })),
     ...sources.webhooks.map((webhook): Automation => ({
       kind: "webhook", id: webhook.id, name: webhook.name, botId: webhook.botId, instructions: webhook.prompt, enabled: webhook.enabled,
@@ -166,7 +169,14 @@ export function plainWhen(schedule: RoutineSchedule): string {
 const IRREGULAR: Record<string, string> = { have: "has", do: "does", go: "goes", be: "is" };
 const NOT_A_VERB = new Set(["if", "when", "whenever", "every", "each", "please", "the", "a", "an", "you", "i", "we", "my", "our", "your", "this", "that", "on", "at", "for", "after", "before"]);
 const PHRASE_CHARS = 60;
+const ENGLISH_WORD = /\b(?:the|to|and|of|for|with|from|my|your|it|is|this|that|every|each|all|any|new|about|when|then)\b/i;
 const COMMON_VERBS = "add|archive|book|check|create|draft|email|file|flag|forward|label|list|message|move|notify|open|ping|post|reply|report|review|save|schedule|send|share|summarize|tell|update|write";
+const COMMON_VERB_FIRST = new RegExp(`^(?:${COMMON_VERBS})\\b`, "i");
+
+/** An English app still leaves "Tulis ringkasan pesan masuk" as written: only a clause that reads as English is conjugated. */
+function readsAsEnglish(clause: string): boolean {
+  return ENGLISH_WORD.test(clause) || COMMON_VERB_FIRST.test(clause);
+}
 
 function thirdPerson(verb: string): string {
   const lower = verb.toLowerCase();
@@ -187,7 +197,7 @@ const TECHNICAL_TAIL = /\s+(?:in|from|of|inside)\s+(?:the\s+)?(?:(?:incoming|web
 export function doesPhrase(instructions: string, english = activeLocale().startsWith("en")): string {
   let clause = instructions.replace(/^\s*please\s+/i, "").split(/[.:;!?\n]|\s[—–-]\s/)[0]?.trim().replace(TECHNICAL_TAIL, "") ?? "";
   if (!clause) return t("automations.does.default");
-  if (english) {
+  if (english && readsAsEnglish(clause)) {
     clause = clause.replace(/\bme\b/gi, "you").replace(/\bmy\b/gi, "your").replace(/\bmine\b/gi, "yours").replace(/\bI\b/g, "you");
     const [first = "", ...rest] = clause.split(/\s+/);
     clause = keepsCase(first) ? clause : /^[A-Za-z]+$/.test(first) && !NOT_A_VERB.has(first.toLowerCase())
@@ -218,9 +228,13 @@ export function sourcePhrase(name: string): string {
 }
 
 /** "Every weekday at 9 AM, Scout sends you a summary of your inbox"; "When your sales form sends something, Scout drafts…". */
-export function automationSentence(automation: Pick<Automation, "kind" | "name" | "instructions" | "schedule" | "appTrigger">, botName: string): string {
+export function automationSentence(automation: Pick<Automation, "kind" | "name" | "instructions" | "schedule" | "appTrigger" | "workflowId">, botName: string, workflow?: { name: string; bots: string[] }): string {
   const does = doesPhrase(automation.instructions);
   if (automation.kind === "app" && automation.appTrigger) return t("automations.sentence.appEvent", { when: appWhen(automation.appTrigger), bot: botName, does });
+  if (automation.kind === "schedule" && automation.schedule && automation.workflowId) {
+    const when = plainWhen(automation.schedule);
+    return workflow?.bots.length ? t("workflow.sentence.named", { when, name: workflow.name, bots: listOf(workflow.bots) }) : t("workflow.sentence.unknown", { when, bot: botName });
+  }
   if (automation.kind === "schedule" && automation.schedule) {
     return t("automations.sentence.schedule", { when: plainWhen(automation.schedule), bot: botName, does });
   }

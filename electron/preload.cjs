@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer, webFrame, webUtils } = require("electron");
 
 // Sandboxed preloads get Electron's restricted `require`, which cannot load sibling CommonJS files.
-const desktopRemoteClient = process.argv.includes("--openmausbot-remote-client");
+const desktopRemoteClient = process.argv.includes("--seira-remote-client");
 
 let pendingPackageInstallUrl = null;
 const packageInstallListeners = new Set();
@@ -62,7 +62,7 @@ ipcRenderer.on("app:open-settings", (_event, section) => {
 });
 
 // The full bridge goes only to the local server's UI; a remote page gets the safe subset, and main enforces the same rule.
-const localOrigin = process.argv.find((arg) => arg.startsWith("--omb-local-origin="))?.slice("--omb-local-origin=".length) ?? null;
+const localOrigin = process.argv.find((arg) => arg.startsWith("--seira-local-origin="))?.slice("--seira-local-origin=".length) ?? null;
 const isLocalPage = !localOrigin || location.origin === localOrigin;
 
 // The window's own rail of places stands at its left edge (electron/chrome-rail.mjs): main says how wide, and every page
@@ -90,7 +90,7 @@ function railKeepsItsSize() {
 if (typeof window !== "undefined") {
   for (const type of ["resize", "DOMContentLoaded"]) window.addEventListener(type, () => { leaveRailRoom(); railKeepsItsSize(); });
 }
-const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate"]);
+const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "glance", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "textSize", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
 /** My Cloud's own page once it is the person's home (main checks the sender again): it is this app's page then. */
 const HOME_PAGE = ["home", "onChatLink", "onPackageInstall", "exportDiagnostics", "openLogsFolder", "openAtLogin", "callActive"];
 function updaterOffered() {
@@ -106,6 +106,26 @@ function savedAnalyticsChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-analytics:read"); return typeof saved === "boolean" ? saved : null; } catch { return null; }
 }
 let analyticsChoice;
+const text = (value, max) => (typeof value === "string" ? value.slice(0, max) : undefined);
+/** Main passes --seira-crash-reports=1 only when this build has a crash endpoint; without it the page gets `available: false` and no way to send. */
+function crashReportsBridge() {
+  if (!process.argv.includes("--seira-crash-reports=1")) return { available: false };
+  // Read on first use, not at load. A value that cannot be read counts as off.
+  let choice;
+  const savedChoice = () => { try { return ipcRenderer.sendSync("desktop-crash-reports:read") === true; } catch { return false; } };
+  return {
+    available: true,
+    enabled: () => { if (choice === undefined) choice = savedChoice(); return choice; },
+    set: enabled => { choice = enabled === true; return ipcRenderer.invoke("desktop-crash-reports:set", choice); },
+    report: report => {
+      try {
+        const ids = report?.debugIds && typeof report.debugIds === "object" ? Object.fromEntries(Object.entries(report.debugIds).slice(0, 50).filter(([, id]) => typeof id === "string")) : undefined;
+        ipcRenderer.send("desktop-crash-reports:renderer", { kind: text(report?.kind, 40), errorName: text(report?.errorName, 100), message: text(report?.message, 20000), stack: text(report?.stack, 20000), page: text(report?.page, 20), debugIds: ids });
+      } catch {}
+    },
+    page: name => { try { ipcRenderer.send("desktop-crash-reports:page", text(name, 20)); } catch {} },
+  };
+}
 function savedLanguageChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-language:read"); return typeof saved === "string" ? saved : null; } catch { return null; }
 }
@@ -121,13 +141,13 @@ const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(upda
 
 // Keep in parity with shared/workspace-backup-client.ts (a sandboxed preload cannot import it).
 const COMPANY_BACKUP_CLIENT_KEYS = [
-  "omb-drafts", "omb-draft-attachments", "omb-draft-send-ids", "omb-draft-channel-modes",
-  "omb-skin", "omb-show-threads", "omb-show-run-card", "omb-send-key", "omb-color-user-bubbles", "omb-chat-width", "openmausbot.sidebarDensity",
-  "openmausbot.sidebarToolsLayout",
-  "openmausbot.sidebarCollapsedSections.v1", "openmausbot.sidebarSectionOrder.v1",
-  "omb-analytics-opt-out", "openmausbot.remote-voice.v1",
+  "seira-drafts", "seira-draft-attachments", "seira-draft-send-ids", "seira-draft-channel-modes",
+  "seira-skin", "seira-show-threads", "seira-show-run-card", "seira-send-key", "seira-color-user-bubbles", "seira-chat-width", "seira.sidebarDensity",
+  "seira.sidebarToolsLayout",
+  "seira.sidebarCollapsedSections.v1", "seira.sidebarSectionOrder.v1",
+  "seira-analytics-opt-out", "seira.remote-voice.v1",
 ];
-if (isLocalPage && !desktopRemoteClient && process.argv.includes("--omb-company-desktop=1")) {
+if (isLocalPage && !desktopRemoteClient && process.argv.includes("--seira-company-desktop=1")) {
   ipcRenderer.on("company-backups:collect-client-state", (_event, request) => {
     if (!request || typeof request.requestId !== "string" || !/^[a-f0-9-]{36}$/.test(request.requestId)) return;
     try {
@@ -147,7 +167,7 @@ if (isLocalPage && !desktopRemoteClient && process.argv.includes("--omb-company-
 }
 
 // main passes app.getVersion(): a server's page carries that server's version, so About asks this for the app's own.
-const appVersion = (process.argv.find((arg) => arg.startsWith("--omb-app-version="))?.slice("--omb-app-version=".length) ?? "").slice(0, 64);
+const appVersion = (process.argv.find((arg) => arg.startsWith("--seira-app-version="))?.slice("--seira-app-version=".length) ?? "").slice(0, 64);
 
 /** ipcRenderer wraps a main-process throw in "Error invoking remote method"; the page shows the text verbatim. */
 function invokeWithPlainError(channel, ...args) {
@@ -157,10 +177,14 @@ function invokeWithPlainError(channel, ...args) {
   });
 }
 
+function httpsAddress(url) {
+  try { return new URL(String(url)).protocol === "https:"; } catch { return false; }
+}
+
 const bridge = {
   platform: process.platform,
   /** Linux without a GPU (electron/linux-gpu.mjs): the page drops its backdrop blurs. */
-  softwareRendering: process.argv.includes("--omb-software-rendering=1"),
+  softwareRendering: process.argv.includes("--seira-software-rendering=1"),
   /** This app's version, and whether this page is this app's own (served by this computer, not a server from the Server menu). */
   app: { version: appVersion, ownPage: isLocalPage },
   // Safe on a cloud page: the person chooses in a native menu, or a circle of the rail main listed (only for this app's
@@ -185,6 +209,9 @@ const bridge = {
     // Remove from list, for a Cloud the window's rail lists as removable, from a click on the rail's own page (main refuses any other page).
     remove: (id) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("workspaces:remove", String(id)) : Promise.reject(new Error("Choose Remove from list.")),
+    // A new name for a server saved by hand that the window's rail lists, from a click on the rail's own page (main refuses any other page).
+    rename: (id, name) => isLocalPage || navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("workspaces:rename", String(id), String(name ?? "")) : Promise.reject(new Error("Choose Rename.")),
     // Make a server of the person's own their bots' home, from a click on the rail's own page (main refuses any other page).
     makeHome: (id) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("workspaces:make-home", String(id)) : Promise.reject(new Error("Choose Make my home.")),
@@ -211,6 +238,11 @@ const bridge = {
       const handler = () => cb();
       ipcRenderer.on("workspaces:new-local", handler);
       return () => ipcRenderer.removeListener("workspaces:new-local", handler);
+    },
+    onConnectServer: (cb) => {
+      const handler = () => cb();
+      ipcRenderer.on("workspaces:connect-server", handler);
+      return () => ipcRenderer.removeListener("workspaces:connect-server", handler);
     },
   },
   // The window's own rail (this app's page at /rail, beside every place's page): while a sheet of its own is open it
@@ -251,6 +283,18 @@ const bridge = {
     state: () => ipcRenderer.invoke("window-frame:state"),
     set: (on) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("window-frame:set", on === true) : Promise.reject(new Error("Choose to turn the window frame on or off.")),
+  },
+  // The text size of the window, this desktop's choice for every page of it; main moves it too, from the View menu and
+  // its shortcuts. A server's page changes it only from the person's click.
+  textSize: {
+    get: () => ipcRenderer.invoke("text-size:get"),
+    set: (step) => isLocalPage || navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("text-size:set", Number(step)) : Promise.reject(new Error("Choose a text size.")),
+    onChange: (cb) => {
+      const handler = (_event, step) => cb(Number(step));
+      ipcRenderer.on("text-size:changed", handler);
+      return () => ipcRenderer.removeListener("text-size:changed", handler);
+    },
   },
   // Buying another Cloud from the rail's ＋, on this app's page or a hosted Cloud's: plain words in, what the sheet says
   // out; the account, the token and the checkout page stay in main. Only from the person's click where it opens anything.
@@ -377,11 +421,17 @@ const bridge = {
   permRequestMic: () => ipcRenderer.invoke("perm:request-mic"),
   permOpenSettings: (pane) => ipcRenderer.invoke("perm:open-settings", pane),
   relaunch: () => ipcRenderer.invoke("desktop:relaunch"),
+  quit: () => ipcRenderer.invoke("desktop:quit"),
 
   openInstallTerminal: (command) => ipcRenderer.invoke("engine:open-terminal", command),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   /** Unlike window.open, this still works after an asynchronous API request. */
   openExternal: (url) => ipcRenderer.invoke("desktop:open-external", url),
+  /** An https sign-in page only, and on another server's page only from the person's click; main checks both again. */
+  openSignInPage: (url) => (isLocalPage || navigator.userActivation?.isActive === true) && httpsAddress(url)
+    ? ipcRenderer.invoke("desktop:open-sign-in-page", String(url)) : Promise.reject(new Error("Use the link to open the page.")),
+  openCleanSignInPage: (url) => (isLocalPage || navigator.userActivation?.isActive === true) && httpsAddress(url)
+    ? ipcRenderer.invoke("desktop:open-sign-in-page", String(url), { clean: true }) : Promise.reject(new Error("Use the link to open the page.")),
   applySkin: (skin) => ipcRenderer.invoke("desktop:skin", skin),
   windowControls: {
     minimize: () => ipcRenderer.invoke("window:minimize"),
@@ -438,6 +488,24 @@ const bridge = {
   openHtmlInBrowser: (source, name) => invokeWithPlainError("desktop:open-html", source, name),
   // This app's own logs folder (server.log, desktop-crashes.log, updater.log); the page names no path.
   openLogsFolder: () => ipcRenderer.invoke("desktop:open-logs"),
+  // Install on my server (electron/vps-install.mjs): the page sends each secret once and keeps none; events carry none.
+  serverInstall: {
+    info: () => ipcRenderer.invoke("server-install:info"),
+    pickKey: () => ipcRenderer.invoke("server-install:pick-key"),
+    forgetHost: () => ipcRenderer.invoke("server-install:forget-host"),
+    start: request => ipcRenderer.invoke("server-install:start", request),
+    acceptHostKey: () => ipcRenderer.invoke("server-install:accept-host-key"),
+    rejectHostKey: () => ipcRenderer.invoke("server-install:reject-host-key"),
+    check: () => ipcRenderer.invoke("server-install:check"),
+    install: options => ipcRenderer.invoke("server-install:install", options),
+    sendCode: code => ipcRenderer.invoke("server-install:send-code", code),
+    cancel: () => ipcRenderer.invoke("server-install:cancel"),
+    onEvent: cb => {
+      const handler = (_event, message) => cb(message);
+      ipcRenderer.on("server-install:event", handler);
+      return () => ipcRenderer.removeListener("server-install:event", handler);
+    },
+  },
   alwaysOnHome: {
     state: () => ipcRenderer.invoke("always-on-home:state"),
     set: on => ipcRenderer.invoke("always-on-home:set", on === true),
@@ -459,6 +527,7 @@ const bridge = {
   appUpdate: {
     request: () => navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("update:for-server-page") : Promise.reject(new Error("Choose Update app.")),
+    way: () => ipcRenderer.invoke("update:way-for-server-page"),
   },
 
   updater: {
@@ -485,6 +554,7 @@ const bridge = {
     create: (name, dataDir) => ipcRenderer.invoke("environments:create", name, dataDir),
     pickDir: () => ipcRenderer.invoke("environments:pick-dir"),
     forget: (id, purge) => ipcRenderer.invoke("environments:forget", id, purge === true),
+    rename: (id, name) => ipcRenderer.invoke("environments:rename", String(id), String(name ?? "")),
     status: () => ipcRenderer.invoke("environments:status"),
     retry: (id) => ipcRenderer.invoke("environments:retry", ...(typeof id === "string" ? [id] : [])),
     onStatus: (cb) => {
@@ -498,7 +568,7 @@ const bridge = {
       return () => ipcRenderer.removeListener("workspaces:open-settings", handler);
     },
   },
-  cloudAccount: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudAccount: process.argv.includes("--seira-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("cloud-account:state"),
     begin: () => ipcRenderer.invoke("cloud-account:begin"),
     signInAgain: () => ipcRenderer.invoke("cloud-account:signInAgain"),
@@ -550,7 +620,7 @@ const bridge = {
     },
   } : undefined,
   // Either page: the one-time move's line.
-  cloudSendPage: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudSendPage: process.argv.includes("--seira-company-desktop=1") ? {
     notice: () => ipcRenderer.invoke("cloud-send:notice"),
     dismiss: signature => ipcRenderer.invoke("cloud-send:dismiss", String(signature)),
     moveRetry: () => isLocalPage || navigator.userActivation?.isActive === true
@@ -578,7 +648,7 @@ const bridge = {
       ? ipcRenderer.invoke("cloud-send:move-everything") : Promise.reject(new Error("Choose which bots move.")),
     botMoveRetry: () => ipcRenderer.invoke("cloud-send:bot-move-retry"),
     openMyCloud: () => ipcRenderer.invoke("cloud-send:open-my-cloud"),
-    // Settings → MausBot Cloud, Advanced: "Keep this computer's bots on this computer".
+    // Settings → Seira Cloud, Advanced: "Keep this computer's bots on this computer".
     keepHere: () => ipcRenderer.invoke("one-home:keep"),
     setKeepHere: on => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("one-home:keep-set", on === true) : Promise.reject(new Error("Turn the switch to keep this computer's bots here.")),
@@ -589,7 +659,7 @@ const bridge = {
     },
   } : undefined,
   // This computer's page and My Cloud's own page (main refuses any other): the other one's bots, listed beside this one's.
-  placesTogether: process.argv.includes("--omb-company-desktop=1") ? {
+  placesTogether: process.argv.includes("--seira-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("places-together:state"),
     set: on => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("places-together:set", on === true) : Promise.reject(new Error("Turn the switch to list both places' bots.")),
@@ -622,7 +692,7 @@ const bridge = {
     },
   },
   // Who is signed in on this device: this app's own pages only (main checks the sender). No token ever comes through here.
-  accounts: process.argv.includes("--omb-company-desktop=1") ? {
+  accounts: process.argv.includes("--seira-company-desktop=1") ? {
     list: () => ipcRenderer.invoke("accounts:list"),
     signOut: id => ipcRenderer.invoke("accounts:sign-out", String(id)),
     addStart: email => ipcRenderer.invoke("accounts:add-start", String(email)),
@@ -645,12 +715,12 @@ const bridge = {
     },
   } : undefined,
   // Any place's page: opens the accounts sheet on the rail's page, from the person's click. The page learns nothing of them.
-  accountSheet: process.argv.includes("--omb-company-desktop=1") ? {
+  accountSheet: process.argv.includes("--seira-company-desktop=1") ? {
     offered: () => ipcRenderer.invoke("accounts:offered"),
     open: () => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("accounts:open") : Promise.reject(new Error("Choose your account to open it.")),
   } : undefined,
-  cloudPlan: process.argv.includes("--omb-company-desktop=1") ? {
+  cloudPlan: process.argv.includes("--seira-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("cloud-plan:state"),
     manage: () => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("cloud-plan:manage") : Promise.reject(new Error("Choose Manage to open your Plan page.")),
@@ -673,7 +743,7 @@ const bridge = {
     restartNow: () => navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("cloud-plan:restart-now") : Promise.reject(new Error("Choose Restart now to restart the Cloud.")),
   } : undefined,
-  organization: process.argv.includes("--omb-company-desktop=1") ? {
+  organization: process.argv.includes("--seira-company-desktop=1") ? {
     settingsOpened: () => ipcRenderer.invoke("organization:settings-opened"),
     state: () => ipcRenderer.invoke("organization:state"),
     begin: input => ipcRenderer.invoke("organization:begin", input),
@@ -687,7 +757,7 @@ const bridge = {
       return () => ipcRenderer.removeListener("organization:state-changed", handler);
     },
   } : undefined,
-  companyBackups: process.argv.includes("--omb-company-desktop=1") ? {
+  companyBackups: process.argv.includes("--seira-company-desktop=1") ? {
     state: () => ipcRenderer.invoke("company-backups:state"),
     list: () => ipcRenderer.invoke("company-backups:list"),
     create: input => ipcRenderer.invoke("company-backups:create", input),
@@ -760,6 +830,21 @@ const bridge = {
       return () => notificationOpenListeners.delete(cb);
     },
   },
+  // Glance, the visor at the top of the screen: the page tells main what its bots do and answers what the person picks there.
+  glance: {
+    feed: (feed) => { try { ipcRenderer.send("glance:feed", feed); } catch {} },
+    onAct: (handler) => {
+      const listener = async (_event, message) => {
+        const id = message && typeof message.id === "string" ? message.id : null;
+        if (!id) return;
+        let ok = false;
+        try { ok = (await handler(message.act)) === true; } catch { ok = false; }
+        ipcRenderer.send("glance:acted", { id, ok });
+      };
+      ipcRenderer.on("glance:act", listener);
+      return () => { ipcRenderer.removeListener("glance:act", listener); };
+    },
+  },
   desktopAnalytics: {
     enabled: () => {
       if (analyticsChoice === undefined) analyticsChoice = savedAnalyticsChoice();
@@ -767,6 +852,7 @@ const bridge = {
     },
     ...(isLocalPage ? { set: enabled => { analyticsChoice = enabled === true; return ipcRenderer.invoke("desktop-analytics:set", analyticsChoice); } } : {}),
   },
+  ...(isLocalPage ? { crashReports: crashReportsBridge() } : {}),
   desktopLanguage: {
     choice: () => {
       if (languageChoice === undefined) languageChoice = savedLanguageChoice();

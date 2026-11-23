@@ -1,4 +1,5 @@
 import { approvalModeFor, approvalModeWidens, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
+import { continueThread, type HandoffStore } from "../thread-handoff.ts";
 import { threadLinkUrl } from "../../shared/thread-link.ts";
 import type { TaskResponse, WireBot, WireTask } from "../../shared/wire.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
@@ -17,6 +18,7 @@ import { titleConversationExcerpt, type ThreadTitleSource } from "../thread-titl
 import type { MessagePage } from "./channels.ts";
 import { bulkDeleteThreadIds, type BulkDeleteRefusal } from "./bulk-delete.ts";
 import { forkMessageId } from "./fork-request.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { sawThread } from "../thread-presence.ts";
 import { refusalBody, userError } from "../user-errors.ts";
@@ -29,7 +31,7 @@ export interface TaskRouteDeps {
   store: Pick<Store,
     | "bot" | "bots" | "taskByThread" | "project" | "projectBotForTask" | "patchTask" | "patchProject" | "tasks"
     | "switchTaskModel" | "switchTask" | "retitleTask" | "reorderProjects" | "refreshTaskPermissions" | "messagesTail"
-    | "messagesFor" | "deleteTasks" | "deleteProject" | "createTask" | "forkTask" | "createProject">;
+    | "messagesFor" | "deleteTasks" | "deleteProject" | "createTask" | "forkTask" | "createProject"> & HandoffStore;
   /** On a Cloud home only the owner changes how a bot asks for approval. */
   cloudHome: boolean;
   /** The desktop app owns this server, so a loopback caller is its owner. */
@@ -186,8 +188,17 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       if (body.select !== undefined && typeof body.select !== "boolean") return json(res, 400, { error: "select must be a boolean" });
       const bot = store.bot(m[1]);
       if (!bot) return json(res, 404, { error: "no such bot" });
+      const continueFrom = body.continueFrom;
+      if (continueFrom !== undefined && (typeof continueFrom !== "string" || !store.taskByThread(bot.id, continueFrom))) {
+        return json(res, 400, { error: "continueFrom must be a conversation of this bot" });
+      }
+      const continueRefusal = typeof continueFrom === "string" ? cloudThreadRefusal(auth, continueFrom) : null;
+      if (continueRefusal) return json(res, 403, { error: continueRefusal });
       let cwd: string | undefined;
       if (body.cwd !== undefined) {
+        if (fromPairedDevice(req, auth)) {
+          return json(res, 403, { error: "Choose a working folder on the host computer." });
+        }
         // Choosing where its file tools run takes the same authority as editing the bot's folder.
         if (!auth.scopes.includes("admin")) {
           return json(res, 403, { error: "Choosing a working folder requires the admin scope" });
@@ -216,6 +227,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       const task = store.createTask(bot.id, typeof body.title === "string" ? body.title : undefined, body.select !== false, body.projectId, undefined, body.approvalMode, undefined, cwd,
         auth.kind === "session" ? (created) => threadStarters.set(created.threadId, actorKey(auth)) : undefined);
       if (!task) return json(res, 500, { error: "couldn't create that task" });
+      if (typeof continueFrom === "string") continueThread(store, bot.id, continueFrom, task);
       return json(res, 201, { bot: publicBot(store.bot(bot.id)!), task: wireTask(task, store.bot(bot.id)!.modelSelection) } satisfies TaskResponse);
     }
     m = path.match(/^\/api\/bots\/([\w-]+)\/tasks\/delete$/);
@@ -315,7 +327,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
         const widensMode = approvalModeWidens(approvalModeFor(current), nextMode);
         const nextAllow = profile.alwaysAllow ?? [];
         const widensAllow = nextAllow.some((key) => !(current.alwaysAllow ?? []).includes(key));
-        // Full has no OMB-side guard here; the narrower levels keep this one.
+        // Full has no SEIRA-side guard here; the narrower levels keep this one.
         if (nextMode !== "full" && (widensMode || widensAllow) && auth.kind === "loopback" && !DESKTOP_MANAGED && !req.headers.origin && store.bots.some((bot) => bot.busy)) {
           return json(res, 409, { error: "Change approval mode from the app or a paired device while bots are working." });
         }

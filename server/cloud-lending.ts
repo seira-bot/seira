@@ -1,4 +1,4 @@
-// Who may use a Mac lent to an OMB Cloud home: only a turn the harness can prove acts for the owner (a conversation they
+// Who may use a Mac lent to a Seira Cloud home: only a turn the harness can prove acts for the owner (a conversation they
 // started from their own admin-scoped device, a room member answering their own line there, or a routine they wrote or
 // started by hand), in a conversation they opened that has never held anybody else's words, since a resumed session
 // carries everything said in it. Webhooks, guests, work handed in from elsewhere and anything unprovable never can.
@@ -151,7 +151,7 @@ export function answeredByPerson(card: Card | undefined): boolean {
 
 type RoutineShape = {
   prompt?: string; target?: unknown; botId?: string; groupId?: string; attachments?: { id: string; path: string }[];
-  schedule?: unknown; runOn?: string;
+  schedule?: unknown; runOn?: string; workflowId?: string;
 };
 
 /** The scheduler never rewrites these fields, so any edit by someone else changes the fingerprint. */
@@ -159,7 +159,7 @@ export function routineFingerprint(routine: RoutineShape): string {
   const attachments = (routine.attachments ?? []).map(attachment => [attachment.id, attachment.path]);
   return createHash("sha256").update(JSON.stringify([
     routine.prompt ?? "", routine.target ?? null, routine.botId ?? "", routine.groupId ?? null, attachments,
-    routine.schedule ?? null, routine.runOn ?? null,
+    routine.schedule ?? null, routine.runOn ?? null, ...(routine.workflowId ? [routine.workflowId] : []),
   ])).digest("hex");
 }
 

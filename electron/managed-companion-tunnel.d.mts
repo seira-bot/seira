@@ -29,6 +29,10 @@ export interface ManagedTunnel {
 }
 
 export declare function normalizeManagedCompanionEndpoint(value: unknown): string;
+/** The zones a server's tunnel address may sit in (`seira.run`, plus SEIRA_TUNNEL_HOST_SUFFIX with SEIRA_CONTROL_PLANE_URL). */
+export declare function serverTunnelHostSuffixes(environment?: NodeJS.ProcessEnv): string[];
+/** True only for `https://c-<32 lowercase hex>.<suffix>`, with no port or path. */
+export declare function serverTunnelEndpointAllowed(value: unknown, environment?: NodeJS.ProcessEnv): boolean;
 export declare function managedCompanionTunnelAccess(credentials: Record<string, unknown>): ManagedTunnelAccess | null;
 export declare function stagedCloudflaredPath(options?: {
   appPath?: string;

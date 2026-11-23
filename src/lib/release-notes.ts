@@ -1,4 +1,4 @@
-import { Archive, Bug, Layers, MessagesSquare, Mic, Package, Plug, Sparkles, Timer, Users, type LucideIcon } from "lucide-react";
+import { Activity, AppWindow, Eye, Inbox, MapPin, Power, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,67 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.191", items: [
+    { id: "glance", icon: Eye },
+    { id: "powerButton", icon: Power },
+    { id: "uiMap", icon: MapPin },
+    { id: "hermesExport", icon: ArrowRightLeft },
+    { id: "backupParts", icon: Archive },
+  ] },
+  { version: "0.1.190", items: [
+    { id: "inboxFirst", icon: Inbox },
+    { id: "providerInUse", icon: EyeOff },
+  ] },
+  { version: "0.1.189", items: [
+    { id: "windowRecovers", icon: AppWindow },
+    { id: "updateCheckHonest", icon: RefreshCw },
+    { id: "serverSetupGuide", icon: Server },
+  ] },
+  { version: "0.1.188", items: [
+    { id: "boatGone", icon: Server },
+    { id: "memoryForBots", icon: Gauge },
+  ] },
+  { version: "0.1.187", items: [
+    { id: "callView", icon: Phone },
+    { id: "chosenFolders", icon: FolderLock },
+    { id: "providerMenu", icon: EyeOff },
+    { id: "fullChat", icon: History },
+    { id: "departmentAccess", icon: Building2 },
+    { id: "pictures", icon: ImagePlus },
+  ] },
+  { version: "0.1.186", items: [
+    { id: "installOwnServer", icon: Server },
+    { id: "codexImages", icon: ImagePlus },
+    { id: "aiSettings", icon: KeyRound },
+    { id: "boardDone", icon: CircleCheck },
+    { id: "appsFeatured", icon: Star },
+    { id: "serverRename", icon: Pencil },
+  ] },
+  { version: "0.1.185", items: [
+    { id: "teamSuggestion", icon: Users },
+    { id: "usageRing", icon: Gauge },
+    { id: "appsConnected", icon: Plug },
+    { id: "phonePush", icon: Bell },
+    { id: "socialRepliz", icon: Megaphone },
+    { id: "linuxDesktop", icon: Monitor },
+  ] },
+  { version: "0.1.184", items: [
+    { id: "aiImport", icon: ArrowRightLeft },
+    { id: "board", icon: SquareKanban },
+    { id: "botWorkflows", icon: Bot },
+    { id: "turnActivity", icon: Activity },
+    { id: "appsInChat", icon: AtSign },
+    { id: "sendSetting", icon: Send },
+  ] },
+  { version: "0.1.183", items: [
+    { id: "workflows", icon: Workflow },
+    { id: "drawFromReply", icon: Wand2 },
+    { id: "copyCode", icon: Copy },
+    { id: "personLook", icon: Shuffle },
+  ] },
+  { version: "0.1.182", items: [
+    { id: "seiraName", icon: Tag },
+  ] },
   { version: "0.1.181", items: [
     { id: "aiPool", icon: Layers },
     { id: "connectOneClick", icon: Plug },
@@ -90,4 +151,18 @@ export function releaseNotesView(record: VersionRecord, current: string, notes: 
     .filter(note => (compareVersions(note.version, from) ?? 0) > 0 && (compareVersions(note.version, current) ?? 1) <= 0)
     .sort((a, b) => (compareVersions(b.version, a.version) ?? 0));
   return { version: current, from, items: merged.flatMap(note => note.items).slice(0, MAX_RELEASE_NOTE_ITEMS) };
+}
+
+export type WhatsNewMenuAction = { kind: "popup"; view: ReleaseNotesView } | { kind: "link"; url: string };
+
+/** Picks the notes the What's new menu item shows: the running version, else the newest older entry, else the releases page. */
+export function whatsNewMenuAction(current: string, notes: readonly ReleaseNote[] = RELEASE_NOTES): WhatsNewMenuAction {
+  const popup = (entry: ReleaseNote): WhatsNewMenuAction =>
+    ({ kind: "popup", view: { version: entry.version, from: null, items: entry.items.slice(0, MAX_RELEASE_NOTE_ITEMS) } });
+  const exact = notes.find(note => note.version === current);
+  if (exact) return popup(exact);
+  const older = notes.find(note => (compareVersions(note.version, current) ?? 1) < 0);
+  if (older) return popup(older);
+  if (numeric(current) === null) return notes[0] ? popup(notes[0]) : { kind: "link", url: RELEASES_URL };
+  return { kind: "link", url: releaseNotesUrl(current) };
 }

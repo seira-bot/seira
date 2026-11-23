@@ -33,11 +33,11 @@ const fetchFrom = (routes) => async (url) => {
 };
 
 test("a check sorts a server into connected, a passing problem, or one that needs the person", async () => {
-  const ok = await checkServer("https://maus.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => descriptor(), "/api/auth/session": () => new Response("{}") }));
+  const ok = await checkServer("https://seira.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => descriptor(), "/api/auth/session": () => new Response("{}") }));
   assert.deepEqual(ok, { kind: "ok", version: "0.1.140", install: "docker" });
-  assert.deepEqual(await checkServer("https://maus.example.com", fetchFrom({})), { kind: "transient" });
-  assert.deepEqual(await checkServer("https://maus.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => new Response("", { status: 502 }) })), { kind: "transient" });
-  assert.deepEqual(await checkServer("https://maus.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => descriptor(), "/api/auth/session": () => new Response("", { status: 401 }) })),
+  assert.deepEqual(await checkServer("https://seira.example.com", fetchFrom({})), { kind: "transient" });
+  assert.deepEqual(await checkServer("https://seira.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => new Response("", { status: 502 }) })), { kind: "transient" });
+  assert.deepEqual(await checkServer("https://seira.example.com", fetchFrom({ "/.well-known/openmausbot/environment": () => descriptor(), "/api/auth/session": () => new Response("", { status: 401 }) })),
     { kind: "blocked", reason: "signedOut" });
   let asked = 0;
   assert.deepEqual(await checkServer("http://203.0.113.9:8799", async () => { asked++; return descriptor(); }), { kind: "blocked", reason: "insecure" });
@@ -68,7 +68,7 @@ function clock() {
   };
 }
 
-function harness(results, entries = [{ id: "vps", origin: "https://maus.example.com" }]) {
+function harness(results, entries = [{ id: "vps", origin: "https://seira.example.com" }]) {
   const c = clock();
   const checks = [];
   let changes = 0;

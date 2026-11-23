@@ -120,6 +120,7 @@ export const CHAT_NOTICE = {
   "chat.notice.teammateNeedsInput": "{name} needs your input: {question}",
   "chat.notice.relayCouldNotContinue": "this conversation could not carry on — {error}",
   "chat.notice.engineSignedOut": "{name} is signed out.",
+  "chat.notice.engineRootFullAccess": "Claude can't use Full access while Seira runs as the administrator account. Choose Ask for approval or Approve for me for this bot, or run Seira as a normal user.",
   "chat.notice.failoverSignedInAgain": "{engine} is signed in again, so this conversation is back on {engine}.",
   "chat.notice.failoverSignedOut": "{from} is signed out, so {to} took over.",
   "chat.notice.backupCardWaiting": "switched to {name}. Your request waits on a card above and continues on {name} once you act on it.",
@@ -153,9 +154,12 @@ export const CHAT_NOTICE = {
   "chat.notice.memoryReclaimedTask": "Ran out of room, so I stopped this task to keep everything else running.",
   "chat.notice.botMemoryCap":
     "{bot} used more memory than this computer allows for one bot ({used} MB of {cap} MB) while memory was running short, so I stopped this task to keep the other bots running. Send the message again to start over; if it keeps happening, give this task less to do at once, or give this computer more memory.",
+  "chat.notice.memoryFenceStop": "A program in this task used all the memory set aside for bots on this computer ({gb} GB), so it was stopped. Your other apps kept running. The bot will try a lighter way.",
+  "chat.notice.memoryFenceStopUntold": "A program in this task used all the memory set aside for bots on this computer ({gb} GB), so it was stopped. Your other apps kept running.",
   "chat.notice.memoryReclaimedBrowserDetail": "Ran out of room, so I closed the browser to keep everything else running. ({detail})",
   "chat.notice.memoryReclaimedTaskDetail": "Ran out of room, so I stopped this task to keep everything else running. ({detail})",
   "chat.notice.outOfProcesses": "There is no room to start another program ({code}), so this task could not run. Nothing was sent to the AI. It starts again by itself when there is room.",
+  "chat.notice.outOfRoomComputer": "There is no room on this computer to start another program, so this task could not run. Nothing was sent to the AI. It starts again by itself when there is room.",
 } as const;
 
 export type ChatNoticeKey = keyof typeof CHAT_NOTICE;

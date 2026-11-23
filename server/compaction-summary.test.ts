@@ -184,3 +184,10 @@ it("falls back to the excerpt summary, without failing the turn, when the helper
   expect(aborted).toBe(true);
   expect(hanging.booked).toEqual([]);
 });
+
+it("falls back to the deterministic summary when the model writes nothing for a full conversation", async () => {
+  for (const generateText of [async () => "", async () => "   \n ", async () => { throw new Error("model unavailable"); }]) {
+    expect(await draftSummary(history, { signal: new AbortController().signal, generateText })).toBe(deterministicSummary(history));
+  }
+  expect(deterministicSummary(history)).toContain(EXCERPT_SUMMARY_HEADER);
+});

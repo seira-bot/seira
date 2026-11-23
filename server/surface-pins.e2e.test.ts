@@ -1,7 +1,6 @@
 // A restartable fixture home lets tests seed bots.json between boots: the sourceless pin shapes only exist on disk.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -14,6 +13,26 @@ import { decodeCuaConnection } from "./local-computer.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const VPS_ALIAS = "fixture-vps";
+const VPS_FAILURE = "Error response from daemon: the image registry is unreachable.";
+// Docker over SSH on a VPS that has no computer for the bot yet and cannot fetch the image to make one.
+const FAILING_DOCKER = `#!/bin/sh
+case "$*" in
+  *" image inspect "*) echo "Error response from daemon: No such image: seira" >&2; exit 1 ;;
+  *" container ls "*) exit 0 ;;
+  *" inspect "*) echo "Error: No such object: computer" >&2; exit 1 ;;
+  *" pull "*) echo "Error response from daemon: the image registry is unreachable" >&2; exit 1 ;;
+  *) echo "unexpected docker invocation: $*" >&2; exit 64 ;;
+esac
+`;
+const FIXTURE_SSH = `#!/bin/sh
+if [ "$1" = "-F" ]; then shift 2; fi
+case "$*" in
+  "-O check -- ${VPS_ALIAS}") exit 255 ;;
+  "-o BatchMode=yes -o PermitLocalCommand=no -T -- ${VPS_ALIAS} true") exit 0 ;;
+  *) echo "unexpected fixture SSH command: $*" >&2; exit 64 ;;
+esac
+`;
 
 describe("surface pin provenance against the real server", () => {
   let home = "";
@@ -24,12 +43,10 @@ describe("surface pin provenance against the real server", () => {
   let finishFile = "";
   let cuaDescriptor = "";
   let inertBrowser = "";
+  let vpsBin = "";
   let output = "";
   let child: ChildProcess | null = null;
   let base = "";
-  let boatServer: Server;
-  let boatApi = "";
-  let boatDown = false;
 
   const vmState = (state: Record<string, unknown> = {}) => writeFileAtomic(stateFile, JSON.stringify(state));
   const resetTurn = () => { vmState(); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true }); };
@@ -60,8 +77,8 @@ describe("surface pin provenance against the real server", () => {
   }, Boolean);
   const mountedComputer = (sent: any) => sent.mcpConfig.mcpServers.computer;
   // The first screen tools/call, exactly as the mounted proxy issues it: a claim and its pin land on use, not on mount.
-  const gate = (c: any) => fetch(c.env.OMB_CONTROL_URL, {
-    headers: { authorization: `Bearer ${c.env.OMB_CONTROL_TOKEN}` },
+  const gate = (c: any) => fetch(c.env.SEIRA_CONTROL_URL, {
+    headers: { authorization: `Bearer ${c.env.SEIRA_CONTROL_TOKEN}` },
   }).then(response => response.json() as Promise<any>);
   const threadState = (botId: string, threadId: string) =>
     api("GET", "/api/bots?messages=0").then(({ body }) =>
@@ -76,6 +93,29 @@ describe("surface pin provenance against the real server", () => {
     edit(bots.find((bot: any) => bot.id === botId));
     writeRegistry(data, { bots });
   };
+  /** Only the test that needs the VPS has its docker and ssh, so no other test finds them on PATH. */
+  const installFailingVps = () => {
+    writeFileSync(join(vpsBin, "docker"), FAILING_DOCKER, { mode: 0o755 });
+    writeFileSync(join(vpsBin, "ssh"), FIXTURE_SSH, { mode: 0o755 });
+  };
+  const removeFailingVps = () => { for (const name of ["docker", "ssh"]) rmSync(join(vpsBin, name), { force: true }); };
+  const forgetVps = () => api("PUT", "/api/config", { vps: { sshAlias: "" } }).catch(() => {});
+  /** A bot that works on the failing VPS, and a fresh conversation of it. */
+  const vpsBotTask = async (name: string, taskBody: Record<string, unknown> = {}) => {
+    await apiOk("PUT", "/api/config", { vps: { sshAlias: VPS_ALIAS } });
+    const { bot } = await apiOk("POST", "/api/bots", { name });
+    await apiOk("PATCH", `/api/bots/${bot.id}`, { cloudBackend: "vps" });
+    const { task } = await apiOk("POST", `/api/bots/${bot.id}/tasks`, taskBody);
+    const lastRow = async () => {
+      const { messages } = await apiOk("GET", `/api/threads/${task.threadId}/messages?limit=30`);
+      return String(messages.filter((message: any) => message.kind !== "digest").at(-1)?.tool?.name ?? "");
+    };
+    return { bot, task, lastRow };
+  };
+  /** The turn's own select_computer call, as the mounted agents tools make it. */
+  const selectComputer = async (sent: any, surface: string) => (await fetch(base + "/api/internal/computer/select", { method: "POST",
+    headers: { authorization: `Bearer ${sent.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ surface }) })).json();
 
   async function start(withBrowser = false) {
     const port = await freePortBlock([0, 1]);
@@ -85,12 +125,12 @@ describe("surface pin provenance against the real server", () => {
       "--import", pathToFileURL(join(ROOT, "server/testing/desktop-parent.mjs")).href, join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: data,
+        HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: ui, OMB_TEST_VM_STATE: stateFile,
-        OMB_BOAT_API: boatApi, OMB_USER_DATA: join(home, "user-data"), OMB_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
-        ...(withBrowser ? { OMB_AGENT_BROWSER_PATH: inertBrowser, AGENT_BROWSER_EXECUTABLE_PATH: inertBrowser } : {}),
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
+        SEIRA_USER_DATA: join(home, "user-data"), SEIRA_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor, SEIRA_EXTRA_PATH: vpsBin,
+        ...(withBrowser ? { SEIRA_AGENT_BROWSER_PATH: inertBrowser, AGENT_BROWSER_EXECUTABLE_PATH: inertBrowser } : {}),
       }, stdio: ["ignore", "pipe", "pipe"],
     });
     child = proc;
@@ -115,7 +155,7 @@ describe("surface pin provenance against the real server", () => {
   }
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), "omb-surface-pins-"));
+    home = mkdtempSync(join(tmpdir(), "seira-surface-pins-"));
     data = join(home, "data");
     ui = join(home, "static");
     stateFile = join(home, "vm.json");
@@ -124,23 +164,16 @@ describe("surface pin provenance against the real server", () => {
     cuaDescriptor = join(home, "user-data", "cua-connection.json");
     inertBrowser = join(home, "agent-browser");
     writeFileSync(inertBrowser, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    vpsBin = join(home, "fake-vps-bin");
+    mkdirSync(vpsBin);
     vmState();
     mkdirSync(data);
     mkdirSync(join(ui, "assets"), { recursive: true });
     writeFileSync(join(ui, "index.html"), "<title>Surface pins</title>");
     writeFileSync(join(ui, "assets", "test.css"), "body{}");
-    boatServer = createServer(async (req, res) => {
-      res.setHeader("content-type", "application/json");
-      const path = new URL(req.url ?? "/", "http://box.fixture").pathname;
-      if (boatDown && path.startsWith("/sandboxes")) { res.statusCode = 503; return res.end(JSON.stringify({ error: "Fixture Boat unavailable" })); }
-      if (path === "/sandboxes") return res.end(JSON.stringify({ sandboxes: [] }));
-      return res.end("{}");
-    });
-    await new Promise<void>(resolve => boatServer.listen(0, "127.0.0.1", resolve));
-    boatApi = `http://127.0.0.1:${(boatServer.address() as { port: number }).port}`;
     writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
-      // The first computer call is what reaches the Boat, as with a real model.
+      // The first computer call is what claims the computer, as with a real model.
       environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
     }, teammate: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
@@ -149,10 +182,9 @@ describe("surface pin provenance against the real server", () => {
   });
   afterAll(async () => {
     await stop();
-    if (boatServer) await new Promise<void>(resolve => boatServer.close(() => resolve()));
     if (home) await removeTempDir(home);
   });
-  afterEach(async () => { await stop(); resetTurn(); boatDown = false; });
+  afterEach(async () => { await stop(); resetTurn(); removeFailingVps(); });
 
   it("marks a person's thread pin as theirs and clears provenance with the pin", async () => {
     await start();
@@ -380,7 +412,7 @@ describe("surface pin provenance against the real server", () => {
         await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Stay where I pinned you.", threadId: task.threadId });
         const sent = await dump();
         expect(sent.systemPrompt).toContain("You can act on the user's computer");
-        expect(mountedComputer(sent).env.OMB_CUA_COMMAND).toBe("/fixture/cua-driver");
+        expect(mountedComputer(sent).env.SEIRA_CUA_COMMAND).toBe("/fixture/cua-driver");
         expect(mountedComputer(sent).args.some((arg: string) => arg.includes("container-mcp"))).toBe(false);
         writeFileSync(finishFile, "finish");
         await idle(bot.id, task.threadId);
@@ -392,77 +424,57 @@ describe("surface pin provenance against the real server", () => {
     await stop();
   });
 
-  it("clears a select_computer pin to a cloud computer that fails, and keeps a person's pin", async () => {
+  it.skipIf(process.platform === "win32")("clears a select_computer pin to a VPS computer that fails to start, and keeps a person's pin", async () => {
+    installFailingVps();
     await start();
-    const { bot } = await apiOk("POST", "/api/bots", { name: "Failed place bot" });
-    const { task } = await apiOk("POST", `/api/bots/${bot.id}/tasks`, {});
-    await apiOk("PUT", "/api/config", { box: { token: "box_fixture" } });
-    const lastRow = async () => {
-      const { messages } = await apiOk("GET", `/api/threads/${task.threadId}/messages?limit=30`);
-      return String(messages.filter((message: any) => message.kind !== "digest").at(-1)?.tool?.name ?? "");
-    };
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the cloud computer.", threadId: task.threadId });
-    const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
-    const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
-    expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
-    boatDown = true;
-    writeFileSync(finishFile, "finish");
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).toBe("error: Cloud desktops can't start right now. It isn't anything you did. This conversation is back on Auto. Send your message again.");
-    const cleared = savedTask(bot.id, task.threadId)!;
-    expect(cleared.surface).toBeUndefined();
-    expect(cleared.surfaceSource).toBeUndefined();
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Carry on where you can.", threadId: task.threadId });
-    const next = await dump();
-    expect(mountedComputer(next)?.args ?? []).not.toContain("computer");
-    writeFileSync(finishFile, "finish");
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).not.toMatch(/^error:/);
+    const { bot, task, lastRow } = await vpsBotTask("Failed place bot");
+    try {
+      resetTurn();
+      await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the VPS computer.", threadId: task.threadId });
+      expect(await selectComputer(await dump(), "cloud")).toMatchObject({ status: "pending", surface: "cloud" });
+      writeFileSync(finishFile, "finish");
+      await until(() => lastRow(), row => row.startsWith("error:"));
+      await idle(bot.id, task.threadId);
+      expect(await lastRow()).toBe(`error: ${VPS_FAILURE} This conversation is back on Auto. Send your message again.`);
+      const cleared = savedTask(bot.id, task.threadId)!;
+      expect(cleared.surface).toBeUndefined();
+      expect(cleared.surfaceSource).toBeUndefined();
+      resetTurn();
+      await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Carry on where you can.", threadId: task.threadId });
+      const next = await dump();
+      expect(mountedComputer(next)?.args ?? []).not.toContain("computer");
+      writeFileSync(finishFile, "finish");
+      await idle(bot.id, task.threadId);
+      expect(await lastRow()).not.toMatch(/^error:/);
 
-    await apiOk("PATCH", `/api/bots/${bot.id}/tasks/${task.threadId}`, { surface: "cloud" });
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Use the cloud computer.", threadId: task.threadId });
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).toBe("error: Cloud desktops can't start right now. It isn't anything you did. Clear this conversation's place in the composer to continue.");
-    expect(savedTask(bot.id, task.threadId)).toMatchObject({ surface: "cloud", surfaceSource: "user" });
-    boatDown = false;
-    await apiOk("DELETE", `/api/bots/${bot.id}`);
-    await stop();
+      await apiOk("PATCH", `/api/bots/${bot.id}/tasks/${task.threadId}`, { surface: "cloud" });
+      resetTurn();
+      await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Use the VPS computer.", threadId: task.threadId });
+      await until(() => lastRow(), row => row.startsWith("error:"));
+      await idle(bot.id, task.threadId);
+      expect(await lastRow()).toBe(`error: ${VPS_FAILURE} Clear this conversation's place in the composer to continue.`);
+      expect(savedTask(bot.id, task.threadId)).toMatchObject({ surface: "cloud", surfaceSource: "user" });
+      await apiOk("DELETE", `/api/bots/${bot.id}`);
+    } finally { await forgetVps(); }
   });
 
-  it("never takes a relayed line's conversation for where the person writes, when select_computer continues its turn", async () => {
+  it.skipIf(process.platform === "win32")("never takes a relayed line's conversation for where the person writes, when select_computer continues its turn", async () => {
+    installFailingVps();
     await start();
-    const { bot } = await apiOk("POST", "/api/bots", { name: "Relayed place bot" });
     // An Ask thread, as a Slack relay's guarded send expects.
-    const { task } = await apiOk("POST", `/api/bots/${bot.id}/tasks`, { approvalMode: "ask" });
-    await apiOk("PUT", "/api/config", { box: { token: "box_fixture" } });
-    const lastRow = async () => {
-      const { messages } = await apiOk("GET", `/api/threads/${task.threadId}/messages?limit=30`);
-      return String(messages.filter((message: any) => message.kind !== "digest").at(-1)?.tool?.name ?? "");
-    };
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages/guarded`, {
-      threadId: task.threadId, sendId: randomUUID(), text: "Check the dashboard on the cloud computer.", expectedActiveLeafId: null,
-    });
-    const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
-    const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
-    expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
-    boatDown = true;
-    writeFileSync(finishFile, "finish");
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(savedTask(bot.id, task.threadId)).not.toHaveProperty("askedAt");
-    boatDown = false;
-    await apiOk("DELETE", `/api/bots/${bot.id}`);
-    await stop();
+    const { bot, task, lastRow } = await vpsBotTask("Relayed place bot", { approvalMode: "ask" });
+    try {
+      resetTurn();
+      await apiOk("POST", `/api/bots/${bot.id}/messages/guarded`, {
+        threadId: task.threadId, sendId: randomUUID(), text: "Check the dashboard on the VPS computer.", expectedActiveLeafId: null,
+      });
+      expect(await selectComputer(await dump(), "cloud")).toMatchObject({ status: "pending", surface: "cloud" });
+      writeFileSync(finishFile, "finish");
+      await until(() => lastRow(), row => row.startsWith("error:"));
+      await idle(bot.id, task.threadId);
+      expect(savedTask(bot.id, task.threadId)).not.toHaveProperty("askedAt");
+      await apiOk("DELETE", `/api/bots/${bot.id}`);
+    } finally { await forgetVps(); }
   });
 
   it("lets a teammate's hand-off move to the built-in browser only, and returns the result from there", async () => {
@@ -482,7 +494,7 @@ describe("surface pin provenance against the real server", () => {
     const { task: own } = await apiOk("POST", `/api/bots/${asker.id}/tasks`, {});
     resetTurn();
     await apiOk("POST", `/api/bots/${asker.id}/messages`, { text: "Ask Tester to check the site.", threadId: own.threadId });
-    const askerToken = (await dump()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const askerToken = (await dump()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const handed = await fetch(base + "/api/internal/coordinate-bots", { method: "POST",
       headers: { authorization: `Bearer ${askerToken}`, "content-type": "application/json" },
       body: JSON.stringify({ botIds: [tester.id], message: "Sign in to the shop and check the order page." }) });
@@ -492,7 +504,7 @@ describe("surface pin provenance against the real server", () => {
       if (!existsSync(teammateDump)) return null;
       try { return JSON.parse(readFileSync(teammateDump, "utf8")); } catch { return null; }
     }, Boolean);
-    const token = (await teammateTurn()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await teammateTurn()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const select = (body?: unknown) => fetch(base + "/api/internal/computer/select", { method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const offered = await (await select()).json() as any;
@@ -515,7 +527,7 @@ describe("surface pin provenance against the real server", () => {
     expect(JSON.stringify(moved.prompt)).toContain("Continue the handed-off request");
     expect(moved.mcpConfig.mcpServers.browser).toBeDefined();
     expect(savedTask(tester.id, workThread)).toMatchObject({ surface: "browser" });
-    const resumedToken = (await dump()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const resumedToken = (await dump()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const resumedOffer = await (await fetch(base + "/api/internal/computer/select", {
       headers: { authorization: `Bearer ${resumedToken}` } })).json() as any;
     expect(resumedOffer.canSelect).not.toBe(true);

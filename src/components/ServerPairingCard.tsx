@@ -92,6 +92,8 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
   const [pairingCodes, setPairingCodes] = useState(initialPairingCodes);
   const [computerName, setComputerName] = useState<string | null>(null);
   const [scope, setScope] = useState<"admin" | "client">("admin");
+  const mainKind = forComputer ? "computer" : "phone";
+  const [offerFor, setOfferFor] = useState<"phone" | "computer">(mainKind);
   const [offer, setOffer] = useState<PairingOffer | null>(null);
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
@@ -163,16 +165,18 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
       </div>
     );
   }
-  const dialogTitle = forComputer ? t("devices.computers.pairTitle") : t("phone.pair.dialogTitle", { place: placeName });
+  const computerCode = offerFor === "computer";
+  const dialogTitle = computerCode ? t("devices.computers.pairTitle") : t("phone.pair.dialogTitle", { place: placeName });
   const expired = offer ? offer.expiresAt <= now : false;
   const listed = shownDevices(devices, cloudHome);
 
-  async function create() {
+  async function create(kind: "phone" | "computer" = mainKind) {
     setBusy(true);
     setError(null);
     setCopied("idle");
+    setOfferFor(kind);
     try {
-      const body: PairingOffer = await api("/api/auth/pairing", { method: "POST", body: JSON.stringify({ scopes: scope === "admin" || cloudHome ? ["admin", "client"] : ["client"] }) });
+      const body: PairingOffer = await api("/api/auth/pairing", { method: "POST", body: JSON.stringify({ scopes: scope === "admin" || cloudHome ? ["admin", "client"] : ["client"], ...(kind === "computer" ? { device: "computer" } : {}) }) });
       setOffer(body);
       setNow(Date.now());
     } catch (e) {
@@ -192,7 +196,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
     }
   }
 
-  const forOtherComputer = forComputer && offer ? computerLink(offer, address) : null;
+  const forOtherComputer = computerCode && offer ? computerLink(offer, address) : null;
   const link = forOtherComputer?.link ?? offer?.url ?? null;
   async function copyLink() {
     if (!link) return;
@@ -201,8 +205,8 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
   }
 
   // A code for another computer is typed there, so the phone-only parts (QR, phone notes) stay out.
-  const secretNote = offer && !forComputer ? phoneSecretNote(offer) : null;
-  const sameWifiOnly = !forComputer && sameWifiOnlyLink(offer?.url ?? null);
+  const secretNote = offer && !computerCode ? phoneSecretNote(offer) : null;
+  const sameWifiOnly = !computerCode && sameWifiOnlyLink(offer?.url ?? null);
   const offerPanel = pairingCodes && offer ? (
     <Layer modal>
       <div role="dialog" aria-modal="true" aria-label={dialogTitle} data-settings-look="simple" data-pair-dialog="code"
@@ -214,14 +218,14 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
           ) : (
             <div className="flex flex-col items-start gap-4">
               {/* The code is the dialog's centre: the QR sits in the middle, and the words under it run the full width. */}
-              {offer.url && !forComputer ? (
+              {offer.url && !computerCode ? (
                 <div data-pair-qr="" className="self-center rounded-[12px] bg-white p-3 shadow-[inset_0_0_0_0.5px_var(--settings-edge)]">
                   <QRCodeSVG value={offer.url} size={200} level="M" bgColor="#ffffff" fgColor="#111111" />
                 </div>
               ) : null}
               {/* One 14/20 ink instruction, then 12/16 secondary notes. */}
               <div className="flex flex-col gap-1" data-pair-instructions="">
-                {forComputer ? <p className="text-[14px] leading-5 text-ink">{t("devices.computers.typeCode", { app: productName() })}</p> : offer.url ? <>
+                {computerCode ? <p className="text-[14px] leading-5 text-ink">{t("devices.computers.typeCode", { app: productName() })}</p> : offer.url ? <>
                   <p className="text-[14px] leading-5 text-ink">{t("phone.code.installAndScan", { app: productName() })}</p>
                   <p className="text-[12px] leading-4 text-ink-secondary">{t("phone.code.notCamera", { app: productName() })}</p>
                 </> : <p className="text-[14px] leading-5 text-ink">{t("phone.code.typeThis", { app: productName() })}</p>}
@@ -237,7 +241,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
                 <div className="text-[20px] font-medium leading-7 tracking-[0.08em] text-ink tabular-nums" data-pairing-code="">{offer.code}</div>
                 <div className="text-[12px] leading-4 text-ink-secondary">{codeUntil(offer.expiresAt)}</div>
               </div>
-              {forComputer && !cloudHome ? null : <p className="text-[12px] leading-4 text-ink-secondary">{t(cloudHome ? "phone.pair.cloudPersonal" : "remote.serverPairing.subtitle", { app: productName() })}</p>}
+              {computerCode && !cloudHome ? null : <p className="text-[12px] leading-4 text-ink-secondary">{t(cloudHome ? "phone.pair.cloudPersonal" : "remote.serverPairing.subtitle", { app: productName() })}</p>}
               {secretNote ? <p data-pair-no-phone-secrets="" className="text-[12px] leading-4 text-ink-secondary">{secretNote}</p> : null}
               {sameWifiOnly ? <p data-pair-same-wifi="" className="text-[12px] leading-4 text-ink-secondary">{t("remote.serverPairing.sameWifiOnly", { app: productName() })}</p> : null}
             </div>
@@ -248,7 +252,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
                 {t(copied === "copied" ? "remote.serverPairing.copied" : copied === "failed" ? "common.copyFailed" : "remote.serverPairing.copyLink")}
               </button>
             )}
-            {expired && <button type="button" className="ui-button" onClick={() => void create()}>{t("remote.serverPairing.create")}</button>}
+            {expired && <button type="button" className="ui-button" onClick={() => void create(offerFor)}>{t("remote.serverPairing.create")}</button>}
             <button type="button" className={cn("ui-button", (expired || !forOtherComputer) && "ui-button-primary")} onClick={() => setOffer(null)}>{t("devices.pair.done")}</button>
             {!expired && forOtherComputer && (
               <button type="button" onClick={() => void copyLink()} className="ui-button ui-button-primary" data-copy-link="">
@@ -264,8 +268,19 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
   const pairButton = (
     <button type="button" data-phone-pairing-action={reveal ? "" : undefined} data-settings-drop="" onClick={() => void create()} disabled={busy || !pairingCodes}
       className={cn("ui-button ui-button-primary", !pairingCodes && "opacity-40")}>
-      {busy ? t("remote.serverPairing.creating") : pairLabel}
+      {busy && offerFor === mainKind ? t("remote.serverPairing.creating") : pairLabel}
     </button>
+  );
+  const computerRow = forComputer || cloudHome ? null : (
+    <SettingsGroup block="pair-computer">
+      <SettingsRows>
+        <SettingRow title={t("devices.computers.pairTitle")} subtitle={t("devices.computers.pairLine")} message={pairingCodes ? undefined : t("remote.serverPairing.portalShort")}>
+          <button type="button" data-pair-computer="" onClick={() => void create("computer")} disabled={busy || !pairingCodes} className={cn("ui-button", !pairingCodes && "opacity-40")}>
+            {busy && offerFor === "computer" ? t("remote.serverPairing.creating") : t("devices.computers.pairButton")}
+          </button>
+        </SettingRow>
+      </SettingsRows>
+    </SettingsGroup>
   );
   const choices = !simple && pairingCodes && !cloudHome ? (
     <Select variant="ghost" value={scope} aria-label={t("remote.serverPairing.title")} onChange={(event) => setScope(event.target.value === "client" ? "client" : "admin")}>
@@ -316,6 +331,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
             {!pairingCodes && <p data-server-pairing-portal className="px-4 text-[12px] leading-4 text-ink-secondary">{t("remote.serverPairing.portal")}</p>}
           </SettingsGroup>
       )}
+      {computerRow}
       {error ? <p className="px-4 text-[12px] leading-4 text-danger">{error}</p> : null}
     </div>
   );

@@ -17,6 +17,8 @@ finish-args:
   - --socket=wayland
   - --socket=pulseaudio
   - --device=dri
+  # Host agent programs start in the task folders of the data folder, so it must have the same path on both sides.
+  - --filesystem=~/.seira:create
   - --talk-name=org.freedesktop.Notifications
   # Agent programs live on the host. The server starts them with flatpak-spawn --host.
   - --talk-name=org.freedesktop.Flatpak

@@ -69,7 +69,7 @@ function harness(
   autoApply?: DirectApplyCheck,
 ) {
   const clock = { now: start };
-  const dir = mkdtempSync(join(tmpdir(), "omb-routine-request-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-routine-request-"));
   tempDirs.push(dir);
   const routines = new RoutineManager({
     file: join(dir, "routines.json"),
@@ -118,7 +118,7 @@ describe("RoutineRequestService", () => {
   it("refuses instruction replacement after redaction without saving a card or changing other fields", async () => {
     const { routines, service, store } = harness();
     const prompt = "Review the queue.\n".repeat(180) + "Use sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789.";
-    const saved = routines.create({ name: "Private instructions", prompt, botId: "bot-a", target: "bot", runOn: "maus", enabled: false,
+    const saved = routines.create({ name: "Private instructions", prompt, botId: "bot-a", target: "bot", runOn: "seira", enabled: false,
       durationMinutes: 30, schedule: { type: "interval", everyMinutes: 60, anchorAt: Date.now() + 3_600_000 } });
     const submit = (changes: unknown) => service.submit({ botId: "bot-a", threadId: "thread-a", proposal: { action: "update", routineId: saved.id, changes } });
     const before = structuredClone(routines.listRoutines());
@@ -256,6 +256,20 @@ describe("RoutineRequestService", () => {
     expect(appended.every((card) => card.dismissed && card.options.length === 0)).toBe(true);
     expect(store.messagesFor("full-thread").every((message) => message.card?.answered === "allow")).toBe(true);
     expect(autoApply).toHaveBeenLastCalledWith("bot-a", "full-thread", "bot-a");
+  });
+
+  it("keeps a moved automation paused when an agent asks to resume it or run it now, and tells it where to choose", async () => {
+    const { service, routines } = harness();
+    const submit = (proposal: RoutineProposalInput) => service.submit({ botId: "bot-a", threadId: "full-thread", proposal });
+    const routineId = (await submit(createProposal())).result!.resultId;
+    await submit({ action: "pause", routineId });
+    (routines as unknown as { routines: Array<{ id: string; placeLost?: true }> }).routines.find((routine) => routine.id === routineId)!.placeLost = true;
+    const refusal = expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
+    await expect(submit({ action: "resume", routineId })).rejects.toEqual(refusal);
+    await expect(submit({ action: "run_now", routineId })).rejects.toEqual(refusal);
+    await expect(submit({ action: "update", routineId, changes: { name: "Renamed" } })).resolves.toMatchObject({ state: "applied" });
+    expect(routines.listRoutines().find((routine) => routine.id === routineId)).toMatchObject({ enabled: false, placeLost: true });
+    expect(routines.listRuns()).toEqual([]);
   });
 
   it("reads the grant after cloud readiness for the log, applies either way, and preserves scope validation", async () => {
@@ -1007,7 +1021,7 @@ describe("RoutineRequestService", () => {
     await service.propose({
       botId: "bot-a",
       threadId: "thread-a",
-      proposal: { action: "update", routineId: routine.id, changes: { runOn: "maus" } },
+      proposal: { action: "update", routineId: routine.id, changes: { runOn: "seira" } },
     });
     await service.propose({
       botId: "bot-a",
@@ -1122,7 +1136,7 @@ describe("RoutineRequestService", () => {
       botId: "bot-a",
       name: "Morning brief",
       prompt: "Summarize the overnight support queue.",
-      runOn: "maus",
+      runOn: "seira",
       enabled: true,
       schedule: { type: "daily", time: "09:00", weekdays: [1, 3] },
       durationMinutes: 5,
@@ -1701,7 +1715,7 @@ describe("RoutineRequestService", () => {
 describe("cross-bot routine targeting", () => {
   function targetedHarness(validateTarget?: (proposerBotId: string, target: { botId: string; name: string }) => string | null) {
     const clock = { now: Date.parse("2026-08-28T10:00:00Z") };
-    const dir = mkdtempSync(join(tmpdir(), "omb-routine-target-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-routine-target-"));
     tempDirs.push(dir);
     const routines = new RoutineManager({
       file: join(dir, "routines.json"),

@@ -9,3 +9,7 @@ export const gitConfig = {
   repo: 'seira',
   branch: 'main',
 };
+export const organizationName = 'Seira';
+export const organizationUrl = 'https://seira.bot';
+export const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+export const playStoreUrl = 'https://play.google.com/store/apps/details?id=bot.seira.companion';

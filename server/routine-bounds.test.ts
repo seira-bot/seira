@@ -10,7 +10,7 @@ import type { RoutineManagerOptions, RoutineRun } from "./routines.ts";
 
 const MINUTE = 60_000, HOUR = 60 * MINUTE;
 const run = (more: Partial<RoutineRun> = {}): RoutineRun => ({
-  id: "run", routineId: "r", routineName: "Check", target: "bot", botId: "bot-1", runOn: "maus", scheduledFor: 0, status: "running", manual: false, createdAt: 0, startedAt: 0, ...more,
+  id: "run", routineId: "r", routineName: "Check", target: "bot", botId: "bot-1", runOn: "seira", scheduledFor: 0, status: "running", manual: false, createdAt: 0, startedAt: 0, ...more,
 });
 /** Scheduler passes a minute apart from `from` to `to`, as while a run works. */
 const passes = (row: RoutineRun, clock: RunClock, from: number, to: number) => {
@@ -70,6 +70,16 @@ describe("the run limit", () => {
     clock.from(row, "workedMs", 0);
     expect(passes(row, clock, MINUTE, 3 * HOUR - MINUTE)).toBeNull();
     expect(runOverLimit(row, clock, 3 * HOUR)).toEqual({ text: "Stopped: this run ran longer than the 3-hour limit", codes: { errorCode: "routines.server.overLimit", errorParams: { hours: 3 } } });
+  });
+
+  it("gives a workflow run twelve hours of work, and not a minute for its waits", () => {
+    const row = run({ workflowId: "wf-1" }), clock = new RunClock();
+    clock.from(row, "workedMs", 0);
+    expect(passes(row, clock, MINUTE, 12 * HOUR - MINUTE)).toBeNull();
+    expect(runOverLimit(row, clock, 12 * HOUR)).toMatchObject({ codes: { errorCode: "routines.server.overLimit", errorParams: { hours: 12 } } });
+    const resting = run({ workflowId: "wf-1", status: "waiting", workedMs: 11 * HOUR });
+    expect(runOverLimit(resting, new RunClock(), 40 * HOUR)).toBeNull();
+    expect(runLimitAt(resting, 40 * HOUR)).toBeNull();
   });
 
   it("gives a room goal's run, which stays running across its members' turns, twelve hours", () => {

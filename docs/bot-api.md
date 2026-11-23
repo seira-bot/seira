@@ -11,7 +11,7 @@ The key is shown that once and kept hashed; when the card is opened again the
 command shows `YOUR_KEY` in its place. **New key** replaces the key (apps using
 the old one stop working); switching the card off forgets it. Only someone who
 may edit the bot can switch it on, mint a key or switch it off; each of those
-is a **Bot API** row in Settings → Activity.
+is a **Bot API** row in Settings → Data → Activity.
 
 ## Plans
 
@@ -32,7 +32,7 @@ curl -X POST "https://your.domain/hooks/api/bots/<botId>/messages" \
 The address lives under the webhook receiver's `/hooks` path, so wherever this
 bot's webhooks are reachable (a Cloud's public name, a self-hosted edge that
 forwards `/hooks/*` as [deploy/Caddyfile](../deploy/Caddyfile) does, or
-`OMB_WEBHOOK_PUBLIC_URL`) the API is too; nothing new to open.
+`SEIRA_WEBHOOK_PUBLIC_URL`) the API is too; nothing new to open.
 
 The JSON body takes:
 
@@ -111,11 +111,11 @@ Who and where:
   Anyone who may manage the key can take the mark off.
 - Never on a team's Cloud or a shared or hosted workspace (one with members on
   its sign-in list), except a hosted workspace whose operator set the
-  dedicated policy `OMB_SHARED_WORKSPACE_FULL_ACCESS=1`, where an admin may.
+  dedicated policy `SEIRA_SHARED_WORKSPACE_FULL_ACCESS=1`, where an admin may.
 - Never for guest links or webhooks: only a Bot API key carries it.
 - **New key** starts without the mark, and switching the API off forgets it.
   Marking and unmarking, including the mark a new key or switching the API off
-  clears, are **Bot API** rows in Settings → Activity, a call
+  clears, are **Bot API** rows in Settings → Data → Activity, a call
   taken this way shows "as you" among the card's calls, and every viewer of
   the card sees whether the key acts as the owner.
 

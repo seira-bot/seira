@@ -2,6 +2,7 @@ import type { Surface } from "../shared/wire.ts";
 import { canWorkOnCloud, type CloudEngine } from "../shared/cloud-computer.ts";
 import { canUseMcpServer } from "../shared/tool-scope.ts";
 import { placeRowText, type PlaceRow, type PlaceSource } from "../shared/place-view.ts";
+import { failedTurnTool } from "../shared/failed-turn.ts";
 import { PLAIN_WORDS } from "./local-computer-guidance.ts";
 import { theirComputer, type LentPlatform } from "./lent-computers.ts";
 export type { Surface, PlaceSource };
@@ -32,8 +33,8 @@ export function parseSurface(value: unknown): Surface | undefined {
   return typeof value === "string" && SURFACES.has(value) ? (value as Surface) : undefined;
 }
 
-export function surfaceOfComputerKind(kind: "box" | "vps" | "vm" | "local" | null): Surface | null {
-  if (kind === "box" || kind === "vps") return "cloud";
+export function surfaceOfComputerKind(kind: "vps" | "vm" | "local" | null): Surface | null {
+  if (kind === "vps") return "cloud";
   return kind;
 }
 
@@ -82,27 +83,6 @@ function placeOf(input: { destination: Destination; pinnedSurface?: Surface | nu
     return { computer: destination, browser: browserOn, pinned: null, note: "" };
   }
   return { computer: undefined, browser: browserOn, pinned: null, note: "" };
-}
-
-/** On Auto, work handed over by another bot runs on the receiving bot's own cloud computer when it has one (asleep or awake): the handoff cannot pick a place itself. Auto still never creates one; Works on, a pin, a person's turn and a consult keep their usual place. */
-/** Work another bot handed over: a child node (a person's own root also runs as "work" when it resumes), never a consult. */
-export function isHandedWork(node: { parentId?: string; mode: string } | undefined): boolean {
-  return Boolean(node?.parentId && node.mode !== "consult");
-}
-
-export function handoffUsesOwnCloud(input: { plan: Pick<SurfacePlan, "computer">; handoffWork: boolean; ownCloudState: string | null | undefined }): boolean {
-  return input.handoffWork && input.plan.computer === undefined && Boolean(input.ownCloudState);
-}
-
-/** Best effort: an unreachable Boat service counts as no cloud computer after `ms`, so a handoff still starts promptly.
- * `unavailable` marks a failed or slow lookup, which is not a confirmed "no cloud computer". */
-export function ownCloudStateWithin(status: Promise<{ box?: { state?: string | null } | null }>, ms = 3_000): Promise<{ state: string | null | undefined; unavailable: boolean }> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const unavailable = { state: undefined, unavailable: true };
-  return Promise.race([
-    status.then((result) => ({ state: result.box?.state, unavailable: false }), () => unavailable),
-    new Promise<typeof unavailable>((resolve) => { timer = setTimeout(() => resolve(unavailable), ms); }),
-  ]).finally(() => clearTimeout(timer));
 }
 
 /** Opens the built-in browser for a turn. Beside a computer it is extra: a browser that fails to open is left out and
@@ -157,6 +137,34 @@ export class PlaceUnavailableError extends Error {
 export function placeUnavailable(place: Surface, row: PlaceRow, cloudHome = false): PlaceUnavailableError {
   return new PlaceUnavailableError(place, row, cloudHome);
 }
+
+/** A Cloud pick with no cloud computer behind it: the bot does not work on a VPS, or no VPS is set up. The turn goes on with no computer; it is never moved to this one or a VM. */
+export function cloudPickWithoutComputer(input: {
+  wants: ComputerWant;
+  /** The bot works on a VPS, and one is set up for it: its own alias or the install's default. */
+  vpsConfigured: boolean;
+  routine: boolean;
+  cloudHome: boolean;
+}): boolean {
+  return input.wants === "cloud" && !input.vpsConfigured && !input.routine && !input.cloudHome;
+}
+
+export function withoutCloudComputerRow(bot: string, source: PlaceSource): PlaceRow {
+  return { state: "cc-not-set-up", params: { bot }, source };
+}
+
+/** One notice a conversation: a turn that went on without a computer says so, and a restart does not repeat it. */
+export function noticeWithoutCloudComputer(
+  thread: { messagesFor(threadId: string): Array<{ tool?: { notice?: true; place?: { state?: string } } }>; appendMessage(threadId: string, message: any): unknown },
+  bot: string, threadId: string, source: PlaceSource,
+): void {
+  const row = withoutCloudComputerRow(bot, source);
+  if (thread.messagesFor(threadId).some((message) => message.tool?.notice && message.tool.place?.state === row.state)) return;
+  thread.appendMessage(threadId, { role: "bot", kind: "activity", tool: failedTurnTool(placeRowText(row), { place: row, notice: true }) });
+}
+
+export const WITHOUT_CLOUD_COMPUTER_NOTE =
+  " This bot is set to a cloud computer, but none is set up, so no desktop computer is mounted this turn and this stays so for the whole request: do not offer, select or switch to another computer; the person moves a conversation only by their own choice in the place control. You cannot open, click or check anything on a computer's screen. The built-in browser is the only screen you may have, and only when its tools are listed this turn. Work that needs no screen can go ahead. If the request needs a desktop, do not claim to have used one: say that no cloud computer is set up and that the person can connect their own server or change where this bot works.";
 
 export function surfaceLabel(surface: Surface): string {
   switch (surface) {

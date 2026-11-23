@@ -1,10 +1,12 @@
-// Email sign-in codes sent through the server's own mail server (OMB_SIGNIN_SMTP_URL) instead of the OpenMausBot account
+// Email sign-in codes sent through the server's own mail server (SEIRA_SIGNIN_SMTP_URL) instead of the Seira account
 // service. A code is 8 digits, works once for ten minutes and for five tries, and only its hash is kept, in memory.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 
 export const SIGNIN_CODE_TTL_MS = 10 * 60_000;
 export const SIGNIN_CODE_RESEND_MS = 30_000;
 export const SIGNIN_CODE_TRIES = 5;
+export const SIGNIN_CODES_PER_ADDRESS = 3;
+export const SIGNIN_CODES_PER_ADDRESS_ALL = 10;
 const MAX_PENDING = 1_000;
 
 export interface MailMessage {
@@ -23,7 +25,8 @@ export type CodeCheck = "ok" | "format" | "wrong" | "tooMany";
 export interface SignInMail {
   /** "tooSoon": a code went to this address moments ago; it still works. */
   /** `target` names the server the code signs in to, so a code asked for elsewhere is recognised as not this one. */
-  send(email: string, target?: string | null): Promise<"sent" | "tooSoon">;
+  /** `source`: who asked, so one source cannot use up the codes another source may ask for. */
+  send(email: string, target?: string | null, source?: string): Promise<"sent" | "tooSoon">;
   check(email: string, code: string): CodeCheck;
 }
 
@@ -38,9 +41,9 @@ export function smtpOptions(url: string) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new SignInMailError("OMB_SIGNIN_SMTP_URL is not a URL such as smtps://user:password@smtp.example.com:465");
+    throw new SignInMailError("SEIRA_SIGNIN_SMTP_URL is not a URL such as smtps://user:password@smtp.example.com:465");
   }
-  if (parsed.protocol !== "smtps:" && parsed.protocol !== "smtp:") throw new SignInMailError("OMB_SIGNIN_SMTP_URL must start with smtps:// or smtp://");
+  if (parsed.protocol !== "smtps:" && parsed.protocol !== "smtp:") throw new SignInMailError("SEIRA_SIGNIN_SMTP_URL must start with smtps:// or smtp://");
   const secure = parsed.protocol === "smtps:";
   const user = decodeURIComponent(parsed.username);
   return {
@@ -59,30 +62,61 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
   let transport: Promise<MailTransport> | undefined = options.transport ? Promise.resolve(options.transport) : undefined;
   const from = (): string => {
     const named = options.from?.trim() || smtpOptions(options.url).auth?.user || "";
-    if (!named.includes("@")) throw new SignInMailError("set OMB_SIGNIN_SMTP_FROM to the address sign-in codes come from");
+    if (!named.includes("@")) throw new SignInMailError("set SEIRA_SIGNIN_SMTP_FROM to the address sign-in codes come from");
     return named;
   };
+  const sentAt = new Map<string, number[]>();
+  const sentAtAll = new Map<string, number[]>();
   const prune = () => {
     for (const [email, entry] of pending) if (now() - entry.sentAt >= SIGNIN_CODE_TTL_MS) pending.delete(email);
+    for (const map of [sentAt, sentAtAll]) {
+      for (const [key, times] of map) {
+        const recent = times.filter((time) => now() - time < SIGNIN_CODE_TTL_MS);
+        if (recent.length) map.set(key, recent);
+        else map.delete(key);
+      }
+    }
   };
   return {
-    async send(email, target) {
+    async send(email, target, source = "") {
+      const quota = `${source}\n${email}`;
       prune();
       const open = pending.get(email);
       if (open && now() - open.sentAt < SIGNIN_CODE_RESEND_MS) return "tooSoon";
       if (!open && pending.size >= MAX_PENDING) return "tooSoon";
+      if ((sentAt.get(quota)?.length ?? 0) >= SIGNIN_CODES_PER_ADDRESS) return "tooSoon";
+      if ((sentAtAll.get(email)?.length ?? 0) >= SIGNIN_CODES_PER_ADDRESS_ALL) return "tooSoon";
       const sender = from();
       transport ??= import("nodemailer").then(({ createTransport }) => createTransport(smtpOptions(options.url)));
       const code = String(randomInt(0, 100_000_000)).padStart(8, "0");
       pending.set(email, { hash: digest(code), sentAt: now(), tries: 0 });
+      sentAt.set(quota, [...(sentAt.get(quota) ?? []), now()]);
+      sentAtAll.set(email, [...(sentAtAll.get(email) ?? []), now()]);
       try {
         await (await transport).sendMail({
           from: sender, to: email, subject: target ? `Your Seira sign-in code for ${target}` : "Your Seira sign-in code",
-          text: `Your code to sign in to ${target ?? "Seira"} is\n\n    ${code.slice(0, 4)} ${code.slice(4)}\n\nIt works once, for the next ten minutes.\n`
-            + "If you did not ask to sign in, ignore this email: nobody gets in without the code.\n",
+          text: [
+            `Your code to sign in to ${target ?? "Seira"}:`,
+            "",
+            code,
+            "",
+            "Do not share this code with anyone.",
+            "Did not ask for this code? Ignore this email. Nothing changes.",
+            "",
+            "--",
+            ...(target ? [`Sent by the Seira server at ${target}`] : []),
+            "seira.bot",
+            "",
+          ].join("\n"),
         });
       } catch (error) {
         pending.delete(email);
+        for (const [map, key] of [[sentAt, quota], [sentAtAll, email]] as const) {
+          const times = map.get(key) ?? [];
+          times.pop();
+          if (times.length) map.set(key, times);
+          else map.delete(key);
+        }
         throw error;
       }
       return "sent";

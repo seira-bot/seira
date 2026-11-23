@@ -18,7 +18,7 @@ export type FailoverWhy = "limit" | "signed-out";
 /** Stop reasons drivers settle a turn with that may be shown as they are; any other becomes "other". */
 const STOP_CODES: ReadonlySet<string> = new Set(["ok", "interrupted", "auth_required", "rpc_error", "shutdown_timeout", "provider_safety",
   "update_required", "spawn_error", "quota", "tool_error", "exit_before_result", "error_during_execution", "error", "failed", "cap",
-  "max_tokens", "stalled", "stdin_write_failed", "timeout", "waiting_on_person", "other"]);
+  "max_tokens", "context_full", "stalled", "stdin_write_failed", "timeout", "waiting_on_person", "other"]);
 /** Why drivers say they retry (classifyError's reasons and the chat runtime's own); any other becomes "other". */
 const RETRY_CODES: ReadonlySet<string> = new Set(["rate_limited", "overloaded", "server_error", "connection_reset", "timeout", "auth", "quota",
   "unknown_model", "invalid_request", "not_found", "interrupted", "unknown", "provider_safety", "terminal_exit", "tool_limit", "request_too_large",

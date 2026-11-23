@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, openSync, readFileSync, renameSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
@@ -37,7 +38,7 @@ let searchWorker: MessageSearchWorker | null = null;
 let closingSearch: Promise<void> = Promise.resolve();
 
 function open(): DatabaseSync {
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   const file = DB_FILE();
   // Transcripts are private: owner-only mode, also repairing an existing file's permissive umask.
   closeSync(openSync(file, "a", 0o600));
@@ -137,7 +138,7 @@ const UPSERT_MESSAGE =
   "INSERT INTO messages (thread_id, id, at, role, kind, text, json, search_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
   "ON CONFLICT(thread_id, id) DO UPDATE SET at = excluded.at, role = excluded.role, kind = excluded.kind, " +
   "text = excluded.text, json = excluded.json, search_text = excluded.search_text";
-const messageRow = (threadId: string, message: Message) =>
+export const messageRow = (threadId: string, message: Message) =>
   [threadId, message.id, message.at, message.role, message.kind, message.text ?? null, JSON.stringify(message), cjkSearchText(message.text)] as const;
 
 const ACTIVE_LEAF = "SELECT active_leaf_id FROM thread_state WHERE thread_id = ?";
@@ -167,7 +168,7 @@ export function prepared(sql: string): StatementSync {
 }
 
 let transactionDepth = 0;
-function transaction<T>(fn: (database: DatabaseSync) => T): T {
+export function transaction<T>(fn: (database: DatabaseSync) => T): T {
   const database = db();
   if (transactionDepth > 0) {
     const savepoint = `command_${transactionDepth}`;

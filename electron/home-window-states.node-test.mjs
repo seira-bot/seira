@@ -121,7 +121,7 @@ test("Remove from list on this computer's screen: the Admin first, then the wind
 });
 
 // A computer whose bots moved to one Cloud of the person's while My Cloud is now another (several Clouds per account).
-const MOVED_TO = "https://omb-trial-1.fly.dev";
+const MOVED_TO = "https://seira-trial-1.fly.dev";
 test("a freeze that names another Cloud on the person's own list is theirs, never another account's; one not on it is said to be another account's", async () => {
   const listed = world({ journal: null, marker: { frozen: true, cloud: CLIENT }, state: { ...connected(), clouds: [CLIENT_A] } });
   await listed.home.show();
@@ -179,4 +179,31 @@ test("what a launch may open now, by the session's word alone: a running Cloud o
   await out.home.refresh();
   assert.equal(out.home.opensNow("cloud"), null);
   assert.equal(out.home.opensNow({ team: ACME.id }), null);
+});
+
+test("a team the session lists with no machine has no Cloud to open: never its plan screen; asked for, the window stays on the place it keeps, and a remembered one is forgotten", async () => {
+  const bare = (role = "member") => ({ ...connected(), teams: [{ ...ACME, role, machine: null }] });
+  for (const role of ["member", "admin", "owner"]) {
+    const w = world({ state: bare(role) });
+    await w.home.show({ place: { team: "team-acme" } });
+    assert.notEqual(w.home.view()?.screen, "plan", role);
+    assert.deepEqual(w.went.at(-1), [CLOUD, CLOUD], `${role}: My Cloud, the place the window keeps`);
+    assert.deepEqual([w.teamPairs, w.remembers, w.left], [[], [], []], `${role}: nothing paired, kept or said`);
+    assert.equal(w.home.opensNow({ team: "team-acme" }), false, role);
+  }
+  const kept = world({ state: { ...bare(), clouds: [CLIENT_A] }, remembered: { cloud: "c-a" } });
+  await kept.home.show({ place: { team: "team-acme" } });
+  assert.equal(kept.home.placeOrigin(), CLIENT, "another Cloud of their own stays on screen");
+  assert.deepEqual([kept.remembers, kept.teamPairs], [[{ cloud: "c-a" }], []]);
+  const launch = world({ state: bare(), remembered: { team: "team-acme", name: "Acme", origin: TEAM } });
+  await launch.home.show();
+  assert.notEqual(launch.home.view()?.screen, "plan");
+  assert.deepEqual([launch.went.at(-1), launch.remembers, launch.left, launch.teamPairs], [[CLOUD, CLOUD], [null], [], []], "remembered: forgotten, My Cloud, nothing said");
+  const shown = world({ state: { ...connected(), teams: [ACME] }, remembered: { team: "team-acme", name: "Acme", origin: TEAM } });
+  await shown.home.show();
+  assert.equal(shown.home.placeOrigin(), TEAM);
+  shown.state = bare();
+  await shown.home.changed();
+  assert.deepEqual([shown.went.at(-1), shown.remembers.at(-1), shown.left], [[CLOUD, CLOUD], null, []], "its machine gone while shown: My Cloud");
+  assert.notEqual(shown.home.view()?.screen, "plan");
 });

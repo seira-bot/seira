@@ -7,8 +7,9 @@ import { agentToolAnnotations } from "../agent-tool-policy.ts";
 import { CHAT_CARD_TOOL_DEFINITIONS } from "./agents-chat-card-tools.ts";
 import { DEVS_TOOL_DEFINITIONS } from "./agents-devs-tools.ts";
 import { HELPER_TOOL_DEFINITIONS } from "./agents-helper-tools.ts";
-import { USAGE_LIMITS_TOOL_DEFINITION } from "./agents-usage-tool.ts";
+import { MACHINE_BUDGET_TOOL_DEFINITION, USAGE_LIMITS_TOOL_DEFINITION } from "./agents-usage-tool.ts";
 import { APP_SETTINGS_TOOL_DEFINITION } from "./agents-app-settings-tool.ts";
+import { WORKFLOW_TOOL_DEFINITION } from "./agents-workflow-tool.ts";
 import { THREAD_POST_TOOL_DEFINITION } from "./agents-thread-post-tool.ts";
 import { RENAME_THREAD_TOOL_DEFINITION } from "./agents-thread-title-tool.ts";
 import { WAIT_TOOL_DEFINITIONS, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
@@ -16,10 +17,11 @@ import { COMPUTER_ASK_TOOL_DEFINITIONS, COMPUTER_ASK_TOOL_NAMES } from "./agents
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { HOSTING_TOOL_DEFINITIONS, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
 import { MEETING_TOOL_DEFINITIONS, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
-import { MAUSBOT_TOOL_DEFINITIONS } from "./agents-mausbot-tools.ts";
+import { SEIRA_TOOL_DEFINITIONS } from "./agents-seira-tools.ts";
 import { PERSON_TOOL_DEFINITIONS } from "./agents-person-tools.ts";
 import { RESEARCH_TOOL_DEFINITIONS, RESEARCH_TOOL_NAMES, X_TOOL_NAMES } from "./agents-research-tools.ts";
 import { SHARE_TOOL_DEFINITIONS } from "./agents-share-tool.ts";
+import { TEAM_TOOL_DEFINITIONS } from "./agents-team-tool.ts";
 import type { CatalogProfile } from "./agents-catalog-profile.ts";
 import { advertisedSchema } from "./agents-schema.ts"; import { withoutToolsOff } from "./agents-tool-groups.ts";
 export { catalogProfileFromEnv, type CatalogProfile } from "./agents-catalog-profile.ts";
@@ -95,9 +97,9 @@ const TRIGGER_FIELDS_SCHEMA = {
   event_config: { type: "object", description: "app_event: config_fields from trigger_info action=events." },
   run_on: {
     type: "string",
-    // "box" is Boat's historical run_on destination id (agents wire contract).
-    enum: ["maus", "box"],
-    description: "Omit normally: maus (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
+    // "box" stays in the enum: released agents send it (agents wire contract).
+    enum: ["seira", "box"],
+    description: "Omit normally: seira (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
   },
   timeout_minutes: { type: "integer", minimum: 5, maximum: 240, description: "Schedules: optional limit on a run, 5 to 240." },
   clear_timeout: { type: "boolean", description: "Update: true removes the limit." },
@@ -199,6 +201,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: { type: "object", properties: {} },
   },
   USAGE_LIMITS_TOOL_DEFINITION,
+  MACHINE_BUDGET_TOOL_DEFINITION,
   {
     name: "list_rooms",
     description:
@@ -213,20 +216,6 @@ const TOOL_DEFINITIONS = [
       surface: { type: "string", enum: ["auto", "cloud", "vm", "local", "browser"],
         description: "auto = suitable configured computer, cloud = the bot's cloud computer or self-hosted VPS, vm = isolated Local VM, local = user's own desktop, browser = built-in browser. Omit to list." },
     } },
-  },
-  {
-    name: "reset_cloud_computer",
-    description:
-      "Reset your cloud computer when it is stuck: it is deleted with everything on it once your turn ends, and your next turn makes a fresh one. Only for a stuck computer. End your turn after calling it." + CHIEF_PROFILE_TARGET,
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        why: { type: "string", description: "One sentence shown in the chat: what is wrong with the computer." },
-        for_bot_id: { type: "string", description: "Chief of Staff only: the bot whose cloud computer to reset, from list_bots." },
-      },
-      required: ["why"],
-    },
   },
   {
     name: "list_threads",
@@ -511,7 +500,7 @@ const TOOL_DEFINITIONS = [
       required: ["text"],
     },
   },
-  ...RESEARCH_TOOL_DEFINITIONS, ...HELPER_TOOL_DEFINITIONS, ...IMAGE_TOOL_DEFINITIONS, ...MEETING_TOOL_DEFINITIONS, ...PERSON_TOOL_DEFINITIONS, ...DEVS_TOOL_DEFINITIONS, ...HOSTING_TOOL_DEFINITIONS, ...SHARE_TOOL_DEFINITIONS,
+  ...RESEARCH_TOOL_DEFINITIONS, ...HELPER_TOOL_DEFINITIONS, ...IMAGE_TOOL_DEFINITIONS, ...MEETING_TOOL_DEFINITIONS, ...PERSON_TOOL_DEFINITIONS, ...DEVS_TOOL_DEFINITIONS, ...HOSTING_TOOL_DEFINITIONS, ...SHARE_TOOL_DEFINITIONS, ...TEAM_TOOL_DEFINITIONS,
   {
     name: "memory_update",
     description:
@@ -541,6 +530,19 @@ const TOOL_DEFINITIONS = [
         note: { type: "string", description: "Optional: one sentence for the teammate about what to watch for this time." },
       },
       required: ["bot_id", "thread_id"],
+    },
+  },
+  {
+    name: "board_close",
+    description:
+      "Move a Board card from Needs you to Done as closed, with your reason, when the person no longer needs to act on it. It does not rerun or cancel any work. Without card_id it lists the Needs you cards you may close.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        card_id: { type: "string", description: "The card's id from the list. Omit to list the cards you may close." },
+        reason: { type: "string", minLength: 1, maxLength: 200, description: "Required with card_id: why the card is done, in one plain sentence." },
+      },
     },
   },
   {
@@ -587,15 +589,15 @@ const TOOL_DEFINITIONS = [
   {
     name: "trigger_info",
     description:
-      "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet.",
+      "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet. workflows: the saved workflows (steps under Automations → Workflows) that include this bot, with their steps, and the automations that run each; call it first when the person says workflow.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        action: { type: "string", enum: ["list", "events"] },
+        action: { type: "string", enum: ["list", "events", "workflows"] },
         trigger_id: { type: "string", description: "Full instructions and fires; edit redactions in Automations." },
         include_address: { type: "boolean", description: "list, with a webhook's trigger_id: also its private address. For the bot that owns it, or a Chief of Staff." },
-        for_bot_id: { type: "string", description: "list: ANOTHER bot's triggers in your section, from list_bots." },
+        for_bot_id: { type: "string", description: "list, workflows: ANOTHER bot's triggers or workflows in your section, from list_bots." },
         app: { type: "string", description: "events: optional app slug, e.g. gmail." },
         search: { type: "string", description: "events: optional words in event names." },
       },
@@ -605,7 +607,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "trigger",
     description:
-      "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
+      "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. A schedule that runs a saved workflow takes workflow_id instead of instructions; to change what it does, change the workflow's steps under Automations → Workflows. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -614,6 +616,10 @@ const TOOL_DEFINITIONS = [
         trigger_id: { type: "string", description: "Not for create: from trigger_info." },
         when: { type: "string", enum: ["schedule", "app_event", "webhook", "limit_reset"] },
         ...TRIGGER_FIELDS_SCHEMA,
+        workflow_id: {
+          type: ["string", "null"],
+          description: "when=schedule: the id of a saved workflow (trigger_info action=workflows, or the workflow tool) that each run does instead of instructions. Its first step's bot owns the automation. update: null stops running it and needs instructions.",
+        },
         app: { type: "string", description: "app_event: slug from trigger_info action=events." },
         event: { type: "string", description: "app_event: slug from trigger_info action=events." },
         account: { type: "string", description: "app_event: only when the app has several accounts." },
@@ -639,6 +645,7 @@ const TOOL_DEFINITIONS = [
     },
   },
   ...WAIT_TOOL_DEFINITIONS,
+  WORKFLOW_TOOL_DEFINITION,
   ...COMPUTER_ASK_TOOL_DEFINITIONS,
   {
     name: "propose_profile",
@@ -799,9 +806,9 @@ const SKILL_TOOL_NAMES = new Set(["skills_list", "skill_manage"]);
 export const SHARED_COMPUTER_TOOL_NAMES = new Set(["list_shared_computers", "shared_computer"]);
 const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);
 const CHIEF_ONLY_TOOL_NAMES = new Set([
-  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread",
+  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread", "suggest_team",
 ]);
-const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model", "reset_cloud_computer"]);
+const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model"]);
 const CHIEF_TARGET_FIELDS = new Set(["for_bot_id", "browserProfile"]);
 const WATCHER_TOOL_NAMES = new Set(["create_options_card"]);
 
@@ -834,7 +841,7 @@ export function availableTools(profile: CatalogProfile) {
   return placed.map((tool) => ({ ...tool, inputSchema: advertisedSchema(tool.inputSchema, tool.description) }));
 }
 
-const FULL_INPUT_SCHEMAS = new Map<string, unknown>([...TOOL_DEFINITIONS, ...MAUSBOT_TOOL_DEFINITIONS].map((tool) => [tool.name, tool.inputSchema]));
+const FULL_INPUT_SCHEMAS = new Map<string, unknown>([...TOOL_DEFINITIONS, ...SEIRA_TOOL_DEFINITIONS].map((tool) => [tool.name, tool.inputSchema]));
 
 /** A tool's input schema as the catalog writes it, before tools/list leaves anything out: what every call is held to. */
 export function fullInputSchema(name: string): unknown {
@@ -848,7 +855,7 @@ function catalogTools(profile: CatalogProfile) {
     (profile.computerSelection === true || tool.name !== "select_computer") &&
     (profile.room !== true || !ROOM_REFUSED_TOOL_NAMES.has(tool.name)) &&
     (profile.imageGeneration === true || !IMAGE_TOOL_NAMES.has(tool.name)) && (profile.appHosting === true || !HOSTING_TOOL_NAMES.has(tool.name)) &&
-    (profile.meetings === true || (!MEETING_TOOL_NAMES.has(tool.name) && tool.name !== "reset_cloud_computer")));
+    (profile.meetings === true || !MEETING_TOOL_NAMES.has(tool.name)));
   const AUTHORING_TOOLS = profile.skillAuthoring
     ? BOT_SCOPED_TOOLS
     : BOT_SCOPED_TOOLS.filter((tool) => !SKILL_TOOL_NAMES.has(tool.name));
@@ -868,5 +875,5 @@ function catalogTools(profile: CatalogProfile) {
       const properties = Object.fromEntries(Object.entries(tool.inputSchema.properties).filter(([key]) => !CHIEF_TARGET_FIELDS.has(key)));
       return { ...tool, description: tool.description.replace(CHIEF_PROFILE_TARGET, ""), inputSchema: { ...tool.inputSchema, properties } };
     });
-  return [...ROLE_TOOLS, ...(profile.mausbot === true ? MAUSBOT_TOOL_DEFINITIONS : [])];
+  return [...ROLE_TOOLS, ...(profile.seira === true ? SEIRA_TOOL_DEFINITIONS : [])];
 }

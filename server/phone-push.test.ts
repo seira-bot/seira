@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,14 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PUSH_KINDS, phonePushCollapseId } from "../shared/phone-push.ts";
 import {
   MAX_PUSH_DEVICES,
-  PHONE_PUSH_DESKTOP_MESSAGE,
   PHONE_PUSH_FILE,
   PUSH_COALESCE_MS,
   PUSH_DEVICE_WINDOW_MAX,
   PUSH_MAX_AGE_MS,
   PUSH_RETRY_MS,
   PhonePush,
-  PhonePushAccessSource,
   RELAY_UNAVAILABLE_PAUSE_MS,
   phonePushEnabled,
   phonePushNotification,
@@ -21,8 +19,8 @@ import {
   type PhonePushOptions,
 } from "./phone-push.ts";
 
-const CREDENTIAL = `omb_install_${"a".repeat(22)}.${"b".repeat(43)}`;
-const ACCESS = { controlPlane: "https://accounts.openmausbot.test", credential: CREDENTIAL };
+const CREDENTIAL = `seira_install_${"a".repeat(22)}.${"b".repeat(43)}`;
+const ACCESS = { relay: "https://push.seira.test", credential: CREDENTIAL };
 const APNS = "ab".repeat(32);
 const APNS_2 = "cd".repeat(32);
 const FCM = `fcmInstance_1:APA91b${"x".repeat(140)}`;
@@ -53,7 +51,7 @@ let clock: number;
 let timers: Array<{ run: () => void; at: number }>;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-phone-push-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-phone-push-"));
   clock = 1_000_000;
   timers = [];
 });
@@ -109,12 +107,12 @@ const notification = (overrides: Record<string, unknown> = {}) => ({
 const everyone = () => true;
 
 describe("phone push switch", () => {
-  it("is off unless config or OMB_PHONE_PUSH turns it on, and the variable wins", () => {
+  it("is off unless config or SEIRA_PHONE_PUSH turns it on, and the variable wins", () => {
     expect(phonePushEnabled({}, {})).toBe(false);
     expect(phonePushEnabled({ features: { phonePush: true } }, {})).toBe(true);
-    expect(phonePushEnabled({ features: { phonePush: true } }, { OMB_PHONE_PUSH: "0" })).toBe(false);
-    expect(phonePushEnabled({}, { OMB_PHONE_PUSH: "1" })).toBe(true);
-    expect(phonePushEnabled({ features: { phonePush: false } }, { OMB_PHONE_PUSH: "yes" })).toBe(false);
+    expect(phonePushEnabled({ features: { phonePush: true } }, { SEIRA_PHONE_PUSH: "0" })).toBe(false);
+    expect(phonePushEnabled({}, { SEIRA_PHONE_PUSH: "1" })).toBe(true);
+    expect(phonePushEnabled({ features: { phonePush: false } }, { SEIRA_PHONE_PUSH: "yes" })).toBe(false);
   });
 
   it("switched off, keeps nothing, sends nothing and says so", async () => {
@@ -390,27 +388,70 @@ describe("the push's identifier and title", () => {
   });
 });
 
-describe("where the relay credential comes from", () => {
-  const tunnelFile = () => join(dataDir, "tunnel-account.json");
-
-  it("prefers the desktop app's message, including its 'none'", () => {
-    writeFileSync(tunnelFile(), JSON.stringify({ companionInstallationCredential: CREDENTIAL }));
-    const source = new PhonePushAccessSource({ env: { OMB_PUSH_CREDENTIAL: CREDENTIAL }, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.openmausbot.com" });
-    expect(source.receive({ type: "something-else" })).toBe(false);
-    expect(source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: { controlPlane: "https://accounts.openmausbot.com/", credential: CREDENTIAL } })).toBe(true);
-    expect(source.current()).toEqual({ controlPlane: "https://accounts.openmausbot.com", credential: CREDENTIAL });
-    source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: null });
-    expect(source.current()).toBeNull();
-    source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: { controlPlane: "http://evil.example", credential: CREDENTIAL } });
-    expect(source.current()).toBeNull();
+describe("the relay credential", () => {
+  it("is asked for before a phone registers, and a phone registers with the one that came back", async () => {
+    let access: typeof ACCESS | null = null;
+    const prepared: string[] = [];
+    const { push, relay } = harness({ access: () => access, prepare: async () => { prepared.push("prepare"); access = ACCESS; } });
+    const answer = await push.register(PHONE, { platform: "fcm", token: FCM });
+    expect(prepared).toEqual(["prepare"]);
+    expect(answer).toMatchObject({ push: "on", relay: "registered" });
+    expect(relay.calls.map((call) => [call.path, call.authorization])).toEqual([["/v1/installations/self/push/register", `Bearer ${CREDENTIAL}`]]);
   });
 
-  it("then OMB_PUSH_CREDENTIAL, a fleet's credential, then `seira login`'s file", () => {
-    const at = (env: NodeJS.ProcessEnv) => new PhonePushAccessSource({ env, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.openmausbot.com" }).current();
-    expect(at({})).toBeNull();
-    writeFileSync(tunnelFile(), JSON.stringify({ companionInstallationCredential: CREDENTIAL }));
-    expect(at({})).toEqual({ controlPlane: "https://accounts.openmausbot.com", credential: CREDENTIAL });
-    expect(at({ OMB_PUSH_CREDENTIAL: "not-a-credential" })).toBeNull();
-    expect(at({ OMB_INSTALLATION_CREDENTIAL: CREDENTIAL, OMB_CONTROL_PLANE_URL: "http://127.0.0.1:8787" })).toEqual({ controlPlane: "http://127.0.0.1:8787", credential: CREDENTIAL });
+  it("is not asked for, and the relay is not called, while push is off or no phone is registered", async () => {
+    let prepared = 0;
+    const { push, relay, setEnabled } = harness({ prepare: async () => { prepared += 1; } });
+    await push.keepAccess();
+    expect(prepared).toBe(0);
+    setEnabled(false);
+    await push.register(PHONE, { platform: "fcm", token: FCM });
+    await push.keepAccess();
+    push.offer({ notification: notification(), seq: 1 }, everyone);
+    await push.flush();
+    expect(prepared).toBe(0);
+    expect(relay.calls).toEqual([]);
+    setEnabled(true);
+    await push.register(PHONE, { platform: "fcm", token: FCM });
+    await push.keepAccess();
+    expect(prepared).toBe(2);
+  });
+
+  it("says no-account and keeps the phone when no credential could be had", async () => {
+    const { push, relay } = harness({ access: () => null, prepare: async () => {} });
+    const answer = await push.register(PHONE, { platform: "fcm", token: FCM });
+    expect(answer).toMatchObject({ push: "no-account", relay: "off", device: { platform: "fcm" } });
+    expect(relay.calls).toEqual([]);
+  });
+
+  it("retries a push with a new credential when the relay refused the saved one", async () => {
+    let access: typeof ACCESS | null = ACCESS;
+    const renewed = { ...ACCESS, credential: `seira_install_${"c".repeat(22)}.${"d".repeat(43)}` };
+    const refusedWith: string[] = [];
+    const { push, relay } = harness({
+      access: () => access,
+      prepare: async () => { access ??= renewed; },
+      refused: (credential) => { refusedWith.push(credential); access = null; return true; },
+    });
+    await push.register(PHONE, { platform: "fcm", token: FCM });
+    relay.answers.push({ status: 401, error: "unauthorized" });
+    push.offer({ notification: notification(), seq: 1 }, everyone);
+    await push.flush();
+    expect(refusedWith).toEqual([CREDENTIAL]);
+    expect(push.pending()).toBe(1);
+    await advance(push, PUSH_RETRY_MS[0]);
+    expect(relay.sends().map((call) => call.authorization)).toEqual([`Bearer ${CREDENTIAL}`, `Bearer ${renewed.credential}`]);
+    expect(push.pending()).toBe(0);
+  });
+
+  it("leaves the relay alone for an hour when it refuses a credential that cannot be renewed", async () => {
+    const { push, relay } = harness({ refused: () => false });
+    await push.register(PHONE, { platform: "fcm", token: FCM });
+    relay.answers.push({ status: 401, error: "unauthorized" });
+    push.offer({ notification: notification(), seq: 1 }, everyone);
+    await push.flush();
+    push.offer({ notification: notification({ threadId: "th_2" }), seq: 2 }, everyone);
+    await advance(push, RELAY_UNAVAILABLE_PAUSE_MS - 1);
+    expect(relay.sends()).toHaveLength(1);
   });
 });

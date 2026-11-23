@@ -11,7 +11,7 @@ import type { TeamConnectionsHost } from "./team-connections-host.ts";
 const remote = (url = "https://data.example.com/mcp"): StoredMcpServer => ({ type: "http", url, headers: {}, enabled: false }) as StoredMcpServer;
 
 function fixture(options: { refuse?: (name: string) => string | undefined; personal?: string[]; keys?: Parameters<typeof createMcpConfig>[0]["keys"] } = {}) {
-  const cfg: Pick<AppConfig, "mcpServers" | "postiz"> = { mcpServers: {} };
+  const cfg: Pick<AppConfig, "mcpServers"> = { mcpServers: {} };
   const mcpOAuth = new McpOAuthManager({ file: join(DATA_DIR, "mcp-config-oauth.json") });
   const forget = vi.spyOn(mcpOAuth, "forget");
   const changed = vi.fn();

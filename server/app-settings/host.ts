@@ -3,6 +3,7 @@
 // owner-only setting is only explained.
 import { randomUUID } from "node:crypto";
 
+import { APP_FEATURES, findAppFeatures, type AppFeature } from "../../shared/app-features.ts";
 import { isSettingsCardId, SETTINGS_CARD_IDS, type AppSettingRequest, type SettingsCardId } from "../../shared/app-settings.ts";
 import { appendDecision } from "../decision-log.ts";
 import { UNDO_STALE } from "../direct-apply.ts";
@@ -11,13 +12,15 @@ import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { ThemeTool } from "../themes/tool.ts";
 import { cardElsewhere, cardNotInRoom, cardShownStatus, SETTINGS_CARDS } from "./cards.ts";
 import type { TakenPicture } from "./picture-file.ts";
-import { findPlaces, placePath, placesList } from "./places.ts";
+import { findPlaces, findUiPlaces, placePath, placesList } from "./places.ts";
 import { findSettings, personOnly, type SettingEntry, type WritableEntry } from "./registry.ts";
 
 export const TOOL = "app_settings";
 export const WRITE_BUDGET = 10;
 const THEME_ACTIONS: readonly string[] = ["theme", "set_theme", "add_theme_asset", "theme_history", "undo_theme"];
 const FIND_LIMIT = 8;
+const FEATURE_LIMIT = 5;
+const featureLine = (feature: AppFeature) => `${feature.name} — ${feature.place}: ${feature.does}${feature.tools?.length ? ` (tools: ${feature.tools.join(", ")})` : ""}`;
 const NOT_SET = "not set";
 const text = (value: string) => value || NOT_SET;
 /** What a card and the bot see of a change: before → after, or, with no `before`, one line saying what it does. */
@@ -201,13 +204,19 @@ export function createAppSettings(deps: AppSettingsDeps) {
         const query = typeof body.query === "string" ? body.query : "";
         const hits = findSettings(entries, query, FIND_LIMIT).map(describe);
         if (hits.length) return reply(200, { text: JSON.stringify(hits) });
-        const places = findPlaces(query);
+        const places = [...findPlaces(query), ...findUiPlaces(query, 3)];
         return reply(200, { text: `No setting you can change matches ${JSON.stringify(query)}.${places.length ? ` Where the person finds it in the app: ${places.join("; ")}.` : " Try other words, or use action places."}` });
       }
       if (body.action === "places") {
         const query = typeof body.query === "string" ? body.query.trim() : "";
-        const places = query ? findPlaces(query) : [];
-        return reply(200, { text: query ? (places.length ? places.join("\n") : `No place in the app matches ${JSON.stringify(query)}. Here is every place:\n${placesList()}`) : placesList() });
+        const places = query ? [...findPlaces(query), ...findUiPlaces(query)] : [];
+        return reply(200, { text: query ? (places.length ? places.join("\n") : `No place in the app matches ${JSON.stringify(query)}. Say you do not know where it is, or try other words; do not name a menu or button you were not given.`) : `${placesList()}\nThe rest of the app (sidebar, chat header, message box, messages, Automations, Board, People, Inbox, Files, Apps) is searched with words: pass query, for example "automations calendar".` });
+      }
+      if (body.action === "features") {
+        const query = typeof body.query === "string" ? body.query.trim() : "";
+        if (!query) return reply(200, { text: APP_FEATURES.map((feature) => `${feature.name} — ${feature.place}`).join("\n") });
+        const hits = findAppFeatures(query, FEATURE_LIMIT);
+        return reply(200, { text: hits.length ? hits.map(featureLine).join("\n") : `No feature of the app matches ${JSON.stringify(query)}. Here is every feature:\n${APP_FEATURES.map((feature) => `${feature.name} — ${feature.place}`).join("\n")}` });
       }
       if (body.action === "get") {
         const entry = typeof body.id === "string" ? byId.get(body.id) : undefined;
@@ -218,7 +227,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
       if (body.action === "set") return set(turn, body);
       if (body.action === "show_card") return showCard(turn, body);
       if (typeof body.action === "string" && THEME_ACTIONS.includes(body.action)) return theme(turn, body);
-      return refuse(400, `action must be find, get, set, show_card, places, ${THEME_ACTIONS.join(", ")}.`);
+      return refuse(400, `action must be find, get, set, show_card, places, features, ${THEME_ACTIONS.join(", ")}.`);
     },
 
     /** Undo on an applied card: restores the value read before the change, unless it changed since. */

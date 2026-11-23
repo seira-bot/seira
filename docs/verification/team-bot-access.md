@@ -11,7 +11,7 @@ pnpm exec vitest run server/cloud-team-bot-access.e2e.test.ts server/bot-access.
   server/bot-visibility.test.ts src/components/bot-access src/state/team-chats.test.ts src/components/settings/settings-index.test.ts
 ```
 
-- `server/cloud-team-bot-access.e2e.test.ts` starts a real Team Cloud (`OMB_CLOUD_ROLE=team`) with the Owner (Olive),
+- `server/cloud-team-bot-access.e2e.test.ts` starts a real Team Cloud (`SEIRA_CLOUD_ROLE=team`) with the Owner (Olive),
   an Admin (Ada) and four Users paired with the Admin's signed claims, and the synthetic Claude CLI. Payroll is shared
   with Bob to view, Cara to chat and Dan to edit; Eve is not added. As each of them it tries every route a member
   reaches: the bot list (each copy's `yourAccess`, the sharing only on an editor's), its chat, export, a room with it,
@@ -32,7 +32,7 @@ pnpm exec vitest run server/cloud-team-bot-access.e2e.test.ts server/bot-access.
   changes the bot, a relayed message, and who may be added.
 - `server/host/access-requests.test.ts`: the admins decide when the owner is gone, one admin's Allow settles every
   copy, the owner alone decides while on the team, Not now gives nothing.
-- `src/components/bot-access/AccessOverview.dom.test.ts`: Settings → Bot access lists each team bot (no one's own
+- `src/components/bot-access/AccessOverview.dom.test.ts`: Settings → People → Bot access lists each team bot (no one's own
   Seira) with its owner, a plain summary and a stack of faces (+N past four); a row opens the Share dialog; the search
   takes a bot's name or owner; By person lists each User, and opening one gives their bots at the same level menus, with
   Remove only for their own access; the empty states; "Ask Cara to chat" asks and says so, "Ask an admin to chat" when
@@ -112,7 +112,7 @@ checkout of the code before levels.
 
 ```sh
 pnpm exec vitest run server/cloud-team-private-default.e2e.test.ts server/new-bot-sharing.test.ts server/host/share-notice.test.ts
-OMB_UI_E2E=1 OMB_TEAM_PRIVATE_SHOTS=/tmp/private-shots pnpm exec vitest run scripts/testing/team-private-default-ui.e2e.test.ts
+SEIRA_UI_E2E=1 SEIRA_TEAM_PRIVATE_SHOTS=/tmp/private-shots pnpm exec vitest run scripts/testing/team-private-default-ui.e2e.test.ts
 ```
 
 The first runs a real Team Cloud with an Owner, an Admin and two Users and makes a bot every way one comes to exist

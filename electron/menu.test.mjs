@@ -36,11 +36,11 @@ describe("buildApplicationMenu", () => {
 
   it.each(["darwin", "linux", "win32"])("lists a saved local environment by its folder, so switching servers never fails on %s", platform => {
     const onSwitch = vi.fn();
-    const local = { id: "e1", kind: "local", name: "Work", dataDir: "/Users/me/.openmausbot-work" };
+    const local = { id: "e1", kind: "local", name: "Work", dataDir: "/Users/me/.seira-work" };
     const tailnet = { id: "t1", name: "Mac mini", origin: "https://mac-mini.tail1f3f14.ts.net" };
     const template = build(platform, { environments: [local, tailnet], activeId: "t1", onSwitch });
     const items = template.find(entry => entry.label === "Server").submenu;
-    expect(items.find(entry => entry.label === "Work — /Users/me/.openmausbot-work")).toMatchObject({ checked: false });
+    expect(items.find(entry => entry.label === "Work — /Users/me/.seira-work")).toMatchObject({ checked: false });
     expect(items.find(entry => entry.label === "Mac mini — mac-mini.tail1f3f14.ts.net")).toMatchObject({ checked: true });
     items.find(entry => entry.label.startsWith("Work")).click();
     expect(onSwitch).toHaveBeenCalledWith("e1");
@@ -115,10 +115,10 @@ describe("buildApplicationMenu", () => {
   });
 
   it("mirrors Add a Cloud… under the saved servers only when main offers it, and names My Cloud's line", () => {
-    const servers = [{ id: "cloud", name: "My Cloud", origin: "https://omb-u-1.fly.dev" }];
+    const servers = [{ id: "cloud", name: "My Cloud", origin: "https://seira-u-1.fly.dev" }];
     const without = build("darwin", { environments: servers }).find(entry => entry.label === "Server").submenu;
     expect(without.some(entry => entry.id === "add-cloud")).toBe(false);
-    expect(without.find(entry => entry.type === "radio" && entry.label.startsWith("My Cloud")).label).toBe("My Cloud — omb-u-1.fly.dev");
+    expect(without.find(entry => entry.type === "radio" && entry.label.startsWith("My Cloud")).label).toBe("My Cloud — seira-u-1.fly.dev");
     const onAddCloud = vi.fn();
     const submenu = build("darwin", { environments: servers, onAddCloud, sublabels: { cloud: "Always on" } }).find(entry => entry.label === "Server").submenu;
     expect(submenu.map(entry => entry.id ?? entry.label ?? entry.type).slice(0, 4)).toEqual(["This computer", "My Cloud — Always on", "add-cloud", "separator"]);
@@ -128,7 +128,7 @@ describe("buildApplicationMenu", () => {
   });
 
   it("once My Cloud is home, lists only the other saved servers with Back to My Cloud, and has no Server menu without any", () => {
-    const home = { origin: "https://omb-t-1.fly.dev", onBack: vi.fn() };
+    const home = { origin: "https://seira-t-1.fly.dev", onBack: vi.fn() };
     const cloud = { id: "c", name: "My Cloud", origin: home.origin };
     const office = { id: "o", name: "Office", origin: "https://office.example.test" };
     const alone = build("darwin", { environments: [cloud], activeId: "c", home });
@@ -163,13 +163,13 @@ describe("buildApplicationMenu", () => {
       fileMenu: ["close"],
       editMenu: ["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll", "-",
         ["showSubstitutions", "-", "toggleSmartQuotes", "toggleSmartDashes", "toggleTextReplacement"], ["startSpeaking", "stopSpeaking"]],
-      viewMenu: ["reload", "forceReload", "toggleDevTools", "-", "resetZoom", "zoomIn", "zoomOut", "-", "togglefullscreen"],
+      viewMenu: ["reload", "forceReload", "toggleDevTools", "-", "-", "togglefullscreen"],
       windowMenu: ["minimize", "zoom", "-", "front"],
     },
     win32: {
       fileMenu: ["quit"],
       editMenu: ["undo", "redo", "-", "cut", "copy", "paste", "delete", "-", "selectAll"],
-      viewMenu: ["reload", "forceReload", "toggleDevTools", "-", "resetZoom", "zoomIn", "zoomOut", "-", "togglefullscreen"],
+      viewMenu: ["reload", "forceReload", "toggleDevTools", "-", "-", "togglefullscreen"],
       windowMenu: ["minimize", "zoom", "close"],
     },
   };
@@ -200,5 +200,37 @@ describe("buildApplicationMenu", () => {
     expect(build("win32")[0].submenu.at(-1).label).toBe("Exit");
     expect(build("linux")[0].submenu.at(-1).label).toBe("Quit");
     expect(build("linux").find((entry) => entry.role === "windowMenu").submenu.at(-1).label).toBe("Close");
+  });
+
+  it.each(["darwin", "win32", "linux"])("AC-05 AC-06 the View menu's zoom items move the text size, with the shortcuts, on %s", (platform) => {
+    const zoom = { zoomIn: vi.fn(), zoomOut: vi.fn(), reset: vi.fn() };
+    const view = build(platform, { zoom }).find((entry) => entry.role === "viewMenu").submenu;
+    const item = (id) => view.find((entry) => entry.id === id);
+    expect(item("actual-size")).toMatchObject({ label: "Actual Size", accelerator: "CmdOrCtrl+0" });
+    expect(item("zoom-in")).toMatchObject({ label: "Zoom In", accelerator: "CmdOrCtrl+Plus" });
+    expect(item("zoom-in-equals")).toMatchObject({ label: "Zoom In", accelerator: "CmdOrCtrl+=", visible: false, acceleratorWorksWhenHidden: true });
+    expect(item("zoom-out")).toMatchObject({ label: "Zoom Out", accelerator: "CmdOrCtrl+-" });
+    expect(view.some((entry) => ["resetZoom", "zoomIn", "zoomOut"].includes(entry.role))).toBe(false);
+    item("zoom-in").click(); item("zoom-in-equals").click(); item("zoom-out").click(); item("actual-size").click();
+    expect(zoom.zoomIn).toHaveBeenCalledTimes(2);
+    expect(zoom.zoomOut).toHaveBeenCalledOnce();
+    expect(zoom.reset).toHaveBeenCalledOnce();
+    expect(() => item("zoom-in").click()).not.toThrow();
+  });
+
+  it("AC-12 puts a Glance checkbox in the View menu, only when Glance is offered, and a click turns it the other way", () => {
+    const onToggle = vi.fn();
+    for (const platform of ["darwin", "linux", "win32"]) {
+      const view = (template) => template.find((entry) => entry.role === "viewMenu").submenu;
+      expect(view(build(platform)).some((item) => item.id === "glance")).toBe(false);
+      const on = view(build(platform, { glance: { checked: true, onToggle } })).find((item) => item.id === "glance");
+      expect(on).toMatchObject({ type: "checkbox", checked: true });
+      expect(typeof on.label).toBe("string");
+      on.click();
+      expect(onToggle).toHaveBeenLastCalledWith(false);
+      const off = view(build(platform, { glance: { checked: false, onToggle } })).find((item) => item.id === "glance");
+      off.click();
+      expect(onToggle).toHaveBeenLastCalledWith(true);
+    }
   });
 });

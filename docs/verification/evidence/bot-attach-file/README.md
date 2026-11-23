@@ -28,7 +28,7 @@ Cloud/VPS file transfer and mobile file rendering are outside this change.
 
 Captured on 2026-09-19 against upstream `main` (v0.1.84) with a real Claude Code CLI
 (2.1.251) running Z.ai `glm-5.3`, a per-bot Podman Local VM desktop, and the
-production build served by the real `server/index.ts` (`OMB_STATIC_DIR`) on a
+production build served by the real `server/index.ts` (`SEIRA_STATIC_DIR`) on a
 disposable data directory. Every assistant message in the session transcript records
 `glm-5.3`.
 
@@ -169,7 +169,7 @@ After:
 
 ## Not covered
 
-- Only the Local VM path was run end to end. Cloud boat and VPS computers were not;
+- Only the Local VM path was run end to end. Cloud and VPS computers were not;
   `vm_exec` is Local VM only.
 - The group/room view got the same "no bubble for attachment-only messages" change; it
   was type- and test-checked but not looked at in a real room.

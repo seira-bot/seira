@@ -6,15 +6,15 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { acquireDataDirLease, releaseOnceAtExit } from "./data-dir-lease.ts";
+import { acquireDataDirLease, acquireDataDirLeaseOrExit, releaseOnceAtExit, runningServerLine } from "./data-dir-lease.ts";
 
 const MODULE_URL = pathToFileURL(join(process.cwd(), "server", "data-dir-lease.ts")).href;
 const dirs: string[] = [];
 
 function tempDataDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "omb-data-dir-lease-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-data-dir-lease-"));
   dirs.push(dir);
   return dir;
 }
@@ -57,7 +57,7 @@ describe("Seira data-directory lease", () => {
   it("holds one directory until its matching handle releases it", () => {
     const dir = tempDataDir();
     const lease = acquireDataDirLease(dir);
-    const stored = JSON.parse(readFileSync(join(dir, "openmausbot-server.lease"), "utf8"));
+    const stored = JSON.parse(readFileSync(join(dir, "seira-server.lease"), "utf8"));
 
     // boot/uptime identify which boot wrote the record, so a pid recycled
     // across a restart cannot be mistaken for a live owner, and ns/start which
@@ -89,7 +89,7 @@ describe("Seira data-directory lease", () => {
 
   it("will not release a lease whose owner token changed", () => {
     const dir = tempDataDir();
-    const path = join(dir, "openmausbot-server.lease");
+    const path = join(dir, "seira-server.lease");
     const lease = acquireDataDirLease(dir);
     const original = JSON.parse(readFileSync(path, "utf8"));
     const replacement = { ...original, token: randomUUID() };
@@ -155,7 +155,7 @@ describe("Seira data-directory lease", () => {
 
   it("fails closed on a corrupt owner record", () => {
     const dir = tempDataDir();
-    const path = join(dir, "openmausbot-server.lease");
+    const path = join(dir, "seira-server.lease");
     writeFileSync(path, "not-json\n", { mode: 0o600 });
 
     expect(() => acquireDataDirLease(dir)).toThrow(/lease is invalid.*refusing to start/i);
@@ -176,5 +176,41 @@ describe("Seira data-directory lease", () => {
     }
     expect(calls).toBe(1);
     expect(logged).toEqual(["[data-directory] lease release failed: gone"]);
+  });
+});
+
+describe("a second start while a live Seira holds the data folder", () => {
+  const PLAIN = "Seira is already running with this data. It may still be starting. Wait a minute, or stop it, then start again.";
+
+  it("names the live holder in plain words and nothing when the folder is free", () => {
+    const dir = tempDataDir();
+    expect(runningServerLine(dir)).toBeNull();
+    const lease = acquireDataDirLease(dir);
+    expect(runningServerLine(dir)).toBe(PLAIN);
+    lease.release();
+    expect(runningServerLine(dir)).toBeNull();
+  });
+
+  it("exits with one plain line instead of a stack trace and keeps the live holder's lease", () => {
+    const dir = tempDataDir();
+    const holder = acquireDataDirLease(dir);
+    const printed: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((line: unknown) => { printed.push(String(line)); });
+    const exit = vi.fn((code: number): never => { throw new Error(`exit ${code}`); });
+    try {
+      expect(() => acquireDataDirLeaseOrExit(dir, {}, exit)).toThrow("exit 1");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(printed).toEqual([PLAIN]);
+    expect(runningServerLine(dir)).toBe(PLAIN);
+    holder.release();
+  });
+
+  it("takes the lease when no live Seira holds the folder", () => {
+    const dir = tempDataDir();
+    const lease = acquireDataDirLeaseOrExit(dir, {}, () => { throw new Error("must not exit"); });
+    expect(lease.ownerPid).toBe(process.pid);
+    lease.release();
   });
 });

@@ -46,8 +46,8 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); setLocale("en"); config.value = {}; });
 
-const LOCAL_ENV = { id: "env-1", kind: "local", name: "Work", dataDir: "/home/me/.openmausbot-work", missing: false };
-const GONE_ENV = { id: "env-2", kind: "local", name: "Old", dataDir: "/home/me/.openmausbot-old", missing: true };
+const LOCAL_ENV = { id: "env-1", kind: "local", name: "Work", dataDir: "/home/me/.seira-work", missing: false };
+const GONE_ENV = { id: "env-2", kind: "local", name: "Old", dataDir: "/home/me/.seira-old", missing: true };
 const envState = (overrides: Record<string, unknown> = {}) => ({
   localOrigin: "http://127.0.0.1:1", remote: false, packaged: true, activeId: "local",
   environments: [LOCAL_ENV, GONE_ENV, VPS], ...overrides,
@@ -68,7 +68,7 @@ it("lists the servers, then local environments (Advanced) with their folders, ma
   const { html } = render();
   expect(html).toContain("Environments on this computer");
   expect(html.indexOf("bots.example.test")).toBeLessThan(html.indexOf("Environments on this computer"));
-  expect(html).toContain("/home/me/.openmausbot-work");
+  expect(html).toContain("/home/me/.seira-work");
   expect(html.match(/ · missing/g)).toHaveLength(1);
   expect(html).toContain("bots.example.test · HTTPS");
 });
@@ -78,7 +78,7 @@ it("hides local environments and the create form in a dev build", async () => {
   const { html } = render();
   expect(html).not.toContain("Environments on this computer");
   expect(html).not.toContain("Choose…");
-  expect(html).not.toContain("/home/me/.openmausbot-work");
+  expect(html).not.toContain("/home/me/.seira-work");
 });
 
 it("creates an environment with the chosen folder — and without one when the field is left empty", async () => {
@@ -176,8 +176,8 @@ it("offers no Forget for the environment this app is on", async () => {
 
 it("a Cloud of the person's own has no lending control here, since this computer is lent to it by itself; other servers keep Computer access", async () => {
   config.value = { features: { sharedComputers: true } };
-  const cloud = { id: "cloud", name: "My Cloud", origin: "https://omb-u-1.fly.dev", home: true };
-  const other = { id: "a", name: "Client A", origin: "https://omb-c-a.fly.dev", cloud: { id: "c-a", role: "owner" } };
+  const cloud = { id: "cloud", name: "My Cloud", origin: "https://seira-u-1.fly.dev", home: true };
+  const other = { id: "a", name: "Client A", origin: "https://seira-c-a.fly.dev", cloud: { id: "c-a", role: "owner" } };
   stub({ computerSharing: { state: vi.fn() } });
   vi.mocked((globalThis.window as unknown as { ogb: { environments: { state: ReturnType<typeof vi.fn> } } }).ogb.environments.state)
     .mockResolvedValue({ localOrigin: "http://127.0.0.1:1", remote: false, activeId: "local", environments: [VPS, cloud, other] });
@@ -210,4 +210,19 @@ it("shows local environment controls in Simplified Chinese", async () => {
   const { html } = render();
   expect(html).toContain("每个环境都有自己的机器人、会话和数据文件夹");
   expect(html).not.toContain("Separate setups on this computer");
+});
+
+it("Rename for a saved server goes to main, and the list is read again once it is saved", async () => {
+  const rename = vi.fn().mockResolvedValue({ outcome: "saved" });
+  const environments = stubEnvironments({}, { rename });
+  await mount();
+  const onRename = (render().nodes.find(n => "onRename" in n.props)!.props as unknown as { onRename: (id: string, name: string) => Promise<string> }).onRename;
+  expect(await onRename("vps", "Studio")).toBe("saved");
+  expect(rename).toHaveBeenCalledWith("vps", "Studio");
+  expect(environments.state).toHaveBeenCalledTimes(2);
+  rename.mockResolvedValueOnce({ outcome: "taken" });
+  expect(await onRename("vps", "Office")).toBe("taken");
+  rename.mockRejectedValueOnce(new Error("no"));
+  expect(await onRename("vps", "Office")).toBe("failed");
+  expect(environments.state, "nothing saved: the list is not read again").toHaveBeenCalledTimes(2);
 });

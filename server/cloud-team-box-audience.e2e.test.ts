@@ -13,7 +13,7 @@ import { detectBox } from "./bot-box/detect.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const posix = process.platform !== "win32";
-const boxed = posix && detectBox({ env: { ...process.env, OMB_CLOUD_ROLE: "team" } }).box === "bwrap";
+const boxed = posix && detectBox({ env: { ...process.env, SEIRA_CLOUD_ROLE: "team" } }).box === "bwrap";
 const TOKEN = `ops_fake-team-box-${randomBytes(8).toString("hex")}`;
 const OWNER = { email: "olive@acme.test", role: "owner" as const };
 const MIRA = { email: "mira@acme.test", role: "member" as const };
@@ -60,10 +60,10 @@ const newThread = async (token: string, title: string) => {
 
 beforeAll(async () => {
   if (!posix) return;
-  const box = { OMB_BOT_BOX: boxed ? "1" : "0" };
+  const box = { SEIRA_BOT_BOX: boxed ? "1" : "0" };
   fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-box", name: "Acme", engine: SHELL, env: box }, cloudEngine: SHELL, cloudEnv: box });
   team = fx.team!;
-  dataDir = join(team.home, ".openmausbot");
+  dataDir = join(team.home, ".seira");
   owner = (await team.pair(OWNER)).token!;
   mira = (await team.pair(MIRA)).token!;
   ben = (await team.pair(BEN)).token!;

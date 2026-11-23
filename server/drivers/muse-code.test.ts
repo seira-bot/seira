@@ -89,7 +89,7 @@ describe("Muse Code driver", () => {
 const FAKE_MUSE_SERVE = `
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-appendFileSync(process.env.FAKE_MUSE_LOG, JSON.stringify({ argv: process.argv.slice(2), home: process.env.HOME }) + "\\n");
+appendFileSync(process.env.FAKE_MUSE_LOG, JSON.stringify({ argv: process.argv.slice(2), home: process.env.HOME, workspaceKey: process.env.OMB_OPENAI_API_KEY ?? null }) + "\\n");
 const { FAKE_MUSE_TURN, FAKE_MUSE_INTERRUPT, FAKE_MUSE_EXIT_DELAY_MS } = process.env;
 const send = (frame) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...frame }) + "\\n");
 const input = createInterface({ input: process.stdin });
@@ -122,7 +122,7 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
   });
 
   const fakeMuse = () => {
-    root = mkdtempSync(join(tmpdir(), "omb-muse-launch-"));
+    root = mkdtempSync(join(tmpdir(), "seira-muse-launch-"));
     const log = join(root, "launches.jsonl");
     writeFileSync(join(root, "fake-muse.mjs"), FAKE_MUSE_SERVE);
     const cli = join(root, "muse");
@@ -148,6 +148,20 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
     }
   });
 
+  it("keeps a workspace key stored under the old prefix out of the engine", async () => {
+    const { cli, log } = fakeMuse();
+    const instance = await MuseCodeDriver.create({ instanceId: "museCode", displayName: "Muse Code", enabled: true,
+      environment: { OMB_OPENAI_API_KEY: "old-prefix-should-not-leak" }, config: MuseCodeDriver.decodeConfig({ cli }) });
+    try {
+      await instance.refreshModels!();
+      const launches = readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { workspaceKey: string | null });
+      expect(launches.length).toBeGreaterThan(0);
+      for (const launch of launches) expect(launch.workspaceKey).toBeNull();
+    } finally {
+      await instance.dispose();
+    }
+  });
+
   it("removes the folder of a model list once the list is read", async () => {
     const { cli } = fakeMuse();
     const instance = await MuseCodeDriver.create({ instanceId: "museCode", displayName: "Muse Code", enabled: true,
@@ -155,7 +169,7 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
     try {
       await instance.refreshModels!();
       expect(instance.models.default).toBe("muse-fake-1.0");
-      await expect.poll(() => readdirSync(tmpdir()).filter((name) => name.startsWith("omb-muse-models-"))).toEqual([]);
+      await expect.poll(() => readdirSync(tmpdir()).filter((name) => name.startsWith("seira-muse-models-"))).toEqual([]);
     } finally {
       await instance.dispose();
     }
@@ -164,7 +178,7 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
   it("starts through the shared launcher, in the conversation's engine home, and stops with the instance", async () => {
     const { cli, log } = fakeMuse();
     const home = join(root, "home");
-    const dataDir = join(home, ".openmausbot");
+    const dataDir = join(home, ".seira");
     mkdirSync(dataDir, { recursive: true });
     engineHomes.start({ dataDir, serverHome: home, audienceOf: () => "member:p_bob", threads: () => [], log: () => {} });
     const spawned = vi.spyOn(procs, "spawnCli");

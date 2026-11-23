@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { resolveAcpClientPath } from "./client-path.ts";
 import { createHash } from "node:crypto";
 
-import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, WORKSPACE_CREDENTIAL_ENV } from "../../config.ts";
+import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, stripEnvNames, stripWorkspaceCredentialKeys } from "../../config.ts";
 import { openStartupModelCatalog } from "../../startup-model-catalog.ts";
 import { acpModelCatalog } from "./model-catalog.ts";
 import { decodeInjectId } from "../local-inject.ts";
@@ -190,13 +190,14 @@ export interface AcpSupport extends AcpDriverHooks {
   shareProcess?: boolean;
   /** Route workspace file access through ACP so edits retain approval cards. */
   clientFileSystem?: boolean;
-  /** Additional server-owned directories this turn may read; writes remain confined to cwd. */
+  /** Directories this turn may read; it writes only in cwd and `clientWriteRoots`. */
   clientReadRoots?(turn: SendTurnInput): readonly string[];
+  clientWriteRoots?(turn: SendTurnInput): readonly string[];
   /** Sent as `clientCapabilities._meta` on initialize, where agents read vendor capabilities. */
   clientCapabilitiesMeta?: Record<string, unknown>;
   /** Made once per process: rewrites a session/update before the turn reads it, or drops it by returning null. */
   updateFilter?(): (update: Record<string, any>) => Record<string, any> | null; /** Rewrites a session/request_permission's params (its options and tool call) before the card is built. */ permissionRequest?(params: Record<string, any>): Record<string, any>;
-  /** The agent reaches MCP servers by URL: OpenMausBot's own servers are this server's endpoints, no process each. */
+  /** The agent reaches MCP servers by URL: Seira's own servers are this server's endpoints, no process each. */
   ownMcpOverHttp?: boolean;
   /** How many tools the agent lists of its own beside the MCP servers', counted against a provider's tool limit. */
   engineTools?: number;
@@ -213,7 +214,7 @@ export interface AcpSupport extends AcpDriverHooks {
   /** Mutate the child env once the turn model is known; catalog refresh and snapshot see only `transformEnv`. */
   applyTurnEnv?(
     env: Record<string, string | undefined>,
-    ctx: { model?: string; requestedModel?: string; fullAuto: boolean; botId?: string; cwd: string; toolScope?: SendTurnInput["toolScope"]; threadId: string; mcpServers: AcpMcpServer[] },
+    ctx: { model?: string; requestedModel?: string; fullAuto: boolean; botId?: string; cwd: string; folders?: SendTurnInput["folders"]; toolScope?: SendTurnInput["toolScope"]; threadId: string; mcpServers: AcpMcpServer[] },
   ): void;
   /** The authenticate methodId from initialize's authMethods; null skips authenticate. */
   pickAuthMethod(authMethods: Array<{ id?: string }>, env: Record<string, string | undefined>): string | null;
@@ -343,12 +344,11 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           ...input.environment,
           PATH: augmentedPath(),
         };
-        const allowedCredentials = new Set(support.credentialEnv ?? []);
         // Foreign provider keys would flip billing off the CLI's login, and workspace credentials are
         // the harness's: only credentialEnv passes.
-        for (const key of [...PROVIDER_CREDENTIAL_ENV, ...WORKSPACE_CREDENTIAL_ENV]) {
-          if (!allowedCredentials.has(key)) delete env[key];
-        }
+        const allowedCredentials = new Set(support.credentialEnv ?? []);
+        stripEnvNames(env, PROVIDER_CREDENTIAL_ENV, [...allowedCredentials]);
+        stripWorkspaceCredentialKeys(env, allowedCredentials);
         stripControlPlaneEnv(env);
         support.transformEnv?.(env, activeConfig, instanceId, input.environment);
         return env;
@@ -459,7 +459,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             for (const link of host.links) closeSession(link.threadId, "recycle");
           }
           host.recycle = null;
-        }, envOr("OMB_ACP_SHARED_RECYCLE_MS", 60_000)); // shared: a process several conversations used, recycled once none is left
+        }, envOr("SEIRA_ACP_SHARED_RECYCLE_MS", 60_000)); // shared: a process several conversations used, recycled once none is left
         host.recycle.unref?.();
       };
       const armIdle = (threadId: string) => {
@@ -633,7 +633,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           try {
             if (!support.clientFileSystem) throw new Error("Client file access is disabled.");
             const params = msg.params ?? {};
-            const path = await resolveAcpClientPath(params.path, cwd, msg.method === "fs/read_text_file" ? support.clientReadRoots?.(current.turn) : undefined);
+            const path = await resolveAcpClientPath(params.path, cwd, (msg.method === "fs/read_text_file" ? support.clientReadRoots : support.clientWriteRoots)?.(current.turn));
             if (msg.method === "fs/read_text_file") {
               const info = await stat(path);
               if (!info.isFile() || info.size > CLIENT_FILE_MAX_BYTES) {
@@ -991,7 +991,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         const mcpServers = acpMcpServers(turn, { http: loopbackUnproxied(env, support.ownMcpOverHttp === true || acpOwnMcpOverHttp(instanceId, support.mcpServersFromLaunch === true)), engine: support.driverKind,
           toolBudget: mcpToolBudget(learnedToolCountLimit(toolLimitKey), support.engineTools ?? 32) });
         support.applyTurnEnv?.(env, {
-          model: resolvedModel, requestedModel: turn.model, fullAuto: turnConfig.fullAuto === true, botId: turn.botId, cwd, toolScope: turn.toolScope,
+          model: resolvedModel, requestedModel: turn.model, fullAuto: turnConfig.fullAuto === true, botId: turn.botId, cwd, folders: turn.folders, toolScope: turn.toolScope,
           threadId, mcpServers,
         });
         let cliTurn =
@@ -1164,7 +1164,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                   "initialize",
                   {
                     protocolVersion: 1,
-                    clientInfo: support.clientInfo?.(instanceId) ?? { name: "openmausbot", version: "0.0.0" },
+                    clientInfo: support.clientInfo?.(instanceId) ?? { name: "seira", version: "0.0.0" },
                     clientCapabilities: {
                       fs: {
                         readTextFile: support.clientFileSystem === true,
@@ -1556,7 +1556,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         if (support.requireAuthenticationBeforeSpawn && !(await support.isAuthenticated(env, turnConfig, instanceId, instanceEnvNames(input.environment, env)))) {
           throw new Error(support.loginNote);
         }
-        const cwd = mkdtempSync(join(await support.oneShotFolder?.() ?? tmpdir(), "omb-acp-memory-"));
+        const cwd = mkdtempSync(join(await support.oneShotFolder?.() ?? tmpdir(), "seira-acp-memory-"));
         try {
           const turn = { threadId: `memory-text-${newId()}`, text: prompt, approvalMode: "ask", cwd } as SendTurnInput;
           support.applyTurnEnv?.(env, { fullAuto: false, cwd, threadId: turn.threadId, mcpServers: [] });

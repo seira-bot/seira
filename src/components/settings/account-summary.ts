@@ -1,3 +1,4 @@
+import type { PersonLook } from "../../../shared/person-look";
 import { useEffect, useState } from "react";
 import type { CloudAccountState, CloudPlanSnapshot } from "../../../electron/cloud-account.mjs";
 import { cloudPlanLabel, cloudPlanView } from "@/lib/cloud-plan";
@@ -29,7 +30,7 @@ function fromPlan(plan: CloudPlanSnapshot | null): AccountSummary {
   return { signedIn: plan.status !== "none" && plan.status !== "signin", email: null, plan: paid ? cloudPlanLabel(plan.tier) : null, paid };
 }
 
-/** Who is signed in to MausBot on this device, as far as this page may know. */
+/** Who is signed in to Seira on this device, as far as this page may know. */
 export function useAccountSummary(): AccountSummary {
   const account = typeof window === "undefined" || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const planBridge = account ? undefined : typeof window === "undefined" ? undefined : window.ogb?.cloudPlan;
@@ -51,7 +52,7 @@ export function useAccountSummary(): AccountSummary {
 }
 
 /** The name and photo the chrome shows for you, and the server session they came from. */
-export function useYou(): { profile: { name?: string; email?: string; avatarUrl?: string } | undefined; session: SessionState | null } {
+export function useYou(): { profile: { name?: string; email?: string; avatarUrl?: string; look?: PersonLook } | undefined; session: SessionState | null } {
   const { state } = useStore();
   const [session, setSession] = useState<SessionState | null>(null);
   useEffect(() => {

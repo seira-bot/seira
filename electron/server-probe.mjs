@@ -2,9 +2,10 @@
 // failure is sorted into one thing the person can fix.
 import { EXAMPLE_ADDRESS, isLoopbackHost, parseServerInput, serverTransport } from "./server-address.mjs";
 import { inTailscaleRange, isTailnetName } from "./tailnet.mjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
-const DESCRIPTOR = "/.well-known/openmausbot/environment";
-/** A MausBot desktop app's Remote access (companion/src/routes.ts) refuses the descriptor with this until a phone pairs. */
+const DESCRIPTOR = sentWireName("environmentPath");
+/** A Seira desktop app's Remote access (companion/src/routes.ts) refuses the descriptor with this until a phone pairs. */
 const DESKTOP_APP_REFUSAL = /^pair this device from Remote access settings/;
 
 /** The sentence for each problem, in the window's catalog and main's alike ({host}, {example} filled in). */
@@ -21,27 +22,28 @@ export const CONNECT_PROBLEM_KEYS = Object.freeze({
   unreachable: "native.connect.unreachable",
   dns: "native.connect.dns",
   certificate: "native.connect.certificate",
-  notMausBot: "native.connect.notMausBot",
+  notSeira: "native.connect.notSeira",
   desktopApp: "native.connect.desktopApp",
   desktopAppTailnet: "native.connect.desktopAppTailnet",
   loopback: "native.connect.loopback",
   localNetwork: "native.connect.localNetwork",
   tailscaleOff: "native.connect.tailscaleOff",
   otherTailnet: "native.connect.otherTailnet",
+  magicDnsOff: "native.connect.magicDnsOff",
   tailnetBlocked: "native.connect.tailnetBlocked",
   tailnetSilent: "native.connect.tailnetSilent",
 });
 
 /**
  * Why an address only a tailnet reaches did not answer: Tailscale is off on this computer, the name is not on this
- * computer's tailnet (MagicDNS answers only names it knows), macOS refused (its Local Network permission, from macOS 15,
+ * computer's tailnet (MagicDNS answers only names it knows) or the tailnet has MagicDNS off, macOS refused (its Local Network permission, from macOS 15,
  * covers Tailscale's addresses too, and is expected to fail at once with no route to host where a sleeping peer times
  * out), or the computer there is asleep, offline or not sharing.
  */
-function tailnetProblem(kind, platform, tailnet) {
+function tailnetProblem(kind, platform, tailnet, magicDnsOff) {
   if (kind === "desktopApp") return "desktopAppTailnet";
   if (!tailnet) return "tailscaleOff";
-  if (kind === "dns") return "otherTailnet";
+  if (kind === "dns") return magicDnsOff ? "magicDnsOff" : "otherTailnet";
   if (kind === "noRoute" && platform === "darwin") return "tailnetBlocked";
   return "tailnetSilent";
 }
@@ -98,10 +100,10 @@ async function describe(origin, fetchImpl, timeoutMs) {
   } catch (error) {
     return { ok: false, kind: failureKind(error) };
   }
-  if (response.status === 401) return { ok: false, kind: await isDesktopAppRefusal(response) ? "desktopApp" : "notMausBot" };
-  if (!response.ok) return { ok: false, kind: "notMausBot" };
+  if (response.status === 401) return { ok: false, kind: await isDesktopAppRefusal(response) ? "desktopApp" : "notSeira" };
+  if (!response.ok) return { ok: false, kind: "notSeira" };
   const body = await response.json().catch(() => null);
-  if (typeof body?.environmentId !== "string" || !body.environmentId) return { ok: false, kind: "notMausBot" };
+  if (typeof body?.environmentId !== "string" || !body.environmentId) return { ok: false, kind: "notSeira" };
   return { ok: true, environmentId: body.environmentId, label: typeof body.label === "string" && body.label.trim() ? body.label.trim().slice(0, 60) : new URL(origin).host,
     version: typeof body.version === "string" ? body.version.slice(0, 32) : null };
 }
@@ -109,10 +111,10 @@ async function describe(origin, fetchImpl, timeoutMs) {
 /**
  * Reads the sheet's fields and finds the server: `{ outcome: "found", origin, label, version, transport, code, credential }`,
  * or `{ outcome: "problem", problem, host?, code? }` with one of parseServerInput's problems or: unreachable, dns,
- * certificate, notMausBot, desktopApp (another computer's MausBot desktop app, which can't be a server), loopback (an address on this computer that is this app's own workspace, or nothing at all).
+ * certificate, notSeira, desktopApp (another computer's Seira desktop app, which can't be a server), loopback (an address on this computer that is this app's own workspace, or nothing at all).
  * `ownEnvironmentId()`: this app's own local workspace, so a "this computer" link copied off a server is caught.
  */
-export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnvironmentId = async () => null, timeoutMs = 6_000, platform = process.platform, tailnet = () => true }) {
+export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnvironmentId = async () => null, timeoutMs = 6_000, platform = process.platform, tailnet = () => true, magicDns = async () => null }) {
   const parsed = parseServerInput(address, code);
   if (!parsed.ok) {
     const { ok: _ok, ...problem } = parsed;
@@ -131,8 +133,10 @@ export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnv
       if (failure?.problem === "desktopApp") continue;
       // A bare 100.64/10 address counts only on a computer that is on a tailnet: carrier NAT and other VPNs use that range.
       const bare = hostname.replace(/^\[|\]$/g, "");
-      const tailnetHost = (isTailnetName(bare) || (inTailscaleRange(bare) && tailnet())) && found.kind !== "certificate" && found.kind !== "notMausBot";
-      const problem = loopback ? { problem: "loopback", host } : tailnetHost ? { problem: tailnetProblem(found.kind, platform, tailnet()), host } : blockedOnMac ? { problem: "localNetwork", host }
+      const tailnetHost = (isTailnetName(bare) || (inTailscaleRange(bare) && tailnet())) && found.kind !== "certificate" && found.kind !== "notSeira";
+      // Names under .ts.net only resolve through MagicDNS, so a tailnet with it off cannot find them at all.
+      const magicDnsOff = tailnetHost && found.kind === "dns" && isTailnetName(bare) && tailnet() && (await Promise.resolve().then(magicDns).catch(() => null)) === false;
+      const problem = loopback ? { problem: "loopback", host } : tailnetHost ? { problem: tailnetProblem(found.kind, platform, tailnet(), magicDnsOff), host } : blockedOnMac ? { problem: "localNetwork", host }
         : { problem: kind === "refused" || kind === "timeout" ? "unreachable" : kind, host, ...(kind === "refused" || kind === "timeout" ? { reason: kind } : {}) };
       // A later guess at a tailnet name that just didn't answer says less than whatever an earlier one said.
       if (!(failure && problem.problem === "tailnetSilent")) failure = problem;
@@ -144,14 +148,18 @@ export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnv
   return { outcome: "problem", ...failure };
 }
 
+/** The window's bundle reads this file too, so the module that runs Tailscale's tool loads only here, in the app's main process. */
+const TAILSCALE_CHECK = "./tailscale-check.mjs";
+const readMagicDns = async () => (await import(/* @vite-ignore */ TAILSCALE_CHECK)).magicDnsEnabled();
+
 /**
  * Connecting from the desktop: `probe` for the sheet's line under the field; `connect` for its button, which names the
  * server already, so it opens exactly what it finds or resolves with the problem; `connectAsking` for a link from the
  * clipboard or Settings, which names the server in main's own dialog (`ask(found)`) first and throws a problem's sentence.
  * `open(found, name)` saves the server and opens its /pair page.
  */
-export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, open, t, tailnet }) {
-  const probe = (address, code = "") => probeServer({ address, code, fetch: fetchImpl, ownEnvironmentId, tailnet });
+export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, open, t, tailnet, magicDns = readMagicDns }) {
+  const probe = (address, code = "") => probeServer({ address, code, fetch: fetchImpl, ownEnvironmentId, tailnet, magicDns });
   return {
     probe,
     async connect(address, code = "") {

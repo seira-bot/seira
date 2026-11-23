@@ -154,11 +154,21 @@ const __APP_VERSION__: string;
       home?: import("../../electron/home-window.mjs").HomeBridge;
       desktopNotices?: import("../../electron/desktop-prefs.mjs").DesktopNoticesBridge;
       desktopNotifications?: import("../../electron/desktop-notifications.mjs").DesktopNotificationsBridge;
+      /** Desktop app only: the feed Glance shows, and the answers the person gives there. Resolve true only when an answer was sent. */
+      glance?: { feed(feed: import("../../shared/glance").GlanceFeed): void; onAct(handler: (act: import("../../shared/glance").GlanceAct) => Promise<boolean>): () => void };
       /** This computer's own page only: the account's full name, for a first run's profile (system-name.mjs). */
       desktopProfile?: { systemName(): Promise<string | null> };
       desktopAnalytics?: import("../../electron/desktop-prefs.mjs").DesktopAnalyticsBridge;
+      /** This computer's own page only, and only in a build that has a crash report service. The main process checks the switch, filters and sends. */
+      crashReports?: {
+        available: boolean;
+        enabled(): boolean;
+        set(on: boolean): Promise<unknown>;
+        report(report: { kind: "renderer-error" | "renderer-rejection" | "page-boundary"; errorName: string; message: string; stack: string; page: string; debugIds?: Record<string, string> }): void;
+        page(name: "chat" | "settings" | "onboarding" | "rail" | "other"): void;
+      };
       desktopLanguage?: import("../../electron/desktop-prefs.mjs").DesktopLanguageBridge;
-      /** This computer's page and My Cloud's own page: the one-time "Get MausBot updates?" answer. */
+      /** This computer's page and My Cloud's own page: the one-time "Get Seira updates?" answer. */
       updatesConsent?: import("../../electron/updates-consent.mjs").UpdatesConsentBridge;
       companyBackups?: {
         state(): Promise<CompanyBackupState>;
@@ -195,7 +205,7 @@ const __APP_VERSION__: string;
          * address, `code` the pairing code typed apart; without `link`, the clipboard's), or type its address. With `code`
          * (even empty) it resolves with the outcome; without, false when the person cancels Connect. */
         add?: (choice: "cloud" | "link" | "address", link?: string, code?: string) => Promise<import("../../electron/server-probe.mjs").ConnectOutcome | boolean | void>;
-        /** Finds the MausBot server at what the Connect sheet holds, without connecting. Absent on an older app. */
+        /** Finds the Seira server at what the Connect sheet holds, without connecting. Absent on an older app. */
         probe?: (address: string, code?: string) => Promise<import("../../electron/server-probe.mjs").ServerProbe>;
         /** The colour of the place this page is (This computer's too), and whether it can be changed here. Absent on an
          * older app. */
@@ -208,6 +218,9 @@ const __APP_VERSION__: string;
         /** Remove from list: a Cloud the window's rail lists as `removable`, by its circle's id, once the person said yes on
          * the rail's own page (refused on any other page). Absent on an older app. */
         remove?: (id: string) => Promise<{ outcome: import("../../electron/cloud-account.mjs").CloudRemoveOutcome }>;
+        /** A new name for a server saved by hand, which the rail lists with `forget`, by its circle's id, from the person's
+         * click on the rail's own page (refused on any other page). Absent on an older app. */
+        rename?: (id: string, name: string) => Promise<{ outcome: "saved" | "name" | "taken" | "gone" | "failed" | "unsupported" }>;
         /** Make a server of the person's own, which the rail lists with `makeHome`, their bots' home: the move starts. */
         makeHome?: (id: string) => Promise<{ started: true }>;
         /** The ids of the servers main offers Make … my home for now (none once a move is done). Absent on an older app. */
@@ -218,12 +231,14 @@ const __APP_VERSION__: string;
          * which main opens next; a name or colour for one the rail lists; its removal, once the person said yes. Absent on
          * an older app. */
         local?: {
-          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "failed" }>;
+          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" | "failed" }>;
           edit(id: string, changes: { name: string } | { color: import("../../electron/cloud-list.mjs").CloudSwatch | null }): Promise<{ outcome: "saved" | "name" | "taken" | "full" | "gone" }>;
           remove(id: string): Promise<{ outcome: "removed" | "gone" | "failed" }>;
         };
         /** The Server menu's New workspace on this computer: this computer's own page asks its name. */
         onNewLocal?: (callback: () => void) => () => void;
+        /** The Server menu's Connect to a server…: this computer's own page opens the Connect sheet. */
+        onConnectServer?: (callback: () => void) => () => void;
       };
       /** Buying another Cloud from the rail's ＋, on this app's page or a hosted Cloud's; absent on an older app. */
       cloudAdd?: {
@@ -266,6 +281,8 @@ const __APP_VERSION__: string;
             cloud?: { id: string; role: string };
           }>;
         }>;
+        /** A new name for a server saved by hand, on this computer's own page. Absent on an older app. */
+        rename?: (id: string, name: string) => Promise<{ outcome: "saved" | "name" | "taken" | "gone" | "failed" }>;
         /** Local targets answer {ok, error?} (error strings are an open set); remote ones answer nothing. */
         switch: (id: string) => Promise<{ ok: boolean; error?: string } | void>;
         addFromLink: (link: string, name?: string) => Promise<boolean | void>;
@@ -353,7 +370,7 @@ const __APP_VERSION__: string;
       };
       /** Start native dictation. Call mode supplies endpointMs so silence
        * finalizes a turn; composer dictation omits it and remains manual. */
-      speechStart(options?: { endpointMs?: number }): Promise<void>;
+      speechStart(options?: { endpointMs?: number; locale?: string }): Promise<void>;
       speechStop(): Promise<void>;
       /** Finish capture and emit the recognizer's final transcript. */
       speechFinish?(): Promise<void>;
@@ -381,6 +398,7 @@ const __APP_VERSION__: string;
       permOpenSettings(pane: "mic" | "screen" | "speech" | "accessibility"): Promise<void>;
       /** Relaunch the local desktop app through its normal shutdown cleanup. */
       relaunch?(): Promise<boolean>;
+      quit?(): Promise<boolean>;
       /** Copies an engine install command and opens a blank terminal. False
        * when no terminal could be launched; the clipboard still has it. */
       openInstallTerminal?(command: string): Promise<boolean>;
@@ -388,6 +406,10 @@ const __APP_VERSION__: string;
       copyText?(text: string): Promise<boolean>;
       /** Opens an http(s) link in the user's default browser. */
       openExternal?(url: string): Promise<boolean>;
+      /** Opens an https sign-in page in the user's default browser, on every page of the window, another server's
+       * included. From another server's page it needs the person's click; it rejects any other address. Absent on older apps. */
+      openSignInPage?(url: string): Promise<boolean>;
+      openCleanSignInPage?(url: string): Promise<boolean>;
       /** Recolor the native window chrome for a skin; absent on older builds. */
       applySkin?(skin: string): Promise<boolean>;
       /** The window's own frame, this desktop's choice (Settings → Appearance). Absent on an older app. */
@@ -395,6 +417,14 @@ const __APP_VERSION__: string;
         state(): Promise<import("../../electron/desktop-prefs.mjs").WindowFrameState>;
         /** From the person's click on another server's page. */
         set(on: boolean): Promise<import("../../electron/desktop-prefs.mjs").WindowFrameState>;
+      };
+      /** The window's text size, this desktop's choice (Settings → Appearance). Absent on an older app. */
+      textSize?: {
+        get(): Promise<number>;
+        /** From the person's click on another server's page. Resolves with the step now in use. */
+        set(step: number): Promise<number>;
+        /** Also fires for the View menu and the zoom shortcuts. Returns the way to stop listening. */
+        onChange(callback: (step: number) => void): () => void;
       };
       /** The renderer-drawn Windows caption buttons; absent outside the
        * frameless Windows shell (macOS/Linux/browser keep native chrome). */
@@ -405,19 +435,19 @@ const __APP_VERSION__: string;
         state(): Promise<{ maximized: boolean }>;
         onMaximizedChanged(cb: (maximized: boolean) => void): () => void;
       };
-      /** Receives a GitHub package URL opened through openmausbot://install. */
+      /** Receives a GitHub package URL opened through seira://install. */
       onPackageInstall?(cb: (url: string) => void): () => void;
-      /** Receives a chat link (openmausbot://thread/… or openmausbot://bot/…)
+      /** Receives a chat link (seira://thread/… or seira://bot/…)
        * opened from outside the app. */
       onChatLink?(cb: (link: string) => void): () => void;
       /** The desktop shell's app-menu Preferences… item was activated; open
        * app Settings. Every server's page in the window receives it, and the
        * bridge is absent in the browser. "cloud" is the
-       * openmausbot://cloud link (Settings → OMB Cloud, opened by the link). */
+       * seira://cloud link (Settings → Seira Cloud, opened by the link). */
       onOpenAppSettings?(cb: (section?: "organization" | "cloud" | "cloud-settings" | "cloud-add" | "cloud-add-howto" | import("../state/store").SettingsPageId) => void): () => void;
       /** Updates the native Dock/taskbar unread indicator. */
       setUnreadCount?(count: number): void;
-      /** Opens a live desktop as a sandboxed window owned by OpenMausBot. */
+      /** Opens a live desktop as a sandboxed window owned by Seira. */
       desktopViewer?: {
         open(url: string, title: string, contextId: string): Promise<boolean>;
         /** Closes the live-desktop window, but only when it belongs to this bot. */
@@ -449,7 +479,7 @@ const __APP_VERSION__: string;
       /** Writes the redacted diagnostics report to a user-chosen file;
        * resolves the path, or null when cancelled. */
       exportDiagnostics?(): Promise<string | null>;
-      /** Asks where to save a bot-created file (inside ~/.openmausbot), copies
+      /** Asks where to save a bot-created file (inside ~/.seira), copies
        * it there and reveals it. Resolves the chosen path, or null if the
        * user cancelled the dialog. */
       saveFile?(filePath: string): Promise<string | null>;
@@ -464,6 +494,20 @@ const __APP_VERSION__: string;
       openLogsFolder?(): Promise<{ folder: string; opened: boolean; error?: string }>;
       /** This app's own login item, which opens the window. `available`: false in a build that cannot add one. */
       openAtLogin?: { state(): Promise<{ available: boolean; on: boolean; startupApps?: boolean }>; set(on: boolean): Promise<{ available: boolean; on: boolean; startupApps?: boolean }> };
+      /** Install on my server: the page sends each secret once and keeps none; events carry none. */
+      serverInstall?: {
+        info(): Promise<{ agent: boolean }>;
+        pickKey(): Promise<{ name: string } | null>;
+        forgetHost(): Promise<boolean>;
+        start(request: { address: string; user: string; email: string; method: "password" | "key" | "agent"; password?: string; sudoPassword?: string; passphrase?: string }): Promise<boolean>;
+        acceptHostKey(): Promise<boolean>;
+        rejectHostKey(): Promise<boolean>;
+        check(): Promise<boolean>;
+        install(options: { installDocker: boolean }): Promise<boolean>;
+        sendCode(code: string): Promise<boolean>;
+        cancel(): Promise<boolean>;
+        onEvent(callback: (event: import("./ogb").ServerInstallEvent) => void): () => void;
+      };
       /** Use this computer as an always-on home (this computer's own page only). Absent on an older app. */
       alwaysOnHome?: { state(): Promise<AlwaysOnHomeState>; set(on: boolean): Promise<AlwaysOnHomeState> };
       /** Saved keys this launch could not read (this app's own page only). `reset` asks the person, moves the unreadable
@@ -473,7 +517,7 @@ const __APP_VERSION__: string;
       credentialStore?: { unreadable(): Promise<boolean>; reset(): Promise<"reset" | "cancelled" | "quitting" | "failed" | "readable"> };
       /** Save a provider credential through Electron's OS-backed store. */
       setCredential?(
-        name: "openaiApiKey" | "anthropicApiKey" | "openrouterApiKey" | "mistralApiKey" | "cerebrasApiKey" | "groqApiKey" | "greenferenceApiKey" | "modelgoApiKey" | "metaApiKey" | "deepseekApiKey" | "openaiCompatApiKey" | "composioApiKey" | "xaiApiKey" | "boxToken" | "opencodeGoApiKey" | "ttsKey" | "fishAudioKey" | "geminiTtsKey" | "jevApiKey" | "openrouterDeciderKey" | "workersAiToken" | "customDeciderKey" | "openaiImageApiKey" | "customImageApiKey" | "openaiLiveKey" | "tregApiKey" | "postizApiKey" | "geminiImageApiKey",
+        name: "openaiApiKey" | "anthropicApiKey" | "openrouterApiKey" | "mistralApiKey" | "cerebrasApiKey" | "groqApiKey" | "greenferenceApiKey" | "modelgoApiKey" | "metaApiKey" | "deepseekApiKey" | "openaiCompatApiKey" | "composioApiKey" | "xaiApiKey" | "opencodeGoApiKey" | "ttsKey" | "fishAudioKey" | "geminiTtsKey" | "jevApiKey" | "openrouterDeciderKey" | "workersAiToken" | "customDeciderKey" | "openaiImageApiKey" | "customImageApiKey" | "openaiLiveKey" | "tregApiKey" | "geminiImageApiKey",
         value: string,
         options?: { everyClaudeBot?: false },
       ): Promise<ConfigStatus>;
@@ -494,10 +538,24 @@ const __APP_VERSION__: string;
        * learns only what was done; the app asks in its own dialog before it restarts. Absent in older desktop builds. */
       appUpdate?: {
         request(): Promise<AppUpdateAnswer>;
+        /** How this app gets its updates. Absent in older desktop builds. */
+        way?(): Promise<AppUpdateWay>;
       };
     };
   }
 }
+
+/** What the install flow tells the page (electron/vps-install.mjs): never a secret, never the pairing link. */
+export type ServerInstallEvent =
+  | { type: "phase"; phase: "connecting" | "rights" | "upload" | "checking" | "installing" }
+  | { type: "hostKey"; host: string; port: number; fingerprint: string }
+  | { type: "check"; id: string; level: "ok" | "fix" | "note"; sentence: string }
+  | { type: "checks"; result: "ok" | "fix"; items: { id: string; level: "ok" | "fix" | "note"; sentence: string }[] }
+  | { type: "step"; id: string; state: "start" | "done" | "fail"; sentence: string | null }
+  | { type: "askCode"; email: string; again?: true }
+  | { type: "connected" }
+  | { type: "cancelled" }
+  | { type: "failed"; reason: string; step: string | null; sentence: string | null; source?: "saved" | "system" | "both" };
 
 export interface LinuxLocalControlStatus {
   enabled: boolean;
@@ -514,6 +572,9 @@ export interface LinuxLocalControlStatus {
 
 /** What asking for this app's update from a server's page did (electron/updater.mjs `updateForServerPage`). */
 export type AppUpdateAnswer = "installing" | "later" | "downloading" | "current" | "failed" | "unavailable";
+
+/** How this app gets its updates (electron/updater.mjs `appUpdateWay`). */
+export type AppUpdateWay = "self" | "store" | "download";
 
 export interface UpdaterState {
   status:
@@ -547,6 +608,12 @@ export interface UpdaterState {
    * can be shown, use this.
    */
   installMode?: "restart" | "handoff";
+  /** when (ms) the last check found no newer version; cleared when one is found */
+  upToDateAt?: number;
+  /** when (ms) the last check failed; cleared when a later check finishes */
+  checkFailedAt?: number;
+  /** this copy cannot update itself: new versions come from the website */
+  downloadOnly?: boolean;
   /** an app store updates this install, so the app offers no update action of its own */
   managedByStore?: boolean;
   /** hand-off only: the install command, already on the clipboard */

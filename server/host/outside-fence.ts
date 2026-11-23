@@ -1,5 +1,5 @@
-// Security invariant: a confined turn acts on words nobody here wrote, and every engine pre-allows OpenMausBot's own tools
-// (only the harness can tell them apart). So of OpenMausBot's own routes it reaches only what this list names, and a route
+// Security invariant: a confined turn acts on words nobody here wrote, and every engine pre-allows Seira's own tools
+// (only the harness can tell them apart). So of Seira's own routes it reaches only what this list names, and a route
 // nobody listed is refused:
 // - reads of this conversation's own work and what the bot may see;
 // - what waits on a person's card (asks, proposed changes, a tool the engine asks about first);
@@ -16,6 +16,7 @@ const EXACT: ReadonlySet<string> = new Set([
   "POST /api/internal/attach-file",
   "POST /api/internal/voice-note",
   "GET /api/internal/agents",
+  "GET /api/internal/workflows",
   "GET /api/internal/rooms",
   "GET /api/internal/room-targets",
   "GET /api/internal/threads",

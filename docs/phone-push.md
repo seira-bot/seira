@@ -9,8 +9,10 @@ swiped away, nothing arrives.
 
 This document describes real push: Apple's push service (APNs) on iPhone and
 Firebase Cloud Messaging (FCM) on Android wake the phone even when the app is
-closed. The code for every part is in place and switched off. Nothing changes
-until the owner supplies the keys and turns it on (see "Switching it on").
+closed. The push relay (`cloudflare/push-relay`, `push.seira.bot`) sends to
+Android today; iPhone waits for the Apple key (see "Switching it on"). Each
+computer stays off until its owner turns on Settings → Phone & devices →
+Alerts when the phone app is closed.
 
 ## How it works
 
@@ -25,10 +27,10 @@ until the owner supplies the keys and turns it on (see "Switching it on").
    phone's paired session, or the device the desktop's companion vouched for),
    never from the body. The phone does this after it connects, whenever the
    token changes, and whenever the person changes a notification switch.
-3. **The server registers the token with the control plane**
-   (`POST /v1/installations/self/push/register`), using the installation
-   credential it already holds for the hosted transport. The control plane
-   holds the APNs key and the Firebase service account; servers never do.
+3. **The server registers the token with the push relay**
+   (`POST /v1/installations/self/push/register`), with this server's own relay
+   credential (see "The relay credential"). The relay holds the APNs key and
+   the Firebase service account; servers never do.
 4. **Something happens that would notify the person.** The server emits its
    `notify` frame as today. For each registered phone, it checks:
    - is phone push switched on;
@@ -42,14 +44,14 @@ until the owner supplies the keys and turns it on (see "Switching it on").
      Cloud's per-person frames);
    - has it had a push for the same kind and conversation in the last
      10 seconds, or 30 pushes in the last 10 minutes.
-5. **The server asks the control plane to send**
+5. **The server asks the push relay to send**
    (`POST /v1/installations/self/push/send`) with the kind, a title made from
    names, ids, the phone's tag for this computer, and a notification
    identifier. The send is queued in a small outbox: a failure the relay may
    recover from is retried after 5 s, 30 s and 2 min; a push still waiting
    after 10 minutes, or for a phone that connected in the meantime, is
    dropped.
-6. **The control plane sends it to APNs or FCM,** which wake the phone.
+6. **The push relay sends it to APNs or FCM,** which wake the phone.
 7. **The phone shows it.** On iPhone the system shows it. On Android
    expo-notifications shows it, in the same channel and with the same buttons
    as a local notification.
@@ -58,9 +60,38 @@ until the owner supplies the keys and turns it on (see "Switching it on").
    Deny, Answer) work as they do on a local notification: they open the app,
    wait for the connection, and answer the card.
 
+## The relay credential
+
+The push relay has no accounts. Each server enrolls itself and keeps the
+credential it gets.
+
+- **Enroll.** The first time the server needs the relay (a phone registers, a
+  push is due, or the 12-hourly check with a phone registered), it calls
+  `POST /v1/push/enroll` with `{"v":1}` and no credential. The relay answers
+  `201 {installationId, credential, expiresAt}`.
+- **Keep.** The server writes the answer to `<data dir>/push-relay.json`
+  (mode 0600), with the relay origin that issued it. It sends the credential
+  only to that origin, only in the `Authorization` header, and never writes it
+  to a log.
+- **Rotate.** A credential lasts 90 days. With fewer than 30 days left, the
+  server calls `POST /v1/installations/self/credentials/rotate` and saves the
+  new one.
+- **Refused.** If the relay answers `401` to a rotate or a push call, the
+  server drops the saved credential and enrolls again.
+- **Wait.** A failed enroll or rotate waits for `Retry-After` (1 minute to
+  1 day), or 1 minute doubling up to 6 hours. The relay allows 3 enrolls per
+  minute and 5 per UTC day from one address.
+- **Off.** While phone push is off, the server makes no relay call at all.
+
+| Variable | Effect |
+| --- | --- |
+| `SEIRA_PUSH_RELAY_URL` | Another relay origin (`https://…`, or `http://` on loopback). Empty means `https://push.seira.bot`. An invalid value turns push access off. |
+| `SEIRA_PUSH_CREDENTIAL` | A credential the relay issued elsewhere. The server uses it as it is: no enroll, no rotate. |
+| `SEIRA_PHONE_PUSH` | `1` forces push on, `0` forces it off, whatever the switch says. |
+
 ## What a push contains
 
-Never message text. The control plane's schema refuses any field that could
+Never message text. The push relay's schema refuses any field that could
 carry it (`400 invalid_request`, not silently dropped).
 
 | Field | Example | Notes |
@@ -71,7 +102,7 @@ carry it (`400 invalid_request`, not silently dropped).
 | thread id | `th_…` | which conversation to open |
 | room id, room name | `grp_…`, `Launch` | only in a room |
 | pairing | the phone's random tag for this computer | so a tap opens the right one of several saved computers |
-| collapse id | `openmaus.<thread>.<seq>` | see "No duplicates" |
+| collapse id | `seira.<thread>.<seq>` | see "No duplicates" |
 
 What the lock screen reads, by kind:
 
@@ -81,10 +112,10 @@ What the lock screen reads, by kind:
 - finished reply: "Scout finished"
 
 On iPhone the payload is `{aps: {alert: {title}, sound, thread-id, category,
-interruption-level}, omb: {...}, body: {...}}`. On Android it is a data-only
+interruption-level}, seira: {...}, body: {...}}`. On Android it is a data-only
 FCM message with `title`, `tag`, `channelId`, `categoryId`, `threadIdentifier`
 and `body` (the same fields as JSON), and no message text. The exact shapes are
-in `cloudflare/control-plane/README.md` ("Phone push relay").
+in `cloudflare/push-relay/README.md` ("Payload contract, version 1").
 
 A Live Activity push leaves `alert` unset. An activity `update` that carries
 `alert` lights the screen and pops the activity open in the Dynamic Island,
@@ -93,7 +124,9 @@ activities send no alert configuration, so the island stays a small mark).
 The person still hears about the ask: the closed-app alert above arrives as
 an ordinary notification. Only a push-to-start `start` carries `alert`,
 because ActivityKit does not start an activity remotely without one, and the
-control plane refuses `alert` on anything else. A phone that registers its
+relay refuses `alert` on anything else. The push relay answers
+`503 push_unavailable` to every activity call today, so Live Activities and
+Android's ongoing notification get no push until it takes them. A phone that registers its
 status words (`statuses`) gets the activity in its content state version 1
 (`status`, `ask`, `waiting`, `version`); a phone that does not gets the
 earlier shape with `headline`, which the phone app also draws.
@@ -105,7 +138,7 @@ of the two exists. They can meet at the edges: the app comes back and replays
 the frames it missed, or the stream closes just as an alert is sent.
 
 - The push carries the identifier the app would give its own notification for
-  the same frame: `openmaus.<threadId>.<seq>`. On iPhone this is the APNs
+  the same frame: `seira.<threadId>.<seq>`. On iPhone this is the APNs
   collapse id, which becomes the notification's identifier; on Android it is
   the notification's tag. A local notification with the same identifier
   replaces the push instead of adding a second one.
@@ -120,12 +153,13 @@ the frames it missed, or the stream closes just as an alert is sent.
 
 ## Privacy and threat model
 
-**What the control plane learns.** For each registered phone: the installation
-that registered it, the device token, its platform and APNs environment, and
-when it last got a push. For each send: the kind, the title, the bot's and
-room's names and ids, the thread id and the phone's pairing tag. It never sees
-message text, files or credentials. It logs only the request id, the platform
-and the provider's status and reason, never the token or the payload.
+**What the push relay learns.** For each registered phone: the anonymous
+installation that registered it, the device token, its platform and APNs
+environment, and when it last got a push. For each send: the kind, the title,
+the bot's and room's names and ids, the thread id and the phone's pairing tag.
+It never sees message text, files, an account or a raw IP address. It logs at
+most one line per failure (message, status, platform and reason), never the
+token or the payload.
 
 **What Apple and Google learn.** The same names, ids and title, the device
 token, and when Seira pushed to the phone. Not the content of any
@@ -133,9 +167,12 @@ conversation.
 
 **Where tokens are kept.** On the computer or Cloud, in
 `<data dir>/push-devices.json` (mode 0600), beside the other paired-device
-records. In the control plane, in the D1 table `installation_push_devices`
-(token and its SHA-256). The phone app never sends the token anywhere else.
-`GET /api/push/device` never echoes it.
+records. In the push relay, in the D1 table `installation_push_devices`
+(token and its SHA-256), in the push relay's own database. The phone app
+never sends the token anywhere else.
+`GET /api/push/device` never echoes it. The server's relay credential is in
+`<data dir>/push-relay.json` (mode 0600); the relay keeps only its SHA-256
+hash.
 
 **Revocation.** A registration ends when:
 
@@ -146,8 +183,8 @@ records. In the control plane, in the D1 table `installation_push_devices`
 - the desktop's companion unpairs the phone (`/api/live/device-revoked`);
 - the same phone pairs again (the token moves to the new pairing);
 - Apple or Google say the token is dead (`410`), which deletes it everywhere;
-- the installation is revoked in the control plane, which deletes all its
-  tokens.
+- the installation is deleted at the relay (`DELETE /v1/installations/self`),
+  or the relay deletes it after 90 days unused, with all its tokens.
 
 Known gap: a phone that removes a computer it cannot reach (the computer is
 off) leaves its registration there until one of the other events happens. The
@@ -155,9 +192,10 @@ phone then still gets "Scout finished" from that computer; a tap opens
 nothing, because the computer is no longer saved.
 
 **Rate limits.** On the server: one push per phone, kind and conversation in
-10 seconds, 30 per phone in 10 minutes. In the control plane: 600 sends per
+10 seconds, 30 per phone in 10 minutes. In the push relay: 600 sends per
 installation and 60 per token per hour, 120 registrations per hour, 50 tokens
-per installation.
+per installation, and the enroll limits above (full table in
+`cloudflare/push-relay/README.md`).
 
 **Replay and forgery.** Every relay call needs the installation credential.
 A send reaches only a token that the same installation registered, so a
@@ -171,34 +209,12 @@ would only send that person the same names and ids it can already read.
 
 ## Cloud homes
 
-A desktop has an installation credential once its owner turns on "Use your
-phone anywhere", and `seira serve` has one after `seira login` or
-from `OMB_INSTALLATION_CREDENTIAL`. A Cloud home has none, so today it cannot
-send.
-
-The server code already reads a push-only credential from
-`OMB_PUSH_CREDENTIAL`, so the smallest change on the home itself is nothing
-but that variable. The open question is who issues it. Installation
-credentials last 90 days and are rotated with an account session, which a
-Cloud home does not have. Two ways:
-
-1. **Recommended: the Admin relays for its homes.** The home already talks to
-   the Admin with its bootstrap secret (as `/api/cloud/machines/woke` does).
-   Add `POST /api/cloud/machines/push/{register,unregister,send}` to the Admin,
-   signed the same way, with the same strict body as the control plane. The
-   Admin forwards to a matching control-plane route family that it reaches
-   with one Worker secret shared only between the two, keyed by the home's
-   machine id instead of an installation. No credential lives on the home, no
-   90-day rotation, and deleting a home in the Admin deletes its tokens. Cost:
-   a small Admin route, a control-plane route family beside the installation
-   one, and a second relay transport in `server/phone-push.ts`.
-2. The Admin mints an installation per home under a service account and
-   passes it as `OMB_PUSH_CREDENTIAL`. No new code on the home or in the
-   control plane, but the Admin must keep a control-plane account session
-   alive to rotate every home's credential every 90 days.
-
-Neither is built yet. Until one is, a Cloud home answers `push: "no-account"`
-and its phones keep today's behaviour.
+A Cloud home runs the same server, so it enrolls itself like any computer and
+needs no account. Open risk: Cloud homes can share an outgoing address, and the
+relay allows 5 enrolls per address per UTC day. More new homes than that on one
+address wait for the next day (the server retries after the relay's
+`Retry-After`). A fleet that must not enroll each home can give it a
+credential with `SEIRA_PUSH_CREDENTIAL`.
 
 ## Always-on and the grace period
 
@@ -228,7 +244,7 @@ and its phones keep today's behaviour.
 - The categories (Allow and Deny on an approval, Answer on a question) are the
   ones the app registers today.
 
-## Compared with the reference app, and why push goes through the control plane
+## Compared with the reference app, and why push goes through a hosted sender
 
 The owner asked for push "like the reference app does it, with a relay". This
 section says what the reference app actually does, how each part maps onto
@@ -269,10 +285,10 @@ Seira, and which design we keep.
 | The reference app | Seira |
 | --- | --- |
 | The user's server watches its events and decides | The computer or Cloud (`server/phone-push.ts`) does the same |
-| Hosted relay: holds the APNs and Firebase keys, stores tokens, sends | The control plane's push routes (`cloudflare/control-plane/src/push.ts`) |
-| Server authenticates with an environment credential | The installation credential the computer already has |
-| Device registration goes to the hosted relay, per account | Registration goes to each computer over the phone's existing link, and the computer registers it with the control plane |
-| Live Activity tokens registered, updates and ends by push | The same (`/api/push/activity`, control plane `push/activity`) |
+| Hosted relay: holds the APNs and Firebase keys, stores tokens, sends | The push relay (`cloudflare/push-relay`), the control plane's push routes without accounts |
+| Server authenticates with an environment credential | The installation credential each server enrolls for itself at the push relay |
+| Device registration goes to the hosted relay, per account | Registration goes to each computer over the phone's existing link, and the computer registers it with the push relay |
+| Live Activity tokens registered, updates and ends by push | The same (`/api/push/activity`, relay `push/activity`; the relay answers `503` to it today) |
 | Android ongoing notification from FCM data, no foreground service | The same (the phone app's `bot-activity` module) |
 
 Seira also has something called a relay: Seira Relay (`relay1`, `relay2`,
@@ -280,7 +296,7 @@ Seira also has something called a relay: Seira Relay (`relay1`, `relay2`,
 end-to-end encrypted connection to the computer and cannot read a byte of it,
 so it never sees an event, a bot name or a token. The reference app's relay is
 a hosted service that receives plain state from the user's server and talks to
-Apple and Google. In Seira that service is the control plane.
+Apple and Google. In Seira that service is the push relay.
 
 ### Should push go through Seira Relay as well, or instead?
 
@@ -290,29 +306,29 @@ What it would buy:
   relay's view is the same session the computer holds, seen from the middle.
   The computer also knows when a phone on Wi-Fi or a tunnel is gone, which the
   relay never sees.
-- **One hosted hop.** We already have one: computer → control plane → Apple or
+- **One hosted hop.** We already have one: computer → push relay → Apple or
   Google. Going through the relay would add a hop (computer → relay → Apple),
   because the relay would still have to learn what to send from the computer.
 - **Fewer moving parts.** It would be more. The relay nodes are long-running
   containers on two hosts, built to carry bytes they cannot read. They would
   need the APNs key and the Firebase service account on each node, a token
   store, rate limits and dead-token handling. That is a second sender to
-  secure and keep in step with the control plane, which already does all of
+  secure and keep in step with the push relay, which already does all of
   this and is covered by tests.
 
 What it would cost or break:
 
 - **Cloud homes and many phones never touch the relay.** A Cloud is reached
   directly over HTTPS, and many phones use Wi-Fi or a tunnel. Only the
-  control plane can serve them all.
+  push relay can serve them all.
 - **It weakens what the relay promises.** Today a relay compromise exposes
   only ciphertext and connection metadata. With push it would also expose
   device tokens and the keys that can alert every Seira phone.
 - **Credentials would sit outside Cloudflare's secret store,** on hosts we
   patch ourselves.
 
-**Recommendation: keep the control plane as the sender. It already is our
-equivalent of the reference app's relay:** a single hosted service that holds
+**Recommendation: keep one hosted Worker as the sender, now the push relay.
+It is our equivalent of the reference app's relay:** a single hosted service that holds
 the Apple and Google keys, receives content-free state from the user's own
 machine, and sends. Seira Relay stays a blind splice. What we take from the
 reference app is everything around the sender: the phone's registration
@@ -324,44 +340,43 @@ without any Seira account at all.
 
 ## Switching it on
 
-What the owner provides and does, in order. Nothing here has been done.
+What the owner provides and does, in order. Done for Android on 2026-11-21:
+the `seira-push` Worker runs at `push.seira.bot` with `FCM_SERVICE_ACCOUNT`
+set (`GET /healthz` says `"fcm": true`). iPhone waits for steps 1, 2 and the
+APNs secrets.
 
 **Apple**
 
 1. In the Apple Developer account, create an APNs auth key (`.p8`) with the
    Apple Push Notifications service enabled. Note its Key ID and the Team ID.
-2. Enable the Push Notifications capability on the App ID `com.openmausbot.app`
+2. Enable the Push Notifications capability on the App ID `com.seira.app`
    (and `.next` / `.dev` if those builds should get pushes), then regenerate
    the provisioning profiles.
 
 **Google**
 
-3. Create a Firebase project, add the Android app `com.openmausbot.companion`
+3. Create a Firebase project, add the Android app `com.seira.companion`
    (and the `.next` / `.dev` packages if wanted), and download
    `google-services.json`.
 4. In Project settings → Service accounts, generate a private key (the
    service-account JSON). It needs the Firebase Cloud Messaging API (V1)
    enabled.
 
-**Control plane** (`cloudflare/control-plane/README.md`, "Phone push relay")
+**Push relay** (`cloudflare/push-relay/README.md`)
 
-5. Apply the D1 migrations `0017_push_platforms.sql` (after `0008`) and
-   `0018_push_purpose.sql` (Live Activity and push-to-start tokens). Live
-   Activities and Android's ongoing notification need no further secret: they
-   use the same APNs key (topic `<bundle id>.push-type.liveactivity`) and the
-   same Firebase project.
-6. Set the secrets: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` (the
-   `.p8`), `APNS_BUNDLE_ID` (`com.openmausbot.app`), optionally
-   `APNS_ENVIRONMENTS=production,sandbox` to accept development builds, and
-   `FCM_SERVICE_ACCOUNT` (the whole service-account JSON).
+5. Apply the relay's D1 migrations.
+6. Set the secrets: `IP_HASH_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID`,
+   `APNS_PRIVATE_KEY` (the `.p8`), `APNS_BUNDLE_ID` (`com.seira.app`),
+   optionally `APNS_ENVIRONMENTS=production,sandbox` to accept development
+   builds, and `FCM_SERVICE_ACCOUNT` (the whole service-account JSON).
 7. Deploy the Worker. Until a platform's secrets are set its routes answer
    `503 push_unavailable` and servers back off for an hour.
 
 **Phone app** (`app/app.config.ts` in the phone repository)
 
 8. Put `google-services.json` where the build can read it (an EAS file secret
-   named by `MAUSBOT_GOOGLE_SERVICES_FILE`, or `app/google-services.json`).
-9. Build with `MAUSBOT_REMOTE_PUSH=1` (or set `REMOTE_PUSH = true`). This adds
+   named by `SEIRA_GOOGLE_SERVICES_FILE`, or `app/google-services.json`).
+9. Build with `SEIRA_REMOTE_PUSH=1` (or set `REMOTE_PUSH = true`). This adds
    the `aps-environment` entitlement (`production` for preview and production
    builds, `development` for development builds), Firebase on Android, and
    turns on token registration in the app. Update the store privacy answers
@@ -370,21 +385,21 @@ What the owner provides and does, in order. Nothing here has been done.
 
 **Desktop and server**
 
-10. Ship the server with phone push. It stays off until
-    `features.phonePush: true` is in `config.json`, or `OMB_PHONE_PUSH=1` is set
-    (`OMB_PHONE_PUSH=0` forces it off). This is the rollout flag: turn it on
-    for one machine first, then flip the default in a release.
-11. For Cloud homes, build one of the two options under "Cloud homes".
+10. Ship the server with phone push. It stays off until the owner turns on
+    Settings → Phone & devices → Alerts when the phone app is closed
+    (`features.phonePush: true` in `config.json`), or `SEIRA_PHONE_PUSH=1` is
+    set (`SEIRA_PHONE_PUSH=0` forces it off). Turn it on for one machine first,
+    then decide whether a release turns it on by default.
 
-Deploy order: migration and secrets, then the control plane, then a server
-with phone push on for one test machine, then a phone build with the switch on,
+Deploy order: migration and secrets, then the push relay, then a server with
+phone push on for one test machine, then a phone build with the switch on,
 then widen.
 
 ## Test plan on real devices
 
 Run each on an iPhone (TestFlight build, production APNs) and an Android
 phone (release build with Google Play services), paired with a desktop that
-has "Use your phone anywhere" on and `features.phonePush: true`.
+has Alerts when the phone app is closed turned on.
 
 1. Pair, then `GET /api/push/device` from the phone (or check the server's
    `push-devices.json`) shows a registration with the right platform.
@@ -407,8 +422,8 @@ has "Use your phone anywhere" on and `features.phonePush: true`.
     the service and pushes resume.
 11. Uninstall the app, trigger an alert: the server log shows the token
     dropped after the provider's `410`/`UNREGISTERED`.
-12. A computer with phone push left off: nothing in the control plane's logs,
-    `GET /api/push/device` says `off`.
+12. A computer with phone push left off: no call to the push relay, no
+    `push-relay.json` in its data folder, and `GET /api/push/device` says `off`.
 
 ## What this does not do
 
@@ -418,10 +433,10 @@ has "Use your phone anywhere" on and `features.phonePush: true`.
 - **Nothing arrives if the computer is off or asleep,** or offline. The
   computer is what notices the event and asks for the push; a sleeping Mac
   notices nothing. A Cloud runs all the time, so a Cloud's phones get pushes
-  whenever its bots work (once a Cloud home can send, see "Cloud homes").
+  whenever its bots work (see "Cloud homes").
 - **No push for other kinds** (mentions, routine failures, waits, notices).
   They arrive as today while the app is connected.
 - **No badge counts from push.** The badge is updated when the app runs.
 - **No delivery guarantee.** Apple and Google may delay or drop a push (low
   battery, Focus, Doze); the outbox retries only failures between the server
-  and the control plane.
+  and the push relay.

@@ -13,7 +13,7 @@ import { BotAvatar } from "./Avatar";
 import { joinedCorners, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX } from "./chat-bubble";
 import { loadAppCards } from "./bot-settings/useBotApps";
 import { engineReady } from "./EngineLibrary";
-import { IntroChips } from "./HelperSetup";
+import { IntroChips, seiraSuggestsTeams, useIsAdmin } from "./HelperSetup";
 import { usePrefersReducedMotion } from "./mascot-clock";
 import { preloadConnectedApps } from "@/lib/connected-apps";
 
@@ -25,7 +25,7 @@ const LOOK_MS = 3_000;
 const ALL = 6;
 const DELAYS = [INTRO_TIMING.first, INTRO_TIMING.line, INTRO_TIMING.line, INTRO_TIMING.typing, INTRO_TIMING.followup, INTRO_TIMING.chips];
 
-/** MausBot's three lines: who it is, what it does here, and that it is looking around. A MausBot that is not the Chief
+/** Seira's three lines: who it is, what it does here, and that it is looking around. A Seira that is not the Chief
  * keeps its helper's lines; a Team Cloud member's leaves their day to the team's Chief. */
 export function introLines(input: { name: string; chief: boolean; person?: string; team?: string }): string[] {
   const team = input.team ? t("helperIntro.team", { team: input.team }) : "";
@@ -110,13 +110,14 @@ function useArrival(first: boolean, ai: boolean, ready: boolean): { shown: numbe
   return { shown: run ?? (animate ? 0 : ALL), staged: run !== null };
 }
 
-/** MausBot's first messages in Simple mode, in the viewer's language: three short bubbles, its follow-up once it has looked
+/** Seira's first messages in Simple mode, in the viewer's language: three short bubbles, its follow-up once it has looked
  * around (a real message, helperFollowup, which a first run asks the server for) and chips for what is still missing.
  * The chips go once the person writes anything after it (`answered`). */
 export function SimpleHelperIntro({ botId, threadId, message, answered, followup }: {
   botId: string; threadId: string; message: Message; answered: boolean; followup?: Message;
 }) {
   const { state } = useStore();
+  const admin = useIsAdmin();
   const welcoming = useWelcomingBot();
   const hidden = welcoming === botId;
   const bot = state.bots.find((candidate) => candidate.id === botId);
@@ -166,6 +167,7 @@ export function SimpleHelperIntro({ botId, threadId, message, answered, followup
     appsConnected: Boolean(look.apps?.length),
     phonePaired: look.phonePaired,
     importFound: look.importFound,
+    agentTools: seiraSuggestsTeams(bot, state.instances, admin),
   });
   const typing = staged && ai !== "none" && shown === 4 && Boolean(bot);
   return (
@@ -188,7 +190,7 @@ export function SimpleHelperIntro({ botId, threadId, message, answered, followup
           <span className="text-[14px] leading-5 text-ink-tertiary">{t("helperIntro.typing")}</span>
         </div>
       )}
-      <IntroChips chips={chips} />
+      <IntroChips chips={chips} botId={botId} threadId={threadId} />
     </div>
   );
 }

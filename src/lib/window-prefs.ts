@@ -41,6 +41,7 @@ const PREFS: { [I in WindowPrefId]: Pref<I> } = {
   "appearance.advanced": { read: () => readAdvancedMode(), write: (on) => setAdvancedMode(on) },
   "appearance.font": { read: () => readFont(), write: (font) => applyFont(font) },
   "appearance.chatWidth": { read: () => readChatWidth(), write: (width) => applyChatWidth(width) },
+  "appearance.textSize": { read: () => ogb()?.textSize?.get(), write: (step) => ogb()?.textSize?.set(step) },
   "general.sendKey": { read: () => readSendKey(), write: (key) => setSendKey(key) },
   "general.notificationSounds": { read: () => notificationSoundsEnabled(), write: (on) => setNotificationSounds(on) },
   "appearance.userBubbles": { read: () => readColorUserBubbles(), write: (on) => setColorUserBubbles(on) },
@@ -124,3 +125,4 @@ export function reportWindowPrefs(): void {
 }
 
 onWindowPrefChanged(reportWindowPrefs);
+if (typeof window !== "undefined") ogb()?.textSize?.onChange?.(reportWindowPrefs);

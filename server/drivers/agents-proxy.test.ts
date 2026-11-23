@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { childEnv } from "../testing/omb-env.ts";
+import { childEnv } from "../testing/seira-env.ts";
 import { ToolResults } from "../tool-results.ts";
 import { waitForExit } from "../testing/cleanup.ts";
 import { fullInputSchema } from "./agents-catalog.ts";
@@ -49,6 +49,9 @@ let assignmentStatusCode = 200;
 let lastThreadBody: any = null;
 let threadCalls = 0;
 let threadsList: unknown = { threads: [] };
+let boardCloseList: unknown = { cards: [] };
+let boardCloseReply: { status: number; body: unknown } = { status: 200, body: { ok: true, title: "Ship the report", botName: "Ops" } };
+let boardCloseBody: any = null;
 let threadResponse: unknown = { threadId: "thread-new", title: "QA: PR #1", botId: "bot-asker", botName: "Asker", self: true, state: "running", limit: 3 };
 let computerRequests: { method: string; url: string; body: unknown }[] = [];
 let computerResponse: unknown = { current: "local", available: ["local", "vm"] };
@@ -268,6 +271,21 @@ beforeAll(async () => {
       res.end(JSON.stringify({ current: { instanceId: "claude", model: "claude-sonnet-5" }, engines: [{ instanceId: "codex", name: "Codex", models: ["gpt-5.5"] }] }));
       return;
     }
+    if (req.url?.startsWith("/api/internal/board-close")) {
+      if (req.method === "GET") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(boardCloseList));
+        return;
+      }
+      let data = "";
+      req.on("data", (c) => (data += c));
+      req.on("end", () => {
+        boardCloseBody = JSON.parse(data);
+        res.writeHead(boardCloseReply.status, { "content-type": "application/json" });
+        res.end(JSON.stringify(boardCloseReply.body));
+      });
+      return;
+    }
     if (req.method === "GET" && req.url?.startsWith("/api/internal/threads?")) {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(threadsList));
@@ -466,16 +484,16 @@ beforeAll(async () => {
       ...childEnv(),
       // Recalled lines are dated on the machine's clock, so the proxy runs in a fixed zone (+05:30).
       TZ: "Asia/Kolkata",
-      OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
-      OMB_BOT_ID: "bot-asker",
-      OMB_THREAD_ID: "thread-asker-routine",
-      OMB_COMMS_TOKEN: TOKEN,
-      OMB_SKILL_AUTHORING_ENABLED: "1",
-      OMB_SHARED_COMPUTERS_ENABLED: "1",
+      SEIRA_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
+      SEIRA_BOT_ID: "bot-asker",
+      SEIRA_THREAD_ID: "thread-asker-routine",
+      SEIRA_COMMS_TOKEN: TOKEN,
+      SEIRA_SKILL_AUTHORING_ENABLED: "1",
+      SEIRA_SHARED_COMPUTERS_ENABLED: "1",
       // A Chief's turn, so the Chief-only team tools are mounted too.
-      OMB_CHIEF_OF_STAFF: "1",
+      SEIRA_CHIEF_OF_STAFF: "1",
       // A person's own request, which may pick its computer.
-      OMB_COMPUTER_SELECTION: "1",
+      SEIRA_COMPUTER_SELECTION: "1",
     },
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -630,7 +648,7 @@ describe("agents-proxy MCP surface", () => {
 
   it("answers the MCP handshake and lists the agents tools", async () => {
     const init = await rpc("initialize", { protocolVersion: "2024-11-05" });
-    expect(init.result.serverInfo.name).toBe("openmausbot-agents");
+    expect(init.result.serverInfo.name).toBe("seira-agents");
     const list = await rpc("tools/list");
     expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
       "tool_result_read",
@@ -641,6 +659,7 @@ describe("agents-proxy MCP surface", () => {
       "assignment_status",
       "list_bots",
       "usage_limits",
+      "machine_budget",
       "list_rooms",
       "select_computer",
       "list_threads",
@@ -671,8 +690,10 @@ describe("agents-proxy MCP surface", () => {
       "message_person",
       "report_bug",
       "share",
+      "suggest_team",
       "memory_update",
       "retry_thread",
+      "board_close",
       "memory_log",
       "session_search",
       "trigger_info",
@@ -681,6 +702,7 @@ describe("agents-proxy MCP surface", () => {
       "wait_until",
       "list_waits",
       "cancel_wait",
+      "workflow",
       "propose_profile",
       "propose_model",
       "propose_team_memory",
@@ -770,7 +792,7 @@ describe("agents-proxy MCP surface", () => {
     const readNames = [
       "tool_result_read",
       "list_shared_computers",
-      "assignment_status", "list_bots", "usage_limits", "list_rooms", "list_threads",
+      "assignment_status", "list_bots", "usage_limits", "machine_budget", "list_rooms", "list_threads",
       "list_models", "list_team_setup",
       "session_search", "trigger_info", "list_waits", "skills_list",
     ];
@@ -1328,6 +1350,31 @@ describe("agents-proxy MCP surface", () => {
     assignmentStatusResponse = DONE_ASSIGNMENT;
   });
 
+  it("board_close lists the cards the bot may close, and closes one with a reason", async () => {
+    boardCloseList = { cards: [{ id: "handoff:h1", title: "Ship the report", state: "failed", botName: "Ops" }] };
+    expect((await callTool("board_close", {})).result.content[0].text).toBe("Needs you cards you may move to Done:\n- Ship the report (failed, @Ops) [card id: handoff:h1]");
+    boardCloseList = { cards: [] };
+    expect((await callTool("board_close", {})).result.content[0].text).toBe("No Needs you cards that you may move to Done.");
+
+    const missing = await callTool("board_close", { card_id: "handoff:h1" });
+    expect(missing.result.isError).toBe(true);
+    expect(missing.result.content[0].text).toContain("needs a reason");
+
+    const closed = await callTool("board_close", { card_id: "handoff:h1", reason: "The person fixed it by hand." });
+    expect(closed.result.isError).toBeFalsy();
+    expect(closed.result.content[0].text).toContain("Moved Ship the report to Done as closed");
+    expect(boardCloseBody).toMatchObject({ cardId: "handoff:h1", reason: "The person fixed it by hand." });
+
+    boardCloseReply = { status: 403, body: { error: "you can close only cards of your own work" } };
+    try {
+      const refused = await callTool("board_close", { card_id: "handoff:x", reason: "Not mine." });
+      expect(refused.result.isError).toBe(true);
+      expect(refused.result.content[0].text).toContain("you can close only cards of your own work");
+    } finally {
+      boardCloseReply = { status: 200, body: { ok: true, title: "Ship the report", botName: "Ops" } };
+    }
+  });
+
   it("assignment_status and list_threads say why a queued handoff has not started, with its handoff id", async () => {
     const waiting = "waiting for a free thread slot: Ops is already running 3 of 3 threads at once";
     assignmentStatusResponse = { outstanding: [{ id: "asg-q", botId: "bot-ops", botName: "Ops", status: "queued", waiting }] };
@@ -1643,7 +1690,7 @@ describe("agents-proxy MCP surface", () => {
       name: "Morning brief",
       instructions: "Summarize today's priorities.",
       schedule: { type: "weekly", time: "09:00", weekdays: ["monday", "friday"] },
-      run_on: "maus",
+      run_on: "seira",
       duration_minutes: 45,
       timeout_minutes: 15,
       continuity: true,
@@ -1658,7 +1705,7 @@ describe("agents-proxy MCP surface", () => {
         name: "Morning brief",
         instructions: "Summarize today's priorities.",
         schedule: { type: "weekly", time: "09:00", weekdays: ["monday", "friday"] },
-        runOn: "maus",
+        runOn: "seira",
         timeoutMinutes: 15,
         continuity: true,
         runOnStartup: true,
@@ -1673,12 +1720,12 @@ describe("agents-proxy MCP surface", () => {
   it("creates a webhook trigger with only the fields a webhook has, and refuses schedule fields on it", async () => {
     lastRoutineRequestBody = null;
     const res = await callTool("create_trigger", {
-      when: "webhook", name: "Interested replies", instructions: "Draft a follow-up for the lead.", run_on: "maus", webhook_event_types: ["reply.labelled"],
+      when: "webhook", name: "Interested replies", instructions: "Draft a follow-up for the lead.", run_on: "seira", webhook_event_types: ["reply.labelled"],
     });
     expect(res.result.isError).toBeFalsy();
     expect(lastRoutineRequestBody).toEqual({
       fromBotId: "bot-asker", fromThreadId: "thread-asker-routine", action: "create", kind: "webhook",
-      webhook: { name: "Interested replies", instructions: "Draft a follow-up for the lead.", runOn: "maus", eventTypes: ["reply.labelled"] },
+      webhook: { name: "Interested replies", instructions: "Draft a follow-up for the lead.", runOn: "seira", eventTypes: ["reply.labelled"] },
     });
     lastRoutineRequestBody = null;
     const refused = await callTool("create_trigger", { when: "webhook", name: "Bad", instructions: "x", schedule: { type: "daily", time: "09:00" } });
@@ -1725,9 +1772,9 @@ describe("agents-proxy MCP surface", () => {
     expect(res.result.isError).toBeFalsy();
   });
 
-  it.each(["box", "cloud"])("maps %s execution to the explicit Boat runner without changing stored wire values", async (run_on) => {
+  it.each(["box", "cloud"])("maps %s execution to the cloud run without changing stored wire values", async (run_on) => {
     const res = await callTool("create_trigger", { when: "schedule",
-      name: "Boat check", instructions: "Check explicitly on Boat.",
+      name: "Cloud run check", instructions: "Check on the cloud desktop.",
       schedule: { type: "daily", time: "09:00" }, run_on,
     });
     expect(res.result.isError).toBeFalsy();
@@ -1739,10 +1786,10 @@ describe("agents-proxy MCP surface", () => {
     expect(lastRoutineRequestBody.changes.runOn).toBe("cloud");
   });
 
-  it("advertises VPS-compatible default execution separately from the Boat runner", async () => {
+  it("advertises VPS-compatible default execution separately from the cloud run", async () => {
     const list = await rpc("tools/list");
     const routine = list.result.tools.find((entry: { name: string }) => entry.name === "trigger");
-    expect(routine.inputSchema.properties.run_on.enum).toEqual(["maus", "box"]);
+    expect(routine.inputSchema.properties.run_on.enum).toEqual(["seira", "box"]);
     expect(routine.inputSchema.properties.run_on.description).toContain("INCLUDING a self-hosted VPS");
   });
 
@@ -1764,7 +1811,7 @@ describe("agents-proxy MCP surface", () => {
 
   it.each([
     { run_on: 7 },
-    { run_on: "maus", runOn: "cloud" },
+    { run_on: "seira", runOn: "cloud" },
     { timeout_minutes: "20" },
     { timeout_minutes: 10, timeoutMinutes: 20 },
     { clear_timeout: true, timeoutMinutes: 10 },
@@ -2255,10 +2302,10 @@ describe("standing external runtime", () => {
 
   beforeAll(async () => {
     external = spawn(process.execPath, [PROXY], {
-      env: { ...childEnv(), OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`, OMB_BOT_ID: "bot-asker",
-        OMB_THREAD_ID: "thread-asker-routine", OMB_COMMS_TOKEN: TOKEN,
-        OMB_EXTERNAL_RUNTIME: "1", OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1",
-        OMB_SKILL_AUTHORING_ENABLED: "1", OMB_SHARED_COMPUTERS_ENABLED: "1" },
+      env: { ...childEnv(), SEIRA_HARNESS_URL: `http://127.0.0.1:${stubPort}`, SEIRA_BOT_ID: "bot-asker",
+        SEIRA_THREAD_ID: "thread-asker-routine", SEIRA_COMMS_TOKEN: TOKEN,
+        SEIRA_EXTERNAL_RUNTIME: "1", SEIRA_ROOM_TURN: "1", SEIRA_OWN_THREAD_CREATION: "1",
+        SEIRA_SKILL_AUTHORING_ENABLED: "1", SEIRA_SHARED_COMPUTERS_ENABLED: "1" },
       stdio: ["pipe", "pipe", "inherit"],
     });
     let buffer = "";
@@ -2281,7 +2328,7 @@ describe("standing external runtime", () => {
   it("sees the same one tool surface as every turn: the switches it sets change nothing", async () => {
     const list = await externalRpc("tools/list");
     // the main child is a Chief's turn that may pick its computer; this one is neither, so only those differ
-    const chiefOnly = ["create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+    const chiefOnly = ["create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "suggest_team", "propose_bot_deletion", "manage_room", "retry_thread"];
     const everyTurn = (await rpc("tools/list")).result.tools.filter((tool: any) => !chiefOnly.includes(tool.name) && tool.name !== "select_computer");
     const names = list.result.tools.map((tool: any) => tool.name);
     expect(names).toEqual(everyTurn.map((tool: any) => tool.name));
@@ -2350,12 +2397,12 @@ describe("with computer sharing off and no Chief of Staff (the defaults)", () =>
     gated = spawn(process.execPath, [PROXY], {
       env: {
         ...childEnv(),
-        OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
-        OMB_BOT_ID: "bot-asker",
-        OMB_THREAD_ID: "thread-asker-routine",
-        OMB_COMMS_TOKEN: TOKEN,
-        OMB_SKILL_AUTHORING_ENABLED: "1",
-        // deliberately no OMB_SHARED_COMPUTERS_ENABLED or OMB_CHIEF_OF_STAFF
+        SEIRA_HARNESS_URL: `http://127.0.0.1:${stubPort}`,
+        SEIRA_BOT_ID: "bot-asker",
+        SEIRA_THREAD_ID: "thread-asker-routine",
+        SEIRA_COMMS_TOKEN: TOKEN,
+        SEIRA_SKILL_AUTHORING_ENABLED: "1",
+        // deliberately no SEIRA_SHARED_COMPUTERS_ENABLED or SEIRA_CHIEF_OF_STAFF
       },
       stdio: ["pipe", "pipe", "inherit"],
     });
@@ -2504,8 +2551,8 @@ describe("tool bridge", () => {
   function startProxy(env: Record<string, string>): Rpc {
     const proxy = spawn(process.execPath, [PROXY], {
       env: {
-        ...childEnv(), TZ: "Asia/Kolkata", OMB_HARNESS_URL: `http://127.0.0.1:${stubPort}`, OMB_BOT_ID: "bot-asker",
-        OMB_THREAD_ID: "thread-asker-routine", OMB_COMMS_TOKEN: TOKEN, ...env,
+        ...childEnv(), TZ: "Asia/Kolkata", SEIRA_HARNESS_URL: `http://127.0.0.1:${stubPort}`, SEIRA_BOT_ID: "bot-asker",
+        SEIRA_THREAD_ID: "thread-asker-routine", SEIRA_COMMS_TOKEN: TOKEN, ...env,
       },
       stdio: ["pipe", "pipe", "inherit"],
     });
@@ -2534,8 +2581,8 @@ describe("tool bridge", () => {
   }
 
   /** The main child's switches: a Chief with skills and shared computers. */
-  const CHIEF = { OMB_SKILL_AUTHORING_ENABLED: "1", OMB_SHARED_COMPUTERS_ENABLED: "1", OMB_CHIEF_OF_STAFF: "1", OMB_COMPUTER_SELECTION: "1" };
-  const CHIEF_ONLY = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+  const CHIEF = { SEIRA_SKILL_AUTHORING_ENABLED: "1", SEIRA_SHARED_COMPUTERS_ENABLED: "1", SEIRA_CHIEF_OF_STAFF: "1", SEIRA_COMPUTER_SELECTION: "1" };
+  const CHIEF_ONLY = ["create_bot", "list_team_setup", "propose_team_setup", "suggest_team", "propose_bot_deletion", "manage_room", "retry_thread"];
   const HOT = ["tool_result_read", "list_room_targets", "coordinate_bots", "list_bots", "list_rooms", "select_computer", "attach_file", "publish_page", "post_to_room", "post_to_thread", "request_credential", "request_sign_in", "fill_login", "message_person", "share", "memory_update"];
   let chief: Rpc;
   let plain: Rpc;
@@ -2554,12 +2601,12 @@ describe("tool bridge", () => {
   };
 
   beforeAll(async () => {
-    chief = startProxy({ ...CHIEF, OMB_AGENTS_TOOL_BRIDGE: "1" });
+    chief = startProxy({ ...CHIEF, SEIRA_AGENTS_TOOL_BRIDGE: "1" });
     // not a Chief, nothing optional, a person's own request: bridged
-    plain = startProxy({ OMB_COMPUTER_SELECTION: "1", OMB_AGENTS_TOOL_BRIDGE: "1" });
-    off = startProxy({ ...CHIEF, OMB_AGENTS_TOOL_BRIDGE: "0" });
+    plain = startProxy({ SEIRA_COMPUTER_SELECTION: "1", SEIRA_AGENTS_TOOL_BRIDGE: "1" });
+    off = startProxy({ ...CHIEF, SEIRA_AGENTS_TOOL_BRIDGE: "0" });
     for (const proxy of [chief, plain, off]) {
-      expect((await proxy("initialize", { protocolVersion: "2024-11-05" })).result.serverInfo.name).toBe("openmausbot-agents");
+      expect((await proxy("initialize", { protocolVersion: "2024-11-05" })).result.serverInfo.name).toBe("seira-agents");
     }
   });
   afterAll(async () => { for (const proxy of started) await waitForExit(proxy, { signal: "SIGTERM" }); });

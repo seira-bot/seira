@@ -7,17 +7,17 @@ export type SidebarToolsLayout = "rows" | "toolbar";
 
 export const SIDEBAR_TOOLS_LAYOUTS: readonly SidebarToolsLayout[] = ["rows", "toolbar"];
 
-export const SIDEBAR_DENSITY_KEY = "openmausbot.sidebarDensity";
-export const SIDEBAR_TOOLS_LAYOUT_KEY = "openmausbot.sidebarToolsLayout";
-export const SIDEBAR_WIDTH_KEY = "openmausbot.sidebarWidth";
-export const SIMPLE_SIDEBAR_WIDTH_KEY = "openmausbot.sidebarWidth.simple";
-export const SIDEBAR_ATTENTION_PINNED_KEY = "openmausbot.sidebarAttentionPinned.v1";
-export const SIDEBAR_COLLAPSED_SECTIONS_KEY = "openmausbot.sidebarCollapsedSections.v1";
-export const SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.v1";
-export const SIMPLE_SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.simple.v1";
-export const PINNED_CIRCLES_KEY = "openmausbot.pinnedCircles";
-export const UNIVERSAL_PINS_KEY = "openmausbot.universalPins";
-export const PINNED_CIRCLE_ORDER_KEY = "openmausbot.pinnedCircleOrder.v1";
+export const SIDEBAR_DENSITY_KEY = "seira.sidebarDensity";
+export const SIDEBAR_TOOLS_LAYOUT_KEY = "seira.sidebarToolsLayout";
+export const SIDEBAR_WIDTH_KEY = "seira.sidebarWidth";
+export const SIMPLE_SIDEBAR_WIDTH_KEY = "seira.sidebarWidth.simple";
+export const SIDEBAR_ATTENTION_PINNED_KEY = "seira.sidebarAttentionPinned.v1";
+export const SIDEBAR_COLLAPSED_SECTIONS_KEY = "seira.sidebarCollapsedSections.v1";
+export const SIDEBAR_SECTION_ORDER_KEY = "seira.sidebarSectionOrder.v1";
+export const SIMPLE_SIDEBAR_SECTION_ORDER_KEY = "seira.sidebarSectionOrder.simple.v1";
+export const PINNED_CIRCLES_KEY = "seira.pinnedCircles";
+export const UNIVERSAL_PINS_KEY = "seira.universalPins";
+export const PINNED_CIRCLE_ORDER_KEY = "seira.pinnedCircleOrder.v1";
 
 /** What the sidebar's key keeps for the column of avatars. The values an older app kept there ("compact", "icons") open
  * the sidebar as it is. */
@@ -170,8 +170,11 @@ export function useSidebarToolsLayout(): SidebarToolsLayout {
 /** The narrowest the open sidebar gets. */
 export const SIDEBAR_MIN_WIDTH = 240;
 
-export function clampSidebarWidth(width: number, viewportWidth: number, max = 480): number {
-  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(max, viewportWidth - 320, Math.round(width)));
+/** The narrowest the open Simple sidebar gets: two columns of tiles. */
+export const SIMPLE_SIDEBAR_MIN_WIDTH = 156;
+
+export function clampSidebarWidth(width: number, viewportWidth: number, max = 480, min = SIDEBAR_MIN_WIDTH): number {
+  return Math.max(min, Math.min(max, viewportWidth - 320, Math.round(width)));
 }
 
 export function loadSidebarWidth(storage?: Pick<Storage, "getItem"> | null, key = SIDEBAR_WIDTH_KEY): number | null {
@@ -180,7 +183,8 @@ export function loadSidebarWidth(storage?: Pick<Storage, "getItem"> | null, key 
     const raw = target?.getItem(key);
     if (raw === null || raw === undefined || !/^\d+$/.test(raw)) return null;
     const width = Number(raw);
-    return width >= SIDEBAR_MIN_WIDTH && width <= 480 ? width : null;
+    const min = key === SIMPLE_SIDEBAR_WIDTH_KEY ? SIMPLE_SIDEBAR_MIN_WIDTH : SIDEBAR_MIN_WIDTH;
+    return width >= min && width <= 480 ? width : null;
   } catch {
     return null;
   }
@@ -470,7 +474,7 @@ export function saveSimpleSectionOrder(
 }
 
 /** Bots whose sidebar thread list stays at "Show all N threads" until the person picks "Show fewer". */
-export const SIDEBAR_SHOW_ALL_KEY = "openmausbot.sidebarShowAllThreads.v1";
+export const SIDEBAR_SHOW_ALL_KEY = "seira.sidebarShowAllThreads.v1";
 
 let showAllBots: ReadonlySet<string> | null = null;
 const showAllListeners = new Set<() => void>();

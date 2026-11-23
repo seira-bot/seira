@@ -22,6 +22,10 @@ export declare function resolveCompanionControlPlaneURL(options?: {
   isPackaged?: boolean;
   environment?: NodeJS.ProcessEnv;
 }): string;
+export declare function resolveServerControlPlaneURL(options?: {
+  environment?: NodeJS.ProcessEnv;
+  live?: readonly string[];
+}): string;
 export declare function companionAccountCleanupPending(credentials: CredentialDocument): boolean;
 export declare function companionTunnelRetired(credentials: CredentialDocument): boolean;
 /** true while a pairing window is open or a paired device was seen in the
@@ -59,6 +63,9 @@ export interface CompanionAccountService {
   connectorChanged(status: { status: string } | null | undefined): void;
   signOut(): Promise<CompanionAccountState>;
   restore(): Promise<CompanionAccountState>;
+  /** The relay refused this computer's installation credential or none is stored: asks for a usable one with the
+   * account, at most once per `renewIntervalMs`. The address stays as it is. */
+  renewInstallation(): Promise<CompanionAccountState>;
   /** Cancels background recovery timers (autoRecover only). */
   dispose(): void;
 }
@@ -90,7 +97,7 @@ export declare function createCompanionAccountService(options: {
   /** Hold the address only while something needs it (the desktop app). */
   onDemand?: boolean;
   managedEndpointNeeded?: () => Promise<boolean | "unused" | null>;
-  /** MausBot Relay: `capable` lets a "no" from managedEndpointNeeded hold even right after sign-in. */
+  /** Seira Relay: `capable` lets a "no" from managedEndpointNeeded hold even right after sign-in. */
   relay?: { capable: () => boolean; legacyDevices: () => Promise<number | null> };
   releaseGraceMs?: number;
   releaseJitterMs?: number;
@@ -98,6 +105,8 @@ export declare function createCompanionAccountService(options: {
   forcedCheckIntervalMs?: number;
   /** A new installation credential was stored. */
   installationChanged?: () => void;
+  /** The shortest wait between two renewals of the installation credential (default 10 minutes). */
+  renewIntervalMs?: number;
   /** One line per failed setup step: code, HTTP status, request id, retry delay. */
   log?: (line: string) => void;
 }): CompanionAccountService;

@@ -4,13 +4,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { stagedCloudflaredPath } from "../electron/managed-companion-tunnel.mjs";
+import { COMPANION_ACCOUNT_TOKEN_FIELD, COMPANION_ACCOUNT_USER_ID_FIELD } from "../electron/companion-account-service.mjs";
+import { MANAGED_COMPANION_ENDPOINT_FIELD, MANAGED_COMPANION_TOKEN_FIELD, stagedCloudflaredPath } from "../electron/managed-companion-tunnel.mjs";
 import { runLogin, runLogout, runStatus, type CliIo, type CliOptions } from "./cli.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { startControlPlaneStub, type ControlPlaneStub } from "./testing/control-plane-stub.ts";
 import { freePortBlock } from "./testing/ports.ts";
 import {
   cleanupTunnelOrigin,
+  controlPlaneProblem,
   createTunnelAccount,
   createTunnelOrigin,
   describeTunnelAccount,
@@ -50,7 +52,7 @@ describe("the headless cloudflared connector", () => {
   let marker: string;
   let lines: string[];
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-tunnel-connector-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-tunnel-connector-"));
     here = join(dir, "bundle");
     dataDir = join(dir, "data");
     staged = join(dataDir, "dist-native", "cloudflared", `${process.platform}-${process.arch}`, process.platform === "win32" ? "cloudflared.exe" : "cloudflared");
@@ -87,7 +89,7 @@ describe("the headless cloudflared connector", () => {
     mkdirSync(dirname(staged), { recursive: true });
     writeFileSync(staged, "override");
     expect(await ensureCloudflared({
-      dataDir, here, env: { PATH: "", MARKER: marker, OMB_CLOUDFLARED_PATH: staged }, log: (line) => lines.push(line),
+      dataDir, here, env: { PATH: "", MARKER: marker, SEIRA_CLOUDFLARED_PATH: staged }, log: (line) => lines.push(line),
     })).toBe(staged);
     expect(existsSync(marker)).toBe(false);
     expect(readFileSync(staged, "utf8")).toBe("override");
@@ -130,7 +132,7 @@ describe("the headless cloudflared connector", () => {
 describe("tunnel credentials: a private file, and unreadable is not empty", () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-tunnel-cred-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-tunnel-cred-"));
   });
   afterEach(() => removeTempDir(dir));
 
@@ -162,9 +164,9 @@ describe("login and logout against the control plane", () => {
   let dir: string;
   let stub: ControlPlaneStub;
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), "omb-tunnel-login-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-tunnel-login-"));
     stub = await startControlPlaneStub();
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", stub.url);
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
   });
   afterEach(async () => {
     vi.unstubAllEnvs();
@@ -202,13 +204,13 @@ describe("login and logout against the control plane", () => {
   });
 
   it("tells the control plane the release this server runs, and no version at all when it cannot read one", async () => {
-    vi.stubEnv("OMB_APP_VERSION", "0.1.153");
+    vi.stubEnv("SEIRA_APP_VERSION", "0.1.153");
     expect(await runLogin(options(dir, { email: "milind@example.test" }), fakeIo([stub.otp]).io)).toBe(0);
     expect([...stub.installations.values()][0]?.appVersion).toBe("0.1.153");
 
     expect(await runLogout(options(dir, { command: "logout" }), fakeIo([]).io)).toBe(0);
     stub.installations.clear();
-    vi.stubEnv("OMB_APP_VERSION", "unknown");
+    vi.stubEnv("SEIRA_APP_VERSION", "unknown");
     expect(await runLogin(options(dir, { email: "milind@example.test" }), fakeIo([stub.otp]).io)).toBe(0);
     expect([...stub.installations.values()][0]?.appVersion).toBeNull();
   });
@@ -273,10 +275,10 @@ describe("login and logout against the control plane", () => {
   });
 
   it("an unusable control-plane override is a clear error, not a silent default", async () => {
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", "ftp://nope");
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "ftp://nope");
     const io = fakeIo([]);
     expect(await runLogin(options(dir, { email: "a@b.test" }), io.io)).toBe(1);
-    expect(io.err.join("\n")).toMatch(/OMB_CONTROL_PLANE_URL/);
+    expect(io.err.join("\n")).toMatch(/SEIRA_CONTROL_PLANE_URL/);
   });
 });
 
@@ -285,7 +287,7 @@ describe("where the pieces are", () => {
     expect(platformName("darwin")).toBe("darwin");
     expect(platformName("win32")).toBe("windows");
     expect(platformName("linux")).toBe("linux");
-    const bundled = mkdtempSync(join(tmpdir(), "omb-tunnel-bundled-"));
+    const bundled = mkdtempSync(join(tmpdir(), "seira-tunnel-bundled-"));
     try {
       expect(guardianEntry(bundled)).toBeNull();
       writeFileSync(join(bundled, "tunnel-guardian.js"), "");
@@ -311,18 +313,18 @@ describe("where the pieces are", () => {
 
 describe.skipIf(!posix)("startTunnel: guardian, gateway and connector, verified through the gateway", () => {
   it("forwards the public address to the harness socket (no peer address = remote) and tears everything down on stop", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-tunnel-run-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-tunnel-run-"));
     const origin = createTunnelOrigin();
     const pidFile = join(dir, "connector.pid");
     const fake = join(dir, "cloudflared");
     writeFileSync(fake, `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 300\n`, { mode: 0o755 });
     const harness = createServer((req, res) => {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ app: "openmausbot", url: req.url, peer: req.socket.remoteAddress ?? null }));
+      res.end(JSON.stringify({ app: "seira", url: req.url, peer: req.socket.remoteAddress ?? null }));
     });
     await new Promise<void>((done) => harness.listen(origin.socketPath, done));
     const originPort = await freePortBlock([0], 29_600);
-    const endpoint = "https://c-stub.openmausbot.invalid";
+    const endpoint = "https://c-stub.seira.invalid";
     const guardian = guardianEntry();
     expect(guardian).toBeTruthy();
     const states: string[] = [];
@@ -332,7 +334,7 @@ describe.skipIf(!posix)("startTunnel: guardian, gateway and connector, verified 
       originTarget: { pid: process.pid, socketPath: origin.socketPath },
       binaryPath: fake,
       guardian: guardian ?? "",
-      env: { ...process.env, OMB_TUNNEL_ORIGIN_PORT: String(originPort) },
+      env: { ...process.env, SEIRA_TUNNEL_ORIGIN_PORT: String(originPort) },
       fetchImpl: (input, init) => fetch(String(input).replace(endpoint, `http://127.0.0.1:${originPort}`), init),
       onState: (state) => states.push(state.status),
     });
@@ -340,7 +342,7 @@ describe.skipIf(!posix)("startTunnel: guardian, gateway and connector, verified 
       const settled = await tunnel.started;
       expect(settled.status, states.join(",")).toBe("ready");
       const viaGateway: any = await (await fetch(`http://127.0.0.1:${originPort}/api/health`)).json();
-      expect(viaGateway.app).toBe("openmausbot");
+      expect(viaGateway.app).toBe("seira");
       expect(viaGateway.peer).toBeNull();
       // the connector is spawned right after the gateway binds; its shell writes the pid a moment later
       const connectorPidOtherThan = async (previous: number) => {
@@ -377,21 +379,142 @@ describe("a fleet's credential in the environment", () => {
   it("gets the public address with no account file and no emailed code; a rejected credential is a clear error", async () => {
     const stub = await startControlPlaneStub();
     try {
-      const env = { ...process.env, OMB_CONTROL_PLANE_URL: stub.url };
+      const env = { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url };
       expect(fleetCredential({})).toBeNull();
-      expect(fleetCredential({ OMB_INSTALLATION_CREDENTIAL: "   " })).toBeNull();
-      const credential = stub.seedInstallation("boat-1");
-      expect(fleetCredential({ OMB_INSTALLATION_CREDENTIAL: ` ${credential} ` })).toBe(credential);
+      expect(fleetCredential({ SEIRA_INSTALLATION_CREDENTIAL: "   " })).toBeNull();
+      const credential = stub.seedInstallation("install-1");
+      expect(fleetCredential({ SEIRA_INSTALLATION_CREDENTIAL: ` ${credential} ` })).toBe(credential);
       const access = await fleetAccess({ credential, env, version: "9.8.7" });
       expect(access).toEqual({ endpoint: stub.endpointUrl, token: stub.connectorToken });
       expect(stub.calls).toContain("POST /v1/installations/self/endpoint");
       // The fleet created the installation without a version; the endpoint request reports this server's release.
       expect([...stub.installations.values()].find((inst) => inst.credential === credential)?.appVersion).toBe("9.8.7");
       expect(stub.calls.some((call) => call.includes("/api/auth/"))).toBe(false);
-      await expect(fleetAccess({ credential: `omb_install_${"x".repeat(22)}.${"y".repeat(43)}`, env })).rejects.toThrow(/rejected/);
-      await expect(fleetAccess({ credential, env: { ...env, OMB_CONTROL_PLANE_URL: "ftp://nope" } })).rejects.toThrow(/OMB_CONTROL_PLANE_URL/);
+      await expect(fleetAccess({ credential: `seira_install_${"x".repeat(22)}.${"y".repeat(43)}`, env })).rejects.toThrow(/rejected/);
+      await expect(fleetAccess({ credential, env: { ...env, SEIRA_CONTROL_PLANE_URL: "ftp://nope" } })).rejects.toThrow(/SEIRA_CONTROL_PLANE_URL/);
     } finally {
       await stub.close();
     }
+  });
+});
+
+describe("the control plane a server uses by default", () => {
+  it("is Seira's own once the server tunnel service is live, and the override wins", () => {
+    const live = ["site", "cloud", "apps", "updates", "serverTunnel"];
+    const dir = mkdtempSync(join(tmpdir(), "seira-tunnel-default-"));
+    try {
+      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: live }).controlPlane).toBe("https://accounts.seira.bot");
+      expect(createTunnelAccount({ dataDir: dir, version: "test", env: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, liveServices: live }).controlPlane).toBe("https://cp.example.test");
+      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: ["site"] }).controlPlane).toBe("");
+    } finally {
+      void removeTempDir(dir);
+    }
+  });
+});
+
+describe("which commands get a control plane", () => {
+  const live = ["site", "cloud", "apps", "updates", "serverTunnel"];
+
+  it("gives login and --tunnel Seira's own once it is live, and keeps Seira Relay on SEIRA_CONTROL_PLANE_URL", () => {
+    expect(controlPlaneProblem({}, "tunnel", live)).toBeNull();
+    expect(controlPlaneProblem({}, "relay", live)).toContain("no account service for Seira Relay");
+    expect(controlPlaneProblem({ SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, "relay", live)).toBeNull();
+  });
+
+  it("names the missing service and the ways in that work while nothing is set", () => {
+    const tunnel = controlPlaneProblem({}, "tunnel", ["site"]);
+    expect(tunnel).toContain("no account service for tunnel addresses");
+    for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(tunnel).toContain(word);
+    expect(controlPlaneProblem({ SEIRA_CONTROL_PLANE_URL: "http://x" }, "tunnel", live)).toBe("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
+  });
+});
+
+describe("a tunnel address outside seira.run", () => {
+  let dir: string;
+  let stub: ControlPlaneStub;
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await stub.close();
+    await removeTempDir(dir);
+  });
+  const start = async (endpointUrl: string, env: Record<string, string> = {}) => {
+    dir = mkdtempSync(join(tmpdir(), "seira-tunnel-host-"));
+    stub = await startControlPlaneStub({ endpointUrl });
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+  };
+  const HEX = "0123456789abcdef0123456789abcdef";
+
+  it("is refused at login: no connector token is stored", async () => {
+    for (const endpoint of [`https://c-${HEX}.seira.bot`, `https://c-${HEX.slice(1)}.seira.run`, `https://c-${HEX}.sub.seira.run`, `https://c-${HEX}.seira.run:8443`, `http://c-${HEX}.seira.run`]) {
+      if (stub) await stub.close();
+      await start(endpoint);
+      const io = fakeIo([stub.otp]);
+      expect(await runLogin(options(dir, { email: "milind@example.test" }), io.io), endpoint).toBe(1);
+      const doc = openTunnelCredentials(dir).read();
+      expect(doc[MANAGED_COMPANION_TOKEN_FIELD], endpoint).toBeUndefined();
+      expect(doc[MANAGED_COMPANION_ENDPOINT_FIELD], endpoint).toBeUndefined();
+      expect(tunnelAccess(doc)).toBeNull();
+    }
+  });
+
+  it("is refused from a fleet credential before a connector can start", async () => {
+    await start(`https://c-${HEX}.seira.bot`);
+    await expect(fleetAccess({ credential: stub.seedInstallation(), env: { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url } })).rejects.toThrow();
+  });
+
+  it("is not used when it was saved earlier", async () => {
+    await start(`https://c-${HEX}.seira.run`);
+    expect(await runLogin(options(dir, { email: "milind@example.test" }), fakeIo([stub.otp]).io)).toBe(0);
+    const doc = openTunnelCredentials(dir).read();
+    expect(tunnelAccess(doc)?.endpoint).toBe(`https://c-${HEX}.seira.run`);
+    expect(tunnelAccess({ ...doc, [MANAGED_COMPANION_ENDPOINT_FIELD]: `https://c-${HEX}.si.seira.bot` })).toBeNull();
+  });
+
+  it("is accepted under a self-hosted suffix only with a self-hosted control plane", async () => {
+    await start(`https://c-${HEX}.tunnel.example.test`, { SEIRA_TUNNEL_HOST_SUFFIX: "tunnel.example.test" });
+    expect(await runLogin(options(dir, { email: "milind@example.test" }), fakeIo([stub.otp]).io)).toBe(0);
+    expect(tunnelAccess(openTunnelCredentials(dir).read())?.endpoint).toBe(`https://c-${HEX}.tunnel.example.test`);
+    expect(tunnelAccess(openTunnelCredentials(dir).read(), { SEIRA_TUNNEL_HOST_SUFFIX: "tunnel.example.test" })).toBeNull();
+  });
+});
+
+describe("sign-in through Seira Cloud", () => {
+  let dir: string;
+  let stub: ControlPlaneStub;
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "seira-tunnel-cloud-"));
+    stub = await startControlPlaneStub({ accounts: "seira-cloud" });
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
+    vi.stubEnv("SEIRA_CLOUD_ORIGIN", stub.url);
+  });
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await stub.close();
+    await removeTempDir(dir);
+  });
+
+  it("signs in with the emailed code and stores the Seira Cloud account", async () => {
+    const io = fakeIo([stub.otp]);
+    expect(await runLogin(options(dir, { email: "milind@example.test" }), io.io)).toBe(0);
+    expect(stub.cloudBodies[0]).toMatchObject({ path: "/api/cloud/app/sign-in/start", body: { email: "milind@example.test", platform: process.platform === "darwin" || process.platform === "win32" ? process.platform : "linux" } });
+    expect(stub.cloudBodies[1]?.path).toBe("/api/cloud/app/sign-in/verify");
+    expect(stub.calls).toContain("POST /v1/installations");
+    expect(stub.calls.some((call) => call.includes("/api/auth/"))).toBe(false);
+    const doc = openTunnelCredentials(dir).read();
+    expect(doc[COMPANION_ACCOUNT_USER_ID_FIELD]).toBe(stub.cloudAccountId);
+    expect(String(doc[COMPANION_ACCOUNT_TOKEN_FIELD])).toMatch(/^omc_/);
+    expect(describeTunnelAccount(doc)).toMatchObject({ email: "milind@example.test", address: stub.endpointUrl });
+
+    expect(await runLogout(options(dir, { command: "logout" }), fakeIo([]).io)).toBe(0);
+    expect(stub.calls).toContain("DELETE /api/cloud/desktop/session");
+    expect(stub.calls).not.toContain("POST /api/auth/sign-out");
+  });
+
+  it("a wrong code is a plain failure and stores nothing", async () => {
+    const io = fakeIo(["00000000"]);
+    expect(await runLogin(options(dir, { email: "milind@example.test" }), io.io)).toBe(1);
+    expect(io.err.join("\n")).toMatch(/sign-in failed/);
+    expect(openTunnelCredentials(dir).read()[COMPANION_ACCOUNT_TOKEN_FIELD]).toBeUndefined();
   });
 });

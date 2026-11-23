@@ -27,7 +27,7 @@ export const COMPANION_TUNNEL_WAITING_FIELD = "companionTunnelWaiting";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSTALLATION_ID = UUID;
-const INSTALLATION_CREDENTIAL = /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+const INSTALLATION_CREDENTIAL = /^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 export const ownString = (document, field) =>
   typeof document?.[field] === "string" ? document[field] : "";
 
@@ -131,7 +131,7 @@ const PROBLEM_OF = {
   control_plane_unavailable: "unreachable", network_unavailable: "unreachable",
   unauthorized: "sign_in", forbidden: "sign_in", signed_out: "sign_in", invalid_otp: "sign_in", otp_expired: "sign_in", invalid_email: "sign_in",
   rate_limited: "busy", credential_rotation_rate_limited: "busy", endpoint_rate_limited: "busy", endpoint_busy: "busy", endpoint_capacity: "busy",
-  installation_limit_reached: "limit", update_required: "update",
+  installation_limit_reached: "limit", endpoint_limit: "limit", update_required: "update",
 };
 
 /** A control-plane error code as one of the renderer's few problem words; the code itself stays in the main process. */

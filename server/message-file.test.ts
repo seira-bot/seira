@@ -22,7 +22,7 @@ import {
 } from "./message-file.ts";
 
 const referencesAttachment = (text: string, requested: string) => messageAttachmentName(text, requested) !== null;
-const suite = mkdtempSync(join(tmpdir(), "omb-message-file-"));
+const suite = mkdtempSync(join(tmpdir(), "seira-message-file-"));
 const workspace = join(suite, "workspace");
 const outside = join(suite, "outside");
 
@@ -89,6 +89,24 @@ describe("message-linked files", () => {
     })[0]).toBe("/current/project");
   });
 
+  it("adds the folders opened for a turn after the conversation's own roots, and nothing without them", () => {
+    const base = { senderWorkspace: "/app/workspace", attachments: "/app/attachments", pinnedCwd: "/proj" };
+    const plain = messageFileRoots(base);
+    expect(plain).toEqual(["/proj", "/app/workspace", "/app/attachments"]);
+    expect(messageFileRoots({ ...base, extraRoots: [] })).toEqual(plain);
+    expect(messageFileRoots({ ...base, extraRoots: ["/shared/read", "/proj"] })).toEqual([...plain, "/shared/read"]);
+  });
+
+  it("opens a file in an opened folder, and still refuses one outside every root", async () => {
+    writeFileSync(join(outside, "granted.txt"), "hello");
+    const roots = messageFileRoots({ senderWorkspace: workspace, attachments: join(suite, "attachments"), pinnedCwd: null, extraRoots: [outside] });
+    const opened = await openMessageFile(join(outside, "granted.txt"), roots);
+    expect(opened.bytes).toBe(5);
+    await opened.handle.close();
+    const without = messageFileRoots({ senderWorkspace: workspace, attachments: join(suite, "attachments"), pinnedCwd: null });
+    await expect(openMessageFile(join(outside, "granted.txt"), without)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("matches Unix, Windows, and UNC links independently of the server OS", () => {
     expect(messageReferencesFile(
       "[Open the notes](file:///Users/milind/Project/release%20notes.md)",
@@ -100,12 +118,12 @@ describe("message-linked files", () => {
     ))
       .toBe(false);
     expect(messageReferencesFile(
-      "[Open it](C:\\Users\\Maus\\report.md)",
-      "C:\\Users\\Maus\\report.md",
+      "[Open it](C:\\Users\\Seira\\report.md)",
+      "C:\\Users\\Seira\\report.md",
     )).toBe(true);
     expect(messageReferencesFile(
-      "[Open it](file:///C:/Users/Maus/release%20notes.md)",
-      "C:\\Users\\Maus\\release notes.md",
+      "[Open it](file:///C:/Users/Seira/release%20notes.md)",
+      "C:\\Users\\Seira\\release notes.md",
     )).toBe(true);
     expect(messageReferencesFile(
       "[Open it](file://server/share/phone%20report.md)",
@@ -123,19 +141,19 @@ describe("message-linked files", () => {
       .toBe(true);
 
     expect(messageReferencesFile(
-      "[Open it](C:/Users/Maus/drafts/../report.md)",
-      "C:\\Users\\Maus\\report.md",
+      "[Open it](C:/Users/Seira/drafts/../report.md)",
+      "C:\\Users\\Seira\\report.md",
     )).toBe(true);
-    expect(messageReferencesFile("[Open it](/C:/Users/Maus/report.md)", "C:/Users/Maus/report.md"))
+    expect(messageReferencesFile("[Open it](/C:/Users/Seira/report.md)", "C:/Users/Seira/report.md"))
       .toBe(false);
-    expect(messageReferencesFile("[Open it](C:/Users/Maus/report.md)", "c:/users/maus/report.md"))
+    expect(messageReferencesFile("[Open it](C:/Users/Seira/report.md)", "c:/users/seira/report.md"))
       .toBe(false);
   });
 
   it("normalizes encoded Windows and UNC targets before authorization", () => {
     expect(messageReferencesFile(
-      "[Open it](C:/Users/Maus/release%20notes.md?download=1#latest)",
-      "C:\\Users\\Maus\\release notes.md",
+      "[Open it](C:/Users/Seira/release%20notes.md?download=1#latest)",
+      "C:\\Users\\Seira\\release notes.md",
     )).toBe(true);
     expect(messageReferencesFile(
       "[Web link](//server/share/team%20notes.md?download=1#latest)",
@@ -147,21 +165,21 @@ describe("message-linked files", () => {
     )).toBe(true);
 
     expect(messageReferencesFile(
-      "[Open it](C:/Users/Maus/release%2520notes.md?download=1)",
-      "C:\\Users\\Maus\\release notes.md",
+      "[Open it](C:/Users/Seira/release%2520notes.md?download=1)",
+      "C:\\Users\\Seira\\release notes.md",
     )).toBe(false);
   });
 
-  it("keeps a Windows path's backslash before punctuation, as in \\.openmausbot", () => {
-    const report = "C:\\Users\\Maus\\.openmausbot\\workspaces\\bot\\_drafts\\report.md";
-    const chart = "C:\\Users\\Maus\\.openmausbot\\workspaces\\bot\\chart.png";
-    const notes = "C:\\Users\\Maus\\.openmausbot\\release notes.md";
+  it("keeps a Windows path's backslash before punctuation, as in \\.seira", () => {
+    const report = "C:\\Users\\Seira\\.seira\\workspaces\\bot\\_drafts\\report.md";
+    const chart = "C:\\Users\\Seira\\.seira\\workspaces\\bot\\chart.png";
+    const notes = "C:\\Users\\Seira\\.seira\\release notes.md";
     const markdown = `[Report](${report})\n\n![Chart](${chart})\n\n[Notes][notes]\n\n[notes]: <${notes}>`;
 
     expect(messageReferencesFile(markdown, report)).toBe(true);
     expect(messageReferencesFile(markdown, notes)).toBe(true);
     expect(messageImageTargetAt(markdown, markdown.indexOf("![Chart]"))).toBe(chart);
-    expect(messageReferencesFile(markdown, "C:\\Users\\Maus.openmausbot\\workspaces\\bot_drafts\\report.md")).toBe(false);
+    expect(messageReferencesFile(markdown, "C:\\Users\\Seira.seira\\workspaces\\bot_drafts\\report.md")).toBe(false);
   });
 
   it("resolves only definitions used by rendered reference links", () => {
@@ -290,10 +308,10 @@ describe("message-linked files", () => {
   it("normalizes an encoded Windows path before opening it", async () => {
     const path = process.platform === "win32"
       ? join(workspace, "release notes.md")
-      : join(workspace, "C:\\Users\\Maus\\release notes.md");
+      : join(workspace, "C:\\Users\\Seira\\release notes.md");
     const href = process.platform === "win32"
       ? `${path.replace("release notes.md", "release%20notes.md")}?download=1#latest`
-      : "C:\\Users\\Maus\\release%20notes.md?download=1#latest";
+      : "C:\\Users\\Seira\\release%20notes.md?download=1#latest";
     writeFileSync(path, "windows path bytes");
 
     const opened = await openMessageFile(href, [workspace]);

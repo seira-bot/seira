@@ -14,7 +14,7 @@ import localOriginModule from "./local-origin.cjs";
 const LOCAL = "http://127.0.0.1:8799";
 const CLOUD = "https://home-7f3k2.fly.dev";
 const OTHER = "https://bots.example.test";
-const OWN = "https://omb-c-a.fly.dev";
+const OWN = "https://seira-c-a.fly.dev";
 
 const fixture = vi.hoisted(() => ({ autoUpdater: null, handlers: new Map(), home: "" }));
 
@@ -121,8 +121,15 @@ const settle = async () => {
   for (let index = 0; index < 10; index += 1) await Promise.resolve();
 };
 
+const FEED = "provider: github\nowner: seira-bot\nrepo: seira\n";
+let feedFolder = "";
+const resourcesBeforeTest = process.resourcesPath;
+
 beforeEach(() => {
-  fixture.home = mkdtempSync(join(tmpdir(), "omb-updater-home-"));
+  fixture.home = mkdtempSync(join(tmpdir(), "seira-updater-home-"));
+  feedFolder = mkdtempSync(join(tmpdir(), "seira-updater-feed-"));
+  writeFileSync(join(feedFolder, "app-update.yml"), FEED);
+  process.resourcesPath = feedFolder;
   localOriginModule.setLocalOrigin(LOCAL);
   vi.useFakeTimers();
 });
@@ -130,6 +137,9 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   rmSync(fixture.home, { recursive: true, force: true });
+  rmSync(feedFolder, { recursive: true, force: true });
+  if (resourcesBeforeTest === undefined) delete process.resourcesPath;
+  else process.resourcesPath = resourcesBeforeTest;
 });
 
 function bridgeFor(origin, { clicked = false, rule = null } = {}) {
@@ -139,7 +149,7 @@ function bridgeFor(origin, { clicked = false, rule = null } = {}) {
   const loading = page(origin);
   if (rule) rule.window.webContents = loading.webContents;
   vm.runInNewContext(readFileSync(new URL("./preload.cjs", import.meta.url), "utf8"), {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL}`] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL}`] },
     location: { origin }, navigator: { userActivation: { isActive: clicked } },
     TextEncoder, localStorage: { getItem: () => null },
     require: () => ({
@@ -224,18 +234,19 @@ it("a downloaded update installs when the app quits, except a system package, wh
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   const resourcesPath = process.resourcesPath;
   const appImage = process.env.APPIMAGE;
-  const resources = mkdtempSync(join(tmpdir(), "omb-updater-package-"));
+  const resources = mkdtempSync(join(tmpdir(), "seira-updater-package-"));
   try {
     for (const [os, marker, image, installsOnQuit] of [
       ["darwin", null, null, true],
       ["win32", null, null, true],
-      ["linux", null, "/home/a/OpenMausBot.AppImage", true],
+      ["linux", null, "/home/a/Seira.AppImage", true],
       ["linux", "deb", null, false],
       ["linux", "rpm", null, false],
     ]) {
       Object.defineProperty(process, "platform", { ...platform, value: os });
       process.resourcesPath = resources;
       rmSync(join(resources, "package-type"), { force: true });
+      writeFileSync(join(resources, "app-update.yml"), FEED);
       if (marker) writeFileSync(join(resources, "package-type"), marker);
       if (image) process.env.APPIMAGE = image;
       else delete process.env.APPIMAGE;
@@ -257,19 +268,20 @@ it("a downloaded update installs by itself at a quiet moment on macOS and Window
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   const resourcesPath = process.resourcesPath;
   const appImage = process.env.APPIMAGE;
-  const resources = mkdtempSync(join(tmpdir(), "omb-updater-quiet-"));
+  const resources = mkdtempSync(join(tmpdir(), "seira-updater-quiet-"));
   const quiet = { locked: () => true, idleMs: () => 0, typedAt: () => 0, shown: () => true, busy: () => null, work: async () => null, watch: () => {} };
   try {
     for (const [os, marker, image, installs] of [
       ["darwin", null, null, true],
       ["win32", null, null, true],
-      ["linux", null, "/home/a/OpenMausBot.AppImage", false],
+      ["linux", null, "/home/a/Seira.AppImage", false],
       ["linux", "deb", null, false],
       ["linux", "rpm", null, false],
     ]) {
       Object.defineProperty(process, "platform", { ...platform, value: os });
       process.resourcesPath = resources;
       rmSync(join(resources, "package-type"), { force: true });
+      writeFileSync(join(resources, "app-update.yml"), FEED);
       if (marker) writeFileSync(join(resources, "package-type"), marker);
       if (image) process.env.APPIMAGE = image;
       else delete process.env.APPIMAGE;
@@ -344,11 +356,11 @@ it("downloads an update by itself: the first check after launch starts it, and n
 it("My Cloud's page reads and drives the update channels, and another server's page is refused", async () => {
   const rule = mainRule();
   const { handlers } = await load(rule.pageAllowed);
-  expect([...handlers.keys()].sort()).toEqual(["update:check", "update:for-server-page", "update:get-state", "update:install", "update:seen"]);
+  expect([...handlers.keys()].sort()).toEqual(["update:check", "update:for-server-page", "update:get-state", "update:install", "update:seen", "update:way-for-server-page"]);
 
   const cloud = page(CLOUD);
   rule.show(cloud, "cloud");
-  const channels = [...handlers.keys()].filter((channel) => channel !== "update:for-server-page");
+  const channels = [...handlers.keys()].filter((channel) => channel !== "update:for-server-page" && channel !== "update:way-for-server-page");
   for (const channel of channels) expect(() => handlers.get(channel)(cloud.event), channel).not.toThrow();
   rule.context.cloudAccount = { homeTarget: () => null, state: () => ({ status: "unavailable", account: { id: "a1" } }), isOwnCloud: () => false };
   rule.context.rememberedHome = { accountId: "a1", origin: CLOUD };
@@ -441,8 +453,14 @@ it("a server's page the window shows may ask for the app's own update: it learns
   const ask = handlers.get("update:for-server-page");
   await expect(Promise.resolve().then(() => ask({ sender: page(OTHER).webContents, senderFrame: { url: `${OTHER}/` } }))).rejects.toThrow(/only available/);
   expect(await ask(other.event)).toBe("unavailable");
+  const way = handlers.get("update:way-for-server-page");
+  expect(() => way({ sender: page(OTHER).webContents, senderFrame: { url: `${OTHER}/` } })).toThrow(/only available/);
+  expect(() => way(page(LOCAL).event)).toThrow(/only available/);
+  expect(way(other.event)).toBe("download");
+  expect(updater.appUpdateWay()).toBe("download");
   updater.attachUpdaterWindow(rule.window);
   updater.startUpdater();
+  expect(way(other.event)).toBe("self");
   // Checked and downloaded at the page's request; the person said Not now. Five asks at once open one dialog, which
   // names the asking server.
   vi.advanceTimersByTime(updater.SERVER_PAGE_ASK_COOLDOWN_MS);
@@ -483,6 +501,7 @@ for (const [name, env] of [["a Flatpak", { FLATPAK_ID: "bot.seira.Seira" }], ["a
       expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
       expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
       expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+      expect(updater.appUpdateWay()).toBe("store");
       await handlers.get("update:check")(local.event);
       await handlers.get("update:install")(local.event);
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
@@ -517,6 +536,7 @@ it("never checks, downloads or installs an update by itself in a Microsoft Store
     expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
     expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+    expect(updater.appUpdateWay()).toBe("store");
     await handlers.get("update:check")(local.event);
     await handlers.get("update:install")(local.event);
     expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
@@ -527,4 +547,97 @@ it("never checks, downloads or installs an update by itself in a Microsoft Store
     if (store) Object.defineProperty(process, "windowsStore", store);
     else delete process.windowsStore;
   }
+});
+
+it("records when a check found nothing newer, and forgets it once an update is found", async () => {
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  autoUpdater.checkForUpdates = vi.fn(async () => {
+    autoUpdater.emit("checking-for-update");
+    autoUpdater.emit("update-not-available", { version: "1.0.0" });
+    return { isUpdateAvailable: false };
+  });
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+  expect(handlers.get("update:get-state")(local.event).upToDateAt).toBeUndefined();
+
+  vi.setSystemTime(new Date("2026-11-21T10:00:00Z"));
+  await handlers.get("update:check")(local.event);
+  await settle();
+  expect(handlers.get("update:get-state")(local.event)).toMatchObject({ status: "idle", upToDateAt: Date.parse("2026-11-21T10:00:00Z") });
+
+  autoUpdater.checkForUpdates = vi.fn(async () => {
+    autoUpdater.emit("checking-for-update");
+    autoUpdater.emit("update-available", { version: "2.0.0" });
+    return { isUpdateAvailable: true };
+  });
+  await handlers.get("update:check")(local.event);
+  await settle();
+  expect(handlers.get("update:get-state")(local.event).upToDateAt).toBeUndefined();
+});
+
+it("a copy without the update feed file never checks, and tells the window to send people to the website", async () => {
+  rmSync(join(feedFolder, "app-update.yml"));
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+
+  await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+  await settle();
+  await handlers.get("update:check")(local.event);
+  await handlers.get("update:install")(local.event);
+
+  expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+  expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+  expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", downloadOnly: true });
+  expect(updater.appUpdateWay()).toBe("download");
+  expect(updater.unattendedUpdates()).toBe("none");
+});
+
+it("a failed check forgets the up-to-date time and records the failure, until a later check finishes", async () => {
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  const check = (outcome) => {
+    autoUpdater.checkForUpdates = vi.fn(async () => {
+      autoUpdater.emit("checking-for-update");
+      if (outcome === "fail") {
+        const error = Object.assign(new Error("HTTP 404"), { statusCode: 404 });
+        autoUpdater.emit("error", error);
+        throw error;
+      }
+      autoUpdater.emit(outcome === "current" ? "update-not-available" : "update-available", { version: "2.0.0" });
+      return { isUpdateAvailable: outcome === "newer" };
+    });
+    return Promise.resolve(handlers.get("update:check")(local.event)).catch(() => {}).then(settle);
+  };
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+  const read = () => handlers.get("update:get-state")(local.event);
+
+  vi.setSystemTime(new Date("2026-11-23T10:00:00Z"));
+  await check("current");
+  expect(read()).toMatchObject({ upToDateAt: Date.parse("2026-11-23T10:00:00Z") });
+  expect(read().checkFailedAt).toBeUndefined();
+
+  vi.setSystemTime(new Date("2026-11-23T11:00:00Z"));
+  await check("fail");
+  expect(read().upToDateAt).toBeUndefined();
+  expect(read().checkFailedAt).toBe(Date.parse("2026-11-23T11:00:00Z"));
+
+  await check("current");
+  expect(read().checkFailedAt).toBeUndefined();
+  expect(read().upToDateAt).toBeDefined();
+
+  await check("fail");
+  await check("newer");
+  expect(read().checkFailedAt).toBeUndefined();
+  expect(read().upToDateAt).toBeUndefined();
 });

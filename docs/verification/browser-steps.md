@@ -3,7 +3,7 @@
 What a bot's page reports (console errors, uncaught errors, failed requests)
 reaches the bot in its browser tool results, and a bot set to **Record browser
 steps** leaves a screenshot and a short note of each browser action with the
-conversation. Design: [the browser engine plan](../plans/browser-engine.md#7-page-health-and-recorded-browser-steps-implemented).
+conversation.
 
 ## The automated check
 
@@ -13,10 +13,10 @@ and its Chrome (Chrome for Testing in CI's ui-smoke job, which reproduces the
 500 endpoint, a dead port and a flood of 1,100 errors:
 
 ```sh
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/browser-evidence.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/browser-evidence.e2e.test.ts
 ```
 
-Locally, `OMB_AGENT_BROWSER_PATH` and `AGENT_BROWSER_EXECUTABLE_PATH` pick an
+Locally, `SEIRA_AGENT_BROWSER_PATH` and `AGENT_BROWSER_EXECUTABLE_PATH` pick an
 installed engine and Chrome instead of the download. It checks, through the
 real `BrowserRuntime` and then through the real server and a scripted turn:
 

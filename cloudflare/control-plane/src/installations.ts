@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 
-import type { ControlPlaneAuth } from "./auth";
-import { accountSession } from "./auth";
+import { requireAccount, type AccountService } from "./account-session";
 import { HTTPError, json, readBoundedJSON } from "./http";
 
 interface InstallationRow {
@@ -22,6 +21,7 @@ interface OwnedInstallationRow extends InstallationRow {
 
 interface InstallationCredentialRow {
   installation_id: string;
+  owner_user_id: string;
   lookup_id: string;
   secret_hash: string;
   display_name: string;
@@ -47,7 +47,7 @@ function printableString(maxLength: number) {
 const printableName = printableString(80);
 export const printableVersion = printableString(64);
 
-/** The desktop app, or a self-hosted server (`openmausbot serve`, a fleet container). Optional on every request
+/** The desktop app, or a self-hosted server (`seira serve`, a fleet container). Optional on every request
  * that carries it: accepted here before any client sends it, since the request schemas are strict. */
 export const installationKindSchema = z.enum(["desktop", "server"]);
 export type InstallationKind = z.infer<typeof installationKindSchema>;
@@ -61,7 +61,7 @@ const createInstallationSchema = z.strictObject({
 });
 
 const INSTALLATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const INSTALLATION_CREDENTIAL = /^omb_install_([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/;
+const INSTALLATION_CREDENTIAL = /^seira_install_([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/;
 const INSTALLATION_CREDENTIAL_TTL_MS = 90 * 24 * 60 * 60 * 1_000;
 const CREATION_RATE_WINDOW_MS = 60 * 60 * 1_000;
 const CREATION_RATE_MAX_ATTEMPTS = 100;
@@ -111,19 +111,13 @@ export async function sha256(value: string): Promise<string> {
 async function newCredential(createdAt: number) {
   const lookupId = base64URL(randomBytes(16));
   const secret = base64URL(randomBytes(32));
-  const raw = `omb_install_${lookupId}.${secret}`;
+  const raw = `seira_install_${lookupId}.${secret}`;
   return {
     lookupId,
     raw,
     secretHash: await sha256(raw),
     expiresAt: createdAt + INSTALLATION_CREDENTIAL_TTL_MS,
   };
-}
-
-async function requireAccount(request: Request, auth: ControlPlaneAuth) {
-  const session = await accountSession(request, auth);
-  if (!session) throw new HTTPError(401, "unauthorized");
-  return session;
 }
 
 async function enforceCreationRateLimit(ownerUserId: string, env: Env): Promise<void> {
@@ -156,8 +150,8 @@ async function enforceCreationRateLimit(ownerUserId: string, env: Env): Promise<
   if (result.meta.changes === 0) throw new HTTPError(429, "rate_limited");
 }
 
-export async function listInstallations(request: Request, env: Env, auth: ControlPlaneAuth): Promise<Response> {
-  const session = await requireAccount(request, auth);
+export async function listInstallations(request: Request, env: Env, accounts: AccountService): Promise<Response> {
+  const user = await requireAccount(request, env, accounts);
   const result = await env.DB.prepare(
     `SELECT id, client_instance_id, display_name, platform, app_version,
             created_at, updated_at, last_seen_at
@@ -165,13 +159,13 @@ export async function listInstallations(request: Request, env: Env, auth: Contro
       WHERE owner_user_id = ? AND revoked_at IS NULL
       ORDER BY created_at ASC, id ASC
       LIMIT 100`,
-  ).bind(session.user.id).all<InstallationRow>();
+  ).bind(user.id).all<InstallationRow>();
   return json({ installations: result.results.map(installationJSON) });
 }
 
-export async function createInstallation(request: Request, env: Env, auth: ControlPlaneAuth): Promise<Response> {
-  const session = await requireAccount(request, auth);
-  await enforceCreationRateLimit(session.user.id, env);
+export async function createInstallation(request: Request, env: Env, accounts: AccountService): Promise<Response> {
+  const user = await requireAccount(request, env, accounts);
+  await enforceCreationRateLimit(user.id, env);
   const parsed = createInstallationSchema.safeParse(await readBoundedJSON(request));
   if (!parsed.success) throw new HTTPError(400, "invalid_request");
 
@@ -188,7 +182,7 @@ export async function createInstallation(request: Request, env: Env, auth: Contr
          VALUES (?, ?, ?, ?, ?, ?, ?, ?${parsed.data.kind ? ", ?" : ""})`,
       ).bind(
         installationId,
-        session.user.id,
+        user.id,
         parsed.data.clientInstanceId,
         parsed.data.name,
         parsed.data.platform,
@@ -204,6 +198,9 @@ export async function createInstallation(request: Request, env: Env, auth: Contr
       ).bind(credentialId, installationId, credential.lookupId, credential.secretHash, now, credential.expiresAt),
     ]);
   } catch (error) {
+    if (error instanceof Error && /account_blocked/i.test(error.message)) {
+      throw new HTTPError(403, "account_blocked");
+    }
     if (error instanceof Error && /active_installation_limit/i.test(error.message)) {
       throw new HTTPError(409, "installation_limit_reached");
     }
@@ -253,10 +250,10 @@ export async function rotateInstallationCredential(
   request: Request,
   installationId: string,
   env: Env,
-  auth: ControlPlaneAuth,
+  accounts: AccountService,
 ): Promise<Response> {
-  const session = await requireAccount(request, auth);
-  const installation = await ownedActiveInstallation(installationId, session.user.id, env);
+  const user = await requireAccount(request, env, accounts);
+  const installation = await ownedActiveInstallation(installationId, user.id, env);
   if (!installation) throw new HTTPError(404, "not_found");
 
   const now = Date.now();
@@ -267,7 +264,7 @@ export async function rotateInstallationCredential(
         `UPDATE installations
             SET updated_at = ?, last_rotation_at = ?
           WHERE id = ? AND owner_user_id = ? AND revoked_at IS NULL`,
-      ).bind(now, now, installationId, session.user.id),
+      ).bind(now, now, installationId, user.id),
       env.DB.prepare(
         `UPDATE installation_credentials
             SET revoked_at = ?
@@ -302,10 +299,10 @@ export async function revokeInstallation(
   request: Request,
   installationId: string,
   env: Env,
-  auth: ControlPlaneAuth,
+  accounts: AccountService,
 ): Promise<Response> {
-  const session = await requireAccount(request, auth);
-  const installation = await ownedInstallation(installationId, session.user.id, env);
+  const user = await requireAccount(request, env, accounts);
+  const installation = await ownedInstallation(installationId, user.id, env);
   if (!installation) throw new HTTPError(404, "not_found");
 
   if (installation.revoked_at === null) {
@@ -329,7 +326,7 @@ async function authenticateInstallation(request: Request, env: Env): Promise<Ins
   if (!bearer || !parsed) return null;
 
   const row = await env.DB.prepare(
-    `SELECT c.installation_id, c.lookup_id, c.secret_hash, c.expires_at,
+    `SELECT c.installation_id, i.owner_user_id, c.lookup_id, c.secret_hash, c.expires_at,
             i.display_name, i.client_instance_id, i.platform, i.app_version,
             i.created_at, i.updated_at, i.last_seen_at
        FROM installation_credentials c

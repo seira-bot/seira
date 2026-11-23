@@ -1,5 +1,5 @@
 // Named accounts reuse provider instances. Claude owns login and credentials;
-// removing an OpenMausBot entry never removes its directory or signs it out.
+// removing a Seira entry never removes its directory or signs it out.
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +19,8 @@ export const instanceSettingsSchema = z.object({
   configDir: configDir.optional(),
   tools: z.boolean().optional(),
   hidden: z.boolean().optional(),
+  /** With hidden: hide although bots or conversations still use the provider. Admins only; a running bot still blocks it. */
+  force: z.boolean().optional(),
   /** null goes back to the server's default wait. */
   replyWaitMinutes: z.number().int().min(1).max(60).nullable().optional(),
   /** An added OpenAI-compatible server's model IDs; [] goes back to its /models list. */
@@ -27,7 +29,8 @@ export const instanceSettingsSchema = z.object({
   url: addEndpointSchema.shape.url.optional(),
   /** Its new API key; omitted keeps the saved one, unless the URL's host changes. */
   apiKey: addEndpointSchema.shape.key.optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, "No settings supplied");
+}).strict().refine((value) => Object.keys(value).length > 0, "No settings supplied")
+  .refine((value) => value.force === undefined || value.hidden === true, "force goes with hidden");
 
 function rawConfig(entry: InstanceConfig): Record<string, unknown> {
   return entry.config && typeof entry.config === "object" && !Array.isArray(entry.config)
@@ -94,7 +97,7 @@ export function claudeSignInCommand(cli: string, directory: string, platform: No
   if (platform === "win32") {
     const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
     const keys = [...CLAUDE_ACCOUNT_ENV_KEYS, "CLAUDE_CONFIG_DIR"];
-    return `& { $ombKeys = ${keys.map(quote).join(",")}; $ombSaved = @{}; foreach ($k in $ombKeys) { $ombSaved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $null, 'Process') }; try { ${directory ? `$env:CLAUDE_CONFIG_DIR = ${quote(directory)}; ` : ""}& ${[resolved.command, ...resolved.args].map(quote).join(" ")} } finally { foreach ($k in $ombKeys) { [Environment]::SetEnvironmentVariable($k, $ombSaved[$k], 'Process') } } }`;
+    return `& { $seiraKeys = ${keys.map(quote).join(",")}; $seiraSaved = @{}; foreach ($k in $seiraKeys) { $seiraSaved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $null, 'Process') }; try { ${directory ? `$env:CLAUDE_CONFIG_DIR = ${quote(directory)}; ` : ""}& ${[resolved.command, ...resolved.args].map(quote).join(" ")} } finally { foreach ($k in $seiraKeys) { [Environment]::SetEnvironmentVariable($k, $seiraSaved[$k], 'Process') } } }`;
   }
   const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
   return `(unset ${[...CLAUDE_ACCOUNT_ENV_KEYS, "CLAUDE_CONFIG_DIR"].join(" ")}; ${directory ? `export CLAUDE_CONFIG_DIR=${quote(directory)}; ` : ""}${[resolved.command, ...resolved.args].map(quote).join(" ")})`;

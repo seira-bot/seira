@@ -15,7 +15,7 @@ const SCRIPT = "import os\ntoken = os.environ['REPORT_TOKEN']\nprint('ok')\n";
 const KEY = `ghp_${"a".repeat(36)}`;
 const folders: string[] = [];
 const scratch = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-share-files-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-share-files-"));
   folders.push(dir);
   return dir;
 };
@@ -34,7 +34,7 @@ function host(stored: Array<{ path: string; content: string | Uint8Array }> | nu
     skillFiles: () => stored, picture: () => undefined, botFolder: (id) => join(botFolder, id),
     publisher: { ...publisher, submit: async (submission) => {
       submitted.push(submission);
-      return { ok: true, link: "https://github.com/milind-soni/openmausbot-teams/tree/main/teams/reporter", prUrl: "https://github.com/milind-soni/openmausbot-teams/pull/1" };
+      return { ok: true, link: "https://github.com/seira-bot/seira-teams/tree/main/teams/reporter", prUrl: "https://github.com/seira-bot/seira-teams/pull/1" };
     } },
     patch: () => {},
   });

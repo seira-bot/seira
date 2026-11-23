@@ -67,14 +67,25 @@ describe("which Chrome the bots' browser runs", () => {
     expect(registryData(output, "Missing")).toBeNull();
   });
 
-  it("on a Linux desktop without its own Google Chrome keeps the bundled shell, as a fixed choice", () => {
-    const linuxDesktop = (files: string[]) => host("linux", files, { env: { OMB_RESOURCES_PATH: "/opt/Seira/resources" } });
-    expect(resolveChromePlan(linuxDesktop(["/opt/google/chrome/chrome"]), managed)).toMatchObject({ kind: "chrome", chrome: { source: "installed" }, fallback: null });
-    expect(resolveChromePlan(linuxDesktop([]), managed)).toEqual({ kind: "legacy", reason: "Google Chrome is not installed", noChrome: true });
+  it("on a Linux desktop without its own Google Chrome downloads Chrome for Testing, as a Mac does", () => {
+    const linuxDesktop = (files: string[], arch = "x64") => host("linux", files, { arch, env: { SEIRA_RESOURCES_PATH: "/opt/Seira/resources", PATH: "/usr/bin" } });
+    const pin = chromeForTestingPin("linux", "x64");
+    expect(resolveChromePlan(linuxDesktop(["/opt/google/chrome/chrome"]), managed)).toMatchObject({ kind: "chrome", chrome: { source: "installed" }, fallback: pin });
+    expect(resolveChromePlan(linuxDesktop([]), managed)).toEqual({ kind: "download", pin });
+    // A system Chromium on PATH would start through agent-browser with its "HeadlessChrome" user agent.
+    expect(resolveChromePlan(linuxDesktop(["/usr/bin/chromium"]), managed)).toEqual({ kind: "download", pin });
+    const downloaded = chromeForTestingExecutable("/data", pin!);
+    expect(resolveChromePlan(linuxDesktop([downloaded]), managed)).toEqual({ kind: "chrome", chrome: { path: downloaded, source: "downloaded" }, fallback: null });
+    expect(resolveChromePlan(linuxDesktop([], "ia32"), managed)).toEqual({ kind: "legacy", reason: "no Chrome is installed and none is pinned for this platform", noChrome: true });
     const policy = linuxDesktop(["/opt/google/chrome/chrome", "/etc/opt/chrome/policies/managed/corp.json"]);
     expect(chromePolicyManaged(policy)).toBe(true);
-    expect(resolveChromePlan(policy, managed)).toEqual({ kind: "legacy", reason: "Google Chrome here is managed by an organization" });
+    expect(resolveChromePlan(policy, managed)).toEqual({ kind: "download", pin });
     expect(chromePolicyManaged(linuxDesktop(["/etc/opt/chrome/policies/managed/README"]))).toBe(false);
+  });
+
+  it("on a Linux server keeps a browser agent-browser finds on PATH rather than downloading another", () => {
+    const server = host("linux", ["/usr/bin/chromium"], { arch: "x64", env: { PATH: "/usr/bin" } });
+    expect(resolveChromePlan(server, managed)).toEqual({ kind: "legacy", reason: "agent-browser found a browser on this server" });
   });
 
   it("on a server uses the Chrome for Testing agent-browser installed, newest first", () => {
@@ -86,7 +97,7 @@ describe("which Chrome the bots' browser runs", () => {
     expect(resolveChromePlan(host("linux", []), managed)).toEqual({ kind: "download", pin: chromeForTestingPin("linux", "arm64") });
     expect(resolveChromePlan({ ...host("linux", []), arch: "x64" }, managed)).toEqual({ kind: "download", pin: chromeForTestingPin("linux", "x64") });
     const downloaded = chromeForTestingExecutable("/data", chromeForTestingPin("linux", "arm64")!);
-    expect(downloaded.replaceAll("\\", "/")).toBe("/data/tools/chrome/153.0.8010.47/linux-arm64/chrome-linux-arm64/chrome");
+    expect(downloaded.replaceAll("\\", "/")).toBe("/data/tools/chrome/158.0.8127.36/linux-arm64/chrome-linux-arm64/chrome");
     expect(resolveChromePlan(host("linux", [downloaded]), managed)).toEqual({ kind: "chrome", chrome: { path: downloaded, source: "downloaded" }, fallback: null });
     expect(resolveChromePlan(host("linux", ["/opt/google/chrome/chrome"]), managed)).toEqual({ kind: "chrome", chrome: { path: "/opt/google/chrome/chrome", source: "installed" }, fallback: chromeForTestingPin("linux", "arm64") });
     expect(resolveChromePlan({ ...host("linux", []), arch: "ia32" }, managed)).toEqual({ kind: "legacy", reason: "no Chrome is installed and none is pinned for this platform", noChrome: true });
@@ -113,20 +124,20 @@ describe("which Chrome the bots' browser runs", () => {
 
   it("wraps a Chrome named by the environment, as the Docker image names its Chrome for Testing", () => {
     const named = (env: NodeJS.ProcessEnv, files: string[]) => host("linux", files, { env });
-    expect(resolveChromePlan(named({ AGENT_BROWSER_EXECUTABLE_PATH: "/opt/openmausbot-browser/chrome" }, ["/opt/openmausbot-browser/chrome"]), null))
-      .toEqual({ kind: "chrome", chrome: { path: "/opt/openmausbot-browser/chrome", source: "named" }, fallback: null });
-    expect(resolveChromePlan(named({ OMB_CHROME_PATH: "/x/chrome", AGENT_BROWSER_EXECUTABLE_PATH: "/y/chrome" }, ["/x/chrome", "/y/chrome"]), null))
+    expect(resolveChromePlan(named({ AGENT_BROWSER_EXECUTABLE_PATH: "/opt/seira-browser/chrome" }, ["/opt/seira-browser/chrome"]), null))
+      .toEqual({ kind: "chrome", chrome: { path: "/opt/seira-browser/chrome", source: "named" }, fallback: null });
+    expect(resolveChromePlan(named({ SEIRA_CHROME_PATH: "/x/chrome", AGENT_BROWSER_EXECUTABLE_PATH: "/y/chrome" }, ["/x/chrome", "/y/chrome"]), null))
       .toMatchObject({ chrome: { path: "/x/chrome" } });
     expect(resolveChromePlan(named({ AGENT_BROWSER_EXECUTABLE_PATH: "/b/chrome-headless-shell-linux64/chrome-headless-shell" }, ["/b/chrome-headless-shell-linux64/chrome-headless-shell"]), managed))
       .toEqual({ kind: "legacy", reason: "the named browser is a headless shell" });
     expect(resolveChromePlan(named({ AGENT_BROWSER_EXECUTABLE_PATH: "/gone/chrome" }, []), managed)).toEqual({ kind: "legacy", reason: "/gone/chrome does not exist" });
   });
 
-  it("leaves the engine's own choice alone when agent-browser itself was named, and on OMB_BROWSER_LEGACY_SHELL=1", () => {
+  it("leaves the engine's own choice alone when agent-browser itself was named, and on SEIRA_BROWSER_LEGACY_SHELL=1", () => {
     expect(resolveChromePlan(host("darwin", [MAC_CHROME]), { managed: false })).toMatchObject({ kind: "legacy" });
     expect(resolveChromePlan(host("darwin", [MAC_CHROME]), null)).toMatchObject({ kind: "legacy" });
-    expect(resolveChromePlan(host("darwin", [MAC_CHROME, "/x/chrome"], { env: { OMB_BROWSER_LEGACY_SHELL: "1", OMB_CHROME_PATH: "/x/chrome" } }), managed))
-      .toEqual({ kind: "legacy", reason: "OMB_BROWSER_LEGACY_SHELL=1" });
+    expect(resolveChromePlan(host("darwin", [MAC_CHROME, "/x/chrome"], { env: { SEIRA_BROWSER_LEGACY_SHELL: "1", SEIRA_CHROME_PATH: "/x/chrome" } }), managed))
+      .toEqual({ kind: "legacy", reason: "SEIRA_BROWSER_LEGACY_SHELL=1" });
   });
 
   it("downloads only for a platform with a SHA-256 pin, and keeps the bundled shell where none is pinned yet", () => {
@@ -140,7 +151,7 @@ describe("which Chrome the bots' browser runs", () => {
     expect(isHeadlessShell("/r/browser-engine/chrome/chrome-headless-shell-mac-arm64/chrome-headless-shell")).toBe(true);
     expect(isHeadlessShell("C:\\r\\chrome-headless-shell-win64\\chrome-headless-shell.exe")).toBe(true);
     expect(isHeadlessShell(MAC_CHROME)).toBe(false);
-    expect(isHeadlessShell("/opt/openmausbot-browser/chrome")).toBe(false);
+    expect(isHeadlessShell("/opt/seira-browser/chrome")).toBe(false);
   });
 
   it("asks LaunchServices and the registry once per host, since each answer costs a process", () => {

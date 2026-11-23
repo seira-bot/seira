@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, rmSync, unlinkSync } from "node:fs"; import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
 import { writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
@@ -7,7 +7,6 @@ import { parseToolScope, toolScopeWidens } from "../shared/tool-scope.ts"; impor
 import { reorderInPlace } from "../shared/bot-order.ts"; import { trimOutboundPolicy } from "../shared/outbound.ts";
 import { botOwner, chiefConflict, chiefScope, ownerEmail } from "../shared/bot-owner.ts"; import { reshowWhenMoved } from "../shared/default-bot.ts";
 import { ensureSections, readSections, changeEmptySection } from "./section-context.ts"; import { grantNewDepartments } from "./department-grants.ts";
-import type { TeamComputers } from "./team-computers.ts";
 import { removeBotFolder, soulFile, soulHash, writeSoulMirror } from "./bot-folder.ts";
 import type { BotProfilePatch } from "./bot-profile.ts";
 import { DATA_DIR, EVENTS_DIR, NATIVE_DIR, loadBrowserProfileIdAliases } from "./config.ts";
@@ -35,14 +34,14 @@ import type {
   WireMessage, WireTask, BotProject as BotProjectRecord,
 } from "../shared/wire.ts";
 import { movesThreadToTop, nextOpenThread } from "../shared/wire.ts";
-import { parseConnectorTools } from "./connector-tools.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
+import { parseConnectorTools } from "./connector-tools.ts"; import { retireBoatFromBotsAtBoot } from "./boat-retirement.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
 import { sameModelSelection } from "../shared/thread-model.ts";
 import { initialGreetingMessage } from "./initial-greeting.ts"; import { createDefaultBot, defaultBotRefusal, type DefaultBotIntro } from "./default-bot.ts";
 import { appsFromCreator } from "./inherited-apps.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
 import { ThreadCache, type ThreadState } from "./thread-cache.ts";
 import { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 import { buildTask, threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
-import { createBotFork, createGroupFork } from "./store-forks.ts";
+import { createBotFork, createGroupFork } from "./store-forks.ts"; import type { ImportedThreadMark } from "./store-imported.ts";
 import { activeGroupTask, groupTaskByThread, groupTasks, migrateGroupTaskRead, mirrorActiveGroupTask, refreshGroupUnread, setGroupTaskRead, syncGroupReadPatch } from "./group-task-state.ts";
 export { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 export { threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
@@ -51,7 +50,7 @@ export type {
   SecretRequestCardData, Surface, TaskClosedBy, TaskOpenedBy, TaskUsage,
 } from "../shared/wire.ts";
 export type { GroupTask as GroupTaskRecord, BotProject as BotProjectRecord } from "../shared/wire.ts";
-export type { InstalledPlaybook, InstalledPackageMetadata, MausColor, MausExpression } from "../shared/wire.ts";
+export type { InstalledPlaybook, InstalledPackageMetadata, SeiraColor, SeiraExpression } from "../shared/wire.ts";
 
 export type Message = WireMessage & { /** The turn an attach_file line was sent in; never makes it that turn's reply. */ sentInTurn?: string };
 
@@ -85,9 +84,10 @@ export interface TaskRecord extends Omit<WireTask, TaskWireDerivedKeys> {
   surfaceSource?: "user" | "auto";
   /** Epoch ms a person last wrote here: never a teammate, routine, webhook, the bot itself or a Slack relay. */
   askedAt?: number;
+  imported?: ImportedThreadMark;
 }
 
-export type TaskWirePrivateKeys = "resumeCursors" | "lastInstanceId" | "handedMessages" | "appliedCompactionId" | "contextFloor" | "lastContextModel" | "surfaceSource" | "askedAt";
+export type TaskWirePrivateKeys = "resumeCursors" | "lastInstanceId" | "handedMessages" | "appliedCompactionId" | "contextFloor" | "lastContextModel" | "surfaceSource" | "askedAt" | "imported";
 export type TaskWireDerivedKeys = "surfaceAuto" | "followsBotModel";
 export type TaskWireProjection = Pick<TaskRecord, Exclude<keyof TaskRecord, TaskWirePrivateKeys>> & Pick<WireTask, TaskWireDerivedKeys>;
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
@@ -99,7 +99,7 @@ export const taskWireProjectionIsExact: TaskWireProjectionIsExact = true;
 export function toWireTask(task: TaskRecord, botModel: ModelSelection): WireTask {
   const { resumeCursors: _resumeCursors, lastInstanceId: _lastInstanceId, handedMessages: _handedMessages,
     appliedCompactionId: _appliedCompactionId, contextFloor: _contextFloor, lastContextModel: _lastContextModel,
-    surfaceSource, askedAt: _askedAt, ...stored } = task;
+    surfaceSource, askedAt: _askedAt, imported: _imported, ...stored } = task;
   const wire: WireTask = { ...stored, modelSelection: structuredClone(task.modelSelection ?? botModel), followsBotModel: task.modelSelection === undefined };
   return surfaceSource === "auto" && wire.surface !== undefined ? { ...wire, surfaceAuto: true } : wire;
 }
@@ -114,7 +114,6 @@ const TASK_PATCH_FIELDS = [
 export type TaskPatch = Partial<Pick<TaskRecord, typeof TASK_PATCH_FIELDS[number]>>;
 
 export type GroupTaskPatch = Partial<Pick<GroupTaskRecord, "title" | "pinned">> & { turnTimeoutMinutes?: number | null; archivedAt?: number | null; activity?: "waiting-on-you" | null };
-
 
 export const ACTIVITY_BUSY: ReadonlySet<BotActivity> = new Set(["working", "waiting-on-you", "no-signal"]);
 
@@ -288,7 +287,7 @@ export class Store {
     this.driverKindOf = driverKindOf;
     this.initialLanguage = initialLanguage;
     this.personName = personName;
-    mkdirSync(DATA_DIR, { recursive: true });
+    ensurePrivateDir(DATA_DIR);
     // An unreadable bots.json must never read as "every member was deleted".
     let botsLoaded = false;
     try {
@@ -419,7 +418,7 @@ export class Store {
       delete b.approvePeerComms;
       botsMigrated = true;
     }
-    if (recoverThreadGrantsOnce(DATA_DIR, this.bots)) botsMigrated = true;
+    if (recoverThreadGrantsOnce(DATA_DIR, this.bots)) botsMigrated = true; if (retireBoatFromBotsAtBoot(DATA_DIR, this.bots)) botsMigrated = true;
     const botIds = new Set(this.bots.map((b) => b.id));
     for (const g of this.groups) {
       g.busyBotId = null;
@@ -667,12 +666,12 @@ export class Store {
     }
   }
 
-  renameSection(name: string, nextName: string, computers?: TeamComputers): string | undefined {
+  renameSection(name: string, nextName: string): string | undefined {
     if (!name || !this.sections.includes(name)) return "No such department";
     nextName = nextName.trim();
     if (!nextName || nextName.length > 60 || [...nextName].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return "Department name must be 1 to 60 characters without control characters";
     if (name === nextName) return undefined;
-    if (this.sections.includes(nextName) || computers?.forSection(nextName)) return "A department with that name already exists";
+    if (this.sections.includes(nextName)) return "A department with that name already exists";
     const members = this.bots.filter(bot => sectionKey(bot.section) === name);
     const rooms = this.groups.filter(group => sectionKey(group.section) === name);
     const affected = this.bots.filter(bot => members.includes(bot) || bot.managedSections?.some(section => sectionKey(section) === name));
@@ -680,23 +679,20 @@ export class Store {
       return "Stop this department's active work before renaming it";
     }
     // Removing an empty identity revokes its old grants, so recreating it cannot restore access.
-    if (!members.length && !rooms.length && !computers?.forSection(name)) return this.changeEmptySection(name, nextName);
+    if (!members.length && !rooms.length) return this.changeEmptySection(name, nextName);
     const nextBots = this.bots.map(bot => ({ ...bot,
       ...(members.includes(bot) ? { section: nextName } : {}),
       ...(bot.managedSections ? { managedSections: [...new Set(bot.managedSections.map(section => sectionKey(section) === name ? nextName : section))] } : {}),
     }));
     const nextGroups = this.groups.map(group => rooms.includes(group) ? { ...group, section: nextName } : group);
-    let computerChanged = false;
     try {
       // Register the new name only after saving, or the registry's duplicate-name check rejects this rename.
       this.saveBots(nextBots, false);
       this.saveGroups(nextGroups, false);
-      computerChanged = computers?.renameSection(name, nextName) ?? false;
       changeEmptySection(name, nextName);
     } catch (error) {
       this.saveBots(this.bots, false);
       this.saveGroups(this.groups, false);
-      if (computerChanged) computers!.renameSection(nextName, name);
       throw error;
     }
     // Mutate in place: schedulers and other consumers hold these objects.
@@ -833,7 +829,7 @@ export class Store {
     );
   }
 
-  patchGroup(id: string, patch: Partial<Pick<GroupRecord, "name" | "memberIds" | "defaultResponder" | "bulletin" | "description" | "unread" | "lastReadMessageId" | "busyBotId" | "cwd" | "pinnedMessageId" | "section" | "setupCompletedAt" | "setupSkippedAt" | "audienceFloor" | "installedPackage" | "turnTimeoutMinutes" | "turnsPerMember" | "holds" | "heldMessages">>): GroupRecord | null {
+  patchGroup(id: string, patch: Partial<Pick<GroupRecord, "name" | "memberIds" | "defaultResponder" | "bulletin" | "description" | "avatarUrl" | "unread" | "lastReadMessageId" | "busyBotId" | "cwd" | "pinnedMessageId" | "section" | "setupCompletedAt" | "setupSkippedAt" | "audienceFloor" | "installedPackage" | "turnTimeoutMinutes" | "turnsPerMember" | "holds" | "heldMessages">>): GroupRecord | null {
     const group = this.group(id);
     if (!group) return null;
     if (Object.prototype.hasOwnProperty.call(patch, "section")) {
@@ -1103,7 +1099,7 @@ export class Store {
     const newest = messages.reduce((max, message) => Math.max(max, message.at), Number.NEGATIVE_INFINITY);
     const newestOrder = messages.reduce((max, message) => movesThreadToTop(message) ? Math.max(max, message.turnCompletedAt ?? message.at) : max, Number.NEGATIVE_INFINITY);
     if (Number.isFinite(newest)) this.noteThreadActivity(threadId, newest, Number.isFinite(newestOrder), newestOrder);
-  }
+  } /** Only for chats imported from another AI app. */ importedThreads() { return { own: (botId: string) => this.own(botId), commit: (bot: BotRecord, change: () => void) => this.commitBotChange(bot, "the imported threads", change), changed: (botId: string) => this.emit({ type: "bot", botId }), touched: (threadId: string, newest: number | null) => { this.threads.delete(threadId); if (newest !== null) this.noteThreadActivity(threadId, newest); } }; }
 
   activeLeaf(threadId: string): string | null {
     return this.thread(threadId).activeLeafId;
@@ -1972,7 +1968,7 @@ export class Store {
   }
 
   private firstUserLine(threadId: string): string | null {
-    const first = this.messagesFor(threadId).find((m) => m.role === "user" && m.kind === "text" && m.text?.trim());
+    const first = this.messagesFor(threadId).find((m) => m.role === "user" && m.kind === "text" && !m.handoff && m.text?.trim());
     return first?.text ? titleFromMessage(first.text) : null;
   }
 
@@ -2257,7 +2253,7 @@ export class Store {
 
   needsSeed() { return this.bots.length === 0; }
 
-  /** A new place's first bot is its MausBot and its Chief; a Team Cloud's (`defaultBot: false`) is the team's Chief only. */
+  /** A new place's first bot is its Seira and its Chief; a Team Cloud's (`defaultBot: false`) is the team's Chief only. */
   seedIfEmpty({ defaultBot = true, intro }: { defaultBot?: boolean; intro?: DefaultBotIntro } = {}) {
     if (!this.needsSeed()) return;
     if (defaultBot) createDefaultBot(this, { chief: (id) => this.setChiefOfStaff(id), ...(intro ? { intro } : {}) }); else this.setChiefOfStaff(this.createBot({ visibility: "everyone" }).id);

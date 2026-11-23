@@ -13,8 +13,10 @@ const RETIRED: ReadonlyArray<readonly [string, RegExp, string]> = [
   ["OpenMausBot Cloud", /OpenMausBot Cloud/i, "Seira Cloud"],
   ["MausBot Pro", /MausBot Pro\b/, "Seira Cloud"],
   ["Seira Pro", /\bSeira Pro\b/, "Seira Cloud"],
-  // \b before "_" fails, so environment names such as OMB_PUBLIC_IPV4 pass.
   ["OMB", /\bOMB\b/, "Seira"],
+  ["OpenMausBot", /OpenMausBot/i, "Seira"],
+  ["MausBot", /MausBot/i, "Seira"],
+  ["OpenMaus", /OpenMaus/i, "Seira"],
   ["Cloud box", /Cloud box/i, "cloud desktop"],
   ["Hosted desktop", /Hosted desktop/i, "cloud desktop"],
   ["Cloud VM", /Cloud VM/i, "cloud desktop"],
@@ -28,23 +30,18 @@ const RETIRED: ReadonlyArray<readonly [string, RegExp, string]> = [
   ["T3", /\bT3\b/, "no other app's name"],
 ];
 
-// Boat makes the cloud desktops and is credited where they appear ("from Boat", "by Boat"); it never names one desktop.
-const OWN_KEY = /Boat (?:API key|account|key|token|plan|provider|credentials|setup|is not configured|is not connected|is a paid service)|boat\.dev|\b(?:Connect|Configure) Boat\b|\b(?:from|by) Boat\b/g;
+// Boat is gone from the app: no string names it.
 const BOAT = /\bBoats?\b/;
 
 function retiredIn(text: string, boat: RegExp = BOAT): string[] {
   const found = RETIRED.filter(([, pattern]) => pattern.test(text)).map(([word, , use]) => `"${word}" (say ${use})`);
-  if (boat.test(text.replace(OWN_KEY, ""))) found.push(`"Boat" (say cloud desktop; Boat only names a person's own key)`);
+  if (boat.test(text)) found.push(`"Boat" (Boat is gone; say cloud desktop)`);
   return found;
 }
 
 const PENDING_KEY_PREFIXES: string[] = [];
 const CHECKED_PACKS = ["pt-br"];
-const EN_ALLOWED: Record<string, string> = {
-  "botAccess.cloud.boat": "the own-key provider picker names its two providers, Boat and a VPS",
-  "botAccess.cloud.hostedBackendDescription": "the own-key provider picker names its two providers, Boat and a VPS",
-  "botAccess.cloud.vpsAutoDescription": "the own-key provider picker's VPS line names its Cloud choice",
-};
+const EN_ALLOWED: Record<string, string> = {};
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SCANNED = ["src", "server", "electron", "shared", "packages/phone-protocol/src"];
@@ -54,10 +51,17 @@ const isSource = (name: string) => /\.(?:ts|tsx|mjs|cjs|js)$/.test(name) && !/\.
 
 /** No snippet keeps the word file-wide; otherwise only literals containing the snippet. */
 const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = [
-  { file: "packages/phone-protocol/src/credential-request.ts", snippet: "when Boat is selected", why: "the card that asks for a person's own Boat key" },
-  { file: "server/boat-create-idempotency.ts", snippet: "unnamed Boat", why: "own-key repair: boat.dev's own name for a machine" },
-  { file: "server/workspace-backup.ts", snippet: "OMB-WORKSPACE-1", why: "a backup file's format marker" },
-  { file: "electron/company-backups.mjs", snippet: "OMB-WORKSPACE-1", why: "a backup file's format marker" },
+  { file: "server/boat-retirement.ts", why: "the one-time move off Boat names it in its own log lines" },
+  { file: "electron/legacy-names.mjs", why: "reads files that earlier versions wrote" },
+  { file: "packages/phone-protocol/src/wire-names.ts", why: "the released phone apps know these names" },
+  { file: "electron/phone-wire-names.mjs", why: "the released phone apps know these names" },
+  { file: "server/phone-activity.ts", snippet: "openmausbot", why: "the released phone apps register these link schemes" },
+  { file: "packages/phone-protocol/src/phone-push.ts", snippet: "openmausbot", why: "the released phone apps register these link schemes" },
+  { file: "server/phone-secret.ts", snippet: "openmausbot-phone-credential-v1", why: "the phone apps seal secrets with this label" },
+  { file: "packages/phone-protocol/src/phone-secret-envelope.ts", snippet: "OpenMausBot phone credential v1", why: "the phone apps seal secrets with this label" },
+  { file: "server/peer-provenance.ts", snippet: "openmausbot", why: "defuses imitations of an earlier version's notes" },
+  { file: "server/checkpoints.ts", snippet: ".openmausbot-secrets/", why: "keeps the secrets folder of an earlier version out of snapshots" },
+  { file: "server/browser-engine-release.ts", snippet: "milind-soni/OpenMausBot/releases", why: "the release assets still live in the upstream repository" },
 ];
 
 function* sources(dir: string): Generator<string> {
@@ -172,7 +176,6 @@ describe("one name per thing", () => {
       ["cloudAccount.onCloudSignIn", [label("cloudAccount.signInAgain")]],
       ["cloudAccount.storageFailed", [label("settings.account.signOutShort")]],
       ["cloudAccount.codeExpired", [label("settings.account.signIn")]],
-      ["computer.routines.offWarning", [label("routines.runsOn.boat")]],
       ["native.dialog.org.consHosted", [label("native.menu.server")]],
       ["native.dialog.unreachable.detail", [label("native.menu.server")]],
       ["native.boot.folderMissing.body", [label("native.menu.server")]],
@@ -189,19 +192,18 @@ describe("one name per thing", () => {
     }
   });
 
-  it("the check catches each retired word, and lets own-key Boat and env names through", () => {
+  it("the check catches each retired word, and lets env names through", () => {
     for (const bad of [
       "Sign in to OMB Cloud", "Sign in to OpenMausBot Cloud", "Get OpenMausBot Pro", "MausBot Pro plans", "Get Seira Pro",
-      "restart OMB", "Cloud box", "Hosted desktop", "Run it in its cloud VM", "Boat cloud runner",
+      "restart OMB", "Open OpenMausBot", "Ask MausBot", "an OpenMaus team file", "Cloud box", "Hosted desktop", "Run it in its cloud VM", "Boat cloud runner",
       "Open your Cloud dashboard", "Connect to my Cloud", "Your Cloud is ready", "Let my Cloud use this Mac",
       "Local (this computer)", "Choose Cloud to wake", "Auto, Cloud or Browser", "including one from T3",
-      "Auto uses this Boat", "New Boat computer",
+      "Auto uses this Boat", "New Boat computer", "Add a Boat API key in Settings → API keys", "Connect Boat", "Cloud desktops by Boat",
     ]) expect(retiredIn(bad), bad).not.toEqual([]);
     for (const good of [
       "Sign in to Seira Cloud", "Pro active · verified by Seira Cloud", "Restart Seira", "locked by another Seira process",
-      "set OMB_PUBLIC_IPV4", "Open My Cloud", "Open the Cloud", "Choose Cloud desktop to wake", "Auto, Cloud desktop or Browser",
-      "Included with your Cloud plan", "Add a Boat API key in Settings → API keys", "Connect Boat", "Check boat.dev",
-      "Bots here can get their own cloud desktops from Boat, a paid service", "Cloud desktops by Boat",
+      "set SEIRA_PUBLIC_IPV4", "Open My Cloud", "Open the Cloud", "Choose Cloud desktop to wake", "Auto, Cloud desktop or Browser",
+      "Included with your Cloud plan",
       "Local VM", "Open your Plan page",
     ]) expect(retiredIn(good), good).toEqual([]);
   });

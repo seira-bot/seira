@@ -26,7 +26,7 @@
 
 ## User path
 
-Settings → Usage (in Simple mode, on Account) shows the period's totals, where
+Settings → Spending (Advanced mode) shows the period's totals, where
 the money went by bot and by model (with a switch for person, day, provider and
 routine), and every run. Opening a run shows its trace waterfall. In a chat, each
 turn's work line reads "Worked for …" with **View trace** beside it. **Export
@@ -69,7 +69,7 @@ pnpm control:seira wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
 cat DATA_DIR/usage/$(date -u +%Y-%m).jsonl
 ```
 
-Then open the printed preview, go to Settings → Usage, and confirm the run is
+Then open the printed preview, go to Settings → Spending, and confirm the run is
 listed with its bot, and that **Where it went** shows it under **Bot** and under
 **Person** as "This computer".
 
@@ -84,7 +84,7 @@ teammate that calls two agents tools, then reads `GET /api/usage/traces` and
 `GET /api/usage/traces/:id`: one root, the teammate's turn and the Chief's resumed
 turn nested under the first, each tool timed by the server, and totals that add
 up. The unit tests cover nesting, timing, a tool still open at the end of its
-turn, OMB receipts against engine events, Codex's thread totals, old untimed
+turn, Seira receipts against engine events, Codex's thread totals, old untimed
 rows, groups, a parent loop, 2,000 tool calls in one turn and a 500-span trace
 read from disk.
 
@@ -104,7 +104,7 @@ its preview URL.
 The chat header's input/output breakdown has a separate real-renderer fixture:
 
 ```sh
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/usage-details-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/usage-details-ui.e2e.test.ts
 ```
 
 It launches a disposable app, sends one scripted-engine turn through the composer,

@@ -11,8 +11,8 @@ import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(binary);
-if (!enabled) console.info("skipping team canvas UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(binary);
+if (!enabled) console.info("skipping team canvas UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 type BotRecord = {
   id: string; name: string; title?: string; section?: string; threadId: string;
@@ -156,26 +156,6 @@ type BotRecord = {
     for (const name of ["Ada", "Ben", "Cleo", "Dana"]) expect(await snapshot()).toContain(`Change default model for ${name}`);
     expect(await evaluate("[...document.querySelectorAll('[data-team-key] article span')].some(span => span.textContent.trim() === 'Ready')")).toBe(false);
     expect(await evaluate("document.querySelectorAll('[data-team-canvas] [aria-label^=\"Desktop for \"]').length")).toBe(0);
-
-    // The full-app fixture has no Boat credentials. The explicit + entry
-    // explains paid creation, but cannot allocate anything until connected.
-    const beforeComputers = await api("GET", "/api/team-computers");
-    expect(beforeComputers.configured).toBe(false);
-    await evaluate("document.querySelector('summary[aria-label=\"Add to team map\"]').focus(); true");
-    await ui("press", "--keys", "Enter");
-    await click("Cloud desktop");
-    await expect.poll(snapshot).toContain("Connect your Boat account before creating a cloud desktop.");
-    await expect.poll(snapshot).toContain("Your Boat plan and usage charges apply.");
-    const inputRefs = (await ui("snapshot")).refs as Record<string, { role: string; name: string }>;
-    const nameInput = Object.entries(inputRefs).filter(([, entry]) => entry.role === "textbox" && entry.name === "New cloud desktop");
-    expect(nameInput).toHaveLength(1);
-    await ui("type", "--ref", `@${nameInput[0][0]}`, "--text", "Fixture desktop");
-    expect(await evaluate("document.querySelector('aside[aria-label=\"Desktops\"] button[type=submit]').disabled")).toBe(true);
-    expect((await api("GET", "/api/team-computers")).computers).toEqual(beforeComputers.computers);
-    await click("Cancel");
-    await click("Close desktops");
-    expect(await evaluate("Boolean(document.querySelector('aside[aria-label=\"Desktops\"]'))")).toBe(false);
-    receipts.unconfiguredComputerCreation = "Explicit Add entry shows cost disclosure and keeps Create cloud desktop disabled without credentials.";
 
     await evaluate(`(() => {
       const card = document.querySelector(${JSON.stringify(`[data-bot-id=${JSON.stringify(ben.id)}]`)});
@@ -332,7 +312,7 @@ type BotRecord = {
       });
     })()`)).toBe(true);
 
-    const layout = await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('omb-team-canvas:')))");
+    const layout = await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('seira-team-canvas:')))");
     expect(Object.keys(layout)).toHaveLength(2);
     expect(Object.keys(layout).filter(key => key.endsWith(":bot-order"))).toHaveLength(1);
     receipts.layout = layout;
@@ -341,7 +321,7 @@ type BotRecord = {
     await openMap();
     await expect.poll(() => teamPosition("Delivery"), { timeout: 10_000 }).toEqual(arranged);
     await expect.poll(() => cardOrder("Delivery"), { timeout: 10_000 }).toEqual(reordered);
-    expect(await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('omb-team-canvas:')))"))
+    expect(await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('seira-team-canvas:')))"))
       .toEqual(layout);
     expect((await savedBot(ben.id)).section).toBe("Delivery");
     expect(await messages(ben.id)).toEqual(transcript);

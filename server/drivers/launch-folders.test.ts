@@ -20,7 +20,7 @@ interface CutOff {
 
 /** Runs the call in a process that exits in the middle of it, with its own temp folder, and says what it left. */
 function cutOff(scenario: "muse" | "acp" | "background" | "turn", env: Record<string, string> = {}): CutOff {
-  const root = mkdtempSync(join(tmpdir(), "omb-cut-off-"));
+  const root = mkdtempSync(join(tmpdir(), "seira-cut-off-"));
   const home = join(root, "home");
   const tmp = join(root, "tmp");
   mkdirSync(home);
@@ -54,20 +54,20 @@ function expectOwnedAndGone(left: CutOff, prefix: string): void {
 
 describe.skipIf(process.platform === "win32")("the temp folder of a call that a process leaves unfinished", () => {
   it("goes with the process when it ends in the middle of a Muse Code model list", () => {
-    expectOwnedAndGone(cutOff("muse"), "omb-muse-models-");
+    expectOwnedAndGone(cutOff("muse"), "seira-muse-models-");
   });
 
   it("goes with the process when it ends in the middle of an ACP model discovery", () => {
-    expectOwnedAndGone(cutOff("acp"), "omb-acp-models-");
+    expectOwnedAndGone(cutOff("acp"), "seira-acp-models-");
   });
 
   it("goes with the process when it ends in the middle of a one-off Claude call", () => {
-    expectOwnedAndGone(cutOff("background", { FAKE_CLAUDE_TEXT_HANG: "1" }), "omb-claude-background-");
+    expectOwnedAndGone(cutOff("background", { FAKE_CLAUDE_TEXT_HANG: "1" }), "seira-claude-background-");
   });
 
   it("goes with the process when it ends in the middle of a Claude turn: the MCP config and the system prompt", () => {
     const left = cutOff("turn", { FAKE_CLAUDE_MODE: "hang" });
-    expectOwnedAndGone(left, "omb-mcp-");
-    expectOwnedAndGone(left, "omb-system-");
+    expectOwnedAndGone(left, "seira-mcp-");
+    expectOwnedAndGone(left, "seira-system-");
   });
 });

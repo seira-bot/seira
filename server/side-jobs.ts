@@ -25,18 +25,19 @@ export interface HelperConfig {
 /** Goes into a CLI's argv: never a leading dash, no space or control character. */
 const HELPER_MODEL_ID = /^[A-Za-z0-9][\x21-\x7e]*$/;
 
-/** OMB_HELPER_INSTANCE / OMB_HELPER_MODEL win over the file; an empty OMB_HELPER_INSTANCE switches a saved helper off.
+/** SEIRA_HELPER_INSTANCE / SEIRA_HELPER_MODEL win over the file; an empty SEIRA_HELPER_INSTANCE switches a saved helper off.
  * An invalid model switches the helper off rather than writing with a model the person did not name. */
 export function helperSelection(cfg: HelperConfig, env: Record<string, string | undefined> = process.env): { instanceId: string; model?: string } | null {
-  const instanceId = (env.OMB_HELPER_INSTANCE ?? cfg.helper?.instanceId)?.trim();
+  const instanceId = (env.SEIRA_HELPER_INSTANCE ?? cfg.helper?.instanceId)?.trim();
   if (!instanceId) return null;
-  const model = (env.OMB_HELPER_MODEL ?? cfg.helper?.model)?.trim();
+  const model = (env.SEIRA_HELPER_MODEL ?? cfg.helper?.model)?.trim();
   if (!model) return { instanceId };
   return HELPER_MODEL_ID.test(model) ? { instanceId, model } : null;
 }
 
-/** "representative": a person's assistant answering a teammate's question for them, which must never get tools. */
-export type SideJob = "compaction" | "memory" | "skill-review" | "setup-suggestions" | "representative" | "status-reply";
+/** "representative": a person's assistant answering a teammate's question for them, which must never get tools.
+ * "inbox-summary": the summary of a person's Inbox news, which reads text bots wrote and so must never get tools. */
+export type SideJob = "compaction" | "memory" | "skill-review" | "setup-suggestions" | "representative" | "status-reply" | "inbox-summary";
 
 export type SideJobInstance = Pick<ProviderInstance, "instanceId" | "driverKind" | "enabled" | "generateText" | "generateMemoryText" | "models" | "quickModelsUsable"> & {
   adapter: { capabilities: Pick<ProviderAdapter["capabilities"], "agentsMcp"> };
@@ -85,7 +86,7 @@ type TextCall = (prompt: string, options?: TextGenerationOptions) => Promise<str
 
 /** Jobs someone is waiting on, and the representative, which must never get tools, run only on a one-off text call:
  * generateMemoryText starts a whole agent process. */
-const ONE_OFF_ONLY: ReadonlySet<SideJob> = new Set(["compaction", "setup-suggestions", "representative", "status-reply"]);
+const ONE_OFF_ONLY: ReadonlySet<SideJob> = new Set(["compaction", "setup-suggestions", "representative", "status-reply", "inbox-summary"]);
 
 function ownCall(job: SideJob, instance: SideJobInstance): TextCall | undefined {
   const call = ONE_OFF_ONLY.has(job) ? instance.generateText : instance.generateText ?? instance.generateMemoryText;
@@ -95,7 +96,7 @@ function ownCall(job: SideJob, instance: SideJobInstance): TextCall | undefined 
 /** A turn or a person is waiting on these, so they start at once. */
 const NEVER_QUEUED: ReadonlySet<SideJob> = new Set(["compaction", "representative", "status-reply"]);
 /** A person sees these soon (a new bot's suggestions card): they wait ahead of memory upkeep and skill review. */
-const SEEN_SOON: ReadonlySet<SideJob> = new Set(["setup-suggestions"]);
+const SEEN_SOON: ReadonlySet<SideJob> = new Set(["setup-suggestions", "inbox-summary"]);
 
 export function createSideJobs(deps: SideJobsDeps): SideJobs {
   // Logged once per change, not once per call.

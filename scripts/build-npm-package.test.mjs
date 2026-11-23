@@ -18,7 +18,7 @@ beforeAll(() => {
   writeFileSync(join(root, "LICENSE"), "license");
   mkdirSync(join(root, "dist-server"));
   writeFileSync(join(root, "dist-server", "index.js"), "");
-  writeFileSync(join(root, "dist-server", "openmausbot.js"), "");
+  writeFileSync(join(root, "dist-server", "seira.js"), "");
   mkdirSync(join(root, "dist"));
   writeFileSync(join(root, "dist", "index.html"), "");
   run = spawnSync(process.execPath, [join(root, "scripts", "build-npm-package.mjs")], { encoding: "utf8" });
@@ -39,8 +39,8 @@ describe("the npm package", () => {
   });
 
   it("points at the Seira repository", () => {
-    expect(pkg.repository).toEqual({ type: "git", url: "https://github.com/seira-bot/seira.git" });
-    expect(pkg.homepage).toBe("https://github.com/seira-bot/seira#readme");
+    expect(pkg.repository).toEqual({ type: "git", url: "git+https://github.com/seira-bot/seira.git" });
+    expect(pkg.homepage).toBe("https://seira.bot");
     expect(pkg.keywords).toContain("seira");
   });
 
@@ -48,7 +48,7 @@ describe("the npm package", () => {
     expect(readme).toContain("# @seira-bot/seira");
     expect(readme).toContain("npm install -g @seira-bot/seira");
     expect(readme).toContain("npx @seira-bot/seira");
-    expect(readme).not.toContain("npm uninstall -g openmausbot");
-    expect(readme).not.toMatch(/npx openmausbot|(?<!un)install -g openmausbot|milind-soni/);
+    expect(readme).not.toContain("npm uninstall -g seira");
+    expect(readme).not.toMatch(/npx seira|(?<!un)install -g seira|milind-soni/);
   });
 });

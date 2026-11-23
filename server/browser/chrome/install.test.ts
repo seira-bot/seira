@@ -36,15 +36,15 @@ afterAll(async () => {
 });
 afterEach(() => { routes.clear(); requests = 0; });
 
-const pin = (overrides: Partial<ChromeForTestingPin> = {}): ChromeForTestingPin => ({ version: "153.0.8010.47", platform: "mac-arm64", bytes: ARCHIVE.length, sha256: SHA256, ...overrides });
-const dataDir = () => { const folder = mkdtempSync(join(tmpdir(), "omb-cft-")); folders.push(folder); return folder; };
+const pin = (overrides: Partial<ChromeForTestingPin> = {}): ChromeForTestingPin => ({ version: "158.0.8127.36", platform: "mac-arm64", bytes: ARCHIVE.length, sha256: SHA256, ...overrides });
+const dataDir = () => { const folder = mkdtempSync(join(tmpdir(), "seira-cft-")); folders.push(folder); return folder; };
 /** Unpacks only after reading the whole archive, as unzip does. */
 const extract: Extract = async (archive, directory) => {
   expect(readFileSync(archive).equals(ARCHIVE)).toBe(true);
   mkdirSync(dirname(join(directory, RELATIVE)), { recursive: true });
   writeFileSync(join(directory, RELATIVE), "#!/bin/sh\n", { mode: 0o755 });
 };
-const leftovers = (root: string) => readdirSync(join(root, "tools", "chrome", "153.0.8010.47")).filter((name) => name.endsWith(".part"));
+const leftovers = (root: string) => readdirSync(join(root, "tools", "chrome", "158.0.8127.36")).filter((name) => name.endsWith(".part"));
 
 describe("downloading Chrome for Testing", () => {
   it("checks size and SHA-256 before unpacking, then moves the whole browser into place at once", async () => {
@@ -125,7 +125,7 @@ describe("downloading Chrome for Testing", () => {
 
   it("shares one download between callers, and clears what an interrupted one left, never another's live download", async () => {
     const root = dataDir();
-    const version = join(root, "tools", "chrome", "153.0.8010.47");
+    const version = join(root, "tools", "chrome", "158.0.8127.36");
     mkdirSync(join(version, "mac-arm64.dead.part"), { recursive: true });
     writeFileSync(join(version, "mac-arm64.dead.zip.part"), "half");
     const hourAgo = new Date(Date.now() - 60 * 60_000);
@@ -141,10 +141,10 @@ describe("downloading Chrome for Testing", () => {
   });
 
   it("downloads from Google's Chrome for Testing bucket, by pinned version and platform", () => {
-    expect(chromeForTestingUrl(pin())).toBe("https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.47/mac-arm64/chrome-mac-arm64.zip");
-    expect(chromeForTestingPin("darwin", "arm64")).toMatchObject({ platform: "mac-arm64", bytes: 190878359 });
-    expect(chromeForTestingPin("linux", "x64")).toMatchObject({ platform: "linux64", bytes: 195709628 });
-    expect(chromeForTestingPin("linux", "arm64")).toMatchObject({ platform: "linux-arm64", bytes: 195919275 });
+    expect(chromeForTestingUrl(pin())).toBe("https://storage.googleapis.com/chrome-for-testing-public/158.0.8127.36/mac-arm64/chrome-mac-arm64.zip");
+    expect(chromeForTestingPin("darwin", "arm64")).toMatchObject({ platform: "mac-arm64", bytes: 200339070 });
+    expect(chromeForTestingPin("linux", "x64")).toMatchObject({ platform: "linux64", bytes: 208062943 });
+    expect(chromeForTestingPin("linux", "arm64")).toMatchObject({ platform: "linux-arm64", bytes: 205790900 });
     expect(chromeForTestingPin("win32", "x64")).toBeNull();
   });
 });

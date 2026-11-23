@@ -12,16 +12,16 @@ import type { WebhookAttempt } from "@/lib/webhooks";
 const NOW = new Date(2026, 9, 17, 12, 0).getTime(); // Saturday Oct 17 2026, noon local
 const at = (days: number, hours: number, minutes = 0) => { const day = new Date(NOW); day.setDate(day.getDate() + days); day.setHours(hours, minutes, 0, 0); return day.getTime(); };
 const routine = (overrides: Partial<Routine> = {}): Routine => ({
-  id: "brief", name: "Morning summary", prompt: "Send me a summary of my inbox: who wrote and what they need.", target: "bot", botId: "scout", runOn: "maus", enabled: true,
+  id: "brief", name: "Morning summary", prompt: "Send me a summary of my inbox: who wrote and what they need.", target: "bot", botId: "scout", runOn: "seira", enabled: true,
   schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, durationMinutes: 30, nextRunAt: at(2, 9), createdAt: 0, updatedAt: 0, ...overrides,
 });
 const webhook = (overrides: Partial<WebhookTrigger> = {}): WebhookTrigger => ({
-  id: "hook", endpointId: "wh_x", name: "Sales form leads", prompt: "Draft a short follow-up email for the lead.", botId: "scout", runOn: "maus", enabled: true,
+  id: "hook", endpointId: "wh_x", name: "Sales form leads", prompt: "Draft a short follow-up email for the lead.", botId: "scout", runOn: "seira", enabled: true,
   createdAt: 0, updatedAt: 0, deliveryCount: 0, ...overrides,
 });
 let sequence = 0;
 const run = (status: RoutineRun["status"], startedAt: number, extra: Partial<RoutineRun> = {}): RoutineRun => ({
-  id: `run-${++sequence}`, routineId: "brief", routineName: "Morning summary", target: "bot", botId: "scout", runOn: "maus", scheduledFor: startedAt, startedAt,
+  id: `run-${++sequence}`, routineId: "brief", routineName: "Morning summary", target: "bot", botId: "scout", runOn: "seira", scheduledFor: startedAt, startedAt,
   createdAt: startedAt, status, manual: false, ...extra,
 });
 const automation = (runs: RoutineRun[], overrides: Partial<Routine> = {}): Automation => automationsFrom({ routines: [routine(overrides)], webhooks: [], runs })[0]!;
@@ -29,6 +29,20 @@ const automation = (runs: RoutineRun[], overrides: Partial<Routine> = {}): Autom
 describe("the plain sentence", () => {
   it("says when, who and what for a schedule, turning the instructions into a short phrase addressed to the person", () => {
     expect(automationSentence(automation([]), "Scout")).toBe("Every weekday at 9 AM, Scout sends you a summary of your inbox");
+  });
+
+  it("names the workflow and its bots for a routine that runs one", () => {
+    const flowing = automation([], { workflowId: "wf1" });
+    expect(automationSentence(flowing, "Scout", { name: "Morning round", bots: ["Scout", "Ledger"] })).toBe("Every weekday at 9 AM, Morning round runs with Scout and Ledger");
+  });
+
+  it("falls back to the bot starting a workflow when none of the workflow's bots is known", () => {
+    expect(automationSentence(automation([], { workflowId: "wf1" }), "Scout", { name: "Morning round", bots: [] })).toBe("Every weekday at 9 AM, Scout starts a workflow");
+  });
+
+  it("says the bot starts a workflow when the workflow is not known", () => {
+    expect(automationSentence(automation([], { workflowId: "wf1" }), "Scout")).toBe("Every weekday at 9 AM, Scout starts a workflow");
+    expect(automation([], { workflowId: "wf1" }).workflowId).toBe("wf1");
   });
 
   it("says who sends and what the bot does for something another app sends", () => {
@@ -55,6 +69,18 @@ describe("the plain sentence", () => {
     expect(doesPhrase("PDF des factures à envoyer", false)).toBe("PDF des factures à envoyer");
     expect(doesPhrase("Envoyer le résumé", false)).toBe("envoyer le résumé");
     expect(doesPhrase("If it is urgent, call me")).toBe("if it is urgent, call you");
+  });
+
+  it("leaves instructions in another language unconjugated when the app is in English", () => {
+    expect(doesPhrase("Tulis ringkasan pesan masuk setiap pagi")).toBe("tulis ringkasan pesan masuk setiap pagi");
+    expect(doesPhrase("Kirim laporan mingguan ke tim")).toBe("kirim laporan mingguan ke tim");
+    expect(doesPhrase("Envía un resumen al equipo")).toBe("envía un resumen al equipo");
+    expect(doesPhrase("Envía un resumen a Ana")).toBe("envía un resumen a Ana");
+  });
+
+  it("conjugates a short English instruction that has no small English word", () => {
+    expect(doesPhrase("Post a kickoff note")).toBe("posts a kickoff note");
+    expect(doesPhrase("Draft a follow-up")).toBe("drafts a follow-up");
   });
 
   it("says how often a step cron runs, as the bot writes one for every 2 minutes", () => {

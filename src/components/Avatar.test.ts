@@ -5,21 +5,23 @@ import { describe, expect, it } from "vitest";
 import {
   BotAvatar,
   InitialsAvatar,
-  MausAvatar,
+  PersonAvatar,
+  SeiraAvatar,
   resolveBotAvatarOutcome,
   type BotAvatarProps,
-  type MausAvatarProps,
+  type SeiraAvatarProps,
 } from "./Avatar";
+import type { PersonLook } from "../../shared/person-look";
 
-const render = (props: Partial<MausAvatarProps>) =>
-  renderToStaticMarkup(createElement(MausAvatar, { color: "green", animated: false, ...props }));
+const render = (props: Partial<SeiraAvatarProps>) =>
+  renderToStaticMarkup(createElement(SeiraAvatar, { color: "green", animated: false, ...props }));
 
 const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   renderToStaticMarkup(
     createElement(BotAvatar, { bot: { color: "green", ...bot }, animated: false }),
   );
 
-describe("MausAvatar body", () => {
+describe("SeiraAvatar body", () => {
   it("wears Seira when no body is given", () => {
     expect(render({})).toBe(render({ bodyId: "seira" }));
   });
@@ -31,7 +33,7 @@ describe("MausAvatar body", () => {
   it("falls back to Seira for an unknown body", () => {
     // SAFETY: "hexagram" is deliberately not a BotBodyId, to exercise the runtime fallback for persisted or streamed
     // data.
-    expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
+    expect(render({ bodyId: "hexagram" as SeiraAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
   });
 });
 
@@ -95,6 +97,32 @@ describe("theme hooks on faces", () => {
   it("marks the person's picture and their initials", () => {
     expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL", avatarUrl: "/api/attachments/me.png" }))).toMatch(/<img data-avatar="picture" data-avatar-kind="person"/);
     expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL" }))).toMatch(/<div data-avatar="initials" data-avatar-kind="person"/);
+  });
+});
+
+describe("PersonAvatar", () => {
+  const look: PersonLook = { mascotBody: "bob", mascotAccessories: ["glasses"], color: "teal" };
+  const person = (profile: { avatarUrl?: string; look?: PersonLook } | undefined) => renderToStaticMarkup(createElement(PersonAvatar, { profile, size: 28 }));
+
+  it("draws the saved look with the bot avatar parts when there is no photo", () => {
+    const markup = person({ look });
+    expect(markup).toContain('data-avatar="mascot"');
+    expect(markup).toContain('data-avatar-kind="person"');
+    expect(markup).not.toBe(person({ look: { ...look, mascotBody: "spiky", mascotAccessories: [] } }));
+    expect(markup).not.toContain("?");
+  });
+
+  it("shows the photo over the look", () => {
+    const markup = person({ avatarUrl: "/api/attachments/me.png", look });
+    expect(markup).toContain('<img data-avatar="picture" data-avatar-kind="person"');
+    expect(markup).not.toContain("<svg");
+  });
+
+  it("draws a plain person, never initials or a question mark, when it has no look", () => {
+    for (const markup of [person(undefined), person({})]) {
+      expect(markup).toContain("<svg");
+      expect(markup).not.toContain("?");
+    }
   });
 });
 

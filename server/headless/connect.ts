@@ -7,18 +7,19 @@ import { cliCommand } from "../cli-invocation.ts";
 import { EXIT, flag, HeadlessError, usageError } from "./args.ts";
 import { namedServer } from "./client.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
+import { sentWireName } from "../../electron/phone-wire-names.mjs";
 
 type Rec = Record<string, any>;
 
 /** The command that makes a pairing code on a server, whichever way that server was installed. */
-const PAIR_ON_SERVER = "npx @seira-bot/seira pair (Docker: docker compose exec omb openmausbot pair)";
+const PAIR_ON_SERVER = "npx @seira-bot/seira pair --computer (Docker: docker compose exec seira seira pair --computer)";
 
 const isLoopback = (origin: string) => /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(origin);
 
 async function call(origin: string, path: string, init: RequestInit = {}): Promise<{ status: number; body: Rec }> {
   const response = await fetch(`${origin}${path}`, {
     ...init, redirect: "error", signal: AbortSignal.timeout(15_000),
-    headers: { "content-type": "application/json", "x-openmausbot-cli": "1", ...(init.headers as Record<string, string> | undefined) },
+    headers: { "content-type": "application/json", "x-seira-cli": "1", ...(init.headers as Record<string, string> | undefined) },
   });
   return { status: response.status, body: await response.json().catch(() => ({})) as Rec };
 }
@@ -69,7 +70,7 @@ export async function connectVerb(ctx: VerbContext): Promise<VerbOutcome> {
   let origin = candidates[0]!;
   let described: { status: number; body: Rec } | null = null;
   for (const candidate of candidates) {
-    described = await call(candidate, "/.well-known/openmausbot/environment").catch(() => null);
+    described = await call(candidate, sentWireName("environmentPath")).catch(() => null);
     origin = candidate;
     if (described?.status === 200 && typeof described.body.environmentId === "string") break;
   }
@@ -79,12 +80,12 @@ export async function connectVerb(ctx: VerbContext): Promise<VerbOutcome> {
   if (described?.status !== 200 || typeof described.body.environmentId !== "string") {
     throw new HeadlessError(`no Seira server answers at ${origin}`, EXIT.unreachable, "check the address, and that the server is running with a way in (see seira serve --help on the server)");
   }
-  const label = flag(ctx.flags, "label")?.trim() || "openmausbot CLI";
+  const label = flag(ctx.flags, "label")?.trim() || "Seira CLI";
   if (!code) {
-    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}) }) });
+    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}), device: "computer" }) });
     if (minted.status !== 200 || typeof minted.body.code !== "string") {
       throw new HeadlessError(`this server will not mint a pairing code for a command on this computer${minted.body.error ? ` (${minted.body.error})` : ""}`,
-        EXIT.unreachable, `${cliCommand("pair")} in a terminal on this computer, then pass --code CODE`);
+        EXIT.unreachable, `${cliCommand("pair --computer")} in a terminal on this computer, then pass --code CODE`);
     }
     code = minted.body.code as string;
   }

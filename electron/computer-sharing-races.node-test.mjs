@@ -8,7 +8,7 @@ import { setImmediate } from "node:timers/promises";
 import { createComputerSharing } from "./computer-sharing.mjs";
 
 async function fixture(t) {
-  const dir = await mkdtemp(path.join(tmpdir(), "omb-sharing-races-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "seira-sharing-races-"));
   const file = path.join(dir, "computer-sharing.json");
   const env = { id: "cloud", origin: "https://cloud.fixture.test", name: "Cloud" };
   const info = { sessionId: randomUUID(), environmentId: randomUUID() };

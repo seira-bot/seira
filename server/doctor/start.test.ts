@@ -90,6 +90,6 @@ describe("seira doctor --data", () => {
     expect(outcome.human.at(-1)).toMatch(/^All fine now: \d+ fixed\.$/);
     expect(existsSync(temp)).toBe(false);
     // The lease was let go.
-    expect(existsSync(join(data, "openmausbot-server.lease"))).toBe(false);
+    expect(existsSync(join(data, "seira-server.lease"))).toBe(false);
   });
 });

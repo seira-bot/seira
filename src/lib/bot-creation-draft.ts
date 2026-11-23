@@ -93,14 +93,14 @@ export class BotCreationDraft {
   dispose() { if (this.avatarObjectUrl) URL.revokeObjectURL(this.avatarObjectUrl); }
 
   private routine(input: RoutineInput, previous?: Routine): Routine {
-    const { groupId: _group, resultsThreadId: _results, checks: _checks, access: _access, deliver: _deliver, modelSelection: _model, schedule, ...fields } = input;
+    const { groupId: _group, resultsThreadId: _results, workflowId: _workflow, checks: _checks, access: _access, deliver: _deliver, modelSelection: _model, schedule, ...fields } = input;
     const normalizedSchedule = schedule.type === "interval" ? {
       ...schedule, weekdays: schedule.weekdays ?? undefined,
       window: schedule.window ?? undefined, endsAt: schedule.endsAt ?? undefined,
     } : schedule.type === "limit_reset" ? { ...schedule, repeat: schedule.repeat ?? "once", at: schedule.at ?? null } : schedule;
     return {
       id: previous?.id ?? `draft-${randomUuid()}`, createdAt: previous?.createdAt ?? Date.now(),
-      updatedAt: Date.now(), nextRunAt: null, runOn: "maus", ...previous, ...fields,
+      updatedAt: Date.now(), nextRunAt: null, runOn: "seira", ...previous, ...fields,
       enabled: input.enabled ?? previous?.enabled ?? true, target: "bot", botId: this.id,
       timeoutMinutes: input.timeoutMinutes ?? undefined,
       durationMinutes: input.durationMinutes ?? previous?.durationMinutes ?? 30,

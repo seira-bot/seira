@@ -35,6 +35,7 @@ import {
   type PhoneSecretSubmissionRegistry,
 } from "../phone-secret.ts";
 import type { BotLogins } from "../bot-logins.ts";
+import { asksForGithubToken, githubAccessText } from "../github-access.ts";
 import type { VaultReader, VaultStore } from "../vault-store.ts";
 import { loginUsableBy } from "../../shared/logins.ts";
 import { vaultNameKey, type VaultChoice } from "../../shared/vault.ts";
@@ -68,6 +69,8 @@ export interface SecretCardsDeps {
   layerFolder(botId: string, threadId: string): string;
   /** The Local VM (its target key) this conversation's turn holds right now, if any. */
   turnVm(threadId: string): string | undefined;
+  /** This computer already has GitHub access that a bot's own commands can use. Absent where those commands run elsewhere. */
+  githubAccess?(): Promise<boolean>;
   /** The language a line in this conversation is written in for its person (server/server-lines.ts). */
   threadLanguage?(threadId: string): string | undefined;
   /** The Email connector the mailbox card saves to: connecting proves it reads a real header before anything is kept. */
@@ -272,7 +275,7 @@ export function createSecretCards(deps: SecretCardsDeps) {
 
   /** "Use a saved one" on a custom card: saved secrets and the bot's linked ones whose names could fit, never the one by
    * this very name the bot may already use (it would have had it with no card, so the bot wants a new value). A secret
-   * given only to OpenMausBot's own tools is never offered for a file. */
+   * given only to Seira's own tools is never offered for a file. */
   function savedChoices(botId: string, threadId: string, messageId: string): Array<VaultChoice & { use(): Promise<{ id: string; value: string }> }> {
     const message = openCustomCard(botId, threadId, messageId);
     if ("status" in message || message.secret!.delivery === "email") return [];
@@ -626,7 +629,8 @@ export function createSecretCards(deps: SecretCardsDeps) {
   }
 
   /** A secret the Vault holds for the bot by this name, saved or from a linked password manager, is handed over at once,
-   * with no card; otherwise a card asks for it, replacing the bot's pending card with the same name. */
+   * with no card. A GitHub token for commands on a computer that already has GitHub access gets no card either: the bot
+   * hears why. Otherwise a card asks for it, replacing the bot's pending card with the same name. */
   async function requestCustomSecret(from: BotRecord, threadId: string, room: boolean, body: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
     const asked = customRequest(body);
     if ("error" in asked) return { status: 400, body: asked };
@@ -651,6 +655,9 @@ export function createSecretCards(deps: SecretCardsDeps) {
         console.warn(`secret card: could not hand over a saved secret: ${error instanceof Error ? error.message : String(error)}`);
         return { status: 500, body: userError("serverError.secret.notKeptSafely") };
       }
+    }
+    if (asked.delivery === "file" && !vm && deps.githubAccess && asksForGithubToken(asked) && await deps.githubAccess().catch(() => false)) {
+      return { status: 200, body: { label: asked.label, text: githubAccessText(asked.label) } };
     }
     const path = store.activePath(threadId);
     const language = deps.threadLanguage?.(threadId);

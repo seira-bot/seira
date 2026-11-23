@@ -197,6 +197,18 @@ describe("what is for sale, as the Admin says", () => {
     expect(JSON.stringify(cards)).not.toMatch(/a day|credit|Everything in/);
   });
 
+  it("a plan with an allowance of zero shows no row for it", () => {
+    const base = { cpus: 3, memoryMb: 5120, diskGb: 33, maxDiskGb: 33, computers: 0, computerHours: 0, voiceCharacters: 0 };
+    const keys = (rows: Array<{ key: string }>) => rows.map(row => row.key);
+    expect(keys(planCardRows(base))).toEqual(["power", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, snapshotDays: 7 }))).toEqual(["power", "machine", "storage", "backups"]);
+    const text = planCardRows(base).map(row => `${row.text} ${row.note ?? ""}`).join(" ");
+    expect(text).not.toMatch(/at once|desktop|Voice|minute/);
+    expect(keys(planCardRows({ ...base, computers: 2 }))).toEqual(["power", "desktops", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, computerHours: 40 }))).toEqual(["power", "hours", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, voiceCharacters: 20_000 }))).toEqual(["power", "machine", "storage", "voice"]);
+  });
+
   it("a card shows the numbers a person weighs up, and sleeping only where the plans differ; Compare plans keeps the rest of its rows", () => {
     const pro = { tier: "pro", label: "Pro", amount: 4900, allowances: { cpus: 4, cpuKind: "shared" as const, memoryMb: 4096, swapMb: 4096, diskGb: 10, maxDiskGb: 100, computers: 15,
       computerHours: 300, voiceCharacters: 60_000, snapshotDays: 14 } };
@@ -301,7 +313,7 @@ describe("what is for sale, as the Admin says", () => {
       points: ["Routines run on time, day and night", "Reach your bots from your phone, even with this computer off", "$5 of Claude credit to start"],
       price: "Then from $15/month + tax. Cancel any time.", moneyBack: "14-day money-back on every plan." });
     const bare = cloudIntroView({ ...OFFER, creditUsd: undefined, refundDays: undefined })!;
-    expect(bare.points[2]).toBe("Voice and cloud desktops by Boat included"); expect(bare.moneyBack).toBeNull();
+    expect(bare.points[2]).toBe("Voice included"); expect(bare.moneyBack).toBeNull();
     expect(cloudIntroView(noTrial(OFFER))).toBeNull(); expect(cloudIntroView(null)).toBeNull(); expect(cloudIntroView(undefined)).toBeNull();
     expect(JSON.stringify(cloudIntroView(OFFER))).not.toMatch(/launch|\$89|first 100/i);
     const partial: CloudOffer = { ...OFFER, plans: OFFER.plans.map(plan => plan.tier === "starter" ? { ...plan, trialDays: undefined } : plan) };
@@ -321,8 +333,22 @@ describe("the buying sheet, one view per state", () => {
     expect(cloudAddView({ status: "signed-out" }, undefined, at)).toEqual({ kind: "checking" });
     expect(cloudAddView({ status: "signed-out" }, OFFER, at)).toEqual({ kind: "offer", offer: OFFER, signedOut: true, notice: null });
     expect(cloudAddView(connected(), noTrial(OFFER), at)).toEqual({ kind: "offer", offer: noTrial(OFFER), signedOut: false, notice: null });
-    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "unreachable" });
+    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "no-plans" });
+    expect(cloudAddView({ status: "signed-out" }, null, { ...at, unreachable: true })).toEqual({ kind: "unreachable" });
     expect(cloudAddView(connected(), OFFER, { ...at, error: "rate-limited" })).toEqual({ kind: "error", reason: "rate-limited" });
+  });
+
+  it("sends someone with no Cloud to Settings when this build sells none, but still signs a signed-out person in", () => {
+    const none = { ...at, sells: false };
+    const plain: CloudSignInPhase = { step: "email", intent: false, problem: null };
+    const done: CloudSignInPhase = { step: "done", intent: false };
+    for (const offer of [undefined, null, OFFER]) {
+      expect(cloudAddView(connected(), offer, { ...none, signIn: done })).toEqual({ kind: "settings" });
+      expect(cloudAddView(connected(), offer, none)).toEqual({ kind: "settings" });
+      expect(cloudAddView({ status: "signed-out" }, offer, none)).toEqual({ kind: "settings" });
+      expect(cloudAddView({ status: "signed-out" }, offer, { ...none, signIn: plain })).toEqual({ kind: "sign-in", phase: plain });
+    }
+    expect(cloudAddView(connected(), OFFER, { ...none, error: "failed" })).toEqual({ kind: "error", reason: "failed" });
   });
 
   it("follows the sign-in and the checkout in the browser by its own session, never by the return", () => {
@@ -352,7 +378,7 @@ describe("the buying sheet, one view per state", () => {
     expect(cloudAddView(paid({ credit: { ...credit, remainingUsd: 0, state: "used_up" } }), undefined, at)).toMatchObject({ kind: "starting", credit: null });
     expect(cloudAddView(paid({ machine: { status: "provisioning", setup: { step: "storage", slow: true } } }), undefined, at))
       .toEqual({ kind: "starting", tier: "pro", trial: null, credit: null, step: "storage", slow: true, received: false });
-    const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
+    const ready = { status: "ready" as const, origin: "https://seira-u-1.fly.dev" };
     expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000 } }), undefined, at)).toEqual({ kind: "ready", tier: "pro", trial: null, credit: null });
     expect(cloudAddView(paid({ machine: ready }), undefined, at), "Add a Cloud… with a Cloud: one Cloud for now").toEqual({ kind: "has-cloud" });
     expect(cloudAddView(paid({ machine: ready, checkout: { plan: "pro", startedAt: NOW - 3600_000, done: true } }), undefined, at),
@@ -367,7 +393,7 @@ describe("the buying sheet, one view per state", () => {
     const team = (machine: CloudTeam["machine"], extra: Partial<CloudTeam> = {}): CloudTeam => ({ id: "team-acme", name: "Acme", role: "owner", machine, ...extra });
     const onTeam = (tier: string, teams?: CloudTeam[], extra: Partial<CloudAccountState> = {}) =>
       paid({ entitlement: { plan: "pro", tier, status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, ...(teams ? { teams } : {}), ...extra });
-    const up = { status: "ready" as const, origin: "https://omb-t-2.fly.dev" };
+    const up = { status: "ready" as const, origin: "https://seira-t-2.fly.dev" };
     for (const tier of ["team", "business"]) {
       expect(cloudAddView(onTeam(tier, [team(up)]), undefined, at), tier).toEqual({ kind: "team-ready", team: { id: "team-acme", name: "Acme" } });
       expect(cloudAddView(onTeam(tier, [team(up)]), undefined, { ...at, arrived: true }), `${tier}, signed in here just now`).toEqual({ kind: "team-ready", team: { id: "team-acme", name: "Acme" } });
@@ -376,8 +402,8 @@ describe("the buying sheet, one view per state", () => {
       .toEqual({ kind: "team-ready", team: { id: "team-acme", name: "Acme" } });
     expect(cloudAddView(onTeam("team", [team({ status: "provisioning", setup: { step: "storage", slow: true } })]), undefined, at), "the team's Cloud being set up: its own steps")
       .toEqual({ kind: "team-starting", team: "Acme", step: "storage", slow: true });
-    expect(cloudAddView(onTeam("business", [team(null)]), undefined, at), "the team has no machine yet").toEqual({ kind: "team-starting", team: "Acme", step: null, slow: false });
-    expect(cloudAddView(onTeam("team"), undefined, at), "no team listed yet").toEqual({ kind: "team-starting", team: null, step: null, slow: false });
+    expect(cloudAddView(onTeam("business", [team(null)]), undefined, at), "the Admin lists the team with no machine: nothing is being set up").toEqual({ kind: "settings" });
+    expect(cloudAddView(onTeam("team"), undefined, at), "no team listed yet: wait for the Admin, promise no machine").toEqual({ kind: "checking" });
     expect(cloudAddView(onTeam("team", [team({ status: "failed" })]), undefined, at), "a problem is Settings' to say").toEqual({ kind: "settings" });
     expect(cloudAddView(paid(), undefined, at).kind, "a personal plan with no Cloud yet: its setup").toBe("starting");
     expect(cloudAddView(paid({ teams: [team(up, { role: "member" })] }), undefined, at).kind, "a Pro plan's own Cloud, even for someone in a team").toBe("starting");
@@ -392,7 +418,7 @@ describe("the buying sheet, one view per state", () => {
       expect(cloudAddView({ status: "signed-out" }, offer, { ...at, signIn: plain }), "signed out, whatever the offer").toEqual({ kind: "sign-in", phase: plain });
     }
     expect(cloudAddView(removed, OFFER, at)).toEqual({ kind: "settings" });
-    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "unreachable" });
+    expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "no-plans" });
     expect(cloudAddView({ status: "signed-out" }, OFFER, { ...at, signIn: plain, error: "failed" })).toEqual({ kind: "error", reason: "failed" });
   });
 
@@ -410,7 +436,7 @@ describe("the buying sheet, one view per state", () => {
 
   it("never offers anything to someone who pays or may pay: a problem, an ended sign-in or an unreachable Cloud is Settings' to say", () => {
     for (const account of [
-      connected({ entitlement: { plan: "pro", tier: "pro", status: "inactive", expiresAt: null, version: 3 }, machine: { status: "payment-problem", origin: "https://omb-u-1.fly.dev" } }),
+      connected({ entitlement: { plan: "pro", tier: "pro", status: "inactive", expiresAt: null, version: 3 }, machine: { status: "payment-problem", origin: "https://seira-u-1.fly.dev" } }),
       connected({ machine: { status: "stopped" }, trial: trial("ended", { keep: "checkout" }) }),
       paid({ machine: { status: "failed" } }),
       { status: "reauth-required", message: "expired", lastPlan: { tier: "pro", active: true } },
@@ -427,7 +453,7 @@ describe("This computer's Cloud sign-in card", () => {
   const view = (account: CloudAccountState) => cloudNoticeKind(cloudPlanView(account), account);
   it("says sign in again where the sign-in ended, and nothing to someone signed in", () => {
     const base = { status: "connected" as const, account: { id: "a", email: "p@example.test" } };
-    const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
+    const ready = { status: "ready" as const, origin: "https://seira-u-1.fly.dev" };
     expect(view({ ...base, entitlement: { plan: "pro", status: "active", expiresAt: NOW + DAY, version: 1 }, machine: ready })).toBeNull();
     expect(view({ status: "reauth-required", message: "expired", lastPlan: { active: true } })).toBe("sign-in-again");
     expect(view({ status: "reauth-required", message: "expired", lastPlan: { active: false } })).toBeNull();

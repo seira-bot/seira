@@ -14,7 +14,6 @@ export const CREDENTIAL_PATCH = {
   openaiCompatApiKey: (value) => ({ openaiCompat: { key: value } }),
   composioApiKey: (value) => ({ composio: { apiKey: value } }),
   xaiApiKey: (value) => ({ xai: { key: value } }),
-  boxToken: (value) => ({ box: { token: value } }),
   opencodeGoApiKey: (value) => ({ opencodeGo: { apiKey: value } }),
   ttsKey: (value) => ({ tts: { key: value } }),
   fishAudioKey: (value) => ({ tts: { fishKey: value } }),
@@ -28,7 +27,6 @@ export const CREDENTIAL_PATCH = {
   geminiImageApiKey: (value) => ({ imageGen: { geminiKey: value } }),
   openaiLiveKey: (value) => ({ live: { key: value } }),
   tregApiKey: (value) => ({ treg: { key: value } }),
-  postizApiKey: (value) => ({ postiz: { key: value } }),
 };
 
 const DECIDER_ERRORS = Object.freeze({

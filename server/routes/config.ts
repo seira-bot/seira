@@ -1,15 +1,13 @@
+import { machineMemoryBytes, maxBotMemoryGb, validBotMemoryGb } from "../bot-memory-budget.ts";
 import { liveSavePatch } from "../live-config.ts";
 import { signInEnvRefusal } from "../sign-in-env.ts";
-import * as boat from "../boat.ts";
-import { boatCreateRecoverySnapshot, retireDeletedBoatCreate } from "../boat-create-idempotency.ts";
-import { boatDeletionSnapshot } from "../boat-delete-journal.ts";
 import { browserEngineStatus, browserSessionId } from "../browser-engine.ts";
 import { browserEngineKind } from "../browser/config.ts";
 import type { BrowserCleanupCoordinator, BrowserCleanupRequest } from "../browser-lifecycle-cleanup.ts";
 import { finalizeBrowserCleanupMutation, requireBrowserCleanupAcknowledged } from "../browser-lifecycle-cleanup.ts";
 import type { BrowserLive } from "../browser-live.ts";
 import type { BrowserRuntime } from "../browser-runtime.ts";
-import { boatAccountResourceChangeError, vpsAliasResourceChangeError } from "../cloud-backend.ts";
+import { vpsAliasResourceChangeError } from "../cloud-backend.ts";
 import * as composio from "../composio.ts";
 import {
   browserProfilePartitionTarget,
@@ -45,9 +43,8 @@ import type { Store } from "../store.ts";
 import * as tts from "../tts/index.ts";
 import { DEFAULT_DEEPSEEK_VOICE } from "../../shared/deepseek-voice.ts";
 import * as vps from "../vps-computer.ts";
-import { refusalBody, userError, userErrorFields } from "../user-errors.ts";
+import { refusalBody, userError } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
-import type { Postiz } from "../postiz/service.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BusyFlag {
@@ -55,7 +52,7 @@ export interface BusyFlag {
   set(busy: boolean): void;
 }
 
-export type RemoteComputerProvider = "box" | "vps";
+export type RemoteComputerProvider = "vps";
 
 export type ModelSelectionCheck = { ok: true; selection: ModelSelection } | ({ ok: false; status: number } & ServerErrorBody);
 
@@ -94,7 +91,7 @@ export interface ConfigRouteDeps {
   localVmModeChanging(): () => void;
   providerConfigBusy: BusyFlag;
   computerProviderConfigTransitions: Pick<Set<RemoteComputerProvider>, "add" | "delete">;
-  managedBoatOwners(): boat.ManagedBoatOwner[];
+  managedComputerOwners(): vps.ManagedVpsOwner[];
   providerOperationConflict(provider: RemoteComputerProvider): string | null;
   perBotLocalVmCountForModeChange(): Promise<number | null>;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
@@ -114,8 +111,6 @@ export interface ConfigRouteDeps {
   reloadProviders(before: Record<string, unknown>): Promise<void>;
   broadcast(payload: Record<string, unknown>): void;
   drainQueuedSends(): void;
-  /** Postiz: a key is checked at its address before it is saved, and the `postiz` server follows the saved key. */
-  postiz?: Pick<Postiz, "configCheck" | "configSaved">;
 }
 
 export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
@@ -123,9 +118,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
     store, cfg, registry, sessions, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
     closeBrowser, browserEngineSwitched, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy, localVmModeChanging,
-    providerConfigBusy, computerProviderConfigTransitions, managedBoatOwners, providerOperationConflict,
+    providerConfigBusy, computerProviderConfigTransitions, managedComputerOwners, providerOperationConflict,
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
-    configForAccess, resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints, postiz,
+    configForAccess, resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints,
   } = deps;
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     // API keys are never echoed back: booleans only.
@@ -136,6 +131,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       const body = await readBody(req);
       if (hostedModels && ["instances", "anthropic", "openai", "openrouter", "openaiCompat", "xai", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "opencodeGo"].some(key => Object.hasOwn(body, key))) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
       const patch = parseConfigPatchForPerson(body);
+      if (typeof patch.botMemoryGb === "number" && !validBotMemoryGb(patch.botMemoryGb, machineMemoryBytes())) {
+        return json(res, 400, userError("serverError.botMemory.range", { max: maxBotMemoryGb(machineMemoryBytes()) }));
+      }
       if (deps.cloudTeam && patch.browserEngine?.egress?.proxy !== undefined && !(auth.kind === "session" && auth.session.teamRole === "owner")) {
         return json(res, 403, { error: "Only the Team Cloud owner can configure the browser proxy." });
       }
@@ -261,19 +259,12 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           });
         }
       }
-      if (patch.box?.token !== undefined) patch.box.token = patch.box.token.trim();
-      const currentBoatToken = cfg.box?.token?.trim() ?? "";
-      const nextBoatToken = patch.box?.token === undefined ? currentBoatToken : patch.box.token;
-      const changingBoatToken = patch.box?.token !== undefined && nextBoatToken !== currentBoatToken;
       const currentVpsAlias = vpsSshAlias(cfg);
       const nextVpsAlias = patch.vps === undefined
         ? currentVpsAlias
         : vpsSshAlias({ ...cfg, vps: patch.vps });
       const changingVpsAlias = patch.vps !== undefined && nextVpsAlias !== currentVpsAlias;
-      const transitioningProviders: RemoteComputerProvider[] = [
-        ...(changingBoatToken ? ["box" as const] : []),
-        ...(changingVpsAlias ? ["vps" as const] : []),
-      ];
+      const transitioningProviders: RemoteComputerProvider[] = changingVpsAlias ? ["vps"] : [];
       providerConfigBusy.set(true);
       const changingLocalVmMode = patch.localVm?.mode !== undefined && patch.localVm.mode !== localVmMode(cfg);
       if (changingLocalVmMode) localVmModeChangeBusy.set(true);
@@ -287,7 +278,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (changingVpsAlias && currentVpsAlias) {
           const inventory = await vps.listManagedVpsComputers(
             { vps: { sshAlias: currentVpsAlias } },
-            managedBoatOwners(),
+            managedComputerOwners(),
           );
           if (!inventory.available) {
             return json(res, 503, {
@@ -296,77 +287,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           }
           const resourceError = vpsAliasResourceChangeError(inventory.instances.length);
           if (resourceError) return json(res, 409, { error: resourceError });
-        }
-
-        let boatRecovery = changingBoatToken ? boatCreateRecoverySnapshot() : [];
-        let boatDeletions = changingBoatToken ? boatDeletionSnapshot() : [];
-        if (changingBoatToken && boatDeletions.length > 0 && !nextBoatToken) {
-          return json(res, 409, {
-            error: "finish or retry pending cloud computer deletion before removing the Boat account",
-          });
-        }
-        let replacementProvedByDeletion = false;
-        if (changingBoatToken && boatDeletions.length > 0 && nextBoatToken) {
-          try {
-            await boat.verifyBoatDeletionCredential({ box: { token: nextBoatToken } });
-            replacementProvedByDeletion = true;
-            // Re-snapshot: verification may have retired the deletion fence and its create receipt.
-            boatRecovery = boatCreateRecoverySnapshot();
-            boatDeletions = boatDeletionSnapshot();
-          } catch (error) {
-            return json(res, (error as { status?: number })?.status ?? 503, {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        }
-        let currentBoatInventory: boat.ManagedBoatInventory | null = null;
-        let replacingRejectedBoatToken = false;
-        let currentBoatResources: Array<{ boxId: string; name: string }> | null = null;
-        const journalBoatResources: Array<{ boxId: string; name: string }> = [];
-        const deletingBoatIds = new Set(boatDeletions.map((entry) => entry.boxId));
-        if (changingBoatToken && currentBoatToken) {
-          currentBoatInventory = await boat.listManagedBoats(
-            { box: { token: currentBoatToken } },
-            managedBoatOwners(),
-          );
-          if (!currentBoatInventory.available) {
-            replacingRejectedBoatToken = currentBoatInventory.credentialRejected === true && Boolean(nextBoatToken);
-            if (!replacementProvedByDeletion && !replacingRejectedBoatToken) {
-              return json(res, 503, {
-                error: `${currentBoatInventory.problem ?? "cloud computer inventory is unavailable"}. Keep the current Boat account and retry`,
-              });
-            }
-            // A rejected old key cannot authorize its own rotation.
-            currentBoatInventory = null;
-          }
-          if (currentBoatInventory) {
-            const currentById = new Map(
-              currentBoatInventory.instances.map((instance) => [instance.boxId, { boxId: instance.boxId, name: instance.name }]),
-            );
-            for (const recovery of boatRecovery) {
-              if (!recovery.boxId) continue;
-              // The replacement credential already proved this exact deletion target.
-              if (replacementProvedByDeletion && deletingBoatIds.has(recovery.boxId)) continue;
-              const inspected = await boat.inspectBoatIdentity({ box: { token: currentBoatToken } }, recovery.boxId);
-              if (!inspected.available) {
-                return json(res, 503, {
-                  error: `${inspected.problem ?? "a remembered cloud computer could not be verified"}. Keep the current Boat account and retry`,
-                });
-              }
-              if (!inspected.identity) {
-                // Reconcile stale receipts while the current credential still works.
-                retireDeletedBoatCreate(recovery.boxId);
-                continue;
-              }
-              const listed = currentById.get(inspected.identity.boxId);
-              if (listed && listed.name !== inspected.identity.name) {
-                return json(res, 503, { error: "boat.dev returned conflicting cloud computer identities; keep the current Boat account and retry" });
-              }
-              currentById.set(inspected.identity.boxId, inspected.identity);
-              journalBoatResources.push(inspected.identity);
-            }
-            currentBoatResources = [...currentById.values()];
-          }
         }
 
         if (changingLocalVmMode) {
@@ -399,80 +319,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         } else {
           patch.composio = { ...patch.composio, apiKey: "", sessionId: "" };
         }
-      }
-      const postizRefusal = await postiz?.configCheck(patch);
-      if (postizRefusal) return json(res, postizRefusal.status, { error: postizRefusal.error, code: postizRefusal.code, ...userErrorFields(postizRefusal) });
-      const newBoatToken = patch.box?.token;
-      if (newBoatToken?.trim()) {
-        const check = await boat.verifyToken(newBoatToken);
-        if (!check.ok) return json(res, 400, { error: check.message, ...(check.rejected ? { code: "key_rejected" } : {}) });
-      }
-      if (replacingRejectedBoatToken) {
-        // An expired credential cannot authorize its own replacement: probe without adopting or retiring identities.
-        const replacement = await boat.listManagedBoats(
-          { box: { token: nextBoatToken } }, managedBoatOwners(), { adoptLegacy: false },
-        );
-        if (!replacement.available) return json(res, 503, { error: replacement.problem ?? "Could not verify the replacement Boat key. Your saved key and computers are unchanged." });
-      }
-      if (changingBoatToken && (!currentBoatToken || replacementProvedByDeletion || replacingRejectedBoatToken) && boatRecovery.length > 0) {
-        if (!nextBoatToken) {
-          return json(res, 409, { error: "restore the Boat account that owns the remembered cloud computers before clearing it" });
-        }
-        for (const recovery of boatRecovery) {
-          if (!recovery.boxId) {
-            return json(res, 409, { error: "finish reconciling pending cloud computer creation before changing the Boat account" });
-          }
-          if (replacementProvedByDeletion && deletingBoatIds.has(recovery.boxId)) continue;
-          const inspected = await boat.inspectBoatIdentity({ box: { token: nextBoatToken } }, recovery.boxId);
-          if (!inspected.available) {
-            return json(res, 503, {
-              error: `${inspected.problem ?? "a remembered cloud computer could not be verified"}. Retry with the Boat account that created it`,
-            });
-          }
-          if (!inspected.identity || !(await boat.boatNameMatchesBot(recovery.botId, inspected.identity.name))) {
-            return json(res, 409, { error: "that Boat token cannot access the remembered cloud computers from this installation" });
-          }
-        }
-      }
-      if (changingBoatToken && currentBoatInventory && currentBoatResources) {
-        let replacementResources: Array<{ boxId: string; name: string }> | null = null;
-        if (nextBoatToken) {
-          const replacementInventory = await boat.listManagedBoats(
-            { box: { token: nextBoatToken } },
-            managedBoatOwners(),
-            { adoptLegacy: false },
-          );
-          if (!replacementInventory.available) {
-            return json(res, 503, {
-              error: `${replacementInventory.problem ?? "cloud computer inventory is unavailable"}. Keep the current Boat account and retry`,
-            });
-          }
-          replacementResources = replacementInventory.instances.map((instance) => ({
-            boxId: instance.boxId,
-            name: instance.name,
-          }));
-          const replacementById = new Map(
-            replacementResources.map((instance) => [instance.boxId, { boxId: instance.boxId, name: instance.name }]),
-          );
-          for (const identity of journalBoatResources) {
-            const inspected = await boat.inspectBoatIdentity({ box: { token: nextBoatToken } }, identity.boxId);
-            if (!inspected.available) {
-              return json(res, 503, {
-                error: `${inspected.problem ?? "a remembered cloud computer could not be verified"}. Keep the current Boat account and retry`,
-              });
-            }
-            if (!inspected.identity || inspected.identity.name !== identity.name) {
-              return json(res, 409, { error: "the replacement Boat token does not access the same cloud computers" });
-            }
-            replacementById.set(inspected.identity.boxId, inspected.identity);
-          }
-          replacementResources = [...replacementById.values()];
-        }
-        const resourceError = boatAccountResourceChangeError(
-          currentBoatResources,
-          replacementResources,
-        );
-        if (resourceError) return json(res, 409, { error: resourceError });
       }
       // Validated against each voice provider's own credential, so no service is ever sent another's key.
       const newTts = patch.tts;
@@ -573,7 +419,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           if (persisted.openaiCompat?.key !== undefined) persisted.openaiCompat.key = "";
           if (persisted.xai?.key !== undefined) persisted.xai.key = "";
           if (persisted.composio?.apiKey !== undefined) persisted.composio.apiKey = "";
-          if (persisted.box?.token !== undefined) persisted.box.token = "";
           if (persisted.opencodeGo?.apiKey !== undefined) persisted.opencodeGo.apiKey = "";
           if (persisted.tts?.key !== undefined) persisted.tts.key = "";
           if (persisted.tts?.fishKey !== undefined) persisted.tts.fishKey = "";
@@ -587,7 +432,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           if (persisted.imageGen?.geminiKey !== undefined) persisted.imageGen.geminiKey = "";
           if (persisted.live?.key !== undefined) persisted.live.key = "";
           if (persisted.treg?.key !== undefined) persisted.treg.key = "";
-          if (persisted.postiz?.key !== undefined) persisted.postiz.key = "";
           saveConfig(persisted);
           configWriteCommitted = true;
           syncCredentialEnv(patch);
@@ -612,7 +456,6 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       }
       for (const key of resetKeys) if (key) forgetKey(key);
       localVmModeChanged?.();
-      postiz?.configSaved(patch);
       // A saved key reaches an engine through the environment its status read uses, often with no reload.
       registry.forgetSnapshots();
       if (patch.localVm?.idleTimeoutMinutes !== undefined) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 
+import { announceAppConnected } from "@/lib/app-connected";
 import { cardSuggestions } from "@/lib/app-suggestions";
 import { preloadConnectedApps } from "@/lib/connected-apps";
 import { reserveConnectionPage } from "@/lib/connector-oauth";
@@ -51,7 +52,10 @@ export function ConnectorAlsoUseful({ botId, slug }: { botId: string; slug: stri
         stops.current.delete(stop);
         connectorConnect(card.slug, end);
         settle(end === "connected");
-        if (end === "connected") void preloadConnectedApps(true).catch(() => {});
+        if (end === "connected") {
+          announceAppConnected(card.slug, card.label);
+          void preloadConnectedApps(true).catch(() => {});
+        }
       });
       stops.current.add(stop);
     } catch (cause) {

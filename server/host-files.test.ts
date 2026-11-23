@@ -10,13 +10,13 @@ import { withHostFiles } from "./local-computer.ts";
 
 describe("the bridge's switch", () => {
   it("turns on only for this desktop's own gated computer", () => {
-    const gated = { command: "node", args: [], env: { OMB_CUA_COMMAND: "cua-driver" } as Record<string, string>, platform: "win32" as const, scope: "local-computer" as const };
-    expect(withHostFiles(gated).env.OMB_HOST_FILES).toBe("1");
+    const gated = { command: "node", args: [], env: { SEIRA_CUA_COMMAND: "cua-driver" } as Record<string, string>, platform: "win32" as const, scope: "local-computer" as const };
+    expect(withHostFiles(gated).env.SEIRA_HOST_FILES).toBe("1");
     const vm = { command: "node", args: [], env: {}, platform: "linux" as const };
     expect(withHostFiles(vm)).toBe(vm);
     expect(withHostFiles({ ...gated, env: {} }).env).toEqual({});
     const turn = withHostFileTools({ localComputer: gated, agents: { command: "agents", args: [], env: {} } });
-    expect(turn?.localComputer?.env.OMB_HOST_FILES).toBe("1");
+    expect(turn?.localComputer?.env.SEIRA_HOST_FILES).toBe("1");
     expect(turn?.agents).toEqual({ command: "agents", args: [], env: {} });
     const none = { agents: { command: "agents", args: [], env: {} } };
     expect(withHostFileTools(none)).toBe(none);
@@ -34,7 +34,7 @@ describe("file tools on disk", () => {
   });
   const fixture = () => {
     // Native, as the tools resolve: on Windows it also spells out a short (8.3) temp folder name such as RUNNER~1.
-    const root = realpathSync.native(mkdtempSync(join(tmpdir(), "omb-host-files-")));
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), "seira-host-files-")));
     made.push(root);
     const home = join(root, "home");
     mkdirSync(join(home, "Documents"), { recursive: true });
@@ -46,6 +46,11 @@ describe("file tools on disk", () => {
     };
     return { root, home, call };
   };
+
+  it("refuses a path longer than 4096 characters", async () => {
+    const { home, call } = fixture();
+    for (const name of ["list_files", "read_file", "make_folder"]) expect(await call(name, { path: join(home, "x".repeat(4097)) }), name).toEqual({ text: "That path is too long.", error: true });
+  });
 
   it("answers only its own four tools", () => {
     expect(hostFileRelay("/")({ name: "screenshot", arguments: {} })).toBeNull();

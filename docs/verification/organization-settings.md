@@ -42,7 +42,7 @@ The smoke checks:
 - The 390px layout has no horizontal overflow.
 - A remote-origin page gets neither the organization bridge nor Node access.
 - The actual fresh app still opens its existing optional welcome flow, not an
-  organization sign-in wall. Explicit Settings → Organization works before
+  organization sign-in wall. Explicit Settings → Your account → Organization works before
   completing local provider onboarding.
 - A persisted old hosted selection loads the old server's page without an
   organization bridge. Cancelling native organization sign-in leaves the saved
@@ -68,7 +68,7 @@ and preservation of personal controls have focused renderer regressions.
 
 Use **Server → Sign in with your organization…** in the installed desktop app, or
 **Use desktop app → Open desktop app** in Admin. The fixed
-`openmausbot://organization` link opens local settings only; it carries no
+`seira://organization` link opens local settings only; it carries no
 credentials and does not approve enrollment. Remote pages do not gain access
 to the organization bridge. Existing hosted server selections are not reset
 on an ordinary update.
@@ -91,15 +91,15 @@ update or invoking an OS protocol handler. Companion restart/keychain behavior
 is controller-tested, not a production migration claim.
 
 2026-09-20: the extended isolated desktop workflow passed. Evidence:
-`/var/folders/91/pdc4mdh53xs59x0r4z7_0qzc0000gn/T/omb-organization-ui-kdmfy4/`.
+`/var/folders/91/pdc4mdh53xs59x0r4z7_0qzc0000gn/T/seira-organization-ui-kdmfy4/`.
 Installed-app update/protocol testing and production rollout remain separate
 follow-ups; no customer workspace was changed.
 
 2026-09-16: the extended isolated Electron workflow passed, including logo
 decoding, avatar selection/retrieval and removal propagation. Evidence:
-`/var/folders/91/pdc4mdh53xs59x0r4z7_0qzc0000gn/T/omb-organization-ui-ndaRQH/`.
+`/var/folders/91/pdc4mdh53xs59x0r4z7_0qzc0000gn/T/seira-organization-ui-ndaRQH/`.
 The separate private Admin/native runtime integration also passed with branding
-enabled (`/tmp/omb-desktop-integration-ql2mMS/receipt.json`). Neither test used
+enabled (`/tmp/seira-desktop-integration-ql2mMS/receipt.json`). Neither test used
 customer accounts or changed the operator's desktop app.
 
 ## 2026-09-23 renewal, licence lapse and organization policy
@@ -136,8 +136,8 @@ used.
   not restoring the saved policy on start; removing the `bindTurnComputer`
   guard; replacing instances on a renewal; skipping the legacy-id rename;
   forgetting instead of adopting a legacy backup key.
-- Against the Admin itself (in the openmaus-cloud `feat/desktop-lifecycle`
-  worktree, disposable fixtures): this client enrolled, reported its version
+- Against the Admin itself (in a disposable worktree of the Cloud service,
+  with disposable fixtures): this client enrolled, reported its version
   and policy, renewed a week later to now + 30 days with the same device,
   stayed connected past the original 30 days and showed `license-expired`
   after the grace period; against the current Admin `main` it made no renewal
@@ -219,7 +219,7 @@ from `index.ts` each failed a test, then was restored.
 
 Copy only; no behaviour, identifier, menu id, IPC channel, query parameter or
 locale key changed. The app now says **Organization** (US spelling, as Admin
-does), **Settings → Servers** / **Server → Connect to a server…** for saved
+does), **Settings → This app → Your computers** / **Server → Connect to a server…** for saved
 remote servers, **Settings → Installations** for the fleet screen, "this
 installation" for the whole app and its data, and "folder" for bot and task
 folders. The Anthropic Console's "workspace API key" and ChatGPT's "workspace

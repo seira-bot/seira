@@ -4,11 +4,13 @@ import { t } from "@/lib/i18n";
 import { BotAvatar } from "./Avatar";
 import { BotCharacter } from "./BotCharacter";
 import { RenameTitle } from "./RenameTitle";
+import { threadToContinue } from "@/lib/continue-thread";
 
 /** A chat with no messages yet: the bot, its name (renamable in Advanced) and what it is for. */
 export function EmptyChat({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
   const advanced = useAdvancedMode();
+  const earlier = threadToContinue(bot.tasks, bot.threadId);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
       <BotCharacter bot={bot} state="idle" size={96} fallback={<BotAvatar bot={bot} state="idle" size={64} motion="none" motionKey={0} />} />
@@ -29,6 +31,16 @@ export function EmptyChat({ bot }: { bot: Bot }) {
       <div className="max-w-[360px] text-[14px] text-ink-secondary">
         {bot.description || t("chat.emptyPrompt")}
       </div>
+      {earlier && (
+        <button
+          type="button"
+          data-testid="continue-thread"
+          onClick={() => dispatch({ type: "switchTask", botId: bot.id, threadId: earlier.threadId })}
+          className="max-w-[360px] truncate text-[13px] font-medium text-accent hover:underline"
+        >
+          {t("chat.continueIn", { title: earlier.title })}
+        </button>
+      )}
     </div>
   );
 }

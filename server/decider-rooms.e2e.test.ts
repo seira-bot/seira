@@ -84,8 +84,8 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => jev.listen(0, "127.0.0.1", resolve));
   const jevUrl = `http://127.0.0.1:${(jev.address() as AddressInfo).port}`;
 
-  home = mkdtempSync(join(tmpdir(), "omb-decider-rooms-"));
-  data = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-decider-rooms-"));
+  data = join(home, ".seira");
   const staticDir = join(home, "static");
   mkdirSync(data, { recursive: true });
   mkdirSync(join(staticDir, "assets"), { recursive: true });
@@ -119,10 +119,10 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_STATIC_DIR: staticDir,
-      OMB_JEV_API_KEY: KEY,
+      SEIRA_PORT: String(port),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_STATIC_DIR: staticDir,
+      SEIRA_JEV_API_KEY: KEY,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -279,7 +279,7 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
   it("engines never see the key; the decision log holds no text and no key", async () => {
     expect(existsSync(engineDump)).toBe(true);
     const dump = readFileSync(engineDump, "utf8");
-    expect(JSON.parse(dump).env).not.toHaveProperty("OMB_JEV_API_KEY");
+    expect(JSON.parse(dump).env).not.toHaveProperty("SEIRA_JEV_API_KEY");
     expect(dump).not.toContain(KEY);
     const dir = join(data, "decider-log");
     const log = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("");
@@ -376,7 +376,7 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
 
       const saved = await api("PUT", "/api/config?secretStorage=external", { decider: { provider: "openrouter", openrouterModel: MODEL, openrouterKey: OR_KEY } });
       expect(saved.status).toBe(200);
-      expect(saved.body.decider).toEqual({ provider: "openrouter", model: MODEL, api: "chat", configured: true, keySource: "own", enabled: true, jobs: { roomRouting: true } });
+      expect(saved.body.decider).toEqual({ provider: "openrouter", chosen: "openrouter", model: MODEL, api: "chat", configured: true, keySource: "own", enabled: true, jobs: { roomRouting: true } });
       expect(saved.text).not.toContain(OR_KEY);
       const check = openrouterRequests.at(-1)!;
       expect(check.auth).toBe(`Bearer ${OR_KEY}`);
@@ -441,7 +441,7 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
       const keyed = await api("PUT", "/api/config", { openrouter: { key: SHARED } });
       expect(keyed.status).toBe(200);
       // OpenRouter stays the chosen provider in Settings, still with no key of its own.
-      expect(keyed.body.decider).toEqual({ provider: "openrouter", model: MODEL, api: "chat", configured: false, enabled: false, jobs: { roomRouting: true } });
+      expect(keyed.body.decider).toEqual({ provider: "openrouter", chosen: "openrouter", model: MODEL, api: "chat", configured: false, enabled: false, jobs: { roomRouting: true } });
       expect((await api("PUT", "/api/config", { decider: { enabled: true } })).status).toBe(400);
       expect(await api("POST", "/api/decider/test", {})).toMatchObject({ body: { ok: false, reason: "no_key" } });
 
@@ -458,7 +458,7 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
 
     it("engines never see the OpenRouter decision key", () => {
       const dump = readFileSync(engineDump, "utf8");
-      expect(JSON.parse(dump).env).not.toHaveProperty("OMB_OPENROUTER_DECIDER_KEY");
+      expect(JSON.parse(dump).env).not.toHaveProperty("SEIRA_OPENROUTER_DECIDER_KEY");
       expect(dump).not.toContain(OR_KEY);
     });
   });

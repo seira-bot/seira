@@ -6,13 +6,12 @@ Cua container there — a Linux desktop it can see and control. SSH is the only 
 only surface exposed: Seira never opens a public port on the VPS, never stores your SSH key or
 passphrase, and never runs an agent remotely.
 
-## Choosing the backend
+## Choosing Cloud
 
-The [Your own VPS guide](../apps/docs/content/docs/computers/byo-vps.mdx)
-shows the setup steps and configuration fields. In 0.1.151 and 0.1.152, the Simple layout can
-hide the backend selector for an existing bot (#5225; selector fix #5228). The guide
-includes a stopped-app `bots.json` workaround for affected builds. Do not look for
-an Advanced-only Access page in that layout.
+A bot's **Cloud** computer is this VPS. The [Your own VPS guide](../apps/docs/content/docs/computers/byo-vps.mdx)
+shows the setup steps and configuration fields. With no VPS set up, choosing **Cloud** shows one note that
+links to the setup and the bot answers without a computer; it never falls back to this computer or a
+virtual machine.
 
 Using a VPS only as a bot’s computer leaves Seira and its agents on their current
 host. To move the whole server to a VPS, use [Deploy on a VPS](deploy-vps.md).
@@ -20,8 +19,8 @@ host. To move the whole server to a VPS, use [Deploy on a VPS](deploy-vps.md).
 ## What works
 
 - A per-bot Linux desktop in a managed container on your VPS, driven through the official Cua tools.
-- Live screen preview in the Computer panel and in transcripts, same as a Boat.
-- Explicit **Cloud** with the **Self-hosted VPS** backend provisions or starts the container. **Auto** reuses
+- Live screen preview in the Computer panel and in transcripts, in every Cloud desktop.
+- Explicit **Cloud** provisions or starts the container. **Auto** reuses
   a ready container by default; an off-by-default **Start VPS automatically** switch lets that bot prepare
   or wake its managed container when needed. Scheduled and manually triggered routine runs always start it,
   and never fall back to this computer's own desktop when the VPS cannot be reached.
@@ -61,9 +60,9 @@ transport runs it. Podman cannot replace the Docker CLI here: this backend only 
 ## The required SSH config alias
 
 Seira connects only through a named alias in your `~/.ssh/config` — you type the alias into
-Settings → API keys, nothing else. Every bot action becomes a `docker exec` over SSH, so the app
+Settings → AI → Other services, nothing else. Every bot action becomes a `docker exec` over SSH, so the app
 supplies connection sharing and fail-fast timeouts itself: it runs each VPS command through its own
-`ssh_config` (under `~/.openmausbot/ssh/`) that includes your file first and fills in `ControlMaster`,
+`ssh_config` (under `~/.seira/ssh/`) that includes your file first and fills in `ControlMaster`,
 `ControlPersist`, keepalives and a connect timeout wherever your alias leaves them unset. Anything your
 alias sets wins. Startup, previews, bot tools and their connection probes use the same settings.
 The live desktop's tunnel is the exception: it opens its own connection (`ControlPath=none`), so
@@ -93,18 +92,17 @@ Host my-vps
 
 ### One server per bot
 
-The app-level alias (Settings → API keys) is the default server for every bot. A bot can also be pointed at
+The app-level alias (Settings → AI → Other services) is the default server for every bot. A bot can also be pointed at
 its own alias through the `vpsAlias` field in `bots.json`; omit the field to use the default.
 The older Advanced layout exposes this as Bot Settings → Access → **Server (SSH alias)**.
-If the selector is missing, follow the stopped-app workaround in the published guide.
 The bot's own server then wins for everything
 that matters to that bot — provisioning, status checks, previews, screenshots, watched desktop sessions, its
 computer tools, and deletion cleanup. The Settings inventory spans every server in play and tags each
 computer with the alias that holds it.
 
 A bot cannot be moved to another server while its computer still lives on the old one, and the default alias
-cannot change while any computer it manages still exists: remove the computer first from Settings → Local VM →
-Self-hosted VPS computers (or by hand: `docker -H ssh://old-server rm -f openmausbot-vps-<bot>-<hash>`). A server
+cannot change while any computer it manages still exists: remove the computer first from Settings → Desktops & browser →
+Desktops (or by hand: `docker -H ssh://old-server rm -f seira-vps-<bot>-<hash>`). A server
 that cannot be reached never traps a bot: moving the bot to another server, switching its computer, or deleting
 it goes ahead, and the app says what may be left on that server and the command that removes it once the server
 is back. (Changing the default alias still waits until its server can be listed.) Any alias from your
@@ -114,7 +112,7 @@ is back. (Changing the default alias still waits until its server can be listed.
 
 Some cloud boxes pause after a while without traffic and refuse SSH until they are resumed. On macOS and Linux
 you can give the app a wake step: put an executable script named `wake` in the app's SSH folder
-(`~/.openmausbot/ssh/wake`, or `ssh/wake` in your data directory). When a server cannot be reached, the app
+(`~/.seira/ssh/wake`, or `ssh/wake` in your data directory). When a server cannot be reached, the app
 runs it once with the alias as its only argument (`wake my-vps`), then tries the connection once more. Make the
 script resume the box with your provider's command or API and return once the server accepts SSH again; it gets
 up to two minutes. If it exits with an error, the app shows that error next to the SSH one. Without the file
@@ -122,7 +120,7 @@ nothing changes. Only someone who can write to the data directory can add it; no
 
 ```sh
 #!/bin/sh
-# ~/.openmausbot/ssh/wake: $1 is the SSH alias the app could not reach.
+# ~/.seira/ssh/wake: $1 is the SSH alias the app could not reach.
 my-provider resume "$1" && my-provider wait-ready "$1"
 ```
 
@@ -155,8 +153,8 @@ still gets its own managed desktop container on that machine; it does not take o
 
 3. Check it by hand as in [Troubleshooting](#troubleshooting): `ssh home-box true`, then
    `docker -H ssh://home-box info`.
-4. Enter `home-box` as the alias in Settings → API keys (or as one bot's own server), then choose
-   **Self-hosted VPS** for the bot.
+4. Enter `home-box` as the alias in Settings → AI → Other services (or as one bot's own server), then choose
+   **Cloud** for the bot.
 
 The same trust rules apply: the bot gets full control of what Docker can reach on that machine, so prefer one
 that holds nothing you would not hand to the agent. Tailscale does not close ports that are already open to the
@@ -170,7 +168,7 @@ internet, so firewall the machine: its SSH and Docker ports should accept connec
 - **Firewall the VPS to SSH only**, ideally from your IP. Nothing Seira does needs any other inbound
   port open, so anything else open is pure attack surface.
 - **Nothing sensitive is stored.** The only thing Seira persists is the alias name itself
-  (`~/.openmausbot/config.json`, plus a bot's own alias in `bots.json` when it has one); keys, passphrases,
+  (`~/.seira/config.json`, plus a bot's own alias in `bots.json` when it has one); keys, passphrases,
   and agent state stay with SSH. Aliases are also kept out of the settings and bot records that paired phones
   and members of a shared workspace receive — they get configured-or-not, never the name. An SSH or Docker
   error that a bot reports in its conversation can still quote a server's name.
@@ -180,7 +178,7 @@ internet, so firewall the machine: its SSH and Docker ports should accept connec
 
 ## Container lifecycle
 
-Each bot owns one container on the VPS, named `openmausbot-vps-<bot>-<hash>` — stable across restarts and
+Each bot owns one container on the VPS, named `seira-vps-<bot>-<hash>` — stable across restarts and
 independent of the bot's display name. It lives on the bot's server: the default alias, or the bot's own
 when it has one.
 
@@ -249,7 +247,7 @@ Work up the same path the app takes, cheapest signal first:
    not set up; a host-key prompt means the first manual connect has not happened yet.
 2. **Docker over SSH reaches the daemon:** `docker -H ssh://my-vps info` prints server details. A permission
    error means the SSH user is not in the `docker` group.
-3. **Provision:** choose **Cloud** with the **Self-hosted VPS** backend in the bot's Computer panel. The
+3. **Provision:** choose **Cloud** in the bot's Computer panel. The
    first provision pulls and builds the Cua image on the VPS, which can take minutes; later ones are fast.
 4. **Read the status states.** The panel surfaces exactly what the server found, in check order: alias not
    configured → daemon unreachable → image missing → container missing / stopped → container unmanaged or

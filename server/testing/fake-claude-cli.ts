@@ -4,6 +4,7 @@
 //     | stale-session (--resume answers 2.1.295's no-session error result, no init, stays up)
 //     | error-result | resume-dies-after-init | stream (partial deltas plus subagent noise)
 //     | not-logged-in (2.1.296's frames) | api-error | usage-limit (2.1.295's usage_limit_reached frames)
+//   FAKE_CLAUDE_EXIT_STDERR  with exit-early: the stderr text written before exit 3
 //   FAKE_CLAUDE_API_ERROR  text for the api-error frame (default: overloaded)
 //   FAKE_CLAUDE_API_ERROR_KIND  the api-error frame's `error` (default: unknown); FAKE_CLAUDE_API_ERROR_STATUS its result's
 //     api_error_status; FAKE_CLAUDE_NO_TERMINAL_REASON=1: the result has no terminal_reason, only stop_reason "stop_sequence"
@@ -41,8 +42,9 @@
 //   FAKE_CLAUDE_REPLY_STATE  counter file keeping FAKE_CLAUDE_REPLIES in order across processes
 //   FAKE_CLAUDE_TOOL_CALLS  JSON [{name, input?, ok?, hold?}] each turn calls before its reply (unset: one Bash call). A call
 //     with `hold` keeps running until FAKE_CLAUDE_RELEASE exists, sending a tool_progress every FAKE_CLAUDE_TOOL_PROGRESS_MS
-//     (default 30000) as 2.1.306 does; hold "busy" | "idle" | "network" also keeps a stand-in child process that burns CPU,
-//     sleeps, or holds a loopback TCP connection, as the call's command would
+//     (default 30000) as 2.1.306 does; hold "busy" | "idle" | "network" | "memory" also keeps a stand-in child process that
+//     burns CPU, sleeps, holds a loopback TCP connection, or takes 64 MB more memory every 100 ms until it is stopped, as
+//     the call's command would
 //   FAKE_CLAUDE_TOOL_CALLS_FILE  path of the same JSON, read again each turn (a warm process's turns differ); missing: none
 //   FAKE_STREAM_SCRIPT, FAKE_STREAM_CADENCE  a scripted reply chosen by a marker in the prompt (stream-script.ts)
 //   FAKE_CLAUDE_STREAM_CADENCE  "chars:ms" (happy mode): stream each scripted reply as
@@ -76,6 +78,7 @@
 //   FAKE_CLAUDE_LATE_STEER_GATE  path: a late steer runs as the next native turn (2.1.282), replying once it exists
 //   FAKE_CLAUDE_LATE_STEER_INIT_GATE  path: that late turn's `init` also waits for it
 //   FAKE_CLAUDE_LATE_STEER_SILENT  1: the late turn prints `init` and nothing else
+//   FAKE_CLAUDE_STEER_TEXTS  path: each message sent while a turn runs is added to it as one line of text
 //   FAKE_CLAUDE_SLOW_FINISH_GATE  path: `slow` replies once it exists; a body of "fail" ends as is_error
 //   FAKE_CLAUDE_SLOW_TAIL_TOOL  1: `slow` makes one more tool call right before its reply
 //   FAKE_CLAUDE_QUEUED_TURN_COUNT  unset | zero (what 2.1.282 reports for stdin words) | count
@@ -175,9 +178,9 @@ const scriptedReplies = (() => {
     return [];
   }
 })();
-type ScriptedHold = true | "busy" | "idle" | "network";
+type ScriptedHold = true | "busy" | "idle" | "network" | "memory";
 type ScriptedToolCall = { name: string; id?: string; input: Record<string, unknown>; ok: boolean; output?: unknown; server?: string; hold?: ScriptedHold };
-const HOLDS = new Set<unknown>([true, "busy", "idle", "network"]);
+const HOLDS = new Set<unknown>([true, "busy", "idle", "network", "memory"]);
 const parseToolCalls = (raw: string | undefined): ScriptedToolCall[] | null => {
   if (raw === undefined) return null;
   try {
@@ -447,7 +450,7 @@ if (["text", "json"].includes(argAfter("--output-format") ?? "")) {
       writeDumpAtomic(process.env.FAKE_CLAUDE_COMPACT_DUMP, JSON.stringify({
         pid: process.pid, argv, env: process.env, prompt, cwd: process.cwd(), mcpConfig: JSON.parse(file("--mcp-config") ?? "null"),
         settings: JSON.parse(file("--settings") ?? "null"), systemPrompt: file("--append-system-prompt-file"),
-        hookEnv: Object.keys(process.env).filter((key) => key.startsWith("OMB_HOOK_")),
+        hookEnv: Object.keys(process.env).filter((key) => key.startsWith("SEIRA_HOOK_")),
       }, null, 2));
     }
     compactionPause();
@@ -850,6 +853,7 @@ const ORPHAN_EXIT = "const parent = process.ppid; const orphaned = () => { try {
 const STAND_INS: Record<Exclude<ScriptedHold, true>, string> = {
   busy: `${ORPHAN_EXIT} let checked = Date.now(); for (;;) { if (Date.now() - checked > 500) { checked = Date.now(); if (orphaned()) process.exit(0); } }`,
   idle: `${ORPHAN_EXIT} setInterval(() => { if (orphaned()) process.exit(0); }, 500);`,
+  memory: `${ORPHAN_EXIT} const held = []; setInterval(() => { if (orphaned()) process.exit(0); held.push(Buffer.alloc(64 * 1048576, 1)); }, 100);`,
   network: `${ORPHAN_EXIT} const net = require("node:net"); const server = net.createServer(() => {}).listen(0, "127.0.0.1", () => { net.connect(server.address().port, "127.0.0.1"); }); setInterval(() => { if (orphaned()) process.exit(0); }, 500);`,
 };
 
@@ -956,7 +960,7 @@ const playTurn = (prompt: JsonValue, late = false) => {
   }
 
   if (mode === "exit-early") {
-    process.stderr.write("fake-claude: simulated crash before result\n");
+    process.stderr.write(process.env.FAKE_CLAUDE_EXIT_STDERR ?? "fake-claude: simulated crash before result\n");
     process.exit(3);
   }
   // FAKE_CLAUDE_TRANSIENTS launches fail transiently (exit 5), counted in the FAKE_CLAUDE_STATE file;
@@ -1391,6 +1395,7 @@ process.stdin.on("data", (c) => {
         steeredMessages.push(prompt);
       }
       if (process.env.FAKE_CLAUDE_STEER_RECEIVED) writeFileSync(process.env.FAKE_CLAUDE_STEER_RECEIVED, "received");
+      if (process.env.FAKE_CLAUDE_STEER_TEXTS) appendFileSync(process.env.FAKE_CLAUDE_STEER_TEXTS, `${steeredText(prompt)}\n`);
     } else {
       playTurn(prompt);
       armSteerGate();

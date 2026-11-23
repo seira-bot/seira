@@ -8,7 +8,7 @@ import { buildOTPEmail, sendOTPEmail } from "../src/email";
 import worker from "../src/index";
 import { sha256 } from "../src/installations";
 
-const BASE_URL = "https://auth.openmausbot.test";
+const BASE_URL = "https://auth.seira.test";
 
 interface CallOptions {
   method?: string;
@@ -233,7 +233,7 @@ describe("control-plane migrations and health", () => {
           (installation_id, hostname, tunnel_name, tunnel_id, dns_record_id, status,
            last_reconciled_at, created_at, updated_at)
          VALUES ('before-0007', ?, ?, '10000000-0000-4000-8000-000000000001', 'dns-1', 'ready', 5, 1, 5)`,
-      ).bind(`c-${"a".repeat(32)}.openmausbot.com`, `omb-c-${"a".repeat(32)}`),
+      ).bind(`c-${"a".repeat(32)}.seira.bot`, `seira-c-${"a".repeat(32)}`),
       db.prepare(
         `UPDATE managed_endpoint_capacity
             SET scan_page = 7, tunnel_count = 1000, dns_record_count = 990, reclaim_pending = 3,
@@ -249,21 +249,21 @@ describe("control-plane migrations and health", () => {
       "SELECT provider_account, hostname, status FROM installation_endpoints WHERE installation_id = 'before-0007'",
     ).first()).toEqual({
       provider_account: env.CLOUDFLARE_ACCOUNT_ID,
-      hostname: `c-${"a".repeat(32)}.openmausbot.com`,
+      hostname: `c-${"a".repeat(32)}.seira.bot`,
       status: "ready",
     });
     // A Worker that predates the column keeps inserting into the same account.
     await db.prepare(
       `INSERT INTO installation_endpoints (installation_id, hostname, tunnel_name, status, created_at, updated_at)
        VALUES ('older-worker', ?, ?, 'pending', 1, 1)`,
-    ).bind(`c-${"b".repeat(32)}.openmausbot.com`, `omb-c-${"b".repeat(32)}`).run();
+    ).bind(`c-${"b".repeat(32)}.seira.bot`, `seira-c-${"b".repeat(32)}`).run();
     expect(await db.prepare(
       "SELECT provider_account FROM installation_endpoints WHERE installation_id = 'older-worker'",
     ).first()).toEqual({ provider_account: env.CLOUDFLARE_ACCOUNT_ID });
     await expect(db.prepare(
       `INSERT INTO installation_endpoints
         (installation_id, provider_account, hostname, tunnel_name, status, created_at, updated_at)
-       VALUES ('bad-account', 'short', 'c-x.example', 'omb-c-x', 'pending', 1, 1)`,
+       VALUES ('bad-account', 'short', 'c-x.example', 'seira-c-x', 'pending', 1, 1)`,
     ).run()).rejects.toThrow(/CHECK/);
     expect(await db.prepare("SELECT * FROM managed_endpoint_account_capacity").all().then((rows) => rows.results))
       .toEqual([{
@@ -285,7 +285,8 @@ describe("control-plane migrations and health", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      service: "openmausbot-control-plane",
+      service: "seira-control-plane",
+      accounts: "better-auth",
       capacity: {
         status: "unknown",
         checkedAt: null,
@@ -346,11 +347,11 @@ describe("control-plane migrations and health", () => {
   it("validates capacity tuning variables and keeps safe defaults when they are absent", () => {
     const base = { ...env } as Record<string, unknown>;
     for (const name of [
-      "OMB_TUNNEL_LIMIT",
-      "OMB_DNS_RECORD_LIMIT",
-      "OMB_TUNNEL_RECLAIM",
-      "OMB_TUNNEL_OFFLINE_RECLAIM_DAYS",
-      "OMB_CLEANUP_SWEEP_LIMIT",
+      "SEIRA_TUNNEL_LIMIT",
+      "SEIRA_DNS_RECORD_LIMIT",
+      "SEIRA_TUNNEL_RECLAIM",
+      "SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS",
+      "SEIRA_CLEANUP_SWEEP_LIMIT",
     ]) {
       Reflect.deleteProperty(base, name);
     }
@@ -364,27 +365,27 @@ describe("control-plane migrations and health", () => {
     });
     const withVars = (vars: Record<string, string>) => ({ ...base, ...vars }) as unknown as Env;
     expect(readConfig(withVars({
-      OMB_TUNNEL_LIMIT: "2500",
-      OMB_TUNNEL_RECLAIM: "observe",
-      OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: "30",
-      OMB_CLEANUP_SWEEP_LIMIT: "4",
+      SEIRA_TUNNEL_LIMIT: "2500",
+      SEIRA_TUNNEL_RECLAIM: "observe",
+      SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS: "30",
+      SEIRA_CLEANUP_SWEEP_LIMIT: "4",
     })).capacity).toMatchObject({
       cleanupSweepLimit: 4,
       offlineReclaimMs: 30 * 24 * 60 * 60 * 1_000,
       reclaimMode: "observe",
       tunnelLimit: 2500,
     });
-    expect(readConfig(withVars({ OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: "0" })).capacity.offlineReclaimMs).toBe(21 * 24 * 60 * 60 * 1_000);
-    expect(readConfig(withVars({ OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: "1" })).capacity.offlineReclaimMs).toBe(24 * 60 * 60 * 1_000);
-    expect(readConfig(withVars({ OMB_TUNNEL_RECLAIM_PREVIEW_DAYS: "1" })).capacity.reclaimPreviewMs).toBe(24 * 60 * 60 * 1_000);
+    expect(readConfig(withVars({ SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS: "0" })).capacity.offlineReclaimMs).toBe(21 * 24 * 60 * 60 * 1_000);
+    expect(readConfig(withVars({ SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS: "1" })).capacity.offlineReclaimMs).toBe(24 * 60 * 60 * 1_000);
+    expect(readConfig(withVars({ SEIRA_TUNNEL_RECLAIM_PREVIEW_DAYS: "1" })).capacity.reclaimPreviewMs).toBe(24 * 60 * 60 * 1_000);
     for (const invalid of ["", "0", "366", "soon"]) {
-      expect(readConfig(withVars({ OMB_TUNNEL_RECLAIM_PREVIEW_DAYS: invalid })).capacity.reclaimPreviewMs).toBeNull();
+      expect(readConfig(withVars({ SEIRA_TUNNEL_RECLAIM_PREVIEW_DAYS: invalid })).capacity.reclaimPreviewMs).toBeNull();
     }
-    expect(readConfig(withVars({ OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: "3" })).capacity.offlineReclaimMs).toBe(3 * 24 * 60 * 60 * 1_000);
-    expect(readConfig(withVars({ OMB_CLEANUP_SWEEP_LIMIT: "51" })).capacity.cleanupSweepLimit).toBe(20);
-    expect(readConfig(withVars({ OMB_TUNNEL_LIMIT: "1e3" })).capacity.tunnelLimit).toBe(1000);
-    expect(readConfig(withVars({ OMB_TUNNEL_RECLAIM: "yes" })).capacity.reclaimMode).toBe("observe");
-    expect(readConfig(withVars({ OMB_TUNNEL_RECLAIM: "on" })).capacity.reclaimMode).toBe("on");
+    expect(readConfig(withVars({ SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS: "3" })).capacity.offlineReclaimMs).toBe(3 * 24 * 60 * 60 * 1_000);
+    expect(readConfig(withVars({ SEIRA_CLEANUP_SWEEP_LIMIT: "51" })).capacity.cleanupSweepLimit).toBe(20);
+    expect(readConfig(withVars({ SEIRA_TUNNEL_LIMIT: "1e3" })).capacity.tunnelLimit).toBe(1000);
+    expect(readConfig(withVars({ SEIRA_TUNNEL_RECLAIM: "yes" })).capacity.reclaimMode).toBe("observe");
+    expect(readConfig(withVars({ SEIRA_TUNNEL_RECLAIM: "on" })).capacity.reclaimMode).toBe("on");
   });
 
   it("reports an unhealthy deployment without exposing invalid configuration", async () => {
@@ -398,14 +399,17 @@ describe("control-plane migrations and health", () => {
       CLOUDFLARE_ZONE_ID: env.CLOUDFLARE_ZONE_ID,
       COMPANION_HOST_SUFFIX: env.COMPANION_HOST_SUFFIX,
       CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
+      ACCOUNT_SERVICE: env.ACCOUNT_SERVICE,
+      SEIRA_CLOUD: env.SEIRA_CLOUD,
+      SEIRA_ENDPOINTS_PER_ACCOUNT: env.SEIRA_ENDPOINTS_PER_ACCOUNT,
       CLOUDFLARE_ENDPOINT_ACCOUNTS: env.CLOUDFLARE_ENDPOINT_ACCOUNTS,
-      CLOUDFLARE_API_TOKEN_MAUSBOT_SI: env.CLOUDFLARE_API_TOKEN_MAUSBOT_SI,
-      OMB_TUNNEL_LIMIT: env.OMB_TUNNEL_LIMIT,
-      OMB_DNS_RECORD_LIMIT: env.OMB_DNS_RECORD_LIMIT,
-      OMB_TUNNEL_RECLAIM: env.OMB_TUNNEL_RECLAIM,
-      OMB_TUNNEL_OFFLINE_RECLAIM_DAYS: env.OMB_TUNNEL_OFFLINE_RECLAIM_DAYS,
-      OMB_CLEANUP_SWEEP_LIMIT: env.OMB_CLEANUP_SWEEP_LIMIT,
-      OMB_TUNNEL_RECLAIM_PREVIEW_DAYS: env.OMB_TUNNEL_RECLAIM_PREVIEW_DAYS,
+      CLOUDFLARE_API_TOKEN_SEIRA_SI: env.CLOUDFLARE_API_TOKEN_SEIRA_SI,
+      SEIRA_TUNNEL_LIMIT: env.SEIRA_TUNNEL_LIMIT,
+      SEIRA_DNS_RECORD_LIMIT: env.SEIRA_DNS_RECORD_LIMIT,
+      SEIRA_TUNNEL_RECLAIM: env.SEIRA_TUNNEL_RECLAIM,
+      SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS: env.SEIRA_TUNNEL_OFFLINE_RECLAIM_DAYS,
+      SEIRA_CLEANUP_SWEEP_LIMIT: env.SEIRA_CLEANUP_SWEEP_LIMIT,
+      SEIRA_TUNNEL_RECLAIM_PREVIEW_DAYS: env.SEIRA_TUNNEL_RECLAIM_PREVIEW_DAYS,
       RELAY_TUNNEL_RELEASE_PERCENT: env.RELAY_TUNNEL_RELEASE_PERCENT,
       RELAY_TUNNEL_RELEASE_DAYS: env.RELAY_TUNNEL_RELEASE_DAYS,
       TUNNEL_LEGACY_PHONE_CUTOFF_PERCENT: env.TUNNEL_LEGACY_PHONE_CUTOFF_PERCENT,
@@ -596,15 +600,65 @@ describe("Better Auth email OTP and bearer boundary", () => {
     expect((await call("/v1/me", { token: acceptedBody.token })).status).toBe(401);
   });
 
-  it("builds both plain-text and HTML OTP mail and redacts send failures", async () => {
-    const message = buildOTPEmail("noreply@example.com", {
-      email: "recipient@example.com",
-      otp: "12345678",
-      type: "sign-in",
-    });
-    expect(message.text).toContain("12345678");
-    expect(message.html).toContain("12345678");
+  it("builds the sign-in code mail in the approved design", () => {
+    const message = buildOTPEmail("noreply@example.com", { email: "recipient@example.com", otp: "12345678", type: "sign-in" });
+    expect(message.subject).toBe("Your Seira sign-in code");
+    expect(message.to).toBe("recipient@example.com");
+    expect(message.text).toBe([
+      "Your Seira sign-in code", "", "Enter this code in the Seira app:", "", "12345678", "",
+      "Do not share this code with anyone. The Seira team never asks for it.",
+      "Did not ask for this code? Ignore this email. Nothing changes.", "",
+      "--", "Seira \u00b7 seira.bot", "",
+    ].join("\n"));
+    expect(message.html).toContain(">12345678<");
+    expect(message.html).toContain("Enter this code in the Seira app:");
+    expect(message.html).toContain("Do not share this code with anyone. The Seira team never asks for it.");
+    expect(message.html).toContain('href="https://seira.bot"');
+    expect(message.html).not.toMatch(/<img/i);
+  });
 
+  it("names the recipient in the verification and change-email mail", () => {
+    const verify = buildOTPEmail("noreply@example.com", { email: "new@example.com", otp: "87654321", type: "email-verification" });
+    expect(verify.subject).toBe("Verify your Seira email");
+    expect(verify.text).toContain("Enter this code in Seira to confirm that new@example.com is your email:");
+    expect(verify.html).toContain("Verify your email");
+    expect(verify.html).toContain("new@example.com");
+    expect(verify.text).toContain("Did not ask for this? Ignore this email. Nothing changes.");
+    const change = buildOTPEmail("noreply@example.com", { email: "new@example.com", otp: "87654321", type: "change-email" });
+    expect(change.subject).toBe("Confirm your new Seira email");
+    expect(change.text).toContain("Enter this code in Seira to use new@example.com for your Seira account:");
+    expect(change.html).toContain("Confirm your new email");
+    expect(change.html).toContain("new@example.com");
+    expect(change.text).toContain("Your account keeps its current email.");
+  });
+
+  it("never mentions a code lifetime", () => {
+    for (const type of ["sign-in", "email-verification", "change-email"] as const) {
+      const message = buildOTPEmail("noreply@example.com", { email: "recipient@example.com", otp: "12345678", type });
+      for (const body of [message.text, message.html]) {
+        expect(body).not.toMatch(/expires/i);
+        expect(body).not.toMatch(/minutes/i);
+      }
+    }
+  });
+
+  it("escapes the address in the HTML mail", () => {
+    const message = buildOTPEmail("noreply@example.com", { email: "a<b>@example.com", otp: "12345678", type: "email-verification" });
+    expect(message.html).toContain("a&lt;b&gt;@example.com");
+    expect(message.html).not.toContain("a<b>@example.com");
+  });
+
+  it("sends no mail for a password-reset code", async () => {
+    const send = vi.fn(async () => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await sendOTPEmail({ send }, "noreply@example.com",
+      { email: "recipient@example.com", otp: "12345678", type: "forget-password" }, "request-reset");
+    expect(send).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("redacts send failures", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await sendOTPEmail({ send: async () => { throw new Error("recipient@example.com 12345678"); } },
       "noreply@example.com",
@@ -620,7 +674,7 @@ describe("Better Auth email OTP and bearer boundary", () => {
   it("requires account bearers and never confuses installation credentials", async () => {
     expect((await call("/v1/me")).status).toBe(401);
     expect((await call("/v1/me", { token: "not-a-signed-session" })).status).toBe(401);
-    expect((await call("/v1/me", { token: "omb_install_AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" })).status).toBe(401);
+    expect((await call("/v1/me", { token: "seira_install_AAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" })).status).toBe(401);
 
     const account = await signIn("auth-boundary@example.com");
     expect((await call("/v1/installations/self", { token: account.token })).status).toBe(401);
@@ -735,7 +789,7 @@ describe("installation lifecycle", () => {
   it("registers once, stores no raw credential, and serves installation self", async () => {
     const account = await signIn("owner@example.com");
     const created = await createInstall(account.token, "mac-stable-1");
-    expect(created.credential).toMatch(/^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/);
+    expect(created.credential).toMatch(/^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/);
     expect(created.credentialExpiresAt).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1_000);
 
     const stored = await env.DB.prepare(
@@ -1013,20 +1067,20 @@ describe("HTTP boundary hardening", () => {
     blocked.headers.forEach((value, name) => { serializedHeaders += `${name}: ${value}\n`; });
     expect(serializedHeaders).not.toContain("*");
 
-    const allowed = await call("/v1/me", { origin: "https://app.openmausbot.test" });
+    const allowed = await call("/v1/me", { origin: "https://app.seira.test" });
     expect(allowed.status).toBe(401);
-    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.openmausbot.test");
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.seira.test");
     expect(allowed.headers.get("cache-control")).toBe("no-store");
 
     const deniedPreflight = await call("/v1/installations", {
       method: "OPTIONS",
-      origin: "https://app.openmausbot.test",
+      origin: "https://app.seira.test",
       headers: {
         "access-control-request-method": "POST",
         "access-control-request-headers": "authorization, x-unexpected",
       },
     });
     expect(deniedPreflight.status).toBe(403);
-    expect(deniedPreflight.headers.get("access-control-allow-origin")).toBe("https://app.openmausbot.test");
+    expect(deniedPreflight.headers.get("access-control-allow-origin")).toBe("https://app.seira.test");
   });
 });

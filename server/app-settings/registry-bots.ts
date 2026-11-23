@@ -5,7 +5,7 @@ import { z } from "zod";
 import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode.ts";
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile.ts";
 import { TOOL_GROUP_LABELS, TOOL_GROUPS, type ToolGroup } from "../../shared/tool-groups.ts";
-import { EFFORT_LEVELS, MAUS_COLOR_NAMES } from "../../shared/wire.ts";
+import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../../shared/wire.ts";
 import type { BotRecord } from "../store.ts";
 import { withoutKeys, type RegistryDeps, type SettingEntry, type WritableSpec } from "./registry.ts";
 
@@ -93,7 +93,7 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
     }),
     perBot({
       id: "bots.color", label: "Bot colour", help: "A bot's colour in the sidebar and its chat.", where: "bot-settings", synonyms: ["color", "colour", "tint", "bot color"],
-      value: forBot({ color: z.enum(MAUS_COLOR_NAMES) }), allowed: `{"botId","color"} with color one of ${MAUS_COLOR_NAMES.join(", ")}`, read: everyBot((one) => one.color),
+      value: forBot({ color: z.enum(SEIRA_COLOR_NAMES) }), allowed: `{"botId","color"} with color one of ${SEIRA_COLOR_NAMES.join(", ")}`, read: everyBot((one) => one.color),
       effect: (one, { color }) => ({ change: `Make ${one.name} ${color}` }), was: (one, { botId }) => ({ botId, color: one.color }), patch: (_one, { color }) => ({ color }),
     }),
     perBot({
@@ -120,7 +120,7 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
     }),
     writable({
       id: "sidebar.showHelper", label: "Show Seira in the sidebar", help: "Whether this place's own bot, Seira, has a row in the sidebar; it keeps working either way.", where: "show-helper",
-      synonyms: ["helper", "starter", "default bot", "mausbot", "show helper"], value: z.boolean(), allowed: "true or false",
+      synonyms: ["helper", "starter", "default bot", "seira", "show helper"], value: z.boolean(), allowed: "true or false",
       current: () => { const helper = deps.bots().find((one) => one.defaultBot); return helper ? !helper.sidebarHidden : undefined; },
       describe: (show: boolean) => (deps.bots().some((one) => one.defaultBot) ? { change: show ? "Show Seira in the sidebar" : "Take Seira out of the sidebar; it keeps working" } : { refusal: "This place has no Seira of its own." }),
       write: (show: boolean) => { const helper = deps.bots().find((one) => one.defaultBot); return helper ? deps.patchBot(helper.id, { sidebarHidden: !show }) : Promise.resolve("This place has no Seira of its own."); },

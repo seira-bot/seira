@@ -133,8 +133,17 @@ export interface LiveElevenLabsSession {
   session_id: string;
   signed_url: string;
   instructions: string;
+  /** The bot's call speed and language, which the client adds to `conversation_config_override` next to the prompt. Absent
+   * when the bot has neither or the agent does not allow the overrides. */
+  overrides?: LiveElevenLabsOverrides;
   /** ISO time by which the client must connect */
   expires_at: string;
+}
+
+/** `conversation_config_override.tts.speed` and `.agent.language` of an ElevenLabs conversation. */
+export interface LiveElevenLabsOverrides {
+  tts?: { speed: number };
+  agent?: { language: string };
 }
 
 /** An "elevenlabs" call's transport, answered only to the client that started the call; it relays as a "fish" call does. */

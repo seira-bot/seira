@@ -7,7 +7,7 @@ import { citationAttachment, createCitationTextSelector } from "../../src/lib/ci
 import { composeMessage, pasteAttachment } from "../../src/lib/composer-attachments.ts";
 import "../server-line-packs.ts";
 import type { DevsReportPayload } from "../devs-report.ts";
-import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SendOutcome } from "../devs-report-send.ts";
+import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, BUG_REPORT_SERVICE, SendOutcome } from "../devs-report-send.ts";
 import type { Message, StoreChange } from "../store.ts";
 import { draftLine, laterLine, refusedLine } from "./devs-report-words.ts";
 import { createDevsReports, DEVS_REPORTS_FILE, fixedLine, LONGEST_WAIT_MS, NO_ANSWER_MS, RETRY_MS, STATUS_EVERY_MS, STATUS_FIRST_MS, TRACKED_MS,
@@ -25,14 +25,14 @@ const readyAnswer = (line: string) => `Ready for the person to review. Tell them
 const TOO_OLD_MS = 8 * 24 * 3_600_000;
 
 function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: SendOutcome[]; automated?: boolean; lineLanguage?: DevsReportsDeps["lineLanguage"];
-  reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number;
+  reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number; recentLog?: string[];
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
-  /** The MausBot team's answer to each question about this app's reports; none: no answer (offline). */
+  /** The Seira team's answer to each question about this app's reports; none: no answer (offline). */
   answer?: (question: ReportStatusQuestion) => ReportStatusAnswer | null;
   /** Replaces the sender that answers from `outcomes`. */
   send?: DevsReportsDeps["send"] } = {}) {
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
   if (!options.dataDir) dirs.push(dataDir);
   const listeners = new Set<(change: StoreChange) => void>();
   const threads = options.threads ?? new Map<string, Message[]>();
@@ -73,7 +73,7 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
     engine: (instanceId) => ({ name: instanceId === "claude" ? "Claude Code" : "Codex", snapshot: { state: "available", authenticated: true } }),
     appsReady: () => false, language: () => "en", ...(options.lineLanguage ? { lineLanguage: options.lineLanguage } : {}),
     ...(options.reactorOf ? { reactorOf: options.reactorOf } : {}), ...(options.direct === undefined ? {} : { direct: options.direct }),
-    recentLog: () => ["2026-10-27T08:59:00.000Z warn engine probe slow"],
+    recentLog: () => options.recentLog ?? ["2026-10-27T08:59:00.000Z warn engine probe slow"],
     send: options.send ?? (async (payload) => { sent.push(payload); return outcomes.shift() ?? { ok: true, id: `report-${sent.length}` }; }),
     askStatus: async (question) => { asked.push(question); return options.answer?.(question) ?? null; },
     tell: (threadId, text, person) => { told.push({ threadId, text, ...(person ? { person } : {}) }); },
@@ -160,7 +160,7 @@ describe("a message that tags @devs", () => {
     expect(fx.line("scout-main", message.id)!.bugReport).toEqual({ id: "report-1", status: "received" });
     expect(fx.notices("scout-main")).toEqual([]);
     expect(fx.reports.note("scout-main", true)).toBe("");
-    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per @devs message/);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per message/);
     expect(fx.sent).toHaveLength(1);
     fx.stop();
   });
@@ -269,9 +269,9 @@ describe("a message that tags @devs", () => {
     const [words, rest] = description.split("\n\nWhat they wrote: ");
     expect(words).toBe(`help me send on it, my token is «redacted ${token.length} chars»`);
     expect(rest).toMatch(/^> Quoted message:\n> The relay failed\.\n> I only send a report when your message tags @devs\.\n/);
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
     expect(JSON.stringify(fx.sent[0])).not.toContain(token);
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -362,15 +362,15 @@ describe("a message that tags @devs", () => {
   it("drops a marker it cannot read too, so nothing encoded slips past redaction", async () => {
     const fx = fixture();
     const token = `ghp_${"t".repeat(36)}`;
-    const message = fx.person("scout-main", `<!--omb-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
+    const message = fx.person("scout-main", `<!--seira-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
-    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("seira-citation");
     await fx.press("scout-main", message.id);
     expect(fx.sent).toHaveLength(1);
     expect(fx.sent[0]!.description.split("\n")[0]).toBe("it broke");
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -383,8 +383,66 @@ describe("a message that tags @devs", () => {
     await fx.settle();
     expect(fx.sent).toEqual([]);
     expect(fx.offers("scout-main")).toEqual([]);
-    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(200);
     fx.stop();
+  });
+});
+
+describe("a person who asks for a report without @devs", () => {
+  it("gets one draft with the bot's summary, and nothing is sent", async () => {
+    const fx = fixture();
+    const message = fx.person("scout-main", "please report this to the Seira team: pictures never load");
+    fx.busy.add("scout-main");
+    expect(fx.reports.note("scout-main", true)).toBe("");
+    const answer = await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" });
+    expect(answer.status).toBe(200);
+    expect(answer.body.text).toBe(readyAnswer(READY));
+    expect(fx.offer("scout-main", message.id)).toEqual({ id: expect.any(String), for: "user", from: "devs", by: "Scout", state: "offer" });
+    expect(fx.sent).toEqual([]);
+    const draft = fx.view("scout-main", message.id)!;
+    expect(draft.description).toContain("Scout's summary: Pictures never load");
+    expect(draft.description.split("\n")[0]).toBe("please report this to the Seira team: pictures never load");
+    fx.stop();
+  });
+
+  it("gets one draft for each message, also after the repeat time", async () => {
+    const fx = fixture();
+    const message = fx.person("scout-main", "please report this to the Seira team: pictures never load");
+    expect((await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" })).status).toBe(200);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared/);
+    expect(fx.offers("scout-main")).toHaveLength(1);
+    fx.advance(31 * 60_000);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared/);
+    expect(fx.offers("scout-main")).toHaveLength(1);
+    expect(fx.offer("scout-main", message.id)).toBeDefined();
+    fx.person("scout-main", "report this to the Seira team too: the send button froze");
+    expect((await fx.call("scout", "scout-main", { went_wrong: "The send button froze" })).status).toBe(200);
+    expect(fx.offers("scout-main")).toHaveLength(2);
+    fx.stop();
+  });
+
+  it("gets no draft when no person wrote the message that the bot answers", async () => {
+    const none = fixture();
+    expect((await none.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    none.stop();
+
+    const peer = fixture();
+    peer.person("scout-main", "report this", { peerAsk: { botId: "rover", name: "Rover" } });
+    expect((await peer.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(peer.offers("scout-main")).toEqual([]);
+    peer.stop();
+
+    const aside = fixture();
+    aside.person("scout-main", "report this", { aside: true });
+    expect((await aside.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(aside.offers("scout-main")).toEqual([]);
+    aside.stop();
+
+    const routine = fixture({ automated: true });
+    routine.person("scout-main", "report this", { sendId: undefined });
+    expect((await routine.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect(routine.offers("scout-main")).toEqual([]);
+    routine.stop();
   });
 });
 
@@ -563,6 +621,55 @@ describe("sending a draft", () => {
   });
 });
 
+describe("the public issue body that goes to Seira's service", () => {
+  it("masks the credentials in the server's warnings and errors that the owner's report carries", async () => {
+    const apiKey = `sk-ant-${"k".repeat(40)}`, bearer = "b".repeat(32), urlToken = "t0ken-in-the-address-123", pem = `MIIEv${"Q".repeat(60)}`;
+    const recentLog = [
+      `2026-10-27T08:58:00.000Z warn provider refused key ${apiKey}`,
+      `2026-10-27T08:58:30.000Z error upstream answered 401 to Authorization: Bearer ${bearer}`,
+      `2026-10-27T08:59:00.000Z warn fetch https://files.example/v1/get?token=${urlToken}&page=2 failed`,
+      `2026-10-27T08:59:30.000Z error bad key -----BEGIN PRIVATE KEY-----\n${pem}\n-----END PRIVATE KEY-----`,
+    ];
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ id: "br_log", issue: 7 }), { status: 201, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const fx = fixture({ recentLog, send: devsReportSender(BUG_REPORT_SERVICE, fetcher) });
+    const message = fx.person("scout-main", "@devs the files step fails");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(await fx.press("scout-main", message.id)).toMatchObject({ state: "sent", issue: 7 });
+    expect(bodies).toHaveLength(1);
+    const diagnostics = String(bodies[0]!.diagnostics);
+    expect(diagnostics).toContain("## Server warnings and errors, newest last");
+    expect(diagnostics).toContain(`warn provider refused key «redacted ${apiKey.length} chars»`);
+    expect(diagnostics).toContain(`error upstream answered 401 to Authorization: «redacted ${`Bearer ${bearer}`.length} chars»`);
+    expect(diagnostics).toContain("warn fetch https://files.example/…«redacted URL parameters» failed");
+    expect(diagnostics).toMatch(/-----BEGIN PRIVATE KEY-----\s+«redacted \d+ chars»\s+-----END PRIVATE KEY-----/);
+    for (const secret of [apiKey, bearer, urlToken, pem, "page=2"]) expect(JSON.stringify(bodies[0])).not.toContain(secret);
+    fx.stop();
+  });
+});
+
+describe("a report that the endpoint keeps no contact address for", () => {
+  it("tells the plain later line when a report an older version saved goes there", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
+    dirs.push(dataDir);
+    const due = Date.UTC(2026, 9, 27, 9, 0);
+    const payload = { installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "linux x64, desktop app",
+      diagnostics: "Bot: Scout (scout)", contactEmail: "ada@example.com" };
+    writeFileSync(join(dataDir, DEVS_REPORTS_FILE), JSON.stringify({ version: 1, waiting: [], tracked: [], outbox: [
+      { messageId: "scout-main:m1", threadId: "scout-main", payload, firstAt: due - 60_000, attempts: 1, nextAt: due },
+    ] }));
+    const fx = fixture({ dataDir, outcomes: [{ ok: true, id: "br_y", noReply: true }] });
+    await fx.settle();
+    expect(fx.notices("scout-main")).toEqual([`notice: ${laterLine("br_y", undefined, "en")}`]);
+    expect(fx.notices("scout-main").join("\n")).not.toContain("ada@example.com");
+    fx.stop();
+  });
+});
+
 describe("a report that cannot go yet", () => {
   it("is saved when the person sends it, and goes on its own later without a second press", async () => {
     const fx = fixture({ outcomes: [{ ok: false, retry: true, why: "offline" }, { ok: false, retry: true, why: "limited", retryAfterMs: 20 * 60_000 }] });
@@ -645,7 +752,7 @@ describe("a report that cannot go yet", () => {
   });
 
   it("still sends a report an older version saved, with the older system lines in the person's language", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
     dirs.push(dataDir);
     const payload = { installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "linux x64, desktop app", diagnostics: "Bot: Scout (scout)" };
     const due = Date.UTC(2026, 9, 27, 9, 0);
@@ -730,7 +837,7 @@ describe("a group chat", () => {
 });
 
 describe("closing the loop on a report", () => {
-  /** Every report asked about, answered as the MausBot team would: `fixedIn` for all of them, `notify` as given. */
+  /** Every report asked about, answered as the Seira team would: `fixedIn` for all of them, `notify` as given. */
   const team = (state: { status: "received" | "fixed"; fixedIn: string | null; notify: boolean }) => (question: ReportStatusQuestion): ReportStatusAnswer =>
     ({ reports: question.ids.map((id) => ({ id, status: state.status, fixedIn: state.fixedIn })), notify: state.notify });
   /** A report from Scout's chat by Bob, with Scout's summary, that Bob sent; the person's message. */

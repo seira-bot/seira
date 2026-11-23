@@ -10,12 +10,14 @@ import {
   type SpawnOptions,
 } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
-import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
-import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
+import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
+import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
 import { engineOwners } from "./engine-owners.ts";
 import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./engine-records.ts";
@@ -23,6 +25,8 @@ import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
 import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { botMemoryGuard } from "./bot-memory-guard.ts";
+import { memoryFence, type FencedSpawn } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -214,6 +218,8 @@ function signalLinuxDescendants(child: ChildProcess, value: NodeJS.Signals): voi
 }
 
 const MAX_ENDED_SESSIONS = 4_096;
+/** A fenced engine that exits with an error this soon may have failed to start inside the slice. */
+const FAST_EXIT_MS = 3_000;
 const engineSessions = { live: new Set<number>(), ended: new Set<number>() };
 
 /** POSIX session ids of the engines that run bots' turns (each leads its own session). A server opened by any
@@ -247,8 +253,8 @@ function rememberLiveSpawn(child: ChildProcess, line: readonly string[]): void {
 }
 
 /** `bot`: an engine running bots' turns, whose own servers that bot's browser may open on a server host.
- * `openmausbot`: everything else (logins, probes, the browser engine itself). */
-export type CliOwner = "bot" | "openmausbot";
+ * `seira`: everything else (logins, probes, the browser engine itself). */
+export type CliOwner = "bot" | "seira";
 
 /** The bot box (server/bot-box): a `bot` spawn runs in it where it is on; `box` asks for one for another owner, with more
  * paths or the host's network, and `false` keeps a spawn out of it. */
@@ -262,49 +268,77 @@ export interface BoxSpawnOptions {
 }
 export type CliSpawnOptions = SpawnOptions & BoxSpawnOptions;
 
+/** The conversation and bot a spawn runs for: a Team Cloud's engine home, else the turn the driver runs. */
+function spawnConversation(): { threadId?: string; conversationBot?: string } {
+  const turn = currentTurn();
+  const threadId = engineHomes.thread() ?? turn?.threadId, conversationBot = engineHomes.bot() ?? turn?.botId;
+  return { ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) };
+}
+
 /** The box for this spawn, or null when it runs as is. A spawn in an engine home has that home in place of HOME. */
 export function boxedSpawn(resolved: ResolvedSpawn, opts: CliSpawnOptions, owner: CliOwner, homed: HomedSpawn | null = null): WrappedSpawn | null {
   if (opts.box === false || (owner !== "bot" && !opts.box)) return null;
   const request = typeof opts.box === "object" ? opts.box : {};
   const home = homed ? { home: homed.home, shared: homed.shared } : {};
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}), ...request, ...home });
+  return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...spawnConversation(), ...request, ...home });
 }
 
-/** What the audience rule gives a box in `cwd` now, as a key (null off a team or with the box off): a process kept
- * between turns is started again when it changes, such as a bot's "Can edit team files". */
+/** What the audience rule and the bot's folders give a box in `cwd` now, as a key (null off a team with no folder
+ * setting, or for a spawn the box does not take): a process kept between turns is started again when it changes, such
+ * as a bot's "Can edit team files" or "Only chosen folders". */
 export function boxAudienceKey(cwd: string): string | null {
-  if (!botBox.enabled()) return null;
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  return botBox.audienceKey({ cwd, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) });
+  const request = { cwd, ...spawnConversation() };
+  return botBox.takes(request) ? botBox.audienceKey(request) : null;
 }
 
-/** What a process several conversations share must be boxed with to serve `cwd` (null with the box off): all of the bot's
- * conversation folders for a conversation folder (task-workspaces/<bot>/<thread>, BoxRequest.botThreads), on a Team
- * Cloud only those its audience may read (BoxAudience.threads), else `cwd`. */
+/** What a process several conversations share must be boxed with to serve `cwd` (null for a spawn the box does not
+ * take): all of the bot's conversation folders for a conversation folder (task-workspaces/<bot>/<thread>,
+ * BoxRequest.botThreads), on a Team Cloud only those its audience may read (BoxAudience.threads), else `cwd`. */
 export function sharedBoxScope(cwd: string): string | null {
-  if (!botBox.enabled()) return null;
+  const request = { cwd, ...spawnConversation() };
+  if (!botBox.takes(request)) return null;
   const parent = dirname(resolve(cwd));
   if (basename(dirname(parent)) !== "task-workspaces") return resolve(cwd);
-  const threadId = engineHomes.thread(), conversationBot = engineHomes.bot();
-  const threads = botBox.sharedThreadsKey({ cwd, ...(threadId ? { threadId } : {}), ...(conversationBot ? { conversationBot } : {}) });
+  const threads = botBox.sharedThreadsKey(request);
   return threads ? `${parent}#${createHash("sha256").update(threads).digest("hex").slice(0, 16)}` : parent;
 }
 
 /** Security (bot-box/program-trust.ts): a spawn outside the box neither starts a program from a folder a boxed bot can
  * write nor looks one up there. */
 export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: string | URL }>(command: string, opts: T): T {
-  if (!homeProgramsDistrusted()) return opts;
-  if (/[/\\]/.test(command)) {
-    const path = resolve(typeof opts.cwd === "string" ? opts.cwd : process.cwd(), command);
-    let real = path;
-    try { real = realpathSync(path); } catch {}
-    if (!serverMayRunFrom(path) || !serverMayRunFrom(real)) {
-      throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
-    }
-  }
+  if (!programsDistrusted()) return opts;
   const env = opts.env ?? process.env;
-  return { ...opts, env: { ...env, PATH: serverPath(env.PATH) } };
+  const path = serverPath(env.PATH);
+  // A program found by name is checked as well: the folder can be trusted while a link in it leads to one the bots write.
+  const program = !/[/\\]/.test(command) ? onPath(command, path) : isAbsolute(command) ? command : `${spawnCwd(opts.cwd)}${sep}${command}`;
+  if (program && (!serverMayRunFrom(program) || !serverMayRunFrom(realPathOr(program)))) {
+    throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
+  }
+  return { ...opts, env: { ...env, PATH: path } };
+}
+
+function realPathOr(path: string): string {
+  try { return realpathSync.native(path); } catch { return path; }
+}
+
+/** The folder a spawn with `cwd` starts in. */
+function spawnCwd(cwd: string | URL | undefined): string {
+  const dir = cwd instanceof URL ? fileURLToPath(cwd) : cwd ?? process.cwd();
+  return isAbsolute(dir) ? dir : `${process.cwd()}${sep}${dir}`;
+}
+
+/** The file a spawn of `command` by name starts, on `path`, named as the system opens it: unnormalized, because a `..`
+ * after a link goes up from where the link leads. */
+function onPath(command: string, path: string): string | null {
+  for (const dir of path.split(delimiter)) {
+    if (!dir) continue;
+    const file = `${dir}${sep}${command}`;
+    try {
+      accessSync(file, constants.X_OK);
+      if (statSync(file).isFile()) return file;
+    } catch {}
+  }
+  return null;
 }
 
 /** `stdio` with the descriptor `envFd` at HOST_ENV_FD, where `flatpak-spawn` reads the child's environment. */
@@ -318,7 +352,7 @@ export function spawnCli(
   cli: string,
   args: string[],
   opts: CliSpawnOptions,
-  owner: CliOwner = "openmausbot",
+  owner: CliOwner = "seira",
 ): ChildProcessByStdio<Writable, Readable, Readable> {
   const resolved = resolveCli(cli, args);
   assertSafeCliArgv(resolved);
@@ -341,13 +375,17 @@ export function spawnCli(
   const { box: _box, engineHome: _engineHome, botWork, ...spawnOpts } = boxed || hosted ? options : outsideBoxOptions(resolved.command, options);
   // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
   const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
+  const command = boxed?.command ?? hosted?.command ?? resolved.command, argv = boxed?.args ?? hosted?.args ?? resolved.args;
+  const plainEnv = tag ? { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } : boxed?.env ?? spawnOpts.env ?? process.env;
+  let fenced: FencedSpawn | null = null;
   const start = () => {
     const envFd = hosted ? hostEnvFile(hosted.envBlock) : null;
     try {
-      return spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
+      return spawn(fenced?.command ?? command, fenced?.args ?? argv, {
         ...spawnOpts,
         ...(boxed ? { env: boxed.env, stdio } : {}),
-        ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+        ...(tag ? { env: plainEnv } : {}),
+        ...(fenced ? { env: fenced.env } : {}),
         ...(hosted && envFd !== null ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio, envFd) } : {}),
         // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
         ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
@@ -359,6 +397,8 @@ export function spawnCli(
   let child: ChildProcessByStdio<Writable, Readable, Readable>;
   const refused = (code: string | undefined) => { processBudget.spawnFailed(code); engineMemory.spawnRefused(code, owner === "bot"); };
   try {
+    // Not inside `start`: there the server holds the bot's OOM score, and the fence runs systemctl.
+    fenced = !hosted && (owner === "bot" || botWork) ? (process.platform === "linux" ? memoryFence : botMemoryGuard).argv(command, argv, plainEnv) : null;
     child = owner === "bot" || botWork ? spawnBotWork(start) : start();
   } catch (error) {
     // Node throws some refusals (ENOMEM) at once rather than reporting them on the child.
@@ -366,6 +406,10 @@ export function spawnCli(
     throw error;
   } finally {
     for (const fd of boxed?.extraFds ?? []) try { closeSync(fd); } catch {}
+  }
+  if (fenced && process.platform === "linux") {
+    const spawnedAt = Date.now();
+    child.once("exit", (code) => { if (code !== null && code !== 0 && Date.now() - spawnedAt < FAST_EXIT_MS) memoryFence.recheck(); });
   }
   rememberLiveSpawn(child, [resolved.command, ...resolved.args]);
   // Node reports most refused spawns (EAGAIN, EMFILE, ENOENT) on the child, a tick later, with no pid.
@@ -382,8 +426,8 @@ export function spawnCli(
     linuxTrees.set(child, tree);
   }
   if (process.platform !== "win32") recordEngine(child, child.pid ? linuxTrees.get(child)?.get(child.pid) ?? null : null);
-  if (process.platform !== "win32" && owner === "bot") {
-    rememberEngineSession(child);
+  if (owner === "bot") {
+    if (process.platform !== "win32") rememberEngineSession(child);
     engineMemory.track(child);
     engineOwners.track(child, child.pid ? linuxTrees.get(child)?.get(child.pid) ?? null : null);
   }
@@ -694,6 +738,6 @@ export async function waitForExit(child: ChildProcess, ms: number): Promise<bool
 export function brokerSocketPath(dataDir: string, tag: string): string {
   return process.platform === "win32"
     // Named pipes share a global namespace that DATA_DIR cannot isolate.
-    ? `\\\\.\\pipe\\openmausbot-perm-${process.pid}-${tag}`
+    ? `\\\\.\\pipe\\seira-perm-${process.pid}-${tag}`
     : join(dataDir, `perm-${tag}.sock`);
 }

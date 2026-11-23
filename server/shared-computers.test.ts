@@ -30,7 +30,7 @@ describe("shared computer authority and lifecycle", () => {
     broker.close();
   });
   it("a computer whose person changed is no longer lent to its former person", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-lent-rekey-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-lent-rekey-"));
     const lent = new LentComputers(join(dir, "lent.json"));
     const broker = new SharedComputers(id => id === "owner", lent);
     const computer = registration(); broker.register(computer, alice, secret);
@@ -59,7 +59,7 @@ describe("shared computer authority and lifecycle", () => {
     broker.close();
   });
   it("chromeLender names the newest computer that lends Chrome, and whether it is online", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-chrome-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-chrome-"));
     let live = true;
     const broker = new SharedComputers(() => live, new LentComputers(join(dir, "lent.json")));
     const a = { ...registration(), name: "A", platform: "darwin" as const, chrome: true };
@@ -330,7 +330,7 @@ describe("owner partition (audit H1, H2)", () => {
   });
   it("a desktop that pairs again is used while its old sign-in is still live", async () => {
     vi.useFakeTimers({ now: Date.now() });
-    const dir = mkdtempSync(join(tmpdir(), "omb-repaired-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-repaired-"));
     const broker = new SharedComputers(id => id === "old" || id === "new", new LentComputers(join(dir, "lent.json")));
     const computer = registration({ computer: true });
     broker.register(computer, { session: "old", person: alice.person }, secret);
@@ -571,7 +571,7 @@ describe("MCP servers a lent computer runs for this server", () => {
   });
 
   it("finds the computer an MCP server runs on by its installs, online or as last known, and never another person's", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-lent-mcp-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-lent-mcp-"));
     let live = true;
     const broker = new SharedComputers(() => live, new LentComputers(join(dir, "lent.json")));
     const computer = lender(); broker.register(computer, alice, secret);

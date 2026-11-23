@@ -36,6 +36,7 @@ import { CODEX_USAGE_URL, codexUsageLimitReached } from "../../shared/codex-usag
 import { ClaudeUpdatePrompt } from "./ClaudeUpdatePrompt";
 import { MacCuaRecoveryActions } from "./MacCuaRecoveryActions";
 import { macCuaPermissionMessage, missingMacCuaPermissions } from "@/lib/mac-cua-permissions";
+import { PlaceNoteRow } from "./PlaceNoteRow";
 import { claudeUpdateTarget, failedTurnCause, failedTurnNotice, signedOutEngine } from "@/lib/failed-turn";
 import { plainErrorLine } from "@/lib/plain-error";
 import { openPlaceAction, placeRowViewFor, usePlaceSeat, worksOnSimpleLabel } from "@/lib/place-view";
@@ -93,6 +94,7 @@ import { CallRecordRow } from "./CallRecordRow";
 import { AttachmentGallery, collectMessageFiles, replyAttachmentGroup, splitMessageAttachments } from "./AttachmentGallery";
 import { ScreenFrame } from "./ScreenFrame";
 import { CompactionChip, DigestChip } from "./DigestChip";
+import { HandoffCard } from "./HandoffCard";
 import { RenameTitle } from "./RenameTitle"; import { ChatHeadRole, chiefOfStaffBadge } from "./BotRole";
 import { BotActivityPicker } from "./TaskPicker"; import { ChatHeadPill } from "./ChatHeadPill"; import { HeaderShare } from "./bot-access/HeaderShare"; import { ThreadPresenceFaces } from "./TeamPresence"; import { useStoreRef } from "@/state/store-ref"; import { sameFields, useStoreDispatch, useStoreSelector } from "@/state/store-select"; import { sameDrawnBots } from "@/lib/drawn-bots";
 import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
@@ -101,17 +103,18 @@ import { ChatHeaderMenu, ChatMoreMenu } from "./ChatMoreMenu"; import { TeamOwnH
 import { useChatFindRequests, useChatFindShortcut } from "@/lib/chat-find";
 import { CitationSelectionToolbar, SentCitations } from "./CitationUI";
 import { SpeakButton, speakReady } from "./SpeakButton";
-import { CallOverlay } from "./CallView";
+import { CallSurface } from "./CallSurface";
 import { LiveCallBar } from "./LiveCallBar";
-import { LiveCallChip } from "./LiveCallPill";
 import { effectivePlace, toolPlace, type EffectivePlace } from "@/lib/place";
 import { cn } from "@/lib/cn";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
+import { ui } from "@/lib/ui-anchor";
 import { COMPACT_BUBBLE } from "@/lib/compact-chip";
 import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, workedLabel } from "@/lib/activity-runs";
 import { StatusActivityRow } from "@/components/StatusActivityRow";
 import { CancelledTurnRow } from "./CancelledTurnRow";
 import { ActivityRun } from "./ActivityRun";
+import { ActivityStepLine } from "./ActivityStepLine";
 import { AdvancedTurnCard, cardRows, renameBotWith, useAdvancedTurns } from "./advanced-turn";
 import { BubbleEditor } from "./BubbleEditor";
 import { ReplyBlocks } from "./ReplyBlocks";
@@ -138,7 +141,7 @@ import { pendingApprovals } from "./PendingApproval";
 import { TranscriptAnnouncer } from "./TranscriptAnnouncer";
 import { JumpToLatestButton } from "./JumpToLatestButton";
 import { BOT_STACKED, BOT_TURN_INDENT, bubbleGroup, isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_STACKED, SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX, type BubbleJoin } from "./chat-bubble";
-import { BotTurnHead } from "./BotTurnHead"; import { VersionSwitch } from "./VersionSwitch";
+import { BotTurnHead } from "./BotTurnHead"; import { VersionSwitch } from "./VersionSwitch"; import { TeamBlocks } from "./TeamSuggestionCard";
 
 const USER_COLLAPSE_CHARS = 600;
 const USER_COLLAPSE_LINES = 8;
@@ -230,6 +233,7 @@ export function ErrorRow({
         ) : (
           onRetry && (
             <button
+              data-ui={ui("message.retry")}
               onClick={onRetry}
               className="ui-button ui-button-md mt-1.5 rounded-full border-danger/30 bg-transparent text-danger hover:bg-danger/15"
             >
@@ -242,7 +246,9 @@ export function ErrorRow({
   );
 }
 
-function PlaceFailedRow({ place, botId, threadId, onRetry }: {
+function PlaceFailedRow({ place, botId, threadId, onRetry, notice }: {
+  /** The turn ran; the row only says what it ran without: a neutral note, no Retry. */
+  notice?: boolean;
   place: PlaceRow;
   botId: string;
   threadId?: string;
@@ -257,7 +263,8 @@ function PlaceFailedRow({ place, botId, threadId, onRetry }: {
   const onClick = !id ? undefined
     : id === "try-again" ? onRetry
     : () => { openPlaceAction(id, { botId, threadId }, dispatch); };
-  return <ErrorRow message={view.line} action={view.action && onClick ? { label: view.action.label, onClick } : null} />;
+  const action = view.action && onClick ? { label: view.action.label, onClick } : null;
+  return notice ? <PlaceNoteRow message={view.line} action={action} /> : <ErrorRow message={view.line} action={action} />;
 }
 
 const TRIAL_CREDIT_LINE: Record<"paused" | "too_low", LocaleKey> = { paused: "engines.trialCreditPaused", too_low: "engines.trialCreditTooLow" };
@@ -272,7 +279,7 @@ export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageA
   const viewer = useReactor();
   const resume = useLimitResetContinue(botId, threadId, tool.limitResetsAt), fix = useFailedTurnFix(tool, botId, threadId);
   const past = usePastLimitNotice(tool, messageAt);
-  if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} />;
+  if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} notice={tool.notice} />;
   const credit = trialCreditKind(failedTurnCause(tool.name) ?? "");
   if (credit) return <TrialCreditFailedRow kind={credit} onRetry={onRetry} />;
   const { cause, notice } = failedTurnNotice(tool);
@@ -356,6 +363,7 @@ const Bubble = memo(function Bubble({
     viewRaw,
     onToggleRaw: () => setViewRaw((raw) => !raw),
     onRegenerate: !busy ? onRegenerate : undefined,
+    draw: !phone && !peer ? { threadId, reply: message, dispatch } : undefined,
     pin: remoteClient ? undefined : {
       pinned,
       onToggle: () => dispatch({ type: "updateTask", botId, threadId, patch: { pinnedMessageId: pinned ? "" : message.id } }),
@@ -686,14 +694,14 @@ const MessagesList = memo(function MessagesList({
           const rows = cardRows(items, i, live);
           const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
           const forceOpen = live || rows.some((step) => step.id === focusedId);
-          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
+          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}>{advanced ? <ActivityChip message={step} place={place} /> : <ActivityStepLine message={step} botId={botId}><ActivityChip message={step} place={place} /></ActivityStepLine>}</div>);
           const label = item.kind === "turn" ? item.label : undefined;
           if (!advanced) {
             return (
               <div key={itemId} className="contents">
                 {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
                 {divider}
-                <ActivityRun messages={rows} label={label} forceOpen={forceOpen}>{steps}</ActivityRun>
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} botId={botId} durationMs={item.kind === "turn" ? item.durationMs : undefined}>{steps}</ActivityRun>
               </div>
             );
           }
@@ -752,12 +760,13 @@ const MessagesList = memo(function MessagesList({
               return <ActivityChip message={m} place={place} />;
             }
             case "digest":
-              return showToolCalls && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
+              return showToolCalls && advanced && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
-              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
+              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId, continueFrom: threadId }) : undefined} />;
             case "screen":
               return <ScreenFrame threadId={threadId} message={m} />;
             default: {
+              if (m.handoff) return <HandoffCard message={m} />;
               if (m.publishedPage || m.template) return m.template ? <TemplateChatCard message={m} botId={botId} threadId={threadId} /> : <PublishedPageCard message={m} />;
               const peer = peerLine(m) ?? peerRequest(m, botId);
               const user = m.role === "user" && !peer;
@@ -790,7 +799,7 @@ const MessagesList = memo(function MessagesList({
             {newDay && <DaySeparator at={m.at} today={today} simple={simple} />}
             {divider}
             {m.automation && <AutomationCaption message={m} line={m.automation} botId={botId} />}{m.inbox && <InboxCaption message={m} />}
-            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{m.bugOffer && m.role !== "user" && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
+            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{(m.teamSuggestion || m.teamIntro) && <TeamBlocks message={m} botId={botId} threadId={threadId} />}{m.bugOffer && m.role !== "user" && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
           </div>
         );
       })}
@@ -875,7 +884,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   const bots = useStoreSelector((s) => s.bots, sameDrawnBots);
   const teammates = useTeammates(); const mentionPeers = useMemo(() => [...bots.filter((peer) => peer.id !== bot.id), ...teammates.peers], [bots, bot.id, teammates]);
   const focus = state.focusMessage?.threadId === bot.threadId ? state.focusMessage : null;
-  const showToolCalls = showToolCallsEnabled(state.config);
+  const showToolCalls = showToolCallsEnabled(state.config, advanced);
   const tts = state.config?.tts;
   const localVoice = localSystemVoiceActive();
   const locale = activeLocale();
@@ -989,7 +998,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   return (
     <ThreadLinkContext value={threadLink}>
     <main data-look="chat" className="relative flex h-full min-w-0 flex-1 flex-col bg-app">
-      <CallOverlay bot={bot} />
+      <CallSurface botId={bot.id} />
       <GlassScrollFrame className="flex-1 [--glass-tint:var(--color-app)]">
       {/* z-[25]: above the room set-up card (z-20), below the CallOverlay (z-30). */}
       <GlassBar edge="top" fade={!remoteClient} className="z-[25]">
@@ -1057,6 +1066,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
               <ChevronRight size={14} aria-hidden="true" className="-ml-2.5 w-0 shrink-0 text-ink-secondary opacity-0 transition-[width,margin,opacity] duration-150 group-hover:ml-0 group-hover:w-3.5 group-hover:opacity-100 group-focus-visible:ml-0 group-focus-visible:w-3.5 group-focus-visible:opacity-100" />
             </button>
           )}
+          {!phone && <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} />}
           {!phone && !pillHead && <ChatHeadRole bot={bot} />}<span role="status" className="sr-only" data-chathead-status>{bot.busy ? t("sidebar.preview.working") : ""}</span>{!pillHead && privateChat && <TeamPrivateHeader />}{!pillHead && ownHelper && <TeamOwnHelperHeader />}{!pillHead && sharedChat && team && <TeamSharedHeader team={team} onlyPeopleAdded={bot.onlyPeopleAdded} sharedWith={currentTask?.sharedWith?.name} />}
           {!simpleHead && !bot.busy && bot.waitingForTeammates && <span className="truncate text-[12px] text-ink-secondary" role="status">{t("chat.teammatesWorking")}</span>}
           {(advanced || remoteClient) && awayFromMainThread(profile, showThreads) && (
@@ -1089,9 +1099,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
           )}
           <ThreadContextWarning bot={bot} messages={messages} />
           {phone && <UsageAlert engine={bot.modelSelection?.instanceId} />}
-          {/* The model and the bot's computer stay in view in both modes; Simple mode moves only ⋯ into the bot panel. */}
-          {!phone && <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} />}
-          <LiveCallChip currentBotId={bot.id} onOpen={(botId, threadId) => openThread(dispatch, { botId, threadId }, store.state(), showThreads)} />{!phoneMenu && <WatchScreenButton botId={bot.id} messages={messages} liveTools={liveTools} place={place} />}
+          {!phoneMenu && <WatchScreenButton botId={bot.id} messages={messages} liveTools={liveTools} place={place} />}
           <PinnedMessagesMenu
             pins={pinnedPreview(messages, bot.pinnedMessageId, bot.name)}
             triggerClassName={cn(ELEVATED_FLOAT, ELEVATED_HOVER)}

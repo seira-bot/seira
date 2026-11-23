@@ -56,9 +56,8 @@ For deletion, ask separately:
 
 `propose_bot_deletion` produces a separate destructive review naming the exact
 bot. Lifecycle guards reject active work. Before removing the bot, the server
-discovers and deletes its exact managed Boat, VPS container, and per-bot Local
-VM (including that VM's private workspace). Shared team computers are left
-alone. A provider outage, unresolved ownership, unmanaged name collision, or
+discovers and deletes its exact managed VPS container, and per-bot Local
+VM (including that VM's private workspace). A provider outage, unresolved ownership, unmanaged name collision, or
 unconfirmed provider deletion keeps the bot so deletion can be retried. Bot
 conversations, memory, instructions and skills are then removed; generated
 project files remain. The Chief cannot delete itself.
@@ -120,4 +119,4 @@ were removed after the run; only bounded result evidence was retained.
 The combined main-based integration was repeated with real Luna after the
 registry/import fixes: exactly one review created all three requested bots with
 the selected model and Chief grants, then the Chief continued. Evidence:
-`/tmp/omb-live-team-0913.MwRY2k/setup-gpt-5.6-luna-1789255036346/result.json`.
+`/tmp/seira-live-team-0913.MwRY2k/setup-gpt-5.6-luna-1789255036346/result.json`.

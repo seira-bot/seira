@@ -54,14 +54,14 @@ const bot: Bot = {
 };
 const routine: Routine = {
   id: "brief", name: "Morning brief", prompt: "Summarise my inbox and calendar.", target: "bot", botId: bot.id,
-  runOn: "maus", enabled: true, schedule: { type: "daily", time: "06:30", weekdays: [0, 1, 2, 3, 4, 5, 6] },
+  runOn: "seira", enabled: true, schedule: { type: "daily", time: "06:30", weekdays: [0, 1, 2, 3, 4, 5, 6] },
   durationMinutes: 30, nextRunAt: Date.now() + 3_600_000, createdAt: 0, updatedAt: 0, resultsThreadId: "brief-thread",
 };
 const cronRoutine: Routine = {
   ...routine, id: "cron", name: "Office hours check", schedule: { type: "cron", expression: "*/20 9-17 * * 1-5", timeZone: "UTC" },
 };
 const runAt = (day: number, status: RoutineRun["status"]): RoutineRun => ({
-  id: `run-${day}`, routineId: routine.id, routineName: routine.name, target: "bot", botId: bot.id, runOn: "maus",
+  id: `run-${day}`, routineId: routine.id, routineName: routine.name, target: "bot", botId: bot.id, runOn: "seira",
   scheduledFor: day * 86_400_000, createdAt: day * 86_400_000, startedAt: day * 86_400_000,
   finishedAt: day * 86_400_000 + 95_000, status, manual: false,
 });
@@ -239,8 +239,8 @@ describe("routine drawer", () => {
     expect(props.onOpenRun).toHaveBeenCalledWith(runs[3]);
   });
 
-  it("describes the Boat runner in plain words", () => {
-    expect(details(routineItem({ ...routine, runOn: "cloud" })).html).toContain("Cloud desktop");
+  it("never names Boat, even for a routine an older install left on the cloud runner", () => {
+    expect(details(routineItem({ ...routine, runOn: "cloud" })).html).not.toMatch(/Boat/i);
   });
 
   it("Run now and Pause send the same requests as before", () => {
@@ -279,7 +279,7 @@ describe("routine editor", () => {
     seed: { kind: "routine", at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [bot.id], routine: routineToEdit },
     bots: [bot], onClose: vi.fn(), onSavedCall: vi.fn(),
   }));
-  const hidden = ['<select aria-label="Repeat"', "Routine safety limit", "Runs the whole job on the bot&#x27;s cloud desktop", "Add attachment", "Post results to", "Routine type"];
+  const hidden = ['<select aria-label="Repeat"', "Routine safety limit", "Add attachment", "Post results to", "Routine type"];
 
   it("keeps Simple mode to the basics with everything else behind More options", () => {
     const html = editor();
@@ -300,7 +300,7 @@ describe("routine editor", () => {
     const html = editor(cronRoutine);
     expect(html).toContain('aria-expanded="true"');
     for (const text of hidden.filter((text) => text !== "Routine type")) expect(html, text).toContain(text);
-    expect(html).not.toMatch(/aria-pressed="true"/);
+    expect(html.replace(/<button[^>]*data-what-it-does[^>]*>/g, "")).not.toMatch(/aria-pressed="true"/);
   });
 
   it("shows a saved startup choice when the simple editor opens", () => {
@@ -362,6 +362,52 @@ describe("routine editor", () => {
     expect(JSON.parse(off.body)).toMatchObject({ continuity: false });
   });
 
+  describe("that runs a workflow", () => {
+    const props = (extra: Record<string, unknown> = {}) => ({
+      seed: { kind: "routine" as const, at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [bot.id], name: "Round", ...extra },
+      bots: [bot], onClose: vi.fn(), onSavedCall: vi.fn(),
+    });
+
+    it("sends the chosen workflow with the save request", () => {
+      fixture.values = [];
+      const tree = capture(() => EventEditor(props({ workflowId: "wf1" })));
+      const save = buttons(tree).get("Save")!;
+      expect(save.disabled).toBeFalsy();
+      click(save);
+      const [path, init] = fixture.api.mock.calls.at(-1) as unknown as [string, { method: string; body: string }];
+      expect(path).toBe("/api/routines");
+      expect(JSON.parse(init.body)).toMatchObject({ workflowId: "wf1" });
+    });
+
+    it("blocks Save when Workflow is chosen and no workflow is picked, and again once Instructions is empty", () => {
+      fixture.values = [];
+      const editorProps = props();
+      let tree = capture(() => EventEditor(editorProps));
+      const choose = (choice: unknown) => (tree.find(named("WhatItDoes"))!.props.workflow as { onChange: (next: unknown) => void }).onChange(choice);
+      choose({ mode: "workflow", id: null });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBe(true);
+      choose({ mode: "workflow", id: "wf1" });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBeFalsy();
+      choose({ mode: "instructions" });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBe(true);
+    });
+
+    it("locks the bot picker while a workflow is chosen", () => {
+      fixture.values = [];
+      const tree = capture(() => EventEditor(props({ workflowId: "wf1" })));
+      const captions = (found: Node[]) => found.map((node) => textOf(node.props.children as ReactNode));
+      expect(tree.find(named("BotPicker"))!.props.locked).toBe(true);
+      expect(captions(tree)).toContain("The workflow's first bot starts each run.");
+      fixture.values = [];
+      const free = capture(() => EventEditor(props()));
+      expect(free.find(named("BotPicker"))!.props.locked).toBe(false);
+      expect(captions(free)).toContain("This bot owns each scheduled run.");
+    });
+  });
+
   it("turns a one-time routine that already happened back on when it is saved with a new time, and leaves any other's switch alone", async () => {
     const save = async (saved: Routine) => {
       fixture.values = [];
@@ -389,7 +435,7 @@ describe("routine editor", () => {
   it("leaves the Advanced editor as it was", () => {
     fixture.advanced = true;
     const html = editor();
-    for (const text of ['placeholder="Add title"', '<select aria-label="Repeat"', "Assign a bot", "Runs the whole job on the bot&#x27;s cloud desktop", "Post results to", "Routine type", "New event"]) {
+    for (const text of ['placeholder="Add title"', '<select aria-label="Repeat"', "Assign a bot", "Post results to", "Routine type", "New event"]) {
       expect(html, text).toContain(text);
     }
     expect(html).not.toContain("More options");
@@ -404,7 +450,7 @@ describe("a new routine's audience on a team's Cloud", () => {
   const other = { ...bot, id: "other", name: "Other", threadId: "other-main", mainThreadId: "other-main", tasks: [{ threadId: "other-main", title: "Shared chat", createdAt: 1, sharedChat: true }] } as Bot;
   /** The form as opened with this bot's chat on screen; what it shows, and what Save sends. */
   function opened(onScreen: Bot, state: Partial<AppState> = {}) {
-    fixture.state = { ...initialState, bots: [onScreen, other], selectedId: onScreen.id, activeView: "chat", config: { box: { configured: false }, team: { id: "t1", name: "Acme" } } as AppState["config"], ...state };
+    fixture.state = { ...initialState, bots: [onScreen, other], selectedId: onScreen.id, activeView: "chat", config: { team: { id: "t1", name: "Acme" } } as AppState["config"], ...state };
     fixture.values = [];
     fixture.api.mockClear();
     const props = { seed: { kind: "routine" as const, at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [onScreen.id], name: "Salary check", description: "Check the bands" },

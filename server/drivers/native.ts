@@ -67,7 +67,7 @@ export function appendNative(threadId: string, entry: { dir: "in" | "out"; sourc
   if (streamedFragment(entry.source, entry.msg)) return;
   let line: string;
   try {
-    // Session setup carries agent credentials (boat/comms tokens, MCP headers) and
+    // Session setup carries agent credentials (comms tokens, MCP headers) and
     // people paste these logs into bug reports, so values are masked.
     line = JSON.stringify({ at: new Date().toISOString(), ...entry, msg: redactSecrets(withoutInlineData(entry.msg)) }) + "\n";
   } catch {
@@ -77,7 +77,7 @@ export function appendNative(threadId: string, entry: { dir: "in" | "out"; sourc
   if (lines) lines.push(line);
   else held.set(threadId, [line]);
   heldChars += line.length;
-  // What OpenMausBot sent is a few lines a turn, and the line a bug report most needs: it lands at once.
+  // What Seira sent is a few lines a turn, and the line a bug report most needs: it lands at once.
   if (entry.dir === "out") flushNativeLog(threadId);
   else if (heldChars >= MAX_HELD_CHARS) flushNativeLogs();
   else if (!timer) {

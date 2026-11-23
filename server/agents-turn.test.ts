@@ -7,7 +7,7 @@ import { agentsMcp } from "./drivers/agents-mcp.ts";
 import { agentsServerEnv, botDrivenConversation, COMPUTER_OFF_REFUSAL, computerPickRefusal, directTurnKind, roomSkillsRefusal, type AgentsConversation, type AgentsTurn } from "./agents-turn.ts";
 
 const HOST: AgentsConversation["host"] = { skillAuthoring: true, sharedComputers: true, cloudHome: false, team: false, voiceNotes: true, x: true, research: true, imageGeneration: false, localVm: true };
-const CHAT: AgentsConversation = { threadId: "thread-1", bot: { id: "bot-1", chiefOfStaff: true }, room: false, teamComputer: false, host: HOST };
+const CHAT: AgentsConversation = { threadId: "thread-1", bot: { id: "bot-1", chiefOfStaff: true }, room: false, host: HOST };
 const ROOM: AgentsConversation = { ...CHAT, threadId: "room-1", room: true };
 
 /** Every kind of turn a direct chat gets and what that turn may do, as the harness hands it over. */
@@ -48,7 +48,7 @@ describe("one conversation's agents tools", () => {
     for (const bridged of [false, true]) {
       it(`lists ${name} the same tools on every kind of turn, byte for byte${bridged ? ", with the tool bridge on" : ""}`, async () => {
         const turns = await everyTurn(conversation, bridged ? { [TOOL_BRIDGE_ENV]: "1" } : {});
-        expect(new Set(turns.map(({ env }) => env.OMB_COMMS_TOKEN)).size).toBe(turns.length);
+        expect(new Set(turns.map(({ env }) => env.SEIRA_COMMS_TOKEN)).size).toBe(turns.length);
         for (const { kind, wire } of turns) expect(wire, kind).toBe(turns[0]!.wire);
       });
     }
@@ -89,7 +89,7 @@ describe("one conversation's agents tools", () => {
     const off = { ...CHAT, host: { ...HOST, meetings: true, imageGeneration: true }, bot: { ...CHAT.bot, toolsOff: ["meetings", "pages"] } };
     const turns = await everyTurn(off);
     for (const { kind, env, wire } of turns) {
-      expect(env.OMB_TOOLS_OFF, kind).toBe("meetings,pages");
+      expect(env.SEIRA_TOOLS_OFF, kind).toBe("meetings,pages");
       expect(wire, kind).toBe(turns[0]!.wire);
     }
     const names = (wire: string) => (JSON.parse(wire) as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
@@ -99,13 +99,12 @@ describe("one conversation's agents tools", () => {
       expect(kept).not.toContain(tool);
     }
     expect(kept).toContain("generate_image");
-    expect((await everyTurn(CHAT))[0]!.env.OMB_TOOLS_OFF).toBe("");
+    expect((await everyTurn(CHAT))[0]!.env.SEIRA_TOOLS_OFF).toBe("");
   });
 
   it("leaves select_computer out only where the conversation can never pick a computer", async () => {
     const selects = async (conversation: AgentsConversation) => (await everyTurn(conversation))[0]!.wire.includes('"name":"select_computer"');
     expect(await selects({ ...CHAT, bot: { ...CHAT.bot, computer: "off" } })).toBe(false);
-    expect(await selects({ ...CHAT, teamComputer: true })).toBe(false);
     expect(await selects({ ...CHAT, bot: { ...CHAT.bot, computer: "browser" } })).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 // The connector token reaches cloudflared only through a private short-lived file: never argv, the environment, status or logs.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -10,6 +11,7 @@ import {
   validCompanionOriginTarget,
 } from "./companion-origin-gateway.mjs";
 import { minimalGuardianEnvironment } from "./managed-companion-guardian.mjs";
+import { SEIRA_HOSTS } from "./seira-hosts.mjs";
 
 export const MANAGED_COMPANION_ENDPOINT_FIELD = "managedCompanionEndpointUrl";
 export const MANAGED_COMPANION_TOKEN_FIELD = "managedCompanionConnectorToken";
@@ -42,6 +44,27 @@ export function normalizeManagedCompanionEndpoint(value) {
     return "";
   }
   return parsed.origin;
+}
+
+const TUNNEL_LABEL = /^c-[0-9a-f]{32}$/;
+const DOMAIN_NAME = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/** The zones a server's tunnel address may sit in: Seira's own, plus SEIRA_TUNNEL_HOST_SUFFIX when the operator also names a control plane of their own. */
+export function serverTunnelHostSuffixes(environment = process.env) {
+  const suffixes = [SEIRA_HOSTS.tunnel];
+  const ownControlPlane = typeof environment?.SEIRA_CONTROL_PLANE_URL === "string" && environment.SEIRA_CONTROL_PLANE_URL.trim() !== "";
+  const own = typeof environment?.SEIRA_TUNNEL_HOST_SUFFIX === "string" ? environment.SEIRA_TUNNEL_HOST_SUFFIX.trim().toLowerCase() : "";
+  if (ownControlPlane && own.length <= 253 && DOMAIN_NAME.test(own) && !suffixes.includes(own)) suffixes.push(own);
+  return suffixes;
+}
+
+/** True only for exactly `https://c-<32 lowercase hex>.<suffix>`: no port, path, query or other label. */
+export function serverTunnelEndpointAllowed(value, environment = process.env) {
+  if (!isString(value) || !value.startsWith("https://")) return false;
+  const host = value.slice("https://".length).replace(/\/$/, "");
+  const dot = host.indexOf(".");
+  if (dot < 0 || !TUNNEL_LABEL.test(host.slice(0, dot))) return false;
+  return serverTunnelHostSuffixes(environment).includes(host.slice(dot + 1));
 }
 
 function validConnectorToken(value) {
@@ -116,7 +139,7 @@ export function resolveCloudflaredBinary({
   const bundled = path.join(String(resourcesPath ?? ""), "cloudflared", executable);
   if (isPackaged) return exists(bundled) ? bundled : null;
 
-  const override = environment.OMB_CLOUDFLARED_PATH?.trim();
+  const override = environment.SEIRA_CLOUDFLARED_PATH?.trim();
   if (override) return path.isAbsolute(override) && exists(override) ? override : null;
 
   const staged = stagedCloudflaredPath({ appPath, platform, arch });
@@ -276,7 +299,7 @@ async function verifyHostedEndpoint(
   const text = await response.text();
   if (Buffer.byteLength(text) > 4096) return false;
   try {
-    return JSON.parse(text)?.app === "openmausbot";
+    return acceptedWireNames("healthApp").includes(JSON.parse(text)?.app);
   } catch {
     return false;
   }

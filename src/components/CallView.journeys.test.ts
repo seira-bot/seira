@@ -35,6 +35,7 @@ vi.stubGlobal("localStorage", storage);
 const { CallButton } = await import("./CallView");
 const { GroupCallButton } = await import("./GroupCallView");
 const { LiveCallBar } = await import("./LiveCallBar");
+const { CallSurface } = await import("./CallSurface");
 const { BotEditorStore, initialState, reducer } = await import("@/state/store");
 const { callMode, setCallMode } = await import("@/lib/call-mode");
 const { currentCall, endCall } = await import("@/lib/call");
@@ -46,7 +47,7 @@ const { desktopCapabilities } = createRequire(import.meta.url)("../../electron/c
 };
 const PRELOAD = readFileSync(join(process.cwd(), "electron", "preload.cjs"), "utf8");
 const LOCAL_ORIGIN = "http://127.0.0.1:8799";
-const CLOUD_ORIGIN = "https://omb-t-0123456789ab.fly.dev";
+const CLOUD_ORIGIN = "https://seira-t-0123456789ab.fly.dev";
 
 type Bridge = NonNullable<Window["ogb"]>;
 type Platform = "darwin" | "win32" | "linux";
@@ -58,7 +59,7 @@ let microphone: "allowed" | "refused";
 function desktopApp(platform: Platform, page: "this-computer" | "my-cloud"): { bridge: Bridge; desktop: Desktop } {
   let bridge: Bridge | undefined;
   runInNewContext(PRELOAD, {
-    process: { platform, argv: [`--omb-local-origin=${LOCAL_ORIGIN}`] },
+    process: { platform, argv: [`--seira-local-origin=${LOCAL_ORIGIN}`] },
     location: { origin: page === "this-computer" ? LOCAL_ORIGIN : CLOUD_ORIGIN },
     TextEncoder,
     localStorage: { getItem: () => null },
@@ -126,6 +127,7 @@ function chat(config: AppState["config"]) {
     children: [
       createElement(CallButton, { key: "call", bot: ada, placement: "composer" }),
       createElement(LiveCallBar, { key: "bar", bot: ada }),
+      createElement(CallSurface, { key: "surface", botId: ada.id }),
     ],
   })));
 }
@@ -159,7 +161,7 @@ async function firstLiveCall() {
   await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
   await vi.waitFor(() => expect(requests.filter(({ path }) => path === "/api/live/session")).toHaveLength(2));
   expect(liveMedia()).toMatchObject({ phase: "starting", botId: "ada", threadId: "thread-ada" });
-  await vi.waitFor(() => expect(text()).toContain("Live with Ada"));
+  await vi.waitFor(() => expect(text()).toContain("Calling…"));
   expect(text()).not.toContain(KEY_NEEDED);
   expect(text()).not.toContain("Choose This computer");
   expect(requests.filter(({ path }) => path === "/api/config")).toEqual([]);

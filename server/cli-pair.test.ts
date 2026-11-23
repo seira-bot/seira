@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { serverPairingLink } from "../shared/pairing-link.ts";
 import { runPair, type CliOptions } from "./cli.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
@@ -14,6 +15,7 @@ vi.mock("./cli-prompts.ts", async (original) => ({
   ...await original<typeof import("./cli-prompts.ts")>(), defaultSetupIo: () => mocks.ui,
 }));
 vi.mock("./tailscale.ts", () => ({
+  pickTailscaleHttpsPort: () => ({ port: 443, line: null }), tailscaleHttpsProblem: async () => null,
   tailscaleStatus: mocks.tailscaleStatus,
   tailscaleServe: vi.fn(), clearLeftoverTailscaleServe: vi.fn(), explainTailscaleFailure: vi.fn(),
 }));
@@ -38,7 +40,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   // The shared test setup supplies a throwaway HOME before module imports.
   dataDir = mkdtempSync(join(process.env.HOME!, "cli-pair-"));
-  vi.stubEnv("OMB_DATA_DIR", dataDir);
+  vi.stubEnv("SEIRA_DATA_DIR", dataDir);
   options = { command: "pair", port: 18451, dataDir, tailscale: false, tunnel: false, client: false, pair: true, json: false };
   publicUrl = advertisedOrigin;
   remoteWorkspaceId = workspaceId;
@@ -52,7 +54,7 @@ beforeEach(() => {
   fetchMock.mockImplementation(async (input, init) => {
     const url = String(input);
     const local = `http://127.0.0.1:${options.port}`;
-    if (url === `${local}/api/health`) return Response.json({ app: "openmausbot", pid: 12345 });
+    if (url === `${local}/api/health`) return Response.json({ app: "seira", pid: 12345 });
     if (url === `${local}/api/auth/pairing`) {
       if (init?.method === "POST") return Response.json({ code, expiresAt: Date.now() + 300_000, url: `${advertisedOrigin}/pair#code=${code}` });
       return Response.json({ pairings: [], publicUrl });
@@ -101,12 +103,21 @@ describe("seira pair", () => {
     expect(printed()).toContain(`Link           ${explicitOrigin}/pair#code=${code}`);
   });
 
-  it("--phone mints a chat-only code", async () => {
+  it("--phone mints a chat-only code made for a phone", async () => {
     expect(await runPair({ ...options, phone: "ios" })).toBe(0);
     const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(JSON.parse(String(posted![1]!.body))).toEqual({ scopes: ["client"] });
+    expect(JSON.parse(String(posted![1]!.body))).toEqual({ scopes: ["client"], device: "phone" });
     expect(printed()).toContain("· chat and approvals");
     expect(printed()).not.toContain("For a phone");
+  });
+
+  it("--computer mints a code made for another computer, with no phone QR", async () => {
+    expect(await runPair({ ...options, computer: true })).toBe(0);
+    const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(posted![1]!.body))).toEqual({ device: "computer" });
+    expect(printed()).toContain("· everything");
+    expect(printed()).toContain(`seira connect ${advertisedOrigin}/pair#code=${code} --out FILE`);
+    expect(printed()).not.toMatch(/[▀▄█]/);
   });
 
   it("still prints the code when the address answers as another server, and says what to fix", async () => {
@@ -121,7 +132,7 @@ describe("seira pair", () => {
     publicUrl = null;
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url.endsWith("/api/health")) return Response.json({ app: "openmausbot", pid: 12345 });
+      if (url.endsWith("/api/health")) return Response.json({ app: "seira", pid: 12345 });
       if (url.endsWith("/api/auth/pairing")) return init?.method === "POST" ? Response.json({ code, expiresAt: Date.now() + 600_000, url: null }) : Response.json({ pairings: [], publicUrl: null });
       throw new Error(`Unexpected fixture request: ${url}`);
     });
@@ -134,7 +145,7 @@ describe("seira pair", () => {
   it("when the desktop app owns the server, says to pair from the app instead of showing the raw refusal", async () => {
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url.endsWith("/api/health")) return Response.json({ app: "openmausbot", pid: 12345 });
+      if (url.endsWith("/api/health")) return Response.json({ app: "seira", pid: 12345 });
       if (url.endsWith("/api/auth/pairing")) {
         return init?.method === "POST"
           ? Response.json({ error: "forbidden: this change must come from the desktop app or a paired device" }, { status: 403 })
@@ -160,12 +171,12 @@ describe("seira pair", () => {
 });
 
 describe("the phone-app link `seira pair --phone android` scans", () => {
-  const credential = `omb_pair_${"b".repeat(43)}`;
+  const credential = `seira_pair_${"b".repeat(43)}`;
   const serverName = "Miguel's computer";
   const pairingResponse = (fields: Record<string, unknown>) => {
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url === `http://127.0.0.1:${options.port}/api/health`) return Response.json({ app: "openmausbot", pid: 12345 });
+      if (url === `http://127.0.0.1:${options.port}/api/health`) return Response.json({ app: "seira", pid: 12345 });
       if (url === `http://127.0.0.1:${options.port}/api/auth/pairing`) {
         return init?.method === "POST" ? Response.json({ code, expiresAt: Date.now() + 300_000, credential, serverName, ...fields }) : Response.json({ pairings: [], publicUrl: null });
       }
@@ -176,15 +187,42 @@ describe("the phone-app link `seira pair --phone android` scans", () => {
   it("builds the invite for --public-url from the server's credential and name, and never prints it as text", async () => {
     pairingResponse({ url: null, inviteUrl: null });
     expect(await runPair({ ...options, phone: "android", publicUrl: explicitOrigin })).toBe(0);
-    expect(printed()).not.toContain("openmausbot://");
+    expect(printed()).not.toContain("seira://");
     expect(printed()).not.toContain(credential);
     expect(printed()).toContain("scan this with the Seira app");
   });
 
   it("keeps a proxy path in the web link", async () => {
-    pairingResponse({ url: `https://proxy.example.test/omb/pair#code=${code}`, inviteUrl: null });
+    pairingResponse({ url: `https://proxy.example.test/seira/pair#code=${code}`, inviteUrl: null });
     expect(await runPair({ ...options, label: "Pixel" })).toBe(0);
-    expect(printed()).toContain(`https://proxy.example.test/omb/pair#code=${code}`);
+    expect(printed()).toContain(`https://proxy.example.test/seira/pair#code=${code}`);
+  });
+});
+
+describe("the link a server with several routes sends", () => {
+  const tunnel = `https://c-${"a".repeat(32)}.seira.run`;
+  const routes = [{ url: "https://box.tail1234.ts.net", kind: "hosted" as const, priority: 0 }, { url: tunnel, kind: "hosted" as const, priority: 1 }];
+  const reply = (fields: Record<string, unknown>) => fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url === `http://127.0.0.1:${options.port}/api/health`) return Response.json({ app: "seira", pid: 12345 });
+    if (url === `http://127.0.0.1:${options.port}/api/auth/pairing`) {
+      return init?.method === "POST" ? Response.json({ code, expiresAt: Date.now() + 300_000, ...fields }) : Response.json({ pairings: [], publicUrl: null });
+    }
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  it("is printed as the server sent it, with every route", async () => {
+    const link = serverPairingLink({ base: tunnel, code, endpoints: routes })!;
+    reply({ url: link, inviteUrl: null });
+    expect(await runPair({ ...options, publicUrl: explicitOrigin })).toBe(0);
+    expect(printed()).toContain(link);
+    expect(printed()).not.toContain(`${explicitOrigin}/pair#code=`);
+  });
+
+  it("falls back to the CLI's own address when the server sends no link", async () => {
+    reply({ url: null, inviteUrl: null });
+    expect(await runPair({ ...options, publicUrl: explicitOrigin })).toBe(0);
+    expect(printed()).toContain(`${explicitOrigin}/pair#code=${code}`);
   });
 });
 
@@ -193,7 +231,7 @@ describe("pair --ttl", () => {
     const day = Date.now() + 86_400_000;
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
-      if (url.endsWith("/api/health")) return Response.json({ app: "openmausbot", pid: 12345 });
+      if (url.endsWith("/api/health")) return Response.json({ app: "seira", pid: 12345 });
       if (url.endsWith("/api/auth/pairing")) return init?.method === "POST" ? Response.json({ code, expiresAt: day, url: null }) : Response.json({ pairings: [], publicUrl: null });
       throw new Error(`Unexpected fixture request: ${url}`);
     });

@@ -1,9 +1,14 @@
-import { CreditCard, Mail, PhoneCall, RadioTower, Smartphone, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import bubblavLogo from "@/assets/bubblav/logo.png";
-import whopLogo from "@/assets/whop/logo.png";
+import biverLogo from "@/assets/biver/logo.png";
+import citcatLogo from "@/assets/citcat/logo.png";
+import coretLogo from "@/assets/coret/logo.png";
+import dalektaLogo from "@/assets/dalekta/logo.png";
+import grupyLogo from "@/assets/grupy/logo.png";
+import konektorLogo from "@/assets/konektor/logo.png";
+import replizLogo from "@/assets/repliz/logo.png";
+import termiloLogo from "@/assets/termilo/logo.png";
 import type { LocaleKey } from "@/locales";
-import { POSTIZ_SERVER } from "../../shared/postiz";
 
 export interface HostedMcpApp {
   /** The card's id (`data-app-tile`) and the name the server is added under (then `-2`, `-3`…): a valid server name. */
@@ -12,9 +17,6 @@ export interface HostedMcpApp {
   readonly label: string;
   /** Its official hosted MCP endpoint. A server is this app only at exactly this address, over streamable HTTP. */
   readonly url: string;
-  /** A service with no browser sign-in takes a key the person pastes, sent as `Authorization: Bearer`; `url` is where
-   * they make one. Without it the card signs in with browser OAuth. */
-  readonly key?: { readonly url: string };
   /** Its licensed logo, or a neutral lucide glyph when the service publishes none we may ship. */
   readonly icon: { readonly image: string } | { readonly glyph: LucideIcon };
   readonly description: LocaleKey;
@@ -28,71 +30,76 @@ export interface HostedMcpApp {
  * Bot access, its row in the MCP list, search, the Connected filter and the count all derive from this table. */
 export const HOSTED_MCP_APPS = [
   {
-    id: "whop",
-    label: "Whop",
-    url: "https://mcp.whop.com/mcp",
-    icon: { image: whopLogo },
-    description: "whop.description",
-    notice: "whop.notice",
-    keywords: "whop checkout memberships",
+    id: "konektor",
+    label: "Konektor.id",
+    url: "https://mcp.konektor.id/mcp",
+    icon: { image: konektorLogo },
+    description: "konektor.description",
+    notice: "konektor.notice",
+    keywords: "konektor whatsapp leads inbox broadcast ads conversions tracking crm",
   },
   {
-    id: "agentcard",
-    label: "Agentcard",
-    url: "https://mcp.agentcard.sh/mcp",
-    // Agentcard's packages are "SEE LICENSE IN LICENSE" and it publishes no logo licence, so a neutral glyph stands in.
-    icon: { glyph: CreditCard },
-    description: "agentcard.description",
-    notice: "agentcard.notice",
-    keywords: "agentcard agent card opencommerce shopping payments buy virtual debit card",
-  },
-  // None of these four publishes a logo licence we have checked, so neutral glyphs stand in.
-  {
-    id: "agentmail",
-    label: "AgentMail",
-    url: "https://mcp.agentmail.to/mcp",
-    icon: { glyph: Mail },
-    description: "agentmail.description",
-    notice: "agentmail.notice",
-    keywords: "agentmail email inbox mail address send reply",
+    id: "biver",
+    label: "Biver.id",
+    url: "https://mcp.biver.id/mcp",
+    icon: { image: biverLogo },
+    description: "biver.description",
+    notice: "biver.notice",
+    keywords: "biver website landing page builder pages sections forms products checkout domain",
   },
   {
-    id: "vapi",
-    label: "Vapi",
-    url: "https://mcp.vapi.ai/mcp",
-    key: { url: "https://dashboard.vapi.ai" },
-    icon: { glyph: PhoneCall },
-    description: "vapi.description",
-    notice: "vapi.notice",
-    keywords: "vapi phone call calls voice dial assistant",
+    id: "coret",
+    label: "Coret.id",
+    url: "https://mcp.coret.id/mcp",
+    icon: { image: coretLogo },
+    description: "coret.description",
+    notice: "coret.notice",
+    keywords: "coret mind map mindmap whiteboard sketch notes pad book share",
   },
   {
-    id: "telnyx",
-    label: "Telnyx",
-    url: "https://api.telnyx.com/v2/mcp",
-    key: { url: "https://portal.telnyx.com/#/api-keys" },
-    icon: { glyph: RadioTower },
-    description: "telnyx.description",
-    notice: "telnyx.notice",
-    keywords: "telnyx phone number numbers sms text call calls international",
+    id: "termilo",
+    label: "Termilo.id",
+    url: "https://api.termilo.id/mcp",
+    icon: { image: termiloLogo },
+    description: "termilo.description",
+    notice: "termilo.notice",
+    keywords: "termilo booking appointment schedule calendar reservation customers services",
   },
   {
-    id: "agentphone",
-    label: "AgentPhone",
-    url: "https://mcp.agentphone.ai/mcp",
-    icon: { glyph: Smartphone },
-    description: "agentphone.description",
-    notice: "agentphone.notice",
-    keywords: "agentphone phone number sms text call calls",
+    id: "citcat",
+    label: "Citcat.id",
+    url: "https://api-crm.citcat.id/api/mcp",
+    icon: { image: citcatLogo },
+    description: "citcat.description",
+    notice: "citcat.notice",
+    keywords: "citcat whatsapp crm inbox chats contacts customers sales funnel leads instagram messenger line",
   },
   {
-    id: "bubblav",
-    label: "BubblaV",
-    url: "https://www.bubblav.com/mcp",
-    icon: { image: bubblavLogo },
-    description: "bubblav.description",
-    notice: "bubblav.notice",
-    keywords: "bubblav chatbot chat widget website customer support service knowledge base conversations leads analytics",
+    id: "repliz",
+    label: "Repliz",
+    url: "https://mcp.repliz.com/mcp",
+    icon: { image: replizLogo },
+    description: "repliz.description",
+    notice: "repliz.notice",
+    keywords: "repliz social media comments auto reply dm schedule posts automation instagram facebook threads tiktok youtube",
+  },
+  {
+    id: "dalekta",
+    label: "Dalekta",
+    url: "https://mcp.dalekta.id/mcp",
+    icon: { image: dalektaLogo },
+    description: "dalekta.description",
+    notice: "dalekta.notice",
+    keywords: "dalekta whatsapp ctwa lpwa ads tracking leads closing revenue conversions capi meta funnel",
+  },
+  {
+    id: "grupy",
+    label: "Grupy.chat",
+    url: "https://mcp.grupy.chat/mcp",
+    icon: { image: grupyLogo },
+    description: "grupy.description",
+    notice: "grupy.notice",
+    keywords: "grupy whatsapp group groups community summary summaries recap members export join requests approval",
   },
 ] as const satisfies readonly HostedMcpApp[];
 
@@ -117,7 +124,7 @@ export function hostedMcpApp(server: ServerAddress): HostedApp | undefined {
   });
 }
 
-/** `whop`, then `whop-2`, `whop-3`…: never an existing server's name. */
+/** `biver`, then `biver-2`, `biver-3`…: never an existing server's name. */
 export function hostedServerName(app: HostedMcpApp, servers: ReadonlyArray<{ name: string }>): string {
   const names = new Set(servers.map((server) => server.name));
   let name: string = app.id;
@@ -127,21 +134,25 @@ export function hostedServerName(app: HostedMcpApp, servers: ReadonlyArray<{ nam
 
 export const HOSTED_KEY_HEADER = "Authorization";
 
+/** True when the server holds an `Authorization` header, such as a pasted key. */
+export function holdsHostedKey(server: { headerKeys?: readonly string[] }): boolean {
+  return server.headerKeys?.some((name) => name.toLowerCase() === HOSTED_KEY_HEADER.toLowerCase()) === true;
+}
+
 /** The one rule for "connected", shared by the cards, the Connected filter and the count: the server is on and signed
- * in, or for a key app, on and holding its key. */
+ * in or holds an `Authorization` header. */
 export function hostedConnections(
   servers: ReadonlyArray<ServerAddress & { enabled: boolean; auth?: "signed-in" | "needs-sign-in"; headerKeys?: readonly string[] }>,
 ): HostedConnections {
-  const holdsKey = (server: (typeof servers)[number]) => server.headerKeys?.some((name) => name.toLowerCase() === HOSTED_KEY_HEADER.toLowerCase()) === true;
   return Object.fromEntries(HOSTED_MCP_APPS.map((app) => [
     app.id,
-    servers.some((server) => hostedMcpApp(server) === app && server.enabled && ("key" in app ? holdsKey(server) : server.auth === "signed-in")),
+    servers.some((server) => hostedMcpApp(server) === app && server.enabled && (server.auth === "signed-in" || holdsHostedKey(server))),
   ])) as HostedConnections;
 }
 
-/** A server of the person's own: a hosted app's, and Postiz's, show as their own cards instead. */
+/** A server of the person's own: a hosted app's server shows as that app's card instead. */
 export function ownMcpServer(server: ServerAddress & { name: string }): boolean {
-  return server.url === undefined || !(hostedMcpApp(server) || server.name === POSTIZ_SERVER);
+  return server.url === undefined || !hostedMcpApp(server);
 }
 
 /** The one rule for "connected" for such a server: on, and signed in if it takes a sign-in. */

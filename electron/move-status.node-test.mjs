@@ -3,15 +3,15 @@ import test from "node:test";
 
 import { CloudSendError } from "./cloud-send.mjs";
 import { failureCode, safeSentence, SENTENCE_MAX } from "./move-failure.mjs";
-import { createMoveStatusReport, MOVE_STATUS_GAP_MS, MOVE_STATUS_HEARTBEAT_MS, MOVE_STATUS_OFF_MS, MOVE_STATUS_SETTLE_MS, moveStatus } from "./move-status.mjs";
+import { createMoveStatusReport, MOVE_STATUS_FAILED_MAX_MS, MOVE_STATUS_GAP_MS, MOVE_STATUS_HEARTBEAT_MS, MOVE_STATUS_OFF_MS, MOVE_STATUS_SETTLE_MS, moveStatus } from "./move-status.mjs";
 import { CHECK_PASSES, createOneHome, INCOMPLETE, parseJournal, QUIET_MS } from "./one-home.mjs";
 import { installOneHome, oneHomeCloud } from "./one-home-main.mjs";
 
-const CLOUD = "https://omb-t-1.fly.dev";
+const CLOUD = "https://seira-t-1.fly.dev";
 const ACCOUNT = { id: "acct-1", email: "person@example.test" };
 const reply = (status, body = {}) => ({ ok: status < 400, status, body });
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
-/** The MausBot Cloud sign-in's state (cloud-account.mjs) for an account with a ready Cloud of its own it may move to. */
+/** The Seira Cloud sign-in's state (cloud-account.mjs) for an account with a ready Cloud of its own it may move to. */
 const signedIn = (patch = {}) => ({ status: "connected", account: ACCOUNT, deviceId: "device-1", entitlement: { plan: "pro", tier: "personal", status: "active", expiresAt: 1, version: 1 },
   machine: { status: "ready", origin: CLOUD, moves: true }, ...patch });
 const journalOf = (patch = {}) => ({ v: 1, phase: "copy", cloud: { origin: CLOUD, account: ACCOUNT.id, machine: CLOUD }, startedAt: 1_700_000_000_000, ...patch });
@@ -269,7 +269,7 @@ test("what leaves this computer is ids and fixed words: quotes, what My Cloud sa
   assert.equal(safeSentence("This computer's bots can't go yet."), "This computer's bots can't go yet.");
   assert.equal(safeSentence("ENOENT: no such file or directory, open /Users/jane/Documents/plans.md"), "ENOENT: no such file or directory, open …");
   assert.equal(safeSentence("EPERM C:\\Users\\jane\\AppData\\x.db"), "EPERM …");
-  assert.equal(safeSentence("Sent to jane@example.com via https://omb-t-1.fly.dev/api/x?token=1"), "Sent to … via …");
+  assert.equal(safeSentence("Sent to jane@example.com via https://seira-t-1.fly.dev/api/x?token=1"), "Sent to … via …");
   assert.equal(safeSentence(`Bearer omc_${"A".repeat(43)} was refused`), "Bearer … was refused");
   assert.equal(safeSentence("conversation 3f0c2a9e-1b2c-4d5e-8f90-123456789abc is missing"), "conversation 3f0c2a9e-1b2c-4d5e-8f90-123456789abc is missing", "ids stay");
   assert.equal(safeSentence("line one\nline two\u0007"), "line one line two");
@@ -339,6 +339,40 @@ test("a report goes a moment after it changes, at most once a minute, and every 
   r.close();
   r.changed();
   assert.equal(timers.length, 0);
+});
+
+test("a send that keeps failing waits longer each time, up to the heartbeat, however often the move changes", async () => {
+  let clock = 1_800_000_000_000, failing = true, phase = 0;
+  const timers = [], tried = [];
+  const r = createMoveStatusReport({ status: () => ({ v: 1, phase: `p${phase}`, reason: null }), signIn: () => "device-1", now: () => clock,
+    send: async () => { tried.push(clock); if (failing) throw new Error("Cloud request failed."); return true; },
+    timers: { set: (work, ms) => { const timer = { work, at: clock + ms }; timers.push(timer); return timer; }, clear: (timer) => { const at = timers.indexOf(timer); if (at >= 0) timers.splice(at, 1); } } });
+  /** Moves the clock on a minute at a time, the move changing each minute, running each timer due on the way. */
+  const minutes = async (count) => {
+    for (let minute = 0; minute < count; minute += 1) {
+      phase += 1;
+      r.changed();
+      const until = clock + 60_000;
+      for (let next = timers.sort((a, b) => a.at - b.at)[0]; next && next.at <= until; next = timers.sort((a, b) => a.at - b.at)[0]) {
+        timers.splice(timers.indexOf(next), 1);
+        clock = next.at;
+        next.work();
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      clock = until;
+    }
+  };
+  await minutes(120);
+  const gaps = tried.slice(1).map((at, i) => Math.round((at - tried[i]) / 60_000));
+  assert.deepEqual(gaps.slice(0, 5), [1, 2, 4, 8, 15], "a minute, then twice as long each time");
+  assert.ok(gaps.every((gap) => gap <= MOVE_STATUS_FAILED_MAX_MS / 60_000), "never longer than the heartbeat");
+  assert.ok(tried.length <= 12, `two hours of a failing Cloud is ${tried.length} tries, not one a minute`);
+  failing = false;
+  await minutes(16);
+  const recovered = tried.length;
+  await minutes(3);
+  assert.deepEqual(tried.slice(recovered - 1).map((at, i, all) => (i ? (at - all[i - 1]) / 60_000 : 0)).slice(1), [1, 1, 1], "once a send goes through, a change goes within the minute again");
+  r.close();
 });
 
 test("the move's own changes send the report by themselves, a moment later", async () => {

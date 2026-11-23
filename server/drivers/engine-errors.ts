@@ -10,16 +10,21 @@ import { MODEL_NO_ROUTE, USAGE_LIMIT } from "./retry.ts";
 
 /** How long an engine may stay quiet after a model request failed on a limit before the turn is ended as a usage limit,
  * so a backup the person chose carries on (or the bot waits for the reset): longer than any retry an engine makes without a provider's retry-after
- * (OMB_ACP_LIMIT_QUIET_MS overrides). */
+ * (SEIRA_ACP_LIMIT_QUIET_MS overrides). */
 export const DEFAULT_LIMIT_QUIET_MS = 2 * 60_000;
 export const limitQuietMs = (): number => {
-  const ms = Number(process.env.OMB_ACP_LIMIT_QUIET_MS);
+  const ms = Number(process.env.SEIRA_ACP_LIMIT_QUIET_MS);
   return Number.isFinite(ms) && ms > 0 ? ms : DEFAULT_LIMIT_QUIET_MS;
 };
 
 /** A 429 whose wait is longer than any engine retries on its own is a usage limit, not a short rate limit. */
 export const usageLimitWait = (status: number | null | undefined, waitMs: number | null | undefined): boolean =>
   status === 429 && (waitMs ?? 0) > limitQuietMs();
+
+/** Claude Code's refusal when a conversation no longer fits its model: the API's "Prompt is too long" and the CLI's
+ * "automatic compaction failed" (2.1.x), read from the engine's error text only. */
+const CONTEXT_OVERFLOW = /\bprompt is too long\b|\bautomatic compaction failed\b|\bautocompact is thrashing\b/i;
+export const contextOverflow = (text: string): boolean => CONTEXT_OVERFLOW.test(text);
 
 export type EngineFailureKind = "credits" | "usage_limit" | "rate_limit" | "overloaded" | "server" | "tool_schema" | "tool_count" | "model_no_route" | "refused";
 

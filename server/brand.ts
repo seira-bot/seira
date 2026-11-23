@@ -53,7 +53,7 @@ export interface BrandStatus {
 }
 
 export function brandFile(): string {
-  return process.env.OMB_BRAND_FILE || join(DATA_DIR, "brand.json");
+  return process.env.SEIRA_BRAND_FILE || join(DATA_DIR, "brand.json");
 }
 
 /** Never throws. */
@@ -79,6 +79,11 @@ export function loadBrand(options: { file?: string; isEntitled?: (feature: strin
     return fallback(`${file} found but this server is not licensed for whitelabel; using the default brand`);
   }
   return { brand: parsed.data, source: "file", file };
+}
+
+/** All a stranger sees before signing in: no file path, no notice about the operator's setup. */
+export function publicBrand(status: BrandStatus): Pick<BrandStatus, "brand" | "source"> {
+  return { brand: status.brand, source: status.source };
 }
 
 export function describeBrand(status: BrandStatus): string {

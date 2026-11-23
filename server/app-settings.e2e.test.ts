@@ -217,7 +217,7 @@ it("a Full-access bot's own approval mode changes at once on every thread, and U
 it("a bot gives itself and the person a picture from a file in its workspace, refuses a fake picture and a file outside, and Undo takes each back", async () => {
   const PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from("a picture")]);
   const workspace = join(dataDir, "workspaces", bot.id);
-  const elsewhere = mkdtempSync(join(tmpdir(), "omb-picture-outside-"));
+  const elsewhere = mkdtempSync(join(tmpdir(), "seira-picture-outside-"));
   try {
     mkdirSync(workspace, { recursive: true });
     writeFileSync(join(workspace, "face.png"), PNG);

@@ -285,7 +285,7 @@ it("Connect to a server says how another computer's desktop app is opened from h
   const code = form.querySelector("[data-connect-problem]")?.textContent ?? "";
   expect(code).toContain("That code is for the phone app. To open that computer from here, turn on Tailscale and Your other computers in its Settings → Phone & devices, then use the link shown there.");
   expect(code).toContain("My Cloud");
-  expect(code).not.toMatch(/can't connect to another|older MausBot/);
+  expect(code).not.toMatch(/can't connect to another|older Seira/);
 });
 
 it("an address typed key by key stays in its box; a pasted one moves on to the code", async () => {
@@ -295,12 +295,12 @@ it("an address typed key by key stays in its box; a pasted one moves on to the c
   const form = document.querySelector('[data-place-add="own-server"]')!;
   const address = form.querySelector("[data-own-server-link]") as HTMLInputElement;
   const afterTimers = () => act(async () => { await new Promise((done) => setTimeout(done, 0)); });
-  for (const key of "maus.local") {
+  for (const key of "seira.local") {
     const focused = document.activeElement as HTMLInputElement;
     await type(focused, focused.value + key);
     await afterTimers();
   }
-  expect([address.value, (form.querySelector("[data-own-server-code]") as HTMLInputElement).value]).toEqual(["maus.local", ""]);
+  expect([address.value, (form.querySelector("[data-own-server-code]") as HTMLInputElement).value]).toEqual(["seira.local", ""]);
   expect(document.activeElement).toBe(address);
   await type(address, "");
   await act(async () => {
@@ -611,7 +611,7 @@ it("a server of the person's own that main offers as home: its menu's one tap st
   await act(async () => { host.querySelector("[data-rail-menu]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   const menu = await menuOf("garage");
   const row = menu!.querySelector("[data-rail-make-home-start]");
-  expect(row?.textContent).toBe("Make Garage server my homeMoves this computer's bots, chats, memory and routines to Garage server, and this computer then works for it.");
+  expect(row?.textContent).toBe("Make Garage server my homeMoves this computer's bots, chats, memory and routines to Garage server. This computer then stops running bots and works for Garage server.");
   await click(row);
   await settle();
   expect(makeHome).toHaveBeenCalledWith("garage");
@@ -806,6 +806,23 @@ it("＋ offers a new workspace on this computer first, to Cloud owners too: a na
   expect(create).toHaveBeenCalledTimes(2);
 });
 
+it("＋'s new workspace on a server saved by hand, once this computer can't hold one: Create says why, the sheet stays open, and the choice is gone", async () => {
+  const create = vi.fn(async (_name: string, _color: unknown) => { rail = { ...rail, add: { ...rail.add, local: false } }; return { outcome: "unavailable" as const }; });
+  rail = { places: [place("local", "This computer", { kind: "computer" }), place("vps", "Office", { kind: "server", active: true })], add: { cloud: true, link: true, address: false, local: true } };
+  Object.assign(window, { ogb: { workspaces: { ...workspaces, local: { create, edit: vi.fn(), remove: vi.fn() } }, cloudAdd } });
+  await mount(createElement(PlacesRail));
+  await click(host.querySelector("[data-rail-add]"));
+  await click(document.querySelector('[data-place-add-choice="local"]'));
+  await submit(document.querySelector('[data-place-add="local"]'));
+  await act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(document.querySelector("[data-local-problem]")?.textContent).toBe("You can't add a place on this computer now. Choose another kind of place.");
+  expect(document.querySelector("[data-place-add-sheet]"), "the sheet stays open").not.toBeNull();
+  await click([...document.querySelectorAll('[data-place-add="local"] button')].find((button) => button.textContent === "Back") ?? null);
+  expect([...document.querySelectorAll("[data-place-add-choice]")].map((choice) => choice.getAttribute("data-place-add-choice")), "main's choices read again").toEqual(["cloud", "server"]);
+  expect(host.querySelector("[data-rail-add]")?.getAttribute("aria-label")).toBe("Add a Cloud or your own server");
+});
+
 it("with only the new workspace to add, ＋ goes straight to its name, and Close leaves nothing behind", async () => {
   const create = vi.fn();
   rail = { places: [place("local", "This computer", { kind: "computer", active: true }), place("vps", "Office", { kind: "server" })], add: { cloud: false, link: false, address: false, local: true } };
@@ -818,6 +835,47 @@ it("with only the new workspace to add, ＋ goes straight to its name, and Close
   await click(document.querySelector('[data-place-add-sheet] [aria-label="Close"]'));
   expect(document.querySelector("[data-place-add-sheet]")).toBeNull();
   expect(create).not.toHaveBeenCalled();
+});
+
+it("a server saved by hand: its menu offers Rename with its own name, says why a name is refused, saves the trimmed name and closes; a Cloud's menu has no Rename", async () => {
+  const rename = vi.fn(async (_id: string, _name: string) => ({ outcome: "saved" }) as { outcome: "saved" | "taken" | "name" | "gone" | "failed" | "unsupported" });
+  rail = { places: [
+    place("home", "My Cloud", { active: true, paint: { swatch: null } }),
+    place("a", "Client A", { paint: { swatch: "green" } }),
+    place("vps", "instabox-seira", { kind: "server", removable: true, forget: true, paint: { swatch: null } }),
+  ], add: { cloud: false, link: true, address: false } };
+  Object.assign(window, { ogb: { workspaces: { ...workspaces, rename }, cloudAdd, rail: { expand: vi.fn(async () => {}), onSkin: () => () => {} } } });
+  await mount(createElement(PlacesRail, { chrome: true }));
+  const settle = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
+  const menuOf = async (id: string) => {
+    await act(async () => { host.querySelector(`[data-rail-place="${id}"]`)!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    return host.querySelector(`[data-rail-menu="${id}"]`)!;
+  };
+  expect((await menuOf("a")).querySelector("[data-rail-rename]"), "a Cloud: no Rename").toBeNull();
+  await act(async () => { host.querySelector("[data-rail-menu]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  const menu = await menuOf("vps");
+  expect(document.activeElement, "the first row takes the focus").toBe(menu.querySelector("[data-rail-rename]"));
+  await click(menu.querySelector("[data-rail-rename]"));
+  const field = menu.querySelector<HTMLInputElement>("[data-rail-rename-form] input")!;
+  expect([field.value, field.maxLength]).toEqual(["instabox-seira", 60]);
+  await type(field, "Studio");
+  await act(async () => { field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  expect(menu.querySelector("[data-rail-rename-form]"), "Escape leaves the name as it was").toBeNull();
+  expect(rename).not.toHaveBeenCalled();
+  await click(menu.querySelector("[data-rail-rename]"));
+  await type(menu.querySelector("[data-rail-rename-form] input"), "  Office ");
+  for (const [outcome, text] of [["taken", "Another place here has that name. Choose another."], ["name", "Use a name of 1 to 60 characters."], ["failed", "That didn't work. Try again in a moment."]] as const) {
+    rename.mockResolvedValueOnce({ outcome });
+    await submit(menu.querySelector("[data-rail-rename-form]"));
+    await settle();
+    expect(menu.querySelector("[data-rail-rename-form] [role='alert']")?.textContent, outcome).toBe(text);
+    expect(host.querySelector("[data-rail-menu]"), "the menu stays open").toBeTruthy();
+  }
+  await submit(menu.querySelector("[data-rail-rename-form]"));
+  await settle();
+  expect(rename.mock.calls, "by the circle's own id, the trimmed name").toEqual([["vps", "Office"], ["vps", "Office"], ["vps", "Office"], ["vps", "Office"]]);
+  expect(host.querySelector("[data-rail-menu]"), "saved: the menu closes").toBeNull();
+  expect(workspaces.places, "and the list is read again").toHaveBeenCalled();
 });
 
 it("a workspace's menu: Rename (Enter saves, Escape leaves it), its colour, and Remove asked first in plain words; Cancel changes nothing", async () => {

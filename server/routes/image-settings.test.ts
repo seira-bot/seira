@@ -1,11 +1,16 @@
+import { mkdtempSync } from "node:fs";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
-import { describe, expect, it, vi } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { IMAGE_DEFAULT_MODELS, IMAGE_MODEL_CHOICES } from "../../shared/image-generation.ts";
 import type { ImageCredentials } from "../image-generation.ts";
 import type { RequestAuth } from "../request-auth.ts";
+import { removeTempDir } from "../testing/cleanup.ts";
+import { codexAuthFile } from "../testing/codex-image-auth.ts";
 import { createImageSettingsRoutes } from "./image-settings.ts";
 import { PASS } from "./table.ts";
 
@@ -138,5 +143,60 @@ describe("testing an image provider from Settings, without making an image", () 
   it("refuses a request that names no known provider", async () => {
     const { answer } = await call(createImageSettingsRoutes({ config: () => ({}), fetch: vi.fn<typeof fetch>() }), "/api/images/test", "POST", { provider: "acme" });
     expect(answer?.status).toBe(400);
+  });
+});
+
+describe("testing Codex images from Settings, without making an image", () => {
+  const USAGE = "https://chatgpt.com/backend-api/wham/usage";
+  let codexHome: string;
+  const cfg = (): ImageCredentials => ({ instances: { codex: { driver: "codex", environment: { CODEX_HOME: codexHome } } } });
+  const testCodex = async (fetchImpl: typeof fetch, renewCodex = vi.fn(async () => true)) => {
+    const { answer } = await call(createImageSettingsRoutes({ config: cfg, fetch: fetchImpl, renewCodex }), "/api/images/test", "POST", { provider: "codex" });
+    return { status: answer?.status, wire: JSON.stringify(answer?.body), verdict: verdictSchema.parse(answer?.body) };
+  };
+  const sign = (token: string, plan: string | null = "plus", expiresAt = Date.now() + 3_600_000) =>
+    codexAuthFile(codexHome, { token, accountId: "acct-test", plan, expiresAt });
+
+  beforeEach(() => { codexHome = mkdtempSync(join(tmpdir(), "seira-codex-test-")); });
+  afterEach(async () => { await removeTempDir(codexHome); });
+
+  it("says Codex is not signed in, or is on the free plan, without calling anyone", async () => {
+    const none = vi.fn<typeof fetch>();
+    expect((await testCodex(none)).verdict).toEqual({ ok: false, reason: "no_sign_in" });
+    sign("free-token", "free");
+    expect((await testCodex(none)).verdict).toEqual({ ok: false, reason: "free_plan" });
+    expect(none).not.toHaveBeenCalled();
+  });
+
+  it("checks the sign-in at Codex's usage page and answers only the verdict, never the token or the account id", async () => {
+    const access = sign("route-token");
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ plan_type: "plus", email: "ada@example.test" }));
+    const { status, verdict, wire } = await testCodex(fetchImpl);
+    expect({ status, verdict }).toEqual({ status: 200, verdict: { ok: true, check: "authentication" } });
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(USAGE);
+    expect(init.method ?? "GET").toBe("GET");
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${access}`);
+    expect(new Headers(init.headers).get("chatgpt-account-id")).toBe("acct-test");
+    for (const secret of [access, "route-token", "acct-test", "ada@example.test"]) expect(wire).not.toContain(secret);
+  });
+
+  it("asks Codex to renew once after a refusal, then reports a sign-in that is still refused", async () => {
+    sign("refused-token");
+    const renew = vi.fn(async () => { sign("renewed-token"); return true; });
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(Response.json({}));
+    expect((await testCodex(fetchImpl, renew)).verdict).toEqual({ ok: true, check: "authentication" });
+    expect(renew).toHaveBeenCalledOnce();
+    expect(new Headers((fetchImpl.mock.calls[1] as [string, RequestInit])[1].headers).get("authorization")).toContain("renewed-token");
+    const refused = vi.fn<typeof fetch>(async () => new Response("{}", { status: 403 }));
+    expect((await testCodex(refused)).verdict).toEqual({ ok: false, reason: "rejected", status: 403 });
+    expect(refused).toHaveBeenCalledTimes(2);
+  });
+
+  it("says Codex was unreachable when the check gets no answer", async () => {
+    sign("offline-token");
+    expect((await testCodex(vi.fn<typeof fetch>(async () => { throw new TypeError("fetch failed"); }))).verdict).toEqual({ ok: false, reason: "unreachable" });
   });
 });

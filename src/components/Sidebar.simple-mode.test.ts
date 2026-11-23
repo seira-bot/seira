@@ -71,11 +71,11 @@ describe("bot-first sidebar", () => {
   it.each([false, true])("uses the selected mode for bot and room tool previews (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     fixture.showThreads = false;
-    const messages: Bot["messages"] = [{ id: "step", role: "bot", kind: "activity", at: 1, tool: { name: "mcp__omb__computer_batch", ok: true } }];
+    const messages: Bot["messages"] = [{ id: "step", role: "bot", kind: "activity", at: 1, tool: { name: "mcp__seira__computer_batch", ok: true } }];
     const candidate = { ...bot, messages, tasks: [], projects: [] };
     const group: Group = { id: "room", threadId: "room-thread", name: "Team", memberIds: [bot.id], messages, defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
-    const expected = advanced ? "mcp__omb__computer_batch" : "Use the screen";
-    const other = advanced ? "Use the screen" : "mcp__omb__computer_batch";
+    const expected = advanced ? "mcp__seira__computer_batch" : "Use the screen";
+    const other = advanced ? "Use the screen" : "mcp__seira__computer_batch";
     for (const markup of [
       renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate))),
       renderToStaticMarkup(createElement(GroupListItem, { group, density: "comfortable", onMenu: vi.fn() })),
@@ -264,6 +264,32 @@ describe("bot-first sidebar", () => {
     const channel = renderToStaticMarkup(createElement(GroupListItem, { group: { ...room, dm: true }, density, onMenu: vi.fn() }));
     expect(channel).not.toContain("data-room-mark");
     expect(channel.match(/data-avatar-kind="bot"/g)).toHaveLength(2);
+  });
+
+  it.each([
+    { advanced: false, density: "comfortable" },
+    { advanced: false, density: "icons" },
+    { advanced: true, density: "comfortable" },
+    { advanced: true, density: "icons" },
+  ] as const)("draws a room's own picture in its row instead of the faces or the room mark (advanced $advanced, $density)", ({ advanced, density }) => {
+    fixture.advanced = advanced;
+    const pip: Bot = { ...quiet, id: "pip", name: "Pip", color: "blue" };
+    fixture.state = { ...fixture.state, bots: [bot, pip] };
+    const room: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id, pip.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
+    const withPicture = renderToStaticMarkup(createElement(GroupListItem, { group: { ...room, avatarUrl: "/api/attachments/launch-1.png" }, density, onMenu: vi.fn() }));
+    expect(withPicture).toContain("data-room-picture");
+    expect(withPicture).toContain('src="/api/attachments/launch-1.png"');
+    expect(withPicture).not.toContain("data-room-mark");
+    expect(withPicture).not.toContain("data-room-stack");
+    expect(withPicture).not.toContain('data-avatar-kind="bot"');
+    expect(renderToStaticMarkup(createElement(GroupListItem, { group: room, density, onMenu: vi.fn() }))).not.toContain("data-room-picture");
+  });
+
+  it("never draws a picture on a two-bot channel", () => {
+    const pip: Bot = { ...quiet, id: "pip", name: "Pip", color: "blue" };
+    fixture.state = { ...fixture.state, bots: [bot, pip] };
+    const channel: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id, pip.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1, dm: true, avatarUrl: "/api/attachments/launch-1.png" };
+    expect(renderToStaticMarkup(createElement(GroupListItem, { group: channel, density: "comfortable", onMenu: vi.fn() }))).not.toContain("data-room-picture");
   });
 
   it("marks an unread Simple group chat with an accent dot after the preview and a bold title, said once for a screen reader", () => {

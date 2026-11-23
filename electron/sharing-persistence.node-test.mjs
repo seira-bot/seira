@@ -8,7 +8,7 @@ import { createComputerSharing } from "./computer-sharing.mjs";
 import { createLendingIndicator } from "./lending-indicator.mjs";
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(tmpdir(), "omb-sharing-persistence-"));
+  const dir = fs.mkdtempSync(path.join(tmpdir(), "seira-sharing-persistence-"));
   const file = path.join(dir, "computer-sharing.json");
   const env = { id: "fixture-cloud", origin: "https://cloud.fixture.test", name: "Fixture" };
   const grant = { id: randomUUID(), secret: "a".repeat(64), sessionId: randomUUID(), environmentId: randomUUID(), enabled: true,

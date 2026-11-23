@@ -12,7 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "release", "npm");
 const app = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
-for (const required of ["dist-server/index.js", "dist-server/openmausbot.js", "dist/index.html"]) {
+for (const required of ["dist-server/index.js", "dist-server/seira.js", "dist/index.html"]) {
   if (!existsSync(join(root, required))) {
     console.error(`missing ${required}: run \`pnpm build:server && pnpm exec vite build\` first`);
     process.exit(1);
@@ -27,7 +27,7 @@ if (existsSync(join(root, "skills"))) cpSync(join(root, "skills"), join(out, "sk
 cpSync(join(root, "LICENSE"), join(out, "LICENSE"));
 
 // The bin lives next to the bundle so serverEntry() finds index.js by path.
-writeFileSync(join(out, "cli.js"), `#!/usr/bin/env node\nimport "./dist-server/openmausbot.js";\n`);
+writeFileSync(join(out, "cli.js"), `#!/usr/bin/env node\nimport "./dist-server/seira.js";\n`);
 
 writeFileSync(
   join(out, "package.json"),
@@ -35,7 +35,8 @@ writeFileSync(
     {
       name: "@seira-bot/seira",
       version: app.version,
-      description: "Run the Seira server anywhere and pair your devices to it",
+      description:
+        "Run your own team of AI agents (Claude Code, Codex, Gemini, and more) on a server. The Seira harness server with a web app.",
       license: "Apache-2.0",
       type: "module",
       bin: { seira: "cli.js" },
@@ -51,9 +52,23 @@ writeFileSync(
       },
       files: ["cli.js", "dist-server", "dist", "skills", "LICENSE", "README.md"],
       engines: { node: ">=24" },
-      repository: { type: "git", url: "https://github.com/seira-bot/seira.git" },
-      homepage: "https://github.com/seira-bot/seira#readme",
-      keywords: ["seira", "agents", "self-hosted", "server"],
+      repository: { type: "git", url: "git+https://github.com/seira-bot/seira.git" },
+      homepage: "https://seira.bot",
+      bugs: "https://github.com/seira-bot/seira/issues",
+      keywords: [
+        "seira",
+        "ai-agents",
+        "multi-agent",
+        "claude-code",
+        "codex",
+        "gemini-cli",
+        "agent-client-protocol",
+        "mcp",
+        "llm",
+        "self-hosted",
+        "local-first",
+        "ai-assistant",
+      ],
     },
     null,
     2,
@@ -130,7 +145,7 @@ ChatGPT/Claude subscriptions. New API keys in config.json and managed
 account credentials in tunnel-account.json are plaintext, not encrypted,
 with owner-only permissions (0600 on Unix). Keep these files private.
 
-Ctrl-C before saving AI setup leaves its pending OMB changes unapplied.
+Ctrl-C before saving AI setup leaves its pending Seira changes unapplied.
 During the later phone step, it keeps the AI setup already saved and exits
 without starting a server. Completed installs and sign-ins remain; run
 \`seira setup\` to continue without deleting your data.

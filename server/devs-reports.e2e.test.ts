@@ -1,4 +1,4 @@
-// @devs end to end: a fixture server with the synthetic Claude CLI and a fake MausBot team endpoint on loopback. A
+// @devs end to end: a fixture server with the synthetic Claude CLI and a fake Seira team endpoint on loopback. A
 // message that tags @devs makes exactly one bug report draft, with the bot's report_bug summary or, when the bot never
 // calls it, with the server's own facts. Nothing reaches the team until the person selects "Send report" (the draft
 // route); the draft shows the issue as it will be published, with secrets masked and the conversation itself left out.
@@ -81,12 +81,12 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => endpoint.listen(0, "127.0.0.1", resolve));
-  script = mkdtempSync(join(tmpdir(), "omb-devs-e2e-"));
+  script = mkdtempSync(join(tmpdir(), "seira-devs-e2e-"));
   plan([], "Hello.");
   fixture = await launchVerificationServer({
     ...process.env,
-    OMB_BUG_REPORT_URL: `http://127.0.0.1:${(endpoint.address() as AddressInfo).port}/api/bug-reports`,
-    OMB_DEVS_STATUS_MS: "1500",
+    SEIRA_BUG_REPORT_URL: `http://127.0.0.1:${(endpoint.address() as AddressInfo).port}/api/bug-reports`,
+    SEIRA_DEVS_STATUS_MS: "1500",
     FAKE_CLAUDE_TOOL_CALLS_FILE: join(script, "tool-calls.json"),
     FAKE_CLAUDE_REPLY_FILE: join(script, "reply.txt"),
   });
@@ -215,4 +215,35 @@ it("shows each report's status on the message that sent it, and once the team fi
   await new Promise((resolve) => setTimeout(resolve, 5_000));
   expect((await rows()).filter((row) => row.tool?.name === line)).toHaveLength(2);
   expect(questions.length).toBe(after);
+}, hostTimeout(120_000));
+
+it("makes one draft with the bot's report_bug summary for a plain ask without @devs, and sends it only when the person selects Send report", async () => {
+  const asked = "Please report this to the Seira team: the password card never showed up";
+  const before = received.length;
+  plan([{ name: "report_bug", server: "agents", input: { went_wrong: "The password card never showed up", steps: "1. Ask for a password\n2. Wait for the card" } }], "I prepared your report.");
+  await say(asked, "I prepared your report.");
+  await until(async () => (await offerUnder(asked)) !== undefined);
+  await settleTime();
+  expect(received).toHaveLength(before);
+
+  const offer = (await offerUnder(asked))!;
+  expect(offer).toEqual({ id: expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/), for: "user", from: "devs", by: "Scout", state: "offer" });
+  const dump = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { prompt: unknown };
+  expect(JSON.stringify(dump.prompt)).not.toContain("this message tags @devs");
+  const tool = (await rows()).findLast((row) => row.kind === "activity" && row.tool?.name === "report_bug");
+  expect(tool?.tool?.ok).not.toBe(false);
+  expect(tool?.tool?.output).toContain("Your bug report is ready. Review it under your message and select Send report. Nothing is sent before that.");
+
+  const draft = (await api("GET", `/api/bug-reports/drafts/${offer.id}`)).body as Draft;
+  expect(draft).toMatchObject({ id: offer.id, from: "devs", by: "Scout", state: "offer", direct: true });
+  expect(draft.description.split("\n")[0]).toBe(asked);
+  expect(draft.description).toContain("Scout's summary: The password card never showed up");
+  expect(received).toHaveLength(before);
+
+  const sent = await api("POST", `/api/bug-reports/drafts/${offer.id}/send`, {});
+  expect(sent.status, JSON.stringify(sent.body)).toBe(200);
+  expect(sent.body.state).toBe("sent");
+  expect(received).toHaveLength(before + 1);
+  expect(received.at(-1)!.description).toBe(draft.description);
+  await until(async () => (await offerUnder(asked))?.state === "sent", 20_000);
 }, hostTimeout(120_000));

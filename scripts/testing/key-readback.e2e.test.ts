@@ -1,6 +1,6 @@
 // Every credential on the keys page, saved through a real server the way its row saves it, read back from GET
-// /api/config and shown masked. The services that check a key before it is kept (Boat, Composio, ElevenLabs, Fish Audio
-// the decision models and Postiz) answer from one loopback stand-in, so nothing leaves this machine.
+// /api/config and shown masked. The services that check a key before it is kept (Composio, ElevenLabs, Fish Audio
+// and the decision models) answer from one loopback stand-in, so nothing leaves this machine.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
@@ -26,7 +26,7 @@ const { setLocale } = await import("@/lib/i18n");
 
 const ROOT = new URL("../..", import.meta.url);
 const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
-const PREFIX: Record<string, string> = { box: "boat_", composio: "ak_", elevenlabs: "sk_" };
+const PREFIX: Record<string, string> = { composio: "ak_", elevenlabs: "sk_" };
 const EXTRA_PATCH: Record<string, (key: string) => Record<string, unknown>> = {
   workersAi: (key) => ({ decider: { workersAiToken: key, workersAiAccountId: ACCOUNT_ID } }),
   imageCustom: (key) => ({ imageGen: { customApiKey: key } }),
@@ -66,16 +66,8 @@ beforeAll(async () => {
     const raw = bytes.toString("utf8");
     stubCalls.push(`${req.method} ${url.split("?")[0]}`);
     const reply = (status: number, body: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
-    if (url === "/postiz/mcp") {
-      const frame = JSON.parse(raw || "{}") as { id?: number; method?: string };
-      if (frame.id === undefined) { res.writeHead(202).end(); return; }
-      const result = frame.method === "initialize" ? { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "Postiz MCP", version: "1" } }
-        : { tools: [{ name: "integrationList", inputSchema: { type: "object" } }] };
-      return reply(200, { jsonrpc: "2.0", id: frame.id, result });
-    }
-    if (url.startsWith("/sandboxes")) return reply(200, { ok: true, sandboxes: [], pageInfo: { nextCursor: null } });
     if (url.startsWith("/composio/tool_router/session")) {
-      return reply(201, { session_id: "trs_readback", mcp: { type: "http", url: "https://app.composio.dev/tool_router/v3/trs_readback/mcp" }, config: { user_id: "openmausbot_readback" } });
+      return reply(201, { session_id: "trs_readback", mcp: { type: "http", url: "https://app.composio.dev/tool_router/v3/trs_readback/mcp" }, config: { user_id: "seira_readback" } });
     }
     if (url === "/gemini/interactions") {
       const input = JSON.parse(raw);
@@ -117,9 +109,9 @@ beforeAll(async () => {
   writeFileSync(configFile, JSON.stringify({ ...JSON.parse(readFileSync(configFile, "utf8")), decider }));
   const env = {
     ...verificationServerEnvironment({}, fixture.info.dataDir, Number(new URL(fixture.info.url).port)),
-    OMB_BOAT_API: origin, OMB_COMPOSIO_API: `${origin}/composio`, OMB_COMPOSIO_TOOLKITS_API: `${origin}/composio`,
-    OMB_GEMINI_TTS_API: `${origin}/gemini`, OMB_DEEPSEEK_SPEECH_API: `${origin}/deepseek`,
-    OMB_ELEVENLABS_API: `${origin}/eleven`, OMB_FISH_AUDIO_API: `${origin}/fish`, OMB_POSTIZ_CLOUD_URL: `${origin}/postiz`,
+    SEIRA_COMPOSIO_API: `${origin}/composio`, SEIRA_COMPOSIO_TOOLKITS_API: `${origin}/composio`,
+    SEIRA_GEMINI_TTS_API: `${origin}/gemini`, SEIRA_DEEPSEEK_SPEECH_API: `${origin}/deepseek`,
+    SEIRA_ELEVENLABS_API: `${origin}/eleven`, SEIRA_FISH_AUDIO_API: `${origin}/fish`,
   };
   const log = openSync(fixture.info.logPath, "a", 0o600);
   server = spawn(process.execPath, verificationServerArgs(env), { cwd: fileURLToPath(ROOT), env, stdio: ["ignore", log, log] });
@@ -144,7 +136,7 @@ it("saves every kind of credential, reads it back and shows it masked to its las
   setLocale("en");
   expect(saveds.map((entry) => entry.id)).toEqual([
     "openai", "anthropic", "xai", "openrouter", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "deepseek", "opencodeGo", "openaiCompat",
-    "liveKey", "elevenlabs", "geminiTts", "fishAudio", "box", "composio", "treg", "postiz", "jev", "openrouterHelper", "workersAi", "imageOpenai", "imageCustom",
+    "liveKey", "elevenlabs", "geminiTts", "fishAudio", "composio", "treg", "jev", "openrouterHelper", "workersAi", "imageOpenai", "imageCustom",
   ]);
   for (const storage of ["", "?secretStorage=external"]) {
     for (const entry of saveds) {
@@ -172,7 +164,7 @@ it("saves every kind of credential, reads it back and shows it masked to its las
     }
   }
   expect(stubCalls).toEqual(expect.arrayContaining([
-    "GET /sandboxes", "POST /composio/tool_router/session", "GET /eleven/voices", "GET /fish/model", "POST /jev/v1/systemone", "POST /alpha/decisions", "POST /postiz/mcp",
+    "POST /composio/tool_router/session", "GET /eleven/voices", "GET /fish/model", "POST /jev/v1/systemone", "POST /alpha/decisions",
   ]));
 }, hostTimeout(180_000));
 

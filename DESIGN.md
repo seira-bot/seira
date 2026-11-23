@@ -41,7 +41,8 @@ The app has three places: the **sidebar** (bots and conversations), the
 where they belong instead of adding new places.
 
 - **No new header buttons.** The chat header shows the bot, its model and its
-  screen. Anything else goes in the bot panel, a menu or the command palette.
+  screen. The model pill sits in the centre, right after the bot name pill.
+  Anything else goes in the bot panel, a menu or the command palette.
   A button that exists only while the conversation has what it shows (its
   pinned message) is fine: it opens a menu and is gone when there is nothing
   to show.
@@ -51,7 +52,23 @@ where they belong instead of adding new places.
   Settings. Don't add a second home for the same setting.
 - **No new settings.** No new global settings, toggles or hidden flags. Make
   the behaviour automatic with a good default. An optional field on something
-  the person sets up is fine.
+  the person sets up is fine. One approved exception (2026-11-22): the
+  **Send crash reports** switch in Settings → General → Privacy. It is on by
+  default and has no dialog and no nag. A second one (2026-11-23): the
+  **Glance** check item in the desktop app's View menu (and in the Glance tray
+  menu on Linux Wayland). It is on by default and is the only control of
+  Glance.
+- **Glance is the one place outside the window** (2026-11-23). It is a small
+  visor at the top centre of the screen in the desktop app (a tray icon on
+  Linux Wayland, where an app cannot place a window). It shows only bots that
+  work, need the person, failed or just finished: one avatar each, at most
+  four, with a status ring and never a count. It opens by itself only for an
+  approval or a question the chat already shows, never takes keyboard focus,
+  and answers through the chat card's own path. It offers Allow only while
+  the whole text of what the approval covers, as the Inbox shows it, is in
+  view without scrolling. It is not
+  a new ask: it shows the same card. Don't add other surfaces outside the
+  window.
 - **No new asks.** No new permission asks, approval cards, confirm dialogs,
   nags or waits that interrupt the person, and no default below Full access.
   A bot gets on with the work; a change that needs undoing gets **Undo**.
@@ -61,6 +78,8 @@ where they belong instead of adding new places.
   Simple version, then decide what Advanced adds (see [section 13](#13-simple-and-advanced-mode)).
 - **Don't hide everyday features.** A thing most people use must be reachable
   in two clicks from the chat in Simple mode.
+- **The bot panel opens by default in Simple mode** when the window is at least
+  1280px wide. The app then remembers if the person left it open or closed it.
 
 ## 3. Colour
 
@@ -90,6 +109,8 @@ Rules:
   accent one. Give a view one primary action at most.
 - **Status colours mean status.** Use `danger` for destructive actions and
   errors only, never as decoration.
+- **The person's own message uses the neutral `bubble-user`.** The bot colour
+  for it is an opt-in setting.
 - **Bot colours belong to bots.** Use `identity-*` only for things owned by
   one bot: its mark, its bubble, `.bot-button`.
 - **A new token goes in every skin.** `src/lib/skins.test.ts` fails
@@ -171,7 +192,8 @@ element's job and never a pixel value:
   rows 32px, with the same quiet nav rows, line headings and 52px top row
   as Simple. The sidebar search field is 34px so it reads as a field, not a
   button. A section count shows beside a heading only while that section is
-  closed.
+  closed. The round call controls in the call view are 44px, the phone-call
+  size; the call pill keeps the 32px step.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group
@@ -320,6 +342,11 @@ on. Simple is the default for new installs.
   threads as a tree under its row), Simple may offer a shortcut to the same
   thing there instead of a second copy of it: a menu that opens on a click
   of a small chevron, never on hover.
+- **In Simple mode on desktop, the sidebar shows every bot as a tile.** Each tile is 44-48px.
+  The grid has up to 4 columns and follows the sidebar width. Drag the edge narrower for 3
+  or 2 columns. Drag it narrower again and the sidebar becomes the column of avatars. Bots
+  without a section go in the top grid. Each section has one grid under its header. Rooms
+  stay rows. Advanced keeps rows.
 - **The Advanced bot panel is a grouped list.** A hero (avatar, name, role, state), four quick actions, a search
   field, then rows in five groups: Profile, Knowledge, Work, Channels, Admin. Each row is a 44px button with an
   icon, a title, a short value that comes from state already on screen (left empty when there is none) and a
@@ -327,6 +354,17 @@ on. Simple is the default for new installs.
   The hero shows a 24px status pill only while the bot works, waits or has failed, in the words its sidebar row
   uses. A group card has a 1px `hairline` ring so it shows on every skin. An open section drops the cards of its
   own content (a card with its own border stays) so its fields sit flat inside the group card.
+- **The Simple activity card is folded.** It sits under a finished turn that used tools. The head is 40px: a green
+  check, a summary of the steps, 20px avatars of the bots involved (at most four, each with a ring in the chat
+  background), the time the turn took and a chevron. Open, it shows one 32px line per step: avatar, bot name,
+  step text, and a check or a red cross. A 1px `hairline` runs down the start side.
+  A turn under one second shows no time. A failed step stays outside the card, so a closed card never hides an
+  error. Simple shows no separate turn receipt under the reply; Advanced keeps it.
+  Show tool calls is on by default in Advanced and off in Simple, so Simple shows the card only after the person turns
+  it on. A saved choice applies to both modes.
+- **The Simple bot panel has four tabs:** Activity, Details, Library and Computer. It opens on Activity. Activity
+  lists what the bot did, grouped by day, newest first. Each item has an icon, the action, the app and time, and
+  a mark: spinner, check, red cross or bell.
 - **Advanced uses Simple's composer card.** The field sits above one bar, and
   the round slot is voice, Send or Stop. Advanced fills the bar with quiet 28px
   chips (Goal, approval level, place, context) where Simple uses the + menu.

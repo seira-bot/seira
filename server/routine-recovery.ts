@@ -7,7 +7,7 @@
 import type { RuntimeEvent } from "../shared/runtime-events.ts";
 import type { ServerText } from "../shared/server-text.ts";
 import { isCountedSkip, type RoutineRetryCause } from "../shared/routines.ts";
-import { engineFailureKind } from "./drivers/engine-errors.ts";
+import { contextOverflow, engineFailureKind } from "./drivers/engine-errors.ts";
 import { classifyError } from "./drivers/retry.ts";
 import { hostFaultOf, retryCannotFix } from "./host-fault.ts";
 import { outOfProcesses } from "./process-shortage.ts";
@@ -66,7 +66,7 @@ const LIMIT_WAIT_MS = 12 * 60 * 60_000;
 const AFTER_RESET_MS = 60_000;
 const DAY_MS = 24 * 60 * 60_000, WEEK_MS = 7 * DAY_MS;
 /** startTurn's codes for a bot or thread that is busy for now. */
-const BUSY_CODES = new Set(["thread_busy", "thread_limit", "workspace_busy", "settling"]);
+export const BUSY_CODES: ReadonlySet<string> = new Set(["thread_busy", "thread_limit", "workspace_busy", "settling"]);
 /** Stop reasons of a turn someone ended on purpose (Stop, a typed "stop", a settings change that cut it short), the AI
  * declined, or a tool call the person denied or that failed after its corrective rounds: a second start would undo or
  * repeat it. */
@@ -98,6 +98,8 @@ export function classifyRoutineFailure(failure: string, facts: RoutineFailureFac
   if (facts.cause === "busy" || outOfProcesses(failure)) return { kind: "busy" };
   if (facts.cause === "stalled" || facts.cause === "cap") return { kind: "final" };
   if (facts.stopReason && NOT_RETRIED_STOPS.has(facts.stopReason)) return { kind: "final" };
+  // The thread's next run starts a new engine session with a summary (server/context-full.ts), so one more start can finish.
+  if (facts.stopReason === "context_full" || contextOverflow(failure)) return { kind: "retry", cause: "failed" };
   if (classifyContinuable(facts.stopReason, failure) === "cap") return { kind: "final" };
   const fault = hostFaultOf(failure, facts.stopReason);
   if (fault && fault !== "signed_out" && retryCannotFix(fault)) return { kind: "final" };
@@ -126,7 +128,7 @@ export function dispatchRefusal(error: unknown): RoutineFailureFacts {
   return typeof code === "string" || (typeof status === "number" && status >= 400 && status < 500) ? { cause: "refused" } : {};
 }
 
-/** Whether OpenMausBot runs a failed teammate thread once more by itself before its Chief hears of it. */
+/** Whether Seira runs a failed teammate thread once more by itself before its Chief hears of it. */
 export function retriesTeammateThread(failure: string, facts: RoutineFailureFacts = {}): boolean {
   return classifyRoutineFailure(failure, facts).kind === "retry";
 }

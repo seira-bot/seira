@@ -22,6 +22,7 @@ import { DefaultBotSidebarRow } from "../../DefaultBotControls";
 import { EnginesSettings } from "../../EnginesSettings";
 import { ImageGenerationSettings } from "../../ImageGenerationSettings";
 import { LocalComputerSection } from "../../LocalComputerSection";
+import { BotMemorySettings } from "../../BotMemorySettings";
 import { McpCallTimeoutSettings } from "../../McpCallTimeoutSettings";
 import { DefaultBotSettings } from "../../NewBotDialog";
 import { PlaceLookRows } from "../../PlaceLookCard";
@@ -30,7 +31,7 @@ import { RoomTurnTimeoutSettings } from "../../RoomTurnTimeoutSettings";
 import { SavedStepsRow } from "../../SavedStepsRow";
 import { TeamSettingsDialog } from "../../TeamSettingsDialog";
 import { Card, SettingRow, SettingsDisclosureRow, SettingsFoldRow, SettingsGroup, SettingsLinkRow, SettingsRows } from "../../SettingsPrimitives";
-import { KEY_SECTIONS } from "../../keys/key-catalog";
+import { KEY_SECTIONS, type KeySectionId } from "../../keys/key-catalog";
 import { DesktopKinds } from "../DesktopKinds";
 import { SkillsSection } from "../../SkillsSection";
 import { ThreadConcurrencySettings } from "../../ThreadConcurrencySettings";
@@ -42,7 +43,7 @@ import { versionLine } from "../settings-context";
 import { useSettingsShell } from "../settings-shell";
 import { AdvancedSection } from "../AdvancedSection";
 
-const GROUPED_NOTE = "omb-settings-grouped-note";
+const GROUPED_NOTE = "seira-settings-grouped-note";
 const GROUPED_DAYS = 30;
 
 /** Shown for 30 days to a device that used Settings before it was grouped; never on a new install. */
@@ -54,7 +55,7 @@ function useGroupedNote(): [boolean, () => void] {
       if (raw === "dismissed") return;
       const first = raw ? Number(raw) : null;
       if (first === null) {
-        const before = ["omb-skin", "omb-advanced-mode", "omb-send-key"].some((key) => localStorage.getItem(key) !== null);
+        const before = ["seira-skin", "seira-advanced-mode", "seira-send-key"].some((key) => localStorage.getItem(key) !== null);
         if (!before) { localStorage.setItem(GROUPED_NOTE, "dismissed"); return; }
         localStorage.setItem(GROUPED_NOTE, String(Date.now()));
         setShown(true);
@@ -135,6 +136,8 @@ export function AiPage() {
   // A key asked for by search or a link opens Other services whatever the fold says.
   const shown = ctx.advanced || services || anchor === "ai-keys";
   const count = KEY_SECTIONS.filter((section) => section.id !== "ai").length;
+  // Advanced shows Routing and Images further down this page, so only Simple lists them under Other services, as links there.
+  const exclude: KeySectionId[] = [...(anchor === "ai-keys" ? [] : ["ai" as const]), ...(ctx.advanced ? ["routing" as const, "images" as const] : [])];
   return <>
     <AdminOnly>
       <div data-settings-block="providers" className="flex scroll-mt-4 flex-col gap-6">
@@ -150,7 +153,7 @@ export function AiPage() {
       )}
       {shown && (
         <SettingsGroup label={ctx.advanced ? t("settings.ai.otherServices") : undefined} block="ai-keys">
-          <KeysPage bare exclude={anchor === "ai-keys" ? [] : ["ai"]} />
+          <KeysPage bare exclude={exclude} />
         </SettingsGroup>
       )}
       <AdvancedSection anchor="backup-model"><SettingsGroup label={t("settings.ai.backupModel")} block="backup-model"><AutomaticRecoverySettings /></SettingsGroup></AdvancedSection>
@@ -177,10 +180,11 @@ export function BotsPage() {
     <SettingsGroup label={t("settings.bots.newBots")} block="new-bots">
       <SettingsRows><NewBotEffortRow /><DefaultBotSettings simple /></SettingsRows>
     </SettingsGroup>
-    {!(ctx.team && !ctx.admin) && <AdvancedSection anchor="limits" also={["parallel", "group-turns", "tool-time", "keep-warm"]}><SettingsGroup label={t("settings.simple.more.limits")} block="limits">
+    {!(ctx.team && !ctx.admin) && <AdvancedSection anchor="limits" also={["parallel", "group-turns", "tool-time", "bot-memory", "keep-warm"]}><SettingsGroup label={t("settings.simple.more.limits")} block="limits">
       <SettingsRows selectWidth={160}>
         <div data-settings-block="group-turns" className="contents"><RoomTurnTimeoutSettings /></div>
         <div data-settings-block="tool-time" className="contents"><McpCallTimeoutSettings /></div>
+        <div data-settings-block="bot-memory" className="contents"><BotMemorySettings /></div>
         <ThreadConcurrencySettings />
         <div data-settings-block="keep-warm" className="contents"><CacheKeepWarmSettings /></div>
       </SettingsRows>

@@ -22,16 +22,16 @@ describe("serialized secure credential state", () => {
 
   it("writes normally when the store was readable", async () => {
     const persist = vi.fn().mockResolvedValue(undefined);
-    const state = createSecureCredentialState({ boxToken: "old" }, persist, { writable: true });
+    const state = createSecureCredentialState({ xaiApiKey: "old" }, persist, { writable: true });
 
-    await state.update((credentials) => ({ ...credentials, boxToken: "new" }));
-    expect(persist).toHaveBeenCalledWith({ boxToken: "new" });
+    await state.update((credentials) => ({ ...credentials, xaiApiKey: "new" }));
+    expect(persist).toHaveBeenCalledWith({ xaiApiKey: "new" });
   });
 
   it("writes normally when no options are passed at all", async () => {
     const persist = vi.fn().mockResolvedValue(undefined);
     const state = createSecureCredentialState({}, persist);
-    await state.update(() => ({ boxToken: "x" }));
+    await state.update(() => ({ xaiApiKey: "x" }));
     expect(persist).toHaveBeenCalled();
   });
 

@@ -4,7 +4,7 @@ import test from "node:test";
 import { linkedAddress } from "./bot-link-address.mjs";
 import { createBotLinkMain, OUTDATED_RETRY_MS, RETRY_MS } from "./bot-link-main.mjs";
 
-const CLOUD = "https://omb-u-1.fly.dev";
+const CLOUD = "https://seira-u-1.fly.dev";
 
 function harness({ origin = CLOUD, pairStatus = 200, on = false, putFails = false, watchMs = 3_600_000 } = {}) {
   const cloudCalls = [], localCalls = [];
@@ -26,7 +26,7 @@ function harness({ origin = CLOUD, pairStatus = 200, on = false, putFails = fals
       return answer(200, server);
     },
     fetch: async (url, init) => {
-      cloudCalls.push({ url, method: init.method, credentials: init.credentials, background: init.headers["x-omb-background"] === "1", ...(init.body ? { body: JSON.parse(init.body) } : {}) });
+      cloudCalls.push({ url, method: init.method, credentials: init.credentials, background: init.headers["x-seira-background"] === "1", ...(init.body ? { body: JSON.parse(init.body) } : {}) });
       if (init.method === "DELETE") return answer(200, { ok: true });
       return pairStatus === 200 ? answer(200, { token: "link-sign-in-0123456789", place: { id: "cloud-1", name: "My Cloud" } }) : answer(pairStatus, { error: "no" });
     },
@@ -87,7 +87,7 @@ test("the address of a bot of the other place is the link's own, only while the 
   h.the.account = "account-2";
   assert.equal(h.link.address("cloud", "scout"), null, "another account: none, before the next look");
   h.the.account = "account-1";
-  h.the.origin = "https://omb-u-2.fly.dev";
+  h.the.origin = "https://seira-u-2.fly.dev";
   assert.equal(h.link.address("cloud", "scout"), null, "another Cloud: none");
   h.the.origin = CLOUD;
   h.the.signedOut = true;
@@ -175,7 +175,7 @@ test("switch turned off: this computer's server is told and My Cloud forgets thi
 });
 
 test("signing out, another account or another Cloud ends the link on this computer at once, and the old Cloud is not asked over the new sign-in", async (t) => {
-  for (const change of [(the) => { the.signedOut = true; the.account = null; }, (the) => { the.account = "account-2"; }, (the) => { the.origin = "https://omb-u-2.fly.dev"; }]) {
+  for (const change of [(the) => { the.signedOut = true; the.account = null; }, (the) => { the.account = "account-2"; }, (the) => { the.origin = "https://seira-u-2.fly.dev"; }]) {
     const h = harness({ on: true });
     t.after(() => h.link.close());
     await h.link.look();

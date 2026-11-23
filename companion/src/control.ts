@@ -10,11 +10,12 @@ import type { E2EDescriptor } from "./e2e/descriptor.ts";
 import type { LiveRoute } from "./e2e/registry.ts";
 import { companionEndpointCandidates, hostedCompanionUrl } from "./endpoints.ts";
 import { directRoutes, routedAddresses } from "./direct-routes.ts";
+import { linuxFirewall, type LinuxFirewall, type PhoneLan } from "./linux-firewall.ts";
 import { lanInterfaces, tailnetName, tailscaleAddress } from "./listener.ts";
 import { defaultHostName } from "./mdns.ts";
 import { publicNetworks } from "./windows-network.ts";
 
-export const CONTROL_TOKEN_HEADER = "x-openmausbot-control-token";
+export const CONTROL_TOKEN_HEADER = "x-seira-control-token";
 
 export interface ControlOptions {
   devices: DeviceRegistry;
@@ -37,6 +38,7 @@ export interface ControlOptions {
   /** `PUT /routes` from the desktop app: which direct ways in are on, and the tailnet name it learned. */
   setDirectRoutes?: (body: unknown) => boolean;
   publicNetworks?: () => ReadonlySet<string>;
+  linuxFirewall?: (lan: PhoneLan) => LinuxFirewall | null;
   /** End-to-end status; absent or `enabled: false` while it is off. */
   e2e?: () => E2EStatus;
   /** The best live encrypted route of each connected device. */
@@ -85,10 +87,10 @@ export function originIsLoopback(origin: string | undefined): boolean {
 }
 
 /** Null when the desktop app launched this sidecar: it sends the token over its private port, and the control port
- * opens only then. Standing alone, the token is OMB_CONTROL_TOKEN when a script chose one, else random. */
+ * opens only then. Standing alone, the token is SEIRA_CONTROL_TOKEN when a script chose one, else random. */
 export function initialControlToken(env: NodeJS.ProcessEnv, launchedByApp: boolean): string | null {
   if (launchedByApp) return null;
-  const chosen = env.OMB_CONTROL_TOKEN ?? "";
+  const chosen = env.SEIRA_CONTROL_TOKEN ?? "";
   return /^[A-Za-z0-9_-]{43}$/.test(chosen) ? chosen : randomBytes(32).toString("base64url");
 }
 
@@ -202,6 +204,9 @@ export function companionState(options: Omit<ControlOptions, "controlToken">) {
   const publicNetwork = pairing && lead && (options.publicNetworks ?? publicNetworks)().has(lead.name)
     ? lead.name
     : null;
+  const firewall = pairing && lead
+    ? (options.linuxFirewall ?? linuxFirewall)({ name: lead.name, address: lead.address, port: options.companionPort })
+    : null;
   const secretPublicKey = options.secretPublicKey?.() ?? null;
   const routes = directRoutes();
   return {
@@ -215,6 +220,7 @@ export function companionState(options: Omit<ControlOptions, "controlToken">) {
     lan: lead?.address ?? null,
     // Windows has this network as Public, so its firewall likely drops a phone.
     ...(publicNetwork ? { publicNetwork } : {}),
+    ...(firewall ? { linuxFirewall: firewall } : {}),
     hosts: hostCandidates(addresses, name),
     endpoints: companionEndpointCandidates(
       options.companionPort,
@@ -434,7 +440,7 @@ history.replaceState(null, "", location.pathname);
 
 /** Call the control API and return the state it answers with. */
 async function api(path, method) {
-  const res = await fetch(path, { method: method ?? "GET", headers: { "x-openmausbot-control-token": token } });
+  const res = await fetch(path, { method: method ?? "GET", headers: { "x-seira-control-token": token } });
   if (res.status === 403) {
     document.querySelector("main").innerHTML = "<h1>Seira Companion</h1><p class=sub>Open this page from the link the companion printed when it started.</p>";
     throw new Error("control token required");
@@ -456,7 +462,7 @@ function render(s) {
       : "<p class=dim>No network address yet.</p>") +
     (s.tailnetName && s.lan ? "<p class=dim>On this network only: <code>" + esc(s.lan) + ":" + s.port + "</code></p>" : "") +
     (s.tailscale && !s.tailnetName
-      ? "<p class=dim>On a tailnet, but this computer's MagicDNS name could not be read from Tailscale — either MagicDNS is off, or nobody gave it one. iPhones cannot connect to a bare tailnet address: turn Tailscale on in the desktop app, or set OMB_COMPANION_TAILNET_NAME.</p>"
+      ? "<p class=dim>On a tailnet, but this computer's MagicDNS name could not be read from Tailscale — either MagicDNS is off, or nobody gave it one. iPhones cannot connect to a bare tailnet address: turn Tailscale on in the desktop app, or set SEIRA_COMPANION_TAILNET_NAME.</p>"
       : "") +
     (!s.tailscale
       ? "<p class=dim>Reachable on this network only. Install Tailscale on both this computer and your phone to reach it from anywhere — including networks that stop devices from seeing each other.</p>"

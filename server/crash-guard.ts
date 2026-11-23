@@ -20,7 +20,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { ProviderInstance } from "./contracts.ts";
 import { CRASH_EXIT_CODE } from "./restart.ts";
 
-export interface TurnScope { botId: string; threadId: string }
+/** `engine` is the driver kind of the turn's engine; only a crash report reads it. */
+export interface TurnScope { botId: string; threadId: string; engine?: string }
 
 const scope = new AsyncLocalStorage<TurnScope>();
 
@@ -35,7 +36,7 @@ export function withTurnScope<I extends Pick<ProviderInstance, "adapter">>(insta
   const adapter = instance.adapter;
   (instance as { adapter: ProviderInstance["adapter"] }).adapter = {
     ...adapter,
-    sendTurn: (input) => runInTurn({ botId: input.botId ?? "", threadId: input.threadId }, () => adapter.sendTurn(input)),
+    sendTurn: (input) => runInTurn({ botId: input.botId ?? "", threadId: input.threadId, engine: (instance as { driverKind?: string }).driverKind }, () => adapter.sendTurn(input)),
     onEvent: (listener) => adapter.onEvent((event) => outsideTurn(() => listener(event))),
   };
   return instance;
@@ -77,11 +78,18 @@ export function crashLine(kind: "exception" | "rejection", error: unknown, turn:
   return redact(`crash guard: ${kind === "exception" ? "uncaught exception" : "unhandled rejection"} ${where}${codeOf(error) ? ` [${codeOf(error)}]` : ""}: ${name}: ${message.slice(0, 500)} — ${what}${stack}`);
 }
 
+/** What a crash report needs from the guard. The report code decides which part of it leaves the process. */
+export interface CrashReportInfo { kind: "server-exit" | "server-turn"; error: unknown; engine?: string }
+/** The most a close waits for its report. */
+export const REPORT_WAIT_MS = 2_000;
+
 export interface CrashGuardDeps {
   /** Stops the turn and frees what it holds; false when the turn had already ended. */
   failTurn(turn: TurnScope, detail: string): boolean;
   /** The close after a fatal error: mark running turns cut, flush nothing else, process.exit(code). */
   shutdown(code: number): void;
+  /** Files a crash report. The guard does not wait for a turn's report, and waits at most REPORT_WAIT_MS for the report before a close. A report error changes nothing. */
+  report?: (info: CrashReportInfo) => Promise<void> | void;
   log?: (line: string) => void;
   redact?: (text: string) => string;
   now?: () => number;
@@ -94,6 +102,9 @@ export function installCrashGuard(deps: CrashGuardDeps) {
   const now = deps.now ?? Date.now, exit = deps.exit ?? ((code: number) => process.exit(code));
   const recent: number[] = [];
   let closing = false;
+  const file = (kind: CrashReportInfo["kind"], error: unknown, engine: string | undefined): Promise<void> => {
+    try { return Promise.resolve(deps.report?.({ kind, error, engine })).catch(() => {}); } catch { return Promise.resolve(); }
+  };
   const handle = (kind: "exception" | "rejection") => (error: unknown) => {
     try {
       const at = now();
@@ -105,7 +116,7 @@ export function installCrashGuard(deps: CrashGuardDeps) {
       if (verdict === "fail-turn" && turn) {
         let stopped = false;
         try { stopped = deps.failTurn(turn, error instanceof Error ? error.name : "error"); } catch (failure) { log(redact(`crash guard: stopping the turn failed: ${String(failure)}`)); }
-        if (stopped) return;
+        if (stopped) { void file("server-turn", error, turn.engine); return; }
         log(`crash guard: no running turn of thread ${turn.threadId} to stop — the server closes and starts again`);
         verdict = "exit";
       }
@@ -114,7 +125,11 @@ export function installCrashGuard(deps: CrashGuardDeps) {
       closing = true;
       // Ref'd on purpose: a close that hangs still ends here.
       setTimeout(() => exit(CRASH_EXIT_CODE), FATAL_EXIT_DEADLINE_MS);
-      deps.shutdown(CRASH_EXIT_CODE);
+      const close = () => { try { deps.shutdown(CRASH_EXIT_CODE); } catch { exit(CRASH_EXIT_CODE); } };
+      if (!deps.report) { close(); return; }
+      let waitTimer: ReturnType<typeof setTimeout> | undefined;
+      const limit = new Promise<void>((done) => { waitTimer = setTimeout(done, REPORT_WAIT_MS); });
+      void Promise.race([file("server-exit", error, turn?.engine), limit]).then(() => { clearTimeout(waitTimer); close(); });
     } catch {
       exit(CRASH_EXIT_CODE);
     }

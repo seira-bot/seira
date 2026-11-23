@@ -203,6 +203,7 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "GET", path: /^\/api\/tts\/voices$/ },
   { method: "POST", path: /^\/api\/tts\/prepare$/ },
   { method: "POST", path: /^\/api\/tts\/speak$/ },
+  { method: "POST", path: /^\/api\/call\/voice-preview$/ },
 
   // The phone holds its own WebRTC audio; the Mac creates the session, so the
   // key never leaves it.
@@ -215,6 +216,9 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "PUT", path: /^\/api\/phones\/self$/ },
   { method: "GET", path: /^\/api\/phones\/self$/ },
   { method: "DELETE", path: /^\/api\/phones\/self$/ },
+  // Sidecar-owned: the workspaces of this computer, and a request to open one. The proxy answers both locally.
+  { method: "GET", path: /^\/api\/phones\/self\/workspaces$/ },
+  { method: "POST", path: /^\/api\/phones\/self\/workspaces\/switch$/ },
   { method: "GET", path: /^\/api\/phones\/self\/jobs$/ },
   { method: "POST", path: /^\/api\/phones\/self\/jobs\/[\w-]+\/(?:lease|result)$/ },
   // The phone's closed-app alert registration: its own device token, never another phone's.
@@ -236,6 +240,8 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "DELETE", path: /^\/api\/routines\/[\w-]+$/ },
   { method: "POST", path: /^\/api\/routines\/[\w-]+\/run$/ },
   { method: "POST", path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
+  // Read only: how much of each AI plan is used and when it resets. Releasing a hold stays with the host.
+  { method: "GET", path: /^\/api\/limit-resets$/ },
   // The stopped turn's "Continue when your limit resets": a one-time automation in an existing
   // conversation, less than POST /api/routines already allows.
   { method: "POST", path: /^\/api\/limit-resets\/continue$/ },

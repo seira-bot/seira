@@ -90,6 +90,23 @@ describe("transcribe route", () => {
     expect(seen[0]!.file).toBeInstanceOf(Blob);
   });
 
+  it("passes a listed dictation language to the hearing service as its base code", async () => {
+    const forms: FormData[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      forms.push(init.body as FormData);
+      return new Response(JSON.stringify({ text: "olá" }), { status: 200 });
+    }));
+    const withLanguage = (language: string) => {
+      const req = upload(Buffer.from("RIFF")) as unknown as { headers: Record<string, string> };
+      req.headers["x-speech-language"] = language;
+      return req as never;
+    };
+    await call("POST", "/api/tts/transcribe", {}, { tts: { key: "el-own" } } as AppConfig, withLanguage("pt-BR"));
+    await call("POST", "/api/tts/transcribe", {}, { tts: { key: "el-own" } } as AppConfig, withLanguage("xx-unknown"));
+    expect(forms[0]!.get("language_code")).toBe("pt");
+    expect(forms[1]!.has("language_code")).toBe(false);
+  });
+
   it("keeps Fish Audio first when both keys are saved", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ text: "from fish" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

@@ -19,7 +19,7 @@ The Worker answers on the custom domain `apps.seira.bot`.
 
 Forks should create their own D1 database and rate-limit namespaces, replace
 the IDs in `wrangler.jsonc`, deploy under their own Worker name, and set
-`OMB_COMPOSIO_BROKER_URL` in their packaged build. Running only the local
+`SEIRA_COMPOSIO_BROKER_URL` in their packaged build. Running only the local
 server with a Composio project key remains the no-Cloudflare self-host path.
 
 Set `REGISTRATION_MODE` to `closed` to stop issuing new installation tokens
@@ -28,7 +28,7 @@ without affecting existing users.
 ## App events (Composio triggers)
 
 The broker also receives Composio trigger events for every installation and
-queues them until the installation's OMB server collects them. A desktop
+queues them until the installation's Seira server collects them. A desktop
 needs no public URL: Composio posts to the broker, the server long-polls it.
 
 ```
@@ -40,13 +40,14 @@ Composio --signed POST--> /v1/composio/webhook --> D1 queue per installation <--
 | Route | Auth | Does |
 | --- | --- | --- |
 | `POST /v1/composio/webhook` | Composio signature (`COMPOSIO_WEBHOOK_SECRET`) | Verifies the Standard Webhooks signature (300 s tolerance), routes `metadata.trigger_id` through `trigger_bindings`, requires `metadata.user_id` to be that installation's Composio user, and queues the event. A bad, missing or stale signature gets 401; an event no installation can take gets 200 and is only counted. |
+| `GET /v1/catalog[?cursor=<c>]` | installation token | One page of Composio's toolkit catalog. It leaves out `composio_managed_auth_schemes` for toolkits that have an enabled custom auth config in the project, so clients do not read them as "needs its own sign-in". Any other field and every other item pass through unchanged. |
 | `GET /v1/trigger-types[?toolkits=a,b]` | installation token | Event types of the given toolkits (at most 10), or of the installation's active connected accounts. Types that need their own webhook endpoint are left out. Cached per isolate for an hour. |
 | `GET /v1/trigger-types/:slug` | installation token | One event type with its config and payload schemas. |
 | `POST /v1/triggers` `{slug, connectedAccountId, config}` | installation token | Checks that the account is this installation's, then `POST /trigger_instances/{slug}/upsert` and saves the binding. An identical config returns the same `triggerId`, so local triggers can share one. |
 | `PATCH /v1/triggers/:triggerId` `{enabled}` | installation token | Enables or disables the instance at Composio (only disabled once no other binding wants it). A config change is a new `POST` plus a `DELETE` of the old instance. |
 | `DELETE /v1/triggers/:triggerId` | installation token | Removes the binding, its queued events and drop counts, and the Composio instance once nothing else binds it. Also deletes an unbound instance of this installation's Composio user. |
 | `GET /v1/triggers` | installation token | Bindings beside Composio's view (`remote.state`: `enabled`, `disabled` or `missing`), `unbound` instances, drop counts per trigger, limits and today's usage: everything the server's reconciliation needs. |
-| `GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>` + header `x-omb-poller` | installation token | Acks every event at or below `after`, then returns the next events in arrival order, holding up to `wait` seconds. One poller at a time per installation: another `x-omb-poller` gets 409 until the 90 s lease runs out. |
+| `GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>` + header `x-seira-poller` | installation token | Acks every event at or below `after`, then returns the next events in arrival order, holding up to `wait` seconds. One poller at a time per installation: another `x-seira-poller` gets 409 until the 90 s lease runs out. |
 | `POST /v1/events/test` `{triggerId, data}` | installation token | Queues a synthetic event (`type: "omb.test"`) through the same queue and limits. |
 | `PUT /v1/installation/cloud` `{grant}` | installation token | Marks the installation as a paid Cloud's from an Admin-signed grant. |
 | `POST /v1/installation/share` `{for}` | installation token | A one-time code (10 minutes, only its hash kept) that lets the installation `for` act as this installation's Composio user. |
@@ -99,7 +100,7 @@ import { createHmac } from "node:crypto";
 const grant = `v1.${machineId}.${createHmac("sha256", CLOUD_GRANT_SECRET).update(`omb-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
 ```
 
-The Admin sets it as the machine's `OMB_CLOUD_CONNECTED_APPS_GRANT` secret
+The Admin sets it as the machine's `SEIRA_CLOUD_CONNECTED_APPS_GRANT` secret
 for paid plans only. The Cloud's server presents it after registering
 (`server/cloud-connected-apps.ts`). One machine id holds the Cloud limit on one
 installation at a time: presenting the grant again moves it.
@@ -159,7 +160,7 @@ changes nothing.
 6. Waking sleeping Clouds (at launch of a plan that sleeps): apply migration
    `0003_cloud_wake.sql` (step 1) before deploying the code that uses it, then
    set `CLOUD_ADMIN_URL` to the Cloud Admin's origin
-   (`https://cloud.openmausbot.com`). Either add it to `vars` in
+   (`https://cloud.seira.bot`). Either add it to `vars` in
    `wrangler.jsonc` in a PR, or `wrangler secret put CLOUD_ADMIN_URL`: a
    deploy replaces variables set in the dashboard, but keeps secrets. Without
    it (or without `CLOUD_GRANT_SECRET`) the broker never asks the Admin to wake

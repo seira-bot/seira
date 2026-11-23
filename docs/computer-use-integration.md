@@ -17,7 +17,7 @@ Electron main process
 │     driven via webContents.debugger (CDP) — zero-install browser use
 └── server/ harness (drivers spawn agent CLIs with --mcp-config)
       ├── computer-proxy-local.ts  ──▶ forwards MCP tool calls to driver socket
-      └── computer-proxy.ts (existing) ──▶ remote/cloud Boat computer
+      └── computer-proxy.ts (existing) ──▶ remote/cloud (VPS) computer
 ```
 
 - **Plugins = MCP servers over stdio.** The Plugins panel toggles which MCP
@@ -29,7 +29,7 @@ Electron main process
   plus its cursor-theme sidecar outside ASAR. Each remains paired with the
   application release. The Linux support applies to the Ubuntu 24.04 GNOME/Xorg
   beta and guarded GNOME/Wayland beta;
-  remote/cloud Boat computers and the isolated Local VM remain separate providers.
+  remote/cloud (VPS) computers and the isolated Local VM remain separate providers.
   NOT Swift — the Swift file everyone remembers
   (`examples/embedded-host-macos/ExampleAgentHarness.swift`) is a 165-line
   reference host showing the embedding pattern, not the driver.
@@ -57,7 +57,7 @@ No cliclick, no robotjs/nut.js, no Python computer-server, no fallbacks.**
 All local desktop-control and input actions go through the validated
 `cua-driver` binary. Linux screen preview uses the supported Xorg or
 user-initiated XDG portal capture path and is not a control provider. This rule
-does not replace remote/cloud boats or the isolated Local VM provider. Local
+does not replace remote/cloud computers or the isolated Local VM provider. Local
 alternatives evaluated and rejected:
 
 The Ubuntu GNOME beta uses the same official CUA provider with the Phase 5
@@ -162,7 +162,7 @@ capability is missing (e.g. OCR-anchored clicking), it is added to cua-driver
 upstream or requested as a driver tool — never bolted on beside it. This keeps
 one TCC identity, one binary to sign/notarize, and one behavior contract.
 
-[Saved steps](superpowers/specs/2026-10-27-saved-steps-design.md) repeats a
+Saved steps repeat a
 bot's earlier run on this computer by re-issuing the driver's own recorded tool
 calls through the same gated bridge (`server/local-computer-proxy.ts`), each
 target looked up fresh by app, window title and accessibility label, never by
@@ -205,4 +205,4 @@ app doesn't embed it).
 4. Packaging: extraResources + re-sign + notarize; wire
    `EmbeddedCuaDriverHost` for production.
 5. Later: extension bridge, playwright-mcp tier. (Macro record/replay shipped
-   as [saved steps](superpowers/specs/2026-10-27-saved-steps-design.md).)
+   as saved steps.)

@@ -18,6 +18,7 @@ import type {
 } from "./types.ts";
 import { DECIDER_JOBS } from "./types.ts";
 import { workersAiBackend } from "./workers-ai.ts";
+import type { DeciderPick } from "./config.ts";
 
 export { DECIDER_JOBS } from "./types.ts";
 export { deciderOpenRouterKey } from "./accounts.ts";
@@ -33,10 +34,20 @@ const BACKENDS: Record<DeciderProvider, DeciderBackend> = {
 
 type DeciderConfig = NonNullable<AppConfig["decider"]>;
 
-/** The provider a draft key with no provider named is tested at: the old provider choice, else Jev. */
+/** The provider a draft key with no provider named is tested at: the person's pick, else Jev. */
 function draftProvider(cfg: AppConfig): DeciderProvider {
   const chosen = cfg.decider?.provider;
-  return chosen === "openrouter" || chosen === "custom" ? chosen : "jev";
+  return chosen === "openrouter" || chosen === "custom" || chosen === "workersai" ? chosen : "jev";
+}
+
+type PickedProvider = Exclude<DeciderPick, "off">;
+const PICKED_ACCOUNT: Record<Exclude<PickedProvider, "custom">, (cfg: AppConfig) => HelperAccount | null> = {
+  jev: (cfg) => jevAccount(cfg), workersai: (cfg) => workersAiAccount(cfg), openrouter: (cfg) => openrouterAccount(cfg), included: () => includedAccount(),
+};
+
+function pickOf(cfg: AppConfig): PickedProvider | undefined {
+  const pick = cfg.decider?.provider;
+  return pick && pick !== "off" ? pick : undefined;
 }
 
 export function deciderModel(cfg: AppConfig): string {
@@ -52,13 +63,17 @@ export function deciderApi(cfg: AppConfig): OpenRouterApi {
   return cfg.decider.openrouterApi === "decisions" ? "decisions" : "chat";
 }
 
-/** A chosen custom gateway decides alone, or nothing does until it is set up. Otherwise, in order: the person's own Jev
- * key, their own Workers AI key (Clef), Cloud's included relay (only for seams it accepts), the OpenRouter LLM fallback,
- * a Gemini key saved for speech or images, nothing. */
+/** A chosen custom gateway decides alone, or nothing does until it is set up. Otherwise the picked provider's account
+ * first, then in order: the person's own Jev key, their own Workers AI key (Clef), Cloud's included relay (only for
+ * seams it accepts), the OpenRouter LLM fallback, a Gemini key saved for speech or images, nothing. */
 export function deciderAccount(cfg: AppConfig, seam?: DeciderSeam): HelperAccount | null {
-  if (cfg.decider?.provider === "custom") return customAccount(cfg);
+  const pick = pickOf(cfg);
+  if (pick === "custom") return customAccount(cfg);
   const jev = jevAccount(cfg);
-  const candidates = [jev, workersAiAccount(cfg), jev?.included ? null : includedAccount(), openrouterAccount(cfg), geminiAccount(cfg)];
+  const candidates = [
+    pick ? PICKED_ACCOUNT[pick](cfg) : null,
+    jev, workersAiAccount(cfg), jev?.included ? null : includedAccount(), openrouterAccount(cfg), geminiAccount(cfg),
+  ];
   return candidates.find((account): account is HelperAccount => Boolean(account) && !(account!.included && seam && !relaySeam(seam))) ?? null;
 }
 
@@ -94,19 +109,17 @@ export function deciderBorrowedKey(cfg: AppConfig): boolean {
 }
 
 /** Never a key, nor an operator base URL with no UI; a custom gateway's `baseUrl` is the person's own setting. `provider` is the one in use, else the one chosen
- * (so Settings shows its key field); `keySource` and `sharedKey` are OpenRouter's, while it is in use. `chosen` is Jev
- * when the person picked it but only the shared OpenRouter key stands in, and OpenRouter when it was picked but only a
- * saved Gemini key stands in, so Settings keeps the pick and its key field.
- * Which own keys are on file is `describeHelpers`'s. */
+ * (so Settings shows its key field); `model`, `api` and `sharedKey` are OpenRouter's, while it is in use or picked; `keySource` is OpenRouter's, while it is in use. `chosen` is the
+ * person's pick whenever one is saved, so Settings keeps the pick and its fields while another key stands in.
+ * `includedAvailable`: Cloud's included decisions can be picked here while another key decides. Which own keys are on file is `describeHelpers`'s. */
 export function describeDecider(cfg: AppConfig) {
   const account = deciderAccount(cfg);
   const provider = account?.provider ?? draftProvider(cfg);
-  const jevChosen = cfg.decider?.provider === "jev" && provider === "openrouter" && account?.keySource === "shared";
-  const openrouterChosen = cfg.decider?.provider === "openrouter" && provider === "gemini";
+  const chosen = pickOf(cfg);
   return {
     provider,
-    ...(jevChosen ? { chosen: "jev" as const } : openrouterChosen ? { chosen: "openrouter" as const } : {}),
-    ...(provider === "openrouter" ? { model: deciderModel(cfg), api: deciderApi(cfg) } : {}),
+    ...(chosen ? { chosen } : {}),
+    ...(provider === "openrouter" || chosen === "openrouter" ? { model: deciderModel(cfg), api: deciderApi(cfg) } : {}),
     ...(provider === "custom" ? {
       model: cfg.decider?.customModel?.trim() ?? "",
       api: customDeciderApi(cfg),
@@ -114,8 +127,9 @@ export function describeDecider(cfg: AppConfig) {
     } : {}),
     configured: Boolean(account),
     ...(account?.keySource ? { keySource: account.keySource } : {}),
-    ...(provider === "openrouter" && deciderSharedKeyUsable(cfg) ? { sharedKey: true as const } : {}),
+    ...((provider === "openrouter" || chosen === "openrouter") && deciderSharedKeyUsable(cfg) ? { sharedKey: true as const } : {}),
     ...(account?.included ? { included: true as const } : {}),
+    ...(!account?.included && deciderIncludedHere() ? { includedAvailable: true as const } : {}),
     enabled: deciderEnabled(cfg),
     jobs: { roomRouting: deciderJobOn(cfg, "roomRouting") },
   };

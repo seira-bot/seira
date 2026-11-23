@@ -76,7 +76,7 @@ function type(value: string) {
 beforeEach(() => {
   setLocale("en");
   fx.section = "engines";
-  fx.config = { composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" } };
+  fx.config = { composio: { configured: false }, vps: { configured: false, sshAlias: "" } };
   fx.dispatch.mockReset();
   fx.dispatch.mockImplementation((action: { type: string; section?: AppSettingsSection; config?: Record<string, unknown> }) => {
     if (action.type === "toggleAppSettings" && action.section) fx.section = action.section;
@@ -116,6 +116,25 @@ describe("searching Settings for a key", () => {
     type("openai");
     expect(result("openai")!.textContent).toMatch(/^OpenAI API key.*AI › AI providers$/);
     expect(result("liveCalls")!.textContent).toMatch(/^OpenAI key.*AI › Voice and calls$/);
+  });
+
+  it("lists a Routing or Images key under that section and opens it there, where its one field is", () => {
+    flushSync(() => root.render(createElement(SettingsModal)));
+    type("cloudflare");
+    expect(result("workersAi")!.textContent).toMatch(/AI › Routing and extraction$/);
+    type("jev");
+    expect(result("jev")!.textContent).toMatch(/AI › Routing and extraction$/);
+    flushSync(() => result("jev")!.click());
+    expect(fx.section).toBe("decisionModel");
+  });
+
+  it("lists the treg key while X research is not connected, and leaves it to the X card in Apps once it is", () => {
+    flushSync(() => root.render(createElement(SettingsModal)));
+    type("treg");
+    expect(result("treg")!.textContent).toMatch(/AI › Apps and tools$/);
+    flushSync(() => { fx.config = { ...fx.config, treg: { configured: true, last4: "a1b2" } }; publish(); });
+    expect(result("treg")).toBeNull();
+    expect(document.querySelector('[data-settings-hit="apps"]')).not.toBeNull();
   });
 
   it("says plainly when nothing matches", () => {

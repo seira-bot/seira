@@ -14,8 +14,8 @@ import { localizedCard } from "@/lib/widget-text";
 import { widgetToText } from "../../shared/widget";
 
 /** The newest message a preview can show. A receipt or a screen frame says nothing about the conversation on its own. */
-export function lastPreviewable<T extends { kind: string }>(messages: readonly T[] | undefined): T | undefined {
-  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen");
+export function lastPreviewable<T extends { kind: string; handoff?: unknown }>(messages: readonly T[] | undefined): T | undefined {
+  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen" && !message.handoff);
 }
 
 export function botPreview(bot: Bot, visible: Message[], instances: InstanceInfo[], advanced: boolean): string {
@@ -47,7 +47,7 @@ export function lastLine(bot: Bot, visible: Message[], instances: InstanceInfo[]
   if (!newest) return "";
   const last = quotedLine(visible, newest, advanced);
   if (last.kind === "options" && last.card) {
-    // MausBot's intro by its first line, as each mode's intro says it.
+    // Seira's intro by its first line, as each mode's intro says it.
     if (last.helperIntro) return t(advanced ? "helperIntro.title" : bot.chiefOfStaff ? "helperIntro.hello" : "helperIntro.hi.helper", { name: bot.name });
     return (last.card.requestId && last.card.tool && !last.card.questionRequest && approvalCardOutcome(last.card)) || last.card.title;
   }

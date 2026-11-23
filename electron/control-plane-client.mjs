@@ -1,5 +1,7 @@
+const CLOUD_TOKEN_SHAPE = /^omc_[A-Za-z0-9_-]{43}$/;
+const isSeiraCloudToken = (value) => typeof value === "string" && CLOUD_TOKEN_SHAPE.test(value);
 const INSTALLATION_CREDENTIAL =
-  /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+  /^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 const INSTALLATION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLIENT_INSTANCE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -221,6 +223,8 @@ export function createControlPlaneClient({
   timeoutSignal = (milliseconds) => AbortSignal.timeout(milliseconds),
   timeoutMs = 15_000,
   healthTimeoutMs = 3_000,
+  /** The Seira Cloud sign-in (seira-cloud-sign-in.mjs), used when the control plane reports `accounts: "seira-cloud"`. */
+  cloudSignIn = null,
 }) {
   const origin = normalizeControlPlaneURL(baseURL);
   if (!origin) throw new ControlPlaneError("control_plane_unavailable");
@@ -287,8 +291,19 @@ export function createControlPlaneClient({
     return installations;
   };
 
+  const accountService = async () => {
+    const { payload } = await request("/healthz", {
+      deadlineMs: Math.min(timeoutMs, healthTimeoutMs),
+    });
+    return payload.accounts === "seira-cloud" ? "seira-cloud" : "better-auth";
+  };
+  let cloudSignedIn = false;
+
   return {
     origin,
+
+    /** Who holds the accounts: "seira-cloud", or "better-auth" (also when an older control plane says nothing). */
+    accounts: accountService,
 
     async health() {
       const { payload } = await request("/healthz", {
@@ -296,7 +311,7 @@ export function createControlPlaneClient({
       });
       if (
         payload.ok !== true ||
-        payload.service !== "openmausbot-control-plane"
+        payload.service !== "seira-control-plane"
       ) {
         throw new ControlPlaneError("control_plane_unavailable");
       }
@@ -306,6 +321,12 @@ export function createControlPlaneClient({
     async requestOTP(rawEmail) {
       const email = normalizeAccountEmail(rawEmail);
       if (!email) throw new ControlPlaneError("invalid_email");
+      cloudSignedIn = false;
+      if (cloudSignIn && (await accountService()) === "seira-cloud") {
+        await cloudSignIn.start(email);
+        cloudSignedIn = true;
+        return { email };
+      }
       await request("/api/auth/email-otp/send-verification-otp", {
         method: "POST",
         body: { email, type: "sign-in" },
@@ -322,6 +343,7 @@ export function createControlPlaneClient({
         : "";
       if (!email) throw new ControlPlaneError("invalid_email");
       if (!/^\d{8}$/.test(otp)) throw new ControlPlaneError("invalid_otp");
+      if (cloudSignedIn && cloudSignIn) return cloudSignIn.verify(email, otp);
       const { response, payload } = await request("/api/auth/sign-in/email-otp", {
         method: "POST",
         body: { email, otp, name: email.split("@", 1)[0] },
@@ -429,7 +451,7 @@ export function createControlPlaneClient({
       return { endpoint, connectorToken };
     },
 
-    /** MausBot Relay: `{token, hostId, nodes, expiresAt, refreshAfter}`, or `relay_unavailable` (503) while this
+    /** Seira Relay: `{token, hostId, nodes, expiresAt, refreshAfter}`, or `relay_unavailable` (503) while this
      * computer is outside the rollout. */
     async relayToken(installationCredential, { appVersion, devices, kind }) {
       if (typeof installationCredential !== "string" || !INSTALLATION_CREDENTIAL.test(installationCredential)) {
@@ -497,6 +519,10 @@ export function createControlPlaneClient({
 
     async signOut(accountToken) {
       if (!boundedSecret(accountToken)) return;
+      if (cloudSignIn && isSeiraCloudToken(accountToken)) {
+        await cloudSignIn.signOut(accountToken);
+        return;
+      }
       await request("/api/auth/sign-out", {
         method: "POST",
         token: accountToken,

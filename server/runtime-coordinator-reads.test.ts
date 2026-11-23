@@ -23,7 +23,7 @@ describe("the reads a finished turn makes", () => {
   });
 
   function seeded(): Coordinator {
-    dir = mkdtempSync(join(tmpdir(), "omb-coordinator-reads-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-coordinator-reads-"));
     let now = 1_000;
     coordinator = createCoordinator({ dataDir: dir, host, now: () => now, log: () => {} });
     for (let turn = 0; turn < 6; turn++) for (const bot of ["a", "b", "c"]) {
@@ -78,6 +78,18 @@ describe("the reads a finished turn makes", () => {
       expect(c.inThread(threadId)).toEqual(c.all().filter(node => node.threadId === threadId));
       expect(c.inThread(threadId, { open: true })).toEqual(c.all().filter(node => node.threadId === threadId && !["completed", "failed", "cancelled"].includes(node.status)));
     }
+  });
+
+  it("reads the open rows and those that ended at or after a time, and no older ones", () => {
+    const c = seeded();
+    const since = 1_100;
+    const wanted = c.all().filter(node => !["completed", "failed", "cancelled"].includes(node.status) || node.createdAt >= since);
+    expect(wanted.length).toBeLessThan(c.all().length);
+    const { result, reads } = watching(() => c.openSince(since));
+    expect(result).toEqual(wanted);
+    const lists = reads.filter(read => !/WHERE id = \?/.test(read.sql));
+    expect(lists).toHaveLength(1);
+    expect(lists[0]!.rows).toBe(wanted.length);
   });
 
   it("reads one thread's rows through the thread index", () => {

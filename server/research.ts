@@ -1,6 +1,6 @@
 // Research for bots through treg (treg.to): find an endpoint for a job in treg's catalog, read it, call it. With the
 // person's own treg key the calls go straight to treg, billed to their treg balance, with no limits from this side;
-// otherwise they go through the MausBot Cloud Admin's research relay (its `/research/*` routes under the plan's X relay
+// otherwise they go through the Seira Cloud Admin's research relay (its `/research/*` routes under the plan's X relay
 // URL), within the plan's monthly research budget.
 import { createHash, randomUUID } from "node:crypto";
 

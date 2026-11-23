@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { APP_FEATURES } from "../../shared/app-features.ts";
 import type { AppConfig } from "../config.ts";
 import { flushDecisionLog, readDecisions } from "../decision-log.ts";
 import { UNDO_STALE } from "../direct-apply.ts";
@@ -129,6 +130,42 @@ describe("reads", () => {
     expect(every.join("\n")).not.toMatch(/API keys|Computers\b/);
   });
 
+  it("places searches the UI map beside Settings, and on no match says so without listing any menu", async () => {
+    const { host, turn } = fixture();
+    const found = String((await host.handle({ action: "places", query: "where is the calendar" }, turn)).body.text);
+    expect(found).toContain("Calendar: top right of the Automations page");
+    expect(found).toContain("Clicks: Click Automations in the sidebar → Click Calendar");
+    const none = String((await host.handle({ action: "places", query: "quantum flux capacitor" }, turn)).body.text);
+    expect(none).toMatch(/^No place in the app matches "quantum flux capacitor"\./);
+    expect(none).toContain("do not name a menu");
+    expect(none).not.toMatch(/Settings →|Automations|Sidebar/);
+    expect(none.split("\n")).toHaveLength(1);
+    const every = String((await host.handle({ action: "places" }, turn)).body.text);
+    expect(every).toContain("query");
+  });
+
+  it("places only reads: it sends no change to the app", async () => {
+    const { host, turn } = fixture();
+    const before = JSON.stringify(await host.handle({ action: "get", id: "appearance.skin" }, turn));
+    await host.handle({ action: "places", query: "board" }, turn);
+    expect(JSON.stringify(await host.handle({ action: "get", id: "appearance.skin" }, turn))).toBe(before);
+  });
+
+  it("features answers with each match's name, place, what it does and tools, and lists them all with no words", async () => {
+    const { host, turn } = fixture();
+    const found = await host.handle({ action: "features", query: "workflow" }, turn);
+    expect(found.status).toBe(200);
+    const lines = String(found.body.text).split("\n");
+    expect(lines[0]).toMatch(/^Workflows — Automations → Workflows: .*only when a routine uses it/);
+    const routines = String((await host.handle({ action: "features", query: "routine" }, turn)).body.text);
+    expect(routines).toMatch(/^Automations — .*\(tools: trigger_info, trigger, delete_trigger\)/m);
+    const none = String((await host.handle({ action: "features", query: "zzzzqq" }, turn)).body.text);
+    expect(none).toMatch(/^No feature of the app matches "zzzzqq"\. Here is every feature:\n/);
+    const every = String((await host.handle({ action: "features" }, turn)).body.text).split("\n");
+    expect(every).toContain("Workflows — Automations → Workflows");
+    expect(every.length).toBe(APP_FEATURES.length);
+  });
+
   it("works in a turn that is not the owner's, where writes are refused", async () => {
     const { host, turn, set, saved } = fixture({ owner: false });
     expect((await host.handle({ action: "get", id: "general.language" }, turn)).status).toBe(200);
@@ -234,6 +271,17 @@ describe("safe tier", () => {
     expect((await open.set("appearance.skin", "midnight")).status).toBe(200);
     expect(open.windowValues.get("appearance.skin")).toBe("midnight");
     expect((await open.set("appearance.skin", "neon")).status).toBe(400);
+  });
+
+  it("AC-10 sets the text size to a step, says it in percent, and refuses a value that is not a step", async () => {
+    const fx = fixture();
+    const done = await fx.set("appearance.textSize", 1.5);
+    expect(done.status).toBe(200);
+    expect(done.body.text).toMatch(/^Done: Set the text size to 150 %\./);
+    expect(fx.windowValues.get("appearance.textSize")).toBe(1.5);
+    expect((await fx.set("appearance.textSize", 1.3)).status).toBe(400);
+    expect((await fx.set("appearance.textSize", "big")).status).toBe(400);
+    expect(fx.windowValues.get("appearance.textSize")).toBe(1.5);
   });
 
   it(`stops after ${WRITE_BUDGET} writes in one turn and allows the next turn`, async () => {

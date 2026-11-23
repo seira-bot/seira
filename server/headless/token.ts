@@ -1,5 +1,6 @@
 // An access token is a session made for a script: it ends on its date and never renews. It is listed and revoked like
 // any session, and, like `connect`'s, written to a file only you can read and never printed.
+import { cliCommand } from "../cli-invocation.ts";
 import { existsSync } from "node:fs";
 
 import { EXIT, flag, HeadlessError, oneOf, parseDuration, usageError } from "./args.ts";
@@ -28,7 +29,7 @@ async function create(ctx: VerbContext): Promise<VerbOutcome> {
   const ttlMs = raw ? parseDuration(raw, "--expires", { min: 3_600_000, max: 3_650 * DAY }) : 90 * DAY;
   const client = await ctx.client();
   const minted = await client.json<Rec>("/api/auth/pairing", {
-    method: "POST", body: JSON.stringify({ label: name, scopes: scope === "admin" ? ["admin", "client"] : ["client"], tokenTtlMs: ttlMs }),
+    method: "POST", body: JSON.stringify({ label: name, scopes: scope === "admin" ? ["admin", "client"] : ["client"], tokenTtlMs: ttlMs, device: "computer" }),
   });
   const paired = await client.json<Rec>("/api/auth/pair", { method: "POST", body: JSON.stringify({ code: minted.code, label: name }) });
   const session: Rec = paired.session ?? {};
@@ -43,7 +44,7 @@ async function create(ctx: VerbContext): Promise<VerbOutcome> {
     exitCode: EXIT.done,
     human: [
       `Token "${session.label}" (${scope === "admin" ? "full access" : "chat and approvals only"}) until ${day(session.expiresAt)}, id ${session.id}.`,
-      `Saved to ${out}. Use it with: openmausbot ${scope === "admin" ? "doctor" : "bots"} --url ${client.baseUrl} --token-file ${out}`,
+      `Saved to ${out}. Use it with: ${cliCommand(`${scope === "admin" ? "doctor" : "bots"} --url ${client.baseUrl} --token-file ${out}`)}`,
       `Revoke it with: seira token revoke ${session.id}`,
     ],
   };

@@ -2,10 +2,13 @@
 // (or the saved setup); the link always uses the first one in ROUTE_ORDER.
 import { allowedServerOrigin, isLoopbackHost } from "../electron/server-address.mjs";
 import { reachableAddresses, type ReachableAddresses } from "./lan-address.ts";
+import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { tailnetOrigin } from "../electron/tailnet.mjs";
+import { controlPlaneProblem } from "./tunnel.ts";
 
 export type Route = "public-url" | "domain" | "tunnel" | "tailscale" | "lan";
 
-const DESCRIPTOR = "/.well-known/openmausbot/environment";
+const DESCRIPTOR = sentWireName("environmentPath");
 
 /** `--public-url`: https anywhere, or http on a private network; never plain http on the open internet. */
 export function publicUrlProblem(url: string): string | null {
@@ -14,12 +17,12 @@ export function publicUrlProblem(url: string): string | null {
   return `--public-url ${url} is on the open internet, where plain http isn't encrypted: use its https:// address, or --lan for this network only`;
 }
 
-/** OMB_PUBLIC_URL set in the environment: the address a server behind the person's own proxy or tunnel prints. */
+/** SEIRA_PUBLIC_URL set in the environment: the address a server behind the person's own proxy or tunnel prints. */
 export function envPublicUrl(env: NodeJS.ProcessEnv, log: (line: string) => void): string | undefined {
-  const raw = env.OMB_PUBLIC_URL?.trim().replace(/\/+$/, "");
+  const raw = env.SEIRA_PUBLIC_URL?.trim().replace(/\/+$/, "");
   if (!raw) return undefined;
   const problem = publicUrlProblem(raw);
-  if (problem) log(`OMB_PUBLIC_URL is ignored: ${problem.replace(/^--public-url /, "")}`);
+  if (problem) log(`SEIRA_PUBLIC_URL is ignored: ${problem.replace(/^--public-url /, "")}`);
   return problem ? undefined : raw;
 }
 
@@ -28,7 +31,9 @@ export function lanProblem(addresses: ReachableAddresses = reachableAddresses())
   return addresses.lan.length ? null : "--lan: this machine has no private network address, so --lan would reach nobody. Use --public-url, --domain or --tailscale.";
 }
 
-export type ReachCheck = { ok: true; at: number } | { ok: false; kind: "other-server" | "unreachable"; reason?: string };
+export type ReachCheck = { ok: true; at: number } | { ok: false; kind: "other-server" | "unreachable" | "certificate"; reason?: string };
+
+const CERTIFICATE_ERROR = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/;
 
 /** Whether `origin` answers with this server's own descriptor; never sends a code or a credential. */
 export async function checkReach(port: number, origin: string, fetchImpl: typeof fetch = fetch, now = Date.now): Promise<ReachCheck> {
@@ -41,6 +46,7 @@ export async function checkReach(port: number, origin: string, fetchImpl: typeof
     return remote?.environmentId ? { ok: false, kind: "other-server" } : { ok: false, kind: "unreachable", reason: `HTTP ${response.status}` };
   } catch (error) {
     const code = (error as { cause?: { code?: string } })?.cause?.code;
+    if (code && CERTIFICATE_ERROR.test(code)) return { ok: false, kind: "certificate" };
     return { ok: false, kind: "unreachable", reason: code === "ECONNREFUSED" ? "connection refused" : code === "ENOTFOUND" ? "no such name yet" : code ?? "no answer" };
   }
 }
@@ -67,26 +73,45 @@ const NOTE: Record<Route, string> = {
   lan: "this network only, not encrypted",
 };
 
+const isTailnetName = (origin: string) => new URL(origin).hostname.endsWith(".ts.net");
+const originPort = (origin: string) => new URL(origin).port || (origin.startsWith("https:") ? "443" : "80");
+
+/** The first IPv4 tailnet address, else the first address of any kind. */
+function tailnetAddressUrl(addresses: string[], port: number): string | null {
+  const address = addresses.find((value) => !value.includes(":")) ?? addresses[0];
+  return address ? tailnetOrigin(address, port) : null;
+}
+
 /** The Reach line (and its fix, when the address doesn't answer as this server). `check` is absent for the LAN. */
-export function reachLines(route: Route, origin: string, port: number, prefix: string, check?: ReachCheck): string[] {
+export function reachLines(route: Route, origin: string, port: number, prefix: string, check?: ReachCheck, tailnetAddresses: string[] = []): string[] {
   if (!check) return [`Reach    ${origin}   ${NOTE[route]}`.trimEnd()];
-  if (check.ok) return [`Reach    ${origin}   ✓ answers as this server (${clock(check.at)})${NOTE[route] ? ` · ${NOTE[route]}` : ""}`];
-  if (check.kind === "other-server") return [`Reach    ✗ ${origin} answers as a different server.`, `           Check your tunnel or proxy points at this machine's port ${port}.`];
+  const byAddress = route === "tailscale" && origin.startsWith("http:") ? tailnetAddressUrl(tailnetAddresses, port) : null;
+  const address = byAddress ? [`           By address: ${byAddress}`] : [];
+  const tailnetName = route === "tailscale" && isTailnetName(origin);
+  if (check.ok) return [`Reach    ${origin}   ✓ answers as this server (${clock(check.at)})${NOTE[route] ? ` · ${NOTE[route]}` : ""}${tailnetName ? " · checked from this server; other devices need MagicDNS on" : ""}`, ...address];
+  if (check.kind === "certificate") return [`Reach    ✗ ${origin} answers with a certificate that is not this server's.`, `           Another program answers on this address with its own certificate. Find it with: ss -ltnp 'sport = :${originPort(origin)}'`];
+  if (check.kind === "other-server") {
+    return [`Reach    ✗ ${origin} answers as a different server.`, route === "tailscale"
+      ? "           Another Seira server uses this tailnet address. Stop it, or see what it serves with: tailscale serve status"
+      : `           Check your tunnel or proxy points at this machine's port ${port}.`];
+  }
   if (route === "domain") return [`Reach    … ${origin} doesn't answer yet (${check.reason ?? "no answer"}).`, "           Check the domain's DNS points at this machine and ports 80 and 443 are open; the certificate follows."];
+  if (route === "tailscale") return [`Reach    ✗ ${origin} doesn't reach this server (${check.reason ?? "no answer"}).`, `           Check that Tailscale is connected on this machine and that MagicDNS is on, then run: ${prefix} status`, ...address];
   return [`Reach    ✗ ${origin} doesn't reach this server (${check.reason ?? "no answer"}).`, `           Point your tunnel or proxy at http://127.0.0.1:${port} (on another machine: add --lan and use this machine's address), then run: ${prefix} status`];
 }
 
 /** `serve` with no way in: nothing to pair from elsewhere yet, so no code; the ways in, as commands that paste. */
-export function noRouteLines(port: number, prefix: string): string[] {
+export function noRouteLines(port: number, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const tunnel = controlPlaneProblem(env) === null ? [`  ${prefix} serve --tunnel                   a public address through a Cloudflare tunnel; sign in first: ${prefix} login`] : [];
   return [
     `Listening on 127.0.0.1:${port}, reachable from this machine only.`,
     "",
     "Pick a way in and run again:",
     `  ${prefix} serve --public-url https://…     you already have HTTPS in front (cloudflared, Caddy)`,
-    `  ${prefix} serve --domain maus.example.com  we get the certificate (ports 80, 443)`,
+    `  ${prefix} serve --domain seira.example.com  we get the certificate (ports 80, 443)`,
     `  ${prefix} serve --tailscale                your tailnet (needs Tailscale)`,
     `  ${prefix} serve --lan                      this network only, not encrypted`,
-    `  ${prefix} serve --tunnel                   a free Seira web address; sign in first: ${prefix} login`,
+    ...tunnel,
     `Sign in from a browser on this machine with the link from: ${prefix} pair`,
   ];
 }
@@ -94,7 +119,7 @@ export function noRouteLines(port: number, prefix: string): string[] {
 /** Where a browser on the same machine opens a code's link: the configured loopback address (Docker's published port),
  * or this server's own port. */
 export function localLinkBase(publicUrl: string | null, port: number, env: NodeJS.ProcessEnv = process.env): { base: string; place: "machine" | "docker" } {
-  const docker = Boolean(env.OMB_CLI_PREFIX?.includes("docker"));
+  const docker = Boolean(env.SEIRA_CLI_PREFIX?.includes("docker"));
   if (publicUrl && isLoopbackHost(new URL(publicUrl).hostname)) return { base: publicUrl, place: docker ? "docker" : "machine" };
   return { base: `http://127.0.0.1:${port}`, place: "machine" };
 }

@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setLocale } from "@/lib/i18n";
-import { SIDEBAR_WIDTH_KEY } from "@/lib/sidebar-preferences";
-import { AVATARS_BELOW, nextEdgeDrag, SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
+import { SIDEBAR_WIDTH_KEY, SIMPLE_SIDEBAR_WIDTH_KEY } from "@/lib/sidebar-preferences";
+import { AVATARS_BELOW, SIMPLE_AVATARS_BELOW, nextEdgeDrag, SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,17 +14,17 @@ const LEFT = 36;
 let host: HTMLDivElement, root: Root | null = null;
 let seen: boolean[];
 
-function Harness({ avatars: startAvatars }: { avatars: boolean }) {
+function Harness({ avatars: startAvatars, simple = false }: { avatars: boolean; simple?: boolean }) {
   const sidebarRef = useRef<HTMLElement>(null);
   const [avatars, setAvatars] = useState(startAvatars);
-  const sizing = useSidebarWidth({ simple: false, sidePanelOpen: false, sidebarRef });
+  const sizing = useSidebarWidth({ simple, sidePanelOpen: false, sidebarRef });
   return createElement("aside", { ref: sidebarRef, "data-sidebar": "", style: { "--sidebar-width": `${sizing.width}px` } },
     createElement(SidebarResizeHandle, { sizing, sidebarRef, avatars, avatarsWidth: 80, onAvatars: (next: boolean) => { seen.push(next); setAvatars(next); } }));
 }
 
-async function mount(avatars = false) {
+async function mount(avatars = false, simple = false) {
   root = createRoot(host);
-  await act(async () => root!.render(createElement(Harness, { avatars })));
+  await act(async () => root!.render(createElement(Harness, { avatars, simple })));
 }
 const sidebar = () => host.querySelector<HTMLElement>("[data-sidebar]")!;
 const edge = () => host.querySelector<HTMLElement>("[data-sidebar-resize]")!;
@@ -63,6 +63,20 @@ describe("a drag of the sidebar's edge", () => {
     expect(opened).toEqual({ avatars: false, following: false });
     expect(nextEdgeDrag(opened, 250, 320), "short of the edge it opened at").toEqual({ avatars: false, following: false });
     expect(nextEdgeDrag(opened, 320, 320)).toEqual({ avatars: false, following: true });
+  });
+
+  it("in Simple mode, leaves the sidebar open down to 156px and becomes the avatars only below the Simple threshold", async () => {
+    const open = { avatars: false, following: true };
+    expect(nextEdgeDrag(open, SIMPLE_AVATARS_BELOW, 280, SIMPLE_AVATARS_BELOW)).toEqual(open);
+    expect(nextEdgeDrag(open, SIMPLE_AVATARS_BELOW - 1, 280, SIMPLE_AVATARS_BELOW)).toEqual({ avatars: true, following: false });
+    localStorage.setItem(SIMPLE_SIDEBAR_WIDTH_KEY, "280");
+    await mount(false, true);
+    await pointer("pointerdown", 280);
+    await pointer("pointermove", 140);
+    expect(seen).toEqual([]);
+    expect(width()).toBe("156px");
+    await pointer("pointerup", 140);
+    expect(localStorage.getItem(SIMPLE_SIDEBAR_WIDTH_KEY)).toBe("156");
   });
 
   it("narrower than the threshold, becomes the column of avatars, and the sidebar keeps the width it had for when it opens", async () => {
@@ -137,5 +151,15 @@ describe("the sidebar's edge from the keyboard", () => {
     await key("ArrowRight");
     expect(seen).toEqual([true, false]);
     expect(width()).toBe("240px");
+  });
+
+  it("in Simple mode, steps down to 156px before the avatars", async () => {
+    localStorage.setItem(SIMPLE_SIDEBAR_WIDTH_KEY, "168");
+    await mount(false, true);
+    await key("ArrowLeft");
+    expect(width()).toBe("156px");
+    expect(seen).toEqual([]);
+    await key("ArrowLeft");
+    expect(seen).toEqual([true]);
   });
 });

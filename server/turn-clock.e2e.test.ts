@@ -16,7 +16,7 @@ const CLOCK = new RegExp(`^Current time when this message was sent: \\w+day, (\\
 const minute = (at: number) => /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.exec(turnClockLine(at, REPORTED))![0];
 
 it("stamps every direct and room turn with the time it was sent", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-turn-clock-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-turn-clock-"));
   const prompts = join(scratch, "prompts.jsonl");
   const fixture = await launchVerificationServer({ ...process.env, TZ: ZONE, FAKE_CLAUDE_PROMPTS: prompts });
   const control = (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);

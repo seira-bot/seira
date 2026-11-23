@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, PlugZap, RefreshCw, X } from "lucide-react";
 
 import { FIRST_HOUR_OFFER_KEY } from "../../shared/person-wait";
+import { announceAppConnected } from "@/lib/app-connected";
 import { api, type Bot, type Message } from "@/state/store";
 import { ApiError } from "@/state/api";
 import { t } from "@/lib/i18n";
@@ -25,9 +26,11 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | { key: LocaleKey } | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [authorization, setAuthorization] = useState<(PendingAuthorization & { target: string }) | null>(null);
   const [label, setLabel] = useState("");
   const polling = useRef(false);
+  const startedHere = useRef(false);
   const opening = useRef<ReturnType<typeof reserveConnectionPage> | null>(null);
 
   const endpoint = `/api/bots/${encodeURIComponent(botId)}/connector-cards/${encodeURIComponent(message.id)}`;
@@ -41,6 +44,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setBusy(false);
     setLocalError(null);
     setRefusal(null);
+    setUnconfirmed(false);
     setAuthorization(null);
     setLabel("");
     return () => {
@@ -48,6 +52,15 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       opening.current = null;
     };
   }, [target, gone]);
+  const statusShown = useRef(connector.status);
+  useEffect(() => {
+    const signInEnded = statusShown.current === "authorizing" && connector.status !== "authorizing";
+    statusShown.current = connector.status;
+    if (!signInEnded) return;
+    setAuthorization(null);
+    setLocalError(null);
+    setUnconfirmed(false);
+  }, [connector.status]);
   const checkStatus = useCallback(async () => {
     const result = await api(`${endpoint}/status?threadId=${encodeURIComponent(threadId)}`);
     return Boolean(result.connected);
@@ -82,18 +95,26 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     };
   }, [checkStatus, gone, connector.status]);
 
+  useEffect(() => {
+    if (connector.status !== "connected" || !startedHere.current) return;
+    startedHere.current = false;
+    if (!isMcp) announceAppConnected(connector.slug, connector.label);
+  }, [connector.status, connector.slug, connector.label, isMcp]);
+
   if (gone) return null;
 
   const connect = async (alias?: string) => {
     if (busy || opening.current) return;
+    startedHere.current = true;
     const launch = reserveConnectionPage();
     opening.current = launch;
     const isCurrent = () => opening.current === launch && currentTarget.current === target;
     setBusy(true);
     setLocalError(null);
     setRefusal(null);
+    setUnconfirmed(false);
     try {
-      const reusableUrl = alias ? null : reusableConnectionUrl(pendingAuthorization);
+      const reusableUrl = alias || isMcp ? null : reusableConnectionUrl(pendingAuthorization);
       const createdAt = reusableUrl ? pendingAuthorization!.createdAt : Date.now();
       const result = reusableUrl ? { url: reusableUrl } : await api(`${endpoint}/authorize`, {
           method: "POST",
@@ -103,9 +124,10 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       const url = mcpSignInLink(typeof result.url === "string" ? result.url : null);
       if (!url) throw new Error(t("connectors.invalidAuthorizationUrl"));
       setAuthorization({ target, url, createdAt });
-      if (!await launch.open(url) && isCurrent()) {
-        setLocalError({ key: "connectors.card.popupBlocked" });
-      }
+      const opened = await launch.open(url);
+      if (!isCurrent()) return;
+      if (!opened) setLocalError({ key: "connectors.card.popupBlocked" });
+      else setUnconfirmed(!launch.confirms);
     } catch (error) {
       if (!isCurrent()) return;
       if (isMcp && error instanceof ApiError && error.status === 409) setRefusal(error.message);
@@ -231,6 +253,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
           />
         </form>
       ) : error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key)}</p>}
+      {authorizationUrl && unconfirmed && <p role="status" className="mt-1.5 text-[12px] text-ink-secondary">{t("connectors.card.linkIfNotOpened")}</p>}
       {authorizationUrl && (
         <a href={authorizationUrl} target="_blank" rel="noopener noreferrer" onClick={(event) => {
           if (!reusableConnectionUrl(pendingAuthorization)) {

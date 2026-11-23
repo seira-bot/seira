@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { currentFormat, currentRunOn } from "../electron/legacy-names.mjs";
 import { mascotFaceColorSchema } from "./bot-avatar.ts";
 
-import { CONNECTOR_SLUG_PATTERN, CONNECTOR_TOOL_NAME_PATTERN, MAUS_COLOR_NAMES } from "./wire.ts";
+import { CONNECTOR_SLUG_PATTERN, CONNECTOR_TOOL_NAME_PATTERN, SEIRA_COLOR_NAMES } from "./wire.ts";
 import { parseToolScope, type ToolScope } from "./tool-scope.ts";
 
 export const MAX_TEAM_BACKUP_BYTES = 50 * 1024 * 1024;
@@ -11,7 +12,7 @@ export const TEAM_BACKUP_EXCLUSIONS = "Files, images, custom avatars, account co
 const key = z.string().min(1).max(200);
 const name = z.string().trim().min(1).max(200);
 const timestamp = z.number().finite().nonnegative();
-const color = z.enum(MAUS_COLOR_NAMES);
+const color = z.enum(SEIRA_COLOR_NAMES);
 export const goalHistoryWords = z.object({
   role: z.literal("bot"),
   text: z.string().max(2_000_000),
@@ -105,7 +106,7 @@ function knownRoomResponder(value: unknown): unknown {
 }
 
 const backupSchema = z.object({
-  format: z.literal("openmaus.backup"),
+  format: z.literal("seira.backup"),
   version: z.literal(1),
   name,
   exportedAt: timestamp,
@@ -148,7 +149,7 @@ const backupSchema = z.object({
   routines: z.array(z.object({
     name, prompt: z.string().trim().min(1).max(200_000),
     target: z.enum(["bot", "room-goal"]), botId: key, groupId: key.optional(),
-    runOn: z.enum(["maus", "cloud"]), schedule,
+    runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])), schedule,
     durationMinutes: z.number().finite().positive(),
     timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
     checks: z.array(z.enum(["calendar", "mail", "runs"])).max(3).optional(),
@@ -163,7 +164,8 @@ export type BackupTask = z.infer<typeof task>;
 /** Validate the whole reference graph before an import can write anything.
  * All keys are file-local; none are ever used as destination record IDs. */
 export function parseTeamBackup(input: unknown): TeamBackup {
-  const parsed = backupSchema.safeParse(input);
+  const format = (input as { format?: unknown } | null)?.format;
+  const parsed = backupSchema.safeParse(input && typeof input === "object" && currentFormat(format) !== format ? { ...input, format: currentFormat(format) } : input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     throw new Error(`Invalid backup: ${issue.path.join(".") || "file"}: ${issue.message}`);
@@ -197,7 +199,7 @@ export function parseTeamBackup(input: unknown): TeamBackup {
   for (const routine of backup.routines) {
     if (!bots.has(routine.botId)) throw new Error("Invalid backup: unknown routine bot");
     if (routine.target === "room-goal") {
-      if (routine.runOn !== "maus") throw new Error("Invalid backup: room goals must run on this computer");
+      if (routine.runOn !== "seira") throw new Error("Invalid backup: room goals must run on this computer");
       const group = backup.groups.find((candidate) => candidate.key === routine.groupId);
       if (routine.groupId !== undefined && (!groups.has(routine.groupId) || !group || group.dm || !group.memberIds.includes(routine.botId))) {
         throw new Error("Invalid backup: unknown routine room or coordinator");

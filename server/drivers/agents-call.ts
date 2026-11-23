@@ -9,7 +9,7 @@ import { noCloudComputerNote } from "../../shared/team-setup.ts";
 
 import { peerName } from "../peer-roster.ts";
 import { callCardTool, CARD_TOOL_NAMES } from "./agents-call-cards.ts";
-import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts";
+import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts"; import { callWorkflowTool, WORKFLOW_TOOL_NAMES } from "./agents-workflow-tool.ts";
 import { catalogProfileFromEnv, fullInputSchema, SHARED_COMPUTER_TOOL_NAMES } from "./agents-catalog.ts";
 import { harnessClientFromEnv } from "./agents-client.ts";
 import type { HarnessClient, Json } from "./agents-client.ts";
@@ -19,17 +19,17 @@ import { argumentNames, outOfBounds } from "./agents-schema.ts";
 import { dropBlankArguments } from "./agents-blank-arguments.ts";
 import { callResearchTool, RESEARCH_TOOL_NAMES } from "./agents-research-tools.ts";
 import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
-import { callUsageLimitsTool, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
+import { callMachineBudgetTool, callUsageLimitsTool, MACHINE_BUDGET_TOOL, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
 import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
 import { callMeetingTool, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
-import { callMausBotTool, MAUSBOT_TOOL_NAMES } from "./agents-mausbot-tools.ts";
+import { callSeiraTool, SEIRA_TOOL_NAMES } from "./agents-seira-tools.ts";
 import { callPageTool, PAGE_TOOL_NAMES } from "./agents-pages-tools.ts";
-import { callShareTool, SHARE_TOOL_NAMES } from "./agents-share-tool.ts";
+import { callShareTool, SHARE_TOOL_NAMES } from "./agents-share-tool.ts"; import { callTeamTool, TEAM_TOOL_NAMES } from "./agents-team-tool.ts";
 import { callPersonTool, PERSON_TOOL_NAMES } from "./agents-person-tools.ts";
 import { callDevsTool, DEVS_TOOL_NAMES } from "./agents-devs-tools.ts";
 
@@ -53,8 +53,8 @@ export function toolCallContextFromEnv(env: NodeJS.ProcessEnv): ToolCallContext 
   const profile = catalogProfileFromEnv(env);
   return {
     botId: profile.botId,
-    threadId: env.OMB_THREAD_ID ?? "",
-    externalRuntime: env.OMB_EXTERNAL_RUNTIME === "1",
+    threadId: env.SEIRA_THREAD_ID ?? "",
+    externalRuntime: env.SEIRA_EXTERNAL_RUNTIME === "1",
     sharedComputers: profile.sharedComputers,
     client: harnessClientFromEnv(env),
   };
@@ -249,14 +249,14 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (IMAGE_TOOL_NAMES.has(name)) return callImageTool(name, args, context);
   if (HOSTING_TOOL_NAMES.has(name)) return callHostingTool(name, args, context);
   if (MEETING_TOOL_NAMES.has(name)) return callMeetingTool(name, args, context);
-  if (MAUSBOT_TOOL_NAMES.has(name)) return callMausBotTool(name, args, context);
+  if (SEIRA_TOOL_NAMES.has(name)) return callSeiraTool(name, args, context);
   if (PAGE_TOOL_NAMES.has(name)) return callPageTool(name, args, context);
-  if (SHARE_TOOL_NAMES.has(name)) return callShareTool(args, context);
+  if (SHARE_TOOL_NAMES.has(name)) return callShareTool(args, context); if (TEAM_TOOL_NAMES.has(name)) return callTeamTool(args, context);
   if (PERSON_TOOL_NAMES.has(name)) return callPersonTool(name, args, context);
   if (DEVS_TOOL_NAMES.has(name)) return callDevsTool(name, args, context);
-  if (TRIGGER_TOOL_NAMES.has(name)) return callTriggerTool(name, args, context);
+  if (TRIGGER_TOOL_NAMES.has(name)) return callTriggerTool(name, args, context); if (WORKFLOW_TOOL_NAMES.has(name)) return callWorkflowTool(args, context);
   if (WAIT_TOOL_NAMES.has(name)) return callWaitTool(name, args, context);
-  if (name === USAGE_LIMITS_TOOL) return callUsageLimitsTool(context);
+  if (name === USAGE_LIMITS_TOOL) return callUsageLimitsTool(context); if (name === MACHINE_BUDGET_TOOL) return callMachineBudgetTool(context);
   if (COMPUTER_ASK_TOOL_NAMES.has(name)) return callComputerAskTool(args, context);
   // Second lock: with sharing off the catalog already omits these tools.
   if (SHARED_COMPUTER_TOOL_NAMES.has(name) && !context.sharedComputers) {
@@ -416,14 +416,6 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     });
     return { text: JSON.stringify(result) };
   }
-  if (name === "reset_cloud_computer") {
-    const forBotId = String(args.for_bot_id ?? "").trim();
-    const r = await apiResponse("/api/internal/cloud-computer/reset", {
-      method: "POST", body: JSON.stringify({ why: args.why, ...(forBotId ? { targetBotId: forBotId } : {}) }),
-    });
-    if (!r.ok) return { text: String(r.body.error ?? `reset_cloud_computer failed (HTTP ${r.status}).`), isError: true };
-    return { text: String(r.body.text ?? "") };
-  }
   if (name === "list_threads") {
     const query = new URLSearchParams({ fromBotId: BOT_ID, fromThreadId: THREAD_ID });
     const r = await api(`/api/internal/threads?${query.toString()}`);
@@ -498,7 +490,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       text: `${opened}${timing}${approval} Its result will be delivered to this conversation automatically (assignment id: ${assignmentId || "unknown"}). Acknowledge it, mention it to the person as #${threadTitle}, and finish your turn; do not check or wait for it in this turn.`,
     };
   }
-  if (name === "burst") return callBurstTool(args, api);
+  if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);

@@ -1,4 +1,4 @@
-// A Team Cloud person's inbox: their own conversation with their own Chief of Staff, or with their own MausBot while they
+// A Team Cloud person's inbox: their own conversation with their own Chief of Staff, or with their own Seira while they
 // crowned none. Everything addressed to them lands there as one line that says who it is from and where it came from:
 // a message a bot or a teammate passed them, an @mention, a question or approval card a bot asks them (a copy, answered
 // here as there), a routine's report and a failure routed to them. Each line is one notification, sent from there.
@@ -113,7 +113,7 @@ export interface PersonInboxDeps {
   representative?: Representative;
   /** A bot's shared notes (its team layer). */
   notes(botId: string): string;
-  /** Gives a member who has neither a Chief nor a MausBot yet the MausBot every member gets. */
+  /** Gives a member who has neither a Chief nor a Seira yet the Seira every member gets. */
   ensureOwnBot?(email: string): void;
   /** What waits on this inbox's person may have changed: its bot goes out to them again. */
   changed?(threadId: string): void;
@@ -148,7 +148,7 @@ export function createPersonInbox(deps: PersonInboxDeps) {
   };
 
   const ownerKey = (bot: BotRecord) => { const email = botOwner(bot); return email ? deps.personKeyOf(email) : null; };
-  /** The person's own Chief, else their own MausBot. */
+  /** The person's own Chief, else their own Seira. */
   function representativeOf(person: string): BotRecord | null {
     const own = (bot: BotRecord) => !bot.hidden && ownerKey(bot) === person;
     return store.bots.find((bot) => bot.chiefOfStaff && own(bot)) ?? store.bots.find((bot) => Boolean(bot.defaultBot?.person) && own(bot)) ?? null;
@@ -513,6 +513,14 @@ export function createPersonInbox(deps: PersonInboxDeps) {
       if (item.kind === "ask" && item.requestId) return "an ask";
       if (!item.done) { item.done = true; item.seen = true; save(); touch(item.threadId); }
       return "done";
+    },
+    /** The person is done with the named lines of news, or with no ids with all news; an ask stays open. Returns how many changed. */
+    markDoneMany(person: string, ids?: readonly string[]): number {
+      const named = ids ? new Set(ids) : null;
+      const todo = items.filter((item) => item.person === person && !item.done && !(item.kind === "ask" && item.requestId) && (named ? named.has(item.id) : item.kind !== "ask" && !settled(item)));
+      for (const item of todo) { item.done = true; item.seen = true; }
+      if (todo.length) { save(); for (const inbox of new Set(todo.map((item) => item.threadId))) touch(inbox); }
+      return todo.length;
     },
     /** The person read a line. */
     markRead(person: string, id: string): boolean {

@@ -2,15 +2,18 @@ import { z } from "zod";
 
 import { approvalModeFor, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
 import { normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
+import { isCallLanguage, isCallSpeed } from "../../shared/call-voice.ts";
 import { isBotLiveVoice } from "../../shared/live-call.ts";
 import { normalizeOutboundPolicy } from "../../shared/outbound.ts";
 import { normalizePhoneApps } from "../../shared/phone-apps.ts";
 import { parseToolScope, toolScopeWidens } from "../../shared/tool-scope.ts";
 import { parseToolsOff, TOOL_GROUPS } from "../../shared/tool-groups.ts";
-import { isMausColor, MAUS_COLOR_NAMES, type BotUpdateResponse, type WireBot, type WireGroup } from "../../shared/wire.ts";
+import { isSeiraColor, SEIRA_COLOR_NAMES, type BotUpdateResponse, type WireBot, type WireGroup } from "../../shared/wire.ts";
 import { dropRemovedGrants, MAX_ALWAYS_ALLOW } from "../always-allow.ts";
 import { checkBrowserProfileChange, settleBrowserChange } from "../bot-browser-profile.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
+import { validateFolderAccess } from "../folder-access.ts";
+import { FOLDER_ACCESS_SET_ELSEWHERE } from "./department-folders.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
 import { accessFromVisibility } from "../../shared/bot-access.ts";
 import { parseVisibility } from "../bot-visibility.ts";
@@ -29,6 +32,8 @@ import type { MemoryUpkeep } from "../memory-upkeep.ts";
 import { phoneAppsFor } from "../phones/access.ts";
 import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
+import { pairedDeviceWorksOnChange } from "../phone-works-on.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 import { memberBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
@@ -53,9 +58,15 @@ export interface BotPatchRouteDeps {
   hostedModels: ReturnType<typeof hostedModelPolicy>;
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
   routines(): RoutineManager | null;
+  /** Called after a bot's saved call speed changed, so a call that is live can use it. */
+  callSpeedChanged?(botId: string, speed: number | undefined): void;
   activeVpsThreads: { has(botId: string): boolean };
+  /** Where a folder list is checked, and whether it is set from here at all (a Team Cloud or a hosted workspace: no). */
+  folderAccess: { dataDir: string; home: string; setElsewhere(): boolean };
   /** Full access comes only from the workspace policy. */
   hostedWorkspace: boolean;
+  /** This server is a person's Cloud home. */
+  cloudHome: boolean;
   hostedFullAccessRefusal: string;
   desktopManaged: boolean;
   broadcast(payload: Record<string, unknown>): void;
@@ -74,7 +85,7 @@ export interface BotPatchRouteDeps {
   revokeInternalCapabilitiesForThread(threadId: string): void;
   runningTurnInstance(bot: BotRecord | null | undefined, threadId: string): ReturnType<ProviderRegistry["get"]>;
   closeOpenApprovals(threadId: string): void;
-  assertTeamComputerChangeIdle(before: BotRecord, after: BotRecord): void;
+  assertComputerChangeIdle(before: BotRecord, after: BotRecord): void;
   forgetTemporaryBrowser(botId: string): Promise<void>;
   /** What this session may do with the bot: off a Team Cloud a member chats with every bot they see. */
   levelOf(auth: RequestAuth, botId: string): "none" | "view" | "chat" | "edit";
@@ -98,7 +109,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
     hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
     broadcast, wireBot, publicGroupState, audienceChanged, storedAvatarExists, requestedTaskBot, threadBusy, activeGroupTurnForBot,
     checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
-    revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertTeamComputerChangeIdle, forgetTemporaryBrowser,
+    revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser,
   } = deps;
   const pinnedClientThread = pinnedClientThreadGuard(store);
   return async ({ req, res, path, method, auth, json, readBody }) => {
@@ -111,14 +122,23 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return json(res, 400, { error: "body must be a JSON object" });
       }
-      const pairedDevice = req.headers["x-openmausbot-companion"] === "1";
-      if ((auth.kind === "session" && !auth.scopes.includes("admin")) || pairedDevice) {
+      const pairedDevice = fromPairedDevice(req, auth);
+      const worksOn = pairedDeviceWorksOnChange(body, {
+        pairedDevice: pairedDevice && auth.kind === "session", scopes: auth.scopes, cloudHome: deps.cloudHome, hostedWorkspace: HOSTED_WORKSPACE,
+      });
+      if (worksOn === "own-server" && !vpsSshAliasForBot(cfg, store.bot(m[1]))) {
+        return json(res, 409, { error: "Set up your own server for this bot on the computer first." });
+      }
+      if (!worksOn) {
         const session = auth.kind === "session" ? auth.session : undefined;
-        const level = pairedDevice ? "chat" : deps.levelOf(auth, m[1]);
-        const field = memberBotPatchViolation(body, level === "none" ? "chat" : level, ownsDefaultBot(store.bot(m[1]), session?.email), session?.membershipAuthority === "team");
+        const ownSeira = ownsDefaultBot(store.bot(m[1]), session?.email);
+        const teamMember = session?.membershipAuthority === "team";
+        const deviceField = pairedDevice ? memberBotPatchViolation(body, "chat", ownSeira, teamMember) : null;
+        const level = session && !auth.scopes.includes("admin") ? deps.levelOf(auth, m[1]) : null;
+        const field = deviceField ?? (level ? memberBotPatchViolation(body, level === "none" ? "chat" : level, ownSeira, teamMember) : null);
         if (field) {
           return json(res, 403, {
-            error: pairedDevice
+            error: deviceField
               ? `forbidden: a paired device may change how a bot looks, not "${field}"; change it on the host computer`
               : level === "edit" ? `forbidden: "${field}" is an admin's to change`
                 : level === "view" ? `forbidden: you can view this bot, not change "${field}"`
@@ -126,8 +146,8 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           });
         }
       }
-      if (body.color !== undefined && !isMausColor(body.color)) {
-        return json(res, 400, { error: `color must be ${MAUS_COLOR_NAMES.slice(0, -1).join(", ")}, or ${MAUS_COLOR_NAMES.at(-1)}` });
+      if (body.color !== undefined && !isSeiraColor(body.color)) {
+        return json(res, 400, { error: `color must be ${SEIRA_COLOR_NAMES.slice(0, -1).join(", ")}, or ${SEIRA_COLOR_NAMES.at(-1)}` });
       }
       if (body.mascotExpression !== undefined && body.mascotExpression !== null &&
         (typeof body.mascotExpression !== "string" || body.mascotExpression.length > 80)) {
@@ -136,7 +156,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.pinned !== undefined && typeof body.pinned !== "boolean") {
         return json(res, 400, { error: "pinned must be true or false" });
       }
-      const existingBot = store.bot(m[1]); const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
+      const existingBot = store.bot(m[1]); const callSpeedBefore = existingBot?.callSpeed; const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
       if (defaultBotRefused) return json(res, 400, { error: defaultBotRefused });
       if (existingBot && typeof body.unread === "boolean" && deps.shownThread && deps.personMarkThread?.(auth, deps.shownThread(auth, existingBot), body.unread)) {
         delete body.unread;
@@ -204,9 +224,10 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           else section = trimmed;
         }
       }
-      for (const key of ["unread", "cloudBackend", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
+      for (const key of ["unread", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
+      if (body.cloudBackend !== undefined) patch.cloudBackend = body.cloudBackend === "vps" ? "vps" : undefined;
       // null clears the default-bot mark, demoting the bot to a regular (deletable) one.
       if (body.defaultBot === null && existingBot?.defaultBot) patch.defaultBot = undefined;
       const computerSpecified = Object.prototype.hasOwnProperty.call(body, "computer");
@@ -226,6 +247,8 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           return json(res, 400, { error: "computer must be null (Auto), cloud, vm, local, browser, or off" });
         }
       }
+      // Cloud is the person's own VPS: a bot that works on Cloud carries no other backend, whatever client asked.
+      if (requestedComputer === "cloud" && (Object.hasOwn(patch, "cloudBackend") ? patch.cloudBackend : existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
       if (normalizedSelection) patch.modelSelection = normalizedSelection;
       // null/"" clears; the id is not checked against the transcript.
       if (body.pinnedMessageId !== undefined) {
@@ -301,6 +324,15 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.liveVoice !== undefined) {
         if (body.liveVoice !== null && body.liveVoice !== "" && !isBotLiveVoice(body.liveVoice)) return json(res, 400, { error: "liveVoice must be a GPT-Live or Gemini Live voice, or empty" });
         patch.liveVoice = body.liveVoice || undefined;
+      }
+      // null or "": the default again (normal speed, follow the conversation).
+      if (body.callSpeed !== undefined) {
+        if (body.callSpeed !== null && body.callSpeed !== "" && !isCallSpeed(body.callSpeed)) return json(res, 400, { error: "callSpeed must be a number from 0.5 to 2, or empty" });
+        patch.callSpeed = body.callSpeed === null || body.callSpeed === "" ? undefined : (body.callSpeed as number);
+      }
+      if (body.callLanguage !== undefined) {
+        if (body.callLanguage !== null && body.callLanguage !== "" && !isCallLanguage(body.callLanguage)) return json(res, 400, { error: "callLanguage must be auto or a listed language code, or empty" });
+        patch.callLanguage = body.callLanguage === null || body.callLanguage === "" ? undefined : (body.callLanguage as string);
       }
       // Spends the Cloud plan's monthly X research calls: an admin decision too.
       if (body.xResearch !== undefined) {
@@ -468,6 +500,15 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         const checked = validateBotCwd(body.cwd);
         if (!checked.ok) return json(res, 400, { error: checked.error });
         patch.cwd = checked.cwd ?? undefined;
+      }
+      if (body.folderAccess !== undefined) {
+        if (deps.folderAccess.setElsewhere()) return json(res, 409, { error: FOLDER_ACCESS_SET_ELSEWHERE });
+        if (body.folderAccess === null) patch.folderAccess = undefined;
+        else {
+          const checked = validateFolderAccess(body.folderAccess, deps.folderAccess);
+          if (!checked.ok) return json(res, 400, { error: checked.message, refusal: checked.refusal, path: checked.path });
+          patch.folderAccess = checked.value;
+        }
       }
       if (body.hidden === true && existingBot?.chiefOfStaff && body.chiefOfStaff !== false) {
         return json(res, 400, { error: "choose another Chief of Staff before hiding this bot" });
@@ -695,14 +736,14 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       }
       if (Array.isArray(patch.alwaysAllow)) dropRemovedGrants(store, deps.turnBots?.values() ?? [], m[1], patch.alwaysAllow);
       if (profile.patch.soul !== undefined) {
-        if (freshBrowserBot) assertTeamComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
+        if (freshBrowserBot) assertComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
       // Runtime fields keep their fail-closed order; only the profile fields commit atomically.
         const runtimePatch = { ...patch };
         for (const field of Object.keys(profile.patch)) delete runtimePatch[field];
         if (Object.keys(runtimePatch).length) store.patchBot(m[1], runtimePatch);
         bot = store.patchBotProfile(m[1], profile.patch);
       } else {
-        if (freshBrowserBot) assertTeamComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
+        if (freshBrowserBot) assertComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
         bot = store.patchBot(m[1], patch);
       }
       if (!bot) return json(res, 404, { error: "no such bot" });
@@ -732,6 +773,8 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         broadcast({ kind: "sections", sections: store.sections });
         audienceChanged();
       }
+      if (Object.hasOwn(patch, "callSpeed") && patch.callSpeed !== callSpeedBefore) deps.callSpeedChanged?.(bot.id, bot.callSpeed);
+      if (worksOn && auth.kind === "session") console.log(`[bots] paired device ${auth.session.id} moved bot ${bot.id} to ${worksOn === "off" ? "no computer" : "its own server"}`);
       return json(res, 200, { bot: wireBot(store.bot(bot.id)!),
         ...(vpsLeftOn ? { notice: vpsLeftBehindNotice("Moved", vpsLeftOn, vps.vpsContainerName(bot.id)) } : {}) } satisfies BotUpdateResponse);
     }

@@ -8,15 +8,14 @@ import { productName } from "@/lib/brand";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { useStore } from "@/state/store";
-import { InitialsAvatar } from "../Avatar";
+import { PersonAvatar } from "../Avatar";
 import { PlaceMark } from "../PlacesRail";
-import { profileInitials } from "../SidebarProfileMenu";
 import { Switch, SettingsTag } from "../SettingsPrimitives";
 import { accountLine, useAccountSummary, useYou } from "./account-summary";
 import { usePhonePlaceState } from "./phone-status";
 import type { SettingsPlace } from "./settings-context";
 import { OWNERS, pageById, type SearchHit, type SettingsContext, type SettingsOwner, type SettingsPage, type SettingsPageId } from "./settings-index";
-import { useUpdaterState } from "@/lib/updater";
+import { useUpdaterState, type UpdaterState } from "@/lib/updater";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { keySection, type KeyEntry } from "../keys/key-catalog";
 import { HELP_CENTER_URL, desktopAppVersion } from "@/lib/app-links";
@@ -51,7 +50,7 @@ export function AppIcon({ size }: { size: number }) {
 
 export function YouAvatar({ size }: { size: number }) {
   const { profile } = useYou();
-  return <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={size} fontSize={Math.round(size * 0.42)} className="bg-ink/[0.08]" />;
+  return <PersonAvatar profile={profile} size={size} />;
 }
 
 /** The place's one status line under its name: bots on This computer, power on a Cloud. */
@@ -66,11 +65,20 @@ export function usePlaceSubLine(place: SettingsPlace): string {
   return place.kind === "server" ? t("settings.place.running") : t("settings.place.alwaysOn");
 }
 
+const UP_TO_DATE_FOR_MS = 24 * 60 * 60_000;
+
+/** "Up to date" only after a check in the last day that found nothing newer; otherwise the version alone. */
+export function appSubLine(update: UpdaterState | null, version: string, now = Date.now()): string {
+  if (update?.status === "downloaded") return t("settings.app.updateReadyLine", { version });
+  if (update?.managedByStore || update?.downloadOnly || update?.status === "error" || update?.upToDateAt === undefined) return version;
+  if (update.checkFailedAt !== undefined && update.checkFailedAt > update.upToDateAt) return version;
+  return now - update.upToDateAt < UP_TO_DATE_FOR_MS ? t("settings.app.upToDateLine", { version }) : version;
+}
+
 export function useAppSubLine(desktop: boolean): string {
   const update = useUpdaterState();
   if (!desktop) return t("settings.scope.browser");
-  if (update?.status === "downloaded") return t("settings.app.updateReadyLine", { version: desktopAppVersion() });
-  return t("settings.app.upToDateLine", { version: desktopAppVersion() });
+  return appSubLine(update, desktopAppVersion());
 }
 
 export function ownerLabel(owner: SettingsOwner, place: SettingsPlace, desktop: boolean): string {

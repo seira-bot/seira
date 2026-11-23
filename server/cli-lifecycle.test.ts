@@ -1,17 +1,18 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isWorkspaceRunning, runOnboardingCommand, runServe, type CliOptions } from "./cli.ts";
 import { qrToString } from "./cli-pairing.ts";
+import { acquireDataDirLease } from "./data-dir-lease.ts";
 
 const mocks = vi.hoisted(() => ({
   // the fleet path is off in these tests: no credential in the environment
   fleetCredential: vi.fn(() => null),
-  fleetAccess: vi.fn(),
-  FLEET_CREDENTIAL_ENV: "OMB_INSTALLATION_CREDENTIAL",
+  fleetAccess: vi.fn(), controlPlaneProblem: vi.fn(() => null),
+  FLEET_CREDENTIAL_ENV: "SEIRA_INSTALLATION_CREDENTIAL",
   denyLogOpen: false,
   spawn: vi.fn(),
   tailscaleStatus: vi.fn(), tailscaleServe: vi.fn(), tailscaleStop: vi.fn(), clearLeftoverTailscaleServe: vi.fn(), tailnetListenFallback: vi.fn(),
@@ -35,10 +36,14 @@ vi.mock("node:fs", async (original) => {
   };
 });
 vi.mock("./tailscale.ts", () => ({
+  pickTailscaleHttpsPort: () => ({ port: 443, line: null }), tailscaleHttpsProblem: async () => null,
   tailscaleStatus: mocks.tailscaleStatus, tailscaleServe: mocks.tailscaleServe, tailnetListenFallback: mocks.tailnetListenFallback,
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));
 vi.mock("./tunnel.ts", () => ({ ...mocks, describeTunnelState: () => "Fixture tunnel" }));
+vi.mock("./lan-address.ts", async (original) => ({
+  ...await original<typeof import("./lan-address.ts")>(), reachableAddresses: () => ({ lan: ["192.168.50.20"], shared: [], tailscale: [] }),
+}));
 vi.mock("./browser-engine.ts", () => ({
   browserEngineStatus: () => ({ kind: "ready" }), describeBrowserEngine: () => "Fixture browser ready",
 }));
@@ -88,7 +93,7 @@ beforeEach(() => {
   mocks.clearLeftoverTailscaleServe.mockResolvedValue(false);
   mocks.createTunnelAccount.mockReturnValue({ credentials: { status: "available", read: () => ({}) }, service: { retry: async () => ({}), restore: async () => ({}), dispose: vi.fn() } });
   mocks.describeTunnelAccount.mockReturnValue({ email: "fixture@example.test" });
-  mocks.tunnelAccess.mockReturnValue({ endpoint: "https://fixture.openmausbot.test" });
+  mocks.tunnelAccess.mockReturnValue({ endpoint: "https://fixture.seira.test" });
   mocks.ensureCloudflared.mockResolvedValue("/fixture/cloudflared");
   mocks.guardianEntry.mockReturnValue("/fixture/guardian");
   mocks.createTunnelOrigin.mockReturnValue({ socketPath: join(dataDir, "fixture.sock") });
@@ -113,6 +118,54 @@ afterEach(() => {
 });
 
 describe("CLI startup lifecycle", () => {
+  it("does not start a second server while a live Seira holds the data folder", async () => {
+    const holder = acquireDataDirLease(dataDir);
+    const errors: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+    try {
+      await expect(runServe(options, vi.fn())).resolves.toBe(1);
+    } finally {
+      holder.release();
+    }
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(errors).toEqual(["Seira is already running with this data. It may still be starting. Wait a minute, or stop it, then start again."]);
+  });
+
+  describe("while the server applies a backup restore", () => {
+    const marker = () => join(dataDir, ".backups", "restore-progress");
+    const touch = () => { mkdirSync(join(dataDir, ".backups"), { recursive: true }); writeFileSync(marker(), "x"); utimesSync(marker(), new Date(), new Date()); };
+
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it("waits past the normal minute and tells the person why", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => { if (mocks.spawn.mock.calls.length) touch(); return Response.json({}, { status: 503 }); }));
+      const log = vi.fn();
+      const errors: string[] = [];
+      vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+      let done = false;
+      const result = runServe(options, log).then((code) => { done = true; return code; });
+      await vi.advanceTimersByTimeAsync(130_000);
+      expect(done).toBe(false);
+      expect(errors).toEqual([]);
+      expect(log).toHaveBeenCalledWith("Seira is restoring your backup. This can take several minutes. Keep this running.");
+      expect(log).toHaveBeenCalledWith("Seira is still restoring your backup. Keep this running.");
+      interrupt();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await result;
+    });
+
+    it("still gives up after a minute when no restore is running", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, { status: 503 })));
+      const errors: string[] = [];
+      vi.spyOn(console, "error").mockImplementation((line: unknown) => { errors.push(String(line)); });
+      const result = runServe(options, vi.fn());
+      await vi.advanceTimersByTimeAsync(65_000);
+      expect(await result).toBe(1);
+      expect(errors.join("\n")).toContain("did not become ready within a minute");
+    });
+  });
+
   it("does not enable Tailscale or spawn a server when guided logs cannot be opened", async () => {
     mocks.denyLogOpen = true;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({}, { status: 503 })));
@@ -132,12 +185,12 @@ describe("CLI startup lifecycle", () => {
 
   it("starts the server on the tailnet when tailscale serve can't front it, with nothing of Tailscale's to stop", async () => {
     mocks.tailscaleServe.mockResolvedValue({ failure: "https-not-enabled" });
-    mocks.tailnetListenFallback.mockReturnValue({ origin: "http://fixture.tail.ts.net:18451", env: { OMB_TAILNET_NAME: "fixture.tail.ts.net" }, line: "tailscale: listening" });
+    mocks.tailnetListenFallback.mockReturnValue({ origin: "http://fixture.tail.ts.net:18451", env: { SEIRA_TAILNET_NAME: "fixture.tail.ts.net" }, line: "tailscale: listening" });
     let started: NodeJS.ProcessEnv = {};
     mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
     const log = vi.fn();
     await expect(runServe({ ...options, tailscale: true }, log)).rejects.toThrow("Fixture spawn failure");
-    expect(started).toMatchObject({ OMB_TAILNET_NAME: "fixture.tail.ts.net", OMB_PUBLIC_URL: "http://fixture.tail.ts.net:18451" });
+    expect(started).toMatchObject({ SEIRA_TAILNET_NAME: "fixture.tail.ts.net", SEIRA_PUBLIC_URL: "http://fixture.tail.ts.net:18451" });
     expect(log).toHaveBeenCalledWith("tailscale: listening");
     expect(mocks.tailscaleStop).not.toHaveBeenCalled();
   });
@@ -174,7 +227,7 @@ describe("CLI startup lifecycle", () => {
       healthRequests++;
       if (healthRequests === 1) return Response.json({}, { status: 503 });
       if (healthRequests === 3) interrupt();
-      return Response.json({ app: "openmausbot", pid: childPid });
+      return Response.json({ app: "seira", pid: childPid });
     }));
     expect(await runServe({ ...options, tunnel: true }, vi.fn())).toBe(0);
     expect(healthRequests).toBe(3);
@@ -188,7 +241,7 @@ describe("CLI startup lifecycle", () => {
     // Nothing answers before serve starts its server; then it is up.
     vi.stubGlobal("fetch", vi.fn(async () => (++healthRequests === 1
       ? Response.json({}, { status: 503 })
-      : Response.json({ app: "openmausbot", pid: childPid }))));
+      : Response.json({ app: "seira", pid: childPid }))));
     const service = { retry: vi.fn(async () => ({})), restore: vi.fn(), dispose: vi.fn() };
     mocks.createTunnelAccount.mockReturnValue({ credentials: { status: "available", read: () => ({}) }, service });
     const running = { started: Promise.resolve(), stop: vi.fn().mockResolvedValue(undefined) };
@@ -212,15 +265,53 @@ describe("CLI startup lifecycle", () => {
     expect(running.stop).toHaveBeenCalledOnce();
   });
 
+  describe("the access log switch (FR-373)", () => {
+    const serverEnv = async (extra: object) => {
+      mocks.tunnelAccess.mockReturnValue(null);
+      let started: NodeJS.ProcessEnv = {};
+      mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
+      await expect(runServe({ ...options, ...extra }, vi.fn())).rejects.toThrow("Fixture spawn failure");
+      return started;
+    };
+
+    it("sets SEIRA_ACCESS_LOG for the server child with --access-log", async () => {
+      expect((await serverEnv({ accessLog: true })).SEIRA_ACCESS_LOG).toBe("1");
+    });
+
+    it("leaves SEIRA_ACCESS_LOG unset without --access-log", async () => {
+      expect((await serverEnv({})).SEIRA_ACCESS_LOG).toBeUndefined();
+    });
+  });
+
+  it("serves on the LAN without a tunnel when a signed-in machine gets no address (FR-221)", async () => {
+    const reason = "Secure HTTPS links are temporarily full. Try again in 10 minutes, or pair on this Wi-Fi or with Tailscale.";
+    const service = { retry: vi.fn(async () => ({ status: "error", message: reason })), restore: vi.fn(), dispose: vi.fn() };
+    mocks.createTunnelAccount.mockReturnValue({ credentials: { status: "available", read: () => ({}) }, service });
+    mocks.tunnelAccess.mockReturnValue(null);
+    let started: NodeJS.ProcessEnv = {};
+    mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
+    const log = vi.fn();
+    await expect(runServe({ ...options, tunnel: true, lan: true }, log)).rejects.toThrow("Fixture spawn failure");
+    expect(started.SEIRA_LAN).toBe("1");
+    expect(started.SEIRA_SERVES_TUNNEL).toBeUndefined();
+    expect(started.SEIRA_TUNNEL_SOCKET).toBeUndefined();
+    expect(mocks.ensureCloudflared).not.toHaveBeenCalled();
+    expect(mocks.startTunnel).not.toHaveBeenCalled();
+    expect(service.dispose).toHaveBeenCalled();
+    const lines = log.mock.calls.map(([line]) => String(line)).join("\n");
+    expect(lines).toContain(`tunnel: ${reason}`);
+    expect(lines).toMatch(/no public address this time, so this server runs without one/);
+  });
+
   it("reopens a matching desktop workspace even when its server PID differs from the lease owner", async () => {
     writeFileSync(join(dataDir, "environment-id"), workspaceId);
-    writeFileSync(join(dataDir, "openmausbot-server.lease"), JSON.stringify({
+    writeFileSync(join(dataDir, "seira-server.lease"), JSON.stringify({
       version: 1, pid: process.pid, host: hostname(), token: workspaceId, createdAt: Date.now(),
     }));
-    vi.stubEnv("OMB_DATA_DIR", process.env.OMB_DATA_DIR);
+    vi.stubEnv("SEIRA_DATA_DIR", process.env.SEIRA_DATA_DIR);
     for (const stream of [process.stdin, process.stdout]) Object.defineProperty(stream, "isTTY", { value: true, configurable: true });
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => String(url).endsWith("/api/health")
-      ? Response.json({ app: "openmausbot", pid: childPid })
+      ? Response.json({ app: "seira", pid: childPid })
       : Response.json({ environmentId: workspaceId })));
     const start = vi.fn();
     const open = vi.fn().mockResolvedValue(true);
@@ -233,7 +324,7 @@ describe("CLI startup lifecycle", () => {
 
   it("does not mistake another workspace on the same port for this one", async () => {
     writeFileSync(join(dataDir, "environment-id"), workspaceId);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ app: "openmausbot", pid: childPid }))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ app: "seira", pid: childPid }))
       .mockResolvedValueOnce(Response.json({ environmentId: "different-workspace" })));
     expect(await isWorkspaceRunning(options)).toBe(false);
   });
@@ -245,7 +336,7 @@ describe("CLI startup lifecycle", () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const address = String(url);
       if (address.endsWith("/api/health")) {
-        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "openmausbot", pid: childPid });
+        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "seira", pid: childPid });
       }
       if (address.endsWith("/.well-known/openmausbot/environment")) return Response.json({ environmentId: workspaceId, label: "fixture box" });
       expect(address).toBe(`http://127.0.0.1:${options.port}/api/auth/pairing`);
@@ -271,7 +362,7 @@ describe("CLI startup lifecycle", () => {
       requests.push(address);
       expect(init?.method).not.toBe("POST");
       if (address.endsWith("/api/health")) {
-        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "openmausbot", pid: childPid });
+        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "seira", pid: childPid });
       }
       if (address.startsWith("https://")) {
         if (failure === "unreachable") throw new Error("Fixture endpoint offline");
@@ -291,22 +382,22 @@ describe("CLI startup lifecycle", () => {
     const code = "ABCD-EFGH-JKLM";
     const expiresAt = Date.now() + 300_000;
     const pairingUrl = `${origin}/pair#code=${code}`;
-    // A real server mints both encodings of one window; Android can only scan the openmausbot:// one.
-    const credential = `omb_pair_${"a".repeat(43)}`;
-    const inviteUrl = `openmausbot://pair?address=${encodeURIComponent(origin)}&token=${credential}&name=fixture`;
+    // A real server mints both encodings of one window; Android can only scan the seira:// one.
+    const credential = `seira_pair_${"a".repeat(43)}`;
+    const inviteUrl = `seira://pair?address=${encodeURIComponent(origin)}&token=${credential}&name=fixture`;
     let healthRequests = 0;
     const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const address = String(url);
       if (address.endsWith("/api/health")) {
-        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "openmausbot", pid: childPid });
+        return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "seira", pid: childPid });
       }
       if (address === `http://127.0.0.1:${options.port}/api/auth/pairing`) {
         expect(init?.method).toBe("POST");
-        expect(JSON.parse(String(init?.body))).toEqual({ label: "Android", scopes: ["client"] });
-        // A server started without OMB_PUBLIC_URL: it mints the credential but
+        expect(JSON.parse(String(init?.body))).toEqual({ label: "Android", scopes: ["client"], device: "phone" });
+        // A server started without SEIRA_PUBLIC_URL: it mints the credential but
         // cannot name itself, so it returns no links at all. The CLI was told
         // the public address with --public-url and must build both from that.
-        return Response.json({ code, url: null, expiresAt, credential, serverName: "fixture", hint: "set OMB_PUBLIC_URL" });
+        return Response.json({ code, url: null, expiresAt, credential, serverName: "fixture", hint: "set SEIRA_PUBLIC_URL" });
       }
       expect(address).toMatch(/\/\.well-known\/openmausbot\/environment$/);
       expect(init?.method).not.toBe("POST");

@@ -12,7 +12,7 @@ import { SETTINGS_CARDS } from "./cards.ts";
 import { createAppSettings, WRITE_BUDGET } from "./host.ts";
 
 const ADDRESS = "macmini.tail1234.ts.net";
-const SECRETS = [ADDRESS, "http://", "https://", "/pair#code=", "ABCD-EFGH-IJKL", "omb_pair_"];
+const SECRETS = [ADDRESS, "http://", "https://", "/pair#code=", "ABCD-EFGH-IJKL", "seira_pair_", "omb_pair_"];
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
@@ -138,5 +138,7 @@ describe("app_settings show_card", () => {
       + "ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out.");
     expect(properties.action.enum).toContain("show_card");
     expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("you cannot change it or see what it shows");
+    expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("places: where a button, menu or page is, in or outside Settings");
+    expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("by its real name");
   });
 });

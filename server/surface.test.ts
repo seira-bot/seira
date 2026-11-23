@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 
+import { placeRowText } from "../shared/place-view.ts";
 import englishCatalog from "../src/locales/en.json" with { type: "json" };
 import {
   browserIsThePlace,
   chosenPin,
+  cloudPickWithoutComputer,
   cloudPlaceRefusal,
   computerSelectionPrompt,
   computerSkippedNote,
   computerToolsRefusal,
-  handoffUsesOwnCloud,
   failedOnHostPath,
-  isHandedWork,
+  withoutCloudComputerRow,
   namesHostPath,
   openBrowserBeside,
-  ownCloudStateWithin,
   parseSurface,
   pinSource,
   placeUnavailable,
@@ -32,48 +32,6 @@ describe("browserIsThePlace", () => {
     expect(browserIsThePlace(resolveSurface({ destination: "browser", browserOn: false }))).toBe(false);
     expect(browserIsThePlace(resolveSurface({ destination: "local", browserOn: true }))).toBe(false);
     expect(browserIsThePlace(resolveSurface({ destination: "off", browserOn: true }))).toBe(false);
-  });
-});
-
-describe("isHandedWork", () => {
-  it("counts only work another bot handed over: not a person's own resumed root, not a consult", () => {
-    expect(isHandedWork({ parentId: "root-1", mode: "work" })).toBe(true);
-    expect(isHandedWork({ mode: "work" })).toBe(false);
-    expect(isHandedWork({ parentId: "root-1", mode: "consult" })).toBe(false);
-    expect(isHandedWork(undefined)).toBe(false);
-  });
-});
-
-describe("ownCloudStateWithin", () => {
-  it("answers with the cloud computer's state, and marks a failed or slow lookup as unavailable", async () => {
-    await expect(ownCloudStateWithin(Promise.resolve({ box: { state: "stopped" } }))).resolves.toEqual({ state: "stopped", unavailable: false });
-    await expect(ownCloudStateWithin(Promise.resolve({ box: null }))).resolves.toEqual({ state: undefined, unavailable: false });
-    await expect(ownCloudStateWithin(Promise.reject(new Error("Boat is down")))).resolves.toEqual({ state: undefined, unavailable: true });
-    const started = Date.now();
-    await expect(ownCloudStateWithin(new Promise(() => {}), 20)).resolves.toEqual({ state: undefined, unavailable: true });
-    expect(Date.now() - started).toBeLessThan(1_000);
-  });
-});
-
-describe("handoffUsesOwnCloud", () => {
-  const auto = resolveSurface({ destination: undefined, browserOn: true });
-  it("runs handed-off work on Auto on the receiving bot's own cloud computer, awake or asleep", () => {
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: "running" })).toBe(true);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: "archived" })).toBe(true);
-  });
-  it("never creates one, and leaves a person's own turns and consults alone", () => {
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: null })).toBe(false);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: true, ownCloudState: undefined })).toBe(false);
-    expect(handoffUsesOwnCloud({ plan: auto, handoffWork: false, ownCloudState: "running" })).toBe(false);
-  });
-  it("keeps Works on and a pin as they are", () => {
-    for (const plan of [
-      resolveSurface({ destination: "browser", browserOn: true }),
-      resolveSurface({ destination: "local", browserOn: true }),
-      resolveSurface({ destination: "off", browserOn: true }),
-      resolveSurface({ destination: undefined, pinnedSurface: "browser", browserOn: true }),
-      resolveSurface({ destination: undefined, pinnedSurface: "vm", browserOn: true }),
-    ]) expect(handoffUsesOwnCloud({ plan, handoffWork: true, ownCloudState: "running" })).toBe(false);
   });
 });
 
@@ -172,6 +130,12 @@ describe("resolveSurface", () => {
     expect(resolveSurface({ destination: "off", browserOn: true, botOpened: true })).toMatchObject({ computer: "off", browser: false });
   });
 
+  it("a pin kept through the Boat migration never mounts a place on a bot that has no computer", () => {
+    for (const pinnedSurface of ["cloud", "local", "vm", "browser"] as const) {
+      expect(resolveSurface({ destination: "off", pinnedSurface, browserOn: true })).toMatchObject({ computer: "off", browser: false, pinned: null });
+    }
+  });
+
   it("Off mounts no computer and no browser, and says which setting did it", () => {
     const plan = resolveSurface({ destination: "off", browserOn: true });
     expect(plan).toMatchObject({ computer: "off", browser: false, pinned: null });
@@ -182,8 +146,8 @@ describe("resolveSurface", () => {
   });
 
   it("a Problems to look at turn that lost its computer is told why and that it has none", () => {
-    const note = computerSkippedNote("The team's cloud computer is missing; explicitly create or retry it from the Team map.");
-    expect(note).toMatch(/^ This turn answers a Team incidents report and your computer could not be prepared for it \(The team's cloud computer is missing; explicitly create or retry it from the Team map\), so no computer is mounted/);
+    const note = computerSkippedNote("Docker over SSH failed while checking the VPS");
+    expect(note).toMatch(/^ This turn answers a Team incidents report and your computer could not be prepared for it \(Docker over SSH failed while checking the VPS\), so no computer is mounted/);
     expect(note).toMatch(/never claim to have checked that computer yourself\.$/);
     expect(surfacePrompt({ computer: null, browser: false }, { note })).toBe(note);
     const withBrowser = surfacePrompt({ computer: null, browser: true }, { note });
@@ -437,8 +401,7 @@ describe("surface parsing", () => {
     expect(parseSurface(undefined)).toBeUndefined();
   });
 
-  it("folds both cloud backends into one surface", () => {
-    expect(surfaceOfComputerKind("box")).toBe("cloud");
+  it("maps each computer kind to its surface", () => {
     expect(surfaceOfComputerKind("vps")).toBe("cloud");
     expect(surfaceOfComputerKind("vm")).toBe("vm");
     expect(surfaceOfComputerKind("local")).toBe("local");
@@ -624,5 +587,28 @@ describe("a vm_exec command that names this computer's own paths", () => {
     expect(failedOnHostPath("ls /Users/ana/Desktop", { exitCode: 124, timedOut: true }, "darwin")).toBe(false);
     expect(failedOnHostPath("ls /nope", failed, "darwin")).toBe(false);
     expect(failedOnHostPath("ls /Users/ana/Desktop", failed, "linux")).toBe(false);
+  });
+});
+
+describe("a Cloud pick with no cloud computer behind it", () => {
+  const base = { wants: "cloud", vpsConfigured: false, routine: false, cloudHome: false } as const;
+
+  it("goes on without a computer while no VPS is set up for the bot, and not once there is one", () => {
+    expect(cloudPickWithoutComputer(base)).toBe(true);
+    expect(cloudPickWithoutComputer({ ...base, vpsConfigured: true })).toBe(false);
+  });
+
+  it("leaves every other case to its own rule", () => {
+    expect(cloudPickWithoutComputer({ ...base, routine: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, cloudHome: true })).toBe(false);
+    for (const wants of ["vm", "local", "off", undefined] as const) {
+      expect(cloudPickWithoutComputer({ ...base, wants })).toBe(false);
+    }
+  });
+
+  it("words its notice", () => {
+    const row = withoutCloudComputerRow("Scout", "pin");
+    expect(row).toEqual({ state: "cc-not-set-up", params: { bot: "Scout" }, source: "pin" });
+    expect(placeRowText(row)).toMatch(/^Scout answered without a computer.*own server/);
   });
 });

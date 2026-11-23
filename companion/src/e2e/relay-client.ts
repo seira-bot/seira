@@ -1,9 +1,9 @@
-// The computer's side of MausBot Relay: one outbound control socket, and one data socket per phone session. The relay
+// The computer's side of Seira Relay: one outbound control socket, and one data socket per phone session. The relay
 // splices sealed bytes and can't open them; everything here is outside the encryption. Wire spec: README section 9.
 import { webSocketTransport } from "./phone.ts";
 import type { RecordTransport } from "./session.ts";
 
-export const RELAY_PROTOCOL = "omb-relay.v1";
+export const RELAY_PROTOCOL = "seira-relay.v1";
 export type RelayStatus = "connected" | "connecting" | "off";
 /** Why the control socket is not connected, in words the desktop's diagnosis maps: no hello in time ("no_answer"), the
  * token refused (4401), the relay busy or restarting (4429, 4503, `restarting`), the socket failed or closed
@@ -12,6 +12,7 @@ export type RelayProblem = "no_answer" | "token_refused" | "busy" | "unreachable
 
 /** README section 10: 4429 means back off at least this long. */
 const LIMITED_MIN_MS = 30_000;
+const MAX_RETRY_MS = 10 * 60_000;
 const DEFAULT_TIMING = {
   /** Reconnect delays by failure count (± a fifth); the last repeats. */
   backoffMs: [0, 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000],
@@ -371,7 +372,7 @@ export class RelayClient {
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;
       this.#connect(index);
-    }, delayMs);
+    }, delayMs > MAX_RETRY_MS ? MAX_RETRY_MS : delayMs);
     this.#retryTimer.unref?.();
   }
 

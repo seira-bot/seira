@@ -1,13 +1,11 @@
 // Closed-app phone alerts. A paired phone registers its APNs or FCM device token here; when an approval, a question, a
-// sign-in request or a finished reply would reach a phone that holds no live event stream, this asks the push relay in
-// the hosted control plane to wake it, with the installation credential this server already has. The push is
-// content-free: kind, a title from names alone, opaque ids. Off unless `features.phonePush` (or OMB_PHONE_PUSH=1).
+// sign-in request or a finished reply would reach a phone that holds no live event stream, this asks the push relay to
+// wake it, as this server's own relay installation. The push is content-free: kind, a title from names
+// alone, opaque ids. Off unless `features.phonePush` (or SEIRA_PHONE_PUSH=1).
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
-import { COMPANION_INSTALLATION_CREDENTIAL_FIELD } from "../electron/companion-account-service.mjs";
-import { normalizeControlPlaneURL } from "../electron/control-plane-client.mjs";
 import {
   APNS_TOKEN,
   FCM_TOKEN,
@@ -30,15 +28,11 @@ import {
   type PushKind,
 } from "../shared/phone-push.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import { postToRelay, type PhonePushAccess, type RelayAnswer } from "./phone-push-access.ts";
 import { conversationLanguage, serverLine, type ServerLineKey } from "./server-lines.ts";
 
 export const PHONE_PUSH_FILE = "push-devices.json";
-export const PHONE_PUSH_ENV = "OMB_PHONE_PUSH";
-/** A push-only installation credential, for a server that holds no other (a Cloud home). */
-export const PHONE_PUSH_CREDENTIAL_ENV = "OMB_PUSH_CREDENTIAL";
-export const PHONE_PUSH_DESKTOP_MESSAGE = "openmausbot:phone-push-access";
-
-const INSTALLATION_CREDENTIAL = /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+export const PHONE_PUSH_ENV = "SEIRA_PHONE_PUSH";
 /** As routes/phones.ts `phoneKey` mints them. */
 export const PUSH_DEVICE_KEY = /^(companion|session):[\w-]{1,128}$/;
 export const MAX_PUSH_DEVICES = 50;
@@ -53,7 +47,6 @@ export const PUSH_MAX_AGE_MS = 10 * 60_000;
 export const PUSH_RETRY_MS = [5_000, 30_000, 120_000] as const;
 /** How long the relay is left alone after it said it cannot push at all (no keys, credential refused). */
 export const RELAY_UNAVAILABLE_PAUSE_MS = 60 * 60_000;
-const RELAY_TIMEOUT_MS = 10_000;
 
 const TITLES: Record<PushKind, ServerLineKey> = {
   approval: "server.notify.approval",
@@ -62,7 +55,7 @@ const TITLES: Record<PushKind, ServerLineKey> = {
   done: "server.notify.done",
 };
 
-/** On only when switched on: OMB_PHONE_PUSH=1 or 0 wins over `features.phonePush` in config.json. */
+/** On only when switched on: SEIRA_PHONE_PUSH=1 or 0 wins over `features.phonePush` in config.json. */
 export function phonePushEnabled(cfg: { features?: { phonePush?: boolean } }, env: NodeJS.ProcessEnv = process.env): boolean {
   if (env[PHONE_PUSH_ENV] === "1") return true;
   if (env[PHONE_PUSH_ENV] === "0") return false;
@@ -89,16 +82,17 @@ const storedDevice = z.object({
 const storedFile = z.object({ version: z.literal(1), devices: z.array(storedDevice).max(MAX_PUSH_DEVICES) });
 type StoredDevice = z.infer<typeof storedDevice>;
 
-export interface PhonePushAccess {
-  controlPlane: string;
-  credential: string;
-}
+export type { PhonePushAccess, RelayAnswer };
 
 export type PushOutcome = "sent" | "dropped" | "stale" | "live" | "gone" | "failed" | "retry" | "paused";
 
 export interface PhonePushOptions {
   dataDir: string;
   access: () => PhonePushAccess | null;
+  /** Gets this server a relay credential when it has none, or renews one that ends soon. */
+  prepare?: () => Promise<void>;
+  /** The relay refused `credential` (401): true when a new one is on its way, so a push waits for it. */
+  refused?: (credential: string) => boolean;
   enabled: () => boolean;
   /** Whether this phone holds a live event stream right now. */
   live: (key: string) => boolean;
@@ -128,12 +122,6 @@ interface Job {
   queuedAt: number;
   notBefore: number;
   attempts: number;
-}
-
-export interface RelayAnswer {
-  status: number;
-  code?: string;
-  retryAfterMs?: number;
 }
 
 function clip(value: string, max: number): string {
@@ -262,6 +250,7 @@ export class PhonePush {
     this.devices = [...others, next];
     this.persist();
     if (previous && previous.token !== next.token) this.dropFromRelay(previous);
+    await this.options.prepare?.();
     if (this.status() !== "on") return { ...this.answer(key), relay: "off" };
     const answer = await this.relay(PHONE_PUSH_RELAY_PATHS.register, this.registerBody(next));
     return { ...this.answer(key), relay: answer && answer.status < 300 ? "registered" : "pending" };
@@ -331,6 +320,12 @@ export class PhonePush {
     return this.outbox.size;
   }
 
+  /** Enrolls or renews the relay credential while switched on with a phone registered. Never throws. */
+  keepAccess(): Promise<void> {
+    if (!this.devices.length || !this.options.enabled()) return Promise.resolve();
+    return this.options.prepare?.() ?? Promise.resolve();
+  }
+
   private kick(): void {
     if (this.draining) return;
     this.draining = this.drain().finally(() => {
@@ -381,6 +376,7 @@ export class PhonePush {
     if (this.options.live(job.key)) return "live";
     const recent = (this.sent.get(job.key) ?? []).filter((at) => now - at < PUSH_DEVICE_WINDOW_MS);
     if (recent.length >= PUSH_DEVICE_WINDOW_MAX) return "dropped";
+    if (!this.options.access()) await this.options.prepare?.();
     const body = { v: PHONE_PUSH_WIRE_VERSION, token: device.token, ...(device.pairing ? { pairing: device.pairing } : {}), ...(job.collapseId ? { collapseId: job.collapseId } : {}), notification: job.push };
     let sent = body;
     let answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, sent);
@@ -406,6 +402,7 @@ export class PhonePush {
       this.persist();
       return "gone";
     }
+    if (answer.status === 401 && answer.renewing) return "retry";
     if (answer.code === PUSH_RELAY_ERRORS.unavailable || answer.status === 401 || answer.status === 404) return this.pause(RELAY_UNAVAILABLE_PAUSE_MS);
     if (answer.status === 429) return this.pause(answer.retryAfterMs ?? 60_000);
     if (answer.status >= 500) return "retry";
@@ -417,79 +414,16 @@ export class PhonePush {
     return "paused";
   }
 
-  /** One POST to the relay; null when it could not be reached. The credential travels only in the Authorization header,
-   * to the control plane's own origin, and is never logged. */
-  private async relay(path: string, body: unknown): Promise<RelayAnswer | null> {
+  /** One POST to the relay as this server's installation; null when it could not be reached or there is no credential. */
+  private async relay(path: string, body: unknown): Promise<(RelayAnswer & { renewing?: boolean }) | null> {
     const access = this.options.access();
     if (!access) return null;
-    try {
-      const response = await this.fetchImpl(`${access.controlPlane}${path}`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${access.credential}`, "content-type": "application/json" },
-        body: JSON.stringify(body),
-        redirect: "error",
-        signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
-      });
-      const payload = await response.json().catch(() => null) as { error?: unknown } | null;
-      const retryAfter = Number(response.headers.get("retry-after"));
-      return {
-        status: response.status,
-        ...(typeof payload?.error === "string" ? { code: payload.error } : {}),
-        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterMs: retryAfter * 1_000 } : {}),
-      };
-    } catch (error) {
-      this.log(`[phone-push] the relay could not be reached: ${error instanceof Error ? error.name : "error"}`);
+    const answer = await postToRelay(this.fetchImpl, access.relay, path, body, access.credential);
+    if (!answer) {
+      this.log("[phone-push] the relay could not be reached");
       return null;
     }
-  }
-}
-
-/** A validated access pair, or null. */
-export function phonePushAccess(controlPlane: unknown, credential: unknown): PhonePushAccess | null {
-  const origin = typeof controlPlane === "string" ? normalizeControlPlaneURL(controlPlane) : "";
-  if (!origin || typeof credential !== "string" || !INSTALLATION_CREDENTIAL.test(credential)) return null;
-  return { controlPlane: origin, credential };
-}
-
-/** Where this server's control-plane access comes from, first match wins: the desktop app's private message (its
- * credential lives in the OS store this process cannot read), OMB_PUSH_CREDENTIAL, a fleet's
- * OMB_INSTALLATION_CREDENTIAL, `seira login`'s tunnel-account.json. OMB_CONTROL_PLANE_URL overrides the origin. */
-export class PhonePushAccessSource {
-  private desktop: PhonePushAccess | null | undefined;
-  private readonly env: NodeJS.ProcessEnv;
-  private readonly options: { tunnelFile: string; defaultControlPlane: string };
-
-  constructor(options: { env?: NodeJS.ProcessEnv; tunnelFile: string; defaultControlPlane: string }) {
-    this.env = options.env ?? process.env;
-    this.options = options;
-  }
-
-  /** The desktop app's message: true when it was one. */
-  receive(message: unknown): boolean {
-    if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== PHONE_PUSH_DESKTOP_MESSAGE) return false;
-    const access = (message as { access?: unknown }).access;
-    this.desktop = access && typeof access === "object"
-      ? phonePushAccess((access as { controlPlane?: unknown }).controlPlane, (access as { credential?: unknown }).credential)
-      : null;
-    return true;
-  }
-
-  private controlPlane(): string {
-    if (Object.hasOwn(this.env, "OMB_CONTROL_PLANE_URL")) return normalizeControlPlaneURL(this.env.OMB_CONTROL_PLANE_URL ?? "");
-    return this.options.defaultControlPlane;
-  }
-
-  current(): PhonePushAccess | null {
-    if (this.desktop !== undefined) return this.desktop;
-    const fromEnv = this.env[PHONE_PUSH_CREDENTIAL_ENV]?.trim() || this.env.OMB_INSTALLATION_CREDENTIAL?.trim();
-    if (fromEnv) return phonePushAccess(this.controlPlane(), fromEnv);
-    let document: unknown;
-    try {
-      document = JSON.parse(readFileSync(this.options.tunnelFile, "utf8"));
-    } catch {
-      return null;
-    }
-    const credential = document && typeof document === "object" ? (document as Record<string, unknown>)[COMPANION_INSTALLATION_CREDENTIAL_FIELD] : undefined;
-    return phonePushAccess(this.controlPlane(), credential);
+    const { body: _body, ...rest } = answer;
+    return answer.status === 401 && this.options.refused?.(access.credential) ? { ...rest, renewing: true } : rest;
   }
 }

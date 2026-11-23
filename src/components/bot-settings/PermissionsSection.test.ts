@@ -123,11 +123,30 @@ describe("PermissionsSection parts", () => {
 describe("Sending on your behalf", () => {
   const option = (label: string) => [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
 
-  it("asks every time by default, and one click sends without asking", () => {
+  it("asks every time below Full access with no rule, and one click sends without asking", () => {
     render(base);
     expect(option("Ask every time")?.getAttribute("aria-pressed")).toBe("true");
     flushSync(() => option("Send without asking")!.click());
     expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: "updateBot", botId: "pepper", patch: { outbound: { policy: "allow" } } });
+  });
+
+  it("shows that Full access with no rule sends without asking, and one click saves Ask every time", () => {
+    render({ ...base, approvalMode: "full" });
+    expect(option("Send without asking")?.getAttribute("aria-pressed")).toBe("true");
+    expect(option("Ask every time")?.getAttribute("aria-pressed")).toBe("false");
+    flushSync(() => option("Ask every time")!.click());
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: "updateBot", botId: "pepper", patch: { outbound: { policy: "ask" } } });
+  });
+
+  it("saves the shown choice as a rule when none is saved, and saves nothing again once it is", () => {
+    render(base);
+    flushSync(() => option("Ask every time")!.click());
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: "updateBot", botId: "pepper", patch: { outbound: { policy: "ask" } } });
+    dispatch.mockReset();
+    render({ ...base, approvalMode: "full", outbound: { policy: "ask" } });
+    expect(option("Ask every time")?.getAttribute("aria-pressed")).toBe("true");
+    flushSync(() => option("Ask every time")!.click());
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("has no limit to set or count, even for a rule saved with a daily cap", () => {

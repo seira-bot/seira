@@ -9,6 +9,7 @@ import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "n
 import { backup, DatabaseSync } from "node:sqlite";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
+import { readBackupMagic, withCurrentSummary } from "./workspace-backup-legacy.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { userErrorFields, userErrorThrown } from "./user-errors.ts";
 import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.ts";
@@ -18,26 +19,26 @@ import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEngineP
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
-import { userHome } from "./env-path.ts";
+import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
 export const MAX_WORKSPACE_BACKUP_FILES = 100_000;
 export const MAX_WORKSPACE_BACKUP_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_BYTES + 256 * 1024 ** 2;
 const MAX_METADATA_BYTES = 16 * 1024 ** 2;
-const MAGIC = Buffer.from("OMB-WORKSPACE-1\n");
+const MAGIC = Buffer.from("SEIRA-WORKSPACE-1\n");
 const HEADER_BYTES = MAGIC.length + 16 + 12;
 const TAG_BYTES = 16;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const WAITS_FILE = "waits.json";
 const EXCLUDED = new Set([
   ".backups", "tools", "browser", "agent-browser-profiles", "cache", ".cache", "tmp", ".tmp", "dist-native", "tunnel-runtime", "evidence",
-  ".openmausbot-server-child", "environment-id", "sessions.json", "tunnel-account.json",
+  ".seira-server-child", "environment-id", "sessions.json", "tunnel-account.json",
   "team-computers.json",
   // Slack messages a Cloud took from the Admin (team-slack.ts): this machine's own, of no use anywhere else.
   "team-slack-messages.json",
-  "openmausbot-server.lease", "box-create-requests.lock", "messages.db-wal", "messages.db-shm",
-  "runtime.db-wal", "runtime.db-shm",
+  "seira-server.lease", "box-create-requests.lock", "messages.db-wal", "messages.db-shm",
+  "runtime.db-wal", "runtime.db-shm", "workflows.db-wal", "workflows.db-shm",
   "decider-log",
   "cloud-owner.json",
   "sync",
@@ -99,7 +100,7 @@ export interface WorkspaceRestoreResult {
 export type LastWorkspaceRestore = WorkspaceRestoreResult & { restored: true; id: string; pathsRewritten?: true };
 
 function excluded(name: string): boolean {
-  return EXCLUDED.has(name) || excludedWorkspaceAuthPath(name) || name.startsWith("openmausbot-server.lease.") || name.startsWith("box-create-requests.lock.") || /^perm-[A-Za-z0-9_-]+\.sock$/.test(name);
+  return EXCLUDED.has(name) || excludedWorkspaceAuthPath(name) || name.startsWith("seira-server.lease.") || name.startsWith("box-create-requests.lock.") || /^perm-[A-Za-z0-9_-]+\.sock$/.test(name);
 }
 function forbiddenArchivePath(path: string): boolean {
   const folded = path.toLowerCase();
@@ -111,7 +112,8 @@ function preserved(name: string): boolean {
   const folded = name.toLowerCase();
   return excluded(folded) && !LIVE_DATABASE_SIDECARS.has(folded) && folded !== WAITS_FILE;
 }
-const SNAPSHOT_DATABASES: Record<string, string> = { "messages.db": "messages-snapshot.db", "runtime.db": "runtime-snapshot.db" };
+const SNAPSHOT_DATABASES: Record<string, string> = { "messages.db": "messages-snapshot.db", "runtime.db": "runtime-snapshot.db", "workflows.db": "workflows-snapshot.db" };
+const DATABASE_LABELS: Record<string, string> = { "messages.db": "message", "runtime.db": "runtime", "workflows.db": "workflow" };
 const LIVE_DATABASE_SIDECARS = new Set(Object.keys(SNAPSHOT_DATABASES).flatMap((name) => [`${name}-wal`, `${name}-shm`]));
 function keptInPlace(name: string): boolean {
   return preserved(name) || name.toLowerCase() === "sessions.json.open";
@@ -228,7 +230,7 @@ function copyRegular(source: string, destination: string): { size: number; mode:
       if (!count) break;
       size += count;
       if (size > before.size) throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-      hash.update(chunk.subarray(0, count));
+      hash.update(chunk.subarray(0, count)); restoreBeat();
       let offset = 0;
       while (offset < count) offset += writeSync(output, chunk, offset, count - offset);
     }
@@ -254,7 +256,7 @@ function hashFile(path: string): string {
     for (;;) {
       const count = readSync(fd, chunk, 0, chunk.length, null);
       if (!count) return hash.digest("hex");
-      hash.update(chunk.subarray(0, count));
+      hash.update(chunk.subarray(0, count)); restoreBeat();
     }
   } finally { closeSync(fd); }
 }
@@ -336,7 +338,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     for (const [name, snapshotName] of Object.entries(SNAPSHOT_DATABASES)) {
       const sourceDb = join(root, name);
       if (!existsSync(sourceDb)) continue;
-      if (lstatSync(sourceDb).isSymbolicLink()) throw new Error(`The ${name === "messages.db" ? "message" : "runtime"} database must not be a symbolic link.`);
+      if (lstatSync(sourceDb).isSymbolicLink()) throw new Error(`The ${DATABASE_LABELS[name]} database must not be a symbolic link.`);
       // Another connection may open this database meanwhile; without a busy timeout the backup fails at once ("database is locked").
       const db = new DatabaseSync(sourceDb, { readOnly: true, timeout: 5_000 });
       // Node 26's native backup completion can wait on unrelated event-loop activity after an async scrypt; this pulse keeps it moving.
@@ -348,10 +350,9 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     }
     const teamPrivate = teamPrivateThreads({ starters: join(root, "thread-starters.json"), groups: join(root, "groups.json"), bots: join(root, "bots.json") });
     const privacy = teamPrivate && { ...teamPrivate, attachments: teamPrivateAttachments(root, join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), teamPrivate) };
-    if (privacy) {
-      stripTeamPrivate({ messages: join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), runtime: join(snapshot, SNAPSHOT_DATABASES["runtime.db"]!) }, privacy);
-      warnings.push(TEAM_PRIVATE_NOTE);
-    }
+    const snapshotOf = (name: string) => join(snapshot, SNAPSHOT_DATABASES[name]!);
+    const privateWorkflowRuns = privacy ? stripTeamPrivate({ messages: snapshotOf("messages.db"), runtime: snapshotOf("runtime.db"), workflows: snapshotOf("workflows.db") }, privacy) : new Set<string>();
+    if (privacy) warnings.push(TEAM_PRIVATE_NOTE);
     const walk = (directory: string, prefix = "", chain: string[] = [root]) => {
       for (const name of readdirSync(directory).sort()) {
         if (!prefix && excluded(name)) continue;
@@ -377,6 +378,11 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           if (managedTaskSkillLink(source, path, [root, resolve(dataDir)])) skippedLinks++; else skippedWorkLinks++;
           continue;
         }
+        // The app makes these links again on each turn; a missing or foreign target must not stop the backup.
+        if (stat.isSymbolicLink() && /^workspaces\/[^/]+\/\.(?:claude|agents|grok)\/skills\/[^/]+$/.test(path)) {
+          skippedLinks++;
+          continue;
+        }
         if (stat.isSymbolicLink()) {
           let target: string;
           try { target = realpathSync(source); } catch { throw new Error(`Cannot back up dangling symbolic link: ${path}`); }
@@ -385,12 +391,6 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
             throw new Error(`Cannot back up symbolic link outside the workspace: ${path}`);
           }
           const portableRel = rel.replaceAll("\\", "/");
-          // Only the app's disposable native-discovery links may be omitted; any other link is user data.
-          if (/^workspaces\/[^/]+\/\.(?:claude|agents|grok)\/skills\/[^/]+$/.test(path) &&
-            portableRel.startsWith(`workspaces/${path.split("/")[1]}/skills/`)) {
-            skippedLinks++;
-            continue;
-          }
           const workspace = /^workspaces\/[^/]+\//.exec(path)?.[0];
           if (!workspace || !portableRel.startsWith(workspace)) {
             throw new Error(`Cannot back up user-created symbolic link; replace it with regular files first: ${path}`);
@@ -417,7 +417,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
             else if (path === "bots.json") writeJson(destination, withoutTeamPrivate(value, privacy!));
-            else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!));
+            else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!, privateWorkflowRuns));
             else {
               if (!record(value)) throw new Error("Invalid webhook definitions in workspace backup.");
               if (Array.isArray(value.webhooks)) for (const webhook of value.webhooks) if (record(webhook)) { delete webhook.secretHash; delete webhook.sealedSecret; }
@@ -438,7 +438,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     if (copiedLinks) warnings.push(`${copiedLinks} symbolic link(s) inside a workspace were saved as copies of what they point to; restoring creates regular files and folders there.`);
     if (skippedWorkLinks) warnings.push(`${skippedWorkLinks} symbolic link(s) in conversation work folders were omitted; what they point to is outside this backup.`);
     const summary: WorkspaceBackupSummary = {
-      format: "openmaus.workspace-backup", version: 1, id: job.id, createdAt: new Date().toISOString(),
+      format: "seira.workspace-backup", version: 1, id: job.id, createdAt: new Date().toISOString(),
       appVersion: options.appVersion ?? "unknown", files: entries.filter((entry) => entry.type === "file").length,
       directories: entries.filter((entry) => entry.type === "directory").length, bytes,
       bots: countJsonArray(join(snapshot, "data", "bots.json")), groups: countJsonArray(join(snapshot, "data", "groups.json")),
@@ -450,7 +450,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     };
     writeJson(join(snapshot, "manifest.json"), manifest);
     validateManifest(privateJson(join(snapshot, "manifest.json")));
-    const path = join(job.directory, "workspace.ombbackup");
+    const path = join(job.directory, "workspace.seirabackup");
     const iv = randomBytes(12);
     const header = Buffer.concat([MAGIC, salt, iv]);
     const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -469,7 +469,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
 }
 
 function validateManifest(value: unknown): Manifest {
-  if (!record(value) || !record(value.summary) || value.summary.format !== "openmaus.workspace-backup" || value.summary.version !== 1 ||
+  withCurrentSummary(value);
+  if (!record(value) || !record(value.summary) || value.summary.format !== "seira.workspace-backup" || value.summary.version !== 1 ||
     typeof value.summary.id !== "string" || !ID.test(value.summary.id) || typeof value.summary.createdAt !== "string" ||
     !Number.isFinite(Date.parse(value.summary.createdAt)) || typeof value.summary.appVersion !== "string" ||
     typeof value.sourceDataDir !== "string" || !(posix.isAbsolute(value.sourceDataDir) || win32.isAbsolute(value.sourceDataDir)) ||
@@ -520,16 +521,18 @@ async function decryptArchive(inputPath: string, plaintext: string, password: st
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.size < HEADER_BYTES + TAG_BYTES || stat.size > MAX_WORKSPACE_BACKUP_UPLOAD_BYTES) throw new Error("Invalid or oversized workspace backup file.");
-    const header = Buffer.alloc(HEADER_BYTES);
+    const magic = readBackupMagic(fd, MAGIC);
+    const headerBytes = magic.length + 16 + 12;
+    const header = Buffer.alloc(headerBytes);
     const tag = Buffer.alloc(TAG_BYTES);
-    if (readSync(fd, header, 0, header.length, 0) !== header.length || !header.subarray(0, MAGIC.length).equals(MAGIC) ||
+    if (readSync(fd, header, 0, header.length, 0) !== header.length ||
       readSync(fd, tag, 0, tag.length, stat.size - TAG_BYTES) !== tag.length) throw new Error("This is not a supported encrypted workspace backup.");
-    key = await passwordKey(password, header.subarray(MAGIC.length, MAGIC.length + 16));
-    const decipher = createDecipheriv("aes-256-gcm", key, header.subarray(MAGIC.length + 16));
+    key = await passwordKey(password, header.subarray(magic.length, magic.length + 16));
+    const decipher = createDecipheriv("aes-256-gcm", key, header.subarray(magic.length + 16));
     decipher.setAAD(header);
     decipher.setAuthTag(tag);
     try {
-      await pipeline(createReadStream(inputPath, { fd, autoClose: false, start: HEADER_BYTES, end: stat.size - TAG_BYTES - 1 }), decipher,
+      await pipeline(createReadStream(inputPath, { fd, autoClose: false, start: headerBytes, end: stat.size - TAG_BYTES - 1 }), decipher,
         createWriteStream(plaintext, { flags: "wx", mode: 0o600 }));
     } catch {
       throw new Error("The backup password is incorrect, or the backup file is damaged. Nothing was restored.");
@@ -897,13 +900,13 @@ export function readLastWorkspaceRestore(dataDir: string): LastWorkspaceRestore 
 function finishRestore(dataDir: string, id: string, consumePending = true): LastWorkspaceRestore {
   const root = backupRoot(dataDir);
   const { summary, clientState } = readStagedWorkspaceBackup(dataDir, id);
-  const draftAttachments = clientState["omb-draft-attachments"];
+  const draftAttachments = clientState["seira-draft-attachments"];
   if (draftAttachments) {
     try {
       const value: unknown = JSON.parse(draftAttachments);
       const manifest = validateManifest(privateJson(join(jobPath(dataDir, id), "staged", "manifest.json")));
       restorePaths(manifest.sourceDataDir, resolve(dataDir)).fields(value);
-      clientState["omb-draft-attachments"] = JSON.stringify(value);
+      clientState["seira-draft-attachments"] = JSON.stringify(value);
     } catch {}
   }
   const leftBehind = join(jobPath(dataDir, id), "left-behind.json");
@@ -948,8 +951,7 @@ export function applyPendingWorkspaceRestore(dataDir: string): WorkspaceRestoreR
     return { restored: false, rolledBack: true, id: pending.id, safetyCopyPath };
   }
   const staged = join(jobPath(dataDir, pending.id), "staged");
-  const manifest = validateStaged(staged);
-  const prepared = prepareRestore(dataDir, pending.id, manifest);
+  const prepared = withRestoreBeat(dataDir, () => prepareRestore(dataDir, pending.id, validateStaged(staged)));
   folder(join(safetyCopyPath, "data"));
   const journal: RestoreJournal = {
     id: pending.id, phase: "applying",

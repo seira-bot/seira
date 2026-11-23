@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,6 +9,9 @@ import {
   acceptLegacyOrigins,
   BROWSER_SIGN_IN,
   clearSessionCookie,
+  clearSessionCookies,
+  presentedSessionCookie,
+  sessionCookieHeaders,
   fromBrowser,
   adminOnlyBotSetting,
   botProfileSettings,
@@ -69,11 +73,11 @@ describe("origin and cookies", () => {
     expect(isSameOrigin(request({ host: "a.example", origin: "https://evil.example" }))).toBe(false);
   });
   it("parses cookies and names the session cookie per port and environment", () => {
-    expect(parseCookies("a=1; omb_session_8799_abc=tok; b = 2")).toEqual(new Map([["a", "1"], ["omb_session_8799_abc", "tok"], ["b", "2"]]));
+    expect(parseCookies("a=1; seira_session_8799_abc=tok; b = 2")).toEqual(new Map([["a", "1"], ["seira_session_8799_abc", "tok"], ["b", "2"]]));
     expect(parseCookies(undefined).size).toBe(0);
-    expect(sessionCookieName(8799, "3f2a-uuid-like-id")).toBe("omb_session_8799_3f2auuidlike");
-    expect(serializeSessionCookie("c", "t", { secure: true, maxAgeSeconds: 60 })).toBe("c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60; Secure");
-    expect(serializeSessionCookie("c", "t", { secure: false, maxAgeSeconds: 60 })).not.toContain("Secure");
+    expect(sessionCookieName(8799, "3f2a-uuid-like-id")).toBe("seira_session_8799_3f2auuidlike");
+    expect(serializeSessionCookie("c", "t", { secure: true, maxAgeSeconds: 60 })).toBe("__Host-c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60; Secure");
+    expect(serializeSessionCookie("c", "t", { secure: false, maxAgeSeconds: 60 })).toBe("c=t; Path=/; HttpOnly; SameSite=Lax; Max-Age=60");
     expect(clearSessionCookie("c")).toContain("Max-Age=0");
   });
 });
@@ -89,6 +93,21 @@ describe("request source for the lockout", () => {
     expect(requestSource(withPeer("100.64.0.7", { "x-forwarded-for": "1.1.1.1" }))).toBe("100.64.0.7");
     expect(requestSource(withPeer("127.0.0.1", { "x-forwarded-for": "evil\n\u0007 <script>" + "x".repeat(200) }))).toMatch(/^[\w.:%[\]-]{1,64}$/);
     expect(sanitizeSource("")).toBe("unknown");
+  });
+
+  it("keys an IPv6 forwarded source by its /64", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("2001:db8:1:2::1")).toBe(via("2001:db8:1:2::ffff"));
+    expect(via("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:3::1")).not.toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:2::1")).toMatch(/^[\w.:%[\]-]{1,64}$/);
+  });
+
+  it("keeps an IPv4 and an IPv4-mapped IPv6 source as the IPv4 address", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("203.0.113.9")).toBe("203.0.113.9");
+    expect(via("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(requestSource(withPeer("::1", {}))).toBe("::1");
   });
 });
 
@@ -177,6 +196,9 @@ describe("scopes", () => {
       ["PATCH", "/api/bots/x"], ["PATCH", "/api/bots/x/profile"], ["POST", "/api/attachments"], ["PUT", "/api/bots/order"],
       ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
+      ["GET", "/api/workflows"], ["POST", "/api/workflows"], ["GET", "/api/workflows/w1"], ["PATCH", "/api/workflows/w1"], ["DELETE", "/api/workflows/w1"],
+      ["GET", "/api/workflows/w1/runs"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
+      ["GET", "/api/threads/t/messages/m/workflow-draft"],
       ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],
       ["GET", "/api/auth/session"], ["POST", "/api/auth/stream-ticket"], ["POST", "/api/auth/logout"],
@@ -191,7 +213,6 @@ describe("scopes", () => {
       ["POST", "/api/cli-test"], ["GET", "/api/cli-candidates"], ["GET", "/api/instances"], ["PATCH", "/api/instances/claude"],
       ["POST", "/api/bots/x/computer/exec"], ["POST", "/api/bots/x/computer/join"], ["POST", "/api/local-computer/run"],
       ["POST", "/api/bots/x/local-computer/join"], ["POST", "/api/bots/x/local-computer/screenshot"],
-      ["GET", "/api/computers/boxes"], ["POST", "/api/computers/boxes/bx_23456789/delete"],
       ["POST", "/api/webhooks"], ["POST", "/api/webhooks/w/rotate"], ["POST", "/api/bots/x/skills"], ["PATCH", "/api/bots/x/skills/s"],
       ["PATCH", "/api/bots/x/model"], ["PATCH", "/api/groups/g/setup"], ["POST", "/api/teams/import"], ["POST", "/api/share/import"], ["POST", "/api/share/export"],
       ["POST", "/api/team-library/github"], ["GET", "/api/setup-import/grok"],
@@ -200,7 +221,7 @@ describe("scopes", () => {
       ["POST", "/api/bots/x/slack-management"], ["GET", "/api/bots/x/slack-management/extra"],
       ["PUT", "/api/config"], ["POST", "/api/auth/pairing"], ["GET", "/api/auth/sessions"], ["DELETE", "/api/auth/sessions/abc"],
       ["POST", "/api/live/session"], ["POST", "/api/live/call/end"], ["GET", "/api/live/call"], ["PATCH", "/api/live/settings"],
-      ["POST", "/api/live/device-revoked"],
+      ["POST", "/api/live/device-revoked"], ["POST", "/api/call/voice-preview"],
       ["POST", "/api/auth/pair"],
       ["GET", "/api/something-new"],
       ["POST", "/api/bots/x/sign-in-cards/m/provide"], ["POST", "/api/browser-engine/install"],
@@ -211,6 +232,9 @@ describe("scopes", () => {
       ["POST", "/api/bots/x/apps/m/rpc/extra"], ["DELETE", "/api/bots/x/apps/m/context"],
       ["PATCH", "/api/logins/1password/vaults/v1"], ["GET", "/api/bots/x/sign-in-cards/m/done"],
       ["GET", "/api/bots/x/queue/q/steer"], ["POST", "/api/bots/x/queue/q/steer/more"], ["POST", "/api/groups/g/queue/q/steer/more"],
+      ["PUT", "/api/workflows"], ["POST", "/api/workflows/w1"], ["PUT", "/api/workflows/w1"], ["POST", "/api/workflows/w1/runs"],
+      ["POST", "/api/workflow-runs/r1"], ["GET", "/api/workflow-runs/r1/steps/s1/run-again"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again/extra"],
+      ["POST", "/api/threads/t/messages/m/workflow-draft"],
       ["POST", "/api/tts/voices/add"], ["GET", "/api/inbox/read-all"], ["PUT", "/api/inbox/read-all"], ["POST", "/api/inbox/read-all/extra"],
     ] as const) expect(requiredScope(method, path), `${method} ${path}`).toBe("admin");
   });
@@ -247,13 +271,14 @@ describe("scopes", () => {
     expect(clientBotPatchViolation({ xResearch: true })).toBe("xResearch");
     expect(clientBotPatchViolation({ recordBrowserSteps: true })).toBe("recordBrowserSteps");
     expect(clientBotPatchViolation([])).toBe("body");
-    // A Team Cloud member changes no team bot's look, which everyone sees; their own MausBot's they do.
+    // A Team Cloud member changes no team bot's look, which everyone sees; their own Seira's they do.
     expect(clientBotPatchViolation({ color: "blue" }, false, true)).toBe("color");
     expect(clientBotPatchViolation({ avatarUrl: null }, false, true)).toBe("avatarUrl");
     expect(clientBotPatchViolation({ mascotBody: "cursor" }, false, true)).toBe("mascotBody");
     expect(clientBotPatchViolation({ unread: false, pinned: true }, false, true)).toBeNull();
     expect(clientBotPatchViolation({ color: "blue", name: "Mine" }, true, true)).toBeNull();
     expect(clientGroupPatchViolation({ name: "Ops", unread: false, turnTimeoutMinutes: 30 })).toBeNull();
+    expect(clientGroupPatchViolation({ avatarUrl: "/api/attachments/a.png" })).toBeNull();
     expect(clientGroupPatchViolation({ cwd: "/tmp" })).toBe("cwd");
     expect(clientGroupPatchViolation({ memberIds: [] })).toBe("memberIds");
   });
@@ -275,25 +300,101 @@ describe("scopes", () => {
   });
 });
 
+describe("the session cookie name", () => {
+  it("is __Host- on https, with Secure and Path=/ and no Domain, and clears the old name beside it", () => {
+    const issued = serializeSessionCookie("seira_session_1_x", "tok", { secure: true, maxAgeSeconds: 60 });
+    expect(issued.startsWith("__Host-seira_session_1_x=tok")).toBe(true);
+    expect(issued).toContain("Secure");
+    expect(issued).toContain("Path=/");
+    expect(issued).not.toContain("Domain");
+    const headers = sessionCookieHeaders("seira_session_1_x", "tok", { secure: true, maxAgeSeconds: 60 });
+    expect(headers).toEqual([issued, expect.stringMatching(/^seira_session_1_x=; .*Max-Age=0/)]);
+    expect(sessionCookieHeaders("n", "tok", { secure: false, maxAgeSeconds: 60 })).toEqual([expect.stringMatching(/^n=tok; /)]);
+  });
+
+  it("clears both names on logout", () => {
+    const [plain, prefixed] = clearSessionCookies("n");
+    expect(plain).toMatch(/^n=; .*Max-Age=0/);
+    expect(prefixed).toMatch(/^__Host-n=; .*Max-Age=0; Secure$/);
+  });
+
+  it("reads only the __Host- cookie on https", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", true)).toBe("new");
+    expect(presentedSessionCookie("__Host-n=new; n=junk", "n", true)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", true)).toBeUndefined();
+    expect(presentedSessionCookie(undefined, "n", true)).toBeUndefined();
+  });
+
+  it("reads the __Host- cookie first and the unprefixed name when it is absent on http", () => {
+    expect(presentedSessionCookie("n=old; __Host-n=new", "n", false)).toBe("new");
+    expect(presentedSessionCookie("n=old", "n", false)).toBe("old");
+    expect(presentedSessionCookie(undefined, "n", false)).toBeUndefined();
+  });
+});
+
 describe("resolveRequestAuth", () => {
   let dir: string;
   let sessions: SessionRegistry;
-  const cookieName = "omb_session_8799_env";
+  const cookieName = "seira_session_8799_env";
   const resolve = (headers: Record<string, string>, path = "/api/bots", method = "GET") =>
     resolveRequestAuth(request(headers, method), { sessions, cookieName, streamPath: "/api/events", url: new URL(path, "http://x") });
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-auth-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-auth-"));
     sessions = new SessionRegistry({ file: join(dir, "sessions.json") });
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  function pairedSession(scopes: Array<"admin" | "client"> = ["admin", "client"]) {
+    const { code } = sessions.openPairing({ scopes });
+    const result = sessions.exchange({ code, label: "browser", source: "1.2.3.4" });
+    if (!result.ok) throw new Error(result.error);
+    return result;
+  }
+
+  it("a same-name cookie without the prefix does not replace an https session", () => {
+    const { token } = pairedSession();
+    const headers = { host: "bots.example.com", origin: "http://bots.example.com" };
+    const mixed = resolve({ ...headers, cookie: `__Host-${cookieName}=${token}; ${cookieName}=junk` });
+    expect(mixed.auth?.kind).toBe("session");
+    expect(resolve({ ...headers, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+    expect(resolve({ ...headers, cookie: `${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("keeps Live voice samples an admin's, since each sample spends the owner's voice key", () => {
+    const preview = (token: string) => resolve({ host: "127.0.0.1:8799", authorization: `Bearer ${token}` }, "/api/call/voice-preview", "POST");
+    const member = preview(pairedSession(["client"]).token);
+    expect(member.auth).toBeNull();
+    expect(member.status).toBe(403);
+    expect(preview(pairedSession().token).auth?.kind).toBe("session");
+  });
+
+  it("does not accept a valid session that has only the old cookie name on https", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}` }).auth).toBeNull();
+    expect(resolve({ ...https, cookie: `${cookieName}=${token}; __Host-${cookieName}=junk` }).auth).toBeNull();
+  });
+
+  it("accepts the __Host- cookie on https, and ignores a same-name cookie without the prefix", () => {
+    const { token } = pairedSession();
+    const https = { host: "bots.example.com", origin: "https://bots.example.com", "x-forwarded-proto": "https" };
+    expect(resolve({ ...https, cookie: `__Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+    expect(resolve({ ...https, cookie: `${cookieName}=junk; __Host-${cookieName}=${token}` }).auth?.kind).toBe("session");
+  });
+
+  it("accepts the unprefixed cookie name on plain http", () => {
+    const { token } = pairedSession();
+    const old = resolve({ host: "bots.example.com", origin: "http://bots.example.com", cookie: `${cookieName}=${token}` });
+    expect(old.auth?.kind).toBe("session");
+  });
+
   it("accepts authenticated relay mutations without exposing the desktop owner capability", () => {
     const headers = {
       host: "127.0.0.1:8799",
-      "x-openmausbot-companion": "1",
-      "x-openmausbot-companion-device": "phone-1",
-      "x-openmausbot-companion-auth": "relay-secret",
+      "x-seira-companion": "1",
+      "x-seira-companion-device": "phone-1",
+      "x-seira-companion-auth": "relay-secret",
     };
     const check = (method: string, path: string, overrides: Record<string, string> = {}, relay = "relay-secret") =>
       resolveRequestAuth(request({ ...headers, ...overrides }, method), {
@@ -312,7 +413,7 @@ describe("resolveRequestAuth", () => {
     expect(check("POST", "/api/bots/b/skills").auth).toBeNull();
     expect(check("DELETE", "/api/attachments/abc-1.jpg").auth).toEqual({ kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" });
     expect(check("DELETE", "/api/attachments/..%2Fconfig.json").auth).toBeNull();
-    const plain = resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-openmausbot-companion": "1", "x-openmausbot-companion-device": "phone-1" }, "GET"), {
+    const plain = resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-seira-companion": "1", "x-seira-companion-device": "phone-1" }, "GET"), {
       sessions, cookieName, streamPath: "/api/events", url: new URL("/api/phones/self/jobs", "http://localhost"),
       loopbackMutationToken: "desktop-secret", companionMutationToken: "relay-secret",
     });
@@ -322,10 +423,10 @@ describe("resolveRequestAuth", () => {
       ["POST", "/api/bots/b/browser/restart"],
     ]) expect(check(method, path).auth?.kind, path).not.toBe("loopback");
     const forged: Record<string, string>[] = [
-      { "x-openmausbot-companion-auth": "" },
-      { "x-openmausbot-companion-auth": "desktop-secret" },
-      { "x-openmausbot-companion-device": "" },
-      { "x-openmausbot-companion": "0" },
+      { "x-seira-companion-auth": "" },
+      { "x-seira-companion-auth": "desktop-secret" },
+      { "x-seira-companion-device": "" },
+      { "x-seira-companion": "0" },
       { origin: "https://evil.example" },
       { "x-forwarded-for": "203.0.113.1" },
       { host: "remote.example" },
@@ -424,7 +525,7 @@ describe("resolveRequestAuth", () => {
     const desktop = resolveRequestAuth(
       request({
         host: "127.0.0.1:8799",
-        "x-openmausbot-desktop-owner": "owner-token-123",
+        "x-seira-desktop-owner": "owner-token-123",
       }, "POST"),
       options("/api/routines"),
     );
@@ -443,7 +544,7 @@ describe("resolveRequestAuth", () => {
     for (const path of ["/api/desktop-viewer/vps/bot-1", "/api/desktop-viewer/local/shared/websockify", "/api/webhooks/hook-1/address", "/api/setup-import/grok",
       "/api/local-computer", "/api/bots/bot-1/local-computer", "/api/usb-phones/PHONE1/stream", "/api/usb-phones/emulator-5554/stream", "/api/usb-phones/SM.G991B/stream"]) {
       expect(resolveRequestAuth(request({ host: "127.0.0.1:8799" }, "GET"), options(path)).status, path).toBe(403);
-      expect(resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-openmausbot-desktop-owner": "owner-token-123" }, "GET"), options(path)).auth?.kind, path)
+      expect(resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-seira-desktop-owner": "owner-token-123" }, "GET"), options(path)).auth?.kind, path)
         .toBe("loopback");
     }
     for (const path of ["/api/webhooks", "/api/local-computer/instances", "/api/bots/bot-1/local-computer/screenshot", "/api/usb-phones"]) {
@@ -497,42 +598,42 @@ describe("resolveRequestAuth", () => {
     if (!browser.ok) throw new Error(browser.error);
     // What the old address's forwarder sends: Host rewritten to this home's name, the page's own Origin kept.
     const forwarded = (origin: string, cookie = token, extra: Record<string, string> = {}) => ({
-      host: "omb-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.9", "x-forwarded-host": "omb-u-1.fly.dev",
-      cookie: `${cookieName}=${cookie}`, origin, ...extra,
+      host: "seira-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.9", "x-forwarded-host": "seira-u-1.fly.dev",
+      cookie: `__Host-${cookieName}=${cookie}`, origin, ...extra,
     });
     const page = { "sec-fetch-site": "same-origin", "sec-fetch-dest": "empty" };
     try {
-      acceptLegacyOrigins(["https://omb-u-1.fly.dev"]);
-      expect(resolve(forwarded("https://omb-u-1.fly.dev"), "/api/bots", "POST").auth?.kind).toBe("session");
-      expect(resolve(forwarded("https://OMB-U-1.fly.dev "), "/api/bots", "POST").auth?.kind).toBe("session");
-      expect(resolve(forwarded("https://omb-u-1.fly.dev", browser.token, page), "/api/bots", "POST").auth?.kind).toBe("session");
-      expect(resolve(forwarded("https://omb-u-1.fly.dev"), "/api/events").auth?.kind).toBe("session");
-      expect(isSameOrigin(request({ host: "omb-u-1.homes.example", "x-forwarded-proto": "https", origin: "https://omb-u-1.fly.dev", upgrade: "websocket" }))).toBe(true);
-      expect(provesSameOrigin(request({ host: "omb-u-1.homes.example", "x-forwarded-proto": "https", origin: "https://omb-u-1.fly.dev" }))).toBe(true);
+      acceptLegacyOrigins(["https://seira-u-1.fly.dev"]);
+      expect(resolve(forwarded("https://seira-u-1.fly.dev"), "/api/bots", "POST").auth?.kind).toBe("session");
+      expect(resolve(forwarded("https://SEIRA-U-1.fly.dev "), "/api/bots", "POST").auth?.kind).toBe("session");
+      expect(resolve(forwarded("https://seira-u-1.fly.dev", browser.token, page), "/api/bots", "POST").auth?.kind).toBe("session");
+      expect(resolve(forwarded("https://seira-u-1.fly.dev"), "/api/events").auth?.kind).toBe("session");
+      expect(isSameOrigin(request({ host: "seira-u-1.homes.example", "x-forwarded-proto": "https", origin: "https://seira-u-1.fly.dev", upgrade: "websocket" }))).toBe(true);
+      expect(provesSameOrigin(request({ host: "seira-u-1.homes.example", "x-forwarded-proto": "https", origin: "https://seira-u-1.fly.dev" }))).toBe(true);
       // Only the exact origin: not another app on the same provider, its http twin, a port, or a name X-Forwarded-Host gives.
-      for (const origin of ["https://omb-u-2.fly.dev", "http://omb-u-1.fly.dev", "https://omb-u-1.fly.dev:8443", "https://evil.example"]) {
+      for (const origin of ["https://seira-u-2.fly.dev", "http://seira-u-1.fly.dev", "https://seira-u-1.fly.dev:8443", "https://evil.example"]) {
         const refused = resolve(forwarded(origin), "/api/bots", "POST");
         expect(refused, origin).toMatchObject({ auth: null, status: 403, error: "forbidden: cross-origin request" });
       }
-      expect(isSameOrigin(request({ host: "omb-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-host": "evil.example", origin: "https://evil.example" }))).toBe(false);
+      expect(isSameOrigin(request({ host: "seira-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-host": "evil.example", origin: "https://evil.example" }))).toBe(false);
       // Never loopback trust: the former address is a remote page's, so a request with no session is still refused.
-      expect(resolve({ host: "127.0.0.1:8799", origin: "https://omb-u-1.fly.dev" }).auth).toBeNull();
+      expect(resolve({ host: "127.0.0.1:8799", origin: "https://seira-u-1.fly.dev" }).auth).toBeNull();
     } finally {
       acceptLegacyOrigins([]);
     }
-    const unconfigured = resolve(forwarded("https://omb-u-1.fly.dev"), "/api/bots", "POST");
+    const unconfigured = resolve(forwarded("https://seira-u-1.fly.dev"), "/api/bots", "POST");
     expect(unconfigured).toMatchObject({ auth: null, status: 403, error: "forbidden: cross-origin request" });
-    expect(isSameOrigin(request({ host: "omb-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-host": "omb-u-1.fly.dev", origin: "https://omb-u-1.fly.dev" }))).toBe(false);
+    expect(isSameOrigin(request({ host: "seira-u-1.homes.example", "x-forwarded-proto": "https", "x-forwarded-host": "seira-u-1.fly.dev", origin: "https://seira-u-1.fly.dev" }))).toBe(false);
   });
 
   it("lets a browser sign-in's session make changes only when the browser says the request is its own page's", () => {
     const { credential } = sessions.openPairing({ browser: true, owner: "ada@example.test" });
     const signedIn = sessions.exchange({ code: credential, label: "Chrome on Mac", source: "1.2.3.4", browser: true });
     if (!signedIn.ok) throw new Error(signedIn.error);
-    const cookie = `${cookieName}=${signedIn.token}`;
-    const cloud = { host: "omb-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie };
+    const cookie = `__Host-${cookieName}=${signedIn.token}`;
+    const cloud = { host: "seira-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie };
     expect(resolve(cloud).auth?.kind).toBe("session");
-    expect(resolve({ ...cloud, origin: "https://omb-u-0123456789ab.fly.dev" }, "/api/bots", "POST").auth?.kind).toBe("session");
+    expect(resolve({ ...cloud, origin: "https://seira-u-0123456789ab.fly.dev" }, "/api/bots", "POST").auth?.kind).toBe("session");
     expect(resolve({ ...cloud, "sec-fetch-site": "same-origin" }, "/api/bots", "DELETE").auth?.kind).toBe("session");
     for (const [headers, method] of [[{}, "POST"], [{}, "PUT"], [{}, "PATCH"], [{}, "DELETE"], [{ "sec-fetch-site": "none" }, "POST"], [{ "sec-fetch-site": "cross-site" }, "POST"],
       [{ "sec-fetch-site": "same-site" }, "POST"], [{ origin: "https://evil.example", "sec-fetch-site": "same-origin" }, "POST"]] as const) {
@@ -549,7 +650,7 @@ describe("resolveRequestAuth", () => {
     expect(resolve({ ...cloud, "sec-fetch-site": "same-origin" }, connectorRefresh, "GET").auth?.kind).toBe("session");
     expect(resolve({ ...cloud, "sec-fetch-site": "same-site" }, "/api/bots", "GET").auth?.kind).toBe("session");
     const paired = pairedToken();
-    expect(resolve({ host: "omb-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie: `${cookieName}=${paired}` }, "/api/bots", "POST").auth?.kind).toBe("session");
+    expect(resolve({ host: "seira-u-0123456789ab.fly.dev", "x-forwarded-proto": "https", cookie: `__Host-${cookieName}=${paired}` }, "/api/bots", "POST").auth?.kind).toBe("session");
     expect(provesSameOrigin(request({ host: "a.example", origin: "http://a.example" }))).toBe(true);
     expect(provesSameOrigin(request({ host: "a.example" }))).toBe(false);
     expect(provesSameOrigin(request({ host: "a.example", origin: "https://evil.example", "sec-fetch-site": "same-origin" }))).toBe(false);
@@ -598,13 +699,12 @@ describe("resolveRequestAuth", () => {
     ["DELETE", "/api/fleet/workspaces/acme"],
     ["POST", "/api/fleet/upgrade"],
     ["POST", "/api/instances/antigravity/auth/complete"],
-    ["GET", "/api/computers/usage"],
   ])("requires admin for server Settings: %s %s", (method, path) => {
     expect(requiredScope(method, path.split("?")[0]!)).toBe("admin");
     const client = pairedToken(["client"]);
     const admin = pairedToken(["admin"]);
     const headers = { host: "bots.example.com", "x-forwarded-proto": "https", origin: "https://bots.example.com" };
-    const clientCredentials: Record<string, string>[] = [{ authorization: `Bearer ${client}` }, { cookie: `${cookieName}=${client}` }];
+    const clientCredentials: Record<string, string>[] = [{ authorization: `Bearer ${client}` }, { cookie: `__Host-${cookieName}=${client}` }];
     for (const credential of clientCredentials) {
       const denied = resolve({ ...headers, ...credential }, path, method);
       expect(denied.auth).toBeNull();
@@ -630,10 +730,10 @@ describe("resolveRequestAuth", () => {
 describe("a listener on the local network (seira serve --lan)", () => {
   // SAFETY: only headers, method and the socket peer are read
   const fromPeer = (remoteAddress: string, headers: Record<string, string>) => ({ headers, method: "GET", socket: { remoteAddress } }) as unknown as IncomingMessage;
-  const gate = (dir: string) => ({ sessions: new SessionRegistry({ file: join(dir, "sessions.json") }), cookieName: "omb_session_test", streamPath: "/api/events", url: new URL("/api/bots", "http://x") });
+  const gate = (dir: string) => ({ sessions: new SessionRegistry({ file: join(dir, "sessions.json") }), cookieName: "seira_session_test", streamPath: "/api/events", url: new URL("/api/bots", "http://x") });
 
   it("never makes another machine the owner, whatever Host it writes", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-auth-lan-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-auth-lan-"));
     try {
       for (const peer of ["192.168.1.50", "::ffff:192.168.1.50", "100.101.102.103", "fd12::5"]) {
         const spoofed = resolveRequestAuth(fromPeer(peer, { host: "127.0.0.1:8799" }), gate(dir));
@@ -666,10 +766,10 @@ describe("an IPC listener (seira serve --tunnel) is remote by construction", () 
   });
 
   it("never grants loopback trust over the socket, even with a loopback Host and no forwarded headers; a session works", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-auth-ipc-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-auth-ipc-"));
     try {
       const sessions = new SessionRegistry({ file: join(dir, "sessions.json") });
-      const gate = { sessions, cookieName: "omb_session_test", streamPath: "/api/events", url: new URL("/api/bots", "http://x") };
+      const gate = { sessions, cookieName: "seira_session_test", streamPath: "/api/events", url: new URL("/api/bots", "http://x") };
       const denied = resolveRequestAuth(overSocket({ host: "127.0.0.1:8799" }), gate);
       expect(denied.auth).toBeNull();
       expect(denied.status).toBe(403);
@@ -677,7 +777,7 @@ describe("an IPC listener (seira serve --tunnel) is remote by construction", () 
       const { code } = sessions.openPairing({ scopes: ["admin", "client"] });
       const paired = sessions.exchange({ code, label: "phone", source: "203.0.113.9" });
       if (!paired.ok) throw new Error(paired.error);
-      const admitted = resolveRequestAuth(overSocket({ host: "c-1.openmausbot.com", authorization: `Bearer ${paired.token}` }), gate);
+      const admitted = resolveRequestAuth(overSocket({ host: "c-1.seira.bot", authorization: `Bearer ${paired.token}` }), gate);
       expect(admitted.auth?.kind).toBe("session");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -688,7 +788,7 @@ describe("an IPC listener (seira serve --tunnel) is remote by construction", () 
 describe("loopback trust: owner on one person's machine, service on a shared workspace", () => {
   let dir: string;
   let sessions: SessionRegistry;
-  const cookieName = "omb_session_8799_env";
+  const cookieName = "seira_session_8799_env";
   const local = { host: "127.0.0.1:8799" };
   const check = (method: string, path: string, options: { trust?: "owner" | "service"; headers?: Record<string, string>; desktopToken?: string } = {}) =>
     resolveRequestAuth(request({ ...local, ...options.headers }, method), {
@@ -698,12 +798,12 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
     });
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-auth-trust-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-auth-trust-"));
     sessions = new SessionRegistry({ file: join(dir, "sessions.json") });
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  // Every call the deployed cloud Slack worker makes (openmaus-cloud server/slack-worker.ts, every released version): none may break.
+  // Every call the deployed cloud Slack worker makes (every released version): none may break.
   const SERVICE_CALLS: Array<[string, string]> = [
     ["GET", "/api/health"],
     ["GET", "/api/bots?messages=0"],
@@ -772,7 +872,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
   });
 
   it("ignores service trust while the desktop capability is in force", () => {
-    expect(check("PUT", "/api/config", { trust: "service", desktopToken: "owner-token", headers: { "x-openmausbot-desktop-owner": "owner-token" } }).auth)
+    expect(check("PUT", "/api/config", { trust: "service", desktopToken: "owner-token", headers: { "x-seira-desktop-owner": "owner-token" } }).auth)
       .toEqual({ kind: "loopback", scopes: ["admin", "client"] });
   });
 
@@ -781,26 +881,26 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
       resolveLoopbackTrust({ env, desktopManaged: false, hostedWorkspace: false, ...flags });
     expect(pick({})).toEqual({ trust: "owner", reason: "self-hosted default", localBrowsers: false });
     expect(pick({}, { hostedWorkspace: true })).toEqual({ trust: "service", reason: "hosted workspace", localBrowsers: false });
-    expect(pick({ OMB_LOOPBACK_TRUST: "service" })).toEqual({ trust: "service", reason: "OMB_LOOPBACK_TRUST", localBrowsers: false });
-    expect(pick({ OMB_LOOPBACK_TRUST: " Service " }).trust).toBe("service");
-    const forced = pick({ OMB_LOOPBACK_TRUST: "owner" }, { hostedWorkspace: true });
+    expect(pick({ SEIRA_LOOPBACK_TRUST: "service" })).toEqual({ trust: "service", reason: "SEIRA_LOOPBACK_TRUST", localBrowsers: false });
+    expect(pick({ SEIRA_LOOPBACK_TRUST: " Service " }).trust).toBe("service");
+    const forced = pick({ SEIRA_LOOPBACK_TRUST: "owner" }, { hostedWorkspace: true });
     expect(forced.trust).toBe("owner");
     expect(forced.warning).toMatch(/shared workspace/);
-    const typo = pick({ OMB_LOOPBACK_TRUST: "own3r\n" });
+    const typo = pick({ SEIRA_LOOPBACK_TRUST: "own3r\n" });
     expect(typo.trust).toBe("service");
     expect(typo.warning).toMatch(/not owner or service/);
     expect(typo.warning).not.toContain("\n");
-    expect(pick({ OMB_LOOPBACK_TRUST: "" }).trust).toBe("owner");
-    const desktop = pick({ OMB_LOOPBACK_TRUST: "service" }, { desktopManaged: true, hostedWorkspace: true });
+    expect(pick({ SEIRA_LOOPBACK_TRUST: "" }).trust).toBe("owner");
+    const desktop = pick({ SEIRA_LOOPBACK_TRUST: "service" }, { desktopManaged: true, hostedWorkspace: true });
     expect(desktop.trust).toBe("owner");
     expect(desktop.warning).toMatch(/ignored in the desktop app/);
   });
 
-  it("is always service on an OMB Cloud home, where a local request is only ever a process on the machine", () => {
+  it("is always service on a Seira Cloud home, where a local request is only ever a process on the machine", () => {
     const pick = (env: NodeJS.ProcessEnv) => resolveLoopbackTrust({ env, desktopManaged: false, hostedWorkspace: false, cloudHome: true });
     expect(pick({})).toEqual({ trust: "service", reason: "Seira Cloud home", localBrowsers: false });
-    expect(pick({ OMB_LOOPBACK_TRUST: "service" })).toEqual({ trust: "service", reason: "Seira Cloud home", localBrowsers: false });
-    const forced = pick({ OMB_LOOPBACK_TRUST: "owner" });
+    expect(pick({ SEIRA_LOOPBACK_TRUST: "service" })).toEqual({ trust: "service", reason: "Seira Cloud home", localBrowsers: false });
+    const forced = pick({ SEIRA_LOOPBACK_TRUST: "owner" });
     expect(forced.trust).toBe("service");
     expect(forced.warning).toMatch(/ignored on a Seira Cloud home/);
   });
@@ -808,7 +908,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
   it("lets only the CLI that started the server, holding its secret, mint a pairing code under service trust", () => {
     const secret = "c".repeat(43);
     const as = (method: string, path: string, header?: string, token: string | null = secret) =>
-      resolveRequestAuth(request({ ...local, ...(header ? { "x-openmausbot-cli-owner": header } : {}) }, method), {
+      resolveRequestAuth(request({ ...local, ...(header ? { "x-seira-cli-owner": header } : {}) }, method), {
         sessions, cookieName, streamPath: "/api/events", url: new URL(path, "http://x"), loopbackTrust: "service", cliOwnerToken: token ?? undefined,
       });
     expect(as("POST", "/api/auth/pairing", secret).auth).toEqual({ kind: "loopback", scopes: ["admin", "client"] });
@@ -826,7 +926,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
 describe("a browser on this machine is not the owner", () => {
   let dir: string;
   let sessions: SessionRegistry;
-  const cookieName = "omb_session_8799_env";
+  const cookieName = "seira_session_8799_env";
   // What Chrome sends: Sec-Fetch-* on every request to a loopback address, Origin on every WebSocket handshake.
   const page = { host: "127.0.0.1:8799", "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "empty" };
   const navigation = { host: "127.0.0.1:8799", "sec-fetch-site": "none", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "sec-fetch-user": "?1" };
@@ -841,7 +941,7 @@ describe("a browser on this machine is not the owner", () => {
     });
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-auth-browser-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-auth-browser-"));
     sessions = new SessionRegistry({ file: join(dir, "sessions.json") });
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -850,7 +950,7 @@ describe("a browser on this machine is not the owner", () => {
     for (const headers of [page, navigation, socket, ownUi, { host: "localhost", "sec-fetch-dest": "image" }]) expect(fromBrowser(request(headers)), JSON.stringify(headers)).toBe(true);
     const programs: Record<string, string>[] = [
       { host: "127.0.0.1:8799" }, { host: "127.0.0.1:8799", origin: "http://127.0.0.1:8799" }, { host: "127.0.0.1:8799", upgrade: "websocket" },
-      { host: "127.0.0.1:8799", "x-openmausbot-cli": "1" },
+      { host: "127.0.0.1:8799", "x-seira-cli": "1" },
       // Node's fetch.
       { host: "127.0.0.1:8799", "sec-fetch-mode": "cors", "accept-language": "*", "user-agent": "node" },
     ];
@@ -878,24 +978,24 @@ describe("a browser on this machine is not the owner", () => {
 
   it("lets the desktop app's own window in with its owner header, on http and WebSocket alike", () => {
     const desktop = { desktopToken: "owner-token-123" };
-    const owner = { "x-openmausbot-desktop-owner": "owner-token-123" };
+    const owner = { "x-seira-desktop-owner": "owner-token-123" };
     expect(check({ ...ownUi, ...owner }, "/api/bots", "GET", desktop).auth?.kind).toBe("loopback");
     expect(check({ ...ownUi, ...owner }, "/api/bots/bot-1", "PATCH", desktop).auth?.kind).toBe("loopback");
     expect(check({ ...socket, origin: "http://127.0.0.1:8799", ...owner }, "/api/desktop-viewer/local/shared/websockify", "GET", desktop).auth?.kind).toBe("loopback");
-    for (const headers of [ownUi, page, socket, { ...ownUi, "x-openmausbot-desktop-owner": "owner-token-999" }]) {
+    for (const headers of [ownUi, page, socket, { ...ownUi, "x-seira-desktop-owner": "owner-token-999" }]) {
       expect(check(headers, "/api/bots", "GET", desktop).status, JSON.stringify(headers)).toBe(401);
     }
     // Before the desktop app has sent its capability, nothing a browser sends matches.
-    expect(check({ ...ownUi, "x-openmausbot-desktop-owner": "" }, "/api/bots", "GET", { desktopToken: "" }).auth).toBeNull();
+    expect(check({ ...ownUi, "x-seira-desktop-owner": "" }, "/api/bots", "GET", { desktopToken: "" }).auth).toBeNull();
     // The app's main process and the companion send no Sec-Fetch-*.
     expect(check({ host: "127.0.0.1:8799" }, "/api/bots", "GET", desktop).auth?.kind).toBe("loopback");
-    const relay = { host: "127.0.0.1:8799", "x-openmausbot-companion": "1", "x-openmausbot-companion-device": "phone-1", "x-openmausbot-companion-auth": "relay-secret" };
+    const relay = { host: "127.0.0.1:8799", "x-seira-companion": "1", "x-seira-companion-device": "phone-1", "x-seira-companion-auth": "relay-secret" };
     expect(check(relay, "/api/bots/b/messages", "POST", desktop).auth?.kind).toBe("loopback");
   });
 
   it("does not lend the owner header to another page in the desktop window's session", () => {
     const desktop = { desktopToken: "owner-token-123" };
-    const owner = { "x-openmausbot-desktop-owner": "owner-token-123" };
+    const owner = { "x-seira-desktop-owner": "owner-token-123" };
     const savedServer = { host: "127.0.0.1:8799", origin: "http://localhost:8080", "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "empty" };
     const otherPort = { ...savedServer, origin: "http://127.0.0.1:3000", "sec-fetch-site": "same-site" };
     const { origin: _origin, ...imageTag } = { ...savedServer, "sec-fetch-dest": "image" };
@@ -924,13 +1024,54 @@ describe("a browser on this machine is not the owner", () => {
     expect(check(page, "/api/bots/bot-1", "PATCH", { localBrowsers: true, desktopToken: "owner-token-123" }).status).toBe(403);
     const pick = (env: NodeJS.ProcessEnv, flags: { fromSource?: boolean; desktopManaged?: boolean; hostedWorkspace?: boolean } = {}) =>
       resolveLoopbackTrust({ env, desktopManaged: false, hostedWorkspace: false, ...flags });
-    const dev = { OMB_DEV_TRUST_LOCAL_BROWSER: "1" };
+    const dev = { SEIRA_DEV_TRUST_LOCAL_BROWSER: "1" };
     expect(pick(dev, { fromSource: true })).toMatchObject({ trust: "owner", localBrowsers: true, warning: expect.stringMatching(/development only/) });
     expect(pick(dev, { fromSource: false })).toMatchObject({ localBrowsers: false, warning: expect.stringMatching(/ignored/) });
     expect(pick(dev, { fromSource: true, desktopManaged: true })).toMatchObject({ localBrowsers: false, warning: expect.stringMatching(/ignored/) });
     expect(pick(dev, { fromSource: true, hostedWorkspace: true })).toMatchObject({ trust: "service", localBrowsers: false });
-    expect(pick({ ...dev, OMB_LOOPBACK_TRUST: "service" }, { fromSource: true }).localBrowsers).toBe(false);
-    expect(pick({ OMB_DEV_TRUST_LOCAL_BROWSER: "true" }, { fromSource: true })).toEqual({ trust: "owner", reason: "self-hosted default", localBrowsers: false });
+    expect(pick({ ...dev, SEIRA_LOOPBACK_TRUST: "service" }, { fromSource: true }).localBrowsers).toBe(false);
+    expect(pick({ SEIRA_DEV_TRUST_LOCAL_BROWSER: "true" }, { fromSource: true })).toEqual({ trust: "owner", reason: "self-hosted default", localBrowsers: false });
     expect(resolveLoopbackTrust({ env: dev, desktopManaged: false, hostedWorkspace: false, cloudHome: true, fromSource: true }).localBrowsers).toBe(false);
+  });
+});
+
+describe("a session token with either prefix", () => {
+  it.each(["omb_sess_", "seira_sess_"])("signs in with %s from the sessions file", (prefix) => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-auth-legacy-"));
+    try {
+      const file = join(dir, "sessions.json");
+      const first = new SessionRegistry({ file });
+      const issued = first.issue({ label: "Script", scopes: ["admin", "client"] });
+      const earlier = issued.token.replace(/^[a-z]+_sess_/, prefix);
+      const saved = JSON.parse(readFileSync(file, "utf8"));
+      saved.sessions[0].tokenHash = createHash("sha256").update(earlier).digest("hex");
+      writeFileSync(file, JSON.stringify(saved));
+      const sessions = new SessionRegistry({ file });
+      const result = resolveRequestAuth(request({ host: "127.0.0.1:8799", authorization: `Bearer ${earlier}` }), {
+        sessions, cookieName: "seira_session_8799_env", streamPath: "/api/events", url: new URL("/api/bots", "http://x"),
+      });
+      expect(result.auth).toMatchObject({ kind: "session" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("an unpaired request that came through a proxy", () => {
+  const sessions = new SessionRegistry({ file: join(mkdtempSync(join(tmpdir(), "seira-proxied-")), "sessions.json") });
+  it("is refused on the phone route list and every private route, with an answer that names nothing", () => {
+    for (const headers of [{ "x-forwarded-for": "203.0.113.9" }, { "cf-connecting-ip": "203.0.113.9" }] as Array<Record<string, string>>) {
+      for (const path of ["/api/companion/endpoints", "/api/bots", "/api/config", "/api/auth/session"]) {
+        const answer = resolveRequestAuth(request({ host: "127.0.0.1:8799", ...headers }), {
+          sessions, cookieName: "seira_session", streamPath: "/api/events", url: new URL(path, "http://localhost"),
+        });
+        expect(answer.auth, path).toBeNull();
+        expect(answer.status, path).toBe(403);
+        expect(answer.error, path).toBe("forbidden: this request came through a proxy (pair this device to use the server remotely)");
+      }
+    }
+  });
+  it("lets a paired client session read the phone route list", () => {
+    expect(requiredScope("GET", "/api/companion/endpoints")).toBe("client");
   });
 });

@@ -1,6 +1,6 @@
-# OMB Cloud: the home machine
+# Seira Cloud: the home machine
 
-OMB Cloud (the Starter, Pro and Max plans) gives one person an always-on
+Seira Cloud (the Starter, Pro and Max plans) gives one person an always-on
 Seira server of their own (a plan may instead sleep when idle: see
 [Sleeping homes](#sleeping-homes-the-power-read-and-the-sleep-handshake)). The plans differ in machine size, disk and
 included allowances; everything on this page applies to all of them. Each
@@ -8,10 +8,10 @@ customer gets one Fly app with one `home` machine that is always on, a volume
 at `/data`, and TLS at `https://<app>.fly.dev`. The desktop app, the phone and
 the web are windows onto it. Local use of the app is unchanged and free.
 Customers read its name as **Seira Cloud** wherever they meet it (the
-app, the Admin's pages, emails); "OMB Cloud" is this page's shorthand, and
+app, the Admin's pages, emails); "Seira Cloud" is this page's shorthand, and
 the app itself is still Seira.
 
-OMB Cloud includes no AI usage. The person signs in on their machine with their
+Seira Cloud includes no AI usage. The person signs in on their machine with their
 own Claude or ChatGPT subscription, or an API key, through the same sign-in
 flows as any Seira server. Nothing on a Cloud home is routed to a
 platform model gateway. The one exception is a free trial's Claude credit, a
@@ -21,7 +21,7 @@ person connects their own AI ([Trial Claude credit](#trial-claude-credit)).
 This page is the Seira half of a contract with three parties:
 
 - **the home machine**: this repository's `cloud-home` image (`Dockerfile`, `deploy/fly/`);
-- **the Admin** (openmaus-cloud, `docs/consumer-cloud.md` there): provisions
+- **the Admin** (the Seira Cloud service): provisions
   the app, holds the machine's signing secret, and answers the desktop's Cloud
   session;
 - **the desktop app**: signs in to Cloud, lists the machine under Servers,
@@ -32,7 +32,7 @@ Contract version: `1` (`cloudContractVersion` on the wire).
 ## What the person sees
 
 1. They subscribe on the Cloud site. The Admin creates the Fly app and machine.
-2. They open the desktop app, go to **Settings → Seira Cloud** and sign in (the
+2. They open the desktop app, go to **Settings → Your account** and sign in (the
    existing device sign-in). A **Your Cloud** card says **Setting up** until
    the machine is up.
 3. When it is ready, the machine appears under **Servers** as **My Cloud**, and
@@ -65,9 +65,8 @@ Contract version: `1` (`cloudContractVersion` on the wire).
       credit lasts and nothing of the person's own can run, a line says so
       (with the amount where the desktop app knows it), and **Use my credit for
       now** moves on.
-   3. **Files and apps**, optional: **Share folders** opens Settings → Seira
-      Cloud in this computer's window, one click from Files (a browser is told
-      to use the desktop app), and **Connect apps** opens Connected apps on the
+   3. **Files and apps**, optional: **Share folders** says how: on your own Cloud in the app, this computer is lent by itself; elsewhere the desktop app shares folders under
+      Files, and **Connect apps** opens Connected apps on the
       Cloud.
    4. **{name} is ready**: **Say hi to your Chief of Staff** (or to the first
       bot) opens its chat, and **Give it a job** asks the first-job question.
@@ -79,7 +78,7 @@ Contract version: `1` (`cloudContractVersion` on the wire).
    good at its last step or with **Skip setup** (`cloud-welcome-done`), and
    with Hide setup. A save the Cloud refuses (a 409 while provider settings
    are being changed, say) is tried once more; an end that still cannot be
-   saved is kept on this device (`omb.cloudWelcome.done`), so the welcome does
+   saved is kept on this device (`seira.cloudWelcome.done`), so the welcome does
    not come back on the next launch, and a small keeper beside the setup card
    (`WelcomeKeeper.tsx`) sends it again when the Cloud answers.
    The main pane and the setup card read the record the same way, with the
@@ -100,7 +99,7 @@ Contract version: `1` (`cloudContractVersion` on the wire).
    itself up for the job in the chat. With an engine already able to run, it
    is sent at once; the box becomes the composer on the way (a named View
    Transition) and the request is the chat's first message. Otherwise the job
-   waits on this device (`omb.cloudIntent.pending` in browser storage) and
+   waits on this device (`seira.cloudIntent.pending` in browser storage) and
    the engine sign-in shows it at the top, with **Edit**. The Cloud keeps
    that the question was answered (`cloud-intent-asked`) and that a job was
    given (`cloud-intent-given`) in its onboarding record.
@@ -115,8 +114,8 @@ Contract version: `1` (`cloudContractVersion` on the wire).
    - **Grok**: the same device-code flow for Grok Build on a grok.com
      subscription (`grok login --device-auth`, run on the Cloud computer),
      offered only when the image carries the Grok CLI;
-   - **Use an API key**: the existing model-provider keys in **Settings →
-     API keys** (Anthropic, xAI, or an OpenAI-compatible key such as
+   - **Use an API key**: the existing model-provider keys in **Settings → AI → Other
+     services** (Anthropic, xAI, or an OpenAI-compatible key such as
      OpenRouter).
 
    It says plainly that the person's AI plan limits apply to bots that work
@@ -141,13 +140,13 @@ sign-in instead of the welcome flow, which describes the person's own computer
 
 1. Install Seira on your phone from the App Store or Google Play.
 2. The menu under your name → **Connect your phone · to your Cloud (always on)**, or
-   **Settings → Seira Cloud → Use My Cloud on your phone**. The Cloud opens in
+   **Settings → Phone & devices** on the Cloud's own page. The Cloud opens in
    the app window at its phone pairing.
 3. **Create pairing code**, and scan the QR code with the phone app.
 
 How it fits together (`src/lib/phone-pairing.ts`):
 
-- **Connect your phone** opens Settings → Remote access at the pairing that
+- **Connect your phone** opens Settings → Phone & devices → Pair a phone, at the pairing that
   fits the window, with focus on the button that shows the code: this
   computer's phone flow in the desktop app on its own computer, the Cloud's
   own pairing code (`ServerPairingCard`) on a Cloud home, and any other
@@ -158,14 +157,14 @@ How it fits together (`src/lib/phone-pairing.ts`):
   Cloud (always on)* first, which does what **Use My Cloud on your phone**
   does, then *to this computer*. A paid plan whose Cloud is not Ready keeps
   the single *to this computer* line, with a note that the Cloud will show
-  there. A failed switch opens Settings → Seira Cloud.
+  there. A failed switch opens Settings → Your account.
 - **Use My Cloud on your phone** shows for a paid plan. With a Ready Cloud it
   calls `cloud-account:connectHomeForPhone`, which takes no arguments and
   connects as **Open My Cloud** does, adding the one fixed request
   `?desktop-settings=phone` (on `/pair` too, which carries it on once paired).
   The Cloud's page opens Settings on its phone pairing. It never makes a code
   by itself. Before the Cloud is Ready, or if opening it failed, the card
-  lists the two steps instead. On the Cloud itself, Settings → Seira Cloud
+  lists the two steps instead. On the Cloud itself, Settings → Phone & devices
   offers the same button and opens the pairing directly.
 
 ### Only your own devices
@@ -292,8 +291,8 @@ bot's memory files, the bot as a whole cannot use the Mac until the owner
 reviews the change (the bot's **Memory** panel, **Mark reviewed**). Starting
 new conversations avoids it.
 
-At the first personal start the log also says to review **Settings → Remote
-access → Paired devices**, which now shows only admin devices, and to sign
+At the first personal start the log also says to review **Settings → Phone & devices →
+Paired**, which now shows only admin devices, and to sign
 out any that isn't the owner's: a device paired with full access before is
 the owner's from then on, and nothing can tell otherwise.
 
@@ -320,7 +319,7 @@ welcome flow. The step to do now leads the card, with its explanation and
 action, under a segment per step that fills as each finishes. Every other step
 sits below it on one line; one not done becomes the lead with a click. The
 chevron minimizes the card to its segments on this device only
-(`omb.cloudSetup.collapsed` in browser storage), which is not hiding it. When
+(`seira.cloudSetup.collapsed` in browser storage), which is not hiding it. When
 the last required step finishes in the session that is open,
 the card gives way once to **Your Cloud is ready**, with the guide mascot;
 a Cloud that opens already done shows nothing. Each step's state comes from
@@ -354,7 +353,7 @@ bot has finished a turn there) keeps the first-job checklist:
 4. **Approve its plan**: listed once a first job is given. The bot asks its
    questions in the chat and proposes a routine; done once that routine
    exists, the job's bot's and made after the job was sent (this device
-   remembers which bot got it, `omb.cloudIntent.sent`; another device counts
+   remembers which bot got it, `seira.cloudIntent.sent`; another device counts
    any routine). **Open the chat** goes to that bot.
 
 A job counts as given the moment it is sent, before the Cloud's record
@@ -387,7 +386,7 @@ the Cloud (see "This computer works for your Clouds"), through the
 shared-computer tools.
 
 - Neither place is listed in the Computer panel, the composer's place chip, a
-  bot's Works on setting or Settings → Computers (the config answers
+  bot's Works on setting or Settings → Desktops & browser → Desktops (the config answers
   `"cloudHome": true`), nor in `select_computer`, which also drops `vm_exec`.
   Auto never lands on either.
 - A bot still set to either (an older or imported setting) has each task
@@ -420,11 +419,11 @@ microphone for a Live call, as this computer's own page does. That is the
 microphone only, never the camera or screen capture, and only for the main
 frame of the app's window at the exact origin of the person's Cloud
 (`electron/app-permissions.mjs`, `appPermissionHandlers`). One rule says which
-Cloud that is, for the microphone and the Cloud page's Settings → Plan alike
+Cloud that is, for the microphone and the Cloud page's Settings → Plan & billing alike
 (`electron/cloud-home.mjs`, `myCloudOrigin`): the machine the Cloud sign-in
 verified or, failing that, the one this same account last verified in this
 app session. That last one counts while a check is pending or has failed, and
-also after the sign-in has ended or expired, when Settings → Plan on the Cloud
+also after the sign-in has ended or expired, when Settings → Plan & billing on the Cloud
 says "sign in again on your computer". A check that names no machine for the
 account ends it (a stopped machine named without its address does not). A
 call placed while a saved sign-in is still restoring, in the first seconds
@@ -436,7 +435,7 @@ stays refused. In a web browser, the browser asks for the microphone for
 the Cloud's address.
 
 - **The key is the person's own.** No Cloud plan includes the key, and no plan
-  is needed for Live calls: they use the OpenAI key in Settings → API keys, or
+  is needed for Live calls: they use the OpenAI key in Settings → AI → Other services, or
   a separate Live key, from a project with GPT-Live access. It is saved on the
   Cloud (`PUT /api/config`, as a server page has no credential store), and the
   Live copy says so.
@@ -458,12 +457,12 @@ the Cloud's address.
   the call with one bot is a Live call, and a room has no call
   (`effectiveCallMode` in `src/lib/call-mode.ts`, `GroupCallButton`).
 
-### Open in the app: `openmausbot://cloud`
+### Open in the app: `seira://cloud`
 
-The Cloud page (`https://cloud.openmausbot.com/cloud`) can offer **Open in the
-app** as a link to exactly `openmausbot://cloud`. The app accepts that string
+The Cloud page (`https://cloud.seira.bot/cloud`) can offer **Open in the
+app** as a link to exactly `seira://cloud`. The app accepts that string
 and nothing else: no path, query, fragment or trailing slash, and it ignores
-any other form. Like `openmausbot://organization`, it is an action, not a
+any other form. Like `seira://organization`, it is an action, not a
 router. It never carries an address, a pairing code or a credential; the app
 decides everything from its own verified state (`electron/cloud-entry.mjs`).
 
@@ -472,7 +471,7 @@ decides everything from its own verified state (`electron/cloud-entry.mjs`).
    that arrives before the app is ready). If the window already shows
    **My Cloud**, coming forward is all it does.
 2. Otherwise the window returns to this computer (a hosted server that was
-   showing stays saved under **Servers**) and opens **Settings → Seira Cloud**.
+   showing stays saved under **Servers**) and opens **Settings → Your account**.
    Before that view acts, the app gives a saved Cloud sign-in up to five
    seconds to finish restoring, so it is never mistaken for signed out.
 3. Opened this way, the view acts on its own, with no confirmation:
@@ -490,11 +489,11 @@ sign-out in that view starts nothing) and one automatic connection per link.
 A failed connection shows the card's error; clicking the link again retries.
 Closing Settings or choosing another section ends it. While it is open, the
 first-run welcome waits, as it does for Organization settings. A normal visit
-to **Settings → Seira Cloud** never signs in or connects by itself.
+to **Settings → Your account** never signs in or connects by itself.
 
 The link does nothing in development builds, and in companion client mode it
 explains that the app must be disconnected from the other computer first.
-The `openmausbot` scheme belongs to the installed app: on macOS through the
+The `seira` scheme belongs to the installed app: on macOS through the
 app bundle, on Linux through the `.deb`'s desktop entry, and on Windows (and
 for an AppImage) once the installed app has started at least once, since it
 registers itself at startup. Before that, or if the app is not installed, the
@@ -515,7 +514,7 @@ a new tab, signed in after one **Continue**, with nothing to copy.
    scopes, at most two minutes, redeemable only by its 256-bit credential
    through a browser sign-in, and recording its owner. The answer has no
    typeable code and says `"purpose":"browser"` back.
-3. The tab goes to `https://<app>.fly.dev/pair#signin=omb_pair_…`. The
+3. The tab goes to `https://<app>.fly.dev/pair#signin=seira_pair_…`. The
    credential is only in the fragment, which never reaches a server, a proxy
    log or a `Referer`.
 4. Before anything renders, the web UI takes the fragment off the address bar
@@ -707,7 +706,7 @@ Anyone else gets the automatic grant at the next start. A grant kept from before
 keeps its folders, gains the home folder, the internet connection and Chrome, and
 keeps a terminal it had: when every grant of one account lent the terminal and
 nobody said no to lending, **Let Clouds run commands on this Mac** starts on for
-that account and no other; a **Settings → Servers → Computer access** grant kept for
+that account and no other; a **Computer access** grant in **Settings → This app → Your computers** kept for
 a Cloud's own entry gives way to it. Only a kept grant that already lends what it
 should runs as it is: one that doesn't never connects, even for a moment.
 
@@ -806,7 +805,7 @@ On the Mac (the authority; `electron/computer-sharing.mjs`,
 - **Bound to the account and the machine.** The grant records the Cloud
   account id and the machine's origin from the verified Cloud session
   (`cloud-account.mjs`), and the Cloud home's environment id on first contact.
-  Signing out of OMB Cloud, another account signing in, the Cloud moving to
+  Signing out of Seira Cloud, another account signing in, the Cloud moving to
   another machine, or another server answering at that address ends that
   grant; a new one is made only once the verified session lists that Cloud as
   the person's own again. A Cloud
@@ -970,13 +969,13 @@ On the Cloud home (`server/shared-computers.ts`, `server/index.ts`):
   | Claude Code (2.1.257 or newer) | `--restricted` and only Read, Grep, Glob, Edit, Write and WebSearch: no Bash, PowerShell or WebFetch; reads outside its folder refused outright (`blockReadsOutsideWorkingDirectories`, plus deny rules); the folder's own `.mcp.json` and settings never load; only the harness's own MCP tools are pre-allowed, every other call asks the owner. The session's `init` must list no command-running tool, or the turn stops. An older Claude Code refuses. |
   | Codex / ChatGPT (codex-cli 0.159) | no environment (`environments: []`: no `exec_command`, `apply_patch` or `view_image`, and calls to them are refused), `features.shell_tool`, `unified_exec` and `view_image` off and web search disabled, proven in `config/read` before the turn starts, or the turn refuses. |
   | API models (OpenAI-compatible, MiniMax, Mistral, Grok API) | no shell or file tool on the machine at all; only the harness's own agents tools are pre-allowed, every other MCP call asks the owner, and no owner's "Allow for this session" applies or is kept. |
-  | Cursor, Qwen, Gemini, Hermes, Pi, OpenCode, Grok Build, Antigravity, Droid, Kimi, a custom ACP engine, Boat | refused: each runs its own shell or reads files outside its folder without asking in Ask (Qwen, Gemini, OpenCode and Pi could have it switched off; that needs a separate process per guest conversation, a follow-up). |
+  | Cursor, Qwen, Gemini, Hermes, Pi, OpenCode, Grok Build, Antigravity, Droid, Kimi, a custom ACP engine | refused: each runs its own shell or reads files outside its folder without asking in Ask (Qwen, Gemini, OpenCode and Pi could have it switched off; that needs a separate process per guest conversation, a follow-up). |
 - Everything the owner's own devices write carries one owner identity, so
   pairing a device again (or revoking one) never makes the owner's earlier
   conversations someone else's. A guest never carries it.
 - On a Cloud home a request from the machine itself without a session (a
   bot's shell, any local process) is only a service, whatever
-  `OMB_LOOPBACK_TRUST` says: it may reach the health check, the Slack
+  `SEIRA_LOOPBACK_TRUST` says: it may reach the health check, the Slack
   worker's guarded routes and a turn's own capability routes, decline a card
   and nothing else. It cannot open a pairing window, change a setting or a
   bot, answer a card or review memory.
@@ -1091,7 +1090,7 @@ layers (Node, Chrome's libraries, agent-browser and its Chrome) and adds:
   tunnel with `deploy/fly/Caddyfile.tunnel` (all import the same routes,
   `deploy/fly/edge-routes.caddy`);
 - `cloudflared`, pinned and digest-checked by `scripts/prepare-cloudflared.mjs`,
-  run only for a home reached through its own tunnel, as the `omb-tunnel` user;
+  run only for a home reached through its own tunnel, as the `seira-tunnel` user;
 - Grok Build (`/usr/local/bin/grok`) from xAI's own installer, pinned by
   `GROK_VERSION` to the version the Grok driver is verified against. The
   build fails if the installer cannot be reached, rather than shipping an
@@ -1103,7 +1102,7 @@ layers (Node, Chrome's libraries, agent-browser and its Chrome) and adds:
   any file under `/app`, or Caddy, is not root's or is writable by others.
 
 ```sh
-docker build --target cloud-home -t omb-cloud-home .
+docker build --target cloud-home -t seira-cloud-home .
 ```
 
 The app files are the last layers, so an image built from a later commit
@@ -1111,15 +1110,15 @@ differs from the previous one only in those (a few MB) unless Chrome, an
 engine, Grok's pin, or the Node base image changed in between.
 
 At boot the launcher, running as root, hands the volume's mount point to the
-`maus` user, locks the volume for as long as it runs (`flock` on the volume's
+`seira` user, locks the volume for as long as it runs (`flock` on the volume's
 root: a second home on a volume a live home holds refuses to start, which
 Docker on your own server does not prevent by itself), binds the volume to
-this machine as `maus` (`/data/.omb-cloud-home.json`; another machine's
+this machine as `seira` (`/data/.seira-cloud-home.json`; another machine's
 volume, or an unmarked volume with data on it, is refused), clears the
 data-directory lease records another machine or container left on it (a home
 killed uncleanly leaves one, and on one Docker host every container shares the
 boot id while its pids start again from 1, so the lease names its pid
-namespace and its process's start time too), and runs two children as `maus`: the
+namespace and its process's start time too), and runs two children as `seira`: the
 server on `127.0.0.1:8799` (webhooks on `127.0.0.1:8800`) and Caddy on
 `:8080`. It stays a small root supervisor: if either child exits, both stop
 and Fly restarts the machine. Two exceptions (`server/restart.ts`): after a restore
@@ -1128,14 +1127,14 @@ launcher starts only the server again; after a crash (exit 70 from
 `server/crash-guard.ts`, or killed by the system, as out of memory) it starts the
 server again after 1, 2, 5, 15 and 30 s, then gives up so Fly restarts the machine.
 
-The machine's secrets (`OMB_CLOUD_BOOTSTRAP_SECRET` and the relay tokens
-`OMB_CLOUD_BOAT_TOKEN`, `OMB_CLOUD_VOICE_TOKEN`, `OMB_CLOUD_DECIDER_TOKEN`, `OMB_CLOUD_X_TOKEN`,
-`OMB_CLOUD_HOSTING_TOKEN`)
+The machine's secrets (`SEIRA_CLOUD_BOOTSTRAP_SECRET` and the relay tokens
+`SEIRA_CLOUD_VOICE_TOKEN`, `SEIRA_CLOUD_DECIDER_TOKEN`, `SEIRA_CLOUD_X_TOKEN`,
+`SEIRA_CLOUD_HOSTING_TOKEN`)
 arrive as the launcher's environment, from the Fly app secrets the Admin
 sets. The launcher never puts them in a child's environment, because
 `/proc/<pid>/environ` keeps a process's starting environment for anything
 running as the same user to read. It writes them to the server over an
-inherited pipe (`OMB_CLOUD_SECRETS_FD`). The server reads it and closes it
+inherited pipe (`SEIRA_CLOUD_SECRETS_FD`). The server reads it and closes it
 as its very first step (`server/cloud-secrets-boot.ts`, its first import),
 before any other module loads, so no process it starts inherits the pipe.
 The server's environment is built from an allow-list: the process basics,
@@ -1143,17 +1142,17 @@ what the image sets and the parts of the boot contract that are not secret
 (`serverEnvironmentAllowed`). Anything else, a secret the platform adds
 later included, never reaches it; the launcher logs the names it left out,
 never their values. The launcher's own environment and memory belong to
-root, out of `maus`'s reach. A server started without the pipe (tests,
+root, out of `seira`'s reach. A server started without the pipe (tests,
 development) reads them from its environment and says so in its log.
 
-The launcher runs and trusts only code `maus` cannot change: the image
+The launcher runs and trusts only code `seira` cannot change: the image
 makes `/app` root's and not writable by anyone else, and the launcher
 refuses to start if Node, itself, the server's entry point, Caddy or its
 config (or any folder above them) is not root's, is writable by others, or
-is on the volume. Only the `/data` volume is `maus`'s.
+is on the volume. Only the `/data` volume is `seira`'s.
 
 `HOME=/data`, so `~/.claude`, `~/.codex`, `~/.grok` and Seira's own
-data (`/data/.openmausbot`) persist on the volume.
+data (`/data/.seira`) persist on the volume.
 
 ### Memory
 
@@ -1265,8 +1264,7 @@ provider outage. So on a Cloud home (`server/engine-memory.ts`):
 - **The day's pressure is reported** (`room` in the health report, below):
   tasks that waited for memory and how long, turns stopped for it, processes
   the kernel stopped, and minutes the machine stalled on memory (its `full
-  avg10` at 20% or more). The Admin offers a bigger plan from it
-  (openmaus-cloud `server/cloud-room.ts`).
+  avg10` at 20% or more). The Admin offers a bigger plan from it.
 
 ### Why the server stays on loopback
 
@@ -1282,23 +1280,23 @@ reach the edge's loopback, it trusts no client-address header by default: the
 client is the connection's peer. Only proxies the owner names may name one
 (below). The launcher sets these values (`edgeClientAddress`). That address
 feeds the pairing lockout, never authorization. Apart from `/api/health`,
-Caddy answers only for the machine's own name (`OMB_PUBLIC_URL`) and refuses
+Caddy answers only for the machine's own name (`SEIRA_PUBLIC_URL`) and refuses
 any other `Host`.
 
 **A home that moved to another provider.** Its old address (say
 `<app>.fly.dev`) is served by a forwarder that proxies to the new one and
 rewrites `Host` to the new name, so the edge's host matcher, and in
-`OMB_CLOUD_EDGE_TLS` mode the certificate it serves for that name, already
+`SEIRA_CLOUD_EDGE_TLS` mode the certificate it serves for that name, already
 match: the edge is not widened for the old name. What still names the old
 address is the `Origin` of a page or client on it (a browser tab, a device
 paired by code straight to it), which the server's same-origin checks would
-refuse. `OMB_CLOUD_LEGACY_ORIGINS` lists those old origins, and the server
+refuse. `SEIRA_CLOUD_LEGACY_ORIGINS` lists those old origins, and the server
 counts exactly those as its own besides its `Host`'s: for cookie sessions,
 a browser sign-in's changes, WebSockets, the event stream and the viewers.
 `X-Forwarded-Host` is never read. Requests through the forwarder reach the
-edge from the forwarder's address, so in `OMB_CLOUD_EDGE_TLS` mode they share
+edge from the forwarder's address, so in `SEIRA_CLOUD_EDGE_TLS` mode they share
 one pairing lockout unless the forwarder is named in
-`OMB_CLOUD_TRUSTED_PROXIES`. New pairing links name the new address.
+`SEIRA_CLOUD_TRUSTED_PROXIES`. New pairing links name the new address.
 
 ### On your own server: how people reach it
 
@@ -1309,21 +1307,21 @@ start.
 
 | Variable | Value |
 | --- | --- |
-| `OMB_PUBLIC_URL` | `https://` and the name people use, e.g. `https://mausbot.acme.eu`. Its DNS points at the server. |
-| `OMB_CLOUD_EDGE_TLS` | `1`: the edge gets and renews a Let's Encrypt certificate for that name and serves it on 443. Unset or `0`: the edge serves only `:8080`, for the agent, and something else ends TLS. |
-| `OMB_CLOUD_EDGE_ACME_EMAIL` | With `OMB_CLOUD_EDGE_TLS=1`: a fallback CA for when Let's Encrypt refuses a certificate (its rate limits, say). The address of the account ZeroSSL's ACME endpoint gets: Caddy creates that account by itself from the address, with no sign-up or key to set. Let's Encrypt stays first and keeps its own account, and whichever CA issued the certificate stays on the volume. Unset or empty: Let's Encrypt alone. Anything but one plain address stops the home with a message naming the variable. It has no default; the operator sets it. |
-| `OMB_CLOUD_TRUSTED_PROXIES` | Only when the owner's own proxy stands in front: its addresses or ranges (`10.0.0.5`, `10.0.0.0/24`, `private_ranges`), separated by spaces or commas, at most 32. Unset: none. A `/0` range, a host name or anything else stops the home with a message naming the variable. |
-| `OMB_CLOUD_CLIENT_IP_HEADER` | The header those proxies put the client's address in. Default `X-Forwarded-For`; it needs `OMB_CLOUD_TRUSTED_PROXIES`. |
-| `OMB_CLOUD_TUNNEL_TOKEN` | For a server with no inbound port: the connector token of the home's own Cloudflare tunnel. `OMB_PUBLIC_URL` is then the tunnel's address. Not with `OMB_CLOUD_EDGE_TLS`. |
+| `SEIRA_PUBLIC_URL` | `https://` and the name people use, e.g. `https://seira.acme.eu`. Its DNS points at the server. |
+| `SEIRA_CLOUD_EDGE_TLS` | `1`: the edge gets and renews a Let's Encrypt certificate for that name and serves it on 443. Unset or `0`: the edge serves only `:8080`, for the agent, and something else ends TLS. |
+| `SEIRA_CLOUD_EDGE_ACME_EMAIL` | With `SEIRA_CLOUD_EDGE_TLS=1`: a fallback CA for when Let's Encrypt refuses a certificate (its rate limits, say). The address of the account ZeroSSL's ACME endpoint gets: Caddy creates that account by itself from the address, with no sign-up or key to set. Let's Encrypt stays first and keeps its own account, and whichever CA issued the certificate stays on the volume. Unset or empty: Let's Encrypt alone. Anything but one plain address stops the home with a message naming the variable. It has no default; the operator sets it. |
+| `SEIRA_CLOUD_TRUSTED_PROXIES` | Only when the owner's own proxy stands in front: its addresses or ranges (`10.0.0.5`, `10.0.0.0/24`, `private_ranges`), separated by spaces or commas, at most 32. Unset: none. A `/0` range, a host name or anything else stops the home with a message naming the variable. |
+| `SEIRA_CLOUD_CLIENT_IP_HEADER` | The header those proxies put the client's address in. Default `X-Forwarded-For`; it needs `SEIRA_CLOUD_TRUSTED_PROXIES`. |
+| `SEIRA_CLOUD_TUNNEL_TOKEN` | For a server with no inbound port: the connector token of the home's own Cloudflare tunnel. `SEIRA_PUBLIC_URL` is then the tunnel's address. Not with `SEIRA_CLOUD_EDGE_TLS`. |
 
-**Its own domain (`OMB_CLOUD_EDGE_TLS=1`).** The agent publishes the
+**Its own domain (`SEIRA_CLOUD_EDGE_TLS=1`).** The agent publishes the
 container's 443 (and 80 if the owner opens it). Let's Encrypt checks the name
 over TLS on 443 (TLS-ALPN), so port 80 is optional; a certificate took 6 to 8 s
 in tests. Clients reach 443 directly, so the edge counts each by its own
 address with no header at all, and the agent's requests, which arrive through
 `127.0.0.1:8080` from the Docker bridge, are counted apart from any stranger
 on 443. The certificate and the ACME account live on the volume, in
-`/data/.omb-edge/caddy`, outside the server's data folder (no workspace backup
+`/data/.seira-edge/caddy`, outside the server's data folder (no workspace backup
 or export carries the key) and never in `/tmp`: an update or a rollback is a
 new container, and Let's Encrypt issues the same name at most 5 times a week.
 The edge speaks HTTP/1.1 and HTTP/2 only, so UDP 443 stays closed.
@@ -1338,8 +1336,8 @@ network has IPv6 of its own (not verified).
 
 **The owner's own proxy in front.** It ends TLS and forwards to the home's
 `:8080` (published where the proxy can reach it). Name it in
-`OMB_CLOUD_TRUSTED_PROXIES` and, if it does not use `X-Forwarded-For`, its
-header in `OMB_CLOUD_CLIENT_IP_HEADER`, or every member shares one lockout:
+`SEIRA_CLOUD_TRUSTED_PROXIES` and, if it does not use `X-Forwarded-For`, its
+header in `SEIRA_CLOUD_CLIENT_IP_HEADER`, or every member shares one lockout:
 ten wrong codes from anyone would also refuse the Admin's own pairings for a
 minute. A proxy on the same host reaches a published port from the Docker
 bridge's gateway (usually `172.17.0.1`), which the agent shares; naming the
@@ -1353,10 +1351,10 @@ so a client's own `X-Forwarded-For` or `Cf-Connecting-IP` changes nothing.
 `ensureEndpoint`, called with the server's installation credential
 (`fleetAccess` in `server/tunnel.ts`), returns the address
 (`https://c-<32 hex>.<zone>`) and the connector token, which go into
-`OMB_PUBLIC_URL` and `OMB_CLOUD_TUNNEL_TOKEN`. The home then runs the pinned
+`SEIRA_PUBLIC_URL` and `SEIRA_CLOUD_TUNNEL_TOKEN`. The home then runs the pinned
 `cloudflared` from its image (`/usr/local/bin/cloudflared`, the release
-`scripts/prepare-cloudflared.mjs` checks) as its own user, `omb-tunnel`: the
-token rides that process's environment, which `maus`, and so no bot or engine,
+`scripts/prepare-cloudflared.mjs` checks) as its own user, `seira-tunnel`: the
+token rides that process's environment, which `seira`, and so no bot or engine,
 can read. If it stops, the launcher starts it again after 5 s, doubling to
 5 minutes. The control plane points every tunnel at `127.0.0.1:8812`, where
 the edge (`deploy/fly/Caddyfile.tunnel`) listens on loopback only and believes
@@ -1370,8 +1368,8 @@ only whose lockout its own failed codes count toward, never who is signed in.
 
 **Private, on a tailnet.** `tailscale serve --bg --https=443
 http://127.0.0.1:8080` on the server serves `https://<machine>.<tailnet>.ts.net`
-to the tailnet; set `OMB_PUBLIC_URL` to that name, and name the bridge's
-gateway in `OMB_CLOUD_TRUSTED_PROXIES` so each member's tailnet address is
+to the tailnet; set `SEIRA_PUBLIC_URL` to that name, and name the bridge's
+gateway in `SEIRA_CLOUD_TRUSTED_PROXIES` so each member's tailnet address is
 counted apart. The Admin never needs that address: its requests come through
 the agent. Not verified on a tailnet.
 
@@ -1379,14 +1377,14 @@ the agent. Not verified on a tailnet.
 
 The Admin creates the machine through the Machines API; `deploy/fly/fly.toml`
 is the same shape for a manual deploy: `internal_port = 8080`, `force_https`,
-no auto-stop, one machine always running, a volume `omb_home` at `/data`,
+no auto-stop, one machine always running, a volume `seira_home` at `/data`,
 restart policy `always`, and an HTTP check on `GET /api/health` (it answers
-`{"app":"openmausbot"}` with no session). Each customer's app lives in its
+`{"app":"seira"}` with no session). Each customer's app lives in its
 own Fly private network, so no machine can reach another's over 6PN.
 
 ## Boot contract
 
-Set by openmaus-cloud's provisioner (`server/cloud-machines.ts`). Any of the
+Set by the Cloud service's provisioner. Any of the
 first four switches the server into Cloud home mode; then all of them are
 required and the whole contract is validated. A partial or invalid contract
 stops the server before it serves, with a message that names the variable and
@@ -1394,25 +1392,25 @@ never echoes a secret.
 
 | Variable | Fly | Value |
 | --- | --- | --- |
-| `OMB_CLOUD_ROLE` | env | `home`. (`desktop` belongs to the Cloud desktop image and is refused here.) |
-| `OMB_CLOUD_MACHINE_ID` | env | The Admin's machine id (a UUID). Binds the volume. |
-| `OMB_CLOUD_ADMIN_URL` | secret | The Cloud origin, exact `https://`, e.g. `https://cloud.openmausbot.com`. |
-| `OMB_CLOUD_BOOTSTRAP_SECRET` | secret | 43 base64url characters (256 bits): the key the Admin signs pairing requests with. |
-| `OMB_PUBLIC_URL` | env | The machine's exact `https://` origin, `https://<app>.fly.dev`. |
-| `OMB_CLOUD_LEGACY_ORIGINS` | env | Optional, only for a home that moved to another provider: the exact `https://` origins it answered at before, comma-separated (at most 8, never a loopback name), e.g. `https://<app>.fly.dev`. |
+| `SEIRA_CLOUD_ROLE` | env | `home`. (`desktop` belongs to the Cloud desktop image and is refused here.) |
+| `SEIRA_CLOUD_MACHINE_ID` | env | The Admin's machine id (a UUID). Binds the volume. |
+| `SEIRA_CLOUD_ADMIN_URL` | secret | The Cloud origin, exact `https://`, e.g. `https://cloud.seira.bot`. |
+| `SEIRA_CLOUD_BOOTSTRAP_SECRET` | secret | 43 base64url characters (256 bits): the key the Admin signs pairing requests with. |
+| `SEIRA_PUBLIC_URL` | env | The machine's exact `https://` origin, `https://<app>.fly.dev`. |
+| `SEIRA_CLOUD_LEGACY_ORIGINS` | env | Optional, only for a home that moved to another provider: the exact `https://` origins it answered at before, comma-separated (at most 8, never a loopback name), e.g. `https://<app>.fly.dev`. |
 
-- The machine must not also carry `OMB_ADMIN_URL`, `OMB_ADMIN_WORKSPACE` or
-  `OMB_ADMIN_MEMBERSHIP`: a Cloud home is a personal server with pairing codes
+- The machine must not also carry `SEIRA_ADMIN_URL`, `SEIRA_ADMIN_WORKSPACE` or
+  `SEIRA_ADMIN_MEMBERSHIP`: a Cloud home is a personal server with pairing codes
   on, not a hosted team workspace with portal membership.
-- `HOME=/data` and `OMB_DATA_DIR=/data/.openmausbot` are set by the image.
+- `HOME=/data` and `SEIRA_DATA_DIR=/data/.seira` are set by the image.
 - The server keeps the secret in memory and removes it from its environment at
   startup; no engine or tool it starts ever inherits it.
 
 ### No model gateway
 
-OMB Cloud includes no AI, so the contract has no model gateway. If a Cloud
-home is ever given `OMB_HOSTED_MODEL_URL`, `OMB_HOSTED_MODEL_TOKEN` or
-`OMB_HOSTED_MODELS` (an Admin from before this decision set all three), it
+Seira Cloud includes no AI, so the contract has no model gateway. If a Cloud
+home is ever given `SEIRA_HOSTED_MODEL_URL`, `SEIRA_HOSTED_MODEL_TOKEN` or
+`SEIRA_HOSTED_MODELS` (an Admin from before this decision set all three), it
 still boots, logs one warning naming the variables (never their values), and
 ignores them:
 
@@ -1424,44 +1422,38 @@ ignores them:
   trial's Claude credit (below); the person's own engines are otherwise the
   only way to a model.
 
-### Included Boat computers, voice and decisions
+### Included voice and decisions
 
-Pro includes Boat cloud computers, ElevenLabs voice and the decision model
+Pro includes ElevenLabs voice and the decision model
 (TypeSafe's Jev, [decision-model.md](decision-model.md)) with no key to paste.
 For each service the Admin has configured, it also sets:
 
 | Variable | Fly | Value |
 | --- | --- | --- |
-| `OMB_CLOUD_BOAT_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/boat/api/box/v1`, the Admin's Boat relay. The app speaks Boat's public API v1 (`/sandboxes`, `sandbox` envelopes); this relay still serves Boat's retired box API (`/boxes`, `box` envelopes), so for a base ending in `/api/box/v1` the app translates paths and answers in one place, `server/boat-relay.ts`. A base ending in `/api/v1` gets v1 as it is. Bots use it only for cloud computers, as a tool on their own engine; no turn runs on Boat's own agent, so nothing calls its `/prompt`, `/events`, `/prompts/{id}` or `/interrupt` routes. |
-| `OMB_CLOUD_BOAT_TOKEN` | secret | This machine's Boat relay token (`box_omb_…`). It is not a Boat key and works only through the relay. |
-| `OMB_CLOUD_VOICE_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/voice/v1`, the Admin's voice relay. |
-| `OMB_CLOUD_VOICE_TOKEN` | secret | This machine's voice relay token (`omb_voice_…`). |
-| `OMB_TTS_DEFAULT_VOICE` | env | An ElevenLabs voice id, used until the person picks a voice or another speech provider in Settings. |
-| `OMB_CLOUD_DECIDER_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/decider`, the Admin's Jev relay. It is a Jev base URL, used as it is: the decider adds `/v1/systemone`, so every included decision goes to exactly `<OMB_CLOUD_DECIDER_URL>/v1/systemone`, and extraction adds `/v1/extract`. |
-| `OMB_CLOUD_DECIDER_TOKEN` | secret | This machine's decision relay token (`omb_decide_…`). It is not a Jev key and works only through the relay. |
-| `OMB_CLOUD_X_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/x`, the Admin's treg relay; the client calls `<OMB_CLOUD_X_URL>/call/<endpoint>` for the X tools' eight endpoints, `/research/search`, `/research/endpoints/<id>` and `/research/call/<id>` for the research tools, and `GET /usage` for the month's calls on the Apps page's X card (`GET /api/x/status`). The home asks `GET /research/search` with no job at start, which spends nothing: a 400 means research is on, an off answer hides the research tools (x_search stays) until an hour later or a restart, and a research call refused as off does the same. A person's own treg key (Settings → API keys) wins over it and goes straight to treg. |
-| `OMB_CLOUD_X_TOKEN` | secret | This machine's X research relay token (`omb_x_…`). Not a treg key; it works only through the relay, within the plan's monthly X research calls. A signed-in desktop gets its own (`omb_xd_…`) from `POST /api/cloud/desktop/services/x` and hands it to its server in memory. |
-| `OMB_CLOUD_HOSTING_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/hosting/v1`, the Admin's app hosting relay, set only where the Admin has included app hosting on and the plan is paid. The server lists the Cloud's apps and the plan's count (`GET /apps`), publishes a bot's folder (`PUT /apps/<key>`, then each file the relay asks for) and deletes (`DELETE /apps/<key>`); `server/host/included-hosting.ts`. Absent: bots publish to the person's own Netlify account, as on a computer. |
-| `OMB_CLOUD_HOSTING_TOKEN` | secret | This machine's app hosting relay token (`omb_host_…`). Not a Netlify token; it works only through the relay, within the plan's apps and monthly publishes. Bots never get it: they call `publish_app`, and the server publishes. |
+| `SEIRA_CLOUD_VOICE_URL` | env | `https://cloud.seira.bot/api/cloud/services/voice/v1`, the Admin's voice relay. |
+| `SEIRA_CLOUD_VOICE_TOKEN` | secret | This machine's voice relay token (`seira_voice_…`). |
+| `SEIRA_TTS_DEFAULT_VOICE` | env | An ElevenLabs voice id, used until the person picks a voice or another speech provider in Settings. |
+| `SEIRA_CLOUD_DECIDER_URL` | env | `https://cloud.seira.bot/api/cloud/services/decider`, the Admin's Jev relay. It is a Jev base URL, used as it is: the decider adds `/v1/systemone`, so every included decision goes to exactly `<SEIRA_CLOUD_DECIDER_URL>/v1/systemone`, and extraction adds `/v1/extract`. |
+| `SEIRA_CLOUD_DECIDER_TOKEN` | secret | This machine's decision relay token (`seira_decide_…`). It is not a Jev key and works only through the relay. |
+| `SEIRA_CLOUD_X_URL` | env | `https://cloud.seira.bot/api/cloud/services/x`, the Admin's treg relay; the client calls `<SEIRA_CLOUD_X_URL>/call/<endpoint>` for the X tools' eight endpoints, `/research/search`, `/research/endpoints/<id>` and `/research/call/<id>` for the research tools, and `GET /usage` for the month's calls on the Apps page's X card (`GET /api/x/status`). The home asks `GET /research/search` with no job at start, which spends nothing: a 400 means research is on, an off answer hides the research tools (x_search stays) until an hour later or a restart, and a research call refused as off does the same. A person's own treg key (Settings → AI → Other services) wins over it and goes straight to treg. |
+| `SEIRA_CLOUD_X_TOKEN` | secret | This machine's X research relay token (`seira_x_…`). Not a treg key; it works only through the relay, within the plan's monthly X research calls. A signed-in desktop gets its own (`seira_xd_…`) from `POST /api/cloud/desktop/services/x` and hands it to its server in memory. |
+| `SEIRA_CLOUD_HOSTING_URL` | env | `https://cloud.seira.bot/api/cloud/services/hosting/v1`, the Admin's app hosting relay, set only where the Admin has included app hosting on and the plan is paid. The server lists the Cloud's apps and the plan's count (`GET /apps`), publishes a bot's folder (`PUT /apps/<key>`, then each file the relay asks for) and deletes (`DELETE /apps/<key>`); `server/host/included-hosting.ts`. Absent: bots publish to the person's own Netlify account, as on a computer. |
+| `SEIRA_CLOUD_HOSTING_TOKEN` | secret | This machine's app hosting relay token (`seira_host_…`). Not a Netlify token; it works only through the relay, within the plan's apps and monthly publishes. Bots never get it: they call `publish_app`, and the server publishes. |
 
 A service is included only when both its URL and its token are set
-(`server/included-services.ts`). The real Boat, ElevenLabs and Jev keys stay
-on the Admin, which checks the subscription, the monthly caps and which
-computers belong to this machine on every request.
+(`server/included-services.ts`). The real ElevenLabs and Jev keys stay
+on the Admin, which checks the subscription and the monthly caps on every request.
 
 - **The person's own key always wins.** An included token is a fallback, used
   only while the person has no key of their own: none saved in Settings
-  (`box.token`, `tts.key`, `decider.key`, `decider.workersAiToken`) and no
-  `BOX_TOKEN`, `OMB_TTS_KEY`, `OMB_JEV_API_KEY` or `OMB_WORKERS_AI_TOKEN` in
+  (`tts.key`, `decider.key`, `decider.workersAiToken`) and no
+  `SEIRA_TTS_KEY`, `SEIRA_JEV_API_KEY` or `SEIRA_WORKERS_AI_TOKEN` in
   the environment (for extraction, only a Workers AI token with its account ID
   counts: a Jev key does not read). Adding a key switches to it at
-  once; removing it falls back to the included service again (for Boat, once
-  that key's cloud computers are deleted: removing a Boat key that still has
-  computers is refused). The choice is made on every request.
+  once; removing it falls back to the included service again. The choice is made on every request.
 - **Each credential goes to one place.** The relays know only the Admin's
-  accounts, so an own key goes only to the provider (`OMB_BOAT_API`,
-  `OMB_ELEVENLABS_API` or `decider.baseUrl` when set, for development and
-  tests, else Boat's, ElevenLabs' and Jev's own APIs) and an included token
+  accounts, so an own key goes only to the provider (`SEIRA_ELEVENLABS_API` or `decider.baseUrl` when set, for development and
+  tests, else ElevenLabs' and Jev's own APIs) and an included token
   only to its relay, whatever those settings say.
 - **The decision relay takes four decision requests and three extraction
   requests, and the app sends it nothing else.** Through the included token
@@ -1493,9 +1485,11 @@ computers belong to this machine on every request.
 
   Any decision job added later uses only a key of the person's own (Jev,
   Workers AI or OpenRouter) until the relay accepts it too. For decisions the
-  relay speaks Jev's API only: included decisions are Jev's. An own Jev or
-  Workers AI key comes before them; an OpenRouter key comes after them,
-  whichever provider is selected in **Settings › AI › Routing and extraction**.
+  relay speaks Jev's API only: included decisions are Jev's. The provider
+  picked in **Settings › AI › Routing and extraction** decides first when its
+  key is usable; **Included with your Cloud plan** is one of the choices.
+  Without a usable pick, an own Jev or Workers AI key comes before the
+  included decisions, and an OpenRouter key comes after them.
 - **Included decisions are on until switched off.** While the decision model
   runs on the included token, its master switch counts as on unless the person
   switched it off in **Settings › AI › Routing and extraction**; an explicit off
@@ -1509,30 +1503,21 @@ computers belong to this machine on every request.
   `included: true`, and says "Included with your Cloud plan"), and Settings
   never verifies, rotates or clears it. The decision model's **Test** button,
   with no key pasted, makes one tiny decision call and one extraction check
-  through the relay, never to Jev directly. Boat's account-change rules still
-  apply: adding an own Boat key while included cloud computers exist is refused
-  until they are deleted, because the new account cannot reach them.
+  through the relay, never to Jev directly.
 - **What holding the tokens does and does not do.** The server receives the
   tokens over the launcher's pipe, never its environment, keeps them in
   memory, and they are on the credential list. So no process the server
   starts inherits them, including tools that copy its environment as it is
   (the browser, docker, ssh, MCP bridges), and no process finds them in the
   server's `/proc/<pid>/environ`. They are still in the server's memory, and
-  that is the remaining exposure: the server runs as `maus`, like every
+  that is the remaining exposure: the server runs as `seira`, like every
   engine, so a process running as the same user that may trace it (the
   kernel's ptrace policy, `kernel.yama.ptrace_scope`, decides) could read
   them there. That is why a guest's turn gets no shell (above); the complete
-  fix is engines under a user of their own. A relay token is only this customer's own OMB Cloud
+  fix is engines under a user of their own. A relay token is only this customer's own Seira Cloud
   allowance: it works only through the Admin, only on this machine's cloud
   computers, voice and decisions, and only up to the monthly caps.
-- A refusal from the Boat or voice relay (for example, the month's cloud
-  computer hours are used up) is shown as the relay's own message. A resume
-  that fails with a server error is retried on the next poll, as Boat asks.
-- An included cloud computer goes to sleep through the relay's `POST
-  /boxes/{id}/stop` after 10 idle minutes, as one on a person's own key does
-  at Boat; a refused stop is retried later, a longer wait each time. A
-  computer stays on when a routine that uses it runs within the next 30
-  minutes, since every wake counts against the Boat account's shared starts.
+- A refusal from the voice relay is shown as the relay's own message.
 - A refusal from the decision relay (401 for an unknown token, 402 without an
   active subscription, 429 over the month's cap or a rate limit, 502 or 503
   upstream) never reaches a turn: as with any decision-model failure, the room
@@ -1543,19 +1528,19 @@ computers belong to this machine on every request.
 
 The plan includes connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and
 the rest of the catalog) only when the Cloud image names a connected-apps
-service with `OMB_COMPOSIO_BROKER_URL` (env, not secret). Without it, the
-Cloud behaves as if `OMB_COMPOSIO_BROKER=off`: the owner adds a Composio
-project key under **Settings → API keys → Apps and tools → Composio project key**.
+service with `SEIRA_COMPOSIO_BROKER_URL` (env, not secret). Without it, the
+Cloud behaves as if `SEIRA_COMPOSIO_BROKER=off`: the owner adds a Composio
+project key in **Settings → AI → Other services**, under **Apps and tools** (**Composio project key**).
 
 When a service is named, the Admin sets nothing else for it: at every start the
 server registers the Cloud's own installation if it has none, keeps the token
-owner-only in `/data/.openmausbot/connected-apps-installation.json` (never in a
+owner-only in `/data/.seira/connected-apps-installation.json` (never in a
 backup, a move or `config.json`), checks it with the service, and retries with
 backoff while the service is down, without holding up the start. An owner's own
 Composio project key still wins. The details are in
 [composio.md](composio.md#seira-cloud).
 
-For a paid plan with a named service the Admin also sets `OMB_CLOUD_CONNECTED_APPS_GRANT` (secret):
+For a paid plan with a named service the Admin also sets `SEIRA_CLOUD_CONNECTED_APPS_GRANT` (secret):
 a grant it signs for the machine id, which the server presents to the service
 once it holds its token. The service then gives this installation a paid
 Cloud's app-event limit (2,000 a day instead of a desktop's 500). Without it a
@@ -1565,15 +1550,15 @@ Cloud gets the desktop limit. The grant's format is in
 ### Trial Claude credit
 
 A free trial may come with a one-time Claude credit (the Admin's
-`OMB_CLOUD_TRIAL_CREDIT_USD`). While it lasts, and only while the person has
+`SEIRA_CLOUD_TRIAL_CREDIT_USD`). While it lasts, and only while the person has
 no AI of their own on My Cloud, bots run on Claude through the Admin's relay,
 which holds the provider key and meters the credit. For an account with a
 credit, the Admin also sets:
 
 | Variable | Fly | Value |
 | --- | --- | --- |
-| `OMB_CLOUD_AI_URL` | env | `https://cloud.openmausbot.com/api/cloud/services/ai/v1`, an OpenAI-compatible base URL with its `/v1` (as the Admin sends it): `POST {url}/chat/completions` and `GET {url}/models` only. Nothing Anthropic-shaped (no `/v1/messages`) answers a credit token. |
-| `OMB_CLOUD_AI_TOKEN` | secret | This machine's credit token (`omb_ai_…`), sent as `Authorization: Bearer`. It works only through the relay, only for this account's credit, and not at all once it is spent or the Cloud is deleted. |
+| `SEIRA_CLOUD_AI_URL` | env | `https://cloud.seira.bot/api/cloud/services/ai/v1`, an OpenAI-compatible base URL with its `/v1` (as the Admin sends it): `POST {url}/chat/completions` and `GET {url}/models` only. Nothing Anthropic-shaped (no `/v1/messages`) answers a credit token. |
+| `SEIRA_CLOUD_AI_TOKEN` | secret | This machine's credit token (`seira_ai_…`), sent as `Authorization: Bearer`. It works only through the relay, only for this account's credit, and not at all once it is spent or the Cloud is deleted. |
 
 - **Seira's own chat engine, nothing else.** `server/cloud-credit-provider.ts`
   adds one read-only **Trial credit · Claude** engine: the OpenAI-compatible
@@ -1643,9 +1628,9 @@ credit, the Admin also sets:
 ```http
 POST /api/cloud/pairing
 Content-Type: application/json
-x-omb-cloud-timestamp: 1790000000
-x-omb-cloud-nonce: <base64url, 16–128 characters>
-x-omb-cloud-signature: v1=<base64url HMAC-SHA256(OMB_CLOUD_BOOTSTRAP_SECRET, canonical)>
+x-seira-cloud-timestamp: 1790000000
+x-seira-cloud-nonce: <base64url, 16–128 characters>
+x-seira-cloud-signature: v1=<base64url HMAC-SHA256(SEIRA_CLOUD_BOOTSTRAP_SECRET, canonical)>
 
 {"label":"Seira app (Cloud)","ttlSeconds":300}
 ```
@@ -1656,10 +1641,12 @@ where `canonical` is
 v1\n<timestamp>\n<nonce>\nPOST\n/api/cloud/pairing\n<base64url SHA-256 of the raw body>
 ```
 
+Every signed request, in either direction, carries these headers as `x-seira-cloud-*`. Senders also send the same values as `x-omb-cloud-*`, and receivers still accept those names, so older installs keep working. A receiver reads `x-seira-cloud-*` first. A machine request adds `x-seira-cloud-machine` (and `x-omb-cloud-machine`). The signed text and its labels do not change.
+
 `200`:
 
 ```json
-{ "code": "ABCD-EFGH-JKLM", "credential": "omb_pair_…", "expiresAt": 1790000300000 }
+{ "code": "ABCD-EFGH-JKLM", "credential": "seira_pair_…", "expiresAt": 1790000300000 }
 ```
 
 `code` and `credential` are two encodings of **one ordinary pairing window**
@@ -1671,7 +1658,7 @@ With `"purpose":"browser"` and `"owner":"<the account's email>"` in the body
 sign-in window for that owner instead and answers
 
 ```json
-{ "credential": "omb_pair_…", "expiresAt": 1790000120000, "purpose": "browser" }
+{ "credential": "seira_pair_…", "expiresAt": 1790000120000, "purpose": "browser" }
 ```
 
 `ttlSeconds` then defaults to and is capped at 120. Only
@@ -1848,7 +1835,7 @@ apps are looked up in the background at most every 30 minutes, so a slow
 provider never holds the answer. `connectors.items` lists only apps the
 person set up: connected now, or connected once and since expired or failed.
 An app never connected is not listed. Cloud computers are not listed: through
-the Admin's Boat relay that would count as using an included service and hold back
+a cloud computer lookup would count as using an included service and hold back
 updates; a cloud computer that fails a turn arrives as its place's code
 (`cc-unavailable`, `cc-no-start`, `cc-provider`, …).
 
@@ -1881,7 +1868,7 @@ judge a pending timer by a wall-clock time stored when it was set.
 - nobody used the home for 10 minutes (the Admin may ask for another window).
   A use is an authenticated request, except the event stream, `/api/health`,
   `/api/sync/…`, `/api/shared-computers/…` and requests the page marks
-  `x-omb-background: 1` (its own polls). A request with no mark counts, so an
+  `x-seira-background: 1` (its own polls). A request with no mark counts, so an
   older client can only keep a home awake, never let it sleep under someone;
 - work ended 2 minutes ago, the home has been awake 2 minutes, and the next
   scheduled run is at least 5 minutes away.
@@ -1949,7 +1936,7 @@ resume, someone's use, or 120 s (a sleep the Admin never carried out):
   startup" routines don't fire. Any other boot removes nothing and runs them as
   before.
 
-**The edge on a cold wake.** `OMB_CLOUD_EDGE_HOLD` (whole seconds, at most
+**The edge on a cold wake.** `SEIRA_CLOUD_EDGE_HOLD` (whole seconds, at most
 120, such as `30s`; unset: `0s`, today's edge) makes Caddy hold a request while
 the server starts instead of answering 502, so a webhook or the app's first
 request after a stop is answered late rather than refused; Caddy dials the
@@ -1997,7 +1984,7 @@ The desktop polls `GET /api/cloud/desktop/session` with its personal device
 token (`Authorization: Bearer omc_…`). Contract version 1 adds:
 
 ```json
-"cloud": { "state": "ready", "origin": "https://omb-u-1a2b3c4d5e6f.fly.dev", "pairingAvailable": true }
+"cloud": { "state": "ready", "origin": "https://seira-u-1a2b3c4d5e6f.fly.dev", "pairingAvailable": true }
 ```
 
 - `null` or absent when the account has no machine; the app then shows nothing new.
@@ -2181,9 +2168,9 @@ launch: the one first in `NOTICES` shows, and the other waits for a later one.
    button carries the slide's tag on the Cloud's funnel (`app_whats_new_pro`,
    `app_whats_new_team`): **Get Pro** opens the Add a Cloud dialog with
    `source: app_whats_new_pro`, which its checkout sends; **See the new Cloud**
-   opens `https://cloud.openmausbot.com/cloud?src=app_whats_new_pro` (the plans,
+   opens `https://cloud.seira.bot/cloud?src=app_whats_new_pro` (the plans,
    for someone without one); **Start a Team** opens
-   `https://cloud.openmausbot.com/pro/buy?plan=team&src=app_whats_new_team`, the
+   `https://cloud.seira.bot/pro/buy?plan=team&src=app_whats_new_team`, the
    website's Get Team with this slide's tag (the staging Admin's site for an app
    on staging), and for someone with a plan of their own, whom that page would
    only tell to write in, the Add a Cloud dialog with `source:
@@ -2240,15 +2227,15 @@ restoring or connecting.
 
 In the Server menu, **My Cloud** goes through the same connection as
 **Open My Cloud** (no pairing code to type); when it cannot, the app
-opens **Settings → Seira Cloud**, which says the next step. In the desktop app a
+opens **Settings → Your account**, which says the next step. In the desktop app a
 `/pair#code=` link connects without a second click; a browser still asks. On a
 Cloud home the pairing page says where its connection starts (the environment
 descriptor's `capabilities.cloudHome`).
 
-On the person's own Cloud, open in the app's window, **Settings → Seira Cloud**
+On the person's own Cloud, open in the app's window, **Settings → Plan & billing**
 shows the plan read only (`cloud-plan:*`: its name and whether it is active,
 **Manage in your browser** and **Switch to this computer**). It is listed only
-on an OMB Cloud home (`config.cloudHome`), never on another server open in the
+on a Seira Cloud home (`config.cloudHome`), never on another server open in the
 window. Main answers it for the Cloud this account verified, or last verified
 while a check is failing or the sign-in has ended (`myCloudOrigin`, the rule
 the Cloud's microphone uses too), so that page says
@@ -2291,7 +2278,7 @@ ready: the plan (`tier`), when the monthly allowances start over (`resetsAt`, th
 during a free trial), each included allowance as `{kind, used, max, usedUp?}` (`computerHours` in hours, `voice` in
 characters, `decisions`, `x` in calls, `research` in dollars, `storage` in GB of the most the disk grows to), and the bigger
 plans the app can move to itself (`upgrades: [{tier, amount}]`, US cents a month; empty on Max, a team's plan, or while
-the Admin's `OMB_CLOUD_APP_UPGRADES` is off). `electron/cloud-home.mjs` `parseCloudUsage` drops anything malformed (an
+the Admin's `SEIRA_CLOUD_APP_UPGRADES` is off). `electron/cloud-home.mjs` `parseCloudUsage` drops anything malformed (an
 unknown kind, an allowance of nothing, a plan it doesn't know); it is display only and never grants or limits anything.
 Main keeps it on the account's state, and `cloudPlanSnapshot` hands it to this computer's page and the person's own Cloud
 page alike (`ogb.cloudPlan`), so the meter reads the same on both (`src/components/CloudUsageMeter.tsx`,
@@ -2303,7 +2290,7 @@ page alike (`ogb.cloudPlan`), so the meter reads the same on both (`src/componen
   month at this level: it comes back when one reaches 100%, and next month. Never shown in a browser, without a paid plan,
   or on a Team Cloud unless the plan whose usage it is is that team's (only the person who pays for a team sees its usage;
   its members never do).
-- **Settings → General → Seira Cloud usage**, while there is a paid plan: every allowance with its meter, when they
+- **Settings → Plan & billing → This week**, while there is a paid plan: every allowance with its meter, when they
   start over, and Upgrade to the next plan (the others as links), "You're on the top plan" on Max, or "To change your
   team's plan, write to us" on a team's plan.
 - **Upgrade, one tap and a confirm.** Upgrade asks main for a preview (`ogb.cloudPlan.upgradePreview(plan, source)`,
@@ -2323,7 +2310,7 @@ page alike (`ogb.cloudPlan`), so the meter reads the same on both (`src/componen
 ### Room card: short on memory or disk, and the plan that fixes it
 
 The session's `cloud.room` (additive, only beside `cloud.usage`; the Admin's `server/cloud-room.ts`, behind its
-`OMB_CLOUD_ROOM_OFFERS`) says this Cloud is short on room, from its health report's `room` and disk: `cause` is
+`SEIRA_CLOUD_ROOM_OFFERS`) says this Cloud is short on room, from its health report's `room` and disk: `cause` is
 `{kind: "memory", waits, waitMinutes, stopped}` (the last day) or `{kind: "disk", usedGb, capGb}`, then either `plan`
 (the next plan up that fixes it: `tier`, `amount` in US cents a month, `memoryMb`/`fromMemoryMb`, `diskGb`/`fromDiskGb`)
 or `tip: true` on the top plan, and `id`. `electron/cloud-home.mjs` `parseCloudRoom` drops anything malformed; it is display
@@ -2403,7 +2390,7 @@ screen's note.
   checkout already being prepared), the offer says why. A screen reader
   hears each card's button with its plan's name, and each new step takes
   focus at its heading. A payment problem, an ended sign-in or a Cloud that can't
-  be reached go to Settings → Seira Cloud instead.
+  be reached go to Settings → Your account instead.
 - **Checkout runs in the default browser, never the app.** Signed in, main
   asks the Admin for this account's checkout (`POST /api/cloud/desktop/checkout`
   with the plan and where it was opened) and opens the address only when it is
@@ -2415,7 +2402,7 @@ screen's note.
   with `&next=checkout&plan=<plan>&src=<source>` added (older Admins ignore it).
   The app follows its own session, never the return page: every 15 seconds
   for 30 minutes after it opened a checkout, and at once when the window comes
-  back or `openmausbot://cloud` arrives (which then opens the dialog).
+  back or `seira://cloud` arrives (which then opens the dialog).
 - **Ready.** When My Cloud is ready after a checkout this app opened and the
   window is elsewhere, one system notification says so.
 
@@ -2448,7 +2435,7 @@ screen's note.
   `app_onboarding` (main refuses any other, and any plan the offer doesn't
   sell).
 - **Interest** `POST /api/cloud/desktop/interest` `{kind: "another_cloud"}` → `{ok: true}`.
-- Every signed-in request carries this app's version in `x-openmausbot-version`.
+- Every signed-in request carries this app's version in `x-seira-version`.
 
 Nothing in the app is a price: with the Admin's trial switch off, no card is
 shown, and the dialog offers today's plans at the Admin's prices, charged
@@ -2497,7 +2484,7 @@ ends the move as before.
   characters.
 - The signing secret is removed from the server's environment at startup and
   is never passed to engines or to Caddy.
-- There is no platform model gateway: stray `OMB_HOSTED_*` settings are
+- There is no platform model gateway: stray `SEIRA_HOSTED_*` settings are
   ignored with one warning and never reach the server's environment or an
   engine. Every model call uses the person's own sign-in or key.
 - A volume binds to one machine and is never adopted by another.
@@ -2508,9 +2495,10 @@ ends the move as before.
 
 ## Published image
 
-Every push to `main` and every release tag publishes the home machine image as
-`ghcr.io/milind-soni/openmausbot-cloud-home`, tagged `latest` (main only), `sha-<commit>` and the release tag.
-It is the `Dockerfile`'s `cloud-home` target for the same commit, with Grok and the current Claude Code and
-Codex installed. The Docker workflow's summary prints the digest. Set it in the Admin as
-`OMB_CLOUD_HOME_IMAGE=ghcr.io/milind-soni/openmausbot-cloud-home@sha256:…`; changing it rolls the new image
+The `Server image` workflow (run by hand) publishes the home machine image as
+`ghcr.io/seira-bot/seira-cloud-home` for `linux/amd64` only. The tags are the release tag, or `latest` and
+`sha-<commit>` when no tag is given. The label `org.opencontainers.image.version` is the release version without
+the `v`, like `0.1.185`. It is the `Dockerfile`'s `cloud-home` target for the same commit, with Grok and the current
+Claude Code and Codex installed. The job summary of the publish job prints the digest. Set it in the Admin as
+`SEIRA_CLOUD_HOME_IMAGE=ghcr.io/seira-bot/seira-cloud-home@sha256:…`; changing it rolls the new image
 out to existing machines one at a time, reverting automatically on a failed health check.

@@ -1,15 +1,17 @@
 // `doctor --host`: can this Linux machine run the server and the bots' sandbox? It only looks: files under /proc and /sys,
 // version queries to docker, podman and timedatectl, the sockets already listening, and one HEAD request for the time. On
-// a server that runs the MausBot connector it also asks that for its own checks, which start one throwaway box probe.
+// a server that runs the Seira connector it also asks that for its own checks, which start one throwaway box probe.
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
 import { arch, cpus, homedir, release, totalmem } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 
+import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
 import { EXIT, flag, usageError } from "./args.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
+import { acceptedWireNames } from "../../electron/phone-wire-names.mjs";
 
-const CLOCK_ORIGIN = "https://seira.bot";
+const CLOCK_ORIGIN = seiraOrigin(SEIRA_HOSTS.site);
 
 export type HostStatus = "ok" | "warn" | "FAIL";
 
@@ -33,6 +35,8 @@ export interface HostProbe {
   arch: string;
   kernel: string;
   cpus: number;
+  /** The effective user id, or null where the system has none. */
+  euid: number | null;
   memoryBytes: number;
   /** A file's text, or null when it is missing or unreadable. */
   read(path: string): string | null;
@@ -73,6 +77,12 @@ function systemCheck(probe: HostProbe): HostCheck {
   return tested ? ok("system", line) : warn("system", `${line}: not a system we test (Ubuntu 24.04 or 22.04, or Debian 12)`);
 }
 
+function userCheck(probe: HostProbe): HostCheck {
+  if (probe.euid !== 0) return ok("user", "Runs as a normal user");
+  return warn("user", "Running as root: Claude Code refuses Full access for a root process, so bots that use it cannot run with Full access",
+    "create a normal user (sudo adduser seira), sign in as that user, and run the server there");
+}
+
 function archCheck(probe: HostProbe): HostCheck {
   if (probe.arch === "x64") return ok("arch", "x86_64");
   if (probe.arch === "arm64") return warn("arch", "arm64: the server runs here, but a self-hosted Team server is supported on x86_64 only");
@@ -93,12 +103,12 @@ async function containerCheck(probe: HostProbe): Promise<HostCheck> {
   return fail("containers", "Neither Docker nor Podman is installed", "sudo apt-get install -y docker.io   (or podman)");
 }
 
-/** What the MausBot connector on this server says of it, when one runs there: its own checks (connector/src/host.ts). */
+/** What the Seira connector on this server says of it, when one runs there: its own checks (connector/src/host.ts). */
 export interface ConnectorReport {
   checks: { id: string; ok: boolean; warning?: boolean; fix?: string }[];
 }
 
-const CONNECTOR = "mausbot-connector";
+const CONNECTOR = "seira-connector";
 
 /** Asks the connector's container, as root may; null where none runs or it cannot be asked. */
 export async function connectorReport(probe: HostProbe): Promise<ConnectorReport | null> {
@@ -130,7 +140,7 @@ function userNamespaceCheck(probe: HostProbe, connector: ConnectorReport | null)
     return fail("userns", "Bot sandbox: this kernel has no user namespaces", "use a stock Ubuntu or Debian kernel (CONFIG_USER_NS)");
   }
   if (sysctl("kernel.apparmor_restrict_unprivileged_userns") === "1") {
-    // A MausBot home runs under its own AppArmor profile (omb-home-narrow), which allows them for that container alone.
+    // A Seira home runs under its own AppArmor profile (seira-home-narrow), which allows them for that container alone.
     if (connector?.checks.some((check) => check.id === "box" && check.ok)) {
       return ok("userns", "Unprivileged user namespaces: AppArmor restricts them here, and Seira's home has them through its own AppArmor profile");
     }
@@ -223,7 +233,7 @@ async function portChecks(probe: HostProbe, options: HostOptions): Promise<HostC
   if (ours) return [server, warn("web-ports", `${which} in use: by this server's Caddy if it serves --domain, else by another program`, named)];
   return [server, options.domain
     ? fail("web-ports", `${which} taken, and --domain ${options.domain} needs 80 and 443`, `stop that program (${named}), or use --tunnel instead`)
-    : warn("web-ports", `${which} taken: serving on your own domain needs 80 and 443 (a tunnel or Tailscale does not)`, named)];
+    : warn("web-ports", `${which} taken: serving on your own domain needs 80 and 443 (a tunnel does not)${web.includes(443) ? "; `tailscale serve` needs 443 as well" : ""}`, named)];
 }
 
 async function clockCheck(probe: HostProbe): Promise<HostCheck> {
@@ -246,7 +256,7 @@ export async function checkHost(probe: HostProbe, options: HostOptions): Promise
     return [fail("platform", `doctor --host checks a Linux server, and this is ${name}`, "run it on the Linux server that will host Seira")];
   }
   const [containers, ports, clock, connector] = await Promise.all([containerCheck(probe), portChecks(probe, options), clockCheck(probe), connectorReport(probe)]);
-  return [systemCheck(probe), archCheck(probe), containers, userNamespaceCheck(probe, connector), seccompCheck(probe), cgroupCheck(probe),
+  return [systemCheck(probe), archCheck(probe), userCheck(probe), containers, userNamespaceCheck(probe, connector), seccompCheck(probe), cgroupCheck(probe),
     diskCheck(probe, options.dataDir), encryptedCheck(probe, options.dataDir), sizeCheck(probe), ...ports, clock, ...connectorChecks(connector)];
 }
 
@@ -275,7 +285,7 @@ function run(command: string, args: string[]): Promise<CommandResult> {
 export function systemProbe(): HostProbe {
   const read = (path: string) => { try { return readFileSync(path, "utf8"); } catch { return null; } };
   return {
-    platform: process.platform, arch: arch(), kernel: release(), cpus: cpus().length, memoryBytes: totalmem(),
+    platform: process.platform, arch: arch(), kernel: release(), cpus: cpus().length, euid: process.geteuid?.() ?? null, memoryBytes: totalmem(),
     read,
     list: (path) => { try { return readdirSync(path); } catch { return []; } },
     run,
@@ -304,7 +314,7 @@ export function systemProbe(): HostProbe {
     async serverAnswers(port) {
       try {
         const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2_000) });
-        return ((await response.json()) as { app?: unknown }).app === "openmausbot";
+        return acceptedWireNames("healthApp").includes(String(((await response.json()) as { app?: unknown }).app));
       } catch {
         return false;
       }
@@ -313,11 +323,11 @@ export function systemProbe(): HostProbe {
 }
 
 export async function hostDoctor(ctx: VerbContext, probe: HostProbe = systemProbe()): Promise<VerbOutcome> {
-  const rawPort = flag(ctx.flags, "port") ?? ctx.env.OMB_PORT ?? "8799";
+  const rawPort = flag(ctx.flags, "port") ?? ctx.env.SEIRA_PORT ?? "8799";
   const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw usageError("--port must be 1-65535");
   // A Linux machine's path, also when the checks are tested on Windows.
-  const dataDir = posix.resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.OMB_DATA_DIR || join(homedir(), ".openmausbot")));
+  const dataDir = posix.resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.SEIRA_DATA_DIR || join(homedir(), ".seira")));
   const domain = flag(ctx.flags, "domain")?.trim().toLowerCase();
   return hostReport(await checkHost(probe, { dataDir, port, ...(domain ? { domain } : {}) }));
 }

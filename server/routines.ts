@@ -12,7 +12,7 @@ import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import { intervalAllowsOccurrence, intervalHasRestrictions, isSameLocalDay, latestIntervalOccurrence } from "./routine-intervals.ts";
-import { cloneSchedule, limitResetOccurrence, mergeScheduleUpdate, nextOccurrence, RoutineScheduleError, type RoutineSchedule, type RoutineScheduleInput } from "./routine-schedules.ts";
+import { limitResetOccurrence, mergeScheduleUpdate, nextOccurrence, RoutineScheduleError, type RoutineSchedule, type RoutineScheduleInput } from "./routine-schedules.ts";
 import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts";
 import {
   ROUTINE_HANDOFF_WAIT, isRoutineProblemRun, type RoutineAccess, type RoutineCheck, type RoutineContextAttachment, type RoutineDelivery, type RoutineIntervalWindow, type RoutineRetryCause,
@@ -28,17 +28,17 @@ import {
 } from "./routine-recovery.ts";
 import { askOf, settleAsk, waitingFor, type RoutineRunAsk } from "./routine-waits.ts";
 import { failsLikeLastOutcome, outcomesNewestFirst } from "./routine-outcomes.ts"; import { createRunGate, type RunPreparation } from "./routine-run-gate.ts";
-import { busyWait, markStop, RunClock, runOverLimit, SlowStops, withBoundedStops, type StopState } from "./routine-bounds.ts"; import { keepUnreadableAside, readRoutineFile, UNREADABLE_RETRY_MS } from "./routine-file.ts";
+import { busyWait, markStop, RunClock, runOverLimit, SlowStops, withBoundedStops, type StopState } from "./routine-bounds.ts"; import { PlaceLostError, placeConfirmed } from "./place-lost.ts"; import { keepUnreadableAside, readRoutineFile, UNREADABLE_RETRY_MS } from "./routine-file.ts";
 import { noStartAlert, noStartSpacing, turnBackOn } from "./routine-no-start.ts"; import { afterRunSpacing, failureSpacingAlert, runSpacing } from "./routine-failure-spacing.ts"; import { blockingRun, recordSkip, type RoutineSkips } from "./routine-skips.ts";
 import { restartRetryAt, startupDecision } from "./routine-restarts.ts"; import { routineHealthOf, type RoutineHealth } from "./routine-health.ts"; import { Occurrences, ROUTINE_TURN_GONE } from "./routine-occurrences.ts"; import type { Occurrence } from "./routine-ledger.ts";
 import { CATCH_UP_MS, planOccurrence, settleRestored, staggered } from "./routine-catch-up.ts"; import { evictRuns } from "./routine-run-history.ts"; import { RunWatch } from "./routine-run-watch.ts"; import { scheduleSection, type ScheduleSection } from "./routine-schedule-report.ts";
 import { EVENT_RETRY_WINDOW_MS, MAX_EVENT_RECEIPTS, type EventRunReceipt } from "./routine-event-receipts.ts";
-import { attachmentPathsOf, cloneAttachments } from "./routine-attachments.ts";
+import { attachmentPathsOf } from "./routine-attachments.ts";
 import { loadInstalledPackage, matchingRequestReceipt, rememberRequest } from "./routine-load.ts";
 import { applyHolds, holdCauses, type AppliedHolds } from "./routine-holds.ts";
 import { cancelUnfinishedRuns, interruptRunTurns } from "./routine-stops.ts";
-import { sanitizeInput } from "./routine-input.ts";
-import { startRoutineWork } from "./routine-dispatch.ts";
+import { sanitizeInput, workflowLookupFor } from "./routine-input.ts";
+import { startRoutineWork, type WorkflowRoutineOptions } from "./routine-dispatch.ts"; import { cloneRoutine, cloneRun } from "./routine-clone.ts";
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
 import { resolveRoutineResultsThread, routineRunDefinition, type ResultsThreadAllocation } from "./routine-run-definition.ts";
@@ -48,8 +48,8 @@ export { intervalHasRestrictions } from "./routine-intervals.ts";
 export { nextOccurrence, RoutineScheduleError } from "./routine-schedules.ts";
 export type { RoutineIntervalSchedule, RoutineIntervalScheduleInput, RoutineSchedule, RoutineScheduleInput } from "./routine-schedules.ts";
 
-/** `cloud` runs the agent inside the bot's Boat VM; `maus` runs the bot's own provider and borrows only its computer tools. */
-export type RoutineRunOn = "maus" | "cloud";
+/** `cloud` asks for the bot's cloud desktop, and the server refuses such a run; `seira` runs the bot's own provider and borrows only its computer tools. */
+export type RoutineRunOn = "seira" | "cloud";
 export type RoutineTarget = "bot" | "room-goal";
 export type RoutineGoalStatus = Exclude<GroupGoalRunStatus, "working">;
 
@@ -61,6 +61,8 @@ export interface Routine extends RoutineTroubleCode {
   botId: string;
   groupId?: string;
   runOn: RoutineRunOn;
+  /** Moved off a cloud computer that is gone: Run now refuses until the person picks a place (place-lost.ts). */
+  placeLost?: true;
   enabled: boolean;
   schedule: RoutineSchedule;
   durationMinutes: number;
@@ -85,7 +87,7 @@ export interface Routine extends RoutineTroubleCode {
   warning?: string;
   heldFor?: RoutineHoldCause;
   sourceThreadId?: string;
-  resultsThreadId?: string;
+  resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
   installedPackage?: RoutinePackageStamp;
   nextRunAt: number | null;
   createdAt: number;
@@ -138,7 +140,7 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   webhookId?: string;
   deliveryId?: string;
   sourceThreadId?: string;
-  resultsThreadId?: string;
+  resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -199,7 +201,9 @@ export interface RoutineInput {
   checks?: RoutineCheck[] | null;
   access?: RoutineAccess | null;
   deliver?: RoutineDelivery | null;
-  resultsThreadId?: string | null;
+  resultsThreadId?: string | null; workflowId?: string | null; rewriteWorkflow?: true;
+  /** Only on an edit: the person confirmed where a moved automation runs (see place-lost.ts). */
+  confirmPlace?: true;
 }
 
 interface RoutineFile {
@@ -235,7 +239,7 @@ export interface RoutineChecks {
   settled(run: RoutineRun): void;
 }
 
-export interface RoutineManagerOptions {
+export interface RoutineManagerOptions extends WorkflowRoutineOptions {
   file?: string;
   now?: () => number;
   /** Every payload must be `{ kind, … }`: the server numbers and replays frames by it. */
@@ -310,22 +314,6 @@ const WAKE_HORIZON_MS = 60 * 60_000;
 export const ROUTINE_RESTARTED = "Seira restarted while this routine was running";
 const MAX_RUNS = 2_000;
 const earliest = (...times: Array<number | null>): number | null => times.reduce<number | null>((first, at) => at === null ? first : first === null ? at : Math.min(first, at), null);
-function cloneRoutine(routine: Routine): Routine {
-  return {
-    ...routine,
-    schedule: cloneSchedule(routine.schedule),
-    attachments: cloneAttachments(routine.attachments),
-  };
-}
-
-function cloneRun(run: RoutineRun): RoutineRun {
-  return {
-    ...run,
-    attachments: cloneAttachments(run.attachments),
-    denials: run.denials ? [...run.denials] : undefined,
-  };
-}
-
 export class RoutineManager {
   private readonly file: string; private readonly disk: OwnedFile;
   private readonly now: () => number;
@@ -376,7 +364,7 @@ export class RoutineManager {
     let restarts = 0;
     for (const run of this.runs.filter((candidate) => candidate.status === "running" || candidate.status === "waiting")) {
       settleAsk(run, undefined, this.now());
-      if (run.threadId && run.target === "bot" && this.options.hasPendingDelegations?.(run.threadId) === true) {
+      if (run.threadId && run.target === "bot" && (run.workflowId !== undefined || this.options.hasPendingDelegations?.(run.threadId) === true)) {
         this.wait(run, ROUTINE_HANDOFF_WAIT);
         continue;
       }
@@ -564,7 +552,7 @@ export class RoutineManager {
       }
     }
     const at = this.now();
-    const clean = sanitizeInput(input, at);
+    const clean = sanitizeInput(input, at, this.options.workflowCopy);
     clean.schedule = this.timedSchedule(clean.schedule);
     if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
     const nextRunAt = clean.enabled ? this.initialOccurrence(clean.schedule, at) : null;
@@ -607,6 +595,7 @@ export class RoutineManager {
     }
     const routine = this.routines.find((r) => r.id === id);
     if (!routine) return null;
+    const placeCleared = placeConfirmed(routine.placeLost, patch);
     const now = this.now();
     const clean = sanitizeInput({
       name: patch.name ?? routine.name,
@@ -626,8 +615,8 @@ export class RoutineManager {
       runOnStartup: patch.runOnStartup ?? routine.runOnStartup,
       checks: Object.hasOwn(patch, "checks") ? patch.checks : routine.checks,
       access: Object.hasOwn(patch, "access") ? patch.access : routine.access,
-      deliver: Object.hasOwn(patch, "deliver") ? patch.deliver : routine.deliver,
-    }, now);
+      deliver: Object.hasOwn(patch, "deliver") ? patch.deliver : routine.deliver, workflowId: Object.hasOwn(patch, "workflowId") ? patch.workflowId : routine.workflowId,
+    }, now, workflowLookupFor(patch, routine, this.options.workflowCopy));
     clean.schedule = this.timedSchedule(clean.schedule, routine.id);
     if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
     const scheduleChanged = JSON.stringify(clean.schedule) !== JSON.stringify(routine.schedule);
@@ -651,7 +640,8 @@ export class RoutineManager {
         updatedAt: Math.max(now, routine.updatedAt + 1),
       });
       if (patch.enabled !== undefined) delete routine.heldFor;
-      for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver"] as const) if (!clean[key]) delete routine[key];
+      if (placeCleared) delete routine.placeLost;
+      for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver", "workflowId", "workflowBotIds"] as const) if (!clean[key]) delete routine[key];
       if (!clean.checks) for (const key of ["checks", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt"] as const) delete routine[key];
       if (Object.hasOwn(patch, "timeoutMinutes") && patch.timeoutMinutes == null) {
         delete routine.timeoutMinutes;
@@ -747,6 +737,7 @@ export class RoutineManager {
     }
     const routine = this.routines.find((r) => r.id === id);
     if (!routine) return null;
+    if (routine.placeLost) throw new PlaceLostError();
     let run!: RoutineRun;
     const allocations: ResultsThreadAllocation[] = [];
     const previousDestination = routine.resultsThreadId;
@@ -781,7 +772,7 @@ export class RoutineManager {
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
     if (existing) return existing;
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned MAUS no longer exists"), { status: 410 });
+      throw Object.assign(new Error("The assigned bot no longer exists"), { status: 410 });
     }
     const run: RoutineRun = {
       id: randomUUID(), routineId: input.webhookId, routineName: input.webhookName, prompt: input.prompt, target: "bot",
@@ -1230,7 +1221,7 @@ export class RoutineManager {
   handleRuntimeEvent(event: RuntimeEvent): RoutineRun | null {
     const run = this.runs.find((r) => r.threadId === event.threadId && ["running", "waiting"].includes(r.status));
     if (event.type === "turn.completed") this.slowStops.confirmed(event.threadId); this.watch.seen(event.threadId);
-    if (!run || (run.target === "bot" && run.status === "waiting" && !run.asked && this.options.routineTurn?.(event.threadId) === false)) return null;
+    if (!run || run.workflowId !== undefined || (run.target === "bot" && run.status === "waiting" && !run.asked && this.options.routineTurn?.(event.threadId) === false)) return null;
     if (event.type === "turn.started" || event.type === "turn.completed") settleAsk(run, undefined, this.now());
     // A room goal's orchestrator owns its result (finishGoalRun); a member's completion is intermediate.
     if (
@@ -1333,6 +1324,21 @@ export class RoutineManager {
       if (status !== "stopped") run.output = safeDetail.slice(0, 2_000) || undefined;
       this.saveLater();
       this.emitRun(run);
+    }
+    queueMicrotask(() => this.tickInBackground());
+    return cloneRun(run);
+  }
+
+  workflowRunState(runId: string, state: "working" | "waiting" | "completed" | "failed", detail = ""): RoutineRun | null {
+    const run = this.runs.find((candidate) => candidate.id === runId && candidate.workflowId !== undefined && ["running", "waiting"].includes(candidate.status));
+    if (!run) return null;
+    const said = redactSecretsInText(detail).trim();
+    if (state === "failed") this.failRun(run, said || "A workflow step failed");
+    else {
+      if (state === "working") this.clock.work(run, this.now());
+      else if (state === "waiting") this.wait(run, said.slice(0, 500) || undefined);
+      else Object.assign(run, { status: "completed", attention: undefined, error: undefined, finishedAt: this.now(), output: clipRunOutput(said, 2_000) || undefined } satisfies Partial<RoutineRun>);
+      this.saveLater(); this.emitRun(run);
     }
     queueMicrotask(() => this.tickInBackground());
     return cloneRun(run);

@@ -4,13 +4,15 @@ import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/s
 import { nextShortcutBot, shortcutBots, shownBotIds } from "@/lib/sidebar-shortcut-order";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
-import { MausBotWelcome } from "@/components/MausBotWelcome";
+import { SeiraWelcome } from "@/components/SeiraWelcome";
 import { NewBotNameHost } from "@/components/NewBotName";
 import { MemberApps } from "@/components/MemberApps";
 import { CloudTimeZoneSync } from "@/components/CloudTimeZone";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
+import { pageName, reportPage } from "@/lib/crash-reports";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
 import { GuidedTour } from "@/components/onboarding/GuidedTour";
+import { CallHost } from "@/components/CallHost";
 import { LiveCallHost } from "@/components/LiveCallHost";
 import { ThreadRefsProvider } from "@/components/ThreadRefs";
 import { initAnalytics } from "@/lib/analytics";
@@ -24,7 +26,7 @@ import { SIDEBAR_AND_PANEL_FIT, SIDEBAR_INLINE, TWO_SIDE_PANELS_FIT, useMediaQue
 import { preloadConnectedApps } from "@/lib/connected-apps";
 import {
   ActivityPanel, AnnouncementsPage, BotSettingsDialog, CloudAddDialog, ComputerPanel, FilesView, InspectorPanel, KeyboardShortcutsModal, LocalVmWorkspace,
-  PluginsPanel, preloadScreens, PublishedAppsPage, RemoteAgentSettingsPanel, RemoteDesktopPanel, RoomPanel, SettingsModal, TeamFilesPage, TeamMapPage, TriggersPage,
+  BoardPage, PluginsPanel, preloadScreens, PublishedAppsPage, RemoteAgentSettingsPanel, RemoteDesktopPanel, RoomPanel, SettingsModal, TeamFilesPage, TeamMapPage, TriggersPage,
 } from "@/components/lazy-screens";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useRoomPanelShown } from "@/lib/room-panel";
@@ -33,7 +35,8 @@ import { NotificationRail, NotificationsPanel } from "@/components/Notifications
 import { useNotificationFeed } from "@/lib/notification-preferences";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { AppNotices } from "@/components/AppNotices";
-import { AppGrantNotice } from "@/components/AppGrantPrompt";
+import { PowerHost } from "@/components/power/PowerHost";
+import { AppGrantHost, AppGrantNotice } from "@/components/AppGrantPrompt";
 import { BotLimitPopup } from "@/components/BotLimitPopup";
 import { CloudAsleepStrip } from "@/components/CloudAsleepStrip";
 import { LiveConnectionStrip } from "@/components/LiveConnectionStrip";
@@ -43,9 +46,11 @@ import { useTeamChats } from "@/state/team-chats";
 import { needsYouVersion, useTeamPeopleLoader } from "@/state/team-people";
 import { useTeamPresence } from "@/state/team-presence";
 import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/state/inbox";
+import { useGlance } from "@/state/use-glance";
+import { useWorkflowsUnavailable } from "@/state/workflows";
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
-import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
+import { ConnectServerFromMenu, NewLocalFromMenu } from "@/components/PlaceAddSheet";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -112,7 +117,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   useEffect(() => {
     if (!sidebarInline && state.forkPanel) dispatch({ type: "closeForkPanel" });
   }, [sidebarInline, state.forkPanel, dispatch]);
-  useRememberedSidePanel(state, dispatch, { enabled: sidebarInline, inspector: !remoteClient });
+  const advanced = useAdvancedMode();
+  useRememberedSidePanel(state, dispatch, { enabled: sidebarInline, inspector: !remoteClient, botPanelByDefault: !advanced && sidebarAndPanelFit && !remoteClient });
   useEffect(() => {
     if (!window.ogb?.environments) return;
     const open = (computerId?: string | null) => {
@@ -145,7 +151,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     dispatch(phonePairingSettingsAction());
   }, [dispatch]);
   useConnectLink(dispatch, Boolean(state.config?.team));
-  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
+  useExternalChatLinks(state, dispatch); useDesktopNotificationOpens(state, dispatch); useGlance(); useNewBotFromOtherPlace(state.hydrated === true, useCallback(() => dispatch({ type: "newBot" }), [dispatch]));
   usePresence(state, dispatch); useTeamPresence(state);
   usePageLanguage(effectiveLanguage(useLanguageChoice(), state.config?.language), true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -164,11 +170,11 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     view: state.activeView, pluginsOpen: state.pluginsOpen, settingsOpen: state.settingsOpen });
   const closeDrawer = useCallback(() => { hideDrawer(); menuButtonRef.current?.focus(); }, [hideDrawer]);
   const notificationFeed = useNotificationFeed() && !remoteClient;
-  const advanced = useAdvancedMode();
   const roomPanelOpen = useRoomPanelShown({ group, state, simple: !advanced && !remoteClient, advanced: advanced && !remoteClient });
   const sidePanelOpen = (Boolean(bot) && (state.settingsOpen || state.computerOpen || state.inspectorOpen || state.activityOpen)) || Boolean(state.forkPanel) || roomPanelOpen || (notificationFeed && state.notificationsOpen) || inboxShown;
   const collapseSidebar = sidePanelOpen && !sidebarAndPanelFit;
-  const calendarFocus = state.activeView === "routines" && state.routinesFocus.view === "calendar";
+  const workflowsUnavailable = useWorkflowsUnavailable();
+  const calendarFocus = state.activeView === "routines" && (state.routinesFocus.view === "calendar" || (state.routinesFocus.view === "workflows" && !workflowsUnavailable));
   const notificationTray = notificationFeed && !calendarFocus;
 
   const noEngines =
@@ -250,6 +256,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     }
     previousViewRef.current = state.activeView;
   }, [state.activeView]);
+
+  useEffect(() => { reportPage(pageName({ activeView: state.activeView, settingsOpen: state.settingsOpen, firstRun: Boolean(firstRun) })); }, [state.activeView, state.settingsOpen, firstRun]);
 
   useEffect(() => {
     if (
@@ -341,6 +349,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     <div data-look="app" className={cn("flex h-full flex-col", framed && "bg-frame")} onClickCapture={drawerOpen ? noteDrawerAction : undefined} onKeyDownCapture={drawerOpen ? noteDrawerAction : undefined}>
       <WindowFrameBar notifications={notificationTray} />
       <BotLimitPopup />
+      <PowerHost />
       <ConversationShareDialogs />
       {!framed && strips}
       <div className="relative flex min-h-0 flex-1">
@@ -364,6 +373,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       )}
       {!calendarFocus && <PlacesRail />}
       <NewLocalFromMenu />
+      <ConnectServerFromMenu />
       {/* A framed window shows the app, its sidebar and the chat or page, in a rounded card under the top bar and beside
           the window's rail: its top corners and its bottom-left corner are round, and it runs to the window's right and
           bottom edges. */}
@@ -384,6 +394,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <WebPanelPage />
       ) : state.activeView === "published-apps" ? (
         <PublishedAppsPage />
+      ) : state.activeView === "board" ? (
+        <BoardPage />
       ) : state.activeView === "announcements" ? (
         <AnnouncementsPage />
       ) : state.activeView === "team-files" && state.config?.team ? (
@@ -462,6 +474,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       <WelcomeKeeper viewer={viewer} />
       {state.pluginsOpen && (team && viewer?.canSave === false ? <MemberApps /> : <PluginsPanel />)}
       <AppGrantNotice />
+      <AppGrantHost />
       {state.shortcutsOpen && (
         <KeyboardShortcutsModal
           open={state.shortcutsOpen}
@@ -498,11 +511,12 @@ function Application() {
           <Shell viewer={viewer} />
         </ThreadRefsProvider>
         <WelcomeGate viewer={viewer} />
-        <MausBotWelcome viewer={viewer} />
+        <SeiraWelcome viewer={viewer} />
         <NewBotNameHost />
         <CloudTimeZoneSync viewer={viewer} />
         <GuidedTour />
         <LiveCallHost />
+        <CallHost />
         <FirstConversationTour quiet={spotlightsQuiet(viewer)} />
       </StoreProvider>
     </DesktopCapabilitiesProvider>

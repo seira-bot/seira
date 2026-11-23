@@ -156,7 +156,7 @@ describe("per-installation quotas (FR-147)", () => {
     setting("quota.tool_calls.desktop", "1");
     setting("quota.tool_calls.cloud", "3");
     const cloud = await h.install();
-    h.d1.db.prepare("UPDATE installations SET cloud_machine_id = 'omb-machine-1' WHERE id = ?").run(cloud.id);
+    h.d1.db.prepare("UPDATE installations SET cloud_machine_id = 'seira-machine-1' WHERE id = ?").run(cloud.id);
 
     for (let index = 0; index < 3; index += 1) await mcp(cloud, toolCall());
     expect(forwarded()).toBe(3);

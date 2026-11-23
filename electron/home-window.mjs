@@ -13,6 +13,7 @@ import { cloudMachine, cloudState, myCloudOf, otherOwnClouds, ownCloud } from ".
 import { asleepAnswer, BACKGROUND_HEADERS, openSleepingCloud, SIGNED_IN_MS } from "./cloud-power.mjs";
 import nativeText from "./native-text.cjs";
 import { awayIn, parseJournal, sameCloud } from "./one-home.mjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 export const HOME_SCREEN_PATH = "/home";
 /** The look at an awake My Cloud before the window moves there: under 3 s, so the offline screen shows within 3 s. */
@@ -75,7 +76,7 @@ function followedCloud(kept, state) {
 
 /**
  * Who the window opens. `journal`: one-home.json read back; `frozenCloud`: this computer's freeze marker when there is no
- * journal (its Cloud's origin, or true when it names none); `state`: the MausBot Cloud sign-in's state. An ended My Cloud
+ * journal (its Cloud's origin, or true when it names none); `state`: the Seira Cloud sign-in's state. An ended My Cloud
  * sends home only a computer that moved to that Cloud; a freeze that names another Cloud of the signed-in person's own list
  * is theirs, and opens that Cloud.
  * @returns {{ kind: "computer" } | { kind: "cloud", origin: string } | { kind: "signin", other?: true }}
@@ -144,9 +145,10 @@ function ownPlaceOf(asked, remembered, state) {
  * The place a window is asked for. `ask`: "cloud" for My Cloud, `{ team }` for a team's Cloud, `{ cloud }` for another
  * Cloud of the person's own, or nothing for the place remembered from last time (`remembered`). A team is read from the
  * verified session (`state.teams`); one the connected session no longer lists is gone, and the answer is My Cloud with
- * the team's name in `left`, so the window can say so once. While the Admin can't be asked, a remembered team opens as
- * it was saved, on the window's own session.
- * @returns {{ kind: "cloud", left?: string | null } | { kind: "team" | "own", id: string, name: string, role: string | null, origin: string | null, machine: any }}
+ * the team's name in `left`, so the window can say so once. A team the session lists with no machine has no Cloud to
+ * open, so it is no place: My Cloud, with `noCloud`. While the Admin can't be asked, a remembered team opens as it was
+ * saved, on the window's own session.
+ * @returns {{ kind: "cloud", left?: string | null, noCloud?: true } | { kind: "team" | "own", id: string, name: string, role: string | null, origin: string | null, machine: any }}
  */
 export function placeOf({ ask = null, remembered = null, state = null }) {
   const asked = ask ?? remembered;
@@ -154,7 +156,8 @@ export function placeOf({ ask = null, remembered = null, state = null }) {
   const id = asked && asked !== "cloud" && typeof asked.team === "string" ? asked.team : null;
   if (!id) return { kind: "cloud" };
   const team = (Array.isArray(state?.teams) ? state.teams : []).find((entry) => entry?.id === id) ?? null;
-  if (team) return { kind: "team", id, name: team.name, role: team.role, origin: team.machine?.origin ?? null, machine: team.machine ?? null };
+  if (team && (!team.machine || typeof team.machine !== "object")) return { kind: "cloud", noCloud: true };
+  if (team) return { kind: "team", id, name: team.name, role: team.role, origin: team.machine.origin ?? null, machine: team.machine };
   if (state?.status === "connected") return { kind: "cloud", left: asked.name ?? (remembered?.team === id ? remembered.name : null) ?? null };
   const kept = remembered?.team === id ? remembered : asked;
   return kept?.origin ? { kind: "team", id, name: kept.name ?? "the team", role: null, origin: kept.origin, machine: null } : { kind: "cloud" };
@@ -389,7 +392,7 @@ export function createHomeWindow(deps) {
     clearRetry();
   }
   const signInNeeded = () => ["reauth-required", "signed-out"].includes(state()?.status);
-  /** This device has no MausBot Cloud sign-in to pair a team with (homeOf's rule for My Cloud). */
+  /** This device has no Seira Cloud sign-in to pair a team with (homeOf's rule for My Cloud). */
   const signedOut = () => { const current = state(); return !current?.account?.id || ["signed-out", "connecting"].includes(current.status); };
   /** The session's list's word for My Cloud (the account's primary Cloud), else null: an older Admin, or one it doesn't list. */
   const myListed = () => { const current = state(); return current?.status === "connected" && Array.isArray(current.clouds) ? current.clouds.find((cloud) => cloud.primary) ?? null : null; };
@@ -557,7 +560,9 @@ export function createHomeWindow(deps) {
       if (!wanted(token)) return;
     }
     // Nobody signed in has nothing to open but the clean workspace; the place stays remembered for when they're back.
-    const target = current.clean && signedOut() ? { kind: "cloud" } : placeOf({ ask: place, remembered: remembered(), state: state() });
+    let target = current.clean && signedOut() ? { kind: "cloud" } : placeOf({ ask: place, remembered: remembered(), state: state() });
+    // A team asked for with no Cloud to open leaves the window on the place it keeps; one only remembered is forgotten.
+    if (target.noCloud && place) target = placeOf({ remembered: remembered(), state: state() });
     if (target.kind === "cloud" && target.left) { left(target.left); remember(null); }
     if (otherPlace(target)) {
       ensureWindow();
@@ -573,7 +578,7 @@ export function createHomeWindow(deps) {
       if (!target.origin) { toScreen(planScreen(target.machine?.status ?? "stopped", target)); later(); return; }
       return connect(target, token, open);
     }
-    if (place === "cloud" || target.left) remember(null);
+    if (place === "cloud" || target.left || target.noCloud) remember(null);
     opening = null;
     clearRenewal();
     if (current.kind === "computer" && asked) {
@@ -641,7 +646,7 @@ export function createHomeWindow(deps) {
 
   async function version(origin) {
     try {
-      const response = await cookieFetch(`${origin}/.well-known/openmausbot/environment`, { cache: "no-store", redirect: "error",
+      const response = await cookieFetch(`${origin}${sentWireName("environmentPath")}`, { cache: "no-store", redirect: "error",
         signal: AbortSignal.timeout(LOOK_MS), headers: { accept: "application/json", ...BACKGROUND_HEADERS } });
       const body = response.ok ? await response.json() : null;
       return typeof body?.version === "string" ? body.version : null;
@@ -728,7 +733,7 @@ export function createHomeWindow(deps) {
     shown: () => shown,
     /** The person asked again (the screen's timer, back online, or the window focused). */
     retry: () => show(),
-    /** The screen's one button: this device's MausBot Cloud sign-in, again. A sign-in already open in the browser opens
+    /** The screen's one button: this device's Seira Cloud sign-in, again. A sign-in already open in the browser opens
      * again; one with an account My Cloud isn't (`other`) ends first, so the browser can sign in another; one that is still
      * good only looks again. */
     async signIn() {
@@ -745,7 +750,7 @@ export function createHomeWindow(deps) {
       await client.begin();
     },
     repair,
-    /** The MausBot Cloud sign-in changed: a window that waits on it, a home that changed, or a team shown that the
+    /** The Seira Cloud sign-in changed: a window that waits on it, a home that changed, or a team shown that the
      * session no longer lists (or lists at another address), shows again. */
     async changed() {
       const before = home;

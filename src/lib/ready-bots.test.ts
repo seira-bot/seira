@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAUS_COLORS } from "./mascot";
+import { SEIRA_COLORS } from "./mascot";
 import { CLASSIC_ROLE_IDS, READY_BOT_CATEGORIES, READY_BOTS, matchesReadyBot, readyBot, readyBotCopy, readyBotTemplate } from "./ready-bots";
 import { setLocale } from "./i18n";
 import en from "@/locales/en.json";
@@ -27,7 +27,7 @@ describe("ready-made bots", () => {
 
   it("each has a look the app can draw, a category, and something to try", () => {
     for (const bot of READY_BOTS) {
-      expect(Object.keys(MAUS_COLORS)).toContain(bot.look.color);
+      expect(Object.keys(SEIRA_COLORS)).toContain(bot.look.color);
       expect(PICKER_BODY_IDS).toContain(bot.look.mascotBody);
       expect(mascotAccessories(bot.look.mascotAccessories)).toEqual(bot.look.mascotAccessories);
       expect(READY_BOT_CATEGORIES).toContain(bot.category);
@@ -112,13 +112,14 @@ describe("readyBotCopy", () => {
 describe("the social media manager", () => {
   const social = readyBot("social")!;
 
-  it("puts posts in Postiz as drafts or scheduled, and publishes at once only when asked", () => {
-    expect(social).toMatchObject({ title: "Social media manager", category: "work", apps: ["postiz"] });
-    expect(social.soul).toContain("Add every post to Postiz as a draft, unless the user gave it a time to go out: then schedule it for that time.");
-    expect(social.soul).toContain("Never publish a post straight away (type now) unless the user asks for that post to go out now.");
-    expect(social.soul).toContain("show a preview of it with show_html, then add it to Postiz without waiting for a reply.");
+  it("schedules posts in Repliz at the time given, and publishes at once only when asked", () => {
+    expect(social).toMatchObject({ title: "Social media manager", category: "work", apps: ["repliz"] });
+    expect(social.soul).toContain("Schedule each post for the time the user gives; with no time, ask for one before scheduling.");
+    expect(social.soul).toContain("Never publish a post straight away unless the user asks for that post to go out now.");
+    expect(social.soul).toContain("show a preview of it with show_html before you schedule it.");
+    expect(social.soul).toContain("If the repliz tools are missing, say in one line that the user can connect Repliz in Apps");
     expect(social.routines).toEqual([expect.objectContaining({ name: "Weekly post plan", enabled: false })]);
-    expect(social.routines![0]!.prompt).toContain("as drafts");
+    expect(social.routines![0]!.prompt).toContain("Schedule them in Repliz after I agree.");
   });
 
   it("brings its notes and leaves the person's approval level, so publishing asks as their other bots do", () => {

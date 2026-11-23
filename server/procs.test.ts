@@ -2,8 +2,9 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { memoryFence } from "./memory-fence.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import {
   assertSafeCliArgv,
@@ -56,8 +57,8 @@ describe("spawn ENOENT", () => {
   const enoent = () => Object.assign(new Error("spawn codex ENOENT"), { code: "ENOENT" });
 
   it("names a missing working folder instead of blaming the install (MOCA-309)", () => {
-    const missing = join(mkdtempSync(join(tmpdir(), "omb-procs-")), "deleted-project");
-    expect(describeSpawnFailure(enoent(), "/home/u/.openmausbot/tools/npm/bin/codex", missing)).toEqual({
+    const missing = join(mkdtempSync(join(tmpdir(), "seira-procs-")), "deleted-project");
+    expect(describeSpawnFailure(enoent(), "/home/u/.seira/tools/npm/bin/codex", missing)).toEqual({
       message: `This chat's working folder no longer exists: ${missing}. Choose another folder in the bot's settings, or create it again.`,
       setup: false,
     });
@@ -70,7 +71,7 @@ describe("spawn ENOENT", () => {
   });
 
   it("really is what node reports for a missing cwd", async () => {
-    const missing = join(mkdtempSync(join(tmpdir(), "omb-procs-")), "gone");
+    const missing = join(mkdtempSync(join(tmpdir(), "seira-procs-")), "gone");
     const error = await new Promise<NodeJS.ErrnoException>((resolve) => {
       spawn(process.execPath, ["--version"], { cwd: missing }).once("error", resolve);
     });
@@ -118,6 +119,36 @@ describe("out of memory", () => {
     } finally {
       await Promise.all([killCliTree(engine), killCliTree(browser), killCliTree(other)]);
     }
+  });
+});
+
+describe("the memory fence at a spawn", () => {
+  const quit = (code: number) => ({ command: process.execPath, args: ["-e", `process.exit(${code})`], env: process.env });
+  const exitOf = (child: ReturnType<typeof spawnCli>) => new Promise<void>((resolve) => child.once("exit", () => resolve()));
+
+  it.runIf(process.platform === "linux")("works out the fenced command before the server takes the bot's score", async () => {
+    const scores: string[] = [];
+    const argv = vi.spyOn(memoryFence, "argv").mockImplementation(() => { scores.push(readFileSync("/proc/self/oom_score_adj", "utf8").trim()); return quit(0); });
+    vi.spyOn(memoryFence, "recheck").mockImplementation(() => undefined);
+    try {
+      const child = spawnCli(process.execPath, ["-e", "1"], { stdio: ["pipe", "pipe", "pipe"] }, "bot");
+      await exitOf(child);
+      expect(argv).toHaveBeenCalledTimes(1);
+      expect(scores).toEqual([readFileSync("/proc/self/oom_score_adj", "utf8").trim()]);
+      expect(scores[0]).not.toBe("1000");
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it("asks the fence to check again when a fenced engine fails at once, and not when it ends well", async () => {
+    vi.spyOn(memoryFence, "argv").mockImplementation(() => quit(3));
+    const recheck = vi.spyOn(memoryFence, "recheck").mockImplementation(() => undefined);
+    try {
+      await exitOf(spawnCli(process.execPath, ["-e", "1"], { stdio: ["pipe", "pipe", "pipe"] }, "bot"));
+      expect(recheck).toHaveBeenCalledTimes(1);
+      vi.spyOn(memoryFence, "argv").mockImplementation(() => quit(0));
+      await exitOf(spawnCli(process.execPath, ["-e", "1"], { stdio: ["pipe", "pipe", "pipe"] }, "bot"));
+      expect(recheck).toHaveBeenCalledTimes(1);
+    } finally { vi.restoreAllMocks(); }
   });
 });
 
