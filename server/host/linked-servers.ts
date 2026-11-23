@@ -186,7 +186,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       return;
     }
     const fromPeer = event.kind === "received" || event.kind === "result-received";
-    const state = event.kind === "sent" || event.kind === "received" ? "started" : event.ok ? "done" : "failed";
+    const state = event.kind === "result-sent" || event.kind === "result-received" ? (event.ok ? "done" : "failed") : "started";
     const outcome = "outcome" in event && event.outcome && OUTCOMES.has(event.outcome) ? event.outcome : undefined;
     deps.audit({ ...base, action: "linked-server.handoff", actor: fromPeer ? peerActor(record) : { kind: "worker" },
       after: { direction: event.kind, bot: event.bot, farBot: event.far, handoff: event.id, state, ...(outcome ? { outcome } : {}) } });
