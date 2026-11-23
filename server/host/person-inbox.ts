@@ -514,6 +514,14 @@ export function createPersonInbox(deps: PersonInboxDeps) {
       if (!item.done) { item.done = true; item.seen = true; save(); touch(item.threadId); }
       return "done";
     },
+    /** The person is done with the named lines of news, or with no ids with all news; an ask stays open. Returns how many changed. */
+    markDoneMany(person: string, ids?: readonly string[]): number {
+      const named = ids ? new Set(ids) : null;
+      const todo = items.filter((item) => item.person === person && !item.done && !(item.kind === "ask" && item.requestId) && (named ? named.has(item.id) : item.kind !== "ask" && !settled(item)));
+      for (const item of todo) { item.done = true; item.seen = true; }
+      if (todo.length) { save(); for (const inbox of new Set(todo.map((item) => item.threadId))) touch(inbox); }
+      return todo.length;
+    },
     /** The person read a line. */
     markRead(person: string, id: string): boolean {
       const item = items.find((one) => one.person === person && one.id === id);

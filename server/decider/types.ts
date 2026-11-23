@@ -9,8 +9,8 @@ export type OpenRouterApi = "chat" | "decisions";
  * chat is `POST {base}/chat/completions` (any OpenAI-compatible server, such as Gemini's, asked for strict JSON). */
 export type CustomApi = "systemone" | "decisions" | "chat";
 
-export type DeciderJob = "roomRouting" | "inboxTriage";
-export const DECIDER_JOBS: readonly DeciderJob[] = ["roomRouting", "inboxTriage"];
+export type DeciderJob = "roomRouting" | "inboxTriage" | "inboxSort";
+export const DECIDER_JOBS: readonly DeciderJob[] = ["roomRouting", "inboxTriage", "inboxSort"];
 
 /** botDecide: a bot's own `decide` tool call. */
 export type DeciderSeam = DeciderJob | "keyCheck" | "botDecide";

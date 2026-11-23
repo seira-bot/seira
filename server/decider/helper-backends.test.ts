@@ -6,6 +6,7 @@ import type { AppConfig } from "../config.ts";
 import clefWire from "./fixtures/workers-ai-clef.json" with { type: "json" };
 import relayFixtures from "./fixtures/relay-seams.json" with { type: "json" };
 import { createDecider, deciderAccount, deciderReady, deciderSavePatch, describeDecider } from "./index.ts";
+import { inboxSortRequest } from "./inbox-sort.ts";
 import { inboxTriageRequest } from "./inbox-triage.ts";
 import { jevRequestBody, RELAY_SEAM_HEADER } from "./jev.ts";
 import { relayAccepts } from "./relay.ts";
@@ -268,6 +269,19 @@ describe("the relay's seams, from the fixtures shared with Cloud's Admin", () =>
     await expect(d.choose("inboxTriage", { ...triage.state, body: "the whole email" }, triage.question)).resolves.toEqual({ ok: false, reason: "misconfigured" });
     await expect(d.yesNo("botDecide", "", "Is it?")).resolves.toEqual({ ok: false, reason: "misconfigured" });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("the included account alone never sorts the Inbox: inboxSort is no relay seam, so it fails open without a call", async () => {
+    cloud();
+    const fetchImpl = vi.fn<typeof fetch>(async () => json({ answers: {} }));
+    expect(deciderReady({}, "inboxSort")).toBe(false);
+    expect(deciderReady({}, "inboxTriage")).toBe(true);
+    expect(deciderAccount({}, "inboxSort")).toBeNull();
+    const asked = inboxSortRequest({ from: "Eli", message: "Approve the launch?" });
+    await expect(decider({}, fetchImpl).choose("inboxSort", asked.state, asked.question)).resolves.toEqual({ ok: false, reason: "no_key" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(deciderReady({ decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } }, "inboxSort")).toBe(true);
+    expect(deciderReady({ decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT, jobs: { inboxSort: false } } }, "inboxSort")).toBe(false);
   });
 
   it("the relay's 413 is too large, said plainly and called once: it is never retried", async () => {

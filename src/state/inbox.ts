@@ -5,6 +5,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import type { InboxRow, InboxView } from "../../shared/inbox";
 import { api } from "./api";
 import { randomUuid } from "../lib/random-uuid";
+import { isNews } from "../components/inbox/inbox-kind";
 
 type InboxTaskLike = { threadId: string; inbox?: true; openAsks?: number; inboxChangedAt?: number };
 
@@ -74,11 +75,17 @@ export function refreshInbox(): Promise<void> {
   return reading;
 }
 
+/** A message is sorted a moment after it lands; one more read this long after a change shows that verdict. */
+const SORT_READ_MS = 5_000;
+
 /** Keeps the list in step with what it depends on, and catches up when the window comes back. A server without an inbox is
  * not asked again. */
 export function useInboxLoader(version: string): void {
   useEffect(() => {
-    if (support.get() !== "no") void refreshInbox();
+    if (support.get() === "no") return;
+    void refreshInbox();
+    const later = setTimeout(() => { if (support.get() !== "no") void refreshInbox(); }, SORT_READ_MS);
+    return () => clearTimeout(later);
   }, [version]);
   useEffect(() => {
     const again = () => { if (support.get() !== "no") void refreshInbox(); };
@@ -136,6 +143,49 @@ export function doneInboxRow(row: Pick<InboxRow, "id">): void {
   void mark(row.id, "done", before ? { tab: before.tab, unread: before.unread } : {});
 }
 
+/** The person says a line is no decision: its mark goes at once; if the server can't be told, the mark comes back and the
+ * list is read again. */
+export async function notDecisionInboxRow(row: Pick<InboxRow, "id">): Promise<void> {
+  patchRow(row.id, { decision: undefined });
+  const seq = ++sent;
+  const view = await api<InboxView>(`/api/inbox/${row.id}/not-decision`, { method: "POST", background: true }).catch(() => null);
+  if (view && Array.isArray(view.rows)) return show(seq, view);
+  patchRow(row.id, { decision: true });
+  void refreshInbox();
+}
+
+/** Tells the server these lines are done, or with no ids all news; on failure each row goes back and the list is read again. */
+async function markDoneMany(ids: string[] | null, before: Map<string, Partial<InboxRow>>): Promise<void> {
+  const seq = ++sent;
+  const view = await api<InboxView>("/api/inbox/done-all", { method: "POST", background: true, body: JSON.stringify(ids ? { ids } : {}) }).catch(() => null);
+  if (view && Array.isArray(view.rows)) return show(seq, view);
+  for (const [id, undo] of before) patchRow(id, undo);
+  void refreshInbox();
+}
+
+const moveToDone = (match: (row: InboxRow) => boolean): Map<string, Partial<InboxRow>> => {
+  const view = list.get();
+  const before = new Map<string, Partial<InboxRow>>();
+  if (!view) return before;
+  for (const row of view.rows) if (match(row)) before.set(row.id, { tab: row.tab, unread: row.unread });
+  shown = ++sent;
+  list.set({ ...view, rows: view.rows.map((row) => (before.has(row.id) ? { ...row, tab: "done", unread: false } : row)) });
+  return before;
+};
+
+/** The person is done with several lines of news, such as a group's: they move to Done together. */
+export function doneInboxRows(rows: ReadonlyArray<Pick<InboxRow, "id">>): void {
+  const ids = rows.map((row) => row.id);
+  if (!ids.length) return;
+  const named = new Set(ids);
+  void markDoneMany(ids, moveToDone((row) => named.has(row.id)));
+}
+
+/** The person is done with all news: decisions and open asks stay. */
+export function doneAllInboxNews(): void {
+  void markDoneMany(null, moveToDone(isNews));
+}
+
 /** A reply to a line of news that waits on one: it goes back where the line came from, as a Reply in the chat does. */
 export async function replyToInboxRow(view: Pick<InboxView, "botId" | "threadId">, row: Pick<InboxRow, "id" | "origin">, text: string): Promise<void> {
   const origin = view.threadId ? null : row.origin;
@@ -149,10 +199,67 @@ const panel = store<InboxPanelState>({ open: false, reading: null });
 export const useInboxPanel = (): InboxPanelState => useSyncExternalStore(panel.subscribe, panel.get, panel.get);
 export const currentInboxPanel = panel.get;
 
+const summarizing = store(false);
+export const useInboxSummarizing = (): boolean => useSyncExternalStore(summarizing.subscribe, summarizing.get, summarizing.get);
+export const currentInboxSummarizing = summarizing.get;
+
+/** Unread news that the summary on hand does not cover. */
+const SUMMARY_MIN_UNREAD = 5;
+const unsummarizedNews = (view: InboxView): number => {
+  const covered = new Set(view.summary?.covers);
+  return view.rows.filter((row) => isNews(row) && row.unread && !covered.has(row.id)).length;
+};
+
+/** Asks for a summary of the news and shows the inbox it comes back in; `force` writes one even when little is unread. If
+ * the ask fails, only the waiting note goes. */
+export async function requestInboxSummary(force = false): Promise<void> {
+  if (summarizing.get()) return;
+  const seq = ++sent;
+  summarizing.set(true);
+  const view = await api<InboxView>("/api/inbox/summary", { method: "POST", background: true, body: JSON.stringify({ force }) }).catch(() => null);
+  summarizing.set(false);
+  if (!view || !Array.isArray(view.rows)) return;
+  if (seq < shown) void refreshInbox();
+  else show(seq, view);
+}
+
+const withoutSummary = (view: InboxView): InboxView => ({ botId: view.botId, threadId: view.threadId, rows: view.rows, anchor: view.anchor, ...(view.summarizer ? { summarizer: view.summarizer } : {}) });
+
+/** The person hides the summary: it goes at once; if the server can't be told, the list is read again. */
+export async function hideInboxSummary(wrong: boolean): Promise<void> {
+  const view = list.get();
+  if (view?.summary) { shown = ++sent; list.set(withoutSummary(view)); }
+  const seq = ++sent;
+  const next = await api<InboxView>("/api/inbox/summary/hide", { method: "POST", background: true, body: JSON.stringify({ wrong }) }).catch(() => null);
+  if (next && Array.isArray(next.rows)) return show(seq, next);
+  void refreshInbox();
+}
+
+/** The person picks who writes the summary, or none: the choice shows at once; if the server can't be told, the list is read
+ * again. */
+export async function setInboxSummarizer(botId: string | null): Promise<void> {
+  const view = list.get();
+  if (view?.summarizer) { shown = ++sent; list.set({ ...view, summarizer: { botId } }); }
+  const seq = ++sent;
+  const next = await api<InboxView>("/api/inbox/summarizer", { method: "POST", background: true, body: JSON.stringify({ botId }) }).catch(() => null);
+  if (next && Array.isArray(next.rows)) return show(seq, next);
+  void refreshInbox();
+}
+
+let summaryAsked = false;
+/** Once each time the panel opens, with a summarizer chosen and enough unread news outside the summary. */
+function askSummaryOnce(): void {
+  const view = list.get();
+  if (summaryAsked || !panel.get().open || !view?.summarizer?.botId || unsummarizedNews(view) < SUMMARY_MIN_UNREAD) return;
+  summaryAsked = true;
+  void requestInboxSummary();
+}
+
 /** Opens the inbox in the right panel: its list, or straight on one line. */
 export function openInbox(at: { reading?: string } = {}): void {
+  if (!panel.get().open) summaryAsked = false;
   panel.set({ ...panel.get(), open: true, reading: at.reading ?? null });
-  void refreshInbox();
+  void refreshInbox().then(askSummaryOnce);
 }
 export const closeInbox = (): void => panel.set({ ...panel.get(), open: false, reading: null });
 export const readInboxLine = (id: string | null): void => panel.set({ ...panel.get(), reading: id });

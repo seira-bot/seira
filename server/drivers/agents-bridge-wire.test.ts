@@ -87,13 +87,13 @@ const FULL = "skills+shared+voice+x+team+images+hosting";
  * either: lock a saving in by lowering the number. A Chief's list is longer
  * than another bot's only by the Chief-only names in find_tool's description. */
 const BUDGET_BASELINE: Record<string, number> = {
-  "default": 17726,
+  "default": 18092,
   "voice": 18507,
-  "shared": 17766,
+  "shared": 18132,
   "shared+voice": 18547,
-  "skills": 17753,
+  "skills": 18119,
   "skills+voice": 18534,
-  "skills+shared": 17793,
+  "skills+shared": 18159,
   "skills+shared+voice": 18574,
   "non-chief": 17609,
   "voice+non-chief": 18390,
@@ -107,17 +107,17 @@ const BUDGET_BASELINE: Record<string, number> = {
   "skills+shared+voice+non-chief+cloud-home": 18473,
   "skills+shared+voice+x": 18635,
   "skills+shared+voice+x+team": 18635,
-  "default+legacy-switches": 17726,
-  "default+seira": 17778,
+  "default+legacy-switches": 18092,
+  "default+seira": 18144,
   "skills+shared+voice+seira": 18626,
-  "default+no-computer-pick": 16514,
-  "default+room": 16455,
-  "non-chief+room": 16338,
-  "skills+shared+voice+x+team+images": 18651,
-  "default+images": 17742,
+  "default+no-computer-pick": 16892,
+  "default+room": 16833,
+  "non-chief+room": 16702,
+  "skills+shared+voice+x+team+images": 19029,
+  "default+images": 18120,
   "skills+shared+voice+x+team+images+hosting": 19853,
   "default+hosting": 18928,
-  "default+tools-off": 16087,
+  "default+tools-off": 16435,
 };
 
 type RpcAnswer = { id: number; result?: { tools?: unknown[]; content?: Array<{ text: string }>; isError?: boolean }; error?: { code: number; message: string } };
