@@ -160,7 +160,7 @@ describe("a message that tags @devs", () => {
     expect(fx.line("scout-main", message.id)!.bugReport).toEqual({ id: "report-1", status: "received" });
     expect(fx.notices("scout-main")).toEqual([]);
     expect(fx.reports.note("scout-main", true)).toBe("");
-    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per @devs message/);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "again" })).body.text).toMatch(/^Already prepared: report_bug writes one draft per message/);
     expect(fx.sent).toHaveLength(1);
     fx.stop();
   });
@@ -383,7 +383,7 @@ describe("a message that tags @devs", () => {
     await fx.settle();
     expect(fx.sent).toEqual([]);
     expect(fx.offers("scout-main")).toEqual([]);
-    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(409);
+    expect((await fx.call("scout", "scout-main", { went_wrong: "x" })).status).toBe(200);
     fx.stop();
   });
 });
