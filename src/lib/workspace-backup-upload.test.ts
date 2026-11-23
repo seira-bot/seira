@@ -8,18 +8,19 @@ const base = "/api/workspace-backup/upload";
 function fakeServer(options: { failures?: Array<unknown> } = {}) {
   const failures = [...(options.failures ?? [])];
   const state = { id: "upload-1", received: 0, parts: [] as Array<{ offset: number; size: number }>, finished: false, calls: [] as string[] };
-  const api = vi.fn(async (path: string, init?: { method?: string; body?: Blob }) => {
+  const api = vi.fn(async (path: string, init?: { method?: string; body?: BodyInit }) => {
+    const body = init?.body as Blob;
     state.calls.push(`${init?.method ?? "GET"} ${path}`);
     if (path === `${base}/start`) return { id: state.id, chunkBytes: 32 * MIB };
     if (path === `${base}/${state.id}`) return { received: state.received };
     if (path === `${base}/${state.id}/finish`) { state.finished = true; return { id: state.id }; }
     const offset = Number(new URL(path, "http://x").searchParams.get("offset"));
     const next = failures.shift();
-    if (next === "lost-after-store") { state.received = offset + init!.body!.size; throw new TypeError("network"); }
+    if (next === "lost-after-store") { state.received = offset + body.size; throw new TypeError("network"); }
     if (next) throw next;
     expect(offset).toBe(state.received);
-    state.parts.push({ offset, size: init!.body!.size });
-    state.received += init!.body!.size;
+    state.parts.push({ offset, size: body.size });
+    state.received += body.size;
     return { received: state.received };
   });
   return { api, state };
