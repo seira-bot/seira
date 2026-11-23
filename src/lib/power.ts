@@ -113,7 +113,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
 function emit(): void {
-  for (const listener of [...listeners]) listener();
+  for (const listener of listeners) listener();
 }
 
 function subscribe(listener: () => void): () => void {
