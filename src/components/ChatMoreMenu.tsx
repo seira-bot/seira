@@ -190,8 +190,8 @@ function RoundChatMoreMenu({ bot, phoneHeader }: { bot: Bot; phoneHeader: boolea
       triggerTitle={t("chat.more")}
       renderTrigger={({ open }) => (
         <span
-          data-testid="chat-more"
           data-ui={ui("chat.more")}
+          data-testid="chat-more"
           className={cn(
             "flex size-8 items-center justify-center rounded-full",
             advanced ? "bg-raised/50 transition-colors hover:bg-raised" : cn(ELEVATED_CONTROL, ELEVATED_HOVER, open && ELEVATED_OPEN),
@@ -273,8 +273,8 @@ export function ChatHeaderMenu({ bot, onRename }: { bot: Bot; onRename?: () => v
       placement="below"
       renderTrigger={({ open }) => (
         <span
-          data-testid="chat-more"
           data-ui={ui("chat.more")}
+          data-testid="chat-more"
           className={cn(
             "flex size-8 items-center justify-center rounded-full transition-colors hover:bg-ink/[0.06]",
             open || on ? "text-accent" : "text-ink-secondary hover:text-ink",

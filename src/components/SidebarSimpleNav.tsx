@@ -25,10 +25,11 @@ export function SimpleSearchPill() {
     <div className="px-3 pb-1.5 pt-0.5">
       <button
         type="button"
-        data-sidebar-search-pill="" data-ui={ui("sidebar.search")}
+        data-sidebar-search-pill=""
         onClick={openCommandPalette}
         aria-label={t("sidebar.searchAria")}
         title={t("sidebar.searchAria")}
+        data-ui={ui("sidebar.search")}
         className={cn(
           "flex h-[34px] w-full items-center gap-2 rounded-lg bg-inset ps-2.5 pe-1.5 text-[13px] text-ink-tertiary shadow-[inset_0_0_0_0.5px_var(--color-edge)] transition-colors duration-150 hover:text-ink-secondary motion-reduce:transition-none touch:h-11",
           SIMPLE_ROW_FOCUS,

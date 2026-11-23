@@ -66,9 +66,9 @@ export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, ki
       role={renaming ? undefined : "button"}
       tabIndex={renaming ? undefined : 0}
       data-sidebar-bot-row={bot.id}
-      data-ui={ui("sidebar.bots")}
       data-sidebar-tile={kind ?? (primary ? "primary" : "pinned")}
       draggable={Boolean(drag) && !renaming} data-look="sidebar-bot"
+      data-ui={ui("sidebar.bots")}
       aria-label={renaming ? undefined : label}
       aria-current={selected && !renaming ? "page" : undefined}
       aria-busy={deleting || undefined}
