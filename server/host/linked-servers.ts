@@ -38,7 +38,7 @@
 // - A sender that fails too many tries is refused, also when it shares its address with a linked server.
 // - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
 //   does not see the work that routine starts later.
-import { mkdirSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -47,6 +47,7 @@ import { FILE_IDLE_MS, createDialer, readCapped } from "../bot-link/dial.ts";
 import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
 import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 import { json, readBody } from "../harness/http.ts";
 import { bearerToken, requestSource, type RequestAuth } from "../request-auth.ts";
 import { createLinkExchange } from "../routes/bot-link-exchange.ts";
@@ -300,7 +301,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
   function open(record: StoredLink): Instance {
     const { id } = record, key = keyOf(id), dataDir = instanceDir(deps.dataDir, id);
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dataDir);
     const policy: LinkPolicy = {
       key,
       exposed: (botId) => recordOf(id)?.exposed.includes(botId) === true,
