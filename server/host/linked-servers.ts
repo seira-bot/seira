@@ -10,6 +10,10 @@
 // - A peer sees only the bots an admin exposed to it, as id, name, title and description, read again at each hand-off.
 //   Its work runs here as outside work, at no more than the link's approval cap.
 // - A link takes at most ADMIT.open open hand-offs, and ADMIT.perWindow in each ADMIT.windowMs. At most LINKS_MAX links.
+// - A link's exchange is refused when its hand-off, cancel and result frames pass ADMIT.frames in ADMIT.windowMs, and
+//   its work frames are not taken while ADMIT.outbox frames for it wait. Its files waiting here stay within SPOOL_ROOM,
+//   checked at each file. A wrong credential counts as a failed try of its sender, as a wrong invite code does.
+// - A cancel for work the link does not know leaves no trace. Refusals write at most one activity row a minute.
 // - Another server is asked only at https or at this machine's loopback, never through a redirect. Its answers and
 //   its error texts never reach an error, a log line or an activity row here.
 // - Work a linked server started here goes to no bot of another server, and its turns run at no more than that link's
@@ -20,14 +24,17 @@
 // Open risks:
 // - The names a peer gives itself and its bots reach the bot lists here, cleaned to one short line each.
 // - A peer whose hand-off files never come keeps the open slots of those hand-offs.
+// - A peer whose one exchange carries more than ADMIT.frames work frames is refused until it sends fewer at a time.
+// - A sender that fails too many tries is refused, also when it shares its address with a linked server.
 // - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
 //   does not see the work that routine starts later.
 import { mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 
 import type { AdminActionRow, AdminActor, LinkedServerActor } from "../admin-activity.ts";
 import { createDialer } from "../bot-link/dial.ts";
-import { createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
+import { SPOOL, createBotLink, type BotLink, type BotLinkDeps, type LinkEvent, type LinkPolicy } from "../bot-link/link.ts";
 import { LINK_PREFIX, isLinkedId, parseLinked, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { CoordinatorHost, HandoffView } from "../coordinator.ts";
 import { json, readBody } from "../harness/http.ts";
@@ -36,7 +43,8 @@ import { createLinkExchange } from "../routes/bot-link-exchange.ts";
 import type { RouteContext } from "../routes/table.ts";
 import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
-import { createAdmission, createRefusalRecord } from "./linked-servers-admit.ts";
+import { ADMIT, createAdmission, createFrameBudget, createRefusalRecord } from "./linked-servers-admit.ts";
+import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
@@ -54,6 +62,7 @@ const FAIL_TEXT = "The work could not be done on the other server.";
 const REMOVED = "This work stopped because the link to another server was removed.";
 const ENDED_THERE = "This work stopped because the other server ended the link.";
 const LINK_OFF = "This link is not in use any more.";
+const TOO_MANY = "Too many tries. Wait a minute and try again.";
 const ONLY_LINK = "This sign-in works only for the link between two servers.";
 const NOT_VALID = "That invite is not valid any more. Ask for a new one.";
 const FULL_HERE = "This server already has as many linked servers as it can keep. Remove one first.";
@@ -63,7 +72,10 @@ const ANSWER_MAX = 64 * 1024;
 const JOIN_MS = 10_000;
 const TIDY_MS = 60 * 60_000;
 const GUEST_BEARER = /\bbearer\s+lsk_/iu;
-const isBye = (frame: unknown) => (frame as { t?: unknown } | null)?.t === "bye";
+const kindOf = (frame: unknown): unknown => (frame as { t?: unknown } | null)?.t;
+const isBye = (frame: unknown) => kindOf(frame) === "bye";
+const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
+const isWork = (frame: unknown) => WORK_FRAMES.has(kindOf(frame));
 const OUTCOMES: ReadonlySet<string> = new Set<Outcome>(["done", "needs_input", "cap_continued", "stalled", "interrupted", "budget", "provider_error", "denied", "expired", "stopped", "refused", "duplicate"]);
 /** The exchange reads no auth: the peer was identified here, by its credential. */
 const NO_AUTH: RequestAuth = { kind: "loopback", scopes: [] };
@@ -133,6 +145,8 @@ export interface LinkedServersDeps extends InstanceDeps {
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
   timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number };
+  /** Smaller limits for tests: a link's files waiting here, its work frames in a window, and its frames waiting here. */
+  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number };
 }
 
 type Instance = {
@@ -153,6 +167,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const instances = new Map<string, Instance>();
   const admission = createAdmission(now);
   const refusals = createRefusalRecord(now);
+  const budget = createFrameBudget(now, deps.limits?.frames);
+  const outboxMax = deps.limits?.outbox ?? ADMIT.outbox;
   let upkeep: NodeJS.Timeout | undefined;
 
   const save = () => writeLinks(deps.dataDir, file);
@@ -187,12 +203,12 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     if (!record) return;
     const base = { category: "linked-server" as const, target: targetOf(record) };
     if (event.kind === "refused") {
-      const count = refusals.count(id, event.reason);
+      const count = refusals.count(id);
       if (count === null) return;
-      deps.audit({ ...base, action: "linked-server.refused", actor: peerActor(record),
-        after: { reason: event.reason, bot: event.bot, farBot: event.far, handoff: event.id, ...(event.reason === "limit" ? { count } : {}) } });
+      deps.audit({ ...base, action: "linked-server.refused", actor: peerActor(record), after: { reason: event.reason, bot: event.bot, farBot: event.far, handoff: event.id, count } });
       return;
     }
+    if (event.kind === "result-sent" && event.outcome === "refused") return;
     const fromPeer = event.kind === "received" || event.kind === "result-received";
     const state = event.kind === "result-sent" || event.kind === "result-received" ? (event.ok ? "done" : "failed") : "started";
     const outcome = "outcome" in event && event.outcome && OUTCOMES.has(event.outcome) ? event.outcome : undefined;
@@ -275,11 +291,18 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
     });
     const endsOnBye: BotLink = { ...link, receive: (peer, frames) => { if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const takes = (frames: readonly unknown[], ack: number): readonly unknown[] | null => {
+      const work = frames.filter(isWork).length;
+      if (work === 0) return frames;
+      if (!budget.take(id, work)) return null;
+      return link.backlog(key, ack) < outboxMax ? frames : frames.filter((frame) => !isWork(frame));
+    };
     const entry: Instance = {
       id, key, link,
       dialer: record.role === "joiner" ? dialerFor(id, endsOnBye) : null,
       exchange: record.role === "inviter"
-        ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
+        ? createLinkExchange({ link: endsOnBye, paths: GUEST_PATHS, power: deps.power ?? (() => null), room: createSpoolRoom(join(dataDir, SPOOL), deps.limits?.spool), takes,
+          ...(timing.seenMs ? { seenMs: timing.seenMs } : {}) })
         : null,
     };
     instances.set(id, entry);
@@ -321,7 +344,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     const { req, res } = ctx;
     res.setHeader("cache-control", "no-store");
     const source = `linked-server:${requestSource(req)}`;
-    if (!deps.attemptAllowed(source)) { req.resume(); return json(res, 429, { error: "Too many tries. Wait a minute and try again." }); }
+    if (!deps.attemptAllowed(source)) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
     let raw: unknown;
     try { raw = await readBody(req, 16 * 1024); } catch { raw = null; }
     const body = acceptBody.safeParse(raw);
@@ -355,9 +378,11 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   async function exchange(ctx: GuestRequest): Promise<void> {
     const { req, res } = ctx;
     res.setHeader("cache-control", "no-store");
+    const source = `linked-server:${requestSource(req)}`;
+    if (!deps.attemptAllowed(source)) { req.resume(); return json(res, 429, { error: TOO_MANY }); }
     const token = bearerToken(req.headers.authorization);
     const entry = token?.startsWith(GUEST_TOKEN_PREFIX) ? byToken(token) : undefined;
-    if (!entry?.exchange) { req.resume(); return json(res, 401, { error: LINK_OFF }); }
+    if (!entry?.exchange) { deps.attemptFailed?.(source); req.resume(); return json(res, 401, { error: LINK_OFF }); }
     const stillLinked = () => instances.get(entry.id) === entry && entry.link.has(entry.key);
     if (!stillLinked()) { req.resume(); return json(res, 401, { error: LINK_OFF }); }
     return entry.exchange.serve({ ...ctx, auth: NO_AUTH, json, readBody }, entry.key, stillLinked);
@@ -395,7 +420,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       await response.body?.cancel().catch(() => {});
       if (response.status === 403) throw new LinkedServerError(NOT_VALID, 409);
       if (response.status === 409) throw new LinkedServerError("The other server cannot take another link now.", 409);
-      if (response.status === 429) throw new LinkedServerError("Too many tries. Wait a minute and try again.", 429);
+      if (response.status === 429) throw new LinkedServerError(TOO_MANY, 429);
       throw unreachable;
     }
     const body = await readCapped(response);
@@ -476,6 +501,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       if (entry) shut(entry);
       admission.forget(id);
       refusals.forget(id);
+      budget.forget(id);
       rmSync(instanceDir(deps.dataDir, id), { recursive: true, force: true });
       deps.audit({ category: "linked-server", action: "linked-server.remove", target, actor });
       return true;

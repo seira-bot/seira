@@ -45,7 +45,7 @@ const KEEP_ACKED_MS = 7 * DAY_MS;
 /** One never acknowledged is kept as long as the runtime keeps its row. */
 const KEEP_RESULTS_MS = 30 * DAY_MS;
 const KEEP_THREADS_MS = 30 * DAY_MS;
-const RECORDS_MAX = 1_000;
+export const RECORDS_MAX = 1_000;
 /** While a hand-off runs in a place that is connected, its node is told it is alive this often; that place's own clocks
  * bound the work. While that place cannot be reached the node is held as `away` instead. */
 const ALIVE_EVERY_MS = 60_000;
@@ -54,7 +54,7 @@ const SEEN_WRITE_MS = 60 * 60_000;
 const STOPPED = "Coordinated work was stopped";
 const NOT_HERE = "That bot is no longer here.";
 const ENDED: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
-const SPOOL = "bot-link-files";
+export const SPOOL = "bot-link-files";
 /** Bytes that crossed and were never stored (their hand-off was dropped, a side restarted) are removed after this long,
  * and the oldest go first when all of them together pass the size. */
 export const SPOOL_KEEP_MS = DAY_MS;
@@ -455,6 +455,7 @@ export function createBotLink(deps: BotLinkDeps) {
     const work = state.work[id];
     if (!work || work.done) return;
     if (childId) work.child = childId;
+    if (policy && Object.keys(state.work).length > RECORDS_MAX) prune();
     work.done = { ok: result.ok, ...(result.outcome ? { outcome: result.outcome } : {}), ...(result.text !== undefined ? { text: result.text.slice(0, 2_000) } : {}) };
     save();
     audit({ kind: "result-sent", peer: work.peer, bot: work.to ?? "", far: work.by ?? "", id, ok: result.ok, ...(result.outcome ? { outcome: result.outcome } : {}) });
@@ -588,7 +589,12 @@ export function createBotLink(deps: BotLinkDeps) {
       }
       case "cancel": {
         const work = state.work[frame.id];
-        if (!work) { state.work[frame.id] = { peer, root: linkRoot(frame.id), from: "", at: now() }; recordResult(frame.id, { ok: false, text: STOPPED, outcome: "stopped" }); return; }
+        if (!work) {
+          if (policy && fetching.get(frame.id) !== peer) return;
+          state.work[frame.id] = { peer, root: linkRoot(frame.id), from: "", at: now() };
+          recordResult(frame.id, { ok: false, text: STOPPED, outcome: "stopped" });
+          return;
+        }
         if (work.peer !== peer) return;
         if (work.done) { dispatchResult(frame.id); return; }
         deps.coordinator().cancelDirect(work.root, `Stopped by ${work.from || "the requester"}`);
@@ -949,6 +955,8 @@ export function createBotLink(deps: BotLinkDeps) {
       return taken;
     },
     hasOutgoing: (peer: string, ack = 0) => live.get(peer)?.outbox.some((entry) => entry.seq > ack) === true,
+    /** How many frames for this place wait past `ack`. */
+    backlog: (peer: string, ack: number): number => live.get(peer)?.outbox.filter((entry) => entry.seq > ack).length ?? 0,
     onOutgoing(listener: (peer: string) => void): () => void { outboundListeners.add(listener); return () => outboundListeners.delete(listener); },
     /** Work was handed to a place that is not connected: a computer asks its Cloud for it now. */
     /** There is work for a place that is not connected, handed over outside `coordinate` (a room turn). */
