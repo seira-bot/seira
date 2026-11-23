@@ -29,14 +29,41 @@ They prove:
   window has focus or Glance is off;
 - an answer from the visor checked against the current card, sent to the page,
   and a failed or late answer reported back as an error;
+- Allow once and Always allow offered only next to the whole text of what the
+  approval covers; without that text, only Deny and Open chat;
 - the window flags (never focusable, shown inactive, on top of full-screen
   apps), the tray rows, the View menu item and the saved choice;
 - the page feed: idle bots left out, no raw command text, and each answer sent
   through the chat card's own path.
 
-They do not prove the real position on each display, the visor over a
-full-screen app or another Space, the notch on a MacBook, or the tray on each
-Linux desktop.
+## Evidence: the visor in each state
+
+```sh
+node scripts/glance-evidence.mjs [path to Chrome or Chromium]
+```
+
+The script renders the visor page in headless Chrome with views from the real
+model, at the size the visor asks its window for, and writes one picture per
+state to [evidence/glance](evidence/glance/). It prints each picture's size and
+visible text.
+
+| State | Picture |
+|-------|---------|
+| Working, compact | ![Compact visor with two working bots](evidence/glance/compact-working.png) |
+| Six bots working, at most four avatars | ![Compact visor with four avatars](evidence/glance/compact-many.png) |
+| Peek | ![One line of what the bot does](evidence/glance/peek.png) |
+| Card of a working bot | ![Card of a working bot](evidence/glance/open-working.png) |
+| Approval with what it covers | ![Approval card with the command and Allow buttons](evidence/glance/needs-approval.png) |
+| Long approval text, whole and scrollable | ![Approval card with a long command](evidence/glance/needs-approval-long.png) |
+| Approval without that text | ![Approval card with only Deny and Open chat](evidence/glance/needs-no-detail.png) |
+| Question | ![Question card with three choices](evidence/glance/question.png) |
+| Failed | ![Card of a bot that stopped with a problem](evidence/glance/failed.png) |
+| Finished | ![Compact visor saying the bot finished](evidence/glance/done.png) |
+| Answer not sent | ![Approval card with a could-not-send error](evidence/glance/could-not-send.png) |
+
+The checks and pictures do not prove the real position on each display, the
+visor over a full-screen app or another Space, the notch on a MacBook, or the
+tray on each Linux desktop.
 
 ## Setup
 
