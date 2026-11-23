@@ -270,6 +270,7 @@ const control = createControlServer({
   },
   discovery: () => ({ advertising: mdns.advertising, name: service().name }),
   connectedDeviceIds: connectedDevices.ids,
+  workspacesOffered: () => workspaces.list() !== null,
   disconnectDevice,
   revoked: deviceRevoked,
   setDirectRoutes: (body) => {

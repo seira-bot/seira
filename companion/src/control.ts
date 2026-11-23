@@ -31,6 +31,8 @@ export interface ControlOptions {
   setHostedUrl?: (url: string | null) => void;
   discovery: () => { advertising: boolean; name: string };
   connectedDeviceIds?: () => string[];
+  /** Whether the desktop app has sent its workspaces: only then does a phone have any to open. */
+  workspacesOffered?: () => boolean;
   /** Terminate every event stream and viewer relay session a device owns. */
   disconnectDevice?: (deviceId: string) => void;
   /** Revoked, not merely changed: the harness ends the Live call that phone holds. */
@@ -230,6 +232,7 @@ export function companionState(options: Omit<ControlOptions, "controlToken">) {
     ),
     ...(secretPublicKey ? { secretPublicKey } : {}),
     pairing: pairing ? { code: pairing.code, token: pairing.token, expiresAt: pairing.expiresAt } : null,
+    workspaces: options.workspacesOffered?.() ?? false,
     devices: options.devices.list().map((device) => ({ ...device, route: options.liveRoutes?.()[device.id] ?? null })),
     e2e: options.e2e?.() ?? { enabled: false, relay: "off", node: null, descriptor: null },
     // An empty list from an unreadable file must not read as "nothing paired".
@@ -347,6 +350,17 @@ export function createControlServer(options: ControlOptions): Server {
       }
       // Revoking must reach the streams this device already holds open.
       options.disconnectDevice?.(browserControl[1]);
+      return json(res, 200, companionState(options));
+    }
+    const otherWorkspaces = path.match(/^\/devices\/([\w-]+)\/other-workspaces$/);
+    if (otherWorkspaces && (method === "POST" || method === "DELETE")) {
+      try {
+        if (!options.devices.setOtherWorkspaces(otherWorkspaces[1], method === "POST")) {
+          return json(res, 404, { error: "no such device" });
+        }
+      } catch {
+        return json(res, 500, { error: "could not save workspace access" });
+      }
       return json(res, 200, companionState(options));
     }
     const routes = path.match(/^\/devices\/([\w-]+)\/routes$/);

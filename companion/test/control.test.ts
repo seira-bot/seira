@@ -44,6 +44,7 @@ beforeAll(async () => {
       hostedUrl = next;
     },
     discovery: () => ({ advertising: false, name: "Test computer" }),
+    workspacesOffered: () => true,
     connectedDeviceIds: () => connectedDeviceIds,
     disconnectDevice: (deviceId) => {
       disconnectedDeviceIds.push(deviceId);
@@ -104,6 +105,22 @@ describe("the per-launch control token", () => {
       controlToken = CONTROL_TOKEN;
     }
     expect(devices.pairing()).toBeNull();
+  });
+});
+
+describe("other workspaces switch", () => {
+  it("turns off and on for one device, and reports whether workspaces exist", async () => {
+    const { device } = devices.redeem(devices.openPairing().code, "Ada") as any;
+    const state = (await ask("GET", "/state")).body;
+    expect(state.workspaces).toBe(true);
+    expect(state.devices.find((d: any) => d.id === device.id).otherWorkspaces).toBe(true);
+    const off = await ask("DELETE", `/devices/${device.id}/other-workspaces`);
+    expect(off.status).toBe(200);
+    expect(off.body.devices.find((d: any) => d.id === device.id).otherWorkspaces).toBe(false);
+    const on = await ask("POST", `/devices/${device.id}/other-workspaces`);
+    expect(on.body.devices.find((d: any) => d.id === device.id).otherWorkspaces).toBe(true);
+    expect((await ask("POST", "/devices/nobody/other-workspaces")).status).toBe(404);
+    expect((await ask("POST", `/devices/${device.id}/other-workspaces`, {}, undefined, {})).status).toBe(403);
   });
 });
 

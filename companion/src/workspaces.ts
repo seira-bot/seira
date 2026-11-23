@@ -123,18 +123,21 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
   };
 }
 
-/** Answers one of the two routes. `readBody` reads the bounded JSON body of the switch request. */
+/** Answers one of the two routes. `readBody` reads the bounded JSON body of the switch request. `allowed` is the owner's
+ * choice for this phone: off, it lists the current workspace only and refuses every switch. */
 export async function answerWorkspaces(
   channel: WorkspaceChannel | undefined,
   route: WorkspaceRoute,
   method: string,
   path: string,
   readBody: () => Promise<Record<string, unknown>>,
+  allowed = true,
 ): Promise<WorkspaceReply> {
   const absent: WorkspaceReply = { status: 404, body: { error: `no route: ${method} ${path}` } };
   const list = channel?.list();
   if (!channel || !list) return absent;
-  if (route === "list") return { status: 200, body: { workspaces: list } };
+  if (route === "list") return { status: 200, body: { workspaces: allowed ? list : list.filter((workspace) => workspace.current) } };
+  if (!allowed) return { status: 403, body: { error: "This phone cannot open other workspaces. Turn it on for this phone in Settings on the computer." } };
   let body: Record<string, unknown>;
   try {
     body = await readBody();

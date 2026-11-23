@@ -21,6 +21,8 @@ export interface DeviceRecord {
    * person's real accounts is a different risk from a disposable VM. Off on
    * every new and migrated device until the computer owner enables it. */
   browserControlAccess: boolean;
+  /** Off: the phone lists only the current workspace and cannot switch. On for every new and older device. */
+  otherWorkspaces: boolean;
   /** "local": Wi-Fi and Tailscale only. The relay never admits it and its psk is never tried there. */
   routes: DeviceRoutes;
   /** First end-to-end encrypted session. From then on its token is refused on the plain listener. */
@@ -111,6 +113,7 @@ function normalizeDevice(record: Partial<DeviceRecord> & { id: string; tokenHash
     lastSeenAt: timestamp(record.lastSeenAt, createdAt),
     cloudDesktopAccess: record.cloudDesktopAccess === true,
     browserControlAccess: record.browserControlAccess === true,
+    otherWorkspaces: record.otherWorkspaces !== false,
     routes: record.routes === "local" ? "local" : "any",
     ...(typeof record.e2eAt === "number" && record.e2eAt > 0 ? { e2eAt: record.e2eAt } : {}),
   };
@@ -363,7 +366,8 @@ export class DeviceRegistry {
       lastSeenAt: Date.now(),
       cloudDesktopAccess: false,
       browserControlAccess: false,
-      // The owner's restriction carries over; a grant never does.
+      // The owner's restrictions carry over; a grant never does.
+      otherWorkspaces: replaced?.otherWorkspaces ?? true,
       routes: replaced?.routes ?? "any",
     };
     const previous = this.devices;
@@ -484,6 +488,20 @@ export class DeviceRegistry {
       this.persist();
     } catch (error) {
       device.cloudDesktopAccess = previous;
+      throw error;
+    }
+    return true;
+  }
+
+  setOtherWorkspaces(id: string, allowed: boolean): boolean {
+    const device = this.devices.find((candidate) => candidate.id === id);
+    if (!device) return false;
+    const previous = device.otherWorkspaces;
+    device.otherWorkspaces = allowed;
+    try {
+      this.persist();
+    } catch (error) {
+      device.otherWorkspaces = previous;
       throw error;
     }
     return true;

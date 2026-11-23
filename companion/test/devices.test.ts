@@ -536,6 +536,43 @@ describe("browser control capability", () => {
   });
 });
 
+describe("other workspaces switch", () => {
+  beforeEach(() => {
+    rmSync(DATA_DIR, { recursive: true, force: true });
+  });
+
+  it("is on for a new device and for a record written before it existed", () => {
+    const registry = new DeviceRegistry();
+    const { device } = pair(registry);
+    expect(device.otherWorkspaces).toBe(true);
+    const path = join(DATA_DIR, "devices.json");
+    const stored = JSON.parse(readFileSync(path, "utf8"));
+    delete stored.devices[0].otherWorkspaces;
+    writeFileSync(path, JSON.stringify(stored));
+    expect(new DeviceRegistry().list()[0].otherWorkspaces).toBe(true);
+  });
+
+  it("turns off per device, survives a restart, and refuses an unknown device", () => {
+    const registry = new DeviceRegistry();
+    const first = pair(registry, "First").device;
+    const second = pair(registry, "Second").device;
+    expect(registry.setOtherWorkspaces(first.id, false)).toBe(true);
+    const byId = (id: string) => new DeviceRegistry().list().find((d) => d.id === id)!;
+    expect(byId(first.id).otherWorkspaces).toBe(false);
+    expect(byId(second.id).otherWorkspaces).toBe(true);
+    expect(registry.setOtherWorkspaces(first.id, true)).toBe(true);
+    expect(byId(first.id).otherWorkspaces).toBe(true);
+    expect(registry.setOtherWorkspaces("nobody", false)).toBe(false);
+  });
+
+  it("stays off when the phone pairs again", () => {
+    const registry = new DeviceRegistry();
+    const first = pair(registry);
+    registry.setOtherWorkspaces(first.device.id, false);
+    expect(repair(registry, first.token).device.otherWorkspaces).toBe(false);
+  });
+});
+
 describe("re-pairing with the token a phone already holds", () => {
   beforeEach(() => {
     rmSync(DATA_DIR, { recursive: true, force: true });
