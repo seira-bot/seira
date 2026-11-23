@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { createRemoteVisor, REMOTE_LINE_LIMIT, REMOTE_READY_MS } from "./glance-remote-visor.mjs";
+import { createRemoteVisor, REMOTE_KILL_GRACE_MS, REMOTE_LINE_LIMIT, REMOTE_READY_MS } from "./glance-remote-visor.mjs";
 
 function world(extra = {}) {
   const spawns = [], timers = [], fails = [], acts = [];
@@ -83,10 +83,21 @@ test("AC-04 no ready in time kills the helper and reports once", () => {
   w.remote.render({});
   const wait = w.timers.find((t) => t.ms === REMOTE_READY_MS);
   wait.fn();
-  assert.deepEqual(w.child().kills, ["SIGTERM", "SIGKILL"]);
+  assert.deepEqual(w.child().kills, ["SIGTERM"]);
   assert.equal(w.fails.length, 1);
+  w.timers.find((t) => t.ms === REMOTE_KILL_GRACE_MS).fn();
+  assert.deepEqual(w.child().kills, ["SIGTERM", "SIGKILL"]);
   w.child().emit("exit", 1);
   assert.equal(w.fails.length, 1);
+});
+
+test("AC-09 a helper that ends after the stop signal is not killed hard", () => {
+  const w = world();
+  w.remote.render({});
+  w.timers.find((t) => t.ms === REMOTE_READY_MS).fn();
+  w.child().exitCode = 0;
+  w.timers.find((t) => t.ms === REMOTE_KILL_GRACE_MS).fn();
+  assert.deepEqual(w.child().kills, ["SIGTERM"]);
 });
 
 test("AC-04 ready in time stops the wait", () => {

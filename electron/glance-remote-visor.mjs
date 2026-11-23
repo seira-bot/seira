@@ -1,5 +1,7 @@
 export const REMOTE_READY_MS = 10_000;
 export const REMOTE_LINE_LIMIT = 64 * 1024;
+/** A helper that a stop signal ends removes its temporary folder; only one that is still alive after this time is killed hard. */
+export const REMOTE_KILL_GRACE_MS = 2_000;
 
 /**
  * The visor of the main process when Glance runs in a helper process (Linux Wayland with an X11 display).
@@ -28,7 +30,10 @@ export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = []
     shown = false;
     const target = child;
     stop();
-    try { if (target && target.exitCode === null && target.signalCode === null) target.kill("SIGKILL"); } catch {}
+    const force = setTimer(() => {
+      try { if (target && target.exitCode === null && target.signalCode === null) target.kill("SIGKILL"); } catch {}
+    }, REMOTE_KILL_GRACE_MS);
+    force?.unref?.();
     onFail();
   }
 

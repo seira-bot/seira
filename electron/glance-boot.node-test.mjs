@@ -14,3 +14,10 @@ test("AC-11 the helper branch starts first, before the settings folder is chosen
   assert.match(helperBranch, /glance-visor-host\.mjs/);
   assert.doesNotMatch(helperBranch, /main\.mjs|chooseSettingsFolder/);
 });
+
+test("AC-01 the helper branch does not await the host, so Electron can emit ready", () => {
+  const branch = source.indexOf('process.argv.includes("--seira-glance-visor")');
+  const helperBranch = source.slice(branch, source.indexOf("} else if", branch));
+  assert.match(helperBranch, /void runGlanceVisorHost\(/);
+  assert.doesNotMatch(helperBranch, /await runGlanceVisorHost\(/);
+});
