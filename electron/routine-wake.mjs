@@ -7,10 +7,10 @@ export const ROUTINE_WAKE_POLL_MS = 60_000;
 export const ROUTINE_WAKE_BLOCKER = "prevent-app-suspension";
 
 export function routineWakeDecision({ enabled, onBattery, status }) {
-  if (!enabled) return { hold: false, reason: "off", at: null };
-  if (onBattery) return { hold: false, reason: "battery", at: null };
-  if (!status || status.hold !== true) return { hold: false, reason: "idle", at: null };
-  return { hold: true, reason: status.reason === "running" ? "running" : "due", at: typeof status.at === "number" ? status.at : null };
+  if (!enabled) return { hold: false, reason: "off", at: null, routineId: null };
+  if (onBattery) return { hold: false, reason: "battery", at: null, routineId: null };
+  if (!status || status.hold !== true) return { hold: false, reason: "idle", at: null, routineId: null };
+  return { hold: true, reason: status.reason === "running" ? "running" : "due", at: typeof status.at === "number" ? status.at : null, routineId: typeof status.routineId === "string" ? status.routineId : null };
 }
 
 const settingsFile = (userData) => path.join(userData, "routine-wake.json");
@@ -41,7 +41,7 @@ export function rememberRoutineWake(userData, keepAwake) {
 
 /**
  * `deps`:
- * - fetchStatus(): Promise<{hold, reason?, at?} | null> — the server's answer, null when unreachable
+ * - fetchStatus(): Promise<{hold, reason?, at?, routineId?} | null> — the server's answer, null when unreachable
  * - isOnBattery(): boolean
  * - blocker: { start(type): id, stop(id), isStarted(id): boolean } — Electron's powerSaveBlocker
  * - settings(): { keepAwake: boolean }
@@ -50,7 +50,8 @@ export function rememberRoutineWake(userData, keepAwake) {
 export function createRoutineWakeHold(deps) {
   let blockerId = null;
   let timer = null;
-  let last = { hold: false, reason: "idle", at: null };
+  let last = { hold: false, reason: "idle", at: null, routineId: null };
+  let stops = 0;
 
   const apply = (decision) => {
     if (decision.hold && blockerId === null) {
@@ -65,10 +66,12 @@ export function createRoutineWakeHold(deps) {
   };
 
   const poll = async () => {
+    const stopsBefore = stops;
     const status = await Promise.resolve()
       .then(() => deps.fetchStatus())
       .catch(() => null);
-    apply(routineWakeDecision({ enabled: deps.settings().keepAwake, onBattery: deps.isOnBattery(), status }));
+    const decision = routineWakeDecision({ enabled: deps.settings().keepAwake, onBattery: deps.isOnBattery(), status });
+    apply(stops === stopsBefore ? decision : { ...decision, hold: false, reason: "stopped" });
     return state();
   };
 
@@ -84,7 +87,8 @@ export function createRoutineWakeHold(deps) {
     stop() {
       if (timer) clearInterval(timer);
       timer = null;
-      apply({ hold: false, reason: "stopped", at: null });
+      stops += 1;
+      apply({ hold: false, reason: "stopped", at: null, routineId: null });
     },
     poll,
     state,
