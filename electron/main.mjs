@@ -1920,7 +1920,8 @@ async function forgetEnvironment(id, purge = false, confirmed = false) {
 }
 
 function showContextMenu(win, params) {
-  Menu.buildFromTemplate(contextMenuTemplate(params, { webContents: win.webContents, clipboard, downloads: mediaDownloads, t: nativeT })).popup({ window: win, frame: params.frame });
+  const template = contextMenuTemplate(params, { webContents: win.webContents, clipboard, downloads: mediaDownloads, t: nativeT });
+  if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: win, frame: params.frame });
 }
 const mediaDownloads = createMediaDownloads({ dialog, shell, t: (...args) => nativeT(...args), log: slog,
   openDir: () => path.join(app.getPath("temp"), "seira-open-media"), downloadsDir: () => app.getPath("downloads") });
