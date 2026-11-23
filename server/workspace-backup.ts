@@ -19,7 +19,7 @@ import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEngineP
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
-import { userHome } from "./env-path.ts"; import { beginRestoreBeat, endRestoreBeat, restoreBeat } from "./restore-progress.ts";
+import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
@@ -951,9 +951,8 @@ export function applyPendingWorkspaceRestore(dataDir: string): WorkspaceRestoreR
     rmSync(pendingFile, { force: true });
     return { restored: false, rolledBack: true, id: pending.id, safetyCopyPath };
   }
-  const staged = join(jobPath(dataDir, pending.id), "staged"); beginRestoreBeat(dataDir);
-  const manifest = validateStaged(staged);
-  const prepared = prepareRestore(dataDir, pending.id, manifest); endRestoreBeat();
+  const staged = join(jobPath(dataDir, pending.id), "staged");
+  const prepared = withRestoreBeat(dataDir, () => prepareRestore(dataDir, pending.id, validateStaged(staged)));
   folder(join(safetyCopyPath, "data"));
   const journal: RestoreJournal = {
     id: pending.id, phase: "applying",

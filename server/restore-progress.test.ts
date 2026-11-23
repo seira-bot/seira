@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { beginRestoreBeat, endRestoreBeat, restoreBeat, restoreInProgress } from "./restore-progress.ts";
+import { beginRestoreBeat, endRestoreBeat, restoreBeat, restoreInProgress, withRestoreBeat } from "./restore-progress.ts";
 
 const dirs: string[] = [];
 function dataDir(): string {
@@ -46,6 +46,17 @@ describe("restore progress marker", () => {
     expect(readFileSync(file, "utf8")).toBe(first);
     restoreBeat(() => at + 3_000);
     expect(readFileSync(file, "utf8")).toBe(`${at + 3_000}\n`);
+  });
+
+  it("ends the beat when a restore fails, so a later backup copy does not look like a restore", () => {
+    const dir = dataDir();
+    expect(() => withRestoreBeat(dir, () => {
+      expect(restoreInProgress(dir)).toBe(true);
+      throw new Error("bad backup");
+    })).toThrow("bad backup");
+    expect(restoreInProgress(dir)).toBe(false);
+    restoreBeat(() => Date.now() + 10_000);
+    expect(existsSync(join(dir, ".backups", "restore-progress"))).toBe(false);
   });
 
   it("does nothing outside a restore", () => {

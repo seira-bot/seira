@@ -28,6 +28,16 @@ export function endRestoreBeat(): void {
   marker = null;
 }
 
+/** Runs a restore's check and copy with the beat on, and turns it off when they end or fail. */
+export function withRestoreBeat<T>(dataDir: string, work: () => T): T {
+  beginRestoreBeat(dataDir);
+  try {
+    return work();
+  } finally {
+    endRestoreBeat();
+  }
+}
+
 /** Whether a server is applying a restore in this data folder right now (the marker was touched in the last 30 s). */
 export function restoreInProgress(dataDir: string, now: () => number = Date.now): boolean {
   try {
