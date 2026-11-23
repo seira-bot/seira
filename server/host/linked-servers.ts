@@ -56,7 +56,7 @@ import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, kindOf } from "./linked-servers-admit.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
-import { farFileName, farFrame } from "./linked-servers-text.ts";
+import { farCost, farFileName, takeFarFrame } from "./linked-servers-text.ts";
 import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
@@ -158,9 +158,9 @@ export interface LinkedServersDeps extends InstanceDeps {
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
   timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
-  /** Smaller limits for tests: a link's files waiting here, its work frames and hellos in a window, its frames
+  /** Smaller limits for tests: a link's files waiting here, its work frames, hellos and characters to clean in a window, its frames
    * waiting here, and its joiner's exchanges and new sessions in a window. */
-  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; exchanges?: number; sessions?: number };
+  limits?: { spool?: SpoolLimits; frames?: number; outbox?: number; hellos?: number; chars?: number; exchanges?: number; sessions?: number };
 }
 
 type Instance = {
@@ -181,7 +181,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   const instances = new Map<string, Instance>();
   const admission = createAdmission(now);
   const refusals = createRefusalRecord(now);
-  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos });
+  const intake = createIntake(now, { frames: deps.limits?.frames, hellos: deps.limits?.hellos, chars: deps.limits?.chars }, farCost);
   const sent = createFrameBudget(now, deps.limits?.frames);
   const heldBack = createRefusalRecord(now);
   const pace = createPace(now, { exchanges: deps.limits?.exchanges, sessions: deps.limits?.sessions });
@@ -317,7 +317,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
       openThread: deps.openThread, hasThread: deps.hasThread, personName: deps.personName, sentRow: deps.sentRow, resultRow: deps.resultRow, kick: deps.kick,
       refusal: deps.refusal, model: deps.model, directoryChanged: deps.directoryChanged, files,
     });
-    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(farFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
+    const endsOnBye: BotLink = { ...link, receive: (peer, raw) => { const frames = raw.map(takeFarFrame); if (frames.some(isBye)) stopWork(link, key, ENDED_THERE); link.receive(peer, frames); } };
     const takes = (frames: readonly unknown[], ack: number) => intakeOf(id, frames, link.backlog(key, ack) >= outboxMax);
     const entry: Instance = {
       id, key, link,

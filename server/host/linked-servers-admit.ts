@@ -2,8 +2,9 @@
 
 /** `frames`: the hand-off, cancel and result frames a link may send in `windowMs`. `outbox`: while this many frames for
  * it wait unacknowledged, a link's work frames are not taken. `hellos`: the hellos of a link applied in `windowMs`.
- * `exchanges` and `sessions`: the exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
-export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, exchanges: 120, sessions: 10 } as const;
+ * `chars`: the characters of the frames a link may hand this side to clean in `windowMs`: the cleaning costs time in
+ * proportion to them. `exchanges` and `sessions`: the exchanges, and the new sessions among them, a link's joiner may open in `windowMs`. */
+export const ADMIT = { perWindow: 30, windowMs: 60_000, open: 8, frames: 150, outbox: 2_000, hellos: 10, chars: 600_000, exchanges: 120, sessions: 10 } as const;
 export const BUSY_TEXT = "The other side is busy now, so try again later.";
 
 const WORK_FRAMES: ReadonlySet<unknown> = new Set(["handoff", "cancel", "result"]);
@@ -62,36 +63,47 @@ export function createPace(now: () => number = Date.now, limits: { exchanges?: n
 }
 
 /** The frames of one exchange that a link takes: from the first, up to the first work frame its budget has no room for,
- * or up to the first work frame while `full`. Of its hellos only the last is kept, and it goes first in `frames` once the
- * link's hello budget has room: at this exchange or a later one. */
-export function createIntake(now: () => number = Date.now, limits: { frames?: number | undefined; hellos?: number | undefined } = {}) {
+ * or up to the first work frame while `full`, or up to the first frame whose `cost` its character budget has no room for.
+ * A frame costs at most the whole budget, so one frame always fits in an empty window. Of its hellos only the last is
+ * kept, and it goes first in `frames` once the link's hello and character budgets have room: at this exchange or a later one. */
+export function createIntake(now: () => number = Date.now, limits: { frames?: number | undefined; hellos?: number | undefined; chars?: number | undefined } = {}, cost: (frame: unknown) => number = () => 0) {
   const work = createFrameBudget(now, limits.frames ?? ADMIT.frames);
   const hellos = createFrameBudget(now, limits.hellos ?? ADMIT.hellos);
-  const waiting = new Map<string, unknown>();
+  const charMax = limits.chars ?? ADMIT.chars;
+  const chars = createFrameBudget(now, charMax);
+  const waiting = new Map<string, { frame: unknown; chars?: number }>();
+  const priced = (frame: unknown) => Math.min(Math.max(0, Math.ceil(cost(frame))), charMax);
   return {
     take(linkId: string, frames: readonly unknown[], full: boolean): { count: number; frames: unknown[]; undo(): void } {
-      let room = full ? 0 : work.left(linkId), count = 0, spent = 0;
+      let room = full ? 0 : work.left(linkId), charRoom = chars.left(linkId), count = 0, spent = 0, spentChars = 0;
       const taken: unknown[] = [];
       for (const frame of frames) {
         if (isWork(frame)) {
           if (room === 0) break;
+          const price = priced(frame);
+          if (price > charRoom) break;
           room -= 1;
           spent += 1;
+          charRoom -= price;
+          spentChars += price;
         }
         count += 1;
-        if (kindOf(frame) === "hello") waiting.set(linkId, frame);
+        if (kindOf(frame) === "hello") waiting.set(linkId, { frame });
         else taken.push(frame);
       }
-      const undo = work.spend(linkId, spent);
+      const undoFrames = work.spend(linkId, spent), undoChars = chars.spend(linkId, spentChars);
+      let undoHello = () => {};
       const hello = waiting.get(linkId);
-      if (hello !== undefined && hellos.left(linkId) > 0) {
+      const helloChars = hello && hellos.left(linkId) > 0 ? (hello.chars ??= priced(hello.frame)) : 0;
+      if (hello !== undefined && hellos.left(linkId) > 0 && chars.left(linkId) >= helloChars) {
         hellos.spend(linkId, 1);
+        undoHello = chars.spend(linkId, helloChars);
         waiting.delete(linkId);
-        taken.unshift(hello);
+        taken.unshift(hello.frame);
       }
-      return { count, frames: taken, undo };
+      return { count, frames: taken, undo: () => { undoFrames(); undoChars(); undoHello(); } };
     },
-    forget(linkId: string): void { work.forget(linkId); hellos.forget(linkId); waiting.delete(linkId); },
+    forget(linkId: string): void { work.forget(linkId); hellos.forget(linkId); chars.forget(linkId); waiting.delete(linkId); },
   };
 }
 

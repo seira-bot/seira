@@ -256,6 +256,53 @@ describe("admission", () => {
     expect(intake.take("a", [cancel("1"), cancel("2")], false).count).toBe(2);
     expect(intake.take("a", [cancel("3")], false).count).toBe(0);
   });
+
+  const priced = (frame: unknown) => (frame as { c?: number }).c ?? 0;
+  const result = (id: string, c: number) => ({ t: "result", id, ok: true, text: "", c });
+
+  it("takes a batch up to the first frame its characters have no room for, and takes the rest once the window has passed", () => {
+    let now = 0;
+    const intake = createIntake(() => now, { chars: 10 }, priced);
+    const took = (frames: unknown[]) => { const { count, frames: taken } = intake.take("a", frames, false); return { count, frames: taken }; };
+    const bad = { t: "result", id: "bad", c: 0 }, done = { t: "done", id: "x" };
+    expect(took([result("1", 4), bad, result("2", 5), result("3", 2), result("4", 1)])).toEqual({ count: 3, frames: [result("1", 4), bad, result("2", 5)] });
+    expect(took([result("3", 2), done])).toEqual({ count: 0, frames: [] });
+    expect(took([result("4", 1), result("3", 2)])).toEqual({ count: 1, frames: [result("4", 1)] });
+    expect(took([done, result("3", 2)])).toEqual({ count: 1, frames: [done] });
+    now = ADMIT.windowMs;
+    expect(took([result("3", 2), result("4", 1)])).toEqual({ count: 2, frames: [result("3", 2), result("4", 1)] });
+    intake.forget("a");
+    expect(took([result("5", 10)]).count).toBe(1);
+  });
+
+  it("passes one frame larger than the character limit through an empty window, and costs nothing for a frame without a cost", () => {
+    let now = 0;
+    const intake = createIntake(() => now, { chars: 10 }, priced);
+    expect(intake.take("a", [result("1", 500), result("2", 1)], false).count).toBe(1);
+    expect(intake.take("a", [result("2", 1)], false).count).toBe(0);
+    now = ADMIT.windowMs;
+    expect(intake.take("a", [result("2", 1)], false).count).toBe(1);
+    expect(createIntake(() => 0, { chars: 1 }).take("a", [result("1", 500), result("2", 500)], false).count).toBe(2);
+  });
+
+  it("gives back the characters of a batch whose frames could not be taken", () => {
+    const intake = createIntake(() => 0, { chars: 10 }, priced);
+    const failed = intake.take("a", [result("1", 6), result("2", 4)], false);
+    expect(intake.take("a", [result("3", 1)], false).count).toBe(0);
+    failed.undo();
+    expect(intake.take("a", [result("3", 10)], false).count).toBe(1);
+  });
+
+  it("keeps a hello waiting until the characters have room for it", () => {
+    let now = 0;
+    const intake = createIntake(() => now, { chars: 10 }, (frame) => (kind(frame) === "hello" ? 6 : priced(frame)));
+    const kind = (frame: unknown) => (frame as { t?: string }).t;
+    expect(intake.take("a", [result("1", 8), hello("far", "one")], false)).toMatchObject({ count: 2, frames: [result("1", 8)] });
+    expect(intake.take("a", [], false)).toMatchObject({ count: 0, frames: [] });
+    now = ADMIT.windowMs;
+    expect(intake.take("a", [], false)).toMatchObject({ count: 0, frames: [hello("far", "one")] });
+    expect(intake.take("a", [result("2", 5)], false).count).toBe(0);
+  });
 });
 
 describe("the approval cap", () => {
@@ -530,6 +577,37 @@ describe("the linked servers manager", () => {
     expect((await sync(cancels(5, 5))).taken).toBe("4");
     expect((await sync(cancels(9, 1))).taken).toBe("0");
   });
+
+  it("takes the characters of an exchange up to the link's limit for the minute, and takes the same frames in a later minute", async () => {
+    let now = Date.now();
+    const { made } = manager("head", { now: () => now, limits: { chars: 1_000 } });
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    const results = (ids: string[]) => ids.map((id) => ({ t: "result", id, ok: true, text: "x".repeat(400) }));
+    expect((await sync([], { fresh: true })).status).toBe(200);
+    expect(await sync(results(["r1", "r2", "r3", "r4"]))).toMatchObject({ status: 200, taken: "2" });
+    expect(await sync(results(["r3", "r4"]))).toMatchObject({ status: 200, taken: "0" });
+    now += ADMIT.windowMs;
+    expect(await sync(results(["r3", "r4"]))).toMatchObject({ status: 200, taken: "2" });
+  });
+
+  it("drops a frame past the schema's limits without reading its text, and starts no work from it", async () => {
+    const { made, rows } = manager("head");
+    const origin = await serving(made);
+    const { token } = await accepted(made, origin);
+    const sync = exchangeAt(origin, token);
+    expect((await sync([], { fresh: true })).status).toBe(200);
+    const written = rows.length;
+    const huge = "[".repeat(4_000_000);
+    const frames = [{ ...handoff("h-huge"), text: huge }, { ...handoff("h-name"), from: { botId: "scout", name: huge, threadId: "scout-chat" } }, { t: "result", id: "r-huge", ok: true, text: huge }];
+    for (const frame of frames) {
+      const start = performance.now();
+      const answer = await sync([frame]);
+      expect([answer.status, answer.taken, performance.now() - start < 500]).toEqual([200, "1", true]);
+    }
+    expect(rows).toHaveLength(written);
+  }, 15_000);
 
   it("takes the work frames an honest server sends in a minute: its hand-offs, their cancels and its results", async () => {
     const { made } = manager("head");

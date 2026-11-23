@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { farFileName, farFrame } from "./linked-servers-text.ts";
+import { farCost, farFileName, farFrame, takeFarFrame } from "./linked-servers-text.ts";
 
 const HIDDEN = "‮​\u{e0041}ㅤ\u0007";
 const SPACED = (word: string) => new RegExp(`^${word[0]} *${word.slice(1)}$`, "u");
@@ -56,5 +56,35 @@ describe("what a guest peer says", () => {
 
   it("leaves what is not a frame to the link's own check", () => {
     expect([farFrame("x"), farFrame(null), farFrame([1])]).toEqual(["x", null, [1]]);
+  });
+});
+
+describe("what cleaning a guest peer's frame costs", () => {
+  const result = (text: string) => ({ t: "result", id: "r1", ok: true, text });
+
+  it("is nothing for a frame that does not parse, and nothing for a frame with no words", () => {
+    expect([farCost(null), farCost("x"), farCost({ t: "result", id: "r1" }), farCost({ t: "done", id: "d" }), farCost({ t: "cancel", id: "c" }), farCost({ t: "bye" })]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(farCost(result("x".repeat(200_001)))).toBe(0);
+  });
+
+  it("is the size of a frame that parses", () => {
+    expect(farCost(result("abc"))).toBe(JSON.stringify(result("abc")).length);
+    expect(farCost({ t: "hello", place: { id: "p", name: "Far" }, bots: [] })).toBeGreaterThan(0);
+  });
+
+  it("reads no text of a frame past the schema's limits, in a few milliseconds", () => {
+    const huge = "[".repeat(4_000_000);
+    const frames = [result(huge), { t: "handoff", id: "h", to: "w", from: { botId: "b", name: huge, threadId: "t" }, thread: "t", text: "x", mode: "work", origin: { kind: "outside" } },
+      { t: "hello", place: { id: "p", name: huge }, bots: [] }];
+    const start = performance.now();
+    const out = frames.map((frame) => [farCost(frame), takeFarFrame(frame)]);
+    expect(performance.now() - start).toBeLessThan(500);
+    expect(out).toEqual([[0, null], [0, null], [0, null]]);
+  }, 15_000);
+
+  it("cleans a frame that parses as farFrame does", () => {
+    const frame = result(`D${HIDDEN}one`);
+    expect(takeFarFrame(frame)).toEqual(farFrame(frame));
+    expect(takeFarFrame({ t: "bye" })).toEqual({ t: "bye" });
   });
 });
