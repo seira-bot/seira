@@ -13,6 +13,7 @@ export const blockedUses = (cause: unknown): ProviderUse[] => cause instanceof A
 export function providerUseLabel(use: ProviderUse): string {
   switch (use.kind) {
     case "default": return t("provider.use.default");
+    case "other": return t("provider.use.other", { count: String(use.count) });
     case "bot": return t("provider.use.bot", { bot: use.botName });
     case "backup": return t("provider.use.backup", { bot: use.botName });
     case "running": return t("provider.use.running", { bot: use.botName });
@@ -39,6 +40,7 @@ export function ProviderBlockers({ name, uses, onClose, hideAnyway, className }:
   const working = uses.filter((use) => use.kind === "running");
   const open = (use: ProviderUse) => {
     onClose();
+    if (use.kind === "other") return;
     if (use.kind === "default") dispatch({ type: "toggleAppSettings", open: true, section: "ai" });
     else if (use.kind === "bot" || use.kind === "backup") dispatch({ type: "toggleSettings", botId: use.botId, open: true, section: "model" });
     else {
@@ -52,15 +54,15 @@ export function ProviderBlockers({ name, uses, onClose, hideAnyway, className }:
     return (
       <li key={index} data-provider-use={use.kind} className="flex items-center justify-between gap-2 py-0.5">
         <span className="min-w-0 break-words text-ink">{label}</span>
-        <button type="button" aria-label={t("provider.blocked.changeAria", { use: label })} onClick={() => open(use)}
+        {use.kind !== "other" && <button type="button" aria-label={t("provider.blocked.changeAria", { use: label })} onClick={() => open(use)}
           className="shrink-0 font-medium text-accent hover:underline">
           {t(use.kind === "running" ? "provider.blocked.open" : "provider.blocked.change")}
-        </button>
+        </button>}
       </li>
     );
   };
   const reason = hideAnyway && (working.length > 0
-    ? t("provider.hideAnywayWait", { bots: working.flatMap((use) => use.kind === "default" ? [] : [use.botName]).join(", "), name })
+    ? t("provider.hideAnywayWait", { bots: working.flatMap((use) => use.kind === "running" ? [use.botName] : []).join(", "), name })
     : !admin ? t("provider.hideAnywayAdmin") : null);
   return (
     <div data-provider-blockers role="alert" className={cn("flex flex-col gap-1.5 rounded-lg bg-card p-3 text-[12px] leading-snug text-ink-secondary shadow-lg", className)}>

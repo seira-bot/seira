@@ -46,6 +46,7 @@ async function serve(extra: Partial<InstanceRouteDeps> = {}, auth: RequestAuth =
     threadBusy: () => false,
     botForThread: () => null,
     activeGroupTurnForBot: () => null,
+    visibleFor: () => ({ bot: () => true, thread: () => true }),
     ...extra,
   } as unknown as InstanceRouteDeps;
   const routes = [createInstanceRoutes(deps)];
@@ -359,6 +360,23 @@ describe("hiding a provider", () => {
         { kind: "conversation", botId: "pen", botName: "Pen", threadId: "t1", title: "Weekly sales" },
       ]);
       expect(served.persisted).toEqual([]);
+    });
+
+    it("tells a viewer who cannot see a bot only how many uses they cannot open", async () => {
+      const served = await setup(
+        [{ id: "robin", name: "Robin", modelSelection: onA }, { id: "secret", name: "Hidden Bot", modelSelection: onB }],
+        { secret: [{ threadId: "thread-secret", title: "Private plan", modelSelection: onA }], robin: [{ threadId: "t9", title: "Mine", modelSelection: onA }] },
+        { visibleFor: () => ({ bot: (id: string) => id === "robin", thread: (id: string) => id === "t9" }) },
+      );
+      const reply = await patch(served, { hidden: true });
+      expect(reply.status).toBe(409);
+      expect(reply.body.uses).toEqual([
+        { kind: "bot", botId: "robin", botName: "Robin" },
+        { kind: "conversation", botId: "robin", botName: "Robin", threadId: "t9", title: "Mine" },
+        { kind: "other", count: 1 },
+      ]);
+      const text = JSON.stringify(reply.body);
+      for (const secret of ["Hidden Bot", "Private plan", "thread-secret", "\"secret\""]) expect(text).not.toContain(secret);
     });
 
     it("names the default model", async () => {

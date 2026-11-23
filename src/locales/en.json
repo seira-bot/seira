@@ -4885,6 +4885,7 @@
   "provider.use.backup": "{bot}: backup model",
   "provider.use.conversation": "{bot}: conversation {title}",
   "provider.use.conversationUntitled": "{bot}: a conversation",
+  "provider.use.other": "Also used in {count} place(s) you cannot open.",
   "provider.use.running": "{bot} is working now",
   "provider.hideAnyway": "Hide anyway",
   "provider.hideAnywayTitle": "Hide {name} anyway?",

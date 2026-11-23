@@ -12334,7 +12334,7 @@ const configRoutes = createConfigRoutes({
   resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends,
 }); ROUTES.push(configRoutes);
 const instanceRoutes = createInstanceRoutes({
-  store, cfg, registry, sessions, providerAuthSessions,
+  visibleFor: (auth) => visibleTo(viewerFor(auth)), store, cfg, registry, sessions, providerAuthSessions,
   hostedModels: Boolean(hostedModels),
   providerConfigBusy: { get: () => providerConfigBusy, set: (busy) => { providerConfigBusy = busy; } },
   providerInstancesChanging, describeInstances, persistProviderInstance, configStatus, broadcast, testCliBinary,

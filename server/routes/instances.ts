@@ -1,7 +1,8 @@
 import { agentEndpointAddress, discoverAgentEndpointModels, hasExplicitModel, isGatewayEndpoint } from "../agent-endpoint-models.ts";
 import { codexEndpointSchema, codexEndpointUpdateSchema, newCodexEndpoint, updateCodexEndpoint, withCodexEndpointInfo, isCodexEndpoint } from "../codex-endpoints.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
-import { providerUses } from "../provider-uses.ts";
+import { providerUses, usesVisibleTo } from "../provider-uses.ts";
+import type { VisibleSet } from "../bot-visibility.ts";
 import { modelManifest } from "../model-manifest/manifest.ts";
 import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
@@ -63,6 +64,7 @@ export interface InstanceRouteDeps {
   broadcast(payload: Record<string, unknown>): void;
   testCliBinary(cli: string, driver: (typeof BUILT_IN_DRIVERS)[number] | undefined): Promise<unknown>;
   cliProbeEnvironment(): NodeJS.ProcessEnv;
+  visibleFor: (auth: RequestAuth) => Pick<VisibleSet, "bot" | "thread">;
   threadBusy(botId: string, threadId: string): boolean;
   botForThread(botId: string, threadId: string): Pick<{ modelSelection: ModelSelection }, "modelSelection"> | null;
   activeGroupTurnForBot(botId: string): { threadId: string } | null;
@@ -79,7 +81,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   const {
     store, cfg, registry, sessions, providerAuthSessions, hostedModels, providerConfigBusy, providerInstancesChanging,
     persistProviderInstance, configStatus, broadcast, testCliBinary, cliProbeEnvironment, threadBusy,
-    botForThread, activeGroupTurnForBot,
+    botForThread, activeGroupTurnForBot, visibleFor,
   } = deps;
   const detectModels = deps.endpointModelsReadable ?? endpointModelsReadable;
   const describeInstances = async () => hostedModels ? deps.describeInstances()
@@ -507,8 +509,8 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         }
         if (body.hidden === true) {
           const uses = providerUsesOf(instanceId);
-          if (uses.some((use) => use.kind === "running")) return json(res, 409, { ...userError("serverError.instance.hideRunning"), uses });
-          if (uses.length > 0 && !body.force) return json(res, 409, { ...userError("serverError.instance.hideBlocked"), uses });
+          if (uses.some((use) => use.kind === "running")) return json(res, 409, { ...userError("serverError.instance.hideRunning"), uses: usesVisibleTo(uses, visibleFor(auth)) });
+          if (uses.length > 0 && !body.force) return json(res, 409, { ...userError("serverError.instance.hideBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
         }
         if (body.hidden !== undefined) {
           if (body.hidden) entry.hidden = true;
@@ -581,7 +583,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         return json(res, 400, { error: "Only added accounts and custom endpoints can be removed here." });
       }
       const uses = providerUsesOf(instanceId);
-      if (uses.length > 0) return json(res, 409, { ...userError("serverError.instance.removeBlocked"), uses });
+      if (uses.length > 0) return json(res, 409, { ...userError("serverError.instance.removeBlocked"), uses: usesVisibleTo(uses, visibleFor(auth)) });
       // Seira keeps a ChatGPT account's sign-in in its own data folder: removing the account clears it.
       const live = addedChatgpt ? registry.get(instanceId) : undefined;
       if (live?.signOut) {

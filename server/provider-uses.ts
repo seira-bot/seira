@@ -38,3 +38,14 @@ export function providerUses(input: ProviderUseInput): ProviderUse[] {
   }
   return uses;
 }
+
+/** The uses a caller may be told about. What they cannot see becomes one nameless count. */
+export function usesVisibleTo(uses: readonly ProviderUse[], visible: { bot(id: string): boolean; thread(id: string): boolean }): ProviderUse[] {
+  let hidden = 0;
+  const shown = uses.filter((use) => {
+    const ok = use.kind === "default" || use.kind === "other" || (use.kind === "conversation" ? visible.thread(use.threadId) : visible.bot(use.botId));
+    if (!ok) hidden += 1;
+    return ok;
+  });
+  return hidden > 0 ? [...shown, { kind: "other", count: hidden }] : shown;
+}
