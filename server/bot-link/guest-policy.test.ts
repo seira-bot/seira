@@ -1,11 +1,12 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createCoordinator, type BeginTurnRequest, type CoordinateBotsCall, type Coordinator, type CoordinatorHost, type HandoffView, type HostTurnResult } from "../coordinator.ts";
+import type { PassedFile } from "../host/handoff-files.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
-import { createBotLink, type LinkEvent, type LinkPolicy } from "./link.ts";
+import { createBotLink, type FileTransfer, type LinkEvent, type LinkPolicy } from "./link.ts";
 import { linkedId, peerKey, type Frame, type HandoffFrame, type ResultFrame } from "./protocol.ts";
 
 const FAIL = "The work failed on the linked server.";
@@ -35,6 +36,7 @@ const call = (botIds: string[], message: string, more: Partial<CoordinateBotsCal
 const handoff = (id: string, more: Partial<HandoffFrame> = {}): HandoffFrame => ({
   t: "handoff", id, to: "writer", from: { botId: "far-bot", name: "Far", threadId: "far-chat" }, thread: `far-thread-${id}`, text: `Do ${id}`, mode: "work", origin: { kind: "outside" }, ...more,
 });
+const withFile = (id: string, more: Partial<HandoffFrame> = {}) => handoff(id, { files: [{ name: "brief.txt", mime: "text/plain", kind: "file", bytes: 5 }], ...more });
 const probe: CoordinatorHost = { validate: () => "x", busy: () => true, run: async () => ({ ok: true, text: "" }), report: () => {}, changed: () => {}, names: () => ({ requester: "a", assignee: "b" }),
   park: () => {}, levelOf: () => ({ level: "full" }), chiefOf: () => true };
 const nodeOf = (botId: string) => ({ botId, threadId: "t", id: "n" }) as HandoffView;
@@ -48,9 +50,14 @@ function server(label: string, bots: Bot[], guest: { key: string; exposed: strin
   const runs: Array<{ botId: string; text: string; origin: unknown; composed: string }> = [];
   const begun: BeginTurnRequest[] = [], enqueued: string[] = [], events: LinkEvent[] = [], admitted: Array<[string, number]> = [], failed: string[] = [];
   const results: Array<{ name: string; status: string; result: string }> = [];
+  const pulls: string[] = [], stored: string[] = [], discarded: string[] = [];
   const exposed = new Set(guest?.exposed ?? []);
-  const knobs: { limit: string | null; refusal: string | null; notMine(botId: string): boolean; run: Run } = {
-    limit: null, refusal: null, notMine: () => false, run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }),
+  const knobs: { limit: string | null; refusal: string | null; notMine(botId: string): boolean; run: Run; pull: Promise<void> } = {
+    limit: null, refusal: null, notMine: () => false, run: async (node) => ({ ok: true, text: `${node.botId} did: ${node.text}` }), pull: Promise.resolve(),
+  };
+  const transfer: FileTransfer = {
+    holds: async () => false, push: async () => {},
+    pull: async (id, _way, _index, meta, to) => { pulls.push(id); await knobs.pull; writeFileSync(to, "x".repeat(meta.bytes)); },
   };
   const policy: LinkPolicy | undefined = guest ? {
     key: guest.key, exposed: (botId) => exposed.has(botId), words: WORDS,
@@ -76,6 +83,11 @@ function server(label: string, bots: Bot[], guest: { key: string; exposed: strin
     resultRow: (_parent, child, name) => { results.push({ name, status: child.status, result: child.result }); },
     kick: () => { queueMicrotask(() => { try { real.tick(); } catch { /* closed */ } }); },
     notMine: (botId) => knobs.notMine(botId),
+    files: {
+      carried: () => [], crossed: () => {},
+      store: async (files) => files.map((file): PassedFile => { stored.push(file.name); return { kind: "file", path: join(dir, file.name), name: file.name, mime: "text/plain", bytes: 5 }; }),
+      discard: (files) => { discarded.push(...files.map((file) => file.name)); },
+    },
     ...(policy ? { policy } : {}),
   });
   const inner: CoordinatorHost = {
@@ -91,10 +103,10 @@ function server(label: string, bots: Bot[], guest: { key: string; exposed: strin
   const frames = (peer: string): Frame[] => link.outgoing(peer, 0).map((entry) => entry.frame);
   const self = { id: `${label}-environment`, name: label };
   return {
-    link, runs, begun, enqueued, events, admitted, failed, results, exposed, knobs,
+    link, runs, begun, enqueued, events, admitted, failed, results, exposed, knobs, pulls, stored, discarded,
     get coordinator() { return real; },
     accept: (computer = FAR) => link.pair({ self, sessionId: `${label}-session`, computer })!.peer,
-    dial: (peer = { id: "cloud-environment", name: "Far Cloud" }) => { link.turnOn({ self, origin: "https://inviter.example", token: "lsk_test", peer }); return link.cloudPeer()!; },
+    dial: (peer = { id: "cloud-environment", name: "Far Cloud" }) => { link.turnOn({ self, origin: "https://inviter.example", token: "lsk_test", peer }); link.setTransfer(transfer); return link.cloudPeer()!; },
     frames,
     hellos: (peer: string) => frames(peer).flatMap((frame) => (frame.t === "hello" ? [frame.bots] : [])),
     result: (peer: string, id: string) => frames(peer).find((frame): frame is ResultFrame => frame.t === "result" && frame.id === id),
@@ -355,6 +367,58 @@ describe("a guest link", () => {
     expect(here.result(peer, "h1")).toEqual({ t: "result", id: "h1", ok: false, text: "The owner stopped all work from linked servers.", outcome: "stopped" });
     expect(here.result(peer, "h0")).toMatchObject({ ok: true });
     expect(here.events.filter((event) => event.kind === "result-sent").map((event) => event.id)).toEqual(["h0", "h1"]);
+  });
+
+  it("refuses a hand-off with files before it takes any of them in", async () => {
+    const here = server("joiner", [writer, analyst], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    here.coordinator.beginTurn({ id: "link-taken", address: { botId: "writer", threadId: "writer-chat" }, brief: "Mine", level: "full", origin: { kind: "user", request: "Mine" } });
+    here.link.receive(peer, [withFile("h1", { to: "analyst" }), withFile("taken")]);
+    here.knobs.limit = "No more from you today.";
+    here.link.receive(peer, [withFile("h2")]);
+    expect([here.result(peer, "h1")?.text, here.result(peer, "taken")?.text, here.result(peer, "h2")?.text]).toEqual([NOT_HERE, NOT_HERE, "No more from you today."]);
+    expect(here.events.flatMap((event) => (event.kind === "refused" ? [event.reason] : []))).toEqual(["bot", "root", "limit"]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(here.pulls).toEqual([]);
+    expect(here.stored).toEqual([]);
+    expect(here.begun).toEqual([]);
+  });
+
+  it("counts a hand-off whose files are still coming as open, and asks the policy about it once", async () => {
+    const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    let release!: () => void;
+    here.knobs.pull = new Promise<void>((resolve) => { release = resolve; });
+    here.link.receive(peer, [withFile("h1")]);
+    await until(() => here.pulls.length === 1, "h1's file is on the way");
+    here.link.receive(peer, [handoff("h2")]);
+    expect(here.admitted).toEqual([[peer, 0], [peer, 1]]);
+    release();
+    await until(() => here.result(peer, "h1") !== undefined, "h1 is done");
+    expect(here.result(peer, "h1")).toMatchObject({ ok: true, text: "writer did: Do h1" });
+    expect(here.stored).toEqual(["brief.txt"]);
+    expect(here.discarded).toEqual([]);
+    expect(here.admitted).toHaveLength(2);
+  });
+
+  it("removes the files it stored for a hand-off that is refused after they came", async () => {
+    const here = server("joiner", [writer], { key: KEY_2, exposed: ["writer"] });
+    const peer = here.dial();
+    let release!: () => void;
+    here.knobs.pull = new Promise<void>((resolve) => { release = resolve; });
+    here.link.receive(peer, [withFile("h1")]);
+    await until(() => here.pulls.length === 1, "h1's file is on the way");
+    here.exposed.delete("writer");
+    release();
+    await until(() => here.result(peer, "h1") !== undefined, "h1 is refused");
+    expect(here.result(peer, "h1")).toEqual({ t: "result", id: "h1", ok: false, text: NOT_HERE, outcome: "refused" });
+    expect(here.stored).toEqual(["brief.txt"]);
+    expect(here.discarded).toEqual(["brief.txt"]);
+    expect(here.runs).toEqual([]);
+
+    here.exposed.add("writer");
+    here.link.receive(peer, [handoff("h2")]);
+    expect(here.admitted).toEqual([[peer, 0], [peer, 0]]);
   });
 
   it("fails work that waits on the peer in the policy's words when the link is turned off", async () => {

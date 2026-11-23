@@ -143,6 +143,8 @@ export interface BotLinkDeps {
     store(files: ReadonlyArray<{ path: string; name: string }>): Promise<PassedFile[]>;
     /** Keeps them on the assignment, so they reach the receiving conversation's inbox as any passed file does. */
     crossed(assignmentId: string, way: FileWay, from: { botId: string; name: string }, files: readonly PassedFile[]): void;
+    /** On a guest link: removes files stored for a hand-off that did not start. A stored file that other messages use stays. */
+    discard?(files: readonly PassedFile[]): void;
   };
   /** The teammate's result in the requester's conversation. */
   resultRow(parent: HandoffView, child: HandoffView, name: string): void;
@@ -238,6 +240,8 @@ export function createBotLink(deps: BotLinkDeps) {
   let toldBots = "";
   /** Hand-offs whose files are being taken in, and results whose files are being sent: one at a time each. */
   const accepting = new Set<string>(), resultsGoing = new Set<string>();
+  /** Guest hand-offs the policy admitted while their files come: id, and the peer it is from. */
+  const fetching = new Map<string, string>();
   /** What waits to be tried again because a file could not cross yet, by what it is for. */
   const retries = new Map<string, { timer: NodeJS.Timeout; delay: number }>();
   let transfer: FileTransfer | null = null;
@@ -260,7 +264,10 @@ export function createBotLink(deps: BotLinkDeps) {
   const ownsRoot = (rootId: string): boolean => { const work = state?.work[handoffOfRoot(rootId)]; return Boolean(work?.child) && work?.root === rootId; };
   /** Work from a peer whose turn here has not ended: a notice has its result at once, but its turn goes on. */
   const atWork = (work: Work) => !work.done || (work.child !== undefined && !ENDED.has(deps.coordinator().node(work.child)?.status ?? "completed"));
-  const workFor = (peer: string, frame: HandoffFrame): Work => ({ peer, root: linkRoot(frame.id), from: frame.from.name, at: now(), ...(policy ? { to: frame.to, by: frame.from.botId } : {}) });
+  /** The peer's hand-offs that are not over here: at work, or admitted while their files come. */
+  const openOf = (peer: string) => Object.values(state?.work ?? {}).filter((one) => one.peer === peer && atWork(one)).length + [...fetching.values()].filter((one) => one === peer).length;
+  const workFor = (peer: string, frame: HandoffFrame, person = false): Work => ({ peer, root: linkRoot(frame.id), from: frame.from.name,
+    ...(person && frame.person && !policy ? { person: frame.person } : {}), at: now(), ...(policy ? { to: frame.to, by: frame.from.botId } : {}) });
   const crossing = (peer: string, frame: HandoffFrame) => ({ peer, bot: frame.to, far: frame.from.botId, id: frame.id });
   const directory = (): LinkedBot[] => deps.bots().filter((bot) => !bot.hidden && !bot.movedTo && /^[\w-]{1,128}$/u.test(bot.id) && offered(bot)).map((bot) => ({
     id: bot.id, name: bot.name, ...(bot.title ? { title: bot.title.slice(0, 200) } : {}), ...(bot.description ? { description: bot.description.slice(0, 400) } : {}),
@@ -496,7 +503,12 @@ export function createBotLink(deps: BotLinkDeps) {
     if (!state) return;
     const known = state.work[frame.id];
     if (known) { if (known.peer === peer && known.done) dispatchResult(frame.id); return; }
-    if (!frame.files?.length || !deps.files || (policy && !offered(deps.bot(frame.to)))) { start(peer, frame, []); return; }
+    if (!frame.files?.length || !deps.files) { start(peer, frame, []); return; }
+    if (policy && !fetching.has(frame.id)) {
+      const refused = gate(peer, frame);
+      if (refused) return refuse(frame, workFor(peer, frame, true), refused);
+      fetching.set(frame.id, peer);
+    }
     if (accepting.has(frame.id)) return;
     accepting.add(frame.id);
     fetched(peer, frame.id, "sent", frame.files).then((files) => { settled(`in:${frame.id}`); start(peer, frame, files); }, (error) => {
@@ -504,27 +516,39 @@ export function createBotLink(deps: BotLinkDeps) {
       // Not got yet: tried again on a timer, and when the requester sends the hand-off again with the next session.
       if (!isGone(error)) { log(`bot link: the files of ${frame.id} are not here yet (${said(error)})`); retryLater(`in:${frame.id}`, () => accept(peer, frame)); return; }
       settled(`in:${frame.id}`);
-      state.work[frame.id] = workFor(peer, frame);
-      audit({ kind: "refused", reason: "files", ...crossing(peer, frame) });
-      recordResult(frame.id, { ok: false, text: peerText(`The files sent with this could not be taken in (${said(error)}), so the work was not started.`), outcome: "refused" });
+      refuse(frame, workFor(peer, frame), [peerText(`The files sent with this could not be taken in (${said(error)}), so the work was not started.`), "files"]);
     }).finally(() => { accepting.delete(frame.id); });
   }
 
+  /** Why a hand-off from `peer` may not start, or null. `admitted`: the policy let it in before its files came. */
+  function gate(peer: string, frame: HandoffFrame, admitted = false): [string, LinkRefusal] | null {
+    const bot = deps.bot(frame.to);
+    if (!offered(bot)) return [NOT_HERE, "bot"];
+    const refusal = deps.refusal?.(bot);
+    if (refusal) return [peerText(refusal), "unavailable"];
+    // Security invariant: a guest peer chooses the hand-off id, so a root it names that already exists belongs to other work.
+    if (policy && deps.coordinator().node(linkRoot(frame.id))) return [NOT_HERE, "root"];
+    const limited = admitted ? null : policy?.admit(peer, openOf(peer));
+    return limited ? [limited, "limit"] : null;
+  }
+  /** Ends a hand-off from a peer that did not start. On a guest link, its files go, crossed or stored. */
+  function refuse(frame: HandoffFrame, work: Work, [text, reason]: [string, LinkRefusal], files: readonly PassedFile[] = []): void {
+    audit({ kind: "refused", reason, ...crossing(work.peer, frame) });
+    fetching.delete(frame.id);
+    if (policy) { unspool(work.peer, frame.id); if (files.length) deps.files?.discard?.(files); }
+    state!.work[frame.id] = work;
+    recordResult(frame.id, { ok: false, text, outcome: "refused" });
+  }
+
   function start(peer: string, frame: HandoffFrame, files: readonly PassedFile[]): void {
+    const admitted = fetching.delete(frame.id);
     if (!state || state.work[frame.id]) return;
     const root = linkRoot(frame.id);
     const address = { botId: linkedId(peer, frame.from.botId), threadId: root };
-    const work: Work = { ...workFor(peer, frame), ...(frame.person && !policy ? { person: frame.person } : {}) };
-    const refuse = (text: string, reason: LinkRefusal) => { audit({ kind: "refused", reason, ...crossing(peer, frame) }); state!.work[frame.id] = work; recordResult(frame.id, { ok: false, text, outcome: "refused" }); };
-    const bot = deps.bot(frame.to);
-    if (!offered(bot)) return refuse(NOT_HERE, "bot");
-    const refusal = deps.refusal?.(bot);
-    if (refusal) return refuse(peerText(refusal), "unavailable");
-    const coordinator = deps.coordinator();
-    // Security invariant: a guest peer chooses the hand-off id, so a root it names that already exists belongs to other work.
-    if (policy && coordinator.node(root)) return refuse(NOT_HERE, "root");
-    const limited = policy?.admit(peer, Object.values(state.work).filter((one) => one.peer === peer && atWork(one)).length);
-    if (limited) return refuse(limited, "limit");
+    const work = workFor(peer, frame, true);
+    const refused = gate(peer, frame, admitted);
+    if (refused) return refuse(frame, work, refused, files);
+    const bot = deps.bot(frame.to)!, coordinator = deps.coordinator();
     try {
       coordinator.beginTurn({ id: root, address, brief: frame.text, level: deps.level(bot), opener: {
         requester: { kind: "external_runtime", runId: root, botId: address.botId, threadId: address.threadId },
@@ -551,7 +575,7 @@ export function createBotLink(deps: BotLinkDeps) {
     } catch (error) {
       const said = error instanceof Error ? error.message : String(error);
       try { coordinator.endTurn(root, { ok: false, text: said }); } catch { /* the root never began */ }
-      refuse(peerText(said), "error");
+      refuse(frame, work, [peerText(said), "error"], work.child ? [] : files);
     }
   }
 
@@ -687,6 +711,7 @@ export function createBotLink(deps: BotLinkDeps) {
     live.clear();
     for (const retry of retries.values()) clearTimeout(retry.timer);
     retries.clear();
+    fetching.clear();
     rmSync(spoolRoot, { recursive: true, force: true });
     failPending(null, `The link between this place and ${words.otherSide} was turned off before the work came back.`);
     for (const peer of peers) for (const listener of outboundListeners) listener(peer);
