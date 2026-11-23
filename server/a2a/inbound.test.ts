@@ -622,6 +622,7 @@ describe("a request that starts nothing (lesson 6)", () => {
     expect(res.body.error.code).toBe(-32603);
     expect(received).toHaveLength(1);
     expect(tasks.get(frameId("abcd1234", "m1"))).toBeNull();
+    tasks.flush();
     expect(createTaskIndex(dir, Date.now).get(frameId("abcd1234", "m1"))).toBeNull();
   });
 });
