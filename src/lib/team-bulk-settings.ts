@@ -2,7 +2,7 @@
 import { t } from "@/lib/i18n";
 import { threadApprovalModes, type Bot, type InstanceInfo } from "@/state/store";
 import type { BotUpdatePatch } from "@/state/bot-patch-queue";
-import { approvalModeFor, supportsApprovalMode, type ApprovalMode } from "../../shared/approval-mode";
+import { approvalModeFor, modelSwitchNeedsAsk, supportsApprovalMode, type ApprovalMode } from "../../shared/approval-mode";
 import { atLeast, sameAccess, type BotAccess, type BotAccessLevel, type GrantedLevel } from "../../shared/bot-access";
 import { botOwner } from "../../shared/bot-owner";
 import { accessOfBot, withPerson } from "@/components/bot-access/access";
@@ -111,6 +111,9 @@ export function planTeamChange(bots: readonly Bot[], instances: readonly Instanc
     const model = change.model ?? current.model;
     const offered = model === target.models.default || target.models.options.some((option) => option.id === model && !option.orgBlocked && !option.needsCliUpdate);
     if (!offered) return { bot, status: "skip", reason: t("teamSettings.skip.modelUnsupported", { engine: targetName, model }) };
+    if (moving && [approvalModeFor(bot), ...threadApprovalModes(bot)].some((mode) => modelSwitchNeedsAsk(mode, engine?.driverKind, target.driverKind))) {
+      return { bot, status: "skip", reason: t("teamSettings.skip.approvalMode", { engine: targetName }) };
+    }
     const next: ModelSelection = { instanceId: target.instanceId, model };
     if (!moving && current.variant && model === current.model) next.variant = current.variant;
     if (change.effort === undefined) {

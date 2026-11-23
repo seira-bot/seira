@@ -253,6 +253,19 @@ describe("changing the model of every bot", () => {
     expect(plan.map((row) => "patch" in row ? Object.keys(row.patch.modelSelection!) : [])).toEqual([["instanceId", "model"], ["instanceId", "model"]]);
   });
 
+  it("skips a bot moving to an engine that lacks its approval level, with the reason", () => {
+    const moving = [
+      bot("edits", { approvalMode: "edits" }),
+      bot("ask", { approvalMode: "ask" }),
+      bot("full", { approvalMode: "full" }),
+      bot("thread", { approvalMode: "ask", tasks: [{ threadId: "thread-new", title: "New thread", createdAt: 2, approvalMode: "edits" }] }),
+    ];
+    const plan = planTeamChange(moving, instances, { kind: "model", instanceId: "codex", model: "gpt-5" });
+    expect(plan.map((row) => row.status)).toEqual(["skip", "apply", "apply", "skip"]);
+    expect(plan[0]).toMatchObject({ reason: "its approval level isn't supported by Codex. Set it to Ask first, then try again" });
+    expect(planTeamChange([moving[0]!], instances, { kind: "model", instanceId: "claude", model: "sonnet" })[0]).toMatchObject({ status: "apply" });
+  });
+
   it("skips a bot with the reason: model not offered, engine missing or off, busy; and calls a bot already there set", () => {
     const off = [...instances, engine("off", "codex", ["x"], { snapshot: { state: "unavailable", reason: "off" } })];
     const blocked = instances.map((instance) => instance.instanceId === "codex"
