@@ -420,7 +420,7 @@ export function startPhoneRelay(options: PhoneRelayOptions): PhoneRelay | null {
   tokens.start();
 
   return {
-    status: () => ({ relay: relay?.status ?? "off", node: relay?.node ?? null, grant: grantState, ...(grantState === "tunnel" && tunnelReason ? { reason: tunnelReason } : {}), phones: devices.records().length, maxPhones: MAX_RELAY_PHONES }),
+    status: () => ({ relay: relay?.status ?? "off", node: relay?.node ?? null, grant: grantState, ...(grantState === "tunnel" && tunnelReason ? { reason: tunnelReason } : {}), phones: phoneRecords().length, maxPhones: MAX_RELAY_PHONES }),
     invite(credential, name, publicOrigin) {
       const current = descriptor();
       if (!current?.h || !current.r) return null;
