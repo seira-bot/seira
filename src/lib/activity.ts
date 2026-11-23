@@ -54,6 +54,9 @@ export function whoLabel(who: string): string {
   if (who === "Local service") return t("activity.actor.worker");
   if (who === "Command line") return t("activity.actor.cli");
   if (who === "Another Seira") return t("activity.actor.linkedServerUnnamed");
+  if (who === "An A2A agent") return t("activity.actor.linkedA2aUnnamed");
+  const agent = /^(.+) \(A2A agent\)$/u.exec(who);
+  if (agent) return t("activity.actor.linkedA2a", { name: agent[1]! });
   const linked = /^(.+) \(another Seira\)$/u.exec(who);
   if (linked) return t("activity.actor.linkedServer", { name: linked[1]! });
   return who || "—";

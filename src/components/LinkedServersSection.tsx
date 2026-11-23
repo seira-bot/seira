@@ -7,6 +7,7 @@ import { api, useStore } from "@/state/store";
 import { Select } from "./Select";
 import { SettingRow, SettingsEmptyRow, SettingsGroup, SettingsRows } from "./SettingsPrimitives";
 import { SettingsDialog } from "./settings/SettingsDialog";
+import { A2aForm, AddressList, IssuedBox, NewTokenDialog, isA2a, type A2aIssued, type A2aLink } from "./LinkedA2aForm";
 
 export const APPROVAL_CAPS = ["ask", "edits", "auto"] as const;
 export type ApprovalCap = typeof APPROVAL_CAPS[number];
@@ -80,7 +81,7 @@ function JoinBox({ onJoined, onCancel }: { onJoined: () => Promise<void>; onCanc
   );
 }
 
-function LinkEditor({ link, mine, onSaved, onCancel }: { link: LinkedServer; mine: Array<{ id: string; name: string }>; onSaved: () => Promise<void>; onCancel: () => void }) {
+function LinkEditor({ link, mine, onSaved, onCancel }: { link: Pick<LinkedServer, "id" | "exposed" | "cap">; mine: Array<{ id: string; name: string }>; onSaved: () => Promise<void>; onCancel: () => void }) {
   const known = new Set(mine.map((bot) => bot.id));
   const [exposed, setExposed] = useState<string[]>(link.exposed.filter((id) => known.has(id)));
   const [cap, setCap] = useState<ApprovalCap>(link.cap);
@@ -131,7 +132,7 @@ function LinkEditor({ link, mine, onSaved, onCancel }: { link: LinkedServer; min
   );
 }
 
-function RemoveDialog({ link, onRemoved, onClose }: { link: LinkedServer; onRemoved: () => Promise<void>; onClose: () => void }) {
+function RemoveDialog({ link, onRemoved, onClose }: { link: Pick<LinkedServer, "id" | "name">; onRemoved: () => Promise<void>; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const remove = async () => {
@@ -160,14 +161,17 @@ function RemoveDialog({ link, onRemoved, onClose }: { link: LinkedServer; onRemo
 export function LinkedServersSection() {
   const { state } = useStore();
   const mine = state.bots.map((bot) => ({ id: bot.id, name: bot.name }));
-  const [links, setLinks] = useState<LinkedServer[] | null>(null);
+  const [links, setLinks] = useState<Array<LinkedServer | A2aLink> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
   const [joining, setJoining] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<LinkedServer | null>(null);
+  const [removing, setRemoving] = useState<LinkedServer | A2aLink | null>(null);
+  const [addingA2a, setAddingA2a] = useState(false);
+  const [issued, setIssued] = useState<A2aIssued | null>(null);
+  const [renewing, setRenewing] = useState<A2aLink | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -184,6 +188,7 @@ export function LinkedServersSection() {
     setInviting(true);
     setInviteError(null);
     setJoining(false);
+    setAddingA2a(false);
     try {
       const made = await api("/api/linked-servers/invites", { method: "POST", body: "{}" });
       setInvite({ text: String(made.invite), expiresAt: Number(made.expiresAt) });
@@ -195,21 +200,26 @@ export function LinkedServersSection() {
     }
   };
 
-  const stateLine = (link: LinkedServer) => t(`linked.state.${link.state}` as LocaleKey);
-  const exposedLine = (link: LinkedServer) => {
+  const nameOf = (id: string) => mine.find((bot) => bot.id === id)?.name ?? id;
+  const stateLine = (link: LinkedServer | A2aLink) => t((isA2a(link) ? `linked.a2a.state.${link.state}` : `linked.state.${link.state}`) as LocaleKey);
+  const exposedLine = (link: LinkedServer | A2aLink) => {
     const names = link.exposed.map((id) => mine.find((bot) => bot.id === id)?.name).filter((name): name is string => Boolean(name));
-    return names.length ? t("linked.exposed", { bots: names.join(", ") }) : t("linked.exposed.none");
+    const a2a = isA2a(link);
+    return names.length ? t(a2a ? "linked.a2a.exposed" : "linked.exposed", { bots: names.join(", ") }) : t(a2a ? "linked.a2a.exposed.none" : "linked.exposed.none");
   };
 
   return (
     <SettingsGroup label={t("linked.group")} block="links" description={t("linked.intro")}
       actions={<>
         <button type="button" disabled={inviting} onClick={() => void makeInvite()} className="ui-button">{t("linked.makeInvite")}</button>
-        <button type="button" onClick={() => { setJoining(!joining); setInvite(null); setInviteError(null); }} aria-expanded={joining} className="ui-button">{t("linked.join")}</button>
+        <button type="button" onClick={() => { setJoining(!joining); setInvite(null); setInviteError(null); setAddingA2a(false); }} aria-expanded={joining} className="ui-button">{t("linked.join")}</button>
+        <button type="button" onClick={() => { setAddingA2a(!addingA2a); setJoining(false); setInvite(null); setInviteError(null); setIssued(null); }} aria-expanded={addingA2a} className="ui-button">{t("linked.a2a.add")}</button>
       </>}>
       {invite && <InviteBox invite={invite} onDone={() => setInvite(null)} />}
       {inviteError && <p role="alert" className="px-4 text-[12px] leading-4 text-danger">{inviteError}</p>}
       {joining && <JoinBox onCancel={() => setJoining(false)} onJoined={async () => { setJoining(false); await load(); }} />}
+      {addingA2a && <A2aForm onCancel={() => setAddingA2a(false)} onAdded={async (made) => { setAddingA2a(false); setIssued(made); await load(); }} />}
+      {issued && <IssuedBox issued={issued} nameOf={nameOf} onDone={() => setIssued(null)} />}
       {loadError && (
         <p role="alert" className="flex items-center gap-2 px-4 text-[12px] leading-4 text-danger">
           {loadError}
@@ -223,7 +233,16 @@ export function LinkedServersSection() {
             <Fragment key={link.id}>
               <SettingRow title={link.name} subtitle={stateLine(link)}
                 message={<>
+                  {isA2a(link) && <span data-linked-kind="" className="mb-0.5 block font-medium">{t("linked.a2a.kind")}</span>}
+                  {isA2a(link) && link.problem && <span data-linked-problem="" className="mb-0.5 block text-danger">{link.problem}</span>}
                   <span data-linked-summary="">{exposedLine(link)} · {t("linked.cap.line", { cap: t(`linked.cap.${link.cap}` as LocaleKey) })}</span>
+                  {isA2a(link) && link.outbound && <span data-linked-outbound="" className="mt-0.5 block break-all">{t("linked.a2a.outbound", { url: link.outbound.url })}</span>}
+                  {isA2a(link) && link.inbound && (link.inbound.urls.length > 0 ? (
+                    <details data-linked-inbound="" className="mt-1">
+                      <summary className="cursor-pointer">{t("linked.a2a.addresses", { count: String(link.inbound.urls.length) })}</summary>
+                      <div className="mt-1"><AddressList urls={link.inbound.urls} nameOf={nameOf} /></div>
+                    </details>
+                  ) : <span data-linked-inbound="" className="mt-0.5 block">{t("linked.a2a.noAddresses")}</span>)}
                   {link.bots.length > 0 && (
                     <details data-linked-theirs="" className="mt-1">
                       <summary className="cursor-pointer">{t("linked.theirs", { count: String(link.bots.length) })}</summary>
@@ -233,6 +252,10 @@ export function LinkedServersSection() {
                 </>}>
                 <button type="button" disabled={link.state === "ended"} title={link.state === "ended" ? t("linked.state.ended") : undefined}
                   onClick={() => setEditing(editing === link.id ? null : link.id)} aria-expanded={editing === link.id} className="ui-button">{t("linked.edit")}</button>
+                {isA2a(link) && link.inbound && (
+                  <button type="button" disabled={link.state === "ended"} title={link.state === "ended" ? t("linked.a2a.state.ended") : undefined}
+                    onClick={() => setRenewing(link)} className="ui-button">{t("linked.a2a.newToken")}</button>
+                )}
                 <button type="button" onClick={() => setRemoving(link)} className="ui-button">{t("linked.remove")}</button>
               </SettingRow>
               {editing === link.id && <LinkEditor link={link} mine={mine} onCancel={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
@@ -240,6 +263,8 @@ export function LinkedServersSection() {
           ))}
         </SettingsRows>
       )}
+      {renewing && <NewTokenDialog link={renewing} onClose={() => setRenewing(null)}
+        onIssued={async (made) => { setRenewing(null); setAddingA2a(false); setIssued(made); await load(); }} />}
       {removing && <RemoveDialog link={removing} onClose={() => setRemoving(null)} onRemoved={async () => { setRemoving(null); setEditing(null); await load(); }} />}
     </SettingsGroup>
   );

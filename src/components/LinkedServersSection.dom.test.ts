@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setLocale } from "@/lib/i18n";
 import type { LinkedServer } from "./LinkedServersSection";
+import type { A2aLink } from "./LinkedA2aForm";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -13,6 +14,7 @@ const fixture = vi.hoisted(() => ({
   calls: [] as Array<{ path: string; method: string; body?: unknown }>,
   links: [] as unknown[],
   refuse: new Map<string, string>(),
+  answers: new Map<string, unknown>(),
   loadFails: false,
 }));
 
@@ -27,6 +29,8 @@ vi.mock("@/state/store", () => ({
       if (fixture.loadFails) throw new Error("");
       return { servers: fixture.links };
     }
+    const answered = fixture.answers.get(`${method} ${path}`);
+    if (answered) return answered;
     if (path === "/api/linked-servers/invites") return { invite: "seira-link:abc123", expiresAt: Date.now() + 15 * 60_000 };
     return { ok: true };
   },
@@ -39,13 +43,20 @@ const link = (over: Partial<LinkedServer> = {}): LinkedServer => ({
   bots: [{ id: "far1", name: "Planner" }, { id: "far2", name: "Painter" }], ...over,
 });
 
+const agent = (over: Partial<A2aLink> = {}): A2aLink => ({
+  id: "a2a0123456789abc", kind: "a2a", name: "Planner Agent", state: "online", exposed: ["ops"], cap: "ask",
+  bots: [{ id: "far1", name: "Roadmap" }], createdAt: 1, outbound: null,
+  inbound: { urls: [{ bot: "ops", url: "https://seira.example.test/a2a/ops" }] }, problem: null, ...over,
+});
+
 let host: HTMLDivElement;
 let root: Root;
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 const click = async (node: Element | undefined) => { await act(async () => { (node as HTMLElement).click(); }); await settle(); };
-const type = async (field: HTMLTextAreaElement, value: string) => {
+const type = async (field: HTMLTextAreaElement | HTMLInputElement, value: string) => {
+  const proto = field instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(field, value);
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
@@ -60,7 +71,7 @@ const button = (label: string): HTMLButtonElement | undefined =>
 const writes = (): Call[] => fixture.calls.filter((call) => call.method !== "GET");
 const text = () => document.body.textContent ?? "";
 
-async function open(links: LinkedServer[] = [link()]) {
+async function open(links: Array<LinkedServer | A2aLink> = [link()]) {
   fixture.links = links;
   await act(async () => { root.render(createElement(LinkedServersSection)); });
   await settle();
@@ -71,6 +82,7 @@ beforeEach(() => {
   fixture.calls = [];
   fixture.links = [];
   fixture.refuse = new Map();
+  fixture.answers = new Map();
   fixture.loadFails = false;
   host = document.createElement("div");
   document.body.append(host);
@@ -258,5 +270,167 @@ describe("removing a link", () => {
     await click(button("Remove…"));
     await click(button("Remove link"));
     expect(document.body.querySelector("[role=dialog] [role=alert]")!.textContent).toBe("That link is not here.");
+  });
+});
+
+describe("adding an A2A agent", () => {
+  const form = () => host.querySelector<HTMLFormElement>("[data-linked-a2a-form]")!;
+  const inputs = () => [...form().querySelectorAll<HTMLInputElement>("input")];
+  const fill = async (name: string) => { await type(inputs()[0]!, name); };
+
+  it("opens a form that cannot be sent without a name, a way to connect and an address, and says why", async () => {
+    await open([]);
+    await click(button("Add an A2A agent"));
+    expect(button("Add agent")!.disabled).toBe(true);
+    expect(host.querySelector("[data-linked-a2a-why]")!.textContent).toBe("Enter a name for the agent.");
+    await fill("Planner Agent");
+    expect(host.querySelector("[data-linked-a2a-why]")!.textContent).toBe("Enter the address of the agent.");
+    await click(inputs()[1]);
+    expect(button("Add agent")!.disabled).toBe(true);
+    expect(button("Add agent")!.title).toBe("Turn on at least one way to connect.");
+    expect(host.querySelector("[data-linked-a2a-why]")!.textContent).toBe("Turn on at least one way to connect.");
+    await click(inputs()[1]);
+    await click(inputs().find((box) => box.type === "checkbox" && box !== inputs()[1])!);
+    expect(button("Add agent")!.disabled).toBe(true);
+    expect(writes()).toEqual([]);
+  });
+
+  it("sends only the fields that the server accepts, for an agent that this Seira calls", async () => {
+    await open([]);
+    await click(button("Add an A2A agent"));
+    await fill("  Planner Agent ");
+    const [, , address, token] = inputs();
+    await type(address!, " https://agent.example.test/a2a ");
+    await type(token!, "far-secret");
+    fixture.links = [agent({ inbound: null, outbound: { url: "https://agent.example.test/a2a", hasToken: true } })];
+    fixture.answers.set("POST /api/linked-servers/a2a", { server: fixture.links[0], urls: [] });
+    await click(button("Add agent"));
+    expect(writes()).toEqual([{ path: "/api/linked-servers/a2a", method: "POST", body: { name: "Planner Agent", inbound: false, url: "https://agent.example.test/a2a", token: "far-secret" } }]);
+    expect(host.querySelector("[data-linked-a2a-form]")).toBeNull();
+    expect(host.querySelector("[data-linked-a2a-issued]")).toBeNull();
+    expect(text()).toContain("This Seira calls the agent at https://agent.example.test/a2a");
+  });
+
+  it("leaves out the address and the token when this Seira does not call the agent", async () => {
+    await open([]);
+    await click(button("Add an A2A agent"));
+    await fill("Planner Agent");
+    await type(inputs()[2]!, "https://agent.example.test/a2a");
+    await click(inputs()[1]);
+    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    fixture.answers.set("POST /api/linked-servers/a2a", { server: agent(), token: "t0ken", urls: [] });
+    await click(button("Add agent"));
+    expect(writes()).toEqual([{ path: "/api/linked-servers/a2a", method: "POST", body: { name: "Planner Agent", inbound: true } }]);
+  });
+
+  it("shows the token once with its addresses, and drops it after Done", async () => {
+    await open([]);
+    await click(button("Add an A2A agent"));
+    await fill("Planner Agent");
+    await click(inputs()[1]);
+    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    fixture.answers.set("POST /api/linked-servers/a2a", { server: agent(), token: "t0ken-value", urls: [{ bot: "ops", url: "https://seira.example.test/a2a/ops" }] });
+    await click(button("Add agent"));
+    const box = host.querySelector("[data-linked-a2a-issued]")!;
+    expect(box.querySelector("[data-linked-a2a-token]")!.textContent).toBe("t0ken-value");
+    expect(box.textContent).toContain("Copy this token now. It shows only once, and you cannot see it again.");
+    expect(box.textContent).toContain("Ops");
+    expect(box.textContent).toContain("https://seira.example.test/a2a/ops");
+    expect(box.querySelectorAll("button").length).toBe(3);
+    await click(button("Done"));
+    expect(host.querySelector("[data-linked-a2a-issued]")).toBeNull();
+    expect(text()).not.toContain("t0ken-value");
+  });
+
+  it("tells the admin to choose bots when no address exists yet", async () => {
+    await open([]);
+    await click(button("Add an A2A agent"));
+    await fill("Planner Agent");
+    await click(inputs()[1]);
+    await click(inputs().find((box) => box.type === "checkbox" && !box.checked)!);
+    fixture.answers.set("POST /api/linked-servers/a2a", { server: agent({ exposed: [], inbound: { urls: [] } }), token: "t0ken", urls: [] });
+    await click(button("Add agent"));
+    expect(host.querySelector("[data-linked-a2a-issued]")!.textContent).toContain("Choose the bots that the agent may use. Each chosen bot then shows its address here.");
+  });
+
+  it("keeps the form and shows the server's sentence when the agent is refused", async () => {
+    fixture.refuse.set("POST /api/linked-servers/a2a", "Check the name, the address and the token of the A2A agent.");
+    await open([]);
+    await click(button("Add an A2A agent"));
+    await fill("Planner Agent");
+    await type(inputs()[2]!, "http://agent.example.test");
+    await click(button("Add agent"));
+    expect(host.querySelector("[data-linked-a2a-form] [role=alert]")!.textContent).toBe("Check the name, the address and the token of the A2A agent.");
+    expect(inputs()[0]!.value).toBe("Planner Agent");
+    expect(button("Add agent")!.disabled).toBe(false);
+  });
+});
+
+describe("an A2A agent in the list", () => {
+  it("shows its kind, its problem, the bots it may use, the cap and its addresses", async () => {
+    await open([agent({ state: "offline", problem: "The A2A agent could not be reached. Check the address.", outbound: { url: "https://agent.example.test/a2a", hasToken: false } })]);
+    expect(host.querySelector("[data-linked-kind]")!.textContent).toBe("A2A agent");
+    expect(host.querySelector("[data-linked-problem]")!.textContent).toBe("The A2A agent could not be reached. Check the address.");
+    expect(text()).toContain("This Seira can’t reach the agent right now");
+    expect(text()).toContain("The agent can use: Ops");
+    expect(text()).toContain("Most it may do without asking: Ask first");
+    expect(text()).toContain("This Seira calls the agent at https://agent.example.test/a2a");
+    const addresses = host.querySelector("[data-linked-inbound]")!;
+    expect(addresses.tagName).toBe("DETAILS");
+    expect(addresses.querySelector("summary")!.textContent).toBe("Addresses for the agent: 1");
+    expect(addresses.textContent).toContain("https://seira.example.test/a2a/ops");
+    expect(button("New token…")).toBeDefined();
+  });
+
+  it("keeps a Seira link free of the agent parts", async () => {
+    await open([link()]);
+    expect(host.querySelector("[data-linked-kind]")).toBeNull();
+    expect(button("New token…")).toBeUndefined();
+  });
+
+  it("offers no new token for an agent that this Seira only calls", async () => {
+    await open([agent({ inbound: null, outbound: { url: "https://agent.example.test/a2a", hasToken: true } })]);
+    expect(button("New token…")).toBeUndefined();
+  });
+
+  it("changes the bots and the limit of an agent in the same editor", async () => {
+    await open([agent()]);
+    await click(button("Change"));
+    await click(host.querySelectorAll<HTMLInputElement>("[data-linked-edit] input[type=checkbox]")[1]);
+    await click(button("Save"));
+    expect(writes()).toEqual([{ path: "/api/linked-servers/a2a0123456789abc", method: "PATCH", body: { exposed: ["ops", "scribe"], cap: "ask" } }]);
+  });
+
+  it("makes a new token only after the confirm, and shows it once", async () => {
+    await open([agent()]);
+    await click(button("New token…"));
+    const dialog = document.body.querySelector("[role=dialog]")!;
+    expect(dialog.textContent).toContain("Make a new token for Planner Agent?");
+    expect(dialog.textContent).toContain("The old token stops working at once.");
+    expect(writes()).toEqual([]);
+    fixture.answers.set("POST /api/linked-servers/a2a0123456789abc/token", { server: agent(), token: "fresh-token", urls: [{ bot: "ops", url: "https://seira.example.test/a2a/ops" }] });
+    await click(button("Make new token"));
+    expect(writes()).toEqual([{ path: "/api/linked-servers/a2a0123456789abc/token", method: "POST", body: {} }]);
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
+    expect(host.querySelector("[data-linked-a2a-token]")!.textContent).toBe("fresh-token");
+    await click(button("Done"));
+    expect(text()).not.toContain("fresh-token");
+  });
+
+  it("closes the new-token dialog on Cancel without a request", async () => {
+    await open([agent()]);
+    await click(button("New token…"));
+    await click(document.body.querySelector("[role=dialog] button[data-autofocus]")!);
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
+    expect(writes()).toEqual([]);
+  });
+
+  it("shows the server's sentence in the dialog when the new token is refused", async () => {
+    fixture.refuse.set("POST /api/linked-servers/a2a0123456789abc/token", "That link is not here.");
+    await open([agent()]);
+    await click(button("New token…"));
+    await click(button("Make new token"));
+    expect(document.body.querySelector("[role=dialog] [role=alert]")!.textContent).toBe("That link is not here.");
+    expect(host.querySelector("[data-linked-a2a-issued]")).toBeNull();
   });
 });

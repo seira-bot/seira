@@ -54,11 +54,15 @@ describe("linked places in the activity list", () => {
     expect(say("linked-server.remove")).toBe("Removed a link: Studio Seira");
     expect(say("linked-server.handoff")).toBe("Passed work over a link: Studio Seira");
     expect(say("linked-server.refused")).toBe("Refused work from a link: Studio Seira");
+    expect(say("linked-server.a2a-add")).toBe("Added an A2A agent: Studio Seira");
+    expect(say("linked-server.token-rotate")).toBe("Made a new token for an A2A agent: Studio Seira");
   });
 
   it("names the other side as the actor of its own hand-offs", () => {
     expect(whoLabel("Studio Seira (another Seira)")).toBe("Studio Seira (another Seira)");
     expect(whoLabel("Another Seira")).toBe("Another Seira");
+    expect(whoLabel("Planner (A2A agent)")).toBe("Planner (A2A agent)");
+    expect(whoLabel("An A2A agent")).toBe("An A2A agent");
     expect(whoLabel("boss@example.test")).toBe("boss@example.test");
   });
 
