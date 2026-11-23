@@ -2282,7 +2282,7 @@ ipcMain.handle("desktop:open-external", localOnly("desktop:open-external", async
 ipcMain.handle("desktop:open-sign-in-page", signInPageOpener({ open: (url, options) => options.clean ? openCleanSignIn({ BrowserWindow, session }, url) : shell.openExternal(url),
   allowed: event => senderIsLocal(event) || homeWindow.homePage(event) || workspaceSenderAllowed(event, mainWindow?.webContents, environmentsState, rendererOrigin()) }));
 
-// The Boat VNC viewer must be a top-level page for its token exchange.
+// The remote desktop viewer opens as a top-level page, not inside the app window.
 ipcMain.handle("desktop-viewer:open", localOnly("desktop-viewer:open", (event, rawUrl, title, contextId) => {
   const owner = BrowserWindow.fromWebContents(event.sender);
   return openDesktopViewer(owner, rawUrl, title, contextId);

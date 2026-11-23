@@ -257,7 +257,7 @@ The log stays on this machine: workspace backups leave it out.
   **Included with your Cloud plan** to make them decide first, even while a key
   of your own is saved. Otherwise they come before an OpenRouter key, unless
   OpenRouter is picked and its key is usable. See
-  [cloud-pro.md](cloud-pro.md), "Included Boat computers, voice and decisions".
+  [cloud-pro.md](cloud-pro.md), "Included voice and decisions".
 
 The keys are write-only: `GET /api/config` reports only whether one is saved,
 the provider and model, the Workers AI account ID (not a secret), and which

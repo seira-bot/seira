@@ -85,7 +85,7 @@ export interface BotPatchRouteDeps {
   revokeInternalCapabilitiesForThread(threadId: string): void;
   runningTurnInstance(bot: BotRecord | null | undefined, threadId: string): ReturnType<ProviderRegistry["get"]>;
   closeOpenApprovals(threadId: string): void;
-  assertTeamComputerChangeIdle(before: BotRecord, after: BotRecord): void;
+  assertComputerChangeIdle(before: BotRecord, after: BotRecord): void;
   forgetTemporaryBrowser(botId: string): Promise<void>;
   /** What this session may do with the bot: off a Team Cloud a member chats with every bot they see. */
   levelOf(auth: RequestAuth, botId: string): "none" | "view" | "chat" | "edit";
@@ -109,7 +109,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
     hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
     broadcast, wireBot, publicGroupState, audienceChanged, storedAvatarExists, requestedTaskBot, threadBusy, activeGroupTurnForBot,
     checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
-    revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertTeamComputerChangeIdle, forgetTemporaryBrowser,
+    revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser,
   } = deps;
   const pinnedClientThread = pinnedClientThreadGuard(store);
   return async ({ req, res, path, method, auth, json, readBody }) => {
@@ -224,9 +224,10 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           else section = trimmed;
         }
       }
-      for (const key of ["unread", "cloudBackend", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
+      for (const key of ["unread", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
+      if (body.cloudBackend !== undefined) patch.cloudBackend = body.cloudBackend === "vps" ? "vps" : undefined;
       // null clears the default-bot mark, demoting the bot to a regular (deletable) one.
       if (body.defaultBot === null && existingBot?.defaultBot) patch.defaultBot = undefined;
       const computerSpecified = Object.prototype.hasOwnProperty.call(body, "computer");
@@ -247,7 +248,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         }
       }
       // Cloud is the person's own VPS: a bot that works on Cloud carries no other backend, whatever client asked.
-      if (requestedComputer === "cloud" && (patch.cloudBackend ?? existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
+      if (requestedComputer === "cloud" && (Object.hasOwn(patch, "cloudBackend") ? patch.cloudBackend : existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
       if (normalizedSelection) patch.modelSelection = normalizedSelection;
       // null/"" clears; the id is not checked against the transcript.
       if (body.pinnedMessageId !== undefined) {
@@ -735,14 +736,14 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       }
       if (Array.isArray(patch.alwaysAllow)) dropRemovedGrants(store, deps.turnBots?.values() ?? [], m[1], patch.alwaysAllow);
       if (profile.patch.soul !== undefined) {
-        if (freshBrowserBot) assertTeamComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
+        if (freshBrowserBot) assertComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
       // Runtime fields keep their fail-closed order; only the profile fields commit atomically.
         const runtimePatch = { ...patch };
         for (const field of Object.keys(profile.patch)) delete runtimePatch[field];
         if (Object.keys(runtimePatch).length) store.patchBot(m[1], runtimePatch);
         bot = store.patchBotProfile(m[1], profile.patch);
       } else {
-        if (freshBrowserBot) assertTeamComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
+        if (freshBrowserBot) assertComputerChangeIdle(freshBrowserBot, { ...freshBrowserBot, ...patch } as BotRecord);
         bot = store.patchBot(m[1], patch);
       }
       if (!bot) return json(res, 404, { error: "no such bot" });

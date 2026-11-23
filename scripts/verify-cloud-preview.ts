@@ -1,5 +1,5 @@
 // Real ComputerPanel + isolated fake-engine server, with only its cloud
-// transport simulated. No Boat account or user's app data is contacted.
+// transport simulated. No cloud account or user's app data is contacted.
 // Run: node --experimental-strip-types scripts/verify-cloud-preview.ts
 import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
@@ -7,9 +7,9 @@ import { mountPreview, parkUntilSignal, type MountedPreview } from "./testing/pr
 const fixture = await launchVerificationServer();
 let ui: MountedPreview | undefined;
 try {
-  await runControlSeira(["new-bot", "--name", "Boat Preview Test", "--url", fixture.info.url]);
+  await runControlSeira(["new-bot", "--name", "Cloud Preview Test", "--url", fixture.info.url]);
   ui = await mountPreview(fixture, {
-    entry: "/scripts/testing/cloud-preview.tsx", route: "/__cloud-preview.html", title: "Isolated Boat Preview Test",
+    entry: "/scripts/testing/cloud-preview.tsx", route: "/__cloud-preview.html", title: "Isolated Cloud Preview Test",
   });
   console.log(JSON.stringify({ ...fixture.info, previewUrl: ui.previewUrl }, null, 2));
   await parkUntilSignal();

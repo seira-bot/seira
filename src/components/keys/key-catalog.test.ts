@@ -22,7 +22,7 @@ const NOT_A_PERSONS_KEY: Record<string, string> = {
   SEIRA_BROWSER_CONNECTION: "the app's own browser, not a credential",
   SEIRA_USER_DATA: "the app's own data folder, not a credential",
   SEIRA_BOAT_API: "the Boat address, not a credential",
-  BOX_TOKEN: "the Boat key: no row, and the stored copy goes with the Boat server",
+  BOX_TOKEN: "a retired key, still stripped from every engine",
 };
 
 const electron = (file: string) => readFileSync(new URL(`../../../electron/${file}`, import.meta.url), "utf8");
@@ -52,20 +52,19 @@ describe("every credential has one home on the keys page", () => {
     }
     const homed = (name: string) => KEY_CATALOG.some((entry) => entry.target?.slot === name)
       || stored.some((row) => row.name === name && KEY_CATALOG.some((entry) => entry.env.includes(row.env)));
-    for (const name of patched) if (name !== "boxToken") expect(homed(name), name).toBe(true);
+    for (const name of patched) expect(homed(name), name).toBe(true);
   });
 
   // A key saved from a bot's card lands exactly where its Settings row puts it: the same desktop slot, or the same config.
   it("covers every credential a bot can ask for in a chat, saved where Settings saves it", () => {
-    // boxToken is the Boat key: no row, and its credential target goes with the Boat server in the next change.
-    const homes: Record<Exclude<keyof typeof CREDENTIAL_TARGETS, "boxToken">, KeyId> = {
+    const homes: Record<keyof typeof CREDENTIAL_TARGETS, KeyId> = {
       xaiApiKey: "xai", opencodeGoApiKey: "opencodeGo", ttsKey: "elevenlabs", fishAudioKey: "fishAudio", geminiTtsKey: "geminiTts",
       openaiImageApiKey: "imageOpenai", onePasswordToken: "onePassword", composioApiKey: "composio", openaiApiKey: "openai",
       anthropicApiKey: "anthropic", openrouterApiKey: "openrouter", mistralApiKey: "mistral", cerebrasApiKey: "cerebras", groqApiKey: "groq",
       greenferenceApiKey: "greenference", modelgoApiKey: "modelgo", metaApiKey: "meta", deepseekApiKey: "deepseek",
     };
-    expect(Object.keys(homes).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).filter((name) => name !== "boxToken").sort());
-    for (const [name, id] of Object.entries(homes) as Array<[Exclude<keyof typeof CREDENTIAL_TARGETS, "boxToken">, KeyId]>) {
+    expect(Object.keys(homes).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).sort());
+    for (const [name, id] of Object.entries(homes) as Array<[keyof typeof CREDENTIAL_TARGETS, KeyId]>) {
       const entry = keyEntry(id);
       if (!entry.target) {
         expect(entry.opens, name).toBe("logins");

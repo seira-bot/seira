@@ -1772,9 +1772,9 @@ describe("agents-proxy MCP surface", () => {
     expect(res.result.isError).toBeFalsy();
   });
 
-  it.each(["box", "cloud"])("maps %s execution to the explicit Boat runner without changing stored wire values", async (run_on) => {
+  it.each(["box", "cloud"])("maps %s execution to the cloud run without changing stored wire values", async (run_on) => {
     const res = await callTool("create_trigger", { when: "schedule",
-      name: "Boat check", instructions: "Check explicitly on Boat.",
+      name: "Cloud run check", instructions: "Check on the cloud desktop.",
       schedule: { type: "daily", time: "09:00" }, run_on,
     });
     expect(res.result.isError).toBeFalsy();
@@ -1786,7 +1786,7 @@ describe("agents-proxy MCP surface", () => {
     expect(lastRoutineRequestBody.changes.runOn).toBe("cloud");
   });
 
-  it("advertises VPS-compatible default execution separately from the Boat runner", async () => {
+  it("advertises VPS-compatible default execution separately from the cloud run", async () => {
     const list = await rpc("tools/list");
     const routine = list.result.tools.find((entry: { name: string }) => entry.name === "trigger");
     expect(routine.inputSchema.properties.run_on.enum).toEqual(["seira", "box"]);

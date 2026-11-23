@@ -75,7 +75,7 @@ beforeEach(() => {
   fx.dispatch.mockImplementation((action: { type: string; config?: Record<string, unknown> }) => {
     if (action.type === "configStatus") setConfig(action.config!);
   });
-  fx.config = { composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" } };
+  fx.config = { composio: { configured: false }, vps: { configured: false, sshAlias: "" } };
   fx.instances = [];
   host = document.createElement("div");
   document.body.append(host);

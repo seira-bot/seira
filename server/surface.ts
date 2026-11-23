@@ -33,8 +33,8 @@ export function parseSurface(value: unknown): Surface | undefined {
   return typeof value === "string" && SURFACES.has(value) ? (value as Surface) : undefined;
 }
 
-export function surfaceOfComputerKind(kind: "box" | "vps" | "vm" | "local" | null): Surface | null {
-  if (kind === "box" || kind === "vps") return "cloud";
+export function surfaceOfComputerKind(kind: "vps" | "vm" | "local" | null): Surface | null {
+  if (kind === "vps") return "cloud";
   return kind;
 }
 
@@ -83,27 +83,6 @@ function placeOf(input: { destination: Destination; pinnedSurface?: Surface | nu
     return { computer: destination, browser: browserOn, pinned: null, note: "" };
   }
   return { computer: undefined, browser: browserOn, pinned: null, note: "" };
-}
-
-/** On Auto, work handed over by another bot runs on the receiving bot's own cloud computer when it has one (asleep or awake): the handoff cannot pick a place itself. Auto still never creates one; Works on, a pin, a person's turn and a consult keep their usual place. */
-/** Work another bot handed over: a child node (a person's own root also runs as "work" when it resumes), never a consult. */
-export function isHandedWork(node: { parentId?: string; mode: string } | undefined): boolean {
-  return Boolean(node?.parentId && node.mode !== "consult");
-}
-
-export function handoffUsesOwnCloud(input: { plan: Pick<SurfacePlan, "computer">; handoffWork: boolean; ownCloudState: string | null | undefined }): boolean {
-  return input.handoffWork && input.plan.computer === undefined && Boolean(input.ownCloudState);
-}
-
-/** Best effort: an unreachable Boat service counts as no cloud computer after `ms`, so a handoff still starts promptly.
- * `unavailable` marks a failed or slow lookup, which is not a confirmed "no cloud computer". */
-export function ownCloudStateWithin(status: Promise<{ box?: { state?: string | null } | null }>, ms = 3_000): Promise<{ state: string | null | undefined; unavailable: boolean }> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const unavailable = { state: undefined, unavailable: true };
-  return Promise.race([
-    status.then((result) => ({ state: result.box?.state, unavailable: false }), () => unavailable),
-    new Promise<typeof unavailable>((resolve) => { timer = setTimeout(() => resolve(unavailable), ms); }),
-  ]).finally(() => clearTimeout(timer));
 }
 
 /** Opens the built-in browser for a turn. Beside a computer it is extra: a browser that fails to open is left out and
@@ -159,19 +138,15 @@ export function placeUnavailable(place: Surface, row: PlaceRow, cloudHome = fals
   return new PlaceUnavailableError(place, row, cloudHome);
 }
 
-/** A Cloud pick with no cloud computer behind it: no VPS for the bot, or on a leftover Boat setting no Boat key. The turn goes on with no computer; it is never moved to this one or a VM. */
+/** A Cloud pick with no cloud computer behind it: the bot does not work on a VPS, or no VPS is set up. The turn goes on with no computer; it is never moved to this one or a VM. */
 export function cloudPickWithoutComputer(input: {
   wants: ComputerWant;
-  backend: "box" | "vps";
-  boatConfigured: boolean;
-  /** A VPS is set up for the bot: its own alias or the install's default. */
+  /** The bot works on a VPS, and one is set up for it: its own alias or the install's default. */
   vpsConfigured: boolean;
-  teamComputer: boolean;
   routine: boolean;
   cloudHome: boolean;
 }): boolean {
-  return input.wants === "cloud" && !(input.backend === "box" ? input.boatConfigured : input.vpsConfigured)
-    && !input.teamComputer && !input.routine && !input.cloudHome;
+  return input.wants === "cloud" && !input.vpsConfigured && !input.routine && !input.cloudHome;
 }
 
 export function withoutCloudComputerRow(bot: string, source: PlaceSource): PlaceRow {

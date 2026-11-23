@@ -89,7 +89,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   api: (...args: unknown[]) => fixture.api(...args),
   useStore: () => ({
     state: {
-      config: { box: { configured: true }, ...fixture.config },
+      config: { ...fixture.config },
       instances: fixture.instances,
       computerControl: {},
       routines: [],

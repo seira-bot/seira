@@ -22,7 +22,7 @@ export type CloudPlanFacts = { plan: "starter" | "personal" | "pro" | "max" | "o
 export interface UsageInput {
   config: ConfigStatus;
   instances: readonly InstanceInfo[];
-  bots: ReadonlyArray<Pick<Bot, "computer" | "cloudBackend" | "hidden">>;
+  bots: ReadonlyArray<Pick<Bot, "computer" | "hidden">>;
   groups: ReadonlyArray<Pick<Group, "dm">>;
   sections?: readonly string[];
   /** null while the routine list is not loaded. */
@@ -33,7 +33,6 @@ export interface UsageInput {
   sessions: { sessions: ReadonlyArray<{ id?: unknown; email?: unknown }>; current: unknown } | null;
   companionDevices: number | null;
   cloud: CloudPlanFacts | null;
-  computers: { cloudComputers: unknown; teamComputers: unknown } | null;
   platform: "desktop" | "browser";
   remoteClient: boolean;
 }
@@ -56,7 +55,6 @@ function keyProviders(config: ConfigStatus): KeyProvider[] {
     [config.greenference?.configured, "greenference"],
     [config.modelgo?.configured, "modelgo"],
     [config.meta?.configured, "meta"],
-    [config.box?.configured && config.box.included !== true, "boat"],
     [config.composio?.configured && config.composio.mode === "self-hosted", "composio"],
     [config.opencodeGo?.configured, "opencode_go"],
     [ownVoice && config.tts?.provider === "elevenlabs", "elevenlabs"],
@@ -115,12 +113,7 @@ export function buildUsageSnapshot(input: UsageInput): EventProps {
   const props: Record<string, PropValue | undefined> = {
     key_providers: keys,
     key_count: keys.length,
-    has_boat_key: keys.includes("boat"),
-    cloud_computer_source: config.box?.configured ? config.box.included === true ? "included" : "own_key" : "none",
-    cloud_computers: count(input.computers?.cloudComputers),
-    team_computers: count(input.computers?.teamComputers),
-    bots_cloud_boat: tally(bots, (bot) => bot.computer === "cloud" && bot.cloudBackend !== "vps"),
-    bots_cloud_vps: tally(bots, (bot) => bot.computer === "cloud" && bot.cloudBackend === "vps"),
+    bots_cloud_vps: tally(bots, (bot) => bot.computer === "cloud"),
     bots: bots.length,
     bots_local_vm: place("vm"),
     bots_this_computer: place("local"),
@@ -227,16 +220,13 @@ export async function sendDailySnapshot(state: SnapshotState, sources: UsageSour
   try {
     const config = state.config;
     const { companion, cloudAccount, cloudPlan } = sources;
-    const [apps, sessions, companionDevices, cloud, computers] = await Promise.all([
+    const [apps, sessions, companionDevices, cloud] = await Promise.all([
       settle(() => sources.connectedApps()),
       settle(() => sources.request<{ sessions?: unknown; current?: unknown }>("/api/auth/sessions")),
       companion ? settle(() => companion.state()) : null,
       cloudAccount ? settle(() => cloudAccount.state()).then(cloudPlanFromAccount)
         : cloudPlan ? settle(() => cloudPlan.state()).then(cloudPlanFromSnapshot)
         : null,
-      config.box?.configured
-        ? settle(() => sources.request<{ cloudComputers?: unknown; teamComputers?: unknown }>("/api/computers/usage"))
-        : { cloudComputers: 0, teamComputers: 0 },
     ]);
     track("app_snapshot", buildUsageSnapshot({
       config,
@@ -252,7 +242,6 @@ export async function sendDailySnapshot(state: SnapshotState, sources: UsageSour
         : null,
       companionDevices: Array.isArray(companionDevices?.devices) ? companionDevices.devices.length : null,
       cloud,
-      computers: computers ? { cloudComputers: computers.cloudComputers, teamComputers: computers.teamComputers } : null,
       platform: sources.platform,
       remoteClient: sources.remoteClient,
     }));

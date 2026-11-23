@@ -14,8 +14,6 @@ Run the isolated lifecycle checks:
 pnpm exec vitest run server/team-lifecycle.e2e.test.ts server/section-context.test.ts server/store.test.ts src/lib/team-map.test.ts --maxWorkers=2
 SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-lifecycle-ui.e2e.test.ts scripts/testing/team-template-ui.e2e.test.ts --maxWorkers=1
 SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-canvas-ui.e2e.test.ts --maxWorkers=1
-pnpm exec vitest run scripts/testing/team-computers-fixture.test.ts
-pnpm exec vitest run server/index.test.ts -t "creates team computers|shares one team computer" --maxWorkers=1
 ```
 
 The server test uses `launchVerificationServer`, sends a sample conversation,
@@ -68,24 +66,6 @@ Idle cards omit the redundant Ready label. A computer shortcut appears only on
 the selected bot and opens that bot's access settings while Team map remains
 mounted.
 
-The focused `server/index.test.ts` cases run the real server against a local
-HTTP Boat stand-in, with a disposable fake token and no paid account or container
-engine. They verify explicit cost acknowledgement, invalid/foreign-origin
-request denial, read-only inventory, durable failed-create records, same-id
-retry without a second machine, concurrent provisioning rejection, and busy-team
-assignment rejection. Assignment consent and the resulting registry file are
-checked; this is not a full server-restart assertion. Opening a shared desktop
-requires taking human control first.
-
-A second case confirms that Auto bots' direct and room turns receive the same
-Boat ID, while an explicit Off bot receives no computer. The real shared-resource
-lock rejects overlapping work and lifecycle changes; human control is shared
-across the team's bots, while a bot's control capability cannot impersonate
-another bot and is revoked after its turn. Removing the simulated provider
-machine causes a clear failure, never an automatic paid replacement. These
-checks prove server routing and ownership, not actual Boat provisioning or
-remote desktop operation.
-
 The test retains its before/after receipts and dark/light screenshots beside
 the fixture log as `*.team-canvas.json` and `*.team-canvas-*.png`. Its injected
 pointer events exercise renderer gesture handlers against the isolated API;
@@ -103,11 +83,10 @@ The owner API keeps the existing `/api/sidebar-sections` name for older clients:
   membership in an existing team. Removed bots move to General. Invalid or
   stale membership changes are rejected without partially applying the move.
 - `PATCH ?section=NAME { name }` renames a team, including its bots, archived
-  bots, group chats, shared instructions, management grants and assigned team
-  computer. It cannot merge into an existing team or rename during active work.
+  bots, group chats, shared instructions, management grants. It cannot merge into an existing team or rename during active work.
 - `DELETE ?section=NAME` removes the team and its shared instructions while
   retaining bots, archived bots, group chats and their conversations in General.
-  Finish active work and unassign any team computer first. Chief conflicts
+  Finish active work first. Chief conflicts
   reject the deletion rather than changing leadership.
 
 The registry shares the atomic section-context file so rename/delete cannot

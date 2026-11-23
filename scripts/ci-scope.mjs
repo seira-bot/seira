@@ -404,7 +404,7 @@ export function ciOutputs({ checks }, oses) {
   };
 }
 
-/** The outputs for a static job that does the Linux work itself (on a Boat VM, `SEIRA_CI_LINUX_IN_STATIC`): the Linux
+/** The outputs for a static job that does the Linux work itself (`SEIRA_CI_LINUX_IN_STATIC`): the Linux
  * vitest entries, behavior evals and the Linux packaged server smoke become `linux_lanes`
  * (scripts/ci-linux-lanes.mjs), and the jobs left with nothing to run drop out of the selection. */
 export function moveLinuxIntoStatic(outputs) {

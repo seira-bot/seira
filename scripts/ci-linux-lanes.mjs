@@ -3,9 +3,9 @@ import { appendFileSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The Linux jobs' work as lanes of one machine: when the static job runs on a Boat VM (ci.yml, BOAT_CI), the vitest
-// job's Linux shards, behavior evals and the Linux packaged server smoke run there as processes side by side, each
-// lane its commands in order. ci-workflow.test.ts holds every command equal to the job step it stands for.
+// The Linux jobs' work as lanes of one machine: when the static job runs the Linux work itself
+// (`SEIRA_CI_LINUX_IN_STATIC`), the vitest job's Linux shards, behavior evals and the Linux packaged server smoke run
+// there as processes side by side, each lane its commands in order. ci-workflow.test.ts holds every command equal to the job step it stands for.
 
 /** The vitest job's two steps for one Linux matrix entry, with the step's environment. */
 export function vitestLane(entry, retryLog) {

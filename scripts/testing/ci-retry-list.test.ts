@@ -12,7 +12,7 @@ const RUNNER = fileURLToPath(new URL("./ci-retry-runner.ts", import.meta.url));
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
 const list = loadRetryList({});
 /** The real list can be empty, so the matching and the summary are tested on this entry. */
-const sample = [{ file: "server/boat-included.test.ts", test: "waking a sleeping computer > forgets a server error once a later resume is accepted", owner: "o", reason: "r", since: "2026-10-08" }];
+const sample = [{ file: "server/cloud-included.test.ts", test: "waking a sleeping computer > forgets a server error once a later resume is accepted", owner: "o", reason: "r", since: "2026-10-08" }];
 
 const scratch: string[] = [];
 afterEach(() => {
@@ -41,12 +41,12 @@ describe("the known-flaky list", () => {
   });
 
   it("matches a test by its file and its full name, nothing looser", () => {
-    const file = { filepath: join(ROOT, "server", "boat-included.test.ts") };
+    const file = { filepath: join(ROOT, "server", "cloud-included.test.ts") };
     const suite = { name: "waking a sleeping computer", suite: file, filepath: undefined as unknown as string };
     delete (suite as { filepath?: string }).filepath;
     const task = (name: string, parent: object = suite) => ({ name, file, suite: parent as never });
     const listed = testIdentity(ROOT, task("forgets a server error once a later resume is accepted"));
-    expect(listed).toEqual({ file: "server/boat-included.test.ts", test: "waking a sleeping computer > forgets a server error once a later resume is accepted" });
+    expect(listed).toEqual({ file: "server/cloud-included.test.ts", test: "waking a sleeping computer > forgets a server error once a later resume is accepted" });
     expect(findRetryEntry(sample, listed)?.owner).toBeTruthy();
     expect(findRetryEntry(sample, testIdentity(ROOT, task("reports the last server error, not a bare timeout, when the wait runs out on it")))).toBeUndefined();
     // the same title outside its describe block is another test

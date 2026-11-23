@@ -18,7 +18,7 @@ const HOSTILE = [
 
 describe("allow", () => {
   it("passes a value only when its list has it", () => {
-    expect(allow("boat", KEY_PROVIDER)).toBe("boat");
+    expect(allow("composio", KEY_PROVIDER)).toBe("composio");
     expect(allow("gmail", APP)).toBe("gmail");
     for (const value of HOSTILE) expect(allow(value, KEY_PROVIDER), JSON.stringify(value) ?? "undefined").toBe("other");
   });
@@ -85,7 +85,7 @@ describe("app, role and key lists", () => {
 
   it("names a provider for every credential a bot can ask for in chat, and nothing else", () => {
     const expected = {
-      boxToken: "boat", xaiApiKey: "xai", opencodeGoApiKey: "opencode_go", ttsKey: "elevenlabs", fishAudioKey: "fish_audio", geminiTtsKey: "gemini_tts",
+      xaiApiKey: "xai", opencodeGoApiKey: "opencode_go", ttsKey: "elevenlabs", fishAudioKey: "fish_audio", geminiTtsKey: "gemini_tts",
       openaiImageApiKey: "openai_image",
       onePasswordToken: "onepassword", composioApiKey: "composio", openaiApiKey: "openai", anthropicApiKey: "anthropic",
       openrouterApiKey: "openrouter", mistralApiKey: "mistral", cerebrasApiKey: "cerebras", groqApiKey: "groq", greenferenceApiKey: "greenference", modelgoApiKey: "modelgo", metaApiKey: "meta",

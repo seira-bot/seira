@@ -32,7 +32,7 @@ html,body{height:100%;margin:0;overflow:hidden;font-family:var(--font-sans)}
 .card{position:absolute;left:16px;bottom:16px;width:230px;padding:12px 14px;border-radius:12px;background:#fff;color:#1d1d1f;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:13px;line-height:18px}
 </style></head><body>
 <div id="map"><canvas></canvas></div>
-<div class="card"><strong>Harbour ferries</strong><br>Three routes. Next boat 14:20.</div>
+<div class="card"><strong>Harbour ferries</strong><br>Three routes. Next ferry 14:20.</div>
 <script>
 var canvas=document.querySelector("canvas");
 var draw=function(){var w=innerWidth,h=innerHeight;canvas.width=w;canvas.height=h;var c=canvas.getContext("2d");

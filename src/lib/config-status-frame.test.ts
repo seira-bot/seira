@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { configStatusFromFrame, type ConfigStatusFrame } from "./config-status-frame";
 
 const baseFrame: ConfigStatusFrame = {
-  composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" },
+  composio: { configured: false }, vps: { configured: false, sshAlias: "" },
   rooms: { turnTimeoutMinutes: 10 }, localVm: { mode: "shared", maxInstances: 1 },
 };
 

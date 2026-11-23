@@ -20,12 +20,13 @@ export const botDefaultModelSchema = z.object({
 }).strict().refine(value => value.effort === undefined || value.variant === undefined,
   "choose either a model variant or an effort level");
 
-/** Saved defaults may still carry fields no bot has any more; they read as if absent. */
+/** Saved defaults may still carry fields or values no bot has any more; they read as if absent. */
 const RETIRED_FIELDS = ["approvePeerComms", "peers"] as const;
 function withoutRetiredFields(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const rest = { ...(value as Record<string, unknown>) };
   for (const field of RETIRED_FIELDS) delete rest[field];
+  if (rest.cloudBackend === "box") delete rest.cloudBackend;
   return rest;
 }
 
@@ -38,7 +39,7 @@ export const botDefaultsProfileSchema = z.preprocess(withoutRetiredFields, profi
   mascotExpression: z.string().max(60).nullable().optional(),
   modelSelection: botDefaultModelSchema.optional(),
   computer: z.enum(["cloud", "vm", "local", "browser", "off"]).nullable().optional(),
-  cloudBackend: z.enum(["box", "vps"]).optional(),
+  cloudBackend: z.literal("vps").optional(),
   autoStartVps: z.boolean().optional(),
   cwd: z.string().max(4096).nullable().optional(),
   approvalMode: z.enum(["ask", "auto", "full", "custom"]).optional(),

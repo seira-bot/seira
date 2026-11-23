@@ -269,7 +269,7 @@ describe("loading the client", () => {
     const event = {
       uuid: "u", event: "app_snapshot",
       properties: {
-        token: "phc_token", distinct_id: "d", app_version: "0.1.111", surface: "server", bots: 3, key_providers: ["boat"], $os: "Mac OS X",
+        token: "phc_token", distinct_id: "d", app_version: "0.1.111", surface: "server", bots: 3, key_providers: ["anthropic"], $os: "Mac OS X",
         $current_url: page, $host: "ada-tenant.cloud.seira.bot", $pathname: "/", $referrer: "https://www.google.com/?q=ada", $referring_domain: "www.google.com",
         $search_engine: "google", ph_keyword: "ada", utm_source: "hn", utm_campaign: "launch", gclid: "g1", fbclid: "f1", gad_source: "1",
         $session_entry_url: page, $session_entry_host: "ada-tenant.cloud.seira.bot", $session_entry_pathname: "/", $session_entry_referrer: "https://www.google.com/",
@@ -286,7 +286,7 @@ describe("loading the client", () => {
     const sent = beforeSend(structuredClone(event));
     expect(sent).toEqual({
       uuid: "u", event: "app_snapshot",
-      properties: { token: "phc_token", distinct_id: "d", app_version: "0.1.111", surface: "server", bots: 3, key_providers: ["boat"], $os: "Mac OS X", $set: { email: "ada@example.com" } },
+      properties: { token: "phc_token", distinct_id: "d", app_version: "0.1.111", surface: "server", bots: 3, key_providers: ["anthropic"], $os: "Mac OS X", $set: { email: "ada@example.com" } },
       $set: { email: "ada@example.com" },
       $set_once: {},
     });

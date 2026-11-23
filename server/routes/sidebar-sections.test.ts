@@ -6,7 +6,6 @@ import { DATA_DIR } from "../config.ts";
 import { closeMessageDb } from "../message-db.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { Store, type BotRecord } from "../store.ts";
-import type { TeamComputers } from "../team-computers.ts";
 import { createSidebarSectionRoutes, storeRefusal } from "./sidebar-sections.ts";
 import type { RouteContext } from "./table.ts";
 
@@ -38,11 +37,6 @@ describe("a paired device filing bots", () => {
     ["auto", { id: "auto", section: "Home" } as BotRecord],
     ["pinned", { id: "pinned", section: "Home", computer: "local" } as BotRecord],
   ]);
-  const teamComputers = {
-    forSection: (section: string | undefined) => (section === "Studio" ? { id: "studio-pc" } : undefined),
-    forBot: (bot: { computer?: string; cloudBackend?: string; section?: string }) =>
-      bot.computer === undefined && bot.cloudBackend !== "vps" ? teamComputers.forSection(bot.section) : undefined,
-  } as unknown as TeamComputers;
   const filed: Array<[string[], string]> = [];
   const store = {
     sections: ["Home", "Studio"],
@@ -53,7 +47,7 @@ describe("a paired device filing bots", () => {
     },
   } as unknown as Store;
   const handler = createSidebarSectionRoutes({
-    store, teamComputers, maxBots: 100, assertTeamComputerChangeIdle: () => {}, wireBot: (bot) => bot as never,
+    store, maxBots: 100, assertComputerChangeIdle: () => {}, wireBot: (bot) => bot as never,
   });
   const post = async (auth: RequestAuth, body: unknown) => {
     const sent: Array<{ status: number; body: any }> = [];
@@ -72,37 +66,14 @@ describe("a paired device filing bots", () => {
     return sent[0]!;
   };
   const phone = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "d1" } as RequestAuth;
-  const host = { kind: "loopback", scopes: ["admin", "client"] } as RequestAuth;
 
   beforeEach(() => {
     filed.length = 0;
   });
 
-  it("cannot move an Auto bot onto a team computer", async () => {
-    const refused = await post(phone, { name: "Studio", botIds: ["auto"] });
-    expect(refused.status).toBe(403);
-    expect(filed).toEqual([]);
-  });
-
-  it("files into a department without a team computer", async () => {
-    const filedOk = await post(phone, { name: "Home", botIds: ["auto"] });
-    expect(filedOk.status).toBe(200);
-    expect(filed).toEqual([[["auto"], "Home"]]);
-  });
-
-  it("files a bot that has its own computer into a team department", async () => {
+  it("files an Auto bot and a bot with its own computer into a department", async () => {
+    expect((await post(phone, { name: "Studio", botIds: ["auto"] })).status).toBe(200);
     expect((await post(phone, { name: "Studio", botIds: ["pinned"] })).status).toBe(200);
-  });
-
-  it("lets the host computer move an Auto bot onto a team computer", async () => {
-    expect((await post(host, { name: "Studio", botIds: ["auto"] })).status).toBe(200);
-  });
-
-  it("holds a phone's session to the same rule without the companion header, and lets an admin's other session move it", async () => {
-    const session = (record: Record<string, unknown>) =>
-      ({ kind: "session", via: "bearer", scopes: ["admin", "client"], session: { id: "s1", label: "Device", scopes: ["admin", "client"], ...record } }) as unknown as RequestAuth;
-    expect((await post(session({ pairedDevice: true }), { name: "Studio", botIds: ["auto"] })).status).toBe(403);
-    expect(filed).toEqual([]);
-    expect((await post(session({}), { name: "Studio", botIds: ["auto"] })).status).toBe(200);
+    expect(filed).toEqual([[["auto"], "Studio"], [["pinned"], "Studio"]]);
   });
 });

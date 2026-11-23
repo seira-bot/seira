@@ -150,8 +150,6 @@ export function localVmInventoryState(instance: LocalVmInventoryInstance): strin
   return computerStateLabel(localVmInventoryStateKind(instance));
 }
 
-/** Boat's account LIST is eventually consistent: an older snapshot must not undo an action the provider accepted. */
-/** An empty list proves deletion only when Boat says the read was authoritative. */
 export function vpsComputerInventoryStateKind(
   instance: VpsComputerInventoryInstance,
 ): ComputerStateKind {
