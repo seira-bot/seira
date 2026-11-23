@@ -42,7 +42,7 @@ import { checkEngine, type EngineCheck } from "../engine-check.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import type { ProviderAuthSessions } from "../provider-auth-sessions.ts";
 import { instanceIcon, providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
-import { isLoopbackHost, isProxied, ownerOrAdmin } from "../request-auth.ts";
+import { isLoopbackHost, isProxied, ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
