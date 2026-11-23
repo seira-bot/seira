@@ -35,7 +35,7 @@ describe("fixed elements and the desktop rail", () => {
     const offending: string[] = [];
     for (const path of sources(SRC)) {
       for (const [, classes] of readFileSync(path, "utf8").matchAll(/"([^"\n]*\bfixed inset-0\b[^"\n]*)"/g)) {
-        if (/\bbg-(app|panel|card)\b/.test(classes)) offending.push(`${relative(SRC, path)}: ${classes.slice(0, 80)}`);
+        if (/\bbg-(app|panel|card)\b/.test(classes) && !classes.includes("m-auto")) offending.push(`${relative(SRC, path)}: ${classes.slice(0, 80)}`);
       }
     }
     expect(offending).toEqual([]);

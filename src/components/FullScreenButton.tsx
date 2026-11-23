@@ -92,7 +92,7 @@ function WatchFullScreen({ frame, name, takeDisabled, error, onClose, onTakeCont
   const iconButton = "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50";
   const label = t("computer.screenOf", { name });
   return (
-    <div ref={dialogRef} tabIndex={-1} data-watch-full-screen role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-[65] flex flex-col bg-app outline-none">
+    <div ref={dialogRef} tabIndex={-1} data-watch-full-screen role="dialog" aria-modal="true" aria-label={label} className="fixed inset-y-0 right-0 left-[var(--rail-beside,0px)] z-[65] flex flex-col bg-app outline-none">
       <header {...dragProps} className={cn("flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline/40 bg-panel px-3 py-2", macInset && "pl-[86px]")}>
         <span className="min-w-0 truncate text-[13px] font-medium text-ink">{label}</span>
         <span className="pointer-events-none rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm">

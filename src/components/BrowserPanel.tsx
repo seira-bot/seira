@@ -284,7 +284,7 @@ export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserS
   const pipSupported = stream && supportsBrowserPictureInPicture();
   const passkeyWall = passkeyWallAt(nav.url);
   return <div ref={panel} className={maximized
-    ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-ink"
+    ? "fixed inset-y-0 right-0 left-[var(--rail-beside,0px)] z-50 flex flex-col overflow-hidden bg-card text-ink"
     : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-hairline/40 bg-card text-ink"} data-browser-transport={stream ? "stream" : "live"}>
     <ChromeRow
       ref={address}
