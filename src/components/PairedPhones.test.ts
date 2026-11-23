@@ -26,7 +26,7 @@ describe("paired phones", () => {
     for (const [otherWorkspaces, checked] of [[undefined, true], [true, true], [false, false]] as const) {
       const markup = row(phone({ otherWorkspaces }), state({ workspaces: true }));
       expect(markup).toContain("Can open other workspaces");
-      expect(markup.match(/<button[^>]*aria-label="Opening other places for Ada"[^>]*>/)?.[0]).toContain(`aria-checked="${checked}"`);
+      expect(markup.match(/<button[^>]*aria-label="Ada can open other workspaces"[^>]*>/)?.[0]).toContain(`aria-checked="${checked}"`);
     }
   });
 
