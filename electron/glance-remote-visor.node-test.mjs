@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRemoteVisor, REMOTE_KILL_GRACE_MS, REMOTE_LINE_LIMIT, REMOTE_READY_MS } from "./glance-remote-visor.mjs";
 
 function world(extra = {}) {
-  const spawns = [], timers = [], fails = [], acts = [];
+  const spawns = [], timers = [], fails = [], acts = [], made = [], removedFolders = [];
   const make = () => {
     const child = Object.assign(new EventEmitter(), { written: [], kills: [], exitCode: null, signalCode: null, ended: 0 });
     child.stdin = Object.assign(new EventEmitter(), { write: (s) => child.written.push(JSON.parse(s)), end: () => child.ended++ });
@@ -17,11 +17,12 @@ function world(extra = {}) {
     execPath: "/opt/seira", appArgs: ["/app"], switches: ["--no-sandbox"], env: { A: "1", ELECTRON_RUN_AS_NODE: "1" },
     onAct: async (act) => { acts.push(act); return act.ok ?? true; }, onFail: () => fails.push(1),
     setTimer: (fn, ms) => { const t = { fn, ms, off: false, unref() {} }; timers.push(t); return t; }, clearTimer: (t) => { t.off = true; },
+    makeFolder: () => { made.push(spawns.length); return "/tmp-x/seira-glance-ABC"; }, removeFolder: (f) => removedFolders.push(f),
     ...extra,
   });
   const child = () => spawns.at(-1).child;
   const emit = (obj) => child().stdout.emit("data", `${typeof obj === "string" ? obj : JSON.stringify(obj)}\n`);
-  return { remote, spawns, timers, fails, acts, child, emit };
+  return { remote, spawns, timers, fails, acts, child, emit, made, removedFolders };
 }
 const tick = () => new Promise((r) => setImmediate(r));
 
@@ -31,7 +32,7 @@ test("AC-01 AC-02 the helper starts with the X11 switch and the given args, with
   w.remote.render({ entries: [] });
   const [exec, args, options] = w.spawns[0].args;
   assert.equal(exec, "/opt/seira");
-  assert.deepEqual(args, ["/app", "--seira-glance-visor", "--ozone-platform=x11", "--no-sandbox"]);
+  assert.deepEqual(args, ["/app", "--seira-glance-visor=/tmp-x/seira-glance-ABC", "--ozone-platform=x11", "--no-sandbox"]);
   assert.deepEqual(options.env, { A: "1" });
   assert.deepEqual(options.stdio, ["pipe", "pipe", "ignore"]);
 });
@@ -135,4 +136,39 @@ test("a write to a closed pipe does not throw", () => {
   w.emit({ t: "ready" });
   w.child().stdin.write = () => { throw Object.assign(new Error("EPIPE"), { code: "EPIPE" }); };
   assert.doesNotThrow(() => w.remote.render({ n: 1 }));
+});
+
+test("AC-09 the folder is made before spawn and passed as the flag value", () => {
+  const w = world();
+  w.remote.render({});
+  assert.deepEqual(w.made, [0]);
+  assert.ok(w.spawns[0].args[1].includes("--seira-glance-visor=/tmp-x/seira-glance-ABC"));
+  assert.deepEqual(w.removedFolders, []);
+});
+
+test("AC-09 the folder is removed when the child exits after close()", () => {
+  const w = world();
+  w.remote.render({});
+  const child = w.child();
+  w.remote.close();
+  assert.deepEqual(w.removedFolders, []);
+  child.emit("exit", 0, null);
+  assert.deepEqual(w.removedFolders, ["/tmp-x/seira-glance-ABC"]);
+});
+
+test("AC-09 the folder is removed when the child exits after a failure", () => {
+  const w = world();
+  w.remote.render({});
+  const child = w.child();
+  child.emit("exit", 1, null);
+  assert.equal(w.fails.length, 1);
+  assert.deepEqual(w.removedFolders, ["/tmp-x/seira-glance-ABC"]);
+});
+
+test("AC-09 a makeFolder error reports a failure once and spawns nothing", () => {
+  const w = world({ makeFolder: () => { throw new Error("no space"); } });
+  w.remote.render({});
+  w.remote.render({});
+  assert.equal(w.spawns.length, 0);
+  assert.equal(w.fails.length, 1);
 });

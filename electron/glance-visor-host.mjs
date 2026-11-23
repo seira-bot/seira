@@ -1,20 +1,24 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute } from "node:path";
 import { createGlanceWindow } from "./glance-window.mjs";
 
+const VISOR_FLAG = "--seira-glance-visor";
 export const HOST_ACT_WAIT_MS = 10_000;
 export const HOST_LINE_LIMIT = 4 * 1024 * 1024;
 
 /**
  * Runs in the helper process that the main process starts with `--ozone-platform=x11`.
  * It reads one JSON command per line from `input` and writes one JSON event per line to `output`.
+ * The main process owns the settings folder that the flag names and removes it after this process exits.
  * It opens no port and loads only the page of `createGlanceWindow`. Every check of an action stays in the main process.
  */
-export function runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen, input = process.stdin, output = process.stdout, createVisor = createGlanceWindow, mkdtemp = mkdtempSync, rmSync: remove = rmSync, tmpdir: temporary = tmpdir, setTimer = setTimeout, clearTimer = clearTimeout }) {
-  const folder = mkdtemp(join(temporary(), "seira-glance-"));
+export function runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen, input = process.stdin, output = process.stdout, argv = process.argv, createVisor = createGlanceWindow, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  const flag = argv.find((entry) => entry.startsWith(`${VISOR_FLAG}=`));
+  const folder = flag ? flag.slice(VISOR_FLAG.length + 1) : "";
+  if (!folder || !isAbsolute(folder)) {
+    app.quit();
+    return Promise.resolve();
+  }
   app.setPath("userData", folder);
-  app.on("will-quit", () => remove(folder, { recursive: true, force: true }));
   app.on("window-all-closed", () => {});
 
   let visor = null, nextAct = 1, ended = false;

@@ -5,8 +5,8 @@ import test from "node:test";
 import { HOST_ACT_WAIT_MS, runGlanceVisorHost } from "./glance-visor-host.mjs";
 import { createGlanceWindow } from "./glance-window.mjs";
 
-function world({ real = false } = {}) {
-  const handlers = {}, written = [], removed = [], quits = [], paths = [], timers = [];
+function world({ real = false, argv = ["--seira-glance-visor=/tmp-x/seira-glance-ABC"] } = {}) {
+  const handlers = {}, written = [], quits = [], paths = [], timers = [];
   const app = Object.assign(new EventEmitter(), { setPath: (k, v) => paths.push([k, v]), whenReady: () => Promise.resolve(), quit: () => quits.push(1) });
   const input = new EventEmitter(), output = { write: (s) => written.push(s) };
   const frame = {}, contents = { mainFrame: frame };
@@ -21,21 +21,31 @@ function world({ real = false } = {}) {
   const started = runGlanceVisorHost({
     app, BrowserWindow: FakeWindow, screen, ipcMain: { handle: (c, f) => { handlers[c] = f; }, listen: () => listens.push(1) },
     input, output, createVisor: real ? createGlanceWindow : () => visor,
-    mkdtemp: (prefix) => `${prefix}ABC`, rmSync: (...a) => removed.push(a), tmpdir: () => "/tmp-x",
+    argv,
     setTimer: (fn, ms) => { const t = { fn, ms, unref() {} }; timers.push(t); return t; }, clearTimer: () => {},
   });
   const feedLine = (obj) => input.emit("data", `${typeof obj === "string" ? obj : JSON.stringify(obj)}\n`);
   const lines = () => written.map((s) => JSON.parse(s));
-  return { app, input, handlers, written, removed, quits, paths, timers, visor, contents, frame, started, feedLine, lines, loads, listens };
+  return { app, input, handlers, written, quits, paths, timers, visor, contents, frame, started, feedLine, lines, loads, listens };
 }
 
-test("AC-09 the helper uses a new temporary folder and removes it on quit", async () => {
+test("AC-09 the userData path is the flag folder", async () => {
   const w = world();
   await w.started;
   assert.deepEqual(w.paths, [["userData", "/tmp-x/seira-glance-ABC"]]);
-  assert.equal(w.removed.length, 0);
-  w.app.emit("will-quit");
-  assert.deepEqual(w.removed, [["/tmp-x/seira-glance-ABC", { recursive: true, force: true }]]);
+  assert.equal(w.app.listenerCount("will-quit"), 0);
+});
+
+test("AC-09 with no flag value, or a relative path, the host quits and makes no window and registers no handler", async () => {
+  for (const argv of [[], ["--seira-glance-visor="], ["--seira-glance-visor=rel/dir"]]) {
+    const w = world({ argv });
+    await w.started;
+    assert.deepEqual(w.quits, [1]);
+    assert.deepEqual(w.paths, []);
+    assert.deepEqual(Object.keys(w.handlers), []);
+    assert.equal(w.app.listenerCount("window-all-closed"), 0);
+    assert.equal(w.written.length, 0);
+  }
 });
 
 test("AC-01 the helper reports ready and shows render and hide on its visor", async () => {
