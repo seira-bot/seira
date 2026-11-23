@@ -35,7 +35,7 @@ export interface LinkExchangeOptions {
 }
 
 /** An error of reading the request body keeps its own status and text; it holds nothing about this server. */
-class BodyRefused { constructor(readonly error: unknown) {} }
+class BodyRefused { error: unknown; constructor(error: unknown) { this.error = error; } }
 
 export function createLinkExchange({ link, paths, power: powerOf, seenMs, level, room, takes, pace, fileName: ownName = (name) => name, log = (line) => console.error(line) }: LinkExchangeOptions) {
   const session = randomUUID();
