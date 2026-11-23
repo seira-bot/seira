@@ -130,6 +130,27 @@ describe("reads", () => {
     expect(every.join("\n")).not.toMatch(/API keys|Computers\b/);
   });
 
+  it("places searches the UI map beside Settings, and on no match says so without listing any menu", async () => {
+    const { host, turn } = fixture();
+    const found = String((await host.handle({ action: "places", query: "where is the calendar" }, turn)).body.text);
+    expect(found).toContain("Calendar: top right of the Automations page");
+    expect(found).toContain("Clicks: Click Automations in the sidebar → Click Calendar");
+    const none = String((await host.handle({ action: "places", query: "quantum flux capacitor" }, turn)).body.text);
+    expect(none).toMatch(/^No place in the app matches "quantum flux capacitor"\./);
+    expect(none).toContain("do not name a menu");
+    expect(none).not.toMatch(/Settings →|Automations|Sidebar/);
+    expect(none.split("\n")).toHaveLength(1);
+    const every = String((await host.handle({ action: "places" }, turn)).body.text);
+    expect(every).toContain("query");
+  });
+
+  it("places only reads: it sends no change to the app", async () => {
+    const { host, turn } = fixture();
+    const before = JSON.stringify(await host.handle({ action: "get", id: "appearance.skin" }, turn));
+    await host.handle({ action: "places", query: "board" }, turn);
+    expect(JSON.stringify(await host.handle({ action: "get", id: "appearance.skin" }, turn))).toBe(before);
+  });
+
   it("features answers with each match's name, place, what it does and tools, and lists them all with no words", async () => {
     const { host, turn } = fixture();
     const found = await host.handle({ action: "features", query: "workflow" }, turn);

@@ -138,5 +138,7 @@ describe("app_settings show_card", () => {
       + "ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out.");
     expect(properties.action.enum).toContain("show_card");
     expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("you cannot change it or see what it shows");
+    expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("places: where a button, menu or page is, in Settings or outside it");
+    expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("it only reads: it never clicks or changes the app");
   });
 });
