@@ -7,13 +7,13 @@ import { test } from "node:test";
 import { createRoutineWakeHold, rememberRoutineWake, routineWakeDecision, routineWakeSettings } from "./routine-wake.mjs";
 
 test("the hold is on only when enabled, plugged in, and the server says a routine is due or running", () => {
-  const due = { hold: true, reason: "due", at: 1_700_000_000_000 };
-  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: due }), { hold: true, reason: "due", at: 1_700_000_000_000 });
-  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: { hold: true, reason: "running" } }), { hold: true, reason: "running", at: null });
-  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: { hold: false } }), { hold: false, reason: "idle", at: null });
-  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: null }), { hold: false, reason: "idle", at: null });
-  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: true, status: due }), { hold: false, reason: "battery", at: null });
-  assert.deepEqual(routineWakeDecision({ enabled: false, onBattery: false, status: due }), { hold: false, reason: "off", at: null });
+  const due = { hold: true, reason: "due", at: 1_700_000_000_000, routineId: "r1" };
+  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: due }), { hold: true, reason: "due", at: 1_700_000_000_000, routineId: "r1" });
+  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: { hold: true, reason: "running" } }), { hold: true, reason: "running", at: null, routineId: null });
+  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: { hold: false } }), { hold: false, reason: "idle", at: null, routineId: null });
+  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: false, status: null }), { hold: false, reason: "idle", at: null, routineId: null });
+  assert.deepEqual(routineWakeDecision({ enabled: true, onBattery: true, status: due }), { hold: false, reason: "battery", at: null, routineId: null });
+  assert.deepEqual(routineWakeDecision({ enabled: false, onBattery: false, status: due }), { hold: false, reason: "off", at: null, routineId: null });
 });
 
 test("the toggle is on until switched off, and survives a reread", () => {
@@ -50,7 +50,7 @@ test("one assertion is taken while a hold is warranted and released when it is n
     pollMs: 60_000,
   });
 
-  assert.deepEqual(await hold.poll(), { hold: true, reason: "due", at: 42, keepAwake: true, onBattery: false });
+  assert.deepEqual(await hold.poll(), { hold: true, reason: "due", at: 42, routineId: null, keepAwake: true, onBattery: false });
   assert.equal(hold.holding(), true);
   await hold.poll();
   assert.deepEqual(calls, [["start", "prevent-app-suspension", 1]]);
@@ -76,4 +76,54 @@ test("one assertion is taken while a hold is warranted and released when it is n
   hold.stop();
   assert.equal(hold.holding(), false);
   assert.deepEqual(calls.at(-1), ["stop", 3]);
+});
+
+test("the first poll of a started hold that ends after stop does not start a hold", async () => {
+  const started = [];
+  const blocker = { start: (type) => { started.push(type); return 1; }, stop() {}, isStarted: () => true };
+  let answer;
+  const hold = createRoutineWakeHold({
+    fetchStatus: () => new Promise((resolve) => { answer = resolve; }),
+    isOnBattery: () => false,
+    blocker,
+    settings: () => ({ keepAwake: true }),
+    pollMs: 60_000,
+  });
+  hold.start();
+  await new Promise((resolve) => setImmediate(resolve));
+  hold.stop();
+  answer({ hold: true, reason: "running", routineId: "r1" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started, []);
+  assert.equal(hold.holding(), false);
+});
+
+test("a poll in flight when stop runs ends without a hold", async () => {
+  const started = [];
+  const blocker = { start: (type) => { started.push(type); return 1; }, stop() {}, isStarted: () => true };
+  let release;
+  const hold = createRoutineWakeHold({
+    fetchStatus: () => new Promise((resolve) => { release = () => resolve({ hold: true, reason: "running" }); }),
+    isOnBattery: () => false,
+    blocker,
+    settings: () => ({ keepAwake: true }),
+  });
+  const pending = hold.poll();
+  await new Promise((resolve) => setImmediate(resolve));
+  hold.stop();
+  release();
+  const result = await pending;
+  assert.deepEqual(started, []);
+  assert.equal(result.hold, false);
+});
+
+test("the state carries the routine that holds the computer awake", async () => {
+  const blocker = { start: () => 1, stop() {}, isStarted: () => true };
+  const hold = createRoutineWakeHold({
+    fetchStatus: async () => ({ hold: true, reason: "due", at: 5, routineId: "r9" }),
+    isOnBattery: () => false,
+    blocker,
+    settings: () => ({ keepAwake: true }),
+  });
+  assert.equal((await hold.poll()).routineId, "r9");
 });

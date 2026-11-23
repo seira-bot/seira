@@ -409,7 +409,7 @@ describe("an unattended run only its owner can fix", () => {
     expect(h.failed).toEqual([]);
     expect(h.deferred).toEqual([expect.objectContaining({ alert: { detail: expect.stringMatching(/^This bot's AI reached its usage limit\. This run starts again at .+\.$/) } })]);
     expect(h.manager.wakeHold()).toEqual({ hold: false });
-    expect(h.manager.wakeHold(3 * 3_600_000)).toEqual({ hold: true, reason: "due", at: resetsAt + MINUTE });
+    expect(h.manager.wakeHold(3 * 3_600_000)).toEqual({ hold: true, reason: "due", at: resetsAt + MINUTE, routineId: run.routineId });
 
     await h.advance(2 * 3_600_000);
     expect(h.started).toHaveLength(1);
