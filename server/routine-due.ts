@@ -26,10 +26,15 @@ const cloudChecksDue = (now: number) => (routine: Due) => {
 };
 
 /** Every time a run is due, with the routine it is for. */
-const dueWith = (routines: readonly Due[], runs: readonly Run[], now: number): { at: number; routineId?: string }[] => [
-  ...routines.filter((routine) => routine.enabled).map((routine) => ({ at: (routine.checks ? meetingsDue(routine) : routine.nextRunAt), routineId: routine.id })),
-  ...runs.filter((run) => startsLater(run, now)).map((run) => ({ at: run.retryAt, routineId: run.routineId })),
-].filter((entry): entry is { at: number; routineId?: string } => typeof entry.at === "number");
+const dueWith = (routines: readonly Due[], runs: readonly Run[], now: number): { at: number; routineId?: string }[] => {
+  const found: { at: number; routineId?: string }[] = [];
+  for (const routine of routines) {
+    const at = routine.enabled ? (routine.checks ? meetingsDue(routine) : routine.nextRunAt) : undefined;
+    if (typeof at === "number") found.push({ at, routineId: routine.id });
+  }
+  for (const run of runs) if (startsLater(run, now) && typeof run.retryAt === "number") found.push({ at: run.retryAt, routineId: run.routineId });
+  return found;
+};
 
 export type WakeHold = { hold: boolean; reason?: "running" | "due"; at?: number; routineId?: string };
 
