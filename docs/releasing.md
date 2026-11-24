@@ -10,9 +10,11 @@ Seira ships three desktop packages:
   macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
   Until a maintainer sets them, a release has no macOS assets.
 
-A maintainer creates the tag and the GitHub release, and attaches every file
-by hand. No workflow creates a tag or publishes a release. The only package
-that a workflow publishes is the npm package (see [Publish to npm](#publish-to-npm)).
+A maintainer creates the tag and the draft GitHub release, and attaches the
+Linux and Windows files by hand. For a signed `v*` tag, the `Package macOS`
+workflow attaches the macOS files to the draft release. No workflow creates a
+tag or publishes a release. The only package that a workflow publishes is the
+npm package (see [Publish to npm](#publish-to-npm)).
 
 Only the maintainers can release:
 
@@ -336,7 +338,7 @@ Rules for the package:
 ### 6. Build and attach the macOS apps
 
 Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set. Attach the files to the draft release.
+are set. The workflow attaches the files to the draft release.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -358,8 +360,20 @@ commit only. The run summary shows the commit. Before it uploads anything:
 - it makes sure that Gatekeeper accepts both apps and both disk images, and
   that `latest-mac.yml` names each package with the correct SHA-512 and size.
 
-It uploads the twelve macOS assets as one workflow artifact. It cannot publish
-them: its token can only read the repository.
+It uploads the twelve macOS assets as one workflow artifact. The `package`
+job cannot publish them: its token can only read the repository.
+
+For a signed build of a `v*` tag, the `attach` job then uploads the twelve
+files to the draft release of that tag. The job does these steps:
+
+- It checks that the artifact holds exactly the twelve files.
+- It runs `sha256sum -c SHA256SUMS-mac.txt`. It stops before the upload when a
+  sum does not match.
+- It runs `scripts/release-assets.mjs upload`, which uploads `latest-mac.yml`
+  last, and then `check`.
+
+The `attach` job reads no secret. It never publishes the release. The draft
+release must exist before the run. Step 4 creates it.
 
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
@@ -367,6 +381,15 @@ gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
 # A person who is not a maintainer: open the run page, select "Review deployments",
 # and ask a maintainer to approve "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
+node scripts/release-assets.mjs check v<version>
+```
+
+Use the manual upload only when the `attach` job did not run or failed. For
+example, the run started before the draft release existed. First create the
+draft release and re-run the failed `attach` job. If that does not work, upload
+the files by hand:
+
+```sh
 mkdir -p .seira-scratch/macos && cd .seira-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
 sha256sum -c SHA256SUMS-mac.txt
@@ -385,7 +408,7 @@ node ../../scripts/release-assets.mjs check v<version>
   workflow stops at a gate. Build `v0.1.171` or later.
 - The artifact stays for 14 days. Upload it before then, or run the workflow
   again.
-- Upload all twelve files in one upload command. The script uploads
+- Upload all twelve files in one upload command, by the job or by hand. The script uploads
   `latest-mac.yml` last, so installed apps never read a feed whose file is
   still uploading. A release with the apps but without `latest-mac.yml` leaves
   every installed macOS app on its old version.
