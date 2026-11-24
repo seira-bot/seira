@@ -9501,6 +9501,7 @@
   "activity.tool.team.boardClose": "Fechar cartão do quadro",
   "activity.tool.team.closeThread": "Fechar conversa",
   "activity.tool.team.renameThread": "Renomear conversa",
+  "activity.tool.team.suggestReplies": "Sugerir respostas",
   "activity.tool.team.coordinateBots": "Coordenar bots",
   "activity.tool.team.createBot": "Criar bot",
   "activity.tool.team.createRoom": "Criar grupo",

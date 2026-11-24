@@ -9564,6 +9564,7 @@
   "activity.tool.team.boardClose": "Board close",
   "activity.tool.team.closeThread": "Close thread",
   "activity.tool.team.renameThread": "Rename thread",
+  "activity.tool.team.suggestReplies": "Suggest replies",
   "activity.tool.team.coordinateBots": "Coordinate bots",
   "activity.tool.team.createBot": "Create bot",
   "activity.tool.team.createRoom": "Create room",

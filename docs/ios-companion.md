@@ -418,6 +418,12 @@ label, at most 40 characters) and a `prompt` (the text a tap puts in the compose
 optional. A line without it, and a turn that failed, was cancelled or has no useful next step, gets no field; then the
 client shows its own saved chips. A client that does not know the field ignores it.
 
+The server fills the field. During a turn in a direct chat with a bot, the bot can call the `suggest_replies` tool with
+up to 4 `title` and `prompt` pairs. The server cleans the list with `cleanSuggestedReplies`, drops, whole, any entry
+that holds a secret, and holds the rest for the thread. When the turn ends well, the server puts the list on the last
+bot text line of that turn only. It sends no list when the turn failed or was stopped, or when the turn is internal, a
+routine run, or work that another bot assigned. A new turn forgets an unused list.
+
 The text is written by a model, so every side runs `cleanSuggestedReplies`
 (`packages/phone-protocol/src/suggested-replies.ts`) before a chip exists. It replaces control characters, trims
 whitespace and drops, whole and never cut, an entry with an empty or over-limit part, or with one of these in the title

@@ -598,6 +598,7 @@ import { createAppSettings } from "./app-settings/host.ts"; import { createPictu
 import { routeBackedRegistry } from "./app-settings/registry.ts";
 import { createTrustAnswers } from "./host/trust-answers.ts";
 import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
+import { PendingSuggestedReplies } from "./suggested-replies-pending.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
@@ -5353,6 +5354,7 @@ bus.subscribe((event: RuntimeEvent) => {
 });
 // `pin` keeps a sibling thread's snapshot in the same folder from reclaiming the commit mid-turn.
 const turnStartedAt = new Map<string, number>();
+const suggestedReplies = new PendingSuggestedReplies();
 const turnCheckpoints = new Map<string, { botId: string; cwd: string; hash: string; pin: string }>();
 // Not every driver stamps every item with a turnId (some ACP agents), so unstamped rows go to the thread's live turn.
 const liveTurnByThread = new Map<string, string>();
@@ -6135,7 +6137,7 @@ bus.subscribe((event: RuntimeEvent) => {
   const liveTurnId = event.turnId ?? liveTurnByThread.get(event.threadId);
   switch (event.type) {
     case "turn.started":
-      turnStartedAt.set(event.threadId, Date.now());
+      turnStartedAt.set(event.threadId, Date.now()); suggestedReplies.clear(event.threadId);
       // A stop that never saw its turn.completed must not pass for this turn.
       stoppedTurns.delete(event.threadId); personStops.turnStarted(event.threadId, event.turnId);
       break;
@@ -6418,9 +6420,12 @@ bus.subscribe((event: RuntimeEvent) => {
         && (stoppedTurnId === undefined || completedTurnId === undefined || stoppedTurnId === completedTurnId));
       const stopped = event.stopReason === "interrupted" || clientStopped;
       landParkedFiles(); if (contextFullStop(event.stopReason)) contextFull.mark(event.threadId);
+      const offered = suggestedReplies.take(event.threadId);
       if (completedTurnId) {
         const terminal = store.markTerminalAssistantMessage(event.threadId, completedTurnId);
         if (terminal) store.patchMessage(event.threadId, terminal.id, { turnSucceeded: event.ok });
+        // Chips go on the last text line of a turn that ended well in the bot's own chat, nowhere else, and never before the turn ends.
+        if (offered && terminal && event.ok && !stopped && bot && !internal && !routineRun && !coordinator.assignerOf(event.threadId)) store.patchMessage(event.threadId, terminal.id, { suggestedReplies: offered });
         if (bot && event.ok) store.suggestTaskLink(bot.id, event.threadId, store.activePath(event.threadId)
           .filter((message) => message.role === "bot" && message.kind === "text" && message.turnId === completedTurnId)
           .map((message) => message.text ?? "").join("\n"));
@@ -12753,7 +12758,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         store, coordinator, from: internalSender, fromThreadId: internalCapability.threadId,
         ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
         shown: (id) => !proactive.fence.confines(id) && !botApiThread(id) && (CLOUD_TEAM ? teamHost.readableFrom(internalCapability.threadId)(id) : cloudLendingView(internalCapability) ? cloudOwnerOnlyThread(id) : true),
-        threadBusy, queuedThreadPosition, queuedReason: queuedStatus, readBody: readInternalBody,
+        threadBusy, queuedThreadPosition, queuedReason: queuedStatus, readBody: readInternalBody, suggestedReplies,
       }), createToolTimingRoute(usageTrace, internalCapability.threadId)], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/attach-file") {
         const from = internalSender;

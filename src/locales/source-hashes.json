@@ -35444,6 +35444,7 @@
       "activity.tool.team.boardClose": "3eb4cb419861397613ab309088f357faea96a4c74274fae596bf9397fb72b316",
       "activity.tool.team.closeThread": "5110caa6ca6c3ef28948a5962f370a17ad382c417453b260f2e2a080016eb7ac",
       "activity.tool.team.renameThread": "6930c8d1fc4f01d97ea3dbc5c5325c4ce9f88111aec79c61c32fa0efa6f9bc7a",
+      "activity.tool.team.suggestReplies": "87dcad225b44da441e58f6c6fbd2b4d470fad9a7d5f41eeaa3e62f7bc84ec64d",
       "activity.tool.team.coordinateBots": "e011bc66832ddd205a209592432b1828f47394765f17cc943f3d5878b1a50790",
       "activity.tool.team.createBot": "b23572a60492be71fc1ea5ba2ff20c60227c79d78d2da189e7ce7759ce9cfafd",
       "activity.tool.team.createRoom": "30abf96ab9bc2751750404b875e70a501fbf2943a90304b3e8b608ef3888ae8c",

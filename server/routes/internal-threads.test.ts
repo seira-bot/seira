@@ -20,7 +20,7 @@ async function listThreads(from: BotRecord) {
     from, fromThreadId: "t-own", ownsThread: () => true, shown: () => true,
     threadBusy: (_bot, threadId) => threadId === "t-ops-busy", queuedThreadPosition: () => null,
     queuedReason: (node, showTitle) => `${node.id} waits${showTitle ? " (titles)" : ""}`,
-    readBody: async () => ({}),
+    readBody: async () => ({}), suggestedReplies: { offer: () => 0 },
   });
   let body: { threads: Array<Record<string, unknown>> } | undefined;
   await route({ res: {}, path: "/api/internal/threads", method: "GET", json: (_res: unknown, _status: number, value: never) => { body = value; } } as never);
@@ -55,7 +55,7 @@ describe("rename_thread on the conversation the turn speaks in", () => {
       coordinator: {} as never,
       from: lead, fromThreadId: "t-own", ownsThread: () => opts.owns ?? true, shown: () => true,
       threadBusy: () => false, queuedThreadPosition: () => null, queuedReason: () => "",
-      readBody: async () => body,
+      readBody: async () => body, suggestedReplies: { offer: () => 0 },
     });
     let status = 0;
     let answer: Record<string, unknown> | undefined;
@@ -83,5 +83,36 @@ describe("rename_thread on the conversation the turn speaks in", () => {
       expect(refused.status).toBe(409);
       expect(refused.renamed).toEqual([]);
     }
+  });
+});
+
+describe("suggest_replies on the conversation the turn speaks in", () => {
+  async function offer(body: unknown, owns = true) {
+    const offered: Array<[string, unknown]> = [];
+    const route = createInternalThreadRoutes({
+      store: {} as never, coordinator: {} as never,
+      from: lead, fromThreadId: "t-own", ownsThread: () => owns, shown: () => true,
+      threadBusy: () => false, queuedThreadPosition: () => null, queuedReason: () => "",
+      readBody: async () => body,
+      suggestedReplies: { offer: (threadId, replies) => { offered.push([threadId, replies]); return 2; } },
+    });
+    let status = 0;
+    let answer: Record<string, unknown> | undefined;
+    await route({ res: {}, path: "/api/internal/suggested-replies", method: "POST", json: (_res: unknown, code: number, value: never) => { status = code; answer = value; } } as never);
+    return { status, answer: answer!, offered };
+  }
+
+  it("holds the list for the sender's own current thread only and says how many were kept", async () => {
+    const replies = [{ title: "More", prompt: "Tell me more." }];
+    const { status, answer, offered } = await offer({ replies });
+    expect(status).toBe(200);
+    expect(answer).toEqual({ kept: 2 });
+    expect(offered).toEqual([["t-own", replies]]);
+  });
+
+  it("refuses a conversation that is not the sender's and holds nothing", async () => {
+    const refused = await offer({ replies: [{ title: "More", prompt: "Tell me more." }] }, false);
+    expect(refused.status).toBe(403);
+    expect(refused.offered).toEqual([]);
   });
 });

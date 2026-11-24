@@ -352,6 +352,40 @@
       }
     },
     {
+      "name": "suggest_replies",
+      "description": "Offer up to 4 short follow-up replies the person could tap after your answer, only when they would truly help. Call it once, in the turn that writes the answer. A tap fills the person's composer and they decide to send, so write each prompt as the person would say it, in the language of this conversation. Plain text only: no links, commands or code. Leave it out when there is no clear next step.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "replies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "The chip label, at most 40 characters."
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "The text the person would send, at most 500 characters."
+                }
+              },
+              "required": [
+                "title",
+                "prompt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "replies"
+        ]
+      }
+    },
+    {
       "name": "start_thread",
       "description": "Open a separate job on yourself: one conversation with its own history and its own run, shown to the person as a row under you, without switching the person's selected conversation. Use it only when the user requests independent jobs (for example one review per pull request, \"review each pull request\" — one thread per pull request) instead of doing them inside this conversation, or a second opinion from another model (model_selection from list_models, report_back true). The title becomes the row's name, so make it short and specific, and write it as #Title when you mention it to the person; give complete instructions, since the run will not see this conversation. You can open at most five per turn; a self-opened job cannot open more jobs. This is not a teammate handoff: use coordinate_bots for teammates (thread \"new\" opens a fresh thread on them) and their automatic replies. If a call is refused, do not retry it: say what you still wanted opened.",
       "inputSchema": {

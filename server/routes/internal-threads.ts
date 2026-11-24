@@ -4,6 +4,7 @@ import { reachablePeers } from "../peer-roster.ts";
 import { threadTitleFrom, type BotRecord, type Store, type TaskRecord } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
+import type { PendingSuggestedReplies } from "../suggested-replies-pending.ts";
 
 type ThreadState = "running" | "waiting-on-you" | "queued" | "idle" | "closed";
 
@@ -31,6 +32,7 @@ export function createInternalThreadRoutes(deps: {
   queuedReason(node: HandoffView, showTitle?: (threadId: string) => boolean): string;
   /** The caller's body, read only while its turn still holds the capability. */
   readBody(): Promise<unknown>;
+  suggestedReplies: Pick<PendingSuggestedReplies, "offer">;
 }): RouteHandler {
   const { store, coordinator, from, fromThreadId } = deps;
   return async ({ res, path, method, json }) => {
@@ -99,6 +101,14 @@ export function createInternalThreadRoutes(deps: {
       const renamed = store.renameTask(from.id, fromThreadId, threadTitleFrom(title));
       if (!renamed) return json(res, 404, { error: "this conversation is not one of your own threads" });
       return json(res, 200, { renamed: true, title: renamed.title, previous });
+    }
+    // suggest_replies holds the chips for the caller's running turn. They reach a message only when that turn ends well.
+    if (method === "POST" && path === "/api/internal/suggested-replies") {
+      if (!deps.ownsThread(from.id, fromThreadId)) {
+        return json(res, 403, { error: "source conversation does not belong to sender" });
+      }
+      const body = await deps.readBody() as { replies?: unknown } | null;
+      return json(res, 200, { kept: deps.suggestedReplies.offer(fromThreadId, body?.replies) });
     }
     // close_thread folds a thread, never deletes it (a person's confirmed action), and never while it runs.
     const closeMatch = method === "POST" ? path.match(/^\/api\/internal\/threads\/([\w-]+)\/close$/) : null;
