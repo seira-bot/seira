@@ -21,7 +21,8 @@ function source(on: { routines: number; webhooks: number; appTriggers: number })
   const root = directory();
   json(root, "bots.json", []);
   json(root, "groups.json", []);
-  const records = (count: number) => [...Array.from({ length: count }, (_, index) => ({ id: `on${index}`, enabled: true, name: PLANTED, url: `https://${PLANTED}.example` })), { id: "off", enabled: false }];
+  type Entry = { id: string; enabled: boolean; name?: string; url?: string };
+  const records = (count: number): Entry[] => [...Array.from({ length: count }, (_, index): Entry => ({ id: `on${index}`, enabled: true, name: PLANTED, url: `https://${PLANTED}.example` })), { id: "off", enabled: false }];
   json(root, "routines.json", { version: 1, routines: records(on.routines), runs: [] });
   json(root, "webhooks.json", { version: 1, webhooks: records(on.webhooks).map(({ id, enabled, name }) => ({ id, endpointId: `e-${id}`, enabled, name })) });
   json(root, "app-triggers.json", { version: 1, pollerId: "poller-source-0001", cursor: 0, triggers: records(on.appTriggers), attempts: [], deleted: [] });
