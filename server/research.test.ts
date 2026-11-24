@@ -118,6 +118,39 @@ describe("research through the plan's relay", () => {
     expect(costLine(answer)).toBe("about $0.0045, settled when treg finishes");
   });
 
+  describe("the relay's cost headers", () => {
+    const OLD = "x-omb-research-";
+    const NEW = "x-seira-research-";
+    const answerFor = async (headers: Record<string, string>) => {
+      const { fetcher } = fakeFetch({ body: { people: [] }, headers });
+      return createResearchClient(PLAN, { fetcher }).call({ id: "apollo.people.search" });
+    };
+
+    it("reads the cost, the pending flag and the failure note from the new name alone", async () => {
+      expect(await answerFor({ [`${NEW}charged-usd`]: "0.0045", [`${NEW}pending`]: "true", [`${NEW}upstream-failed`]: "treg timed out" }))
+        .toEqual({ result: { people: [] }, costUsd: 0.0045, costPending: true, upstreamFailed: "treg timed out" });
+    });
+
+    it("still reads the old name alone", async () => {
+      expect(await answerFor({ [`${OLD}charged-usd`]: "0.0045", [`${OLD}pending`]: "true", [`${OLD}upstream-failed`]: "treg timed out" }))
+        .toEqual({ result: { people: [] }, costUsd: 0.0045, costPending: true, upstreamFailed: "treg timed out" });
+    });
+
+    it("takes the new name when both are present, header by header", async () => {
+      expect(await answerFor({ [`${NEW}charged-usd`]: "0.001", [`${OLD}charged-usd`]: "0.009", [`${NEW}pending`]: "false", [`${OLD}pending`]: "true", [`${NEW}upstream-failed`]: "new note", [`${OLD}upstream-failed`]: "old note" }))
+        .toEqual({ result: { people: [] }, costUsd: 0.001, upstreamFailed: "new note" });
+    });
+
+    it("falls back to the old name only for the header that the new name lacks", async () => {
+      expect(await answerFor({ [`${NEW}charged-usd`]: "0.001", [`${OLD}pending`]: "true" }))
+        .toEqual({ result: { people: [] }, costUsd: 0.001, costPending: true });
+    });
+
+    it("sends no cost when neither name is present", async () => {
+      expect(await answerFor({})).toEqual({ result: { people: [] } });
+    });
+  });
+
   it("relays the Admin's own sentence, with what keeps research going once the month's is used up, and says research isn't offered yet while its routes are off", async () => {
     const used = fakeFetch({ status: 429, body: { error: "quota_exceeded", message: "This month's $15 of research is used up. It resets on 1 November." } });
     expect((await failure(createResearchClient(PLAN, used).call({ id: "apollo.people.search" }))).message).toBe("This month's $15 of research is used up. It resets on 1 November. Add your own treg key to keep going.");
