@@ -85,7 +85,10 @@ describe("package-macos.yml", () => {
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package"]);
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package", "attach"]);
+    expect(flow.jobs.attach.environment).toBe("release");
+    expect(flow.jobs.attach.permissions).toEqual({ contents: "write" });
+    expect(JSON.stringify(flow.jobs.attach)).not.toContain("secrets.");
     expect(flow.jobs.commit.environment).toBeUndefined();
     expect(flow.jobs.commit.permissions).toBeUndefined();
     expect(JSON.stringify(flow.jobs.commit)).not.toContain("secrets.");
