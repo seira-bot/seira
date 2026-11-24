@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import type { WorkspaceBackupSummary } from "../../shared/workspace-backup";
-import { api } from "@/state/store";
+import { api, useStore } from "@/state/store";
 import { intlLocale, t } from "@/lib/i18n";
 import { applyWorkspaceClientState, collectWorkspaceClientState, WORKSPACE_RESTORE_MARKER } from "@/lib/workspace-backup-client";
 import { uploadBackupInChunks } from "@/lib/workspace-backup-upload";
+import { hasAutomationItem, readDoneItems, readRestoreChecklist, writeDoneItems, type ChecklistItem, type ChecklistItemId } from "@/lib/workspace-restore-checklist";
 import { LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsRows } from "./SettingsPrimitives";
 import { SettingsDialog } from "./settings/SettingsDialog";
 
-type BackupStatus = { busy: boolean; pendingRestore?: boolean; restarts?: boolean; lastRestoreId?: string };
+type BackupStatus = { busy: boolean; pendingRestore?: boolean; restarts?: boolean; lastRestoreId?: string; needsAction?: unknown; leftBehind?: unknown };
 const buttonClass = "cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-medium text-accent-ink disabled:opacity-40";
 const validPassword = (value: string) => value.length >= 12 && value.length <= 1024;
 
@@ -78,8 +79,45 @@ export function WorkspaceBackupSummaryView({ summary }: { summary: WorkspaceBack
   </div>;
 }
 
-type BackupRows = { exportRow: ReactNode; importRow: ReactNode };
-const BOTH_ROWS = ({ exportRow, importRow }: BackupRows) => <SettingsRows>{exportRow}{importRow}</SettingsRows>;
+const CHECKLIST_TEXT: Record<ChecklistItemId, { title: Parameters<typeof t>[0]; hint: Parameters<typeof t>[0]; opensAutomations: boolean }> = {
+  "routines-on": { title: "backup.checklist.routinesOn", hint: "backup.checklist.routinesOnHint", opensAutomations: true },
+  "webhooks-on": { title: "backup.checklist.webhooksOn", hint: "backup.checklist.webhooksOnHint", opensAutomations: true },
+  "app-automations-on": { title: "backup.checklist.appAutomationsOn", hint: "backup.checklist.appAutomationsOnHint", opensAutomations: true },
+  "left-behind": { title: "backup.checklist.leftBehind", hint: "backup.checklist.leftBehindHint", opensAutomations: false },
+};
+
+/** What to do after a restore. `items` is null when the server sends no list (an older server): one static line then. */
+export function WorkspaceRestoreChecklist({ items, done, onToggle, onOpen }: {
+  items: ChecklistItem[] | null; done: readonly string[]; onToggle: (id: ChecklistItemId) => void; onOpen: () => void;
+}) {
+  if (items === null) return <SettingsRows><SettingRow title={t("backup.checklist.title")} subtitle={t("backup.checklist.legacy")}>{null}</SettingRow></SettingsRows>;
+  // No automation item is not proof that nothing is paused (an older restore has no list), so the warning stays.
+  const unlisted = !hasAutomationItem(items)
+    ? <SettingRow title={t("backup.checklist.noneListedTitle")} subtitle={t("backup.checklist.noneListed")}>
+      <button type="button" className="ui-button" data-restore-open="unlisted" onClick={onOpen}>{t("backup.checklist.open")}</button>
+    </SettingRow>
+    : null;
+  if (items.length === 0) return <SettingsRows><SettingRow title={t("backup.checklist.title")} subtitle={t("backup.checklist.subtitle")}>{null}</SettingRow>{unlisted}</SettingsRows>;
+  const open = items.filter((item) => !done.includes(item.id)).length;
+  return <SettingsRows>
+    <SettingRow title={t("backup.checklist.title")} subtitle={open === 0 ? t("backup.checklist.allDone") : t("backup.checklist.subtitle")}>{null}</SettingRow>
+    {items.map((item) => {
+      const text = CHECKLIST_TEXT[item.id];
+      const finished = done.includes(item.id);
+      return <SettingRow key={item.id} title={t(text.title)} subtitle={t(text.hint, { count: item.count })}
+        message={finished ? <span data-restore-done={item.id}>{t("backup.checklist.doneState")}</span> : undefined}>
+        <span className="flex items-center gap-2">
+          {text.opensAutomations && !finished && <button type="button" className="ui-button" data-restore-open={item.id} onClick={onOpen}>{t("backup.checklist.open")}</button>}
+          <button type="button" className="ui-button" data-restore-toggle={item.id} onClick={() => onToggle(item.id)}>{finished ? t("backup.checklist.markUndone") : t("backup.checklist.markDone")}</button>
+        </span>
+      </SettingRow>;
+    })}
+    {unlisted}
+  </SettingsRows>;
+}
+
+type BackupRows = { exportRow: ReactNode; importRow: ReactNode; checklist?: ReactNode };
+const BOTH_ROWS = ({ exportRow, importRow, checklist }: BackupRows) => <><SettingsRows>{exportRow}{importRow}</SettingsRows>{checklist}</>;
 
 /** `layout` places the two rows (a page with a section for each); one instance still owns their state and dialogs. */
 export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows: BackupRows) => ReactNode } = {}) {
@@ -102,12 +140,14 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
   const [unfinishedUpload, setUnfinishedUpload] = useState<string | null>(null);
+  const [done, setDone] = useState<string[]>([]);
+  const { dispatch } = useStore();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
     try {
       const result: BackupStatus = await api("/api/workspace-backup/status");
-      if (alive.current) { setStatus(result); setError(null); }
+      if (alive.current) { setStatus(result); setError(null); setDone(result.lastRestoreId ? readDoneItems(result.lastRestoreId) : []); }
     } catch (cause) {
       if (alive.current) { setStatus(null); setError(cause instanceof Error ? cause.message : String(cause)); }
     }
@@ -195,6 +235,15 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
     if (alive.current) { setStatus({ busy: false, pendingRestore: true, restarts: restarting }); setPreview(null); setConfirmation(""); }
   });
 
+  const toggleDone = (id: ChecklistItemId) => {
+    if (!status?.lastRestoreId) return;
+    const next = done.includes(id) ? done.filter((item) => item !== id) : [...done, id];
+    setDone(next);
+    writeDoneItems(status.lastRestoreId, next);
+  };
+  const checklist = status?.lastRestoreId
+    ? <WorkspaceRestoreChecklist items={readRestoreChecklist(status)} done={done} onToggle={toggleDone} onOpen={() => dispatch({ type: "showRoutines" })} />
+    : null;
   const disabled = busy !== null || !status || status.busy || Boolean(status.pendingRestore);
   const closeExport = () => { setExporting(false); setExportPassword(""); setConfirmPassword(""); };
   const closeImport = () => { setImporting(false); setFile(null); setUploadedId(null); setUnfinishedUpload(null); setUploadFailed(false); setUploadPercent(null); setPreview(null); setConfirmation(""); setImportPassword(""); };
@@ -215,6 +264,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
       importRow: <SettingRow title={t("backup.import")} subtitle={t("backup.importShort")}>
         <button type="button" className="ui-button" disabled={disabled} data-backup-import="" onClick={() => setImporting(true)}>{t("backup.chooseFile")}</button>
       </SettingRow>,
+      checklist,
     })}
     {exporting && (
       <SettingsDialog title={t("backup.export")} onClose={closeExport}>

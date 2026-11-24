@@ -10,10 +10,13 @@ import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.
 import {
   createWorkspaceBackup, stageWorkspaceBackup, commitPendingWorkspaceRestore,
   MAX_WORKSPACE_BACKUP_UPLOAD_BYTES,
+  omittedFromWorkspaceBackup,
   removeWorkspaceBackupJob,
   type WorkspaceBackupSummary,
 } from "./workspace-backup.ts";
 import type { RequestAuth } from "./request-auth.ts";
+import { LEAVE_OUT_PARTS, parseLeaveOut, partSizesAsync, singleFlightSizes } from "./workspace-backup-parts.ts";
+import { teamCloudBackup } from "./workspace-backup-team-private.ts";
 import { userErrorFields } from "./user-errors.ts";
 
 const PREFIX = "/api/workspace-backup";
@@ -29,7 +32,13 @@ type Artifact = {
   /** `uploading` only: the announced size, the bytes stored, and whether a part is being written. */
   total?: number; received?: number; writing?: boolean;
 };
-type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string> };
+/** The status shows only how many bots stayed behind. The folder paths stay in the private receipt. */
+function leftBehindCount(value: unknown): { bots: number } | null {
+  const bots = value && typeof value === "object" ? (value as { bots?: unknown }).bots : undefined;
+  return typeof bots === "number" && Number.isSafeInteger(bots) && bots >= 0 ? { bots } : null;
+}
+
+type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string>; leftBehind?: unknown; needsAction?: unknown[] | null };
 
 /** One `bytes=a-b`, `a-` or `-n` range; any other header, including a list of ranges, means the whole file. */
 function byteRange(header: string | undefined, size: number): { start: number; end: number } | "unsatisfiable" | undefined {
@@ -69,6 +78,8 @@ export function createWorkspaceBackupRoutes(options: {
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
 }) {
+  // The report skips the same paths as the export does: it calls the export's own rule.
+  const sizesOnce = singleFlightSizes((root) => partSizesAsync(root, [], omittedFromWorkspaceBackup));
   const artifacts = new Map<string, Artifact>();
   let operating = false;
   const json = (res: ServerResponse, status: number, body: unknown) => {
@@ -146,7 +157,17 @@ export function createWorkspaceBackupRoutes(options: {
           ...(options.restart ? { restarts: true } : {}),
           lastRestoreId: options.restored.restored ? options.restored.id : null,
           safetyCopyPath: options.restored.safetyCopyPath ?? null,
+          leftBehind: leftBehindCount(options.restored.leftBehind),
+          needsAction: options.restored.needsAction ?? null,
         });
+        return true;
+      }
+      if (method === "GET" && path === `${PREFIX}/sizes`) {
+        // Read-only: bytes for each part of the data folder, so a person can see what makes a backup large.
+        // On a Team Cloud an export leaves out each member's private data, and a count of the raw folder would include it: give no numbers.
+        if (teamCloudBackup()) throw failure("Backup sizes are not available on a Team Cloud, because the totals would include other members' private data.", 403);
+        const parts = await sizesOnce(options.dataDir);
+        json(res, 200, { parts, total: Object.values(parts).reduce((sum, bytes) => sum + bytes, 0), canLeaveOut: [...LEAVE_OUT_PARTS] });
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/client-state`) {
@@ -157,14 +178,16 @@ export function createWorkspaceBackupRoutes(options: {
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/export`) {
-        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}) }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
+        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}), leaveOut: z.unknown().optional() }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
         if (Buffer.byteLength(JSON.stringify(body.clientState)) > MAX_CLIENT_STATE_BYTES) throw failure("Saved drafts exceed the 2 MB backup preference limit.", 413);
+        let leaveOut: string[];
+        try { leaveOut = parseLeaveOut(body.leaveOut); } catch (error) { throw failure((error as Error).message); }
         const clientState = Object.fromEntries(Object.entries(body.clientState).filter(([key]) => WORKSPACE_BACKUP_CLIENT_KEYS.includes(key as typeof WORKSPACE_BACKUP_CLIENT_KEYS[number])));
         const result = await operate(() => options.exclusive(async () => {
           check(req, auth);
           replacePrevious(auth, ["download"]);
           if (artifacts.size >= 4) throw failure("There are already four backup files in progress. Restart or wait an hour before creating another.", 409);
-          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion });
+          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion, leaveOut });
         }));
         try { check(req, auth); } catch (error) { removeWorkspaceBackupJob(options.dataDir, result.id); throw error; }
         artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });

@@ -3,7 +3,7 @@ import { FolderOpen } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { type DepartmentFolders, folderAccessOrNull, limitedBy, shownFolders, type FolderAccess } from "@/lib/folder-access";
+import { type DepartmentFolders, folderAccessOrNull, INSTALL_BWRAP, limitedBy, shownFolders, type FolderAccess } from "@/lib/folder-access";
 import { Segmented, TrashButton } from "./bot-panel/rows";
 import { Switch } from "./SettingsPrimitives";
 import { inputCls } from "./bot-settings/field";
@@ -33,7 +33,6 @@ interface Props {
   boxMissing?: DepartmentFolders["boxMissing"];
 }
 
-const INSTALL_BWRAP = "sudo apt install bubblewrap";
 
 export function FolderAccessEditor({ access, save, department, subject, enforcement, boxMissing }: Props) {
   const [saving, setSaving] = useState(false);

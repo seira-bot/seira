@@ -3,6 +3,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
+
 /** A bot of another place is addressed here as `link-<that place's key>-<its id there>`, so the same id in two places,
  * or on two computers, is as many bots. The key is cut from the place's own identity. */
 export const LINK_PREFIX = "link-";
@@ -32,6 +34,9 @@ export const SEEN_MS = HOLD_MS + 20_000;
 export const LINK_EXPIRES_MS = 30 * 24 * 60 * 60_000;
 /** One exchange carries about this much; what is left goes with the next. */
 export const EXCHANGE_BYTES = 1_500_000;
+/** The largest request or answer a guest link reads, in bytes: a full exchange of characters that take three bytes each,
+ * or the largest frame that parses with each character escaped to six bytes. */
+export const GUEST_EXCHANGE_MAX = 5_500_000;
 /** Computers one Cloud links at a time. */
 export const PEERS_MAX = 10;
 export const BRIEF_MAX = 12_000;
@@ -45,6 +50,8 @@ const botId = z.string().regex(/^[\w-]{1,128}$/u);
  * sends the other only what its level reads. 1: the first version, whose hello takes a bot's id, name, title,
  * description, model and level and nothing else. 2: a bot's look, Chief mark and own thread too. */
 export const LEVEL_HEADER = "x-seira-bot-link";
+/** On a guest link's exchange: how many of the frames it carried, from the first, were taken. The rest are sent again. */
+export const TAKEN_HEADER = "x-seira-bot-link-taken";
 export const PROTOCOL_LEVEL = 2;
 export const levelOf = (header: string | string[] | null | undefined): number => { const said = Number(Array.isArray(header) ? header[0] : header); return Number.isInteger(said) && said >= 1 ? Math.min(said, PROTOCOL_LEVEL) : 1; };
 const name = z.string().trim().min(1).max(120);
@@ -90,6 +97,8 @@ export const frameSchema = z.discriminatedUnion("t", [
 ]);
 export type Frame = z.infer<typeof frameSchema>;
 export type ResultFrame = Extract<Frame, { t: "result" }>;
+/** A frame from a server of another owner: none of its files may be larger than one file may be. */
+export const guestFrameSchema = frameSchema.refine((frame) => !("files" in frame) || !frame.files?.some((one) => one.bytes > FILE_MAX_BYTES));
 
 export const numbered = z.object({ seq: z.number().int().positive(), frame: z.unknown() }).strict();
 export type Numbered = { seq: number; frame: Frame };

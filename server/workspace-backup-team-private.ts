@@ -30,8 +30,13 @@ const rows = (value: unknown): Row[] => (Array.isArray(value) ? value.filter(rec
 const ownBot = (bot: Row): boolean => record(bot.defaultBot) && typeof bot.defaultBot.person === "string" && bot.defaultBot.person.trim() !== "";
 
 /** What a Team Cloud's export must leave out; null anywhere else, where nothing is left out. */
+/** True on a Team Cloud, where an export leaves out each member's private data. The same test `teamPrivateThreads` starts with. */
+export function teamCloudBackup(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SEIRA_CLOUD_ROLE === "team";
+}
+
 export function teamPrivateThreads(files: { starters: string; groups: string; bots: string }, env: NodeJS.ProcessEnv = process.env): TeamPrivacy | null {
-  if (env.SEIRA_CLOUD_ROLE !== "team") return null;
+  if (!teamCloudBackup(env)) return null;
   const rooms = new Set<string>();
   for (const group of rows(readJson(files.groups))) {
     if (typeof group.threadId === "string") rooms.add(group.threadId);
