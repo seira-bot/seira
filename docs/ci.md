@@ -360,7 +360,7 @@ sets them in GitHub **Settings → Actions → General**:
 Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the default branch with no bypass actor.
 An organization admin's merge then also needs a green `CI` check.
 
-In **Settings → General → Releases**, turn on release immutability. After a
+In GitHub **Settings → General → Releases**, turn on release immutability. After a
 release is published, nobody can add, change, or delete its assets, or move
 its tag.
 
