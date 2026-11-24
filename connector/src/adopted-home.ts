@@ -21,7 +21,7 @@ const SERVICE = "seira";
 const FRONT = "caddy";
 const PROJECT_LABEL = "com.docker.compose.project";
 const SERVICE_LABEL = "com.docker.compose.service";
-const HOME_REPOSITORY = "ghcr.io/milind-soni/openmausbot";
+const HOME_REPOSITORIES = ["ghcr.io/seira-bot/seira", "ghcr.io/milind-soni/openmausbot"];
 const COPY_CAPS = ["CHOWN", "DAC_OVERRIDE", "DAC_READ_SEARCH", "FOWNER", "FSETID"];
 const READ_CAPS = ["DAC_READ_SEARCH"];
 const DELETE_CAPS = ["DAC_OVERRIDE", "DAC_READ_SEARCH"];
@@ -46,7 +46,7 @@ export async function findInstall(docker: Docker): Promise<{ ok: true; install: 
   const container = found ? await docker.containerInspect(found.Id) : null;
   if (!container) return { ok: false, why: "Seira is not installed on this server yet. Install it first with the server's install command, then connect it." };
   const image = container.Config.Image;
-  if (!image.startsWith(`${HOME_REPOSITORY}:`) && !image.startsWith(`${HOME_REPOSITORY}@`)) {
+  if (!HOME_REPOSITORIES.some((repository) => image.startsWith(`${repository}:`) || image.startsWith(`${repository}@`))) {
     return { ok: false, why: "The Seira on this server was built here, not downloaded from Seira's registry, so Seira cannot update it. Move it to the published image first: ./update.sh --replace-local-build" };
   }
   const data = (container.Mounts ?? []).find((mount) => mount.Destination === "/data");
