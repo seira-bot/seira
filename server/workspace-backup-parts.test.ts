@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { backupPartOf, partSizes, partSizesAsync, parseLeaveOut, singleFlightSizes } from "./workspace-backup-parts.ts";
 import { dataBytes } from "./workspace-backup-space.ts";
-import { createWorkspaceBackup, createWorkspaceBackupSnapshot, stageWorkspaceBackup } from "./workspace-backup.ts";
+import { createWorkspaceBackup, omittedFromWorkspaceBackup, createWorkspaceBackupSnapshot, stageWorkspaceBackup } from "./workspace-backup.ts";
 import { readFileSync } from "node:fs";
 
 const PASSWORD = "correct horse battery staple";
@@ -125,4 +125,14 @@ it("does one walk for two calls at the same time, then a new walk for a later ca
   expect(walks).toBe(1);
   await once(root);
   expect(walks).toBe(2);
+});
+
+it("skips the paths that the omit rule names, in both the sync and the async walk", async () => {
+  const root = fixture();
+  write(root, "tools/runtime.bin", 777);
+  write(root, "cache/blob", 555);
+  const withRule = partSizes(root, [], omittedFromWorkspaceBackup);
+  expect(withRule.other).toBe(7);
+  expect(partSizes(root).other).toBe(7 + 777 + 555);
+  expect(await partSizesAsync(root, [], omittedFromWorkspaceBackup)).toEqual(withRule);
 });

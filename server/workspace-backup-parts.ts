@@ -37,8 +37,12 @@ export function parseLeaveOut(value: unknown): LeaveOutPart[] {
   return [...chosen];
 }
 
-/** Bytes of regular files for each part. Links, unreadable entries, the backup folder and dependency folders are left out. */
-export function partSizes(root: string, leaveOut: readonly BackupPart[] = []): Record<BackupPart, number> {
+/** Tells whether the export leaves a path out (relative to the data folder, "/" separators). The size report gets the export's own rule. */
+export type OmitFromBackup = (path: string) => boolean;
+
+/** Bytes of regular files for each part. Links, unreadable entries, the backup folder and dependency folders are left out,
+ * and so is every path that `omit` names: pass the export's own rule so the report counts what an export would take. */
+export function partSizes(root: string, leaveOut: readonly BackupPart[] = [], omit?: OmitFromBackup): Record<BackupPart, number> {
   const sizes = Object.fromEntries(BACKUP_PARTS.map((part) => [part, 0])) as Record<BackupPart, number>;
   const skip = new Set<BackupPart>(leaveOut);
   const walk = (directory: string, prefix: string) => {
@@ -47,6 +51,7 @@ export function partSizes(root: string, leaveOut: readonly BackupPart[] = []): R
     for (const name of names) {
       if ((!prefix && name === ".backups") || name === "node_modules") continue;
       const path = prefix ? `${prefix}/${name}` : name;
+      if (omit?.(path)) continue;
       const part = backupPartOf(path);
       if (skip.has(part)) continue;
       try {
@@ -62,7 +67,7 @@ export function partSizes(root: string, leaveOut: readonly BackupPart[] = []): R
 }
 
 /** Same result as `partSizes`, but the walk is async, so a large data folder does not block the event loop. */
-export async function partSizesAsync(root: string, leaveOut: readonly BackupPart[] = []): Promise<Record<BackupPart, number>> {
+export async function partSizesAsync(root: string, leaveOut: readonly BackupPart[] = [], omit?: OmitFromBackup): Promise<Record<BackupPart, number>> {
   const sizes = Object.fromEntries(BACKUP_PARTS.map((part) => [part, 0])) as Record<BackupPart, number>;
   const skip = new Set<BackupPart>(leaveOut);
   const walk = async (directory: string, prefix: string): Promise<void> => {
@@ -71,6 +76,7 @@ export async function partSizesAsync(root: string, leaveOut: readonly BackupPart
     for (const name of names) {
       if ((!prefix && name === ".backups") || name === "node_modules") continue;
       const path = prefix ? `${prefix}/${name}` : name;
+      if (omit?.(path)) continue;
       const part = backupPartOf(path);
       if (skip.has(part)) continue;
       try {

@@ -10,11 +10,13 @@ import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.
 import {
   createWorkspaceBackup, stageWorkspaceBackup, commitPendingWorkspaceRestore,
   MAX_WORKSPACE_BACKUP_UPLOAD_BYTES,
+  omittedFromWorkspaceBackup,
   removeWorkspaceBackupJob,
   type WorkspaceBackupSummary,
 } from "./workspace-backup.ts";
 import type { RequestAuth } from "./request-auth.ts";
-import { LEAVE_OUT_PARTS, parseLeaveOut, singleFlightSizes } from "./workspace-backup-parts.ts";
+import { LEAVE_OUT_PARTS, parseLeaveOut, partSizesAsync, singleFlightSizes } from "./workspace-backup-parts.ts";
+import { teamCloudBackup } from "./workspace-backup-team-private.ts";
 import { userErrorFields } from "./user-errors.ts";
 
 const PREFIX = "/api/workspace-backup";
@@ -70,7 +72,8 @@ export function createWorkspaceBackupRoutes(options: {
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
 }) {
-  const sizesOnce = singleFlightSizes();
+  // The report skips the same paths as the export does: it calls the export's own rule.
+  const sizesOnce = singleFlightSizes((root) => partSizesAsync(root, [], omittedFromWorkspaceBackup));
   const artifacts = new Map<string, Artifact>();
   let operating = false;
   const json = (res: ServerResponse, status: number, body: unknown) => {
@@ -153,6 +156,8 @@ export function createWorkspaceBackupRoutes(options: {
       }
       if (method === "GET" && path === `${PREFIX}/sizes`) {
         // Read-only: bytes for each part of the data folder, so a person can see what makes a backup large.
+        // On a Team Cloud an export leaves out each member's private data, and a count of the raw folder would include it: give no numbers.
+        if (teamCloudBackup()) throw failure("Backup sizes are not available on a Team Cloud, because the totals would include other members' private data.", 403);
         const parts = await sizesOnce(options.dataDir);
         json(res, 200, { parts, total: Object.values(parts).reduce((sum, bytes) => sum + bytes, 0), canLeaveOut: [...LEAVE_OUT_PARTS] });
         return true;
