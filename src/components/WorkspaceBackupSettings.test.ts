@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceBackupSummary } from "../../shared/workspace-backup";
 
-const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], api: vi.fn() }));
+const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], api: vi.fn(), dispatch: vi.fn() }));
 vi.mock("react", async (original) => ({ ...await original<typeof import("react")>(),
   useState: (initial: unknown) => {
     const index = fixture.index++;
@@ -12,7 +12,7 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
   },
   useEffect: (effect: EffectCallback) => { fixture.effects.push(effect); },
 }));
-vi.mock("@/state/store", () => ({ api: fixture.api }));
+vi.mock("@/state/store", () => ({ api: fixture.api, useStore: () => ({ dispatch: fixture.dispatch }) }));
 import { WorkspaceBackupRecovery, WorkspaceBackupRestartNotice, WorkspaceBackupSettings, WorkspaceBackupSummaryView } from "./WorkspaceBackupSettings";
 
 type Node = ReactElement<{ children?: ReactNode; type?: string; disabled?: boolean; value?: string; onChange?: (event: unknown) => void; onSubmit?: (event: unknown) => void; onClick?: () => void }>;
@@ -36,7 +36,7 @@ const change = (input: Node, value: string) => input.props.onChange!({ target: {
 const summary: WorkspaceBackupSummary = { format: "seira.workspace-backup", version: 1, id: "archive-id", createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 9, directories: 3, bytes: 1234, bots: 2, groups: 1, threads: 4, messages: 8, warnings: ["Fixture warning"], exclusions: ["Saved account credentials and connections", "External CLI sign-ins"] };
 let storage: Map<string, string>;
 beforeEach(() => {
-  fixture.values = []; fixture.index = 0; fixture.effects = []; fixture.api.mockReset();
+  fixture.values = []; fixture.index = 0; fixture.effects = []; fixture.api.mockReset(); fixture.dispatch.mockReset();
   storage = new Map();
   vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
   vi.stubGlobal("window", { location: { reload: vi.fn() } });
@@ -370,5 +370,69 @@ describe("Settings full backups", () => {
     expect(render(true).html).toContain("Storage unavailable"); expect(render(true).html).not.toContain("Normal app");
     expect(storage.get("seira-drafts")).toBe("keep"); expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(window.location.reload).not.toHaveBeenCalled();
+  });
+});
+
+describe("Settings after-restore checklist", () => {
+  const withStatus = async (status: Record<string, unknown>) => { fixture.api.mockResolvedValueOnce({ busy: false, ...status }); render(); fixture.effects[0](); await flush(); };
+  const checklistProps = () => render().nodes.find((node) => (node.type as { name?: string }).name === "WorkspaceRestoreChecklist")!.props as unknown as { onToggle: (id: string) => void; onOpen: () => void };
+
+  it("shows one row for each paused kind and for left-behind work folders, and draws only fixed text and a count", async () => {
+    await withStatus({ lastRestoreId: "r1", leftBehind: { bots: 1, paths: ["C:\\Work"] },
+      needsAction: [{ kind: "routines-on", count: 2, name: "secret-token-name" }, { kind: "webhooks-on", count: 3 }, { kind: "mystery", count: 9 }, { kind: "routines-on", count: 5 }] });
+    const html = render().html;
+    expect(html).toContain("After the restore");
+    expect(html).toContain("Turn routines back on");
+    expect(html).toContain("Paused: 2");
+    expect(html).not.toContain("Paused: 5");
+    expect(html).toContain("Turn webhooks back on");
+    expect(html).toContain("Paused: 3");
+    expect(html).toContain("Choose a work folder on this computer");
+    expect(html).toContain("Bots with a work folder that stayed on the old computer: 1");
+    expect(html).not.toContain("mystery");
+    expect(html).not.toContain("secret-token-name");
+    expect(html).not.toContain("C:");
+    expect(html.match(/data-restore-open=/g)).toHaveLength(2);
+  });
+
+  it("opens Automations from a row", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }] });
+    checklistProps().onOpen();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines" });
+  });
+
+  it("keeps done marks on this device for this restore only, and can undo them", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }, { kind: "webhooks-on", count: 1 }] });
+    checklistProps().onToggle("routines-on");
+    expect(JSON.parse(storage.get("seira-restore-checklist:r1")!)).toEqual(["routines-on"]);
+    let html = render().html;
+    expect(html).toContain("data-restore-done=\"routines-on\"");
+    expect(html).not.toContain("data-restore-done=\"webhooks-on\"");
+    checklistProps().onToggle("webhooks-on");
+    expect(render().html).toContain("All items are marked done.");
+    checklistProps().onToggle("routines-on");
+    html = render().html;
+    expect(html).not.toContain("data-restore-done=\"routines-on\"");
+    expect(JSON.parse(storage.get("seira-restore-checklist:r1")!)).toEqual(["webhooks-on"]);
+    // A new restore starts with a clean list.
+    fixture.values = []; await withStatus({ lastRestoreId: "r2", needsAction: [{ kind: "routines-on", count: 1 }] });
+    expect(render().html).not.toContain("data-restore-done");
+    // The first restore's marks come back when its status is read again.
+    fixture.values = []; await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }, { kind: "webhooks-on", count: 1 }] });
+    expect(render().html).toContain("data-restore-done=\"webhooks-on\"");
+  });
+
+  it("says that nothing needs attention when the list is empty", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [], leftBehind: null });
+    const html = render().html;
+    expect(html).toContain("Nothing needs your attention after the last restore.");
+    expect(html).not.toContain("data-restore-open");
+  });
+
+  it("shows the old static line when the server sends no list, and nothing when there was no restore", async () => {
+    await withStatus({ lastRestoreId: "r1" });
+    expect(render().html).toContain("arrive paused after a restore. Turn them on again in Automations");
+    fixture.values = []; await withStatus({});
+    expect(render().html).not.toContain("After the restore");
   });
 });
