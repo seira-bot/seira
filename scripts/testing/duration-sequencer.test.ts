@@ -48,6 +48,13 @@ describe("vitest shard balance", () => {
     expect(viteConfig.test?.sequence?.sequencer ?? BaseSequencer).toBe(DurationSequencer);
   });
 
+  it("collects every component test file that ends in .test.tsx, so the shards run it", () => {
+    const tsx = globSync("src/**/*.test.tsx", { cwd: ROOT, exclude: (file) => /(^|[\\/])node_modules$/.test(file) })
+      .map((file) => file.split(path.sep).join("/"));
+    expect(tsx.length).toBeGreaterThan(0);
+    for (const file of tsx) expect(FILES, file).toContain(file);
+  });
+
   it.each(CI_PLATFORMS)("gives no $os shard much more recorded time than the others", ({ platform, count, files }) => {
     const { loads } = planShards(files, loadShardWeights(ROOT, platform), count);
     const mean = loads.reduce((sum, load) => sum + load, 0) / loads.length;
@@ -148,6 +155,11 @@ describe("update-shard-weights", () => {
       "scripts/testing/cloud-preview.e2e.test.ts": 0,
       "server/c.test.ts": 9,
     });
+  });
+
+  it("reads the line of a component test file that ends in .test.tsx", () => {
+    const log = "2026-10-06T10:03:23.1Z  ✓ src/components/A.test.tsx (4 tests) 6200ms";
+    expect(Object.fromEntries(parseVitestLog(log))).toEqual({ "src/components/A.test.tsx": 6.2 });
   });
 
   it("finds a vitest job's platform by its platform name or its runner name", () => {

@@ -102,6 +102,17 @@ test("only a 503 that says asleep is My Cloud going to sleep", () => {
   assert.equal(asleepAnswer(null), false);
 });
 
+test("the asleep answer is read under the new name and the old one, and the new one wins", () => {
+  const answer = (status, headers = {}) => new Response(null, { status, headers });
+  const OLD = "x-omb-cloud-power";
+  assert.equal(asleepAnswer(answer(503, { "x-seira-cloud-power": "asleep" })), true);
+  assert.equal(asleepAnswer(answer(503, { "x-seira-cloud-power": "awake" })), false);
+  assert.equal(asleepAnswer(answer(503, { "x-seira-cloud-power": "awake", [OLD]: "asleep" })), false);
+  assert.equal(asleepAnswer(answer(503, { "x-seira-cloud-power": "asleep", [OLD]: "awake" })), true);
+  assert.equal(asleepAnswer(answer(200, { "x-seira-cloud-power": "asleep" })), false);
+  assert.equal(asleepAnswer({ status: 503, headers: {} }), false);
+});
+
 test("opening My Cloud: as before without power; a sleeping one is woken first and given 30 s to answer", async () => {
   const calls = [];
   const signedIn = async ms => { calls.push(["signed-in", ms]); return true; };

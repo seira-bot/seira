@@ -37770,6 +37770,7 @@
       "folderAccess.add.pathPlaceholder": "2ece9c10190e8cc363c65a154fffb1e9fd4b8c8c9ff6afa1680e875988476e1b",
       "folderAccess.boxNote": "e886cfe39c4eeb5cc1087dc6b40da3521410331bc7fe8af0f48421fc7fc08914",
       "folderAccess.aiNote": "10e32d40de71f5ad03e1f1f7f4dc62604ccf828b685cef460f09727965f682a6",
+      "folderAccess.noBwrap": "0e70210579e282a78cf767c9c28cc977a77e5128fe3ce06b42a6be20415a7083",
       "folderAccess.setElsewhere": "206917f2176b92d5507bb39068e5daf09c91538a4a921a72914dc6f481d2eb07",
       "team.folders": "c4d6bb200f4c058a9b16e900cb5495e59b52fda24cf011eedef8645c90051a8c",
       "team.foldersFor": "25afea5ef9eeafeb79454acb06acdfdf7a1608886b7ff642321f6c98b0b08430",
@@ -37937,7 +37938,8 @@
       "power.toast.paused": "7d41809f3fa3d66e6f37d72b71a18004f7fffd6b730832bd9175830277a10901",
       "power.toast.resumed": "bdd09e2a3442374f8c4fc5627a194d79e8fa04dd359d41568f2bb600e3ff75ea",
       "power.toast.restarted": "82121eec7c06ab644482be2daba765379e74ca4a956a3a26d3ad75e39bf4c7f3",
-      "power.toast.updated": "da0fcccdc519425a9c333fda0838bbdd50d67fb0266194753bd1044abd0ecbb4"
+      "power.toast.updated": "da0fcccdc519425a9c333fda0838bbdd50d67fb0266194753bd1044abd0ecbb4",
+      "aiImport.drop.backup": "ed9ad239c8e8552237ab7db26c296a8f8b32212d9eea0bb47fab1e22d7811207"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",

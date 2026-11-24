@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createDesktopPrefs } from "./desktop-prefs.mjs";
-import { createMainTextSize, createTextSize, normalizeTextSize, stepTextSize, TEXT_SIZE_STEPS } from "./text-size.mjs";
+import { createMainTextSize, createTextSize, normalizeTextSize, stepTextSize, TEXT_SIZE_STEPS, textSizeMinimum } from "./text-size.mjs";
 
 const memory = (record) => {
   let saved = record;
@@ -96,4 +96,76 @@ test("the main window's size does nothing once the window is gone", () => {
   const size = createMainTextSize({ prefs: () => prefs, window: () => null });
   assert.equal(size.zoomIn(), 1.1);
   assert.equal(prefs.textSize(), 1.1);
+});
+
+const BASE = { width: 840, height: 620 };
+const fitting = ({ step = 1, bounds = { x: 900, y: 300, width: 840, height: 620 }, area = { x: 0, y: 0, width: 1920, height: 1040 }, maximized = false, fullScreen = false } = {}) => {
+  const prefs = createDesktopPrefs(memory({ seen: [], textSize: step })), calls = { min: [], bounds: [] };
+  const contents = { ...page(), on: () => {}, send: () => {} };
+  const win = {
+    minimum: [840, 620], bounds, contents, isDestroyed: () => false, webContents: contents,
+    getMinimumSize() { return this.minimum; }, setMinimumSize(w, h) { this.minimum = [w, h]; calls.min.push([w, h]); },
+    getBounds() { return this.bounds; }, setBounds(value) { this.bounds = value; calls.bounds.push(value); },
+    isMaximized: () => maximized, isFullScreen: () => fullScreen,
+  };
+  const state = { area };
+  const size = createMainTextSize({ prefs: () => prefs, window: () => win, base: BASE, workArea: () => state.area });
+  return { win, calls, size, state };
+};
+
+test("AC-01 and AC-02 the window minimum grows with a step above 100 % and keeps the base at 90 % and 100 %", () => {
+  const expected = [[0.9, 840, 620], [1, 840, 620], [1.1, 924, 682], [1.25, 1050, 775], [1.5, 1260, 930], [1.75, 1470, 1085], [2, 1680, 1240]];
+  for (const [step, width, height] of expected) assert.deepEqual(textSizeMinimum(step, BASE, null), { width, height }, `step ${step}`);
+});
+
+test("AC-03 the window minimum never passes the work area", () => {
+  const area = { x: 0, y: 0, width: 1366, height: 740 };
+  assert.deepEqual(textSizeMinimum(1.25, BASE, area), { width: 1050, height: 740 });
+  assert.deepEqual(textSizeMinimum(2, BASE, area), { width: 1366, height: 740 });
+  assert.deepEqual(textSizeMinimum(2, BASE, null), { width: 1680, height: 1240 });
+  assert.deepEqual(textSizeMinimum(2, BASE, { width: 0, height: NaN }), { width: 1680, height: 1240 });
+});
+
+test("AC-04 a step change grows a window that is smaller than the new minimum and keeps it inside the work area", () => {
+  const { win, calls, size } = fitting();
+  size.set(1.5);
+  assert.deepEqual(win.minimum, [1260, 930]);
+  assert.deepEqual(calls.bounds, [{ x: 660, y: 110, width: 1260, height: 930 }]);
+});
+
+test("AC-05 a maximized or full-screen window keeps its bounds on a step change", () => {
+  for (const flags of [{ maximized: true }, { fullScreen: true }]) {
+    const { win, calls, size } = fitting(flags);
+    size.set(1.5);
+    assert.deepEqual(win.minimum, [1260, 930]);
+    assert.equal(calls.bounds.length, 0);
+  }
+});
+
+test("AC-06 a move to another screen sets the minimum for that work area and does not resize the window", () => {
+  const { win, calls, size, state } = fitting({ step: 1.5, bounds: { x: 0, y: 0, width: 1260, height: 930 } });
+  size.fit();
+  assert.deepEqual(win.minimum, [1260, 930]);
+  state.area = { x: 1920, y: 0, width: 1366, height: 740 };
+  size.fit();
+  assert.deepEqual(win.minimum, [1260, 740]);
+  assert.equal(calls.min.length, 2);
+  assert.equal(calls.bounds.length, 0);
+});
+
+test("AC-07 the stored step sets the minimum and grows the window when the window is made", () => {
+  const { win, calls, size } = fitting({ step: 1.25 });
+  size.attach(win.contents);
+  assert.deepEqual(win.minimum, [1050, 775]);
+  assert.deepEqual(calls.bounds, [{ x: 870, y: 265, width: 1050, height: 775 }]);
+});
+
+test("a step back to 100 % lowers the minimum and leaves the window size", () => {
+  const { win, calls, size } = fitting();
+  size.set(1.5);
+  const grown = win.bounds;
+  size.reset();
+  assert.deepEqual(win.minimum, [840, 620]);
+  assert.equal(calls.bounds.length, 1);
+  assert.equal(win.bounds, grown);
 });

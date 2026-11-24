@@ -35,7 +35,7 @@ import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
 import { startFleetAgent } from "./fleet-agent.ts"; import { fleetLayout } from "./fleet.ts";
 import { migrateBeforeFirstWrite } from "./cli-data-move.ts";
-import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, explainTailscaleFailure, pickTailscaleHttpsPort, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, chooseTailscaleHttpsPorts, explainTailscaleFailure, readTailscaleServeConfig, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
 import { listeningPorts, systemProbe } from "./headless/host-doctor.ts";
 import { laptopLinesHere } from "./cli-devices.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
@@ -44,7 +44,7 @@ import { normalizePhoneOrigin, phoneNotReadyLines, phonePairingInstructions, run
 import { browserSignInLines, desktopOwnedRefusal, formatSessions, pairingBlock, RELAY_NOT_WITH_TUNNEL, relayPairingBlock, showRelayPairing } from "./cli-pairing.ts";
 import { cliCommand, cliPrefix } from "./cli-invocation.ts";
 import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
-import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
+import { busyPortReachLines, checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
 import { restoreInProgress } from "./restore-progress.ts";
 import { runningServerLine } from "./data-dir-lease.ts";
@@ -711,7 +711,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   if (options.accessLog) env.SEIRA_ACCESS_LOG = "1";
   let logPath: string | undefined;
   let logFd: number | undefined;
-  let tailscaleShare: { origin: string; stop(): Promise<void> } | null = null;
+  let tailscaleShare: { origin: string; origins?: string[]; primaryBusy?: boolean; stop(): Promise<void> } | null = null;
   let tailscaleWhy: string | null = null;
   let startupCancelled = false;
   const cancelStartup = () => { startupCancelled = true; };
@@ -727,12 +727,11 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log("\nStarting your workspace…");
     }
     if (tailscale) {
-      const httpsPort = pickTailscaleHttpsPort(listeningPorts(systemProbe()));
-      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPort: httpsPort.port, otherServer: answersAsSeira });
+      const httpsPorts = chooseTailscaleHttpsPorts(options.dataDir, listeningPorts(systemProbe()));
+      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPorts: httpsPorts.ports, otherServer: answersAsSeira, serveConfig: () => readTailscaleServeConfig(tailscale.cli), log });
       const listening = "failure" in served ? tailnetListenFallback(served.failure, tailscale, options.port) : null;
-      if (listening && "failure" in served) tailscaleWhy = explainTailscaleFailure(served.failure);
-      else if (httpsPort.line) log(httpsPort.line);
-      tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : served;
+      if (listening && "failure" in served) tailscaleWhy = explainTailscaleFailure(served.failure); else if (httpsPorts.line) log(httpsPorts.line);
+      tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : { ...served, primaryBusy: httpsPorts.primaryBusy };
       if (startupCancelled || !tailscaleShare) throw startupCancelled ? new SetupCancelled() : new Error(`--tailscale: ${explainTailscaleFailure("failure" in served ? served.failure : "unknown")}`);
       Object.assign(env, listening?.env); if (plan) env.SEIRA_PHONE_ROUTES = [tailscaleShare.origin, ...phoneRoutesFromEnv(process.env)].join(","); else publicUrl = tailscaleShare.origin;
       log(listening?.line ?? `tailscale: serving ${tailscaleShare.origin} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
@@ -851,8 +850,9 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log(`data: ${options.dataDir}`);
       log(describeBrowserEngine(browserEngineStatus({ dataDir: options.dataDir })));
     }
-    const reach = route && origin && route !== "lan" ? await waitForReach(options.port, origin, route === "public-url" ? 3_000 : 15_000) : undefined;
-    if (route && origin) for (const line of reachLines(route, origin, options.port, prefix, reach, tailscale?.addresses)) log(line);
+    const second = route === "tailscale" && tailscaleShare?.primaryBusy ? tailscaleShare.origins?.[1] ?? null : undefined, checked = second === undefined ? origin : second;
+    const reach = route && checked && route !== "lan" ? await waitForReach(options.port, checked, route === "public-url" ? 3_000 : 15_000) : undefined;
+    if (route && origin) for (const line of second === undefined ? reachLines(route, origin, options.port, prefix, reach, tailscale?.addresses) : busyPortReachLines(origin, options.port, prefix, second && reach ? { origin: second, check: reach } : null)) log(line);
     const interactive = process.stdout.isTTY === true;
     if (options.pair && (options.phone || options.relay)) {
       log("");

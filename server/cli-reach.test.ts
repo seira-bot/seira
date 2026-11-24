@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach } from "./cli-reach.ts";
+import { busyPortReachLines, checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach } from "./cli-reach.ts";
 
 const descriptor = (environmentId: string) => Response.json({ environmentId });
 
@@ -75,6 +75,19 @@ describe("the Reach line", () => {
       expect((await checkReach(8799, "https://x.example", failing)).ok === false && (await checkReach(8799, "https://x.example", failing))).toMatchObject({ kind: "certificate" });
     }
     expect(reachLines("tailscale", "https://mini.tail1234.ts.net:8443", 8799, "seira", result).join("\n")).toContain("sport = :8443");
+  });
+
+  it("does not print the certificate error while another program holds the tailnet port, and says what was checked", () => {
+    const alone = busyPortReachLines("https://mini.tail1234.ts.net", 8799, "seira", null).join("\n");
+    expect(alone).toContain("a check from here cannot test tailnet devices");
+    expect(alone).not.toContain("certificate");
+    expect(alone).not.toContain("ss -ltnp");
+    const second = busyPortReachLines("https://mini.tail1234.ts.net", 8799, "seira", { origin: "https://mini.tail1234.ts.net:8443", check: { ok: true, at: 1 } });
+    expect(second[0]).toContain("Checked https://mini.tail1234.ts.net:8443 instead");
+    expect(second[1]).toContain("✓ answers as this server");
+    const failed = busyPortReachLines("https://mini.tail1234.ts.net", 8799, "seira", { origin: "https://mini.tail1234.ts.net:8443", check: { ok: false, kind: "unreachable", reason: "no answer" } }).join("\n");
+    expect(failed).toContain("✗ https://mini.tail1234.ts.net:8443 doesn't reach this server");
+    expect(failed).not.toContain("certificate");
   });
 
   it("says a tailnet name was checked from this server, and what other devices need", () => {

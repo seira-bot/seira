@@ -1,6 +1,110 @@
 {
   "$schema": "./announcements.schema.json",
   "version": 1,
-  "updatedAt": "2026-11-11T00:00:00Z",
-  "cards": []
+  "updatedAt": "2026-11-24T02:24:36Z",
+  "cards": [
+    {
+      "id": "seira-doomsday-avatars",
+      "kind": "product",
+      "label": {
+        "en": "New",
+        "de": "Neu",
+        "es": "Nuevo",
+        "fr": "Nouveau",
+        "hi": "नया",
+        "ja": "新着",
+        "pt-br": "Novo",
+        "zh": "新",
+        "zh-tw": "新",
+        "uk": "Нове",
+        "vi": "Mới",
+        "tr": "Yeni",
+        "pl": "Nowość",
+        "ru": "Новое",
+        "it": "Novità",
+        "ko": "신규"
+      },
+      "title": {
+        "en": "Seira Doomsday: 12 free bot avatars",
+        "de": "Seira Doomsday: 12 Bot-Avatare gratis",
+        "es": "Seira Doomsday: 12 avatares gratis para bots",
+        "fr": "Seira Doomsday : 12 avatars de bot gratuits",
+        "hi": "Seira Doomsday: बॉट के लिए 12 मुफ़्त अवतार",
+        "ja": "Seira Doomsday：ボット用アバター12種を無料配布",
+        "pt-br": "Seira Doomsday: 12 avatares grátis para bots",
+        "zh": "Seira Doomsday：12 款免费机器人头像",
+        "zh-tw": "Seira Doomsday：12 款免費機器人頭像",
+        "uk": "Seira Doomsday: 12 безкоштовних аватарів для ботів",
+        "vi": "Seira Doomsday: 12 ảnh đại diện bot miễn phí",
+        "tr": "Seira Doomsday: 12 ücretsiz bot avatarı",
+        "pl": "Seira Doomsday: 12 darmowych awatarów dla botów",
+        "ru": "Seira Doomsday: 12 бесплатных аватаров для ботов",
+        "it": "Seira Doomsday: 12 avatar gratis per i bot",
+        "ko": "Seira Doomsday: 무료 봇 아바타 12종"
+      },
+      "body": {
+        "en": "Omen the doom bot is here, and 10 Seira heroes stand in the way. Get all 12 avatars in #releases on our Discord, then give your bot a new face.",
+        "de": "Omen, der Untergangs-Bot, ist da. 10 Seira-Helden stellen sich ihm entgegen. Hol dir alle 12 Avatare in #releases auf unserem Discord und gib deinem Bot ein neues Gesicht.",
+        "es": "Llegó Omen, el bot del fin del mundo, y 10 héroes de Seira le cierran el paso. Descarga los 12 avatares en #releases de nuestro Discord y dale una cara nueva a tu bot.",
+        "fr": "Omen, le bot de l’apocalypse, est arrivé, et 10 héros Seira lui barrent la route. Récupérez les 12 avatars dans #releases sur notre Discord et donnez un nouveau visage à votre bot.",
+        "hi": "क़यामत वाला बॉट Omen आ गया है, और 10 Seira हीरो उसका रास्ता रोकने खड़े हैं। हमारे Discord के #releases से सभी 12 अवतार डाउनलोड करें और अपने बॉट को नया चेहरा दें।",
+        "ja": "破滅のボット Omen が現れた。立ち向かうのは10人のSeiraヒーロー。Discordの#releasesで12種のアバターを手に入れて、ボットに新しい顔をあげよう。",
+        "pt-br": "Omen, o robô do fim do mundo, chegou, e 10 heróis da Seira estão no caminho dele. Baixe os 12 avatares em #releases no nosso Discord e dê um rosto novo ao seu bot.",
+        "zh": "末日机器人 Omen 来了，10 位 Seira 英雄挺身而出。到我们 Discord 的 #releases 频道下载全部 12 款头像，给你的机器人换张新脸。",
+        "zh-tw": "末日機器人 Omen 來了，10 位 Seira 英雄挺身而出。到我們 Discord 的 #releases 頻道下載全部 12 款頭像，幫你的機器人換張新臉。",
+        "uk": "З’явився Omen, бот судного дня, і 10 героїв Seira стають йому на заваді. Завантажте всі 12 аватарів у #releases на нашому Discord і дайте своєму боту нове обличчя.",
+        "vi": "Omen, con bot tận thế, đã xuất hiện và 10 anh hùng Seira đứng ra ngăn cản. Tải cả 12 ảnh đại diện tại kênh #releases trên Discord của chúng tôi để đổi gương mặt mới cho bot.",
+        "tr": "Kıyamet botu Omen geldi ve 10 Seira kahramanı onun yolunu kesiyor. 12 avatarın hepsini Discord sunucumuzdaki #releases kanalından indir, botuna yeni bir yüz ver.",
+        "pl": "Nadciąga Omen, bot zagłady, a 10 bohaterów Seiry staje mu na drodze. Pobierz wszystkie 12 awatarów z #releases na naszym Discordzie i daj swojemu botowi nową twarz.",
+        "ru": "Явился Omen, бот судного дня, и 10 героев Seira встают у него на пути. Скачайте все 12 аватаров в #releases на нашем Discord и подарите своему боту новое лицо.",
+        "it": "È arrivato Omen, il bot dell’apocalisse, e 10 eroi di Seira gli sbarrano la strada. Scarica i 12 avatar in #releases sul nostro Discord e dai un nuovo volto al tuo bot.",
+        "ko": "멸망의 봇 Omen이 나타났고, Seira 히어로 10명이 맞섭니다. Discord의 #releases에서 아바타 12종을 받아 봇에게 새 얼굴을 선물하세요."
+      },
+      "image": {
+        "url": "https://raw.githubusercontent.com/seira-bot/seira/main/announcements/images/seira-doomsday.webp",
+        "alt": {
+          "en": "Twelve Seira Doomsday robot avatars",
+          "de": "Zwölf Seira-Doomsday-Roboter-Avatare",
+          "es": "Doce avatares robot de Seira Doomsday",
+          "fr": "Douze avatars robots Seira Doomsday",
+          "hi": "Seira Doomsday के 12 रोबोट अवतार",
+          "ja": "Seira Doomsdayのロボットアバター12種",
+          "pt-br": "Doze avatares de robô do Seira Doomsday",
+          "zh": "12 款 Seira Doomsday 机器人头像",
+          "zh-tw": "12 款 Seira Doomsday 機器人頭像",
+          "uk": "12 аватарів-роботів Seira Doomsday",
+          "vi": "12 ảnh đại diện robot Seira Doomsday",
+          "tr": "12 Seira Doomsday robot avatarı",
+          "pl": "12 awatarów robotów Seira Doomsday",
+          "ru": "12 аватаров-роботов Seira Doomsday",
+          "it": "Dodici avatar robot di Seira Doomsday",
+          "ko": "Seira Doomsday 로봇 아바타 12종"
+        }
+      },
+      "primary": {
+        "label": {
+          "en": "Get them on Discord",
+          "de": "Auf Discord holen",
+          "es": "Descargar en Discord",
+          "fr": "Les obtenir sur Discord",
+          "hi": "Discord से पाएँ",
+          "ja": "Discordで入手",
+          "pt-br": "Baixar no Discord",
+          "zh": "前往 Discord 获取",
+          "zh-tw": "前往 Discord 取得",
+          "uk": "Завантажити в Discord",
+          "vi": "Tải trên Discord",
+          "tr": "Discord'dan al",
+          "pl": "Pobierz z Discorda",
+          "ru": "Скачать в Discord",
+          "it": "Scarica su Discord",
+          "ko": "Discord에서 받기"
+        },
+        "action": {
+          "open_url": "https://discord.gg/wAAgETJpFS"
+        }
+      },
+      "ends": "2027-01-05T00:00:00Z"
+    }
+  ]
 }

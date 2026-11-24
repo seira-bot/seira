@@ -1,7 +1,7 @@
 // A macOS app launched from Finder inherits a bare PATH (no ~/.local/bin, /opt/homebrew/bin or nvm/volta/asdf shims),
 // so every agent CLI spawn goes through augmentedPath().
 import { execFile } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, readdirSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, openSync, readFileSync, readSync, realpathSync, statSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, extname, join } from "node:path";
 import { homeProgramsDistrusted, serverMayRunFrom } from "./bot-box/program-trust.ts";
@@ -211,6 +211,17 @@ export function findCliCandidates(name: string, path: string = augmentedPath()):
     }
   }
   return out;
+}
+
+/** Where `path` leads when it is a file this process may run, else null. */
+export function runnableFile(path: string): string | null {
+  try {
+    if (!statSync(path).isFile()) return null;
+    if (process.platform !== "win32") accessSync(path, constants.X_OK);
+    return realpathSync.native(path);
+  } catch {
+    return null;
+  }
 }
 
 // Windows: libuv ignores PATHEXT, Node refuses to spawn a .cmd without shell:true since CVE-2024-27980, and there is no #!.

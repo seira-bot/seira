@@ -19,7 +19,7 @@ vi.mock("node:child_process", async (original) => ({
   ...await original<typeof import("node:child_process")>(), spawn: mocks.spawn,
 }));
 vi.mock("./tailscale.ts", () => ({
-  pickTailscaleHttpsPort: () => ({ port: 443, line: null }), tailscaleHttpsProblem: async () => null,
+  chooseTailscaleHttpsPorts: () => ({ ports: [443], primaryBusy: false, line: null }), tailscaleHttpsProblem: async () => null, readTailscaleServeConfig: async () => null,
   tailscaleStatus: mocks.tailscaleStatus, tailscaleServe: mocks.tailscaleServe, tailnetListenFallback: mocks.tailnetListenFallback,
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));

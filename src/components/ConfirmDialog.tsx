@@ -5,6 +5,8 @@ import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 
+export const CONFIRM_LAYER = "z-[100]";
+
 export type ConfirmTone = "danger" | "neutral";
 
 export interface ConfirmDialogProps {
@@ -81,7 +83,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 ${props.layer ?? "z-50"} flex items-center justify-center bg-black/55 p-6`}
+      className={`fixed inset-0 ${props.layer ?? CONFIRM_LAYER} flex items-center justify-center bg-black/55 p-6`}
       onMouseDown={(event) => event.target === event.currentTarget && onCancel()}
     >
       <ConfirmDialogCard ref={dialogRef} cancelRef={cancelRef} {...props} />

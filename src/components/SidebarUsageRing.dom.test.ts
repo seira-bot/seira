@@ -128,13 +128,11 @@ it("closes the card on Escape and on a click outside, but not on a click inside 
   await wait(10);
   expect(card()).not.toBeNull();
   flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true })));
-  await wait(10);
-  expect(card()).toBeNull();
+  await vi.waitFor(() => expect(card()).toBeNull());
   flushSync(() => found.click());
   expect(card()).not.toBeNull();
   flushSync(() => document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
-  await wait(10);
-  expect(card()).toBeNull();
+  await vi.waitFor(() => expect(card()).toBeNull());
 });
 
 it("lists the Monthly window in the card", () => {

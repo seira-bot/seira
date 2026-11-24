@@ -6,7 +6,7 @@
 /** Background requests (polls nobody asked for just now) carry this header, so the home doesn't count them as someone
  * using it (server/cloud-power.ts `countsAsActivity`). */
 export const BACKGROUND_HEADER = "x-seira-background";
-export const CLOUD_POWER_HEADER = "x-omb-cloud-power";
+export const CLOUD_POWER_HEADER = "x-seira-cloud-power";
 const WAKE_PATH = "/api/auth/session";
 
 type Listener = (asleep: boolean) => void;
@@ -71,7 +71,9 @@ export function pageShown(signal?: AbortSignal): Promise<void> {
 
 /** An "asleep" answer from the home (held polls and refused background requests carry it). */
 export function asleepAnswer(response: Pick<Response, "status" | "headers">): boolean {
-  return response.status === 503 && response.headers.get(CLOUD_POWER_HEADER) === "asleep";
+  if (response.status !== 503) return false;
+  const mark = response.headers.get(CLOUD_POWER_HEADER) ?? response.headers.get("x-omb-cloud-power");
+  return mark === "asleep";
 }
 
 /** The event stream's frame for it. */

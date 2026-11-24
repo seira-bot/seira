@@ -342,13 +342,12 @@ are set. The workflow attaches the files to the draft release.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
-secrets from the `release` environment. A run that a maintainer starts does
-not wait. A run that another person starts waits until a maintainer approves
-`release-approval` (see [CI](ci.md#the-release-approval-environment)). A
-re-run by a person who is not a maintainer never reuses an approval of an
-earlier attempt. That person must re-run all jobs or ask a maintainer. The
-workflow finds the commit of the ref before the approval, and it builds that
-commit only. The run summary shows the commit. Before it uploads anything:
+secrets from the `release` environment. The release gate checks every run (see
+[CI](ci.md#the-release-gate)). A run that passes the gate does not wait. A run
+that the gate flags waits 6 hours in `release-approval`, then builds. A
+maintainer can cancel it during the wait. A run that the gate refuses does not
+build. A re-run never reuses the wait of an earlier attempt. The workflow finds the commit of the
+ref first, and it builds that commit only. The run summary shows the commit. Before it uploads anything:
 
 - it makes sure that each app has every helper for its own CPU, and that
   `app-update.yml` points at `seira-bot/seira`;
@@ -378,8 +377,8 @@ release must exist before the run. Step 4 creates it.
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
 gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
-# A person who is not a maintainer: open the run page, select "Review deployments",
-# and ask a maintainer to approve "release-approval".
+# A run that the gate flags waits 6 hours in "release-approval".
+# To stop it, cancel the run on its run page.
 gh run watch <run id> --repo seira-bot/seira --exit-status
 node scripts/release-assets.mjs check v<version>
 ```
@@ -459,22 +458,22 @@ install the image of the newest release, so publish it for every release.
 ```sh
 gh workflow run server-image.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run list --repo seira-bot/seira --workflow server-image.yml --limit 1
-# A person who is not a maintainer: open the run page, select "Review deployments",
-# and ask a maintainer to approve "release-approval".
+# A run that the gate flags waits 6 hours in "release-approval".
+# To stop it, cancel the run on its run page.
 gh run watch <run id> --repo seira-bot/seira --exit-status
 docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ```
 
 - Start the run from `main`. The `release` environment refuses other branches.
-- A run that a maintainer starts needs no approval. For another person, the
-  approval request shows after both builds pass. A maintainer approves it
-  within 7 days, or the saved images expire. Then start a new run.
-- Maintainers are the logins in the repository variable `RELEASE_MAINTAINERS`.
-  When the variable is missing, empty, or not a JSON array, every run waits
-  for approval.
-- A person who is not a maintainer cannot re-run a failed publish job alone.
-  An approval from an earlier attempt does not count. Re-run all jobs, or ask a
-  maintainer to re-run.
+- The gate checks the commit of the run. A run that passes publishes with no
+  person. A run that the gate flags shows an approval request after both builds
+  pass. A person approves it within 7 days, or the saved images expire. Then
+  start a new run.
+- The repository variable `RELEASE_HUMAN_REVIEWERS` is a JSON array of the
+  logins of the human reviewers (see [CI](ci.md#the-release-gate)). When the
+  variable is missing, empty, or not a JSON array, it counts as an empty list.
+- A re-run does not reuse the wait of an earlier attempt. Re-run all jobs: the
+  new attempt waits again.
 - Publish the GitHub release first (step 7). The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
@@ -496,8 +495,8 @@ node ../../scripts/release-assets.mjs check v<version>
 ```
 
 Each check must print `OK`, and the `check` command must print no `FAIL`
-line. If a check fails, delete the release assets and upload them again. Never
-edit an asset in place.
+line. A published release is immutable: nobody can change, delete, or add an
+asset. If a check fails, publish a new patch release with correct files.
 
 ## Publish to npm
 
@@ -509,7 +508,8 @@ environment through the GitHub OIDC token.
 It starts in one of two ways:
 
 ```sh
-# Automatic: it starts when a maintainer publishes the GitHub release (step 7).
+# Automatic: when a maintainer publishes the GitHub release (step 7), the
+# workflow starts itself again on main.
 # By hand, from main:
 gh workflow run npm-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run watch <run id> --repo seira-bot/seira --exit-status
@@ -519,22 +519,19 @@ npm view @seira-bot/seira@<version> version
 - The tag must be equal to `v` and the version in `package.json`. The workflow
   stops when they differ.
 - The workflow finds the commit of the tag first, and builds that commit only.
-- A run that a maintainer starts needs no approval. For another person, a
-  maintainer approves `release-approval` (see
-  [CI](ci.md#the-release-approval-environment)). The `publish` job then uses
-  the `release` environment, as the other release jobs do.
+- The release gate checks every run (see [CI](ci.md#the-release-gate)). A run
+  that passes publishes with no wait. A run that the gate flags waits 6 hours
+  in `release-approval`, then publishes. A maintainer can cancel it during the
+  wait. A run that the gate refuses does not publish. The `publish` job uses the `release` environment, as the other
+  release jobs do.
 - When the version is already on npm, the workflow skips the build and the
   publish. A repeated run changes nothing.
 - npm adds a provenance statement that links the package to this commit and run.
-- The `release` environment accepts the `main` branch and the `v*` tags, so a
-  run that starts from a published release can use it. The `release-approval`
-  environment accepts `main` only. So a run that starts from a published
-  release, and that a person outside the maintainers starts, fails at the
-  `approval` job. It does not publish. This is intended. That person starts the
-  workflow by hand from `main` instead.
-- A person who is not a maintainer cannot re-run a failed `publish` job alone.
-  The job reuses no approval of an earlier attempt. Re-run all jobs for a new
-  approval, or ask a maintainer to re-run.
+- The `release` and `release-approval` environments accept the `main` branch
+  only. A published release starts `npm-publish` again on `main`, with the tag
+  as input. The run for the release event itself does nothing else.
+- A re-run does not reuse the wait of an earlier attempt. Re-run all jobs: the
+  new attempt waits again.
 
 ### One-time npm setup
 
@@ -609,8 +606,8 @@ gh secret set APPLE_API_ISSUER_ID --env release --repo seira-bot/seira
 
 9. Keep the `.p12` file, its password, and the `.p8` file in a password
    manager. Then delete the files from the disk.
-10. Run the workflow on `main`. A person who is not a maintainer needs a
-    maintainer to approve it. The artifact name must end in
+10. Run the workflow on `main`. When the release gate flags the run, the run
+    waits 6 hours in `release-approval`. The artifact name must end in
     `-macos`, not in `-NOT-FOR-RELEASE`. Do not attach a build of `main` to
     a release.
 

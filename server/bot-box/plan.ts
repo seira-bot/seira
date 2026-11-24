@@ -587,6 +587,27 @@ export function visibleInBox(plan: BoxPlan, path: string): "rw" | "ro" | "none" 
   return verdict;
 }
 
+/** Whether `path` names a program the box can run, judged by its plan and the files on this computer: the box's own
+ * links (/bin) are followed, the last line that covers the path must show this computer's folder at the same place, and
+ * the program, and where its links lead, must both lie in such a folder. `runnable` says what this computer holds at a path
+ * (its real location, or null when it is no executable file). A path the plan cannot vouch for is not runnable. */
+export function runnableInBox(plan: BoxPlan, path: string, runnable: (hostPath: string) => string | null): boolean {
+  const shown = (candidate: string): boolean => {
+    let found: Mount | undefined;
+    for (const mount of plan.mounts) if (mount.kind !== "symlink" && under(candidate, mount.target)) found = mount;
+    return found !== undefined && (found.kind === "ro" || found.kind === "bind") && found.source === found.target;
+  };
+  let full = resolve(path);
+  if (!isAbsolute(path)) return false;
+  for (const mount of plan.mounts) if (mount.kind === "symlink" && under(full, mount.link)) {
+    full = resolve(dirname(mount.link), mount.target, relative(mount.link, full));
+    break;
+  }
+  if (!shown(full)) return false;
+  const real = runnable(full);
+  return real !== null && (real === full || shown(real));
+}
+
 export function inBoxSocket(name: string): string {
   return join(IN_BOX_SOCKET_DIR, `${name}.sock`);
 }
