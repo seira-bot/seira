@@ -164,7 +164,6 @@ describe("CI workflows", () => {
       expect(step.run, file).toContain("*) exit 1");
       expect(stepsOf(gate).find((each) => each.uses?.startsWith("actions/checkout@"))?.with?.["persist-credentials"], file).toBe(false);
     }
-    }
   });
 
   it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS attach step once to upload to the release and the milestones step once to call the GitHub API", () => {
