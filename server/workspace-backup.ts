@@ -20,6 +20,7 @@ import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEA
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
 import { backupPartOf, LEAVE_OUT_PARTS, parseLeaveOut, type LeaveOutPart } from "./workspace-backup-parts.ts";
+import { databaseCounts } from "./workspace-backup-counts.ts";
 import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
 import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
@@ -276,18 +277,6 @@ function countJsonArray(path: string): number {
     if (item.tasks !== undefined && (!Array.isArray(item.tasks) || !item.tasks.every((task) => record(task) && typeof task.threadId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(task.threadId)))) throw new Error("A workspace roster contains invalid task records.");
   }
   return value.length;
-}
-function databaseCounts(path: string): { threads: number; messages: number } {
-  if (!existsSync(path)) return { threads: 0, messages: 0 };
-  const db = new DatabaseSync(path, { readOnly: true });
-  try {
-    const check = db.prepare("PRAGMA quick_check").all();
-    if (check.length !== 1 || Object.values(check[0])[0] !== "ok") throw new Error("The message database failed its integrity check.");
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages', 'thread_state')").all();
-    if (tables.length !== 2) throw new Error("The backup does not contain a supported message database.");
-    const counts = db.prepare("SELECT COUNT(*) AS messages, COUNT(DISTINCT thread_id) AS threads FROM messages").get()!;
-    return { threads: Number(counts.threads), messages: Number(counts.messages) };
-  } finally { db.close(); }
 }
 
 /** The existing maintenance gate owns exclusivity until this worker has exited.
