@@ -127,8 +127,9 @@ Ways in (pick one; --lan can join any):
              on: port 443, even when another program uses it. The first
              start also answers on 8443, for devices set up on versions
              that moved the link there. A port that Tailscale Funnel opens
-             to the internet is never used. When a web server shares port
-             443, start Seira after it. On a laptop with no address for
+             to the internet is never used, and serve stops when it cannot
+             read the Tailscale Serve settings to check for Funnel. When a
+             web server shares port 443, start Seira after it. On a laptop with no address for
              this server, serve prints an ssh -L line, then sign in once
              with pair.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is

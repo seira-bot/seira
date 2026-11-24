@@ -26,6 +26,7 @@ export type TailscaleFailure =
   | "other-server"
   | "port-taken"
   | "funnel-open"
+  | "serve-unreadable"
   | "unknown";
 
 export function classifyTailscaleStderr(text: string): TailscaleFailure {
@@ -59,6 +60,8 @@ export function explainTailscaleFailure(reason: TailscaleFailure): string {
       return "another tailscale serve rule or session already uses this port; run `tailscale serve status` to see it";
     case "funnel-open":
       return "Tailscale Funnel is on for a port that reaches this server, so the internet could reach it: turn Funnel off for that port (run `tailscale funnel status` to see it), then try again";
+    case "serve-unreadable":
+      return "Seira could not read the Tailscale Serve settings, so it cannot tell whether Funnel opens this server to the internet: run `tailscale serve status`, fix what it reports, then try again";
     default:
       return "Tailscale reported an error; run `tailscale status` and `tailscale serve status` to see it";
   }
@@ -83,7 +86,9 @@ export async function readTailscaleServeConfig(cli: string): Promise<unknown> {
   const result = await run(cli, ["serve", "status", "--json"], 10_000);
   if (!result.ok) return null;
   try {
-    return JSON.parse(result.stdout);
+    const config: unknown = JSON.parse(result.stdout);
+    // An empty setup prints `{}`. Anything that is not an object is not a ServeConfig, so it counts as unreadable.
+    return typeof config === "object" && config !== null && !Array.isArray(config) ? config : null;
   } catch {
     return null;
   }
@@ -263,11 +268,12 @@ const originFor = (dnsName: string, httpsPort: number) => (httpsPort === 443 ? `
  * must not already front a different Seira server. Resolves once the first port has run for `settleMs` without exiting.
  * Another port that fails is skipped with one line; the first port decides the result. `origin` is the first port's.
  * A port that a `tailscale serve --bg` rule already proxies to this server is used as it is, and stays on at stop.
+ * `serveConfig` must return the Serve settings; when it fails or returns no object, the result is `serve-unreadable` and nothing starts.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,
   localPort: number,
-  options: { dataDir: string; httpsPorts?: number[]; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean>; serveConfig?: () => Promise<unknown>; log?: (line: string) => void },
+  options: { dataDir: string; httpsPorts?: number[]; settleMs?: number; spawnImpl?: typeof spawn; otherServer?: (origin: string) => Promise<boolean>; serveConfig: () => Promise<unknown>; log?: (line: string) => void },
 ): Promise<{ origin: string; origins: string[]; stop(): Promise<void> } | { failure: TailscaleFailure }> {
   const wanted = options.httpsPorts?.length ? options.httpsPorts : [443];
   if (!status.dnsName) return { failure: "no-magicdns" };
@@ -276,7 +282,13 @@ export async function tailscaleServe(
   const running: Array<{ port: number; stop(): Promise<void> }> = [];
   const serving: number[] = [];
   const stopAll = () => Promise.all(running.map((one) => one.stop())).then(() => undefined);
-  const config = await (options.serveConfig ?? (async () => null))();
+  // Funnel can only be ruled out from the Serve settings. When they cannot be read, startup stops: the address would say
+  // "only your tailnet can reach it" with nothing to back it. `null` from the reader means it failed.
+  const config = await options.serveConfig().catch(() => null);
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    options.log?.("tailscale: Seira could not read the Tailscale Serve settings (tailscale serve status --json), so it cannot rule out that Tailscale Funnel opens this server to the internet. Seira does not start. Run tailscale serve status, fix what it reports, then start again.");
+    return { failure: "serve-unreadable" };
+  }
   const exposed = funnelPortToLocalServer(config, localPort);
   if (exposed !== null) {
     options.log?.(`tailscale: Tailscale Funnel is on for port ${exposed} and forwards to this server, so the internet could reach it. Seira does not start and leaves that setting as it is (to close it: tailscale funnel --https=${exposed} off).`);

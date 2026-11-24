@@ -201,6 +201,13 @@ describe("CLI startup lifecycle", () => {
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
+  it("does not start the server when the Serve settings cannot be read", async () => {
+    mocks.tailscaleServe.mockResolvedValue({ failure: "serve-unreadable" });
+    await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: serve-unreadable");
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(mocks.tailscaleStop).not.toHaveBeenCalled();
+  });
+
   it("does not start the server when Funnel forwards to it", async () => {
     mocks.tailscaleServe.mockResolvedValue({ failure: "funnel-open" });
     await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: funnel-open");
