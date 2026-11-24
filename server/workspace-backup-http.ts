@@ -29,7 +29,13 @@ type Artifact = {
   /** `uploading` only: the announced size, the bytes stored, and whether a part is being written. */
   total?: number; received?: number; writing?: boolean;
 };
-type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string>; leftBehind?: unknown; needsAction?: unknown[] };
+/** The status shows only how many bots stayed behind. The folder paths stay in the private receipt. */
+function leftBehindCount(value: unknown): { bots: number } | null {
+  const bots = value && typeof value === "object" ? (value as { bots?: unknown }).bots : undefined;
+  return typeof bots === "number" && Number.isSafeInteger(bots) && bots >= 0 ? { bots } : null;
+}
+
+type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string>; leftBehind?: unknown; needsAction?: unknown[] | null };
 
 /** One `bytes=a-b`, `a-` or `-n` range; any other header, including a list of ranges, means the whole file. */
 function byteRange(header: string | undefined, size: number): { start: number; end: number } | "unsatisfiable" | undefined {
@@ -146,8 +152,8 @@ export function createWorkspaceBackupRoutes(options: {
           ...(options.restart ? { restarts: true } : {}),
           lastRestoreId: options.restored.restored ? options.restored.id : null,
           safetyCopyPath: options.restored.safetyCopyPath ?? null,
-          leftBehind: options.restored.leftBehind ?? null,
-          needsAction: options.restored.needsAction ?? [],
+          leftBehind: leftBehindCount(options.restored.leftBehind),
+          needsAction: options.restored.needsAction ?? null,
         });
         return true;
       }

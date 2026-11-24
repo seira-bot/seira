@@ -44,6 +44,10 @@ export function recordNeedsAction(data: string, job: string): void {
   writeFileSync(join(job, FILE), JSON.stringify(cleanNeedsAction(items)), { mode: 0o600 });
 }
 
-export function readNeedsAction(job: string): WorkspaceNeedsAction[] {
-  try { return cleanNeedsAction(JSON.parse(readFileSync(join(job, FILE), "utf8"))); } catch { return []; }
+/** null when the job has no readable list, so the status does not claim "nothing to do" for it. */
+export function readNeedsAction(job: string): WorkspaceNeedsAction[] | null {
+  try {
+    const value: unknown = JSON.parse(readFileSync(join(job, FILE), "utf8"));
+    return Array.isArray(value) ? cleanNeedsAction(value) : null;
+  } catch { return null; }
 }

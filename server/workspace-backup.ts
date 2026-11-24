@@ -94,7 +94,7 @@ export interface WorkspaceRestoreResult {
   id?: string;
   safetyCopyPath?: string;
   summary?: WorkspaceBackupSummary;
-  leftBehind?: WorkspaceLeftBehind; needsAction?: WorkspaceNeedsAction[];
+  leftBehind?: WorkspaceLeftBehind; /** null: a receipt from before the list existed. [] only for a restore that has nothing to do by hand. */ needsAction?: WorkspaceNeedsAction[] | null;
   clientState?: WorkspaceBackupClientState;
 }
 /** `pathsRewritten`: the source data folder was rewritten in text too, by the restore or by repairMovedWorkspacePaths. */
@@ -897,7 +897,7 @@ export function readLastWorkspaceRestore(dataDir: string): LastWorkspaceRestore 
   if (!existsSync(path)) return null;
   const raw = privateJson(path);
   if (!record(raw) || raw.restored !== true || typeof raw.id !== "string" || !ID.test(raw.id)) throw new Error("Invalid workspace restore receipt.");
-  return { ...raw, needsAction: cleanNeedsAction(raw.needsAction) } as unknown as LastWorkspaceRestore;
+  return { ...raw, needsAction: Array.isArray(raw.needsAction) ? cleanNeedsAction(raw.needsAction) : null } as unknown as LastWorkspaceRestore;
 }
 function finishRestore(dataDir: string, id: string, consumePending = true): LastWorkspaceRestore {
   const root = backupRoot(dataDir);

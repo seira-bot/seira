@@ -66,7 +66,7 @@ describe("restore receipt: needs action", () => {
     const receipt = JSON.parse(readFileSync(path, "utf8"));
     delete receipt.needsAction;
     writeFileSync(path, JSON.stringify(receipt));
-    expect(readLastWorkspaceRestore(target)).toMatchObject({ restored: true, id: receipt.id, needsAction: [] });
+    expect(readLastWorkspaceRestore(target)).toMatchObject({ restored: true, id: receipt.id, needsAction: null });
   });
 
   it("drops a receipt item that is not a known kind with a whole count", () => {
