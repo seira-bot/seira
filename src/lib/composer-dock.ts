@@ -1,7 +1,6 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 
-/** Must equal Tailwind `gap-3` on the transcript stack. */
-export const TRANSCRIPT_GAP = "0.75rem";
+export const TRANSCRIPT_END_GAP = "1.5rem";
 
 const FALLBACK_COMPOSER_PX = 64;
 
@@ -9,7 +8,7 @@ export function transcriptEndPad(composerHeightPx: number): string {
   const height = Number.isFinite(composerHeightPx)
     ? Math.max(0, Math.ceil(composerHeightPx))
     : FALLBACK_COMPOSER_PX;
-  return `calc(${height}px + ${TRANSCRIPT_GAP})`;
+  return `calc(${height}px + ${TRANSCRIPT_END_GAP})`;
 }
 
 export function messageBoxHeight(dock: Pick<DOMRect, "bottom">, box: Pick<DOMRect, "top"> | undefined): number {
