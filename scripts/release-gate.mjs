@@ -121,24 +121,28 @@ export async function npmVersions(fetchJson, name) {
   return Object.keys(body.versions);
 }
 
-/** A listed person approved when the latest review of that person that counts is APPROVED. A comment changes nothing. */
-export function humanApproved(reviews, logins) {
+/**
+ * A listed person approved when the latest review of that person that counts is APPROVED, and it covers the final head
+ * commit of the pull request. A comment changes nothing. An approval of an older commit does not count.
+ */
+export function humanApproved(reviews, logins, headSha) {
   const latest = new Map();
   for (const review of reviews) {
     const login = String(review.user?.login ?? "").toLowerCase();
     if (!logins.includes(login) || !["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(review.state)) continue;
-    latest.set(login, review.state);
+    latest.set(login, review);
   }
-  return [...latest.values()].includes("APPROVED");
+  return [...latest.values()].some((review) => review.state === "APPROVED" && Boolean(headSha) && review.commit_id === headSha);
 }
 
 /** The reasons why a merged pull request needs a person. An empty list means the pull request passes. */
-export function evaluatePull({ pull, files, reviews, logins }) {
+export function evaluatePull({ pull, detail = pull, files, reviews, logins }) {
   const reasons = [];
   if (!TRUSTED_AUTHORS.has(pull.author_association)) reasons.push(`author ${pull.user?.login ?? "unknown"} is not an owner or member (${pull.author_association})`);
+  if (typeof detail.changed_files === "number" && detail.changed_files > files.length) reasons.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
   const touched = sensitiveFiles(files);
   if (touched.length > 0) reasons.push(`it changes a sensitive path: ${touched.join(", ")}`);
-  if (reasons.length === 0 || humanApproved(reviews, logins)) return [];
+  if (reasons.length === 0 || humanApproved(reviews, logins, detail.head?.sha)) return [];
   return reasons;
 }
 
@@ -245,6 +249,7 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = n
     else {
       commits = range.commits;
       say("ok", `${range.total} commit(s) since ${previous}, the last version on npm (compare status: ${range.status})`);
+      if (range.total === 0) flag(`no commits since the previous release ${previous}`);
       if (range.status !== "ahead" && range.status !== "identical") flag(`${previous} is not an ancestor of the commit (compare status: ${range.status})`);
       if (commits.length < range.total) flag(`the commit list is cut short (${commits.length} of ${range.total})`);
     }
@@ -261,7 +266,8 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = n
     if (!verdicts.has(pull.number)) {
       const files = await paged(api, `repos/${repo}/pulls/${pull.number}/files`);
       const reviews = await paged(api, `repos/${repo}/pulls/${pull.number}/reviews`);
-      verdicts.set(pull.number, evaluatePull({ pull, files, reviews, logins }));
+      const detail = await api(`repos/${repo}/pulls/${pull.number}`);
+      verdicts.set(pull.number, evaluatePull({ pull, detail, files, reviews, logins }));
     }
     const reasons = verdicts.get(pull.number);
     if (reasons.length === 0) say("ok", `${short(item.sha)} pull request #${pull.number} passes`);

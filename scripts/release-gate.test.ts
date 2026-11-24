@@ -22,11 +22,15 @@ interface World {
   registry?: "error" | "badjson";
   baselineMissing?: boolean;
   rangeStatus?: string;
+  total?: number;
+  changedFiles?: Record<number, number>;
   commits?: string[];
   pulls?: Record<string, Pull[]>;
   files?: Record<number, { filename: string; previous_filename?: string }[]>;
-  reviews?: Record<number, { user: { login: string }; state: string }[]>;
+  reviews?: Record<number, { user: { login: string }; state: string; commit_id?: string }[]>;
 }
+
+const headOf = (number: number) => sha(5000 + number);
 
 const pull = (number: number, commit: string, extra: Partial<Pull> = {}): Pull => ({
   number,
@@ -56,13 +60,20 @@ function fake(world: World) {
       const page = Number(match[3]);
       return {
         status: world.rangeStatus ?? "ahead",
-        total_commits: commits.length,
+        total_commits: world.total ?? commits.length,
         commits: commits.slice((page - 1) * perPage, page * perPage).map((each) => ({ sha: each })),
       };
     }
     if ((match = /\/commits\/([0-9a-f]{40})\/pulls/.exec(path))) return world.pulls?.[match[1]!] ?? [pull(Number(match[1]), match[1]!)];
     if ((match = /\/pulls\/(\d+)\/files\?/.exec(path))) return world.files?.[Number(match[1])] ?? [{ filename: "src/a.ts" }];
-    if ((match = /\/pulls\/(\d+)\/reviews\?/.exec(path))) return world.reviews?.[Number(match[1])] ?? [];
+    if ((match = /\/pulls\/(\d+)\/reviews\?/.exec(path))) {
+      const number = Number(match[1]);
+      return (world.reviews?.[number] ?? []).map((review) => ({ commit_id: headOf(number), ...review }));
+    }
+    if ((match = /^repos\/o\/r\/pulls\/(\d+)$/.exec(path))) {
+      const number = Number(match[1]);
+      return { head: { sha: headOf(number) }, changed_files: world.changedFiles?.[number] ?? (world.files?.[number] ?? [1]).length };
+    }
     throw new Error(`unexpected api call ${path}`);
   };
   const fetched: string[] = [];
@@ -153,6 +164,33 @@ describe("release gate", () => {
       { reviewers: '["boss"]' },
     );
     expect(result.code).toBe(1);
+  });
+
+  it("flags an approval of an older commit, and accepts an approval of the head commit", async () => {
+    const world = (commit_id: string): World => ({
+      files: { 1: [{ filename: ".github/x" }] },
+      reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED", commit_id }] },
+    });
+    expect((await run(world(sha(1)), { reviewers: '["boss"]' })).code).toBe(1);
+    expect((await run(world(headOf(1)), { reviewers: '["boss"]' })).code).toBe(0);
+  });
+
+  it("flags a file list that the API cut short", async () => {
+    const result = await run({ changedFiles: { 1: 3001 } });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("file list is incomplete");
+  });
+
+  it("flags a range with no commits", async () => {
+    const result = await run({ commits: [] });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("no commits since the previous release");
+  });
+
+  it("flags a commit list that is cut short", async () => {
+    const result = await run({ commits: [sha(1)], total: 5 });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("cut short");
   });
 
   it("flags a run with no earlier version on npm (exit 1)", async () => {
@@ -269,10 +307,12 @@ describe("pure parts", () => {
   });
 
   it("ignores a comment after an approval and keeps the latest real review", () => {
-    const review = (state: string) => ({ user: { login: "Boss" }, state });
-    expect(humanApproved([review("APPROVED"), review("COMMENTED")], ["boss"])).toBe(true);
-    expect(humanApproved([review("APPROVED"), review("DISMISSED")], ["boss"])).toBe(false);
-    expect(humanApproved([review("APPROVED")], [])).toBe(false);
+    const review = (state: string, commit_id = "head") => ({ user: { login: "Boss" }, state, commit_id });
+    expect(humanApproved([review("APPROVED"), review("COMMENTED")], ["boss"], "head")).toBe(true);
+    expect(humanApproved([review("APPROVED"), review("DISMISSED")], ["boss"], "head")).toBe(false);
+    expect(humanApproved([review("APPROVED")], [], "head")).toBe(false);
+    expect(humanApproved([review("APPROVED", "old")], ["boss"], "head")).toBe(false);
+    expect(humanApproved([review("APPROVED")], ["boss"], undefined)).toBe(false);
   });
 
   it("parses the reviewer list", () => {
