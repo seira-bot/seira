@@ -11258,6 +11258,7 @@
   "backup.part.other": "Other files",
   "backup.leaveOut": "Leave out {part}",
   "backup.leaveOutUnavailable": "The server can no longer leave out the part you chose, so no backup was made. Close this form and open it again.",
+  "backup.leaveOutNotConfirmed": "The backup came back without a confirmation that the part you chose was left out, so it was not downloaded. Nothing was saved to this device. Try again, or export without leaving that part out.",
   "backup.leaveOutWarning": "Left-out files are not in the backup.",
   "backup.leftOut": "Left out on purpose",
   "settings.threadCleanup.retention.title": "Delete old event logs",

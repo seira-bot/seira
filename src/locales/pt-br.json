@@ -11216,6 +11216,7 @@
   "backup.part.other": "Outros arquivos",
   "backup.leaveOut": "Deixar de fora: {part}",
   "backup.leaveOutUnavailable": "O servidor não consegue mais deixar de fora a parte que você escolheu, então nenhum backup foi feito. Feche este formulário e abra de novo.",
+  "backup.leaveOutNotConfirmed": "O backup voltou sem a confirmação de que a parte que você escolheu foi deixada de fora, então não foi baixado. Nada foi salvo neste dispositivo. Tente de novo ou exporte sem deixar essa parte de fora.",
   "backup.leaveOutWarning": "Os arquivos deixados de fora não entram no backup.",
   "backup.leftOut": "Deixado de fora de propósito",
   "settings.threadCleanup.retention.title": "Apagar registros de eventos antigos",

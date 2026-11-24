@@ -5,7 +5,7 @@ import { api } from "@/state/store";
 import { intlLocale, t } from "@/lib/i18n";
 import { applyWorkspaceClientState, collectWorkspaceClientState, WORKSPACE_RESTORE_MARKER } from "@/lib/workspace-backup-client";
 import { uploadBackupInChunks } from "@/lib/workspace-backup-upload";
-import { backupSizeText, readBackupSizes, sortedBackupParts, totalWithout, type WorkspaceBackupSizes } from "@/lib/workspace-backup-sizes";
+import { backupSizeText, leftOutConfirmed, readBackupSizes, sortedBackupParts, totalWithout, type WorkspaceBackupSizes } from "@/lib/workspace-backup-sizes";
 import { LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsRows, Switch } from "./SettingsPrimitives";
 import { SettingsDialog } from "./settings/SettingsDialog";
 
@@ -158,9 +158,13 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
     // leave out, stop with a message: a silent full export would put the files back in a backup the person trimmed.
     if (leaveOut.some((part) => !sizes?.canLeaveOut.includes(part))) throw new Error(t("backup.leaveOutUnavailable"));
     const skipped = leaveOut;
-    const result: { id: string; filename: string } = await api("/api/workspace-backup/export", {
+    const result: { id: string; filename: string; summary?: BackupSummary } = await api("/api/workspace-backup/export", {
       method: "POST", body: JSON.stringify({ password: exportPassword, clientState: collectWorkspaceClientState(), ...(skipped.length ? { leaveOut: skipped } : {}) }),
     });
+    // HTTP success is not enough: the summary of the new backup must list every part that the person chose to leave
+    // out. An older server ignores the choice, and its full backup would carry the files the person meant to keep out.
+    // Stop before any download link, and keep the form and its passwords so the person can try again.
+    if (!leftOutConfirmed(result.summary, skipped)) throw new Error(t("backup.leaveOutNotConfirmed"));
     if (alive.current) { setExportPassword(""); setConfirmPassword(""); }
     if (!alive.current) return;
     const url = `/api/workspace-backup/download/${encodeURIComponent(result.id)}`;

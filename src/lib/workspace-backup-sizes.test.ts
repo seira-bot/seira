@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backupSizeText, readBackupSizes, sortedBackupParts, totalWithout } from "./workspace-backup-sizes";
+import { backupSizeText, leftOutConfirmed, readBackupSizes, sortedBackupParts, totalWithout } from "./workspace-backup-sizes";
 
 const reply = { parts: { other: 5, "work-folders": 900, chats: 10, memory: 20, attachments: 30 }, total: 965, canLeaveOut: ["work-folders"] };
 
@@ -32,5 +32,22 @@ describe("backup size report", () => {
     expect(backupSizeText(1536)).toBe("1.5 KB");
     expect(backupSizeText(5 * 1024 ** 2)).toBe("5.0 MB");
     expect(backupSizeText(3 * 1024 ** 3)).toBe("3.0 GB");
+  });
+});
+
+describe("leftOutConfirmed", () => {
+  it("is true when nothing was chosen, whatever the summary holds", () => {
+    expect(leftOutConfirmed(undefined, [])).toBe(true);
+    expect(leftOutConfirmed({}, [])).toBe(true);
+  });
+  it("is true only when leftOut lists every chosen part", () => {
+    expect(leftOutConfirmed({ leftOut: ["work-folders"] }, ["work-folders"])).toBe(true);
+    expect(leftOutConfirmed({ leftOut: ["other", "work-folders"] }, ["work-folders"])).toBe(true);
+    expect(leftOutConfirmed({ leftOut: ["work-folders"] }, ["work-folders", "other"])).toBe(false);
+  });
+  it("is false for a missing summary, a missing or empty leftOut, another part, or a leftOut that is not a list", () => {
+    for (const summary of [undefined, null, {}, { leftOut: [] }, { leftOut: ["other"] }, { leftOut: "work-folders" }, { leftOut: { 0: "work-folders" } }]) {
+      expect(leftOutConfirmed(summary, ["work-folders"])).toBe(false);
+    }
   });
 });

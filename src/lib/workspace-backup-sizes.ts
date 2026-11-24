@@ -33,6 +33,16 @@ export function totalWithout(sizes: WorkspaceBackupSizes, leaveOut: readonly str
   return Object.entries(sizes.parts).reduce((sum, [part, bytes]) => leaveOut.includes(part) ? sum : sum + bytes, 0);
 }
 
+/**
+ * True when a new backup's summary lists every part that the person chose to leave out (always true for no choice).
+ * A summary without `leftOut`, or one that misses a chosen part, does not confirm the choice.
+ */
+export function leftOutConfirmed(summary: { leftOut?: unknown } | null | undefined, chosen: readonly string[]): boolean {
+  if (chosen.length === 0) return true;
+  const left = summary?.leftOut;
+  return Array.isArray(left) && chosen.every((part) => left.includes(part));
+}
+
 export function backupSizeText(bytes: number): string {
   const format = (value: number, digits: number) => new Intl.NumberFormat(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
   if (bytes < 1024) return `${format(bytes, 0)} B`;
