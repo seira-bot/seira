@@ -9,11 +9,11 @@
 # The `attach` job reads no secret. It runs only scripts/release-assets.mjs from the workflow commit, never code from the built commit.
 # The `commit` job finds the commit of the ref. The `package` job builds that commit only.
 # The `gate` job runs scripts/release-gate.mjs. It reads every commit since the last version on npm.
-# A run that passes the gate does not wait for a person.
-# A run that the gate flags waits for a person in the `release-approval` environment.
+# A run that passes the gate does not wait.
+# A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait.
 # A run that the gate refuses does not build.
-# The `package` and `attach` jobs run only on `main`. They run only if the gate passed, or if the approval came in this same attempt.
-# A re-run therefore never reuses an approval of an earlier attempt.
+# The `package` and `attach` jobs run only on `main`. They run only if the gate passed, or if the wait ended in this same attempt.
+# A re-run therefore never reuses the wait of an earlier attempt.
 # The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
 # - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE, built without the update feed file;
@@ -115,7 +115,7 @@ jobs:
     outputs:
       attempt: ${{ github.run_attempt }}
     steps:
-      - run: echo "A person approved this run."
+      - run: echo "The wait of the release-approval environment ended."
 
   package:
     name: macOS arm64 and x64 apps

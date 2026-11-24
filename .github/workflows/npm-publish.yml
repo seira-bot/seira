@@ -6,10 +6,10 @@ name: npm publish
 # - The `commit` job finds the commit of the tag. The `publish` job builds that commit only.
 # - The `gate` job runs scripts/release-gate.mjs. It reads every commit since the last version on npm.
 #   A run that passes the gate publishes with no person.
-#   A run that the gate flags waits for a person in the `release-approval` environment.
+#   A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait.
 #   A run that the gate refuses does not publish.
-# - The `publish` job runs only on `main`. It runs only if the gate passed, or if the approval came in this same attempt.
-#   A re-run therefore never reuses an approval of an earlier attempt.
+# - The `publish` job runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
+#   A re-run therefore never reuses the wait of an earlier attempt.
 # - The `publish` job uses the `release` environment. The npm Trusted Publisher names that environment.
 # - A version that is already on npm is skipped, so a repeated run does nothing.
 # scripts/ci-workflow.test.ts and scripts/npm-publish-workflow.test.ts hold these rules.
@@ -127,7 +127,7 @@ jobs:
     outputs:
       attempt: ${{ github.run_attempt }}
     steps:
-      - run: echo "A person approved this run."
+      - run: echo "The wait of the release-approval environment ended."
 
   publish:
     name: publish to npm

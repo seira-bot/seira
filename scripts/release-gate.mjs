@@ -1,7 +1,7 @@
 // Decides if a release run needs a person. It reads every commit since the last version on npm and the pull
 // request that merged it. Only the gated npm publish workflow can publish to npm, so each version on npm passed the gate
-// or a person approved it. It only reads from GitHub, through `gh api`.
-// Exit status: 0 the run may publish with no person, 1 a person must approve first, 2 refuse, wrong use or an API error.
+// or waited in the `release-approval` environment. It only reads from GitHub, through `gh api`.
+// Exit status: 0 the run may publish with no wait, 1 the run waits in `release-approval` first, 2 refuse, wrong use or an API error.
 import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -276,8 +276,8 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", npmPack
   }
 
   return flagged
-    ? finish(1, "Release gate flagged this run. A person must approve it.")
-    : finish(0, "Release gate passed. The run may publish with no person.");
+    ? finish(1, "Release gate flagged this run. It waits in release-approval, and a maintainer can cancel it.")
+    : finish(0, "Release gate passed. The run may publish with no wait.");
 }
 
 function ghApi(path) {

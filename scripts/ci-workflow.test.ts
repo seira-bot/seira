@@ -933,7 +933,7 @@ describe("Release job conditions", () => {
   const cases: Case[] = [
     { name: "runs with no person when the gate passed", pass: "true", approval: "skipped", runs: true },
     { name: "runs again with no person when the gate passes in a later attempt", pass: "true", approval: "skipped", attempt: 2, runs: true },
-    { name: "runs when the gate flagged the run and a person approved in this attempt", pass: "false", approval: "success", approvalAttempt: 1, runs: true },
+    { name: "runs when the gate flagged the run and the wait ended in this attempt", pass: "false", approval: "success", approvalAttempt: 1, runs: true },
     { name: "does not run when the gate flagged the run and nobody approved", pass: "false", approval: "skipped", runs: false },
     { name: "does not run when the approval is rejected", pass: "false", approval: "failure", runs: false },
     { name: "does not run on an approval of an earlier attempt", pass: "false", approval: "success", approvalAttempt: 1, attempt: 2, runs: false },

@@ -116,7 +116,7 @@ reads a secret without it. One job is an exception: the `milestones` job of
 environment. It runs one script from `main`, installs no dependency, and reads
 no secret. The test pins its exact shape (see
 [Milestones workflow](#milestones-workflow)). A job with no secret and no permission can use the
-environment `release-approval`. It holds the approval (see
+environment `release-approval`. It holds the wait for a flagged run (see
 [The `release-approval` environment](#the-release-approval-environment)).
 A `gate` job with read-only permissions runs the release gate (see
 [The release gate](#the-release-gate)). The `redispatch` job of
@@ -380,12 +380,12 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 
 | Setting | Value |
 | --- | --- |
-| Required reviewers | None. The `release-approval` environment holds the approval. |
+| Required reviewers | None. The `release-approval` environment holds the wait for a flagged run. |
 | Deployment branches and tags | Selected branches and tags: `main` only |
 | Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
 
-- A job in `release` never waits for a person. The `gate` and `approval` jobs
-  before it decide if a person must approve the run.
+- A job in `release` never waits. The `gate` and `approval` jobs before it
+  decide if the run waits.
 - With `main` as the only deployment ref, a workflow file changed on
   another branch cannot read the secrets.
 - Do not store the Apple secrets as repository or organization secrets. Every
@@ -399,10 +399,16 @@ GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
-| Required reviewers | The team of human reviewers, with no bot account |
+| Required reviewers | None |
+| Wait timer | 360 minutes (6 hours) |
 | Deployment branches and tags | Selected branches and tags: `main` only |
 | Allow administrators to bypass configured protection rules | Off |
 | Environment secrets | None |
+
+A flagged run waits 6 hours. Then the `approval` job runs, and the run
+publishes. Nobody can make the wait shorter. A maintainer can cancel the run
+during the wait. The run summary of the `gate` job shows why the gate flagged
+the run.
 
 Set "Allow administrators to bypass configured protection rules" to off on the
 `release` environment too.
@@ -415,7 +421,7 @@ runs it from the commit of the workflow.
 
 The gate checks every commit since the last version on npm. Only the gated
 `npm-publish.yml` workflow can publish to npm, so each version on npm passed
-the gate or a person approved it. The gate asks the npm registry for the
+the gate or waited in `release-approval`. The gate asks the npm registry for the
 versions of `@seira-bot/seira` and takes the highest lower version as the
 baseline. A run with a commit and no tag takes the highest version. The tag of the baseline must exist and must be
 an ancestor of the release commit. If not, the gate flags the run. If the
@@ -447,8 +453,8 @@ The gate has three results:
 
 | Exit status | Meaning | What the workflow does |
 | --- | --- | --- |
-| 0 | Pass | The run publishes with no person |
-| 1 | Flagged | The `approval` job waits for a person in `release-approval` |
+| 0 | Pass | The run publishes with no wait |
+| 1 | Flagged | The `approval` job waits 6 hours in `release-approval`, then the run publishes. A maintainer can cancel it. |
 | 2 | Refused, wrong use, or API error | The `gate` job fails and nothing publishes |
 
 The repository variable `RELEASE_HUMAN_REVIEWERS` holds the logins of the human
@@ -457,8 +463,7 @@ variable is missing, empty, or not a JSON array, it counts as an empty list.
 Do not add a bot account to it.
 
 - The `release` and `release-approval` environments accept `main` only.
-- Each attempt checks the approval of that attempt. An approval from an
-  earlier attempt never counts.
+- Each attempt waits again. The wait of an earlier attempt never counts.
 - A published release starts `npm-publish.yml` again on `main`. The
   `redispatch` job does it with the workflow token. GitHub makes a new run for
   this kind of start.
