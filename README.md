@@ -52,7 +52,7 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 
 ## Quick start
 
-1. **Get Seira.** [Download it](#install) for Windows or Linux, then open it.
+1. **Get Seira.** Get it from the [Microsoft Store](https://apps.microsoft.com/detail/9MVFVK4VTFDH), or [download it](#install) for Windows or Linux, then open it.
 2. **Connect an AI that you already use.** Select **Sign in with Claude**, or connect Codex, Gemini, or [another engine](#engines).
    No AI yet? Seira installs OpenCode with its free models, so you can chat at once.
 3. **Give a bot a job.** Watch it work. Each risky step shows as a card that you allow or deny.
@@ -88,9 +88,11 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 
 ## Install
 
+<a href="https://apps.microsoft.com/detail/9MVFVK4VTFDH"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="56"></a>
+
 | System | Download | How to install |
 |---|---|---|
-| **Windows** 10 or later, x64 | [`Seira-setup.exe`](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) | Open the file. If Windows warns you, select **More info**, then **Run anyway**. |
+| **Windows** 10 or later, x64 | [Microsoft Store](https://apps.microsoft.com/detail/9MVFVK4VTFDH) (recommended), or [`Seira-setup.exe`](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) | Store: select **Get**. Installer: open the file. If Windows warns you, select **More info**, then **Run anyway**. |
 | **Ubuntu 24.04**, x64 | [`Seira-amd64.deb`](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) | `sudo apt install ./Seira-amd64.deb` |
 | **Other Linux**, x64 | [`Seira.AppImage`](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) | `chmod +x Seira.AppImage`, then open it. |
 | **Linux with Flatpak**, x64 | [`seira.flatpakref`](https://flatpak.seira.bot/seira.flatpakref) | `flatpak install --user https://flatpak.seira.bot/seira.flatpakref` |
