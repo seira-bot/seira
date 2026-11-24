@@ -251,6 +251,8 @@ describe("The WAPilot card gives the service to one chosen bot", () => {
     await open();
     expect(picker()?.querySelector("[data-hosted-permissions]")?.textContent).toMatch(/read your chats, contacts and groups, and send WhatsApp messages as you/);
     expect(picker()?.textContent).toContain("WAPilot Remote Control");
+    expect(picker()?.textContent).toContain("Connect again to give WAPilot to another bot.");
+    expect(picker()?.textContent).not.toContain("{service}");
     expect(picker()?.textContent).toContain("WAPilot’s servers");
     expect([...picker()!.querySelectorAll("label")].map((label) => label.textContent)).toEqual(["Atlas", "Nova"]);
     expect([...card(app).querySelectorAll<HTMLInputElement>('input[type="radio"]')].some((input) => input.checked)).toBe(false);

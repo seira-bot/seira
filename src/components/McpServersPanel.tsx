@@ -568,7 +568,7 @@ export function McpServersPanel({ embedded = false, hostedCards, hideHosted = fa
         <p className="font-medium text-ink">{t("hostedMcp.pickTitle", { service: app.label })}</p>
         <p data-hosted-permissions className="mt-1.5 leading-relaxed">{t(app.notice)}</p>
         {choices.length === 0 ? <p className="mt-2">{t("hostedMcp.pickNone", { service: app.label })}</p> : <>
-          <p className="mt-2 leading-relaxed">{t("hostedMcp.pickHint")}</p>
+          <p className="mt-2 leading-relaxed">{t("hostedMcp.pickHint", { service: app.label })}</p>
           <div className="mt-2 flex flex-col gap-1.5">{choices.map((bot) => <label key={bot.id} className="flex items-center gap-2 text-ink">
             <input type="radio" name={`hosted-bot-${app.id}`} value={bot.id} checked={pickedBot === bot.id} onChange={() => setPickedBot(bot.id)} />
             <span>{bot.name}</span>
