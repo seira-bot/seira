@@ -75,7 +75,7 @@ const VARIABLES: ReadonlyArray<readonly [string, string]> = [
   ["--shadow-lg", "0 12px 32px rgb(0 0 0 / 0.16)"],
 ];
 
-const TOKEN = /var\((--[\w-]+)\)/g;
+const CSS_VAR = /var\((--[\w-]+)\)/g;
 
 /** A variable whose token this document does not define is left out, so the View's own default applies. */
 export function appStyleVariables(root: Element | null = typeof document === "undefined" ? null : document.documentElement): Record<string, string> {
@@ -83,7 +83,7 @@ export function appStyleVariables(root: Element | null = typeof document === "un
   const out: Record<string, string> = {};
   for (const [name, css] of VARIABLES) {
     let missing = false;
-    const value = css.replace(TOKEN, (_whole, token: string) => {
+    const value = css.replace(CSS_VAR, (_whole, token: string) => {
       const resolved = style?.getPropertyValue(token).trim() ?? "";
       if (!resolved) missing = true;
       return resolved;
