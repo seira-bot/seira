@@ -322,7 +322,8 @@ Windows uses an explicitly identified Seira build of agent-browser
 0.36.0, with the handle-inheritance fix from
 [upstream PR #1781](https://github.com/vercel-labs/agent-browser/pull/1781).
 The official 0.37.0 release does not contain this fix, so Windows stays on the
-native-verified `0.36.0-omb.1` revision and does not yet get the new recording
+native-verified Windows revision (`0.36.0-omb.1` until `0.36.0-seira.2` is
+published and pinned) and does not yet get the new recording
 options. Do not replace it with the unpatched 0.37.0 Windows binary.
 The original binary can hang when a newly started background browser holds
 the tool call's output connection open. The backport changes that Windows
@@ -340,6 +341,9 @@ overwritten; a changed build needs a new revision and reviewed pins.
 The Windows revision has a separate managed installation directory so an old
 0.36.0 download is not mistaken for the patched engine. Desktop packages use
 their bundled engine. Explicit executable overrides remain user-managed.
+Published vendor bytes live in `seira-bot/seira` releases under the tag
+`browser-engine-v<version>`. An engine already installed under the old
+`0.36.0-omb.1` folder is still used until the new revision is installed.
 Remove the backport when an official release includes the fix and passes the
 same native cold-start and restart tests.
 

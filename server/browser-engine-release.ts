@@ -52,6 +52,9 @@ const RELEASES = new Map<string, AgentBrowserReleaseAsset>([
   ],
 ]);
 
+/** Windows engine revisions installed before the Seira rename. The resolver still reads them so an update does not break a working install. */
+export const LEGACY_WINDOWS_ENGINE_VERSIONS: readonly string[] = ["0.36.0-omb.1"];
+
 export function agentBrowserReleaseUrl(asset: AgentBrowserReleaseAsset): string {
   return asset.url ?? `https://github.com/vercel-labs/agent-browser/releases/download/v${AGENT_BROWSER_VERSION}/${asset.asset}`;
 }
