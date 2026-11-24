@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
-import { seedProfile } from "./seed.ts";
+import { seedingDir } from "./profile.ts";
+import { removeStaleSeeding, seedProfile } from "./seed.ts";
 
 const folders: string[] = [];
 afterAll(async () => { for (const folder of folders) await removeTempDir(folder); });
@@ -45,7 +46,7 @@ describe("seeding a profile from another browser's profile folder", () => {
     for (const name of ["SingletonLock", "SingletonSocket", "SingletonCookie", "DevToolsActivePort", "Code Cache", "GPUCache", join("Default", "Cache"), join("Default", "SingletonLock"), join("Default", "link")]) {
       expect(existsSync(join(target, name)), name).toBe(false);
     }
-    expect(existsSync(`${target}.seeding`)).toBe(false);
+    expect(existsSync(seedingDir(target))).toBe(false);
   });
 
   it("copies a folder with no Last Version file, and one an equal Chrome opened", async () => {
@@ -74,6 +75,42 @@ describe("seeding a profile from another browser's profile folder", () => {
     const { dir, target } = source();
     await expect(seedProfile(join(dir, "missing"), target, "155.0.8059.80")).rejects.toThrow();
     expect(existsSync(target)).toBe(false);
-    expect(existsSync(`${target}.seeding`)).toBe(false);
+    expect(existsSync(seedingDir(target))).toBe(false);
+  });
+});
+
+describe("the copy a stopped process leaves behind", () => {
+  function stale(root: string, name: string): string {
+    const dir = join(root, "seeding", name);
+    mkdirSync(join(dir, "Default"), { recursive: true });
+    writeFileSync(join(dir, "Default", "Cookies"), "half a copy");
+    return dir;
+  }
+
+  it("builds the copy in the one seeding folder under the browser root, never beside the profile", () => {
+    expect(seedingDir(join("data", "browser", "profiles", "abc"))).toBe(join("data", "browser", "seeding", "abc"));
+  });
+
+  it("is removed at the next start, but a copy that is running now stays", () => {
+    const { target } = source();
+    const root = join(target, "..", "..");
+    const left = stale(root, "left");
+    const running = stale(root, "running");
+    removeStaleSeeding(root, (profile) => profile === join(root, "profiles", "running"));
+    expect(existsSync(left)).toBe(false);
+    expect(existsSync(running)).toBe(true);
+  });
+
+  it("does nothing when no copy was ever made", () => {
+    const { target } = source();
+    expect(() => removeStaleSeeding(join(target, "..", ".."), () => false)).not.toThrow();
+  });
+
+  it("does not change a copy that finishes after an earlier one was left behind", async () => {
+    const { dir, target } = source();
+    const left = stale(join(target, "..", ".."), "new-profile");
+    expect(await seedProfile(dir, target, "155.0.8059.80")).toBe("copied");
+    expect(existsSync(left)).toBe(false);
+    expect(readFileSync(join(target, "Default", "Cookies"), "utf8")).toBe("cookies");
   });
 });

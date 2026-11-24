@@ -19,6 +19,7 @@ import { BrowserRuntime } from "../browser-runtime.ts";
 import { LentChromeDoors, type ChromeLender } from "../browser/lent-chrome.ts";
 import { audienceBrowserSuffix } from "../browser/audience.ts";
 import { chromeLauncher, ChromeLauncher } from "../browser/chrome/launcher.ts";
+import { SourceStillOpen } from "../browser/chrome/seed.ts";
 import type { ChromePlan } from "../browser/chrome/resolve.ts";
 import type { CdpSession, Params } from "../browser/cdp/connection.ts";
 import { FileChoosers } from "../browser/cdp/files.ts";
@@ -320,6 +321,18 @@ describe("a bot's first browser on Seira's own engine, from its agent-browser pr
     agentBrowserRunning(own.session);
     await host.agentBrowserProfileFor("bot:scout");
     expect(vi.mocked(closeBrowserSession).mock.calls.map(([binary, env]) => `${binary} ${env.AGENT_BROWSER_SESSION}`)).toEqual([`${ENGINE} ${own.session}`]);
+  });
+
+  it("names no folder when the agent-browser browser does not close: the copy stops and says why", async () => {
+    ready();
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    agentBrowserRunning(own.session);
+    vi.mocked(closeBrowserSession).mockResolvedValue(false);
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toBeInstanceOf(SourceStillOpen);
+    vi.mocked(closeBrowserSession).mockRejectedValue(new Error("no answer"));
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toThrow(/still open/);
   });
 
   it("closes nothing when no agent-browser browser runs for the session", async () => {
