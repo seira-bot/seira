@@ -8,7 +8,7 @@ import { posix, resolve, win32 } from "node:path";
 
 import { chromeForTestingExecutable, chromeForTestingPin, type ChromeForTestingPin } from "./install.ts";
 
-export type ChromeSource = "installed" | "downloaded" | "named" | "agent-browser";
+export type ChromeSource = "installed" | "downloaded" | "named" | "agent-browser" | "found";
 
 export interface FoundChrome { path: string; source: ChromeSource }
 
@@ -109,15 +109,23 @@ const LINUX_ENGINE_BROWSERS = ["google-chrome", "google-chrome-stable", "google-
 /** Where Puppeteer and Playwright unpack Chrome inside a cache entry; an entry without one is incomplete. */
 const LINUX_CACHE_EXECUTABLES = ["chrome-linux64/chrome", "chrome-linux/chrome"];
 
-/** A Linux server where agent-browser already finds a browser keeps it rather than downloading another. */
-export function engineFindsLinuxBrowser(host: ChromeHost): boolean {
+/** The browser agent-browser would pick on a Linux server, which keeps it rather than downloading another. */
+export function linuxEngineBrowser(host: ChromeHost): string | null {
   const { join } = posix;
   const onPath = (host.enginePath?.() ?? host.env.PATH ?? "").split(":").filter(Boolean);
-  if (onPath.some((directory) => LINUX_ENGINE_BROWSERS.some((name) => host.exists(join(directory, name))))) return true;
-  const cached = (directory: string, prefix: string) => host.list(directory)
-    .some((name) => name.startsWith(prefix) && LINUX_CACHE_EXECUTABLES.some((executable) => host.exists(join(directory, name, executable))));
+  for (const directory of onPath) {
+    const name = LINUX_ENGINE_BROWSERS.find((candidate) => host.exists(join(directory, candidate)));
+    if (name) return join(directory, name);
+  }
+  const cached = (directory: string, prefix: string) => {
+    for (const entry of host.list(directory).filter((name) => name.startsWith(prefix))) {
+      const executable = LINUX_CACHE_EXECUTABLES.map((path) => join(directory, entry, path)).find((path) => host.exists(path));
+      if (executable) return executable;
+    }
+    return null;
+  };
   return cached(join(host.env.PUPPETEER_CACHE_DIR || join(host.home, ".cache", "puppeteer"), "chrome"), "linux")
-    || cached(host.env.PLAYWRIGHT_BROWSERS_PATH || join(host.home, ".cache", "ms-playwright"), "chromium-");
+    ?? cached(host.env.PLAYWRIGHT_BROWSERS_PATH || join(host.home, ".cache", "ms-playwright"), "chromium-");
 }
 
 /** `downloading`: a Chrome for Testing download is under way, so a browser agent-browser finds later does not replace it. */
@@ -139,9 +147,10 @@ export function resolveChromePlan(host: ChromeHost, engine: ChromeEngine | null,
   if (pin) {
     const executable = chromeForTestingExecutable(host.dataDir, pin);
     if (host.exists(executable)) return { kind: "chrome", chrome: { path: executable, source: "downloaded" }, fallback: null };
-    // WhatsApp Web refuses the "HeadlessChrome" user agent of the bundled shell and of a browser agent-browser starts on its own.
-    const linuxServer = platform === "linux" && !env.SEIRA_RESOURCES_PATH;
-    if (linuxServer && !options.downloading && engineFindsLinuxBrowser(host)) return { kind: "legacy", reason: "agent-browser found a browser on this server" };
+    // WhatsApp Web refuses the "HeadlessChrome" user agent of a browser agent-browser starts on its own, so a browser
+    // found on a server runs through the launcher, with Seira's identity, like any other.
+    const found = platform === "linux" && !env.SEIRA_RESOURCES_PATH && !options.downloading ? linuxEngineBrowser(host) : null;
+    if (found) return { kind: "chrome", chrome: { path: found, source: "found" }, fallback: pin };
     return { kind: "download", pin };
   }
   return installed ? { kind: "legacy", reason: "Google Chrome here is managed by an organization" } : { kind: "legacy", reason: "no Chrome is installed and none is pinned for this platform", noChrome: true };
