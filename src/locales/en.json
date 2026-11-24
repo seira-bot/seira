@@ -11804,6 +11804,7 @@
   "folderAccess.add.pathPlaceholder": "Full path of a folder",
   "folderAccess.boxNote": "Commands also see only these folders, and cannot reach other apps on this computer.",
   "folderAccess.aiNote": "On this computer, a command can still open other files. To check each command first, set approval to {approval}.",
+  "folderAccess.noBwrap": "Commands are not held to these folders because bubblewrap is not installed. On Debian or Ubuntu, install it and restart Seira:",
   "folderAccess.setElsewhere": "Folders are set on the computer where Seira runs.",
   "team.folders": "Folders",
   "team.foldersFor": "Folders for {name}",

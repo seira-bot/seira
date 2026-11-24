@@ -27,6 +27,7 @@ export function SectionFoldersDialog({ section, label, onClose }: { section: str
             <FolderAccessEditor
               subject="department"
               enforcement={data.enforcement}
+              boxMissing={data.boxMissing}
               access={data.departments[section]}
               save={(next) => setDepartment(section, next)}
             />
