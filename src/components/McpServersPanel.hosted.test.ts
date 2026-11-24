@@ -27,7 +27,7 @@ vi.mock("./bot-panel/panel-link", () => ({ openBotSettings: fixture.openBotSetti
 
 import { McpServersPanel } from "./McpServersPanel";
 
-interface Listing { name: string; type: "http"; url: string; headerKeys: string[]; enabled: boolean; auth: "signed-in" | "needs-sign-in"; managedBy?: string }
+interface Listing { name: string; type: "http"; url: string; headerKeys: string[]; enabled: boolean; auth: "signed-in" | "needs-sign-in"; managedBy?: string; bot?: string }
 const listing = (app: HostedApp, extra: Partial<Listing> = {}): Listing => ({ name: app.id, type: "http", url: app.url, headerKeys: [], enabled: false, auth: "needs-sign-in", ...extra });
 
 let host: HTMLDivElement;
@@ -94,7 +94,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe.each(HOSTED_MCP_APPS)("The $label card", (app) => {
+describe.each(HOSTED_MCP_APPS.filter((one) => !("perBot" in one)))("The $label card", (app) => {
   async function connect() {
     await act(async () => button(app, "Connect").click());
     await settle();
@@ -227,6 +227,92 @@ describe.each(HOSTED_MCP_APPS)("The $label card", (app) => {
     await mount();
     expect(card(app).querySelector("img") !== null).toBe("image" in app.icon);
     expect(card(app).querySelector("svg") !== null).toBe("glyph" in app.icon);
+  });
+});
+
+describe("The WAPilot card gives the service to one chosen bot", () => {
+  const app = HOSTED_MCP_APPS.find((one) => one.id === "wapilot")!;
+  const picker = () => card(app).querySelector<HTMLElement>("[data-hosted-pick]");
+  const radio = (id: string) => card(app).querySelector<HTMLInputElement>(`input[type="radio"][value="${id}"]`)!;
+  const open = async () => { await act(async () => button(app, "Connect").click()); await settle(); };
+  const pick = async (id: string) => { await act(async () => radio(id).click()); await settle(); };
+  const continueButton = () => [...card(app).querySelectorAll("button")].find((element) => element.textContent?.startsWith("Continue to sign in"))!;
+
+  beforeEach(() => {
+    fixture.store = { config: null, bots: [{ id: "atlas", name: "Atlas", hidden: false }, { id: "nova", name: "Nova", hidden: false }, { id: "ghost", name: "Ghost", hidden: true }] };
+  });
+
+  it("uses no logo of the service", () => {
+    expect("image" in app.icon).toBe(false);
+  });
+
+  it("shows what a bot can read and send, and asks for a bot, before any sign-in or server", async () => {
+    await mount();
+    await open();
+    expect(picker()?.querySelector("[data-hosted-permissions]")?.textContent).toMatch(/read your chats, contacts and groups, and send WhatsApp messages as you/);
+    expect(picker()?.textContent).toContain("WAPilot Remote Control");
+    expect(picker()?.textContent).toContain("Connect again to give WAPilot to another bot.");
+    expect(picker()?.textContent).not.toContain("{service}");
+    expect(picker()?.textContent).toContain("WAPilot’s servers");
+    expect([...picker()!.querySelectorAll("label")].map((label) => label.textContent)).toEqual(["Atlas", "Nova"]);
+    expect([...card(app).querySelectorAll<HTMLInputElement>('input[type="radio"]')].some((input) => input.checked)).toBe(false);
+    expect(continueButton().disabled).toBe(true);
+    expect(added()).toEqual([]);
+    expect(fixture.runMcpSignIn).not.toHaveBeenCalled();
+  });
+
+  it("does not sign in until a bot is picked, then adds a server that is only that bot's and signs in", async () => {
+    await mount();
+    await open();
+    await act(async () => continueButton().click());
+    await settle();
+    expect(added()).toEqual([]);
+    expect(fixture.runMcpSignIn).not.toHaveBeenCalled();
+
+    await pick("nova");
+    expect(continueButton().disabled).toBe(false);
+    await act(async () => continueButton().click());
+    await settle();
+    expect(added()).toEqual([{ name: "wapilot", type: "http", url: app.url, enabled: false, bot: "nova" }]);
+    expect(fixture.runMcpSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches it on only after sign-in, for the picked bot's own server", async () => {
+    await mount();
+    await open();
+    await pick("atlas");
+    await act(async () => continueButton().click());
+    await settle();
+    await act(async () => { testRequest?.resolve({ ok: true, tools: [] }); });
+    await settle();
+    expect(calls("PATCH")).toEqual([["/api/mcp/servers/wapilot", { enabled: true }]]);
+    expect(servers).toMatchObject([{ name: "wapilot", bot: "atlas", enabled: true }]);
+  });
+
+  it("never switches on, for every bot, a WAPilot server that no bot owns, even when it is signed in from the server list", async () => {
+    servers = [listing(app)];
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => root.render(createElement(() => McpServersPanel({}))));
+    await settle();
+    const row = [...host.querySelectorAll("button")].find((element) => element.textContent?.trim() === "Connect WAPilot")!;
+    await act(async () => row.click());
+    await settle();
+    await act(async () => { testRequest?.resolve({ ok: true, tools: [] }); });
+    await settle();
+    expect(fixture.runMcpSignIn).toHaveBeenCalledTimes(1);
+    expect(calls("PATCH")).toEqual([]);
+    expect(servers[0]!.enabled).toBe(false);
+    expect(host.textContent).toContain("still off");
+  });
+
+  it("offers only bots that do not have it yet", async () => {
+    servers = [listing(app, { bot: "atlas", enabled: true, auth: "signed-in" })];
+    await mount();
+    await open();
+    expect([...picker()!.querySelectorAll("label")].map((label) => label.textContent)).toEqual(["Nova"]);
+    expect(card(app).querySelector('[data-hosted-bot="atlas"]')?.textContent).toContain("Only for Atlas");
   });
 });
 

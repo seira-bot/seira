@@ -4,22 +4,24 @@
 import { escapeNotes } from "./peer-provenance.ts";
 
 export const RECORDS_END = "[end of records]";
-// Characters with no width: dropped, so a marker split by one is whole again before it is checked.
-const INVISIBLE = /[\u00ad\u200b-\u200f\u2060-\u2064\ufeff\u061c\u180e\u115f\u3164\u{e0000}-\u{e007f}]|\u034f|[\ufe00-\ufe0f]/gu;
+// Characters with no width, the tag block and the Hangul fillers that render blank: dropped, so a marker split by one
+// is whole again before it is checked. Joiners go too, so an emoji sequence shows as its separate parts.
+const INVISIBLE = /[\p{Cf}\u115f\u1160\u3164\uffa0\u{e0000}-\u{e007f}]|\u034f|[\ufe00-\ufe0f]/gu;
 // Line separators and bidi overrides: a space, so they never glue two words together or reorder what is shown.
 const LINE_AND_BIDI = /[\u2028-\u202e\u2066-\u2069]/g;
 const isControl = (code: number): boolean => code < 0x20 || (code >= 0x7f && code <= 0x9f);
 const FORGED_END = /\[\s*end\s+of\s+records\s*\]/gi;
 // An opening bracket that would start one of our markers: a records block, a routine header, an untrusted-data or
-// instructions block, or one of Seira's own notes (`[Seira …]`, or `[OpenMausBot …]` from older releases).
-const FORGED_START = /\[(?=\s*\/?\s*(?:records\s+from\b|scheduled\s+routine\b|routine\s+"|untrusted\b|user-configured\b|authenticated\b|default\b|seira\b|openmausbot\b))/gi;
+// instructions block, or one of Seira's own notes (`[Seira …]`, or the same note under its older name). Security
+// invariant: the white space is matched by one `\s*` only, so a long run of it cannot be split in many ways.
+const FORGED_START = /\[(?=\s*(?:\/\s*)?(?:records\s+from\b|scheduled\s+routine\b|routine\s+"|untrusted\b|user-configured\b|authenticated\b|default\b|seira\b|openmausbot\b))/gi;
 
 const defuseMarkers = (text: string): string => text.replace(FORGED_END, "(end of records)").replace(FORGED_START, "(");
 
 /** Outside text with its lines kept: no invisible or control characters but newlines and tabs, and none of our markers. */
 export function defuse(text: string): string {
-  const visible = Array.from(text.replace(INVISIBLE, ""), (ch) => ch !== "\n" && ch !== "\t" && isControl(ch.codePointAt(0)!) ? " " : ch).join("");
-  return escapeNotes(defuseMarkers(visible.replace(LINE_AND_BIDI, " ")));
+  const visible = Array.from(text.replace(LINE_AND_BIDI, " ").replace(INVISIBLE, ""), (ch) => ch !== "\n" && ch !== "\t" && isControl(ch.codePointAt(0)!) ? " " : ch).join("");
+  return escapeNotes(defuseMarkers(visible));
 }
 
 /** `defuse` on one line of at most `max` code points. */

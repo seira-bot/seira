@@ -1,23 +1,28 @@
-// index.ts's wiring of the link between a person's computer and their Cloud (server/bot-link/link.ts): the link over this
-// server's store and coordinator, the computer's end that asks the Cloud, and the routes. With the link off (no
-// bot-link.json in the data folder) `start` asks nobody and every hook here answers as if the link did not exist.
-import { dirname } from "node:path";
+// index.ts's wiring of the link between a person's computer and their Cloud (server/bot-link/link.ts) and of the links to
+// servers of other owners (server/host/linked-servers.ts): the links over this server's store and coordinator, the
+// computer's end that asks the Cloud, and the routes. With the person's link off (no bot-link.json in the data folder)
+// and no linked server, `start` asks nobody and every hook here answers as if no link existed.
+import type { IncomingMessage } from "node:http";
 
+import type { AdminActionRow, AdminActor } from "../admin-activity.ts";
 import { createDialer } from "../bot-link/dial.ts";
-import { createBotLink } from "../bot-link/link.ts";
-import type { Coordinator, HandoffView } from "../coordinator.ts";
-import { redactSecretsInText } from "../redact.ts";
+import { createBotLink, type CoordinateContext } from "../bot-link/link.ts";
+import { isLinkedId } from "../bot-link/protocol.ts";
+import type { CoordinateBotsCall, Coordinator, CoordinatorHost } from "../coordinator.ts";
+import type { PeerDeliveryReceipt } from "../peer-delivery.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { createBotLinkRoutes, linkSessionUser } from "../routes/bot-link.ts";
-import { isLinkedId } from "../bot-link/protocol.ts";
+import { createLinkedServerRoutes } from "../routes/linked-servers.ts";
+import { PASS, dispatchRoutes, type RouteHandler } from "../routes/table.ts";
+import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { mascotAccessories } from "../../shared/mascot-accessories.ts";
-import type { Level } from "../runtime/types.ts";
 import type { BotRecord, Store } from "../store.ts";
-import type { HandoffFiles, PassedFile } from "./handoff-files.ts";
-import { sentRow, teammateResultRow } from "./handoff-sent.ts";
+import { botLinkDeps, type BotLinkStoreDeps } from "./bot-link-deps.ts";
 import { createLinkedRooms, type LinkedRoomsDeps } from "./bot-link-rooms.ts";
+import type { HandoffFiles } from "./handoff-files.ts";
+import { CHAINED, createLinkedServers, type GuestRequest } from "./linked-servers.ts";
 
-export interface BotLinkHostDeps {
+export interface BotLinkHostDeps extends Omit<BotLinkStoreDeps, "store" | "files"> {
   dataDir: string;
   environmentId: string;
   store: Pick<Store, "bots" | "bot" | "standIns" | "createTask" | "taskByThread" | "appendMessage" | "patchTask" | "onChange" | "group" | "groups" | "groupTaskByThread" | "markGroupThreadUnread" | "activePath" | "messagesFor" | "patchGroup">;
@@ -31,22 +36,33 @@ export interface BotLinkHostDeps {
   roomChanged?(groupId: string): void;
   coordinator(): Coordinator;
   kick(): void;
-  level(bot: BotRecord): Level;
-  refusal(bot: BotRecord): string | null;
-  language(threadId: string): string | undefined;
-  personName(threadId: string): string | undefined;
-  sessions: { issue(input: { label: string; scopes: Array<"admin" | "client">; email?: string; userId?: string }): { token: string; session: { id: string } }; revoke(id: string): boolean };
+  sessions: {
+    issue(input: { label: string; scopes: Array<"admin" | "client">; email?: string; userId?: string }): { token: string; session: { id: string } };
+    revoke(id: string): boolean;
+    /** Whether this caller may try a code now, and a wrong code it tried. */
+    attemptAllowed(source: string): { ok: boolean };
+    noteFailure(source: string): void;
+  };
   local(auth: RequestAuth): boolean;
   owner(auth: RequestAuth): boolean;
   power(): { sleeping(): boolean; sleepSignal(): AbortSignal } | null | undefined;
-  files: Pick<HandoffFiles, "carried" | "crossed" | "sentWith" | "returnedWith">;
-  /** One crossed file into the attachment store, named by its bytes, under attach_file's own type and size rules. */
-  storeFile(path: string, name: string, root: string): Promise<{ attachment: { kind: string; path: string; mime: string; name?: string }; bytes: number }>;
+  files: Pick<HandoffFiles, "carried" | "crossed" | "sentWith" | "returnedWith" | "drop">;
+  /** The name other servers know this server by. */
+  serverName(): string;
+  /** The secure public address other servers reach this server at, or null when it has none. */
+  publicOrigin(): string | null;
+  audit(row: Omit<AdminActionRow, "at">): void;
+  /** Who made an admin request, for the activity record. */
+  actor(auth: RequestAuth, req: IncomingMessage): AdminActor;
   log(line: string): void;
 }
 
+type Answer = { status: number; body: Record<string, unknown> };
+type Local = (call: CoordinateBotsCall) => Promise<Answer>;
+
 export function createBotLinkHost(deps: BotLinkHostDeps) {
   const { store } = deps;
+  const shared = botLinkDeps(deps);
   /** Each bot of each linked place as a record this place finds by its address: its name and look, and where it lives.
    * It has no conversation, model or tools here, and takes no turn here. */
   const syncStandIns = () => {
@@ -79,43 +95,18 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
   const rooms = createLinkedRooms({ dataDir: deps.dataDir, store, coordinator: deps.coordinator, on: () => link.on(), linked: (peer) => link.has(peer), online: (peer) => link.online(peer), linkedBots: () => link.linked(), selfName: () => link.selfName(), wanted: () => link.wanted(),
     personName: deps.personName, line: deps.roomLine, window: deps.roomWindow, log: deps.log, ...(deps.roomOpener ? { opener: deps.roomOpener } : {}), ...(deps.roomFollow ? { follow: deps.roomFollow } : {}) });
   const link = createBotLink({
-    dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, rooms, directoryChanged: () => { syncStandIns(); }, revoke: (sessionId) => { deps.sessions.revoke(sessionId); },
-    bots: () => store.bots, bot: (id) => store.bot(id),
-    refusal: (bot) => deps.refusal(bot as BotRecord),
-    model: (bot) => (bot as BotRecord).modelSelection.model,
-    level: (bot) => deps.level(bot as BotRecord),
-    openThread: (bot, title, opener) => store.createTask(bot.id, title, false, undefined, { ...opener, at: Date.now(), kind: "work" })?.threadId,
-    hasThread: (botId, threadId) => Boolean(store.taskByThread(botId, threadId)),
-    personName: deps.personName,
-    files: {
-      carried: deps.files.carried, crossed: deps.files.crossed,
-      store: async (files) => {
-        const stored: PassedFile[] = [];
-        for (const file of files) {
-          const { attachment, bytes } = await deps.storeFile(file.path, file.name, dirname(file.path));
-          if (attachment.kind === "image" || attachment.kind === "file") stored.push({ kind: attachment.kind, path: attachment.path, name: attachment.name || file.name, mime: attachment.mime, bytes });
-        }
-        return stored;
-      },
-    },
-    sentRow: ({ sender, threadId, recipient, workThreadId, nodeId, reason, doneWhen, roomId }) => {
-      const room = roomId ? store.group(roomId) : undefined;
-      store.appendMessage(threadId, sentRow({ sender: { id: sender.id, name: sender.name, color: sender.color ?? "blue" }, recipient: { ...recipient, color: "blue" }, threadId: workThreadId, via: "direct", language: deps.language(threadId), ...(room ? { room: { id: room.id, name: room.name, here: true } } : {}),
-        ...(reason ? { reason } : {}), ...(doneWhen ? { doneWhen: redactSecretsInText(doneWhen) } : {}), ...deps.files.sentWith(nodeId) }));
-    },
-    resultRow: (parent: HandoffView, child: HandoffView, name: string) => {
-      const room = parent.groupId ? store.group(parent.groupId) : undefined;
-      if (parent.groupId ? !room || !store.groupTaskByThread(room.id, parent.threadId) : !store.taskByThread(parent.botId, parent.threadId)) return;
-      const done = child.status === "completed";
-      store.appendMessage(parent.threadId, { role: "bot", kind: "activity", roomRequest: { id: child.id, phase: "result" }, ...deps.files.returnedWith(child, parent),
-        tool: { name: teammateResultRow(deps.language(parent.threadId), child, name, undefined, undefined), ok: done,
-          ...(done && child.result.trim() ? { output: redactSecretsInText(child.result.trim()).slice(0, 2_000) } : {}) } });
-      if (room) store.markGroupThreadUnread(room.id, parent.threadId, true);
-      else if (!parent.parentId && parent.reply !== "poll") store.patchTask(parent.botId, parent.threadId, { unread: true });
-    },
+    ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, rooms, directoryChanged: () => { syncStandIns(); }, revoke: (sessionId) => { deps.sessions.revoke(sessionId); },
+    notMine: (botId) => linked.instances().some((one) => one.link.claims(botId)),
+  });
+  const linked = createLinkedServers({
+    ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, power: deps.power,
+    dropFiles: (paths) => deps.files.drop(paths),
+    serverName: deps.serverName, selfId: () => deps.environmentId, publicOrigin: deps.publicOrigin, audit: deps.audit,
+    attemptAllowed: (source) => deps.sessions.attemptAllowed(source).ok, attemptFailed: (source) => { deps.sessions.noteFailure(source); },
+    ownPeer: (key) => link.has(key),
   });
   const dialer = createDialer({ link, log: deps.log });
-  let stopWatching: (() => void) | undefined, upkeep: NodeJS.Timeout | undefined;
+  let stopWatching: (() => void) | undefined, stopWatchingGuests: (() => void) | undefined, upkeep: NodeJS.Timeout | undefined;
   /** While the link is on: bot changes reach the other places, and old records and stray file bytes are cleared hourly. */
   const watch = () => {
     stopWatching ??= store.onChange((change) => { if (change.type.startsWith("bot.")) link.botsChanged(); });
@@ -128,7 +119,7 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
    * removed is forgotten. Watched while the link is on, or while a room still has a far member. */
   let stopWatchingRooms: (() => void) | undefined;
   const watchRooms = () => { stopWatchingRooms ??= store.onChange((change) => { if (change.type === "group" && (store.standIns.size > 0 || rooms.any())) syncStandIns(); }); };
-  const routes = createBotLinkRoutes({ link, dialer, turnedOn: watch, environmentId: deps.environmentId, local: deps.local, owner: deps.owner, power: deps.power,
+  const ownRoutes = createBotLinkRoutes({ link, dialer, turnedOn: watch, environmentId: deps.environmentId, local: deps.local, owner: deps.owner, power: deps.power,
     // A personal Cloud issues no session without its owner's scopes, so the link's carries them; `linkSessionRefusal`
     // (wired where requests are admitted) keeps it to the link's own routes.
     issue: (auth, label, computerId) => {
@@ -136,10 +127,47 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
       return { token: issued.token, sessionId: issued.session.id };
     },
     revoke: (sessionId) => { deps.sessions.revoke(sessionId); } });
+  const adminRoutes = createLinkedServerRoutes({ manager: linked, knownBot: (id) => store.bots.some((bot) => bot.id === id), actor: deps.actor });
+  const routes: RouteHandler = async (ctx) => (await dispatchRoutes([ownRoutes, adminRoutes], ctx) ? undefined : PASS);
+
+  /** Work a linked server started: a target of any other server is refused, and the rest goes on here. */
+  async function keepHere(call: CoordinateBotsCall, local: Local): Promise<Answer> {
+    const away = call.botIds.filter((raw) => isLinkedId(raw.trim()) || link.resolve(raw) !== undefined);
+    if (away.length === 0) return local(call);
+    const refused = away.map((botId): PeerDeliveryReceipt => ({ botId, outcome: "failed", detail: CHAINED }));
+    const here = call.botIds.filter((raw) => !away.includes(raw));
+    if (here.length === 0) return { status: 409, body: { receipts: refused, error: CHAINED } };
+    const rest = await local({ ...call, botIds: here });
+    const receipts = [...refused, ...(Array.isArray(rest.body.receipts) ? rest.body.receipts as PeerDeliveryReceipt[] : [])];
+    const said = (other: unknown) => [CHAINED, ...(typeof other === "string" && other ? [other] : [])].join("; ");
+    return rest.status === 200
+      ? { status: 200, body: { ...rest.body, receipts, notSent: said(rest.body.notSent) } }
+      : { status: rest.status, body: { ...rest.body, receipts, error: said(rest.body.error) } };
+  }
+
+  const facade = {
+    ...link,
+    /** The coordinator's host with the bots of the person's other places and of every linked server in it. */
+    host: (inner: CoordinatorHost): CoordinatorHost => linked.host(link.host(inner)),
+    /** coordinate_bots: the person's other places take their targets, then each linked server, then this server. */
+    async coordinate(call: CoordinateBotsCall, context: CoordinateContext, local: Local): Promise<Answer> {
+      const parent = deps.coordinator().node(context.parentId ?? context.generation);
+      if (parent && linked.started(parent.rootId)) return keepHere(call, local);
+      const guests = linked.instances().reduceRight<Local>((next, one) => (rest) => one.link.coordinate(rest, context, next), local);
+      return link.coordinate(call, context, guests);
+    },
+    agents: () => [...link.agents(), ...linked.instances().flatMap((one) => one.link.agents())],
+    /** Requests before sign-in that only a linked server makes. False: not one of them. */
+    publicRoutes: (ctx: GuestRequest): Promise<boolean> => linked.serve(ctx),
+    capFor: (threadId: string, mode: ApprovalMode): ApprovalMode => linked.capFor(threadId, mode),
+  };
+
   return {
-    link, routes, rooms,
+    link: facade, routes, rooms, linked,
     /** Once the server is up. Off: nothing. On, on the computer: it starts asking the Cloud. */
     start(): void {
+      linked.start();
+      stopWatchingGuests ??= store.onChange((change) => { if (change.type.startsWith("bot.")) for (const one of linked.instances()) one.link.botsChanged(); });
       // Off: nothing, unless a room here still has a member from another place, which is then found and shown as away.
       if (!link.on()) { if (rooms.any()) { syncStandIns(); watchRooms(); } return; }
       syncStandIns();
@@ -147,6 +175,6 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
       link.tidy();
       if (link.role() === "dialer") dialer.start({ gentle: true });
     },
-    close(): void { if (upkeep) clearInterval(upkeep); stopWatching?.(); stopWatchingRooms?.(); dialer.close(); link.close(); },
+    close(): void { if (upkeep) clearInterval(upkeep); stopWatching?.(); stopWatchingGuests?.(); stopWatchingRooms?.(); dialer.close(); link.close(); linked.close(); },
   };
 }
