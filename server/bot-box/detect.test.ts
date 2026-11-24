@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { boxWanted, cloudRole, detectBox } from "./detect.ts";
+import { boxMissingForEveryBot, boxWanted, cloudRole, detectBox } from "./detect.ts";
 
 const tools = (found: Record<string, string>) => (name: string) => found[name] ?? null;
 
@@ -38,5 +38,16 @@ describe("deciding whether turns are boxed", () => {
     expect(detectBox({ env, platform: "linux", probe: () => true, which: tools({}) })).toEqual({ box: "off", reason: "no-bwrap", tools: null });
     expect(detectBox({ env, platform: "linux", probe: () => false, which: tools({ bwrap: "/usr/bin/bwrap" }) })).toEqual({ box: "off", reason: "userns-refused", tools: null });
     expect(detectBox({ env, platform: "linux", probe: () => true, which: tools({ bwrap: "/usr/bin/bwrap" }) }).tools).toEqual({ bwrap: "/usr/bin/bwrap", socat: null });
+  });
+
+  it("reports a missing bubblewrap for the first-run notice only when every bot was meant to be boxed", () => {
+    const noBwrap = (env: Record<string, string>, platform: NodeJS.Platform = "linux") => detectBox({ env, platform, probe: () => true, which: tools({}) });
+    expect(boxMissingForEveryBot(noBwrap({ SEIRA_CLOUD_ROLE: "home" }), { SEIRA_CLOUD_ROLE: "home" })).toBe("no-bwrap");
+    expect(boxMissingForEveryBot(noBwrap({ SEIRA_BOT_BOX: "1" }), { SEIRA_BOT_BOX: "1" })).toBe("no-bwrap");
+    expect(boxMissingForEveryBot(noBwrap({}), {}), "a Linux computer that boxes only limited bots").toBeNull();
+    expect(boxMissingForEveryBot(noBwrap({ SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0" }), { SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0" }), "switched off").toBeNull();
+    expect(boxMissingForEveryBot(noBwrap({ SEIRA_CLOUD_ROLE: "home" }, "darwin"), { SEIRA_CLOUD_ROLE: "home" }), "another reason").toBeNull();
+    const withBwrap = detectBox({ env: { SEIRA_CLOUD_ROLE: "home" }, platform: "linux", probe: () => true, which: tools({ bwrap: "/usr/bin/bwrap" }) });
+    expect(boxMissingForEveryBot(withBwrap, { SEIRA_CLOUD_ROLE: "home" })).toBeNull();
   });
 });

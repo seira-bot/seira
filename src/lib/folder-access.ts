@@ -67,3 +67,6 @@ export function useDepartmentFolders(enabled: boolean) {
 
   return { data, setDepartment };
 }
+
+/** The command that installs bubblewrap on Debian and Ubuntu. */
+export const INSTALL_BWRAP = "sudo apt install bubblewrap";

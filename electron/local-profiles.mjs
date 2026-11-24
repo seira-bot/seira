@@ -32,6 +32,19 @@ export function profileName(value) {
   return name || null;
 }
 
+const ENVIRONMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The id a workspace's server wrote in its data folder (server/environment.ts) and shows as its own; undefined when the folder
+ * has none yet (it never ran), or the file is not an id. Only reads, and never creates the file. */
+function environmentIdIn(dir, fs) {
+  try {
+    const id = fs.readFileSync(path.join(dir, "environment-id"), "utf8").trim();
+    return ENVIRONMENT_ID.test(id) ? id.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const swatch = (value) => (CLOUD_SWATCHES.includes(value) ? value : null);
 const sameName = (a, b) => typeof a === "string" && typeof b === "string" && a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
@@ -142,7 +155,25 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
   remember = () => {}, changed = () => {}, log = () => {}, fs = nodeFs, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = Date.now }) {
   /** Each switch asked for; a newer one (another tile, My Cloud) ends the wait of the one before. */
   let turn = 0;
-  /** The workspace a switch waits to open (null: This computer's own copy), and for whom. */
+  /** Who started the turn now: the `cause` a caller gave (a phone request's own record), or null when the rail did. */
+  let holder = null;
+  /** For each cause whose turn a later request took: that request's cause, or null when the rail took it. The record is
+   * written at the moment the turn changes, so a request that comes later never takes the credit. */
+  const taken = new WeakMap();
+  const objectOrNull = (value) => (value !== null && typeof value === "object" ? value : null);
+  /** Starts the next turn for `cause` and notes who the turn it ends belonged to lost it to. The wait record of the turn it
+   * ends goes at the same moment, so a record that is visible always belongs to the active turn: a newer switch does not leave
+   * the old one's wait to be hurried while its own busy check still runs. */
+  function bump(cause) {
+    const before = holder;
+    holder = objectOrNull(cause);
+    if (before && !taken.has(before)) taken.set(before, holder);
+    ++turn;
+    if (settling) { settling = null; tell(); }
+    return turn;
+  }
+  /** The workspace the active switch waits to open (null: This computer's own copy), the name of what it waits for, and the
+   * `turn` of that switch. Set only by that switch, and gone when a newer one starts (see bump). */
   let settling = null;
   const listed = (id) => registry.list().find((entry) => entry.id === id && offered(entry.id)) ?? null;
   const offered = (id) => (home() === "cloud" ? true : home() === "local" ? id !== DEFAULT_PROFILE : false);
@@ -159,28 +190,33 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
       try { who = await busy(); } catch {}
       if (mine !== turn) return false;
       if (!who) break;
-      if (settling?.id !== target || settling.name !== who.name) { settling = { id: target, name: who.name || "" }; tell(); }
+      if (settling?.turn !== mine || settling.name !== who.name) { settling = { id: target, name: who.name || "", turn: mine }; tell(); }
       await sleep(SETTLE_POLL_MS);
     }
     if (settling && mine === turn) { settling = null; tell(); }
     return mine === turn;
   }
 
-  /** A second click on the place a switch waits for: it opens now, and the server stops as a quit stops it. */
-  function hurry() {
-    log(`local profiles: ${settling.id ?? "this computer"} opens though ${settling.name || "a turn"} still works`);
+  /** A second click on the place a switch waits for: it opens now, and the server stops as a quit stops it. Only the wait of
+   * the active switch is hurried: `wait` is that record. */
+  function hurry(wait) {
+    log(`local profiles: ${wait.id ?? "this computer"} opens though ${wait.name || "a turn"} still works`);
     settling = null;
     tell();
     return true;
   }
 
-  /** True once workspace `id` is on screen, false when it can't open, null when a newer switch took over. */
-  async function open(id) {
-    const again = settling?.id === id;
-    const mine = ++turn;
+  /** True once workspace `id` is on screen, false when it can't open, null when a newer switch took over. `cause`: the
+   * request that asks (an object); none for the rail. `hurryTurn`: a request that means to hurry the wait it saw (its
+   * `turn`) opens nothing, and changes no turn, unless that wait is the active switch's right now. */
+  async function open(id, cause, hurryTurn) {
+    const wait = settling;
+    const again = wait?.id === id && wait.turn === turn;
+    if (hurryTurn !== undefined && !(again && wait.turn === hurryTurn)) return false;
+    const mine = bump(cause);
     if (!allowed() || !listed(id)) return false;
     const stops = running() !== id && (home() === "local" || running() !== null);
-    if (!(again ? hurry() : await settle(mine, id, stops))) return null;
+    if (!(again ? hurry(wait) : await settle(mine, id, stops))) return null;
     const opened = home() === "cloud" ? await shown.openProfile(id) : running() === id ? (await showLocal(), true) : await clean.open(id);
     if (opened) remember({ profile: id });
     return opened || mine === turn ? opened : null;
@@ -195,20 +231,22 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
       return registry.list().filter((entry) => offered(entry.id)).map((entry) => ({ id: entry.id, name: entry.name, color: swatchColor(entry.color), swatch: entry.color,
         ...(entry.id === onScreen ? { active: true } : {}), ...(settling?.id === entry.id ? { settling: settling.name } : {}) }));
     },
-    /** The workspace a switch waits to open (`id` null: This computer), and the name of what it waits for. */
+    /** The workspace the active switch waits to open (`id` null: This computer), the name of what it waits for, and the
+     * `turn` of that switch. Null as soon as a newer switch starts, though its own busy check is not done. */
     settling: () => settling,
     /** What a paired phone may list: This PC (id `local`) and each workspace the rail offers, one current, a switch that
-     * waits marked on its target. No folder, address or port. Null unless this computer is home. */
+     * waits marked on its target, and the `environmentId` of each that has run. No folder, address or port. Null unless this computer is home. */
     phoneFacts() {
       if (!allowed() || home() !== "local") return null;
       const onScreen = running(), name = reserved();
       const waiting = settling ? { state: "waiting", ...(settling.name ? { waitingFor: settling.name } : {}) } : null;
       const state = (target, current) => (settling?.id === target && waiting ? waiting : current || !settling ? { state: "ready" } : { state: "unavailable" });
+      const environmentId = (dir) => { const id = environmentIdIn(dir, fs); return id ? { environmentId: id } : {}; };
       return [
-        { id: PHONE_LOCAL_ID, ...(name ? { name } : {}), current: onScreen === null, ...state(null, onScreen === null) },
+        { id: PHONE_LOCAL_ID, ...environmentId(dataDir()), ...(name ? { name } : {}), current: onScreen === null, ...state(null, onScreen === null) },
         ...registry.list().filter((entry) => offered(entry.id) && entry.id !== PHONE_LOCAL_ID).map((entry) => {
           const color = swatchColor(entry.color);
-          return { id: entry.id, ...(entry.name ? { name: entry.name } : {}), ...(color ? { color } : {}), current: entry.id === onScreen, ...state(entry.id, entry.id === onScreen) };
+          return { id: entry.id, ...environmentId(profileDir(dataDir(), entry.id)), ...(entry.name ? { name: entry.name } : {}), ...(color ? { color } : {}), current: entry.id === onScreen, ...state(entry.id, entry.id === onScreen) };
         }),
       ];
     },
@@ -216,17 +254,22 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     creatable: () => allowed() && home() !== null,
     open,
     /** Back to This computer's own copy from a workspace (no home but this computer). */
-    async computer() {
-      const again = settling?.id === null;
-      const mine = ++turn;
+    async computer(cause, hurryTurn) {
+      const wait = settling;
+      const again = wait !== null && wait.id === null && wait.turn === turn;
+      if (hurryTurn !== undefined && !(again && wait.turn === hurryTurn)) return false;
+      const mine = bump(cause);
       if (running() === null) { await showLocal(); remember(null); return true; }
-      if (!(again ? hurry() : await settle(mine, null, true))) return null;
+      if (!(again ? hurry(wait) : await settle(mine, null, true))) return null;
       const left = await clean.leave();
       if (left && mine === turn) remember(null);
       return left;
     },
     /** Another place was chosen: a switch still waiting ends. */
-    cancel() { turn++; if (settling) { settling = null; tell(); } },
+    cancel(cause) { bump(cause); },
+    /** What took the turn of `cause` (an object that was given to open, computer or cancel): undefined while nothing
+     * has, null when the rail did, else the cause of the request that did. */
+    takenBy: (cause) => (objectOrNull(cause) && taken.has(cause) ? taken.get(cause) : undefined),
     /** A new workspace's entry; the rail opens it next (cloud-rail.mjs), so a switch that waits shows on its circle. */
     create({ name, color }) {
       if (!allowed() || home() === null) return { outcome: "unavailable" };
@@ -251,7 +294,7 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
      * to the Trash, then its entry. */
     async remove(id) {
       if (!listed(id)) return { outcome: "gone" };
-      turn++;
+      bump();
       if (running() === id) {
         if (!(await clean.leave()) || running() === id) return { outcome: "failed" };
         if (home() === "cloud") await shown.showCloud();

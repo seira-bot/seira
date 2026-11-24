@@ -9,20 +9,14 @@
 // The sign-in it issues is good for the link's own routes and nothing else (`linkSessionRefusal`), so the file that keeps
 // it on the computer (bot-link.json, mode 600) is not the person's sign-in to their Cloud. Each computer has its own; one
 // computer's never reads or answers another's work. Turning the link off on either side ends that session.
-import { createReadStream, createWriteStream, rmSync, statSync } from "node:fs";
-import type { ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
-import { Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 
 import type { createDialer } from "../bot-link/dial.ts";
 import type { BotLink } from "../bot-link/link.ts";
-import { BOTS_PATH, FILE_PATH, LEVEL_HEADER, PAIR_PATH, PROTOCOL_LEVEL, SEEN_MS, STATE_PATH, SYNC_PATH, fileWay, levelOf, placeSchema, syncRequest } from "../bot-link/protocol.ts";
+import { BOTS_PATH, FILE_PATH, PAIR_PATH, STATE_PATH, SYNC_PATH, placeSchema } from "../bot-link/protocol.ts";
 import { mascotAccessories } from "../../shared/mascot-accessories.ts";
-import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
-import { answerAsleep } from "../cloud-power.ts";
 import type { RequestAuth } from "../request-auth.ts";
+import { createLinkExchange } from "./bot-link-exchange.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 const name = z.string().trim().min(1).max(120);
@@ -71,26 +65,7 @@ export interface BotLinkRouteDeps {
 
 export function createBotLinkRoutes(deps: BotLinkRouteDeps): RouteHandler {
   const { link, dialer } = deps;
-  const session = randomUUID();
-  const held = new Map<string, () => void>();
-  const gone = new Map<string, NodeJS.Timeout>();
-  const seen = (peer: string) => {
-    link.setOnline(peer, true);
-    clearTimeout(gone.get(peer));
-    const timer = setTimeout(() => { gone.delete(peer); link.setOnline(peer, false); }, deps.seenMs ?? SEEN_MS);
-    timer.unref?.();
-    gone.set(peer, timer);
-  };
-  /** Until the link has something to send, the wait ends, the computer hangs up or asks again, or the Cloud goes to sleep. */
-  const hold = (res: ServerResponse, peer: string, ack: number, wait: number, sleep: AbortSignal | undefined) => new Promise<void>((resolve) => {
-    held.get(peer)?.();
-    const done = () => { clearTimeout(timer); stop(); res.off("close", done); sleep?.removeEventListener("abort", done); if (held.get(peer) === done) held.delete(peer); resolve(); };
-    const timer = setTimeout(done, wait);
-    const stop = link.onOutgoing((changed) => { if (changed === peer && (!link.has(peer) || link.hasOutgoing(peer, ack))) done(); });
-    res.on("close", done);
-    sleep?.addEventListener("abort", done, { once: true });
-    held.set(peer, done);
-  });
+  const exchange = createLinkExchange({ link, paths: { sync: SYNC_PATH, file: FILE_PATH }, power: deps.power, seenMs: deps.seenMs, level: deps.level });
   const state = () => ({ ...link.status(), ...(link.role() === "dialer" ? dialer.state() : {}) });
 
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
@@ -148,7 +123,7 @@ export function createBotLinkRoutes(deps: BotLinkRouteDeps): RouteHandler {
       const self = { id: deps.environmentId, name: body.data.name };
       const paired = link.pair({ self, sessionId: issued.sessionId, computer: body.data.computer });
       if (!paired) { deps.revoke(issued.sessionId); return json(res, 409, { error: "This Cloud already links as many computers as it can. Turn the link off on one of them first." }); }
-      held.get(paired.peer)?.();
+      exchange.release(paired.peer);
       if (paired.replaced) deps.revoke(paired.replaced);
       deps.turnedOn?.();
       return json(res, 200, { token: issued.token, place: self });
@@ -156,53 +131,6 @@ export function createBotLinkRoutes(deps: BotLinkRouteDeps): RouteHandler {
 
     const peer = auth.kind === "session" ? link.peerOfSession(auth.session.id) : null;
     if (!peer) { req.resume(); return json(res, 403, { error: "This link is off. Turn it on again in the app." }); }
-    if (path === FILE_PATH) {
-      const id = url.searchParams.get("id") ?? "", way = fileWay.safeParse(url.searchParams.get("way")), index = Number(url.searchParams.get("index")), fileName = url.searchParams.get("name") ?? "";
-      if (!id || id.length > 200 || !way.success || !Number.isInteger(index) || !fileName || fileName.length > 255) { req.resume(); return json(res, 400, { error: "send id, way, index and name" }); }
-      if (deps.power()?.sleeping()) { req.resume(); return answerAsleep(res, json); }
-      seen(peer);
-      if (method === "GET" && url.searchParams.has("probe")) return json(res, 200, { have: link.holds(peer, id, way.data, index, fileName, Number(url.searchParams.get("bytes"))) });
-      if (method === "GET") {
-        const file = link.outgoingFile(peer, id, way.data, index);
-        let bytes = -1;
-        try { if (file) bytes = statSync(file.path).size; } catch { /* no longer kept */ }
-        if (!file || bytes < 0) return json(res, 404, { error: "that file is no longer kept" });
-        res.writeHead(200, { "content-type": "application/octet-stream", "content-length": String(bytes) });
-        await pipeline(createReadStream(file.path), res).catch(() => {});
-        return;
-      }
-      if (method !== "PUT") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
-      const to = link.incoming(peer, id, way.data, index, fileName);
-      if (!to) { req.resume(); return json(res, 409, { error: "that file is not wanted here any more" }); }
-      let taken = 0;
-      const capped = new Transform({ transform(chunk: Buffer, _encoding, done) { taken += chunk.length; done(taken > FILE_MAX_BYTES ? new Error("too large") : null, chunk); } });
-      try {
-        await pipeline(req, capped, createWriteStream(to, { mode: 0o600 }));
-      } catch {
-        rmSync(to, { force: true });
-        if (res.destroyed) return;
-        return json(res, taken > FILE_MAX_BYTES ? 413 : 400, { error: taken > FILE_MAX_BYTES ? `a file may be at most ${Math.round(FILE_MAX_BYTES / (1024 * 1024))} MB` : "the file did not arrive whole" });
-      }
-      return json(res, 200, { ok: true });
-    }
-    if (method !== "POST") { req.resume(); return json(res, 405, { error: "method not allowed" }); }
-    const body = syncRequest.safeParse(await readBody(req, 4 * 1024 * 1024));
-    if (!body.success) return json(res, 400, { error: "send { ack, frames, wait }" });
-    const power = deps.power();
-    if (power?.sleeping()) return answerAsleep(res, json);
-    seen(peer);
-    // Each side says what its version reads; a computer on the first version says nothing and is sent only what that reads.
-    link.setLevel(peer, levelOf(req.headers[LEVEL_HEADER]));
-    if ((deps.level ?? PROTOCOL_LEVEL) > 1) res.setHeader(LEVEL_HEADER, String(deps.level ?? PROTOCOL_LEVEL));
-    if (body.data.fresh) link.sessionStarted(peer);
-    link.receive(peer, body.data.frames);
-    const linked = () => auth.kind === "session" && link.peerOfSession(auth.session.id) === peer;
-    if (!linked()) { clearTimeout(gone.get(peer)); gone.delete(peer); return json(res, 200, { session, frames: [] }); }
-    if (body.data.wait > 0 && !link.hasOutgoing(peer, body.data.ack)) await hold(res, peer, body.data.ack, body.data.wait, power?.sleepSignal());
-    if (power?.sleeping()) return answerAsleep(res, json);
-    if (res.writableEnded || res.destroyed) return;
-    if (!linked()) return json(res, 403, { error: "This link is off. Turn it on again in the app." });
-    seen(peer);
-    return json(res, 200, { session, frames: link.outgoing(peer, body.data.ack) });
+    return exchange.serve({ req, res, url, path, method, auth, json, readBody }, peer, () => auth.kind === "session" && link.peerOfSession(auth.session.id) === peer);
   };
 }

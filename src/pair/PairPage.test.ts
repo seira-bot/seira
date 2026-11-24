@@ -79,9 +79,13 @@ it("names a wrong kind of code instead of letting it be sent as a wrong one", ()
   expect(codeReady("1234 5678")).toBe(false);
 });
 
-it("opens the phone app at this server with the code filled in", () => {
-  expect(openInAppLink("https://seira.example.com", "7kq2m9xdh4tp")).toBe("seira://pair?address=https%3A%2F%2Fseira.example.com&code=7KQ2-M9XD-H4TP");
-  expect(openInAppLink("http://192.168.1.20:8799", "")).toBe("seira://pair?address=http%3A%2F%2F192.168.1.20%3A8799");
+it("opens the app at this server's pairing page with the address only, never the code", () => {
+  expect(openInAppLink("https://seira.example.com")).toBe("seira://pair?address=https%3A%2F%2Fseira.example.com");
+  expect(openInAppLink("http://192.168.1.20:8799")).toBe("seira://pair?address=http%3A%2F%2F192.168.1.20%3A8799");
+  for (const link of [openInAppLink("https://seira.example.com"), openInAppLink("http://192.168.1.20:8799")]) {
+    expect(link).not.toMatch(/code|token|secret/i);
+    expect([...new URL(link).searchParams.keys()]).toEqual(["address"]);
+  }
 });
 
 it("warns only on plain http across the open internet", () => {
@@ -97,7 +101,8 @@ it("asks for the code first, with email sign-in as a link below, and says how to
   const html = render(code);
   expect(html).toContain(en["pair.notEncrypted"].replace("'", "&#x27;"));
   expect(html).toContain(en["pair.fromLink"]);
-  expect(html).toContain("seira://pair?address=http%3A%2F%2F203.0.113.9%3A8799&amp;code=ABCD-EFGH-JK23");
+  expect(html).toContain("seira://pair?address=http%3A%2F%2F203.0.113.9%3A8799");
+  expect(html, "the page's link to the app never carries the code").not.toMatch(/seira:\/\/pair\?[^"]*(code|token)/);
   expect(html).toContain("npx @seira-bot/seira pair");
   expect(html.indexOf("<form")).toBeLessThan(html.indexOf(en["pair.code"]));
 });

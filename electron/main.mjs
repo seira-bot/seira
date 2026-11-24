@@ -35,7 +35,7 @@ import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
 import { postToServer } from "./server-message.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
-import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs"; import { createRemoteVisor } from "./glance-remote-visor.mjs"; import { spawn } from "node:child_process";
+import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installPairLinks } from "./pair-link-main.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs"; import { createRemoteVisor } from "./glance-remote-visor.mjs"; import { spawn } from "node:child_process";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
 import { windowBackground, windowChromeOptions } from "./window-chrome.mjs";
 import { createAllWindowsClosedQuit } from "./window-all-closed.mjs";
@@ -253,7 +253,7 @@ function queueChatLink(rawLink) {
 }
 
 app.on("open-url", (event, url) => {
-  if (!teamLinks.fromUrl(url) && !queueOrganizationEntry(url) && !cloudEntry.fromUrl(url) && !queuePackageInstall(url) && !queueChatLink(url)) return;
+  if (!pairLinks.fromUrl(url) && !teamLinks.fromUrl(url) && !queueOrganizationEntry(url) && !cloudEntry.fromUrl(url) && !queuePackageInstall(url) && !queueChatLink(url)) return;
   event.preventDefault();
 });
 
@@ -262,7 +262,7 @@ app.on("second-instance", (_event, commandLine) => {
     queueOrganizationEntry("seira://organization");
     return;
   }
-  if (cloudEntry.fromArgs(commandLine)) return; if (teamLinks.fromArgs(commandLine)) return;
+  if (pairLinks.fromArgs(commandLine)) return; if (cloudEntry.fromArgs(commandLine)) return; if (teamLinks.fromArgs(commandLine)) return;
   const packageUrl = packageUrlFromCommandLine(commandLine);
   if (packageUrl) pendingPackageInstallUrl = packageUrl;
   const chatLink = chatLinkFromCommandLine(commandLine);
@@ -1785,7 +1785,7 @@ const serverConnect = createServerConnect({ fetch: (...args) => session.defaultS
     persistEnvironments(withActive(next, next.environments.find((e) => e.origin === found.origin).id));
     navigateMainWindow(pairingPageUrl(found.origin, found.code ?? found.credential));
   } });
-const connectHostedWorkspace = (input, name) => serverConnect.connectAsking(input, name);
+const connectHostedWorkspace = (input, name) => serverConnect.connectAsking(input, name); const pairLinks = installPairLinks({ dialog, t: nativeT, argv: process.argv, connect: (link, confirm) => serverConnect.connectFromLink(link, confirm), reveal: () => revealForLink() });
 
 /** My Cloud, and each team's Cloud the session lists (home-places.mjs), under Servers. */
 function rememberCloudHome(state) {
@@ -3027,7 +3027,7 @@ app.whenReady().then(async () => {
   const deliveredOrganizationEntry = await deliverOrganizationEntry();
   const deliveredCloudEntry = await cloudEntry.ready();
   startupTimeline.mark("entries-restored");
-  if (!hiddenStart && !restoredOrganizationEntry && !deliveredOrganizationEntry && !deliveredCloudEntry) await showStartPlace(); void cloudAccountRestored().then(() => teamLinks.ready());
+  if (!hiddenStart && !restoredOrganizationEntry && !deliveredOrganizationEntry && !deliveredCloudEntry) await showStartPlace(); void cloudAccountRestored().then(() => teamLinks.ready()); pairLinks.ready();
   // Reconcile incomplete setup and resume interrupted sign-out only once the local app is usable.
   if (hostedAccount) void hostedAccount.restore().catch(() => {});
   // Registering from an unreadable store would mint a second installation identity.

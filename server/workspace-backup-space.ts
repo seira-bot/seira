@@ -1,28 +1,14 @@
-import { lstatSync, readdirSync, statfsSync } from "node:fs";
-import { join } from "node:path";
+import { statfsSync } from "node:fs";
+import { partSizes, type BackupPart } from "./workspace-backup-parts.ts";
 
 export type FreeSpace = (path: string) => { bavail: number | bigint; bsize: number | bigint };
 
 const MARGIN_BYTES = 64 * 1024 ** 2;
 
-/** Bytes of regular files under a folder; links, unreadable entries, the backup folder and dependency folders are left out. */
-export function dataBytes(root: string): number {
-  let total = 0;
-  const walk = (directory: string, top: boolean) => {
-    let names: string[];
-    try { names = readdirSync(directory); } catch { return; }
-    for (const name of names) {
-      if ((top && name === ".backups") || name === "node_modules") continue;
-      try {
-        const path = join(directory, name);
-        const stat = lstatSync(path);
-        if (stat.isDirectory()) walk(path, false);
-        else if (stat.isFile()) total += stat.size;
-      } catch {}
-    }
-  };
-  walk(root, true);
-  return total;
+/** Bytes of regular files under a folder; links, unreadable entries, the backup folder and dependency folders are left out.
+ * Parts named in `leaveOut` are not counted. */
+export function dataBytes(root: string, leaveOut: readonly BackupPart[] = []): number {
+  return Object.values(partSizes(root, leaveOut)).reduce((total, bytes) => total + bytes, 0);
 }
 
 /** The snapshot copy and the encrypted archive each hold the data once. */
@@ -36,14 +22,14 @@ export function sizeText(bytes: number): string {
 }
 
 /** Throws before any copy when the disk holding `directory` is too full; a failed disk query lets the backup go on. */
-export function assertBackupSpace(directory: string, dataRoot: string, statfs: FreeSpace = statfsSync): void {
+export function assertBackupSpace(directory: string, dataRoot: string, statfs: FreeSpace = statfsSync, leaveOut: readonly BackupPart[] = []): void {
   let free: number;
   try {
     const stats = statfs(directory);
     free = Number(stats.bavail) * Number(stats.bsize);
   } catch { return; }
   if (!Number.isFinite(free)) return;
-  const needed = backupSpaceNeeded(dataBytes(dataRoot));
+  const needed = backupSpaceNeeded(dataBytes(dataRoot, leaveOut));
   if (free >= needed) return;
   throw new Error(`This backup needs about ${sizeText(needed)} of free disk space, and ${sizeText(free)} is free. Free some space and try again.`);
 }

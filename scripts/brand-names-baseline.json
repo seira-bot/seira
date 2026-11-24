@@ -708,6 +708,9 @@
   "server/bot-box/env.ts": [
     "723bab029ddc9e8a"
   ],
+  "server/bot-link/dial-power.test.ts": [
+    "5c58d153da82ee6e"
+  ],
   "server/browser-engine-release.ts": [
     "84860ef7d92b4374"
   ],
@@ -1093,11 +1096,11 @@
   ],
   "server/records-block.test.ts": [
     "0063aab924f2e508",
-    "502c60a5ebba5398"
+    "502c60a5ebba5398",
+    "f7f430c1fcb443ba"
   ],
   "server/records-block.ts": [
-    "25ab0a6926e2a75e",
-    "582c96fcdbee4bb3"
+    "19109853338c43fb"
   ],
   "server/request-auth.e2e.test.ts": [
     "9d9ec2f813513f73"
@@ -1342,8 +1345,5 @@
   ],
   "third_party/puppeteer/README.md": [
     "77835e8ff9df18ee"
-  ],
-  "server/bot-link/dial-power.test.ts": [
-    "5c58d153da82ee6e"
   ]
 }

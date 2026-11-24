@@ -549,7 +549,7 @@ export function createProxyHandler(options: ProxyOptions) {
         // Read from the registry at each use: the device seen at the start of the request may be revoked or unpaired by now.
         const current = options.authenticate(token);
         return Boolean(device) && current?.id === device?.id && current?.otherWorkspaces === true;
-      })
+      }, device?.id ?? "")
         .then((reply) => sendJson(res, reply.status, reply.body));
       return;
     }
