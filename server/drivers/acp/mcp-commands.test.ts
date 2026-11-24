@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { findCliCandidates, runnableFile } from "../../env-path.ts";
-import type { ProgramView } from "../../procs.ts";
+import { programViewFor, type ProgramView } from "../../procs.ts";
 import type { AcpMcpServer } from "../turn-mcp.ts";
 import { absoluteMcpCommands, skippedMcpNote, turnMcpCommands } from "./mcp-commands.ts";
 
@@ -66,6 +66,24 @@ describe.skipIf(process.platform === "win32")("absoluteMcpCommands", () => {
     const { servers, skipped } = absoluteMcpCommands([stdio("data", "not-executable"), stdio("dir", "a-directory")], viewOf(bin));
     expect(servers).toEqual([]);
     expect(skipped.map((entry) => entry.name)).toEqual(["data", "dir"]);
+  });
+
+  it("skips a relative path that exists from the working folder: it never reaches the agent", () => {
+    const startDir = process.cwd();
+    process.chdir(bin);
+    try {
+      const { servers, skipped } = absoluteMcpCommands([stdio("rel", "./fake-python"), stdio("sub", "../bin/fake-python")], programViewFor("dsh", { env: { PATH: bin } }));
+      expect(servers).toEqual([]);
+      expect(skipped.map((entry) => entry.name)).toEqual(["rel", "sub"]);
+    } finally {
+      process.chdir(startDir);
+    }
+  });
+
+  it("skips a command written for another platform instead of passing it on", () => {
+    const { servers, skipped } = absoluteMcpCommands([stdio("win", "C:\\tools\\mcp.exe"), stdio("unc", "\\\\host\\share\\mcp.exe")], viewOf(bin));
+    expect(servers).toEqual([]);
+    expect(skipped.map((entry) => entry.name)).toEqual(["win", "unc"]);
   });
 
   it("skips a relative path with a slash instead of guessing a base folder", () => {

@@ -1,4 +1,4 @@
-import { isAbsolute as isAbsolutePosix, win32 } from "node:path";
+import { isAbsolute } from "node:path";
 
 import type { ProgramView } from "../../procs.ts";
 import type { AcpMcpServer } from "../turn-mcp.ts";
@@ -10,9 +10,9 @@ export interface SkippedMcpServer {
   looked: boolean;
 }
 
-const isAbsoluteCommand = (command: string): boolean => isAbsolutePosix(command) || win32.isAbsolute(command);
-
-/** Some ACP agents reject `session/new` outright when a stdio MCP `command` is not an absolute path (dsh 0.2.2-rc.1:
+/** Absolute is judged for the platform the agent is started on: a path written for another one is not a command here.
+ *
+ * Some ACP agents reject `session/new` outright when a stdio MCP `command` is not an absolute path (dsh 0.2.2-rc.1:
  * "mcpServers[n].command must be an absolute path"). A bare command is looked up in `view`, the PATH and files of the place
  * the agent runs it, with no shell; a server whose command cannot be resolved there is left out so the rest of the turn
  * still starts. With no view the name is not guessed at. */
@@ -20,7 +20,7 @@ export function absoluteMcpCommands(servers: AcpMcpServer[], view: ProgramView |
   const skipped: SkippedMcpServer[] = [];
   const kept: AcpMcpServer[] = [];
   for (const server of servers) {
-    if ("type" in server || isAbsoluteCommand(server.command)) {
+    if ("type" in server || isAbsolute(server.command)) {
       kept.push(server);
       continue;
     }

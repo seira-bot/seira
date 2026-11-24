@@ -1,11 +1,12 @@
 // Where an engine looks up a program by name must be where it runs it: the bot box's PATH and files, the host a Flatpak
 // launches from, or this computer. A name is never looked up in one place and run from another.
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { botBox } from "./bot-box/box.ts";
+import { distrustHomePrograms } from "./bot-box/program-trust.ts";
 import type { BoxPlan } from "./bot-box/plan.ts";
 import { resetPathCacheForTests } from "./env-path.ts";
 import { setHostRunnerForTests, type HostRunner } from "./flatpak-host.ts";
@@ -28,6 +29,7 @@ describe.skipIf(process.platform === "win32")("the place a program is looked up"
   });
   afterEach(async () => {
     process.chdir(startDir);
+    distrustHomePrograms(null);
     delete process.env.FLATPAK_ID;
     vi.restoreAllMocks();
     setHostRunnerForTests(null);
@@ -43,6 +45,39 @@ describe.skipIf(process.platform === "win32")("the place a program is looked up"
       const view = programViewFor("dsh", { env: { PATH: ["", "rel", join(root, "none"), join(root, "a")].join(delimiter) } });
       expect(view?.find("mcp-tool")).toBe(first);
       expect(view?.find("relative-tool")).toBeUndefined();
+    });
+  });
+
+  describe("on this computer, where the launcher trusts only some folders", () => {
+    it("gives no program that a link in a trusted folder leads into a folder the bots write, and no later copy in its place", () => {
+      const evil = program(join(root, "home", "bots"), "linked-tool");
+      const later = program(join(root, "later"), "linked-tool");
+      const good = program(join(root, "bin"), "good-tool");
+      mkdirSync(join(root, "bin"), { recursive: true });
+      symlinkSync(evil, join(root, "bin", "linked-tool"));
+      distrustHomePrograms(join(root, "home"));
+      const view = programViewFor("dsh", { env: { PATH: [join(root, "bin"), join(root, "later")].join(delimiter) } });
+      expect(view?.find("good-tool")).toBe(good);
+      expect(view?.find("linked-tool")).toBeUndefined();
+      expect(later).toBeTruthy();
+    });
+
+    it("gives no program in a folder the bots write, even when PATH names it", () => {
+      program(join(root, "home", ".local", "bin"), "planted-tool");
+      distrustHomePrograms(join(root, "home"));
+      expect(programViewFor("dsh", { env: { PATH: join(root, "home", ".local", "bin") } })?.find("planted-tool")).toBeUndefined();
+    });
+  });
+
+  describe("for a name that is not a bare one", () => {
+    it("never takes a file that exists relative to the working folder, nor a path written for another platform", () => {
+      program(join(root, "sub"), "rel-tool");
+      process.chdir(root);
+      const view = programViewFor("dsh", { env: { PATH: join(root, "sub") } });
+      expect(view?.find("rel-tool")).toBe(join(root, "sub", "rel-tool"));
+      for (const name of ["./sub/rel-tool", "sub/rel-tool", "../sub/rel-tool", "C:\\tools\\rel-tool.exe", "\\\\host\\share\\rel-tool", "C:rel-tool", ""]) {
+        expect(view?.find(name), name).toBeUndefined();
+      }
     });
   });
 
@@ -111,6 +146,26 @@ describe.skipIf(process.platform === "win32")("the place a program is looked up"
     it("hands the host only whole folders: no empty or relative entry", () => {
       programViewFor("dsh", { env: { PATH: [":", "", "rel/bin", "/usr/bin", "./x"].join(":") } })?.find("host-only-tool");
       expect(searched).toEqual(["/usr/bin"]);
+    });
+
+    it("keeps a host program off the list when it or where it leads is a folder the bots write, as the launcher does", () => {
+      const trusted = program(join(root, "trusted"), "ok-tool");
+      const planted = program(join(root, "home", "bots"), "planted-tool");
+      const answers: Record<string, string> = { "ok-tool": `${trusted}\0${trusted}\0`, "planted-tool": `${join(root, "trusted", "planted-tool")}\0${planted}\0`, "lost-tool": `${trusted}\0\0` };
+      setHostRunnerForTests((argv) => argv[1] === "printenv" ? { status: 0, stdout: "/usr/bin\n" } : { status: 0, stdout: answers[String(argv.at(-1))] ?? "" });
+      distrustHomePrograms(join(root, "home"));
+      const view = programViewFor("dsh", { env: { PATH: join(root, "trusted") } });
+      expect(view?.find("ok-tool")).toBe(trusted);
+      expect(view?.find("planted-tool")).toBeUndefined();
+      expect(view?.find("lost-tool")).toBeUndefined();
+    });
+
+    it("does not send a name with a path to the host at all", () => {
+      const asked: string[] = [];
+      setHostRunnerForTests((argv) => { asked.push(String(argv.at(-1))); return { status: 0, stdout: "" }; });
+      const view = programViewFor("dsh", { env: { PATH: "/usr/bin" } });
+      for (const name of ["sub/tool", "./tool", "/usr/bin/tool", "C:\\tool.exe"]) expect(view?.find(name), name).toBeUndefined();
+      expect(asked).toEqual([]);
     });
 
     it("gives no view for an engine that runs inside the sandbox", () => {
