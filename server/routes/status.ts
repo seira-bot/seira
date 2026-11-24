@@ -3,7 +3,7 @@ import { activityCsv, activityEntries, flushAdminActivity, parseActivityWhat, re
 import { loadBrand } from "../brand.ts";
 import { browserEngineStatus, ensureChrome, installAgentBrowserBinary, resolveAgentBrowserBinary } from "../browser-engine.ts";
 import { DATA_DIR, EVENTS_DIR, NATIVE_DIR, instanceConfigs, type AppConfig } from "../config.ts";
-import { boundRetentionDays, decisionsCsv, readDecisionRange, readDecisions, type DecisionRow } from "../decision-log.ts";
+import { boundRetentionDays, decisionsCsv, flushDecisionLog, readDecisionRange, readDecisions, type DecisionRow } from "../decision-log.ts";
 import { doctorSummary } from "../doctor/start.ts";
 import { flushNativeLog } from "../drivers/native.ts";
 import { editionForMembers, editionStatus, entitled } from "../enterprise.ts";
@@ -185,6 +185,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
       if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit <= 0)) {
         return json(res, 400, { error: "limit must be a positive whole number" });
       }
+      await flushDecisionLog(DATA_DIR); // rows are appended in the background; a decision already answered is listed
       return json(res, 200, { decisions: readDecisions(DATA_DIR, parsedLimit ?? 200).map(decision) });
     }
     if (method === "GET" && (path === "/api/admin-activity" || path === "/api/admin-activity.csv")) {
@@ -223,6 +224,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
     if (method === "GET" && path === "/api/decisions.csv") {
       const range = parseUsageRange(url.searchParams.get("from"), url.searchParams.get("to"));
       if (!range) return json(res, 400, { error: "from and to must be YYYY-MM-DD, from no later than to, at most a year apart" });
+      await flushDecisionLog(DATA_DIR);
       const stamp = (date: Date) => date.toISOString().slice(0, 10);
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
