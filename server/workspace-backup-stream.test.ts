@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { backupSpaceNeeded } from "./workspace-backup-space.ts";
+import { hashRegular } from "./workspace-backup-stream.ts";
 import { createWorkspaceBackupSnapshot, stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
 
 // Synthetic data only. The export reads each file twice and writes no copy of it.
@@ -86,4 +87,46 @@ it("leaves no download and no job folder when an export fails", async () => {
   // The next export, once the writer has stopped, works.
   const next = await createWorkspaceBackupSnapshot(root, { password: PASSWORD });
   expect(existsSync(next.path)).toBe(true);
+});
+
+const LIMIT = 1024 ** 3;
+const identity = (path: string) => { const stat = statSync(path); return { dev: stat.dev, ino: stat.ino }; };
+
+it("refuses a file that is not the one the walk approved, and names its workspace path", () => {
+  const root = folder();
+  put(root, "workspaces/bot/a.txt", "synthetic alpha");
+  put(root, "workspaces/bot/b.txt", "synthetic alpha");
+  const file = join(root, "workspaces/bot/a.txt");
+  expect(() => hashRegular(file, file, LIMIT, "workspaces/bot/a.txt", { root, walked: identity(join(root, "workspaces/bot/b.txt")) }))
+    .toThrow("A workspace file changed during backup: workspaces/bot/a.txt. Stop its writer and retry.");
+  expect(hashRegular(file, file, LIMIT, "workspaces/bot/a.txt", { root, walked: identity(file) }).copied.size).toBe(15);
+});
+
+it("applies the exclusion policy to the file that is really opened", () => {
+  const root = folder();
+  put(root, "workspaces/bot/auth.json", "{}");
+  const file = join(root, "workspaces/bot/auth.json");
+  expect(() => hashRegular(file, file, LIMIT, "workspaces/bot/auth.json", { root, allowed: (rel) => rel !== "workspaces/bot/auth.json" })).toThrow(/workspaces\/bot\/auth\.json/);
+});
+
+it("refuses a file outside the approved root", () => {
+  const root = folder(), other = folder();
+  put(other, "a.txt", "synthetic");
+  expect(() => hashRegular(join(other, "a.txt"), join(other, "a.txt"), LIMIT, "a.txt", { root })).toThrow(/outside the folder/);
+});
+
+it("refuses a swap of a folder higher up the path, though the file itself is the same", () => refuses(
+  (root) => { renameSync(join(root, "workspaces/bot"), join(root, "workspaces/bot-old")); mkdirSync(join(root, "workspaces/bot")); renameSync(join(root, "workspaces/bot-old/sub"), join(root, "workspaces/bot/sub")); },
+  (root) => put(root, "workspaces/bot/sub/a.txt", "synthetic alpha"),
+));
+
+it("counts the roster from the bytes it archives", async () => {
+  const root = folder();
+  put(root, "bots.json", JSON.stringify([{ id: "bot-a" }, { id: "bot-b" }]));
+  put(root, "groups.json", JSON.stringify([{ id: "group-a" }]));
+  const made = await createWorkspaceBackupSnapshot(root, { password: PASSWORD });
+  expect(made.summary).toMatchObject({ bots: 2, groups: 1 });
+  const target = folder();
+  const staged = await stageWorkspaceBackup(target, made.path, { password: PASSWORD });
+  expect(staged.summary).toMatchObject({ bots: 2, groups: 1 });
 });

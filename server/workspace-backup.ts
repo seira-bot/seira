@@ -22,7 +22,7 @@ import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
 import { backupPartOf, LEAVE_OUT_PARTS, parseLeaveOut, type LeaveOutPart } from "./workspace-backup-parts.ts";
 import { databaseCounts } from "./workspace-backup-counts.ts";
-import { archiveBlocks, copyRegular, hashRegular, type StreamSource } from "./workspace-backup-stream.ts";
+import { archiveBlocks, copyRegular, hashRegular, type HashScope, type StreamSource } from "./workspace-backup-stream.ts";
 import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
 import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
@@ -234,9 +234,9 @@ function hashFile(path: string): string {
     }
   } finally { closeSync(fd); }
 }
-function countJsonArray(path: string): number {
-  if (!existsSync(path)) return 0;
-  const value = privateJson(path);
+function countJsonArray(path: string, text?: string): number {
+  if (text === undefined && !existsSync(path)) return 0;
+  const value = text === undefined ? privateJson(path) : JSON.parse(text);
   if (!Array.isArray(value)) throw new Error("A workspace roster is not a valid JSON array.");
   const ids = new Set<string>();
   for (const item of value) {
@@ -287,7 +287,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   const key = await passwordKey(options.password, salt);
   const job = newJob(dataDir, jobId);
   const snapshot = join(job.directory, "snapshot");
-  const entries: Entry[] = []; const streams = new Map<string, StreamSource>();
+  const entries: Entry[] = []; const streams = new Map<string, StreamSource>(); const rosters = new Map<string, string>();
   const foldedPaths = new Map<string, string>(); const problems: string[] = [];
   const warnings = ["Stop external editors and managed desktops before exporting; files written outside this server cannot be frozen by the backup gate.", "Conversation text and user files are not redacted and may contain secrets you pasted. Keep the encrypted backup private.", RESTORE_WARNING];
   let bytes = 0;
@@ -317,6 +317,12 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     const snapshotOf = (name: string) => join(snapshot, SNAPSHOT_DATABASES[name]!);
     const privateWorkflowRuns = privacy ? stripTeamPrivate({ messages: snapshotOf("messages.db"), runtime: snapshotOf("runtime.db"), workflows: snapshotOf("workflows.db") }, privacy) : new Set<string>();
     if (privacy) warnings.push(TEAM_PRIVATE_NOTE);
+    // Pass 1. A roster is counted from the bytes this read saw; pass 2 proves the archive holds the same bytes.
+    const hashed = (file: string, origin: string, path: string, scope: HashScope) => {
+      const read = hashRegular(file, origin, MAX_WORKSPACE_BACKUP_BYTES, path, { ...scope, keep: path === "bots.json" || path === "groups.json" });
+      if (read.bytes) rosters.set(path, read.bytes.toString("utf8"));
+      return read;
+    };
     const walk = (directory: string, prefix = "", chain: string[] = [root]) => {
       for (const name of readdirSync(directory).sort()) {
         if (!prefix && excluded(name)) continue;
@@ -389,8 +395,9 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
               if (Array.isArray(value.deleted)) for (const entry of value.deleted) if (record(entry) && record(entry.webhook)) delete entry.webhook.sealedSecret;
               writeJson(destination, value);
             }
-            ({ copied, stream } = hashRegular(destination, destination, MAX_WORKSPACE_BACKUP_BYTES));
-          } else ({ copied, stream } = hashRegular(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, join(directory, name), MAX_WORKSPACE_BACKUP_BYTES));
+            ({ copied, stream } = hashed(destination, destination, path, { root: snapshot }));
+          } else ({ copied, stream } = hashed(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, join(directory, name), path,
+            SNAPSHOT_DATABASES[path] ? { root: snapshot } : { root, walked: { dev: stat.dev, ino: stat.ino }, allowed: (rel) => !omittedFromWorkspaceBackup(rel) && !forbiddenArchivePath(rel) }));
           streams.set(path, stream);
           bytes += copied.size;
           if (bytes > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("The workspace exceeds the 10 GB backup limit.");
@@ -408,7 +415,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
       format: "seira.workspace-backup", version: 1, id: job.id, createdAt: new Date().toISOString(),
       appVersion: options.appVersion ?? "unknown", files: entries.filter((entry) => entry.type === "file").length,
       directories: entries.filter((entry) => entry.type === "directory").length, bytes,
-      bots: countJsonArray(streams.get("bots.json")?.source ?? join(snapshot, "data", "bots.json")), groups: countJsonArray(streams.get("groups.json")?.source ?? join(snapshot, "data", "groups.json")),
+      bots: countJsonArray("", rosters.get("bots.json") ?? "[]"), groups: countJsonArray("", rosters.get("groups.json") ?? "[]"),
       ...databaseCounts(join(snapshot, SNAPSHOT_DATABASES["messages.db"]!)),
       exclusions: EXCLUSION_NOTES, warnings,
       ...(leaveOut.length ? { leftOut: leaveOut } : {}),
@@ -425,7 +432,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     cipher.setAAD(header);
     writeFileSync(path, header, { mode: 0o600, flag: "wx" });
     deps.betweenReads?.();
-    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES), entries, streams)), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES, "manifest.json", { root: snapshot }), entries, streams)), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
     const fd = openSync(path, "a");
     try { writeSync(fd, cipher.getAuthTag()); fsyncSync(fd); } finally { closeSync(fd); }
     rmSync(snapshot, { recursive: true, force: true });
