@@ -535,7 +535,7 @@
   "releaseNotes.items.textSize.title": "Make the text of the app larger or smaller",
   "releaseNotes.items.textSize.body": "Open Settings → Appearance → Text size to set the size from 90 % to 200 %. View → Zoom In, Zoom Out and Actual Size change the same setting. If you zoomed with the View menu before, the app starts at 100 % one time. Then set your size again.",
   "releaseNotes.items.sleepWhenIdle.title": "Your laptop can sleep when Seira has no work",
-  "releaseNotes.items.sleepWhenIdle.body": "Seira keeps a laptop on power awake only while an automation is due soon or a bot works. A run that waits for your answer no longer keeps it awake. On battery, the phone link does not keep it awake. The Automations page shows when Seira keeps the laptop awake, and why.",
+  "releaseNotes.items.sleepWhenIdle.body": "A routine whose bot is gone and a run that waits for your answer no longer keep the laptop awake. On battery, the phone link no longer keeps it awake. The Automations page shows which automation keeps the laptop awake.",
   "releaseNotes.items.glanceWayland.title": "Glance shows at the top of the screen on Linux Wayland",
   "releaseNotes.items.glanceWayland.body": "On Linux Wayland, Glance now shows at the top centre of the screen, as on other systems. Before, it was only a tray icon.",
   "releaseNotes.items.backupCheck.title": "Backups check for free space first",

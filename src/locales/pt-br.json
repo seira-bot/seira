@@ -511,7 +511,7 @@
   "releaseNotes.items.textSize.title": "Deixe o texto do app maior ou menor",
   "releaseNotes.items.textSize.body": "Abra Configurações → Aparência → Tamanho do texto para definir o tamanho de 90 % a 200 %. Visualizar → Ampliar, Reduzir e Tamanho real mudam a mesma configuração. Se você já usou o zoom do menu Visualizar, o app começa uma vez em 100 %. Depois, defina seu tamanho de novo.",
   "releaseNotes.items.sleepWhenIdle.title": "Seu notebook pode dormir quando o Seira não tem trabalho",
-  "releaseNotes.items.sleepWhenIdle.body": "O Seira mantém um notebook ligado na tomada acordado só enquanto uma automação vence em breve ou um bot trabalha. Uma execução que espera sua resposta não o mantém mais acordado. Na bateria, o link com o celular não o mantém acordado. A página Automações mostra quando o Seira mantém o notebook acordado e por quê.",
+  "releaseNotes.items.sleepWhenIdle.body": "Uma rotina cujo bot não existe mais e uma execução que espera sua resposta não mantêm mais o notebook acordado. Na bateria, o link com o celular não o mantém mais acordado. A página Automações mostra qual automação mantém o notebook acordado.",
   "releaseNotes.items.glanceWayland.title": "O Glance aparece no topo da tela no Linux Wayland",
   "releaseNotes.items.glanceWayland.body": "No Linux Wayland, o Glance agora aparece no centro do topo da tela, como em outros sistemas. Antes, ele era só um ícone na bandeja.",
   "releaseNotes.items.backupCheck.title": "Os backups verificam o espaço livre primeiro",
