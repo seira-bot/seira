@@ -6420,7 +6420,7 @@ bus.subscribe((event: RuntimeEvent) => {
         && (stoppedTurnId === undefined || completedTurnId === undefined || stoppedTurnId === completedTurnId));
       const stopped = event.stopReason === "interrupted" || clientStopped;
       landParkedFiles(); if (contextFullStop(event.stopReason)) contextFull.mark(event.threadId);
-      const offered = suggestedReplies.take(event.threadId);
+      const offered = suggestedReplies.take(event.threadId, directTurnGenerationByThread.get(event.threadId), directRequestOwners.get(event.threadId));
       if (completedTurnId) {
         const terminal = store.markTerminalAssistantMessage(event.threadId, completedTurnId);
         if (terminal) store.patchMessage(event.threadId, terminal.id, { turnSucceeded: event.ok });
@@ -12758,7 +12758,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         store, coordinator, from: internalSender, fromThreadId: internalCapability.threadId,
         ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
         shown: (id) => !proactive.fence.confines(id) && !botApiThread(id) && (CLOUD_TEAM ? teamHost.readableFrom(internalCapability.threadId)(id) : cloudLendingView(internalCapability) ? cloudOwnerOnlyThread(id) : true),
-        threadBusy, queuedThreadPosition, queuedReason: queuedStatus, readBody: readInternalBody, suggestedReplies,
+        threadBusy, queuedThreadPosition, queuedReason: queuedStatus, readBody: readInternalBody,
+        suggestedReplies: { offer: (threadId, raw) => suggestedReplies.offer(threadId, internalCapability.generation, directRequestOwners.get(threadId), raw) },
       }), createToolTimingRoute(usageTrace, internalCapability.threadId)], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/attach-file") {
         const from = internalSender;
