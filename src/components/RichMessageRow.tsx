@@ -9,12 +9,13 @@ import { GoalRunRow } from "./GoalRunCard";
 import { HelperKeySuggestion } from "./HelperKeySuggestion";
 import { MessageBoundary } from "./MessageBoundary";
 import { SettingsCard } from "./SettingsCard";
+import { UiPlaceCard } from "./UiPlaceCard";
 import { WidgetMessage } from "./widget/WidgetMessage";
 
 export function richRowKind(message: Message): Message["kind"] {
   // Seira's follow-up is text the model reads, drawn under its intro's card row (OptionsCardRow).
   if (message.helperFollowup) return "options";
-  if (message.setupSuggestion || message.settingsCard || (message.kind === "goal.run" && message.goalRun) || (message.kind === "burst" && message.burst)) return "widget";
+  if (message.setupSuggestion || message.settingsCard || message.uiPlace || (message.kind === "goal.run" && message.goalRun) || (message.kind === "burst" && message.burst)) return "widget";
   if (message.kind === "widget" && !message.widget) return "text";
   if (message.kind === "app" && !message.app) return "text";
   return message.kind;
@@ -26,6 +27,8 @@ export function RichMessageRow({ botId, botName, threadId, message, room }: { bo
     <MessageBoundary fallbackText={message.text ?? ""}>
       {message.settingsCard
         ? <SettingsCard message={message} />
+        : message.uiPlace
+        ? <UiPlaceCard message={message} />
         : message.setupSuggestion
         ? <HelperKeySuggestion threadId={threadId} message={message} />
         : message.kind === "burst" && message.burst
