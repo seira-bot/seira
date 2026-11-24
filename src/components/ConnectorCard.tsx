@@ -213,6 +213,11 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
             {authorizing && <Loader2 size={12} className="shrink-0 animate-spin" />}
             {authorizing ? t("connectors.card.waiting") : t("connectors.card.requested")}
           </span>
+          {isMcp && (
+            <button type="button" onClick={dismiss} className={ASK_QUIET_BUTTON}>
+              {t("connectors.card.notNow")}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void connect(labelNeeded ? label.trim() : undefined)}
