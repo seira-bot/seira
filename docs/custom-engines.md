@@ -223,7 +223,7 @@ An OpenAI-compatible instance is a chat engine inside Seira: no process, no shel
 Seira lends it (This computer, a Local VM or a Cloud VPS), with the same computer selection, approval level and folder
 limits as for any other engine. On a server with no display, This computer is not available, so a bot you move to such an
 instance can no longer run a script, read a file outside its turn folder or render an image, until you set up a Local VM
-or lend a computer. Settings → the bot's model shows a note when that may be the case, and the bot's own error says why.
+or lend a computer. The model section of the bot's settings shows a note when that may be the case, and the bot's own error says why.
 See [bot-box](bot-box.md) and [folder-access](folder-access.md).
 
 ### DeepSeek Harness with your own gateway

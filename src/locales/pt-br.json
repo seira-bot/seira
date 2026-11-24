@@ -3400,6 +3400,7 @@
   "model.section.default": "Modelo padrão",
   "model.section.starting": "Modelo inicial para o novo bot e suas conversas.",
   "model.section.threads": "Para grupos e todas as conversas que usam o modelo do bot. Uma conversa mantém seu próprio modelo somente quando você escolhe um nela.",
+  "model.section.noShell": "Este modelo roda como uma IA de chat por API. Ele só executa comandos em um computador que o Seira empresta, e este servidor não tem Este computador. Se você não configurou uma VM local nem uma VPS do Cloud, rotinas e skills que usam um shell param de funcionar. Para manter o acesso ao shell, escolha uma IA de linha de comando (Codex, Claude Code, OpenCode, DeepSeek Harness) ou configure uma VM local.",
   "model.section.installationDefault": "Um novo bot começa com o modelo padrão desta instalação, a menos que você escolha outro aqui. Para trocar automaticamente quando esse modelo atingir o limite de uso, adicione modelos de reserva abaixo.",
   "model.section.effort": "Esforço",
   "model.section.startingReasoning": "Variante inicial de raciocínio para o novo bot.",
