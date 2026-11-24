@@ -353,4 +353,8 @@ Chrome distribution and its proprietary Widevine component are not bundled.
 
 ## Publishing an engine release
 
-Create it with `node scripts/publish-browser-engine-release.mjs browser-engine-vX.Y.Z-seira.N <files>`. The script always passes `--latest=false`. An engine release must never be Latest: `releases/latest` must stay the app release, because the installer, the update check and electron-updater (`latest.yml`) read it.
+Create it with `node scripts/publish-browser-engine-release.mjs browser-engine-vX.Y.Z-seira.N --target <build commit> -- <files>`. The script always passes `--latest=false`. An engine release must never be Latest: `releases/latest` must stay the app release, because the installer, the update check and electron-updater (`latest.yml`) read it.
+
+`--target` is the 40-character commit that built the binary. The script creates the tag at that commit. If the tag already exists on another commit, it stops: a tag is never moved. Every flag goes before `--`, every file after it, so a file name that starts with `-` is never read as an option.
+
+`browser-engine-v0.36.0-seira.2` was created before this script. Its tag points at `61d75f5`, but the binary was built from `c521eab`. The tag stays as it is. The provenance of that release follows `c521eab`: `provenance.json` and the Actions run that built the asset name that commit.

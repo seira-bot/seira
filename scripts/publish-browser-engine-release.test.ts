@@ -2,31 +2,76 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { engineReleaseArgs, main } from "./publish-browser-engine-release.mjs";
+import { engineReleaseArgs, main, parseArgs, tagProblem } from "./publish-browser-engine-release.mjs";
+
+const TAG = "browser-engine-v0.36.0-seira.2";
+const SHA = "c521eab".padEnd(40, "0");
+const OTHER = "61d75f5".padEnd(40, "0");
 
 describe("publish-browser-engine-release", () => {
-  it("always passes --latest=false and never --latest", () => {
-    const args = engineReleaseArgs("browser-engine-v0.36.0-seira.2", ["a.exe", "provenance.json"]);
+  it("always passes --latest=false and --target, and never --latest", () => {
+    const args = engineReleaseArgs(TAG, ["a.exe", "provenance.json"], { target: SHA });
     expect(args).toContain("--latest=false");
     expect(args).not.toContain("--latest");
-    expect(args.slice(0, 5)).toEqual(["release", "create", "browser-engine-v0.36.0-seira.2", "a.exe", "provenance.json"]);
+    expect(args[args.indexOf("--target") + 1]).toBe(SHA);
+    expect(args.slice(0, 3)).toEqual(["release", "create", TAG]);
   });
 
-  it("refuses an app tag and an empty file list", () => {
-    expect(() => engineReleaseArgs("v0.1.192", ["a"])).toThrow(/browser-engine/);
-    expect(() => engineReleaseArgs("browser-engine-v0.36.0-seira.2", [])).toThrow(/file/);
+  it("puts every flag before -- and every asset path after it, even a path that looks like an option", () => {
+    const files = ["--latest", "-t", "--notes=x", "--repo=evil/x", "a.exe"];
+    const args = engineReleaseArgs(TAG, files, { target: SHA });
+    const end = args.indexOf("--");
+    expect(args.slice(end + 1)).toEqual(files);
+    expect(args.slice(0, end).filter((arg) => arg.startsWith("-"))).toEqual(["--repo", "--title", "--target", "--latest=false", "--notes"]);
+    expect(args.slice(0, end)).not.toContain("--latest");
+  });
+
+  it("requires the 40-character build commit", () => {
+    expect(() => engineReleaseArgs(TAG, ["a"], {})).toThrow(/--target/);
+    expect(() => engineReleaseArgs(TAG, ["a"], { target: "main" })).toThrow(/--target/);
+    expect(() => engineReleaseArgs(TAG, ["a"], { target: "c521eab" })).toThrow(/--target/);
+    expect(() => engineReleaseArgs(TAG, ["a"], { target: SHA.toUpperCase() })).toThrow(/--target/);
+  });
+
+  it("refuses an app tag, a bad repo and an empty file list", () => {
+    expect(() => engineReleaseArgs("v0.1.192", ["a"], { target: SHA })).toThrow(/browser-engine/);
+    expect(() => engineReleaseArgs(TAG, [], { target: SHA })).toThrow(/file/);
+    expect(() => engineReleaseArgs(TAG, ["a"], { target: SHA, repo: "--x" })).toThrow(/--repo/);
+  });
+
+  it("reads flags before -- and takes everything after -- as a file", () => {
+    expect(parseArgs([TAG, "--target", SHA, "--repo", "o/r", "--", "--target", "x.exe"])).toEqual({ tag: TAG, target: SHA, repo: "o/r", files: ["--target", "x.exe"] });
+    expect(() => parseArgs([TAG, "--target", SHA, "a.exe"])).toThrow(/after --/);
+    expect(() => parseArgs([TAG, "--bogus"])).toThrow(/unknown option/);
+    expect(() => parseArgs([TAG, "--target"])).toThrow(/needs a value/);
+  });
+
+  it("stops when the tag already points at another commit, and never moves it", () => {
+    expect(tagProblem(TAG, SHA, () => null)).toBeNull();
+    expect(tagProblem(TAG, SHA, () => SHA)).toBeNull();
+    expect(tagProblem(TAG, SHA, () => OTHER)).toMatch(/never moved/);
+    const runs: string[][] = [];
+    const quiet = console.error;
+    console.error = () => {};
+    try {
+      expect(main([TAG, "--target", SHA, "--", "a"], (args: string[]) => { runs.push(args); }, () => OTHER)).toBe(1);
+    } finally {
+      console.error = quiet;
+    }
+    expect(runs).toEqual([]);
   });
 
   it("main exits 2 on wrong use, 1 when gh fails, 0 on success", () => {
     const quiet = console.error;
     console.error = () => {};
     try {
-      expect(main(["v1.0.0", "a"], () => {})).toBe(2);
+      expect(main(["v1.0.0", "--target", SHA, "--", "a"], () => {}, () => null)).toBe(2);
+      expect(main([TAG, "--", "a"], () => {}, () => null)).toBe(2);
     } finally {
       console.error = quiet;
     }
-    expect(main(["browser-engine-v0.36.0-seira.2", "a"], () => { throw new Error("x"); })).toBe(1);
-    expect(main(["browser-engine-v0.36.0-seira.2", "a"], () => {})).toBe(0);
+    expect(main([TAG, "--target", SHA, "--", "a"], () => { throw new Error("x"); }, () => null)).toBe(1);
+    expect(main([TAG, "--target", SHA, "--", "a"], () => {}, () => null)).toBe(0);
   });
 
   it("the engine code never reads releases/latest", () => {
