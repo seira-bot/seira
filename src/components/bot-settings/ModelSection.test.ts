@@ -6,9 +6,10 @@ import type { Bot, InstanceInfo } from "@/state/store";
 
 const instances = vi.hoisted(() => [] as InstanceInfo[]);
 const recovery = vi.hoisted(() => ({ enabled: true }));
+const extraConfig = vi.hoisted(() => ({} as Record<string, unknown>));
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
-  return { ...original, useStore: () => ({ state: { ...original.initialState, instances, config: { automaticRecovery: recovery } }, dispatch: vi.fn() }) };
+  return { ...original, useStore: () => ({ state: { ...original.initialState, instances, config: { automaticRecovery: recovery, ...extraConfig } }, dispatch: vi.fn() }) };
 });
 
 vi.mock("../ModelPicker", () => ({
@@ -129,6 +130,18 @@ describe("the bot's model in Bot settings", () => {
 
   it("says where a new bot's model comes from and points to backup models", () => {
     expect(render(false)).toContain(hint);
+  });
+
+  it("warns, without changing anything, that an API engine may have no shell where no computer can be lent", () => {
+    const note = "runs as an API chat engine";
+    expect(render(false)).toContain(note);
+    expect(render(false)).toContain("choose a CLI engine");
+    extraConfig.vps = { configured: true, sshAlias: "box" };
+    expect(render(false)).not.toContain(note);
+    delete extraConfig.vps;
+    instances.splice(0, 1, { ...engine("primary", "Primary", ["p"]), driverKind: "codex" } as InstanceInfo);
+    expect(render(false)).not.toContain(note);
+    instances.splice(0, 1, engine("primary", "Primary", ["p"]));
   });
 
   it("leaves the hint out while a bot is still being made", () => {

@@ -1443,7 +1443,7 @@ function reconnectCloud(origin) {
 const loginItem = createOpenAtLogin({ app, file: path.join(app.getPath("userData"), "open-at-login.json"), home: os.homedir() });
 loginItem.migrateLegacy();
 installOpenAtLogin({ ipcMain, guard: localOrHome, loginItem, changed: refreshApplicationMenu }); const alwaysOnHome = installAlwaysOnHome({ ipcMain, guard: localOnly, loginItem, changed: refreshApplicationMenu, file: path.join(app.getPath("userData"), "always-on-home.json"), blocker: powerSaveBlocker, isOnBattery: () => powerMonitor.isOnBatteryPower(), updates: unattendedUpdates, lending: () => computerSharing?.lendingSomewhere() === true, log: slog });
-let hiddenStart = false; let glanceControl = null; const textSize = createMainTextSize({ prefs: () => desktopPrefs, window: () => mainWindow });
+let hiddenStart = false; let glanceControl = null; const textSize = createMainTextSize({ prefs: () => desktopPrefs, window: () => mainWindow, base: MIN_BOUNDS, workArea: (win) => screen.getDisplayMatching(win.getBounds()).workArea });
 
 async function openCloudSettings() {
   if (!app.isPackaged || desktopRemoteAccess || !serverReady) return;
@@ -1940,7 +1940,8 @@ function createWindow({ deferNavigation = false } = {}) {
         ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`, ...(crashReports.available ? [CRASH_REPORTS_ARG] : []), ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : [])],
     },
   });
-  mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win); textSize.attach(win.webContents);
+  mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win); textSize.attach(win.webContents); win.on("move", () => textSize.fit());
+  for (const event of ["unmaximize", "leave-full-screen"]) win.on(event, () => textSize.fit({ grow: true }));
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {
@@ -2778,6 +2779,7 @@ setCuaStateListener((connection) => {
 
 app.whenReady().then(async () => {
   startupTimeline.start(slog);
+  screen.on("display-metrics-changed", () => textSize.fit());
   await evictStartupCacheOnce({
     userData: app.getPath("userData"),
     currentVersion: app.getVersion(),

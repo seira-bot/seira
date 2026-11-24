@@ -15,7 +15,7 @@ import type { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
-import type { BoxRequest } from "./bot-box/plan.ts";
+import { runnableInBox, type BoxRequest } from "./bot-box/plan.ts";
 import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
@@ -23,8 +23,8 @@ import { engineOwners } from "./engine-owners.ts";
 import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./engine-records.ts";
 import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
-import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
-import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { findCliCandidates, resolveCliSpawn, runnableFile, type ResolvedSpawn } from "./env-path.ts";
+import { HOST_ENV_FD, hostBasePath, hostBridge, hostEnvFile, hostFindPrograms, inFlatpak, runsInSandbox, type HostSpawn } from "./flatpak-host.ts";
 import { botMemoryGuard } from "./bot-memory-guard.ts";
 import { memoryFence, type FencedSpawn } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
@@ -281,6 +281,55 @@ export function boxedSpawn(resolved: ResolvedSpawn, opts: CliSpawnOptions, owner
   const request = typeof opts.box === "object" ? opts.box : {};
   const home = homed ? { home: homed.home, shared: homed.shared } : {};
   return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...spawnConversation(), ...request, ...home });
+}
+
+/** Looks a program up by name where an engine launched with `cli` will run it, with the PATH and the files it will have there. */
+export interface ProgramView {
+  find(name: string): string | undefined;
+}
+
+/** The view of a spawn of `cli` as `spawnCli` will make it: in the bot box (its PATH, and only the files its plan shows), on
+ * the host a Flatpak launches from (the host's PATH and files), or on this computer without the folders the bots can write.
+ * Null when that view cannot be known now, so the caller never guesses: in a box in a Flatpak (refused at the launch), and
+ * in an engine home of a Team Cloud (made at the launch). Only a bare name is looked up, and only an absolute result for
+ * this platform is given; empty and relative PATH entries are never searched. Outside the box a program is given only where
+ * the launcher would start it: the file and where its links lead are judged by serverMayRunFrom (program-trust.ts). */
+export function programViewFor(cli: string, opts: { cwd?: string; env: NodeJS.ProcessEnv; allowEnv?: string[] }): ProgramView | null {
+  const absolute = (path: string | undefined) => (path ?? "").split(delimiter).filter((dir) => dir && isAbsolute(dir)).join(delimiter);
+  const bare = (name: string) => Boolean(name) && !/[/\\\r\n]/.test(name) && !/^[a-zA-Z]:/.test(name);
+  const view = (look: (name: string) => string | undefined): ProgramView => ({
+    find: (name) => {
+      const found = bare(name) ? look(name) : undefined;
+      return found !== undefined && isAbsolute(found) ? found : undefined;
+    },
+  });
+  const conversation = spawnConversation();
+  const resolved = resolveCli(cli, [], opts.env);
+  if (botBox.takes({ cwd: opts.cwd, ...conversation })) {
+    if (inFlatpak() || (engineHomes.active() && engineHomes.thread() !== undefined)) return null;
+    const seen = botBox.view({ command: resolved.command, args: [], cwd: opts.cwd, env: opts.env, ...conversation, ...(opts.allowEnv ? { allowEnv: opts.allowEnv } : {}) });
+    if (!seen) return null;
+    const path = absolute(seen.path);
+    return view((name) => findCliCandidates(name, path).find((found) => runnableInBox(seen.plan, found, runnableFile)));
+  }
+  if (inFlatpak()) {
+    // The host's own lookup tests each file there (flatpak-host.ts); an engine that runs inside the sandbox has another view.
+    if (runsInSandbox(resolved.command)) return null;
+    // As hostBridge does: the PATH the launcher would give, the first copy only, looked up afresh, kept off the host when
+    // it or where it leads is a place the bots can write.
+    const path = absolute(serverPath(opts.env.PATH ?? hostBasePath()));
+    return view((name) => {
+      const program = hostFindPrograms(name, path, true)[0];
+      return program && program.real && serverMayRunFrom(program.path) && serverMayRunFrom(program.real) ? program.path : undefined;
+    });
+  }
+  const path = absolute(programsDistrusted() ? serverPath(opts.env.PATH) : opts.env.PATH);
+  return view((name) => {
+    // The first file the launcher would start: when it is a place the bots can write, no later copy stands in for it.
+    const found = findCliCandidates(name, path).find((candidate) => runnableFile(candidate) !== null);
+    const real = found === undefined ? null : runnableFile(found);
+    return found !== undefined && real !== null && serverMayRunFrom(found) && serverMayRunFrom(real) ? found : undefined;
+  });
 }
 
 /** What the audience rule and the bot's folders give a box in `cwd` now, as a key (null off a team with no folder

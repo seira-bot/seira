@@ -15,6 +15,7 @@ import { HERMES_EXPORT_SKILL } from "../../../shared/ai-import/hermes-export";
 import { emptyCounts, type ImportErrorCode, type ImportJobView, type LocalSourceView } from "../../../shared/ai-import/api";
 import { limitMessage } from "./copy";
 import { GuideView, HubView, ImportHubSection, resumableJob, type HubViewProps } from "./ImportHub";
+import { DropZone } from "./DropZone";
 import { ApplyView, ReadingView } from "./Progress";
 import { ReportView } from "./Report";
 import { DONE, job, READY } from "./test-jobs";
@@ -130,6 +131,40 @@ describe("the hub on the Import page", () => {
     expect(shown).toContain("Drop an export file or folder here");
     expect(shown).toContain("If the export came in several parts, drop them all together.");
     expect(text(renderToStaticMarkup(createElement(GuideView, { source: "claude-ai", sending: { done: 1, total: 3 }, onFiles: vi.fn(), onBack: vi.fn() })))).toContain("Sending file 1 of 3…");
+  });
+});
+
+describe("a Seira backup in the drop zone", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  beforeEach(() => { host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
+  afterEach(() => { act(() => root.unmount()); host.remove(); });
+
+  const pickFrom = (names: string[]) => {
+    const onFiles = vi.fn();
+    act(() => root.render(createElement(DropZone, { sending: null, onFiles })));
+    const input = host.querySelector<HTMLInputElement>("input[multiple]")!;
+    Object.defineProperty(input, "files", { value: names.map((name) => new File(["x"], name)), configurable: true });
+    act(() => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    return onFiles;
+  };
+
+  it("starts no import and points to Import backup", () => {
+    const onFiles = pickFrom(["Work.SeiraBackup"]);
+    expect(onFiles).not.toHaveBeenCalled();
+    expect(host.querySelector("[data-ai-import-backup]")?.textContent).toBe("This is a Seira backup, not an AI export. To restore it, use Import backup under Settings → Import & export → Bring things in.");
+  });
+
+  it("sends the other files and still shows the message", () => {
+    const onFiles = pickFrom(["a.zip", "b.seirabackup"]);
+    expect(onFiles).toHaveBeenCalledTimes(1);
+    expect((onFiles.mock.calls[0]![0] as Array<{ name: string }>).map((file) => file.name)).toEqual(["a.zip"]);
+    expect(host.querySelector("[data-ai-import-backup]")).not.toBeNull();
+  });
+
+  it("shows no message for an export", () => {
+    expect(pickFrom(["a.zip"])).toHaveBeenCalledTimes(1);
+    expect(host.querySelector("[data-ai-import-backup]")).toBeNull();
   });
 });
 

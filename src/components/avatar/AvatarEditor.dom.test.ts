@@ -48,7 +48,6 @@ const image = (extra: Record<string, unknown> = {}) => ({
   fileRef: createRef<HTMLInputElement>(), crop: "mascot", busy: false, uploading: false, generating: false, error: null,
   upload: vi.fn(), removeImage: vi.fn(), generate: vi.fn(), ...extra,
 });
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const REMOVED = ["data-avatar-crop", "data-avatar-reset", "data-avatar-more", "data-avatar-body-everywhere", "data-cast-character"];
 
 beforeEach(() => {
@@ -266,15 +265,13 @@ describe("what an upload, a generation and a removal save", () => {
     const { patches, get } = await probe(bot(PICTURE), vi.fn(), () => Promise.reject(new Error("The upload failed")));
     await get().upload(new File(["x"], "a.png", { type: "image/png" }));
     expect(patches).toEqual([]);
-    await tick();
-    expect(get().error).toBe("The upload failed");
+    await vi.waitFor(() => expect(get().error).toBe("The upload failed"));
   });
 
   it("keeps the picture and reports the error when a generation fails", async () => {
     const { patches, get } = await probe(bot(PICTURE), vi.fn(() => Promise.reject(new Error("No picture was made"))));
     await get().generate("a calm navigator");
-    await tick();
+    await vi.waitFor(() => expect(get().error).toBe("No picture was made"));
     expect(patches).toEqual([]);
-    expect(get().error).toBe("No picture was made");
   });
 });

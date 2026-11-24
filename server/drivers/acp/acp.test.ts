@@ -1367,6 +1367,50 @@ describe("ACP turns (fake CLI)", () => {
     expect(instance.adapter.capabilities.customMcp).toBe(true);
   });
 
+  it("resolves bare MCP commands for an agent that needs absolute ones and names a server it leaves out", async () => {
+    await create(createAcpDriver({ ...SELECT_MODEL_SUPPORT, driverKind: "absoluteMcpTest", selectModel: undefined, absoluteMcpCommands: true }));
+    const dump = join(scratch, "absolute-dump.json");
+    process.env.FAKE_ACP_DUMP = dump;
+    await instance.adapter.sendTurn({
+      threadId: "t-absolute-mcp",
+      text: "go",
+      integrations: {
+        custom: {
+          bare: { command: "node", args: ["server.js"], env: {} },
+          fixed: { command: "/opt/tools/mcp-server", args: [], env: {} },
+          lost: { command: "seira-no-such-command-480", args: [], env: {} },
+        },
+      },
+    });
+    const done = await recorder.until((event) => event.type === "turn.completed");
+    expect(done).toMatchObject({ ok: true });
+    const seen = JSON.parse(readFileSync(dump, "utf8"));
+    const byName = Object.fromEntries(seen.mcpServers.map((server: { name: string }) => [server.name, server]));
+    expect(byName.bare.command).toMatch(/^\//);
+    expect(byName.bare.command).toMatch(/node$/);
+    expect(byName.fixed.command).toBe("/opt/tools/mcp-server");
+    expect(byName.lost).toBeUndefined();
+    const warning = recorder.events.find((event) => event.type === "runtime.error");
+    expect(warning?.message).toContain('"lost"');
+    expect(warning?.message).toContain("seira-no-such-command-480");
+    expect(recorder.events.filter((event) => event.type === "runtime.error")).toHaveLength(1);
+  });
+
+  it("leaves bare MCP commands alone for an agent that does not ask for absolute ones", async () => {
+    await create();
+    const dump = join(scratch, "bare-dump.json");
+    process.env.FAKE_ACP_DUMP = dump;
+    await instance.adapter.sendTurn({
+      threadId: "t-bare-mcp",
+      text: "go",
+      integrations: { custom: { lost: { command: "seira-no-such-command-480", args: [], env: {} } } },
+    });
+    await recorder.until((event) => event.type === "turn.completed");
+    const seen = JSON.parse(readFileSync(dump, "utf8"));
+    expect(seen.mcpServers).toContainEqual({ name: "lost", command: "seira-no-such-command-480", args: [], env: [] });
+    expect(recorder.events.some((event) => event.type === "runtime.error")).toBe(false);
+  });
+
   const remoteServers = {
     docs: { type: "http" as const, url: "https://docs.example/mcp", headers: { Authorization: "Bearer tok-docs" } },
     legacy: { type: "sse" as const, url: "https://old.example/sse", headers: {} },

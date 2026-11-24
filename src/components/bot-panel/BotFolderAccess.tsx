@@ -23,6 +23,7 @@ export function BotFolderAccess({ bot, variant }: { bot: Pick<Bot, "id" | "secti
     <FolderAccessEditor
       subject="bot"
       enforcement={data.enforcement}
+      boxMissing={data.boxMissing}
       access={saved ? saved.access : bot.folderAccess}
       department={section ? { name: section, access: data.departments[section] } : undefined}
       save={async (next) => {

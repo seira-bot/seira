@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { engineInstallRoots } from "../engine-roots.ts";
-import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, signInPrograms, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, runnableInBox, signInPrograms, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxPlan, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
 
 const home = "/data";
 const dataDir = "/data/.seira";
@@ -679,5 +679,41 @@ linuxBox("a bot's folder list", () => {
       expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519"))).toBe("rw");
       expect(visibleInBox(plan, join(fakeHome, "Documents/a.md"))).toBe("ro");
     });
+  });
+});
+
+describe("runnableInBox", () => {
+  const plan = {
+    mounts: [
+      { kind: "ro", source: "/usr", target: "/usr" },
+      { kind: "symlink", link: "/bin", target: "usr/bin" },
+      { kind: "bind", source: "/work/tools", target: "/work/tools" },
+      { kind: "ro", source: "/elsewhere/lib", target: "/lib" },
+      { kind: "tmpfs", target: "/tmp" },
+    ],
+  } as unknown as BoxPlan;
+  const real = (path: string) => path;
+
+  it("accepts a file under a mount that shows the same path", () => {
+    expect(runnableInBox(plan, "/usr/bin/node", real)).toBe(true);
+    expect(runnableInBox(plan, "/work/tools/mcp", real)).toBe(true);
+  });
+  it("follows a symlink the box makes", () => {
+    expect(runnableInBox(plan, "/bin/node", real)).toBe(true);
+  });
+  it("refuses a path the box does not show", () => {
+    expect(runnableInBox(plan, "/opt/host/bin/mcp", real)).toBe(false);
+  });
+  it("refuses a path in a scratch folder or a mount whose source differs from its target", () => {
+    expect(runnableInBox(plan, "/tmp/mcp", real)).toBe(false);
+    expect(runnableInBox(plan, "/lib/mcp", real)).toBe(false);
+  });
+  it("refuses a relative path and a file that is not runnable", () => {
+    expect(runnableInBox(plan, "usr/bin/node", real)).toBe(false);
+    expect(runnableInBox(plan, "/usr/bin/node", () => null)).toBe(false);
+  });
+  it("refuses a link whose real file lies outside what the box shows", () => {
+    expect(runnableInBox(plan, "/usr/bin/node", () => "/opt/host/node")).toBe(false);
+    expect(runnableInBox(plan, "/usr/bin/node", () => "/usr/lib/node")).toBe(true);
   });
 });

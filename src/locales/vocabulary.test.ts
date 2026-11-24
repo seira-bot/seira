@@ -61,7 +61,6 @@ const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = 
   { file: "packages/phone-protocol/src/phone-secret-envelope.ts", snippet: "OpenMausBot phone credential v1", why: "the phone apps seal secrets with this label" },
   { file: "server/peer-provenance.ts", snippet: "openmausbot", why: "defuses imitations of an earlier version's notes" },
   { file: "server/checkpoints.ts", snippet: ".openmausbot-secrets/", why: "keeps the secrets folder of an earlier version out of snapshots" },
-  { file: "server/browser-engine-release.ts", snippet: "milind-soni/OpenMausBot/releases", why: "the release assets still live in the upstream repository" },
 ];
 
 function* sources(dir: string): Generator<string> {

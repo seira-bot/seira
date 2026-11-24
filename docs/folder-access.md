@@ -61,7 +61,8 @@ A kept engine process starts again on the bot's next turn when its folders chang
   shell command that the engine runs can open any file the computer's user can open. Claude Code and OpenCode stop
   their own edit tools in a read-only folder, not a command such as `bash`. The folder card says so and points to
   **Ask for approval**, which shows each command first. Where the box runs, the card says that commands also see only
-  these folders.
+  these folders. When the box is off because `bwrap` is not on `PATH`, the card also says that bubblewrap is not
+  installed and shows `sudo apt install bubblewrap` for Debian and Ubuntu. Restart Seira after the install.
 - **Reads on Codex, Gemini and other ACP engines where the box does not run.** These engines have no read setting per
   folder.
 - **The engines' sign-in folders in a box on a computer.** They stay shared and read-write, so a limited bot can change

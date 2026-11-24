@@ -1,8 +1,9 @@
+import { NO_SUCH_BOT } from "../../shared/bot-read.ts";
 import type { BotCreateResponse, WireBot } from "../../shared/wire.ts";
 import { freshLook } from "../bot-look.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
-import { parseVisibility } from "../bot-visibility.ts";
+import { memberBot, parseVisibility, type VisibleSet } from "../bot-visibility.ts";
 import type { createCloudRoutineAuthors } from "../cloud-lending.ts";
 import type { AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
@@ -49,6 +50,8 @@ export interface BotCreateRouteDeps {
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
   cloudOwnerSession(auth: RequestAuth): boolean;
   wireBot(bot: BotRecord): WireBot;
+  /** What this requester may see now: the same set the read routes use. A retry is answered from it, never from what was true when the bot was made. */
+  visibleTo(auth: RequestAuth): VisibleSet;
   /** A Team Cloud: a new bot records who created it, and may name who it reports to. */
   team?: { name: string; people: Pick<TeamPeople, "has"> } | null;
   /** Starts writing personal answers for a new bot's setup card; never awaited. */
@@ -58,6 +61,8 @@ export interface BotCreateRouteDeps {
 }
 
 const OWN_ID = /^[\w-]{8,128}$/;
+const RETRY_KEY = /^[\w-]{16,128}$/;
+const RETRY_WINDOW_MS = 10 * 60_000;
 
 /** A bot sent from the person's other computer keeps its id and its conversation's, so later sends and Bring newer
  * chats find it. Only ids in the server's own form, and only while nothing here uses them. */
@@ -76,7 +81,7 @@ export function keptBotIds(body: Record<string, unknown>, store: Pick<Store, "bo
 
 /** The fields a request to make a bot asks for itself. The New bot defaults it may take are the host owner's choice. */
 function askedSettings(body: Record<string, unknown>): Record<string, unknown> {
-  const { id: _id, threadId: _threadId, useDefaults: _useDefaults, settings, ...asked } = body;
+  const { id: _id, threadId: _threadId, retryKey: _retryKey, useDefaults: _useDefaults, settings, ...asked } = body;
   return { ...(settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {}), ...asked };
 }
 
@@ -88,6 +93,34 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
     hostedModels, cloudRoutineAuthors,
     storedAvatarExists, defaultSelection, checkedModelSelection, cloudOwnerSession, wireBot,
   } = deps;
+  /** Who made a bot for which retry key, kept for a short while. The creator is part of the key, so a key replays only for
+   * the one who sent it and never says whether anyone else's bot, key or id exists. */
+  const retries = new Map<string, { botId: string; at: number }>();
+  const replayed = (retryScope: string | null): BotRecord | undefined => {
+    const entry = retryScope === null ? undefined : retries.get(retryScope);
+    return (entry && Date.now() - entry.at < RETRY_WINDOW_MS ? store.bot(entry.botId) : null) ?? undefined;
+  };
+  const created201 = (bot: BotRecord) => ({
+    ...(deps.paused(bot.id) ? { paused: true } : {}),
+    bot: { ...wireBot(bot), messages: store.messagesFor(bot.threadId), activeLeafId: store.activeLeaf(bot.threadId) },
+  } satisfies BotCreateResponse<ReturnType<typeof store.messagesFor>[number]>);
+  /** The answer to a retry that finds its bot. It is the bot as this requester may read it now, as the read routes show it:
+   * a bot they may no longer see is refused as a missing one, and no new bot is made for that retry; the conversation sent
+   * is one they may read. */
+  const replay = (retryScope: string | null, auth: RequestAuth): { status: number; body: unknown } | undefined => {
+    const bot = replayed(retryScope);
+    if (!bot) return undefined;
+    const visible = deps.visibleTo(auth);
+    if (!visible.bot(bot.id)) return { status: 404, body: { error: NO_SUCH_BOT } };
+    const wired = wireBot(bot);
+    const shown = memberBot({ ...wired, tasks: wired.tasks ?? [] }, visible);
+    const threadId = typeof shown.threadId === "string" && visible.thread(shown.threadId) ? shown.threadId : undefined;
+    return {
+      status: 200,
+      body: { ...(deps.paused(bot.id) ? { paused: true } : {}),
+        bot: { ...shown, messages: threadId ? store.messagesFor(threadId) : [], activeLeafId: threadId ? store.activeLeaf(threadId) : null } },
+    };
+  };
   return async ({ req, res, path, method, auth, json, readBody }) => {
     const routines = deps.routines();
     if (method === "POST" && path === "/api/bots") {
@@ -108,9 +141,16 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         // The saved New bot defaults are an admin's choices, some of them an admin's alone to make.
         body = { ...body, useDefaults: false };
       }
+      if (body.retryKey !== undefined && (typeof body.retryKey !== "string" || !RETRY_KEY.test(body.retryKey))) {
+        return json(res, 400, { error: "retryKey must be 16 to 128 letters, digits, - and _" });
+      }
+      const retryScope = typeof body.retryKey === "string"
+        ? `${auth.kind === "session" && auth.session.membershipAuthority === "team" ? auth.session.email?.toLowerCase() ?? "" : ""}\u0000${body.retryKey}` : null;
+      const again = replay(retryScope, auth);
+      if (again) return json(res, again.status, again.body);
       const kept = keptBotIds(body, store);
       if ("error" in kept) return json(res, kept.error.includes("already") ? 409 : 400, { error: kept.error });
-      const { id: _id, threadId: _threadId, ...rest } = body;
+      const { id: _id, threadId: _threadId, retryKey: _retryKey, ...rest } = body;
       body = rest;
       const template = resolveBotCreationDefaults(cfg.newBotDefaults, body);
       const settings = template.profile;
@@ -188,6 +228,10 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         selection = checked.selection;
       }
       if (hostedModels && !hostedModels.allows(selection)) return json(res, 400, { error: hostedModels.error() });
+      // Checked again beside the synchronous write, and before the capacity check: an await above let another request finish
+      // this same retry, perhaps in the last free place, and that retry is answered with its bot, not with a full workspace.
+      const finished = replay(retryScope, auth);
+      if (finished) return json(res, finished.status, finished.body);
       // The capacity check sits beside the synchronous write, after every await.
       if (store.bots.length >= MAX_WORKSPACE_BOTS) {
         return json(res, 409, { error: botLimitRefusal(MAX_WORKSPACE_BOTS) });
@@ -195,7 +239,6 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       // Apply the audience before creation can announce the bot to members.
       const created = body.visibility === undefined ? null : parseVisibility(body.visibility);
       if (created && !created.ok) return json(res, 400, { error: created.error });
-      // Checked again beside the synchronous write: an await above let another request take the same id.
       if (kept.id && "error" in keptBotIds(kept, store)) return json(res, 409, { error: "a bot with this id already exists here" });
       // A bot moved in from another computer keeps its own look; a new one fills what it names not from a fresh one.
       const look = kept.id ? undefined : freshLook(store.bots);
@@ -205,6 +248,10 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         mascotAccessories: settings.mascotAccessories ?? character?.mascotAccessories,
         ...(deps.team && creator ? { createdBy: creator } : {}), ...(reportsTo ? { reportsTo } : {}),
         ...(created?.ok ? { visibility: created.visibility } : {}) }, kept.id ? { ...kept, seedMessages: false } : {});
+      if (retryScope !== null) {
+        for (const [key, entry] of retries) if (Date.now() - entry.at >= RETRY_WINDOW_MS) retries.delete(key);
+        retries.set(retryScope, { botId: bot.id, at: Date.now() });
+      }
       const createdRoutines: Array<{ id: string; enabled: boolean }> = [];
       try {
         const { chiefOfStaff: _chief, managedSections: _managed, toolScope: _toolScope, ...ordinary } = settings;
@@ -274,14 +321,7 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         catch { warnings.push(`Bot created; routine ${routine.id} could not be activated.`); }
       }
       deps.personaliseSetupCard?.(bot);
-      return json(res, 201, {
-        ...(warnings.length ? { warnings } : {}), ...(deps.paused(bot.id) ? { paused: true } : {}),
-        bot: {
-          ...wireBot(bot),
-          messages: store.messagesFor(bot.threadId),
-          activeLeafId: store.activeLeaf(bot.threadId),
-        },
-      } satisfies BotCreateResponse<ReturnType<typeof store.messagesFor>[number]>);
+      return json(res, 201, { ...(warnings.length ? { warnings } : {}), ...created201(bot) });
     }
     return PASS;
   };

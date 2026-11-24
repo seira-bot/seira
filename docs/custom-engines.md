@@ -217,6 +217,28 @@ Both services document this general API setup and their current model IDs
 in their OpenAI compatibility guides. See the [Z.ai guide](https://docs.z.ai/guides/develop/openai/python)
 and the [Zhipu BigModel guide](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction).
 
+### A model through an API engine has no shell of its own
+
+An OpenAI-compatible instance is a chat engine inside Seira: no process, no shell. It runs a command only on a computer
+Seira lends it (This computer, a Local VM or a Cloud VPS), with the same computer selection, approval level and folder
+limits as for any other engine. On a server with no display, This computer is not available, so a bot you move to such an
+instance can no longer run a script, read a file outside its turn folder or render an image, until you set up a Local VM
+or lend a computer. The model section of the bot's settings shows a note when that may be the case, and the bot's own error says why.
+See [bot-box](bot-box.md) and [folder-access](folder-access.md).
+
+### DeepSeek Harness with your own gateway
+
+To keep a shell with the same model and key, run the model through a CLI engine such as DeepSeek Harness (`dsh`). Choose
+that engine for the bot yourself, in the bot's model settings: Seira does not switch it, and the engine's permissions,
+approval level and folder limits still apply. A gateway that speaks the Anthropic Messages API can serve `dsh`. As
+reported for `@deepseek-ai/dsh` 0.2.2-rc.1 (not covered by Seira's tests, so check against the `dsh` docs for your
+version):
+
+- Set `baseURL` for the provider in `$DSH_HOME/cordis.patch.yml`, with your gateway address in place of
+  `<gateway-url>`. `dsh` refuses `DEEPSEEK_BASE_URL` in `$DSH_HOME/.env`.
+- Keep the key in `DEEPSEEK_API_KEY` or in `dsh`'s own `$DSH_HOME/.credentials.yaml`. Never put it in the YAML file or in a bot's instructions.
+- A custom model needs its own `models` entry in `dsh`'s configuration to appear in Seira's model picker.
+
 ## Notes
 
 - `config.json` is written with mode 0600; values in `environment` are stored
