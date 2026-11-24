@@ -1059,6 +1059,7 @@ beforeAll(async () => {
       SEIRA_PORT: String(PORT),
       SEIRA_WEBHOOK_PORT: String(WEBHOOK_PORT),
       SEIRA_EXTRA_PATH: fakeDockerDir,
+      SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser",
       SEIRA_COMPOSIO_API: `http://127.0.0.1:${providerStubPort}/api/v3.1`,
       SEIRA_COMPOSIO_TOOLKITS_API: `http://127.0.0.1:${providerStubPort}/api/v3`,
       // A managed connected-apps broker on the stub, so relayed MCP frames are observable without any network.

@@ -228,8 +228,10 @@ export interface BrowserEngineSummary {
   myChromeOn?: { name: string; device: "PC" | "Mac" | "computer"; online: boolean };
   /** On My Cloud with no computer lending Chrome: it can be lent from the desktop app. */
   myChromeLendable?: true;
-  /** browserEngine.engine: "chrome" when the bots' browsers run on Seira's own Chrome driver. */
+  /** The engine that runs the bots' browsers now: the saved choice, else "chrome" where this host has a Chrome for Seira's own driver. */
   engine?: "agent-browser" | "chrome";
+  /** Present where the host fixes the engine at agent-browser, so no setting can change it. */
+  engineFixed?: true;
   /** Self-hosted servers only: whether bots' browsers may open this server's own sites and its local network
    * (browserEngine.egress.localNetwork, off by default). Absent on the desktop and on Seira Cloud. */
   serverSites?: boolean;

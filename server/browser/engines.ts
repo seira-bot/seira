@@ -51,6 +51,8 @@ export interface ChromeEngineOptions {
   egressNotice(key: string): string | null;
   language?(): string | undefined;
   log?: (line: string) => void;
+  /** The folder of another browser's profile to copy into a profile the first time it opens; see LocalBackendOptions. */
+  seed?: (key: string) => Promise<string | null>;
 }
 
 /** The new engine: one Chrome launcher (no agent-browser wrapper), the browser service, its live views and its sweep. */
@@ -91,6 +93,7 @@ export class ChromeEngine {
       registry: this.#registry,
       sandbox,
       ...(options.log ? { log: options.log } : {}),
+      ...(options.seed ? { seed: options.seed } : {}),
     });
     const maxRunning = Number(env.SEIRA_BROWSER_MAX_RUNNING) || MAX_RUNNING[options.host];
     this.service = new BrowserService({

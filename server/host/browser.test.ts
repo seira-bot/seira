@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BUILT_IN_BROWSER_SYSTEM_PROMPT, browserEngineStatus, clearBrowserSessionState, closeBrowserSession, runningBrowserSessionNames } from "../browser-engine.ts";
+import { BUILT_IN_BROWSER_SYSTEM_PROMPT, browserEngineStatus, browserProfileDirectory, clearBrowserSessionState, closeBrowserSession, runningBrowserSessionNames } from "../browser-engine.ts";
 import { CHROME_BROWSER_SYSTEM_PROMPT } from "../browser/prompt.ts";
 import { LocalBackend } from "../browser/backends.ts";
 import { FakeBackend } from "../browser/testing/fake-chrome.ts";
@@ -18,7 +18,8 @@ import { TurnResources, type TurnOwner } from "../turn-resources.ts";
 import { BrowserRuntime } from "../browser-runtime.ts";
 import { LentChromeDoors, type ChromeLender } from "../browser/lent-chrome.ts";
 import { audienceBrowserSuffix } from "../browser/audience.ts";
-import { chromeLauncher } from "../browser/chrome/launcher.ts";
+import { chromeLauncher, ChromeLauncher } from "../browser/chrome/launcher.ts";
+import type { ChromePlan } from "../browser/chrome/resolve.ts";
 import type { CdpSession, Params } from "../browser/cdp/connection.ts";
 import { FileChoosers } from "../browser/cdp/files.ts";
 import { uploadableFiles } from "../browser-upload.ts";
@@ -41,15 +42,27 @@ vi.mock("../browser-processes.ts", async (original) => ({
 
 type Host = ReturnType<typeof createBrowserHost>;
 const hosts: Host[] = [];
-afterEach(async () => { await Promise.all(hosts.splice(0).map((host) => host.browserRuntime.closeAll())); });
+const plans: Array<{ mockRestore(): void }> = [];
+/** Whether Seira's own engine has a Chrome to run on the host under test, whatever this machine has installed. */
+function seiraChrome(available: boolean): void {
+  const plan: ChromePlan = available ? { kind: "chrome", chrome: { path: "/fake/chrome", source: "named" }, fallback: null } : { kind: "legacy", reason: "no Chrome", noChrome: true };
+  plans.push(vi.spyOn(ChromeLauncher.prototype, "plan").mockReturnValue(plan));
+  vi.stubEnv("SEIRA_BROWSER_ENGINE_DEFAULT", "chrome");
+}
+afterEach(async () => {
+  for (const spy of plans.splice(0)) spy.mockRestore();
+  vi.unstubAllEnvs();
+  await Promise.all(hosts.splice(0).map((host) => host.browserRuntime.closeAll()));
+});
 
 const turn = { threadId: "thread-1", generation: "gen-1" };
 
-function setup(engine: "chrome" | "agent-browser" | undefined, { cloudHome = false, server = false, hosted = false, device, lendRefusal, holder, audienceOf, bots: botIds = ["scout"], browserBox, lentChrome, turnResources, browsersAtOnce }: {
-  cloudHome?: boolean; server?: boolean; hosted?: boolean; device?: BrowserHostDeps["device"]; lendRefusal?: BrowserHostDeps["lendRefusal"]; holder?: (resource: string) => TurnOwner | undefined;
+function setup(engine: "chrome" | "agent-browser" | undefined, { chrome, cloudHome = false, server = false, hosted = false, device, lendRefusal, holder, audienceOf, bots: botIds = ["scout"], browserBox, lentChrome, turnResources, browsersAtOnce }: {
+  chrome?: boolean; cloudHome?: boolean; server?: boolean; hosted?: boolean; device?: BrowserHostDeps["device"]; lendRefusal?: BrowserHostDeps["lendRefusal"]; holder?: (resource: string) => TurnOwner | undefined;
   audienceOf?: BrowserHostDeps["audienceOf"]; bots?: string[]; browserBox?: BrowserHostDeps["browserBox"];
   lentChrome?: BrowserHostDeps["lentChrome"]; turnResources?: BrowserHostDeps["turnResources"]; browsersAtOnce?: BrowserHostDeps["browsersAtOnce"];
 } = {}) {
+  if (engine === undefined || chrome !== undefined) seiraChrome(chrome ?? false);
   const cfg = {
     features: { browser: true },
     ...(engine ? { browserEngine: { engine } } : {}),
@@ -196,6 +209,126 @@ describe("the bots' browser host with browserEngine.engine set to chrome", () =>
     host.browserEngineSwitched();
     expect(host.usedBrowserSessions.has(browser!.session)).toBe(false);
     expect(host.browserSystemPrompt(undefined)).toBe(BUILT_IN_BROWSER_SYSTEM_PROMPT);
+  });
+});
+
+describe("the bots' browser host with no engine chosen", () => {
+  it("runs a bot's browser on Seira's own engine where it has a Chrome to run", async () => {
+    const { host } = setup(undefined, { chrome: true });
+    expect(host.browserEngine()).toBe("chrome");
+    const browser = await host.browserIntegration("scout", undefined, turn);
+    expect(browser?.spec).toEqual({ command: "seira-cdp", args: ["bot:scout"], env: {} });
+    expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "chrome" });
+    expect(host.browserSystemPrompt(undefined)).toBe(CHROME_BROWSER_SYSTEM_PROMPT);
+  });
+
+  it("runs a bot's browser on agent-browser where Seira's engine has no Chrome", () => {
+    const { host } = setup(undefined, { chrome: false });
+    expect(host.browserEngine()).toBe("agent-browser");
+    expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "agent-browser" });
+    expect(host.browserSystemPrompt(undefined)).toBe(BUILT_IN_BROWSER_SYSTEM_PROMPT);
+  });
+
+  it("runs a bot's browser on agent-browser when the person chose it, wherever Seira's engine has a Chrome", async () => {
+    const { host } = setup("agent-browser", { chrome: true });
+    expect(host.browserEngine()).toBe("agent-browser");
+    expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "agent-browser" });
+  });
+
+  it("stays on agent-browser inside a browser box, with no choice or with chrome chosen", async () => {
+    const box = { bwrap: "/usr/bin/bwrap", options: ["--unshare-pid"], seccomp: null };
+    for (const engine of [undefined, "chrome"] as const) {
+      const { host } = setup(engine, { chrome: true, cloudHome: true, browserBox: () => box });
+      expect(host.browserEngine()).toBe("agent-browser");
+      expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "agent-browser" });
+    }
+  });
+
+  it("marks the engine as fixed in the summary only inside a browser box", () => {
+    const box = { bwrap: "/usr/bin/bwrap", options: ["--unshare-pid"], seccomp: null };
+    const summary = { kind: "engine" as const, version: "0.37.0", myChrome: false };
+    expect(setup(undefined, { chrome: true, cloudHome: true, browserBox: () => box }).host.engineSummary(summary)).toMatchObject({ engineFixed: true });
+    expect(setup(undefined, { chrome: true }).host.engineSummary(summary)).not.toHaveProperty("engineFixed");
+    expect(setup("chrome").host.engineSummary(summary)).not.toHaveProperty("engineFixed");
+  });
+
+  it("follows the choice at once: saving agent-browser moves an effective Seira engine off it", () => {
+    const { cfg, host } = setup(undefined, { chrome: true });
+    expect(host.browserEngine()).toBe("chrome");
+    cfg.browserEngine = { engine: "agent-browser" };
+    host.browserEngineSwitched();
+    expect(host.browserEngine()).toBe("agent-browser");
+  });
+});
+
+describe("a bot's first browser on Seira's own engine, from its agent-browser profile", () => {
+  const ENGINE = "/usr/local/bin/agent-browser";
+  const cleanup: string[] = [];
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(browserEngineStatus).mockReset();
+    vi.mocked(closeBrowserSession).mockReset().mockResolvedValue(true);
+    for (const folder of cleanup.splice(0)) rmSync(folder, { recursive: true, force: true });
+  });
+
+  function agentBrowserRunning(session: string): void {
+    const runtime = mkdtempSync(join(tmpdir(), "seira-host-seed-"));
+    cleanup.push(runtime);
+    mkdirSync(join(runtime, "agent-browser"));
+    writeFileSync(join(runtime, "agent-browser", `${session}.pid`), "0");
+    vi.stubEnv("XDG_RUNTIME_DIR", runtime);
+  }
+
+  function earlierProfile(session: string): string {
+    const folder = browserProfileDirectory(session, DATA_DIR);
+    mkdirSync(folder, { recursive: true });
+    cleanup.push(folder);
+    return folder;
+  }
+
+  function ready(): void {
+    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "ready", binaryPath: ENGINE, version: "0.37.0", managed: false });
+    vi.mocked(closeBrowserSession).mockClear().mockResolvedValue(true);
+  }
+
+  it("names the folder of the same bot's agent-browser session", async () => {
+    ready();
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    const shared = (await host.browserIntegration("scout", "work", turn))!;
+    const ownFolder = earlierProfile(own.session);
+    const sharedFolder = earlierProfile(shared.session);
+    expect(await host.agentBrowserProfileFor("bot:scout")).toBe(ownFolder);
+    expect(await host.agentBrowserProfileFor("shared:p-work")).toBe(sharedFolder);
+  });
+
+  it("names nothing for a profile with no agent-browser folder, an unknown key or a temporary browser", async () => {
+    ready();
+    const { host } = setup("chrome");
+    await host.browserIntegration("scout", undefined, turn);
+    const guest = (await host.browserIntegration("scout", "guest", turn))!;
+    earlierProfile(guest.session);
+    expect(await host.agentBrowserProfileFor("bot:scout")).toBeNull();
+    expect(await host.agentBrowserProfileFor("bot:nobody")).toBeNull();
+  });
+
+  it("closes the session's agent-browser browser before it names the folder", async () => {
+    ready();
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    agentBrowserRunning(own.session);
+    await host.agentBrowserProfileFor("bot:scout");
+    expect(vi.mocked(closeBrowserSession).mock.calls.map(([binary, env]) => `${binary} ${env.AGENT_BROWSER_SESSION}`)).toEqual([`${ENGINE} ${own.session}`]);
+  });
+
+  it("closes nothing when no agent-browser browser runs for the session", async () => {
+    ready();
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    await host.agentBrowserProfileFor("bot:scout");
+    expect(closeBrowserSession).not.toHaveBeenCalled();
   });
 });
 

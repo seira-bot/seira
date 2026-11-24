@@ -189,6 +189,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY) childEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY = parentEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY;
   // One log line per browser call and preview frame.
   if (parentEnv.SEIRA_BROWSER_TIMING === "1") childEnv.SEIRA_BROWSER_TIMING = "1";
+  // A sealed fixture keeps agent-browser as the bots' browser unless the caller asks for Seira's own driver.
+  if (parentEnv.SEIRA_BROWSER_ENGINE_DEFAULT) childEnv.SEIRA_BROWSER_ENGINE_DEFAULT = parentEnv.SEIRA_BROWSER_ENGINE_DEFAULT;
   // A share on the tailnet (server/tailnet-listener.ts): a test names one of this machine's own addresses as its stand-in.
   for (const key of ["SEIRA_TAILNET_NAME", "SEIRA_TAILNET_ADDRESSES", "SEIRA_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // The addresses a phone link names (server/phone-routes.ts).
@@ -253,6 +255,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_TEST_APPROVAL_CLOCK === "1") childEnv.SEIRA_TEST_APPROVAL_CLOCK = "1";
   // The stall watchdog fires on a marker file, not after 20 minutes of silence.
   if (parentEnv.SEIRA_TEST_STALL_CLOCK === "1") childEnv.SEIRA_TEST_STALL_CLOCK = "1";
+  // Two servers of different owners on this machine dial each other on loopback; only a test allows that.
+  if (parentEnv.SEIRA_TEST_LINKED_LOOPBACK === "1") childEnv.SEIRA_TEST_LINKED_LOOPBACK = "1";
   // Date.now() jumps when a marker file says so, as it does when a suspended machine wakes; timers don't.
   if (parentEnv.SEIRA_TEST_RESUME_CLOCK === "1") childEnv.SEIRA_TEST_RESUME_CLOCK = "1";
   // The memory gate runs here too, on the memory a fixture file says this machine has.

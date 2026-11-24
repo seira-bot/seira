@@ -2789,7 +2789,7 @@
   "settings.experimental.browserWindows": "Non ancora disponibile su questa macchina Windows: installa il browser con `seira browser install`.",
   "settings.experimental.browserAria": "Attiva il browser integrato",
   "settings.experimental.newBrowser": "Nuovo browser",
-  "settings.experimental.newBrowserDetail": "Disattivato per impostazione predefinita. I browser dei bot girano sul driver Chrome di {app} invece di agent-browser: le pagine si vedono alla nitidezza del tuo schermo e i bot gestiscono caricamenti, scaricamenti, dialoghi e pop-up. I profili che usano il tuo Chrome non cambiano. Al cambio si chiudono i browser aperti e gli accessi salvati in uno non passano all'altro.",
+  "settings.experimental.newBrowserDetail": "Attivo per impostazione predefinita. I browser dei bot usano il driver Chrome di {app} al posto di agent-browser: le pagine hanno la nitidezza del tuo schermo e i bot gestiscono upload, download, finestre di dialogo e popup. I profili che usano il tuo Chrome non cambiano. Quando cambi, i browser aperti si chiudono. Gli accessi salvati con agent-browser passano al nuovo browser la prima volta che un bot lo apre. Disattivalo per tornare ad agent-browser.",
   "settings.experimental.newBrowserAria": "Usa il nuovo browser",
   "browser.panel.profileTitle": "Profilo del browser: {name}",
   "browser.panel.profiles": "Profili del browser",

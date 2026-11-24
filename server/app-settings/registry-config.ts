@@ -8,6 +8,7 @@ import { IMAGE_COMPLEXITIES, IMAGE_PROVIDERS } from "../../shared/image-generati
 import { EFFORT_LEVELS } from "../../shared/wire.ts";
 import { DEFAULT_WINDOW_MINUTES } from "../cache-keepwarm.ts";
 import { botsTowardLimit } from "../../shared/bot-limit.ts";
+import { browserEngineChoice } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
 import { CONFIG_PATCH_FIELDS as F, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
 import { display, withoutKeys, type RegistryDeps, type SettingEntry, type Where, type WritableSpec } from "./registry.ts";
@@ -22,7 +23,7 @@ const nonEmpty = <T extends z.ZodType<object>>(schema: T) => schema.refine((valu
 type BrowserProfileChange = { id?: string; name: string; browser?: "chrome" };
 const imageSlot = z.object({ provider: z.enum(IMAGE_PROVIDERS), model: z.string().trim().max(200).optional() }).strict();
 
-export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "bots" | "call" | "read" | "paused">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
+export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "bots" | "call" | "read" | "paused" | "browserEngine">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const cfg = deps.cfg;
   /** A setting saved with PUT /api/config; `says` is the applied card's line, else it shows before → after. */
   const section = <V,>(spec: { id: string; label: string; help: string; where: Where; synonyms: string[]; value: z.ZodType<V>; allowed: string;
@@ -144,9 +145,9 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       says: (proxy) => (proxy ? "Send bots' browsers to public sites through the SOCKS5 proxy you named" : "Send bots' browsers to public sites directly, with no proxy"),
     }),
     section({
-      id: "desktops.browserEngine", label: "Browser engine", help: "What runs bots' browsers: agent-browser (the default) or Seira's own Chrome driver (early).", where: "browser",
+      id: "desktops.browserEngine", label: "Browser engine", help: "What runs bots' browsers: Seira's own Chrome driver (the default where this computer has a Chrome for it) or agent-browser.", where: "browser",
       synonyms: ["browser engine", "chrome", "new browser", "agent-browser"], value: z.enum(["agent-browser", "chrome"]), allowed: "agent-browser or chrome",
-      current: () => cfg().browserEngine?.engine ?? "agent-browser", patch: (engine) => ({ browserEngine: { engine } }),
+      current: () => deps.browserEngine?.() ?? browserEngineChoice(cfg()) ?? "agent-browser", patch: (engine) => ({ browserEngine: { engine } }),
     }),
     feature("desktops.savedSteps", "Saved steps", "Bots may repeat saved browser steps without AI.", "saved-steps", ["saved steps", "repeat", "without ai"], "savedSteps", true,
       "Let bots repeat saved steps without AI", "Turn off saved steps"),
