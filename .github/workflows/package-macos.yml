@@ -442,7 +442,7 @@ jobs:
   attach:
     name: attach the macOS files to the release
     needs: [commit, approval, package]
-    if: ${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') }}
+    if: ${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: release

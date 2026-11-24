@@ -58,8 +58,7 @@ const MACOS = "package-macos.yml";
 const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
 const ATTACH = "attach";
 const isAttach = (file: string, id: string) => file === MACOS && id === ATTACH;
-const ATTACH_IF =
-  "${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') }}";
+const ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`;
 const MAC_FILES = [
   "Seira-$VERSION-arm64.dmg", "Seira-$VERSION-x64.dmg",
   "Seira-$VERSION-arm64.zip", "Seira-$VERSION-x64.zip",
@@ -129,7 +128,7 @@ describe("CI workflows", () => {
   it("runs a job behind the release environment only for a maintainer or after an approval in the same attempt", () => {
     const gated = [...workflows].flatMap(([file, flow]) =>
       Object.entries(flow.jobs)
-        .filter(([id, job]) => job.environment === "release" && !isAttach(file, id))
+        .filter(([, job]) => job.environment === "release")
         .map(([id, job]) => ({ where: `${file} job ${id}`, job })),
     );
     expect(gated.length).toBeGreaterThan(0);
@@ -515,7 +514,7 @@ describe("macOS attach job", () => {
     });
   });
 
-  it("runs only for a signed build of a v* tag, after the package job succeeded", () => {
+  it("runs only for a signed build of a v* tag, after the package job succeeded, for a maintainer or after an approval in the same attempt", () => {
     expect(job.if).toBe(ATTACH_IF);
   });
 

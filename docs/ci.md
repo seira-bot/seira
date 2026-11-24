@@ -166,6 +166,8 @@ holds these rules for every `package-*.yml` file:
   permission:
   - It needs `commit`, `approval`, and `package`. It runs only when `package`
     succeeded, the build is signed, and `ref` starts with `v`.
+  - Like `package`, it runs only when a maintainer started this attempt, or
+    when the approval came in this attempt.
   - It runs in the `release` environment with `contents: write` and no secret.
   - It checks out only `scripts/release-assets.mjs` from the workflow commit,
     without credentials. It never runs code from the built commit.
