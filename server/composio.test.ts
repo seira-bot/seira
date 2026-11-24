@@ -25,6 +25,7 @@ import {
   trustedSessionMcpUrl,
   validateConnectorGrants,
 } from "./composio.ts";
+import { includeNoAuthServices } from "./composio-no-auth.ts";
 import { forgetProjectAuthConfigs } from "./composio-project.ts";
 import {
   CONNECTOR_ALLOWED_TOOLS_ENV,
@@ -510,6 +511,38 @@ describe.sequential("Composio Sessions", () => {
     expect(flagged("managed")).not.toHaveProperty("needsOwnAuth");
     expect(flagged("unknown")).not.toHaveProperty("needsOwnAuth");
     expect(flagged("open")).not.toHaveProperty("needsOwnAuth");
+  });
+
+  describe("apps that need no sign-in", () => {
+    const notConnected = { connected: false, pending: false, status: "not_connected", accounts: [] };
+
+    it("are listed as connected, so a client that offers Connect for every app that is not connected skips them", async () => {
+      const cfg: AppConfig = { composio: { apiKey: "ak_catalog_auth" } };
+      const status = await includeNoAuthServices(cfg, {
+        open: notConnected,
+        managed: notConnected,
+        waiting: { ...notConnected, pending: true, status: "INITIATED" },
+      });
+
+      expect(status.open).toEqual({ connected: true, pending: false, status: "ACTIVE", accounts: [] });
+      expect(status.managed).toEqual(notConnected);
+      expect(status.waiting).toMatchObject({ connected: false, pending: true });
+    });
+
+    it("cost no catalog request when every app already has a status", async () => {
+      const cfg: AppConfig = { composio: { apiKey: "ak_catalog_auth" } };
+      const before = calls.length;
+      const status = { open: { ...notConnected, connected: true, status: "ACTIVE" } };
+
+      await expect(includeNoAuthServices(cfg, status)).resolves.toBe(status);
+      expect(calls.length).toBe(before);
+    });
+
+    it("keep the status as it was when no catalog can be read", async () => {
+      const status = { open: notConnected };
+
+      await expect(includeNoAuthServices({}, status)).resolves.toEqual(status);
+    });
   });
 
   describe("apps with a sign-in of the project's own", () => {
