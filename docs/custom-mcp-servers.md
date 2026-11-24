@@ -77,6 +77,13 @@ A bot that can use one of these services acts on your account there: it can
 change your pages, maps, bookings, contacts, social posts, WhatsApp messages or WhatsApp groups. Choose which bots get
 each card under **Bot access**.
 
+**WAPilot** is different: **Connect** first shows what a bot can do with it (read
+your chats, contacts and groups, send WhatsApp messages as you, and change your
+auto replies, broadcasts and reminders) and that WAPilot Remote Control
+processes the commands on WAPilot's servers. It then asks which one bot gets
+it, with no bot chosen at first, and only then opens sign-in. The server is that
+bot's own: no other bot can use it. Connect again to give it to another bot.
+
 ### Servers that ask you to sign in
 
 Some URL servers take no token; they want you to sign in with your browser

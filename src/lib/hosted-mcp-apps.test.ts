@@ -63,6 +63,11 @@ describe("hosted MCP apps", () => {
     for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);
   });
 
+  it("gives only a service that can read and send as the person a per-bot card, with no logo of its own", () => {
+    expect(HOSTED_MCP_APPS.filter((app) => "perBot" in app).map((app) => app.id)).toEqual(["wapilot"]);
+    expect("image" in HOSTED_MCP_APPS.find((app) => app.id === "wapilot")!.icon).toBe(false);
+  });
+
   it("counts each app on its own server", () => {
     const first = HOSTED_MCP_APPS[0];
     const connections = hostedConnections([

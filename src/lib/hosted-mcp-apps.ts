@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import { MessageCircle, type LucideIcon } from "lucide-react";
 
 import biverLogo from "@/assets/biver/logo.png";
 import citcatLogo from "@/assets/citcat/logo.png";
@@ -8,7 +8,6 @@ import grupyLogo from "@/assets/grupy/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
-import wapilotLogo from "@/assets/wapilot/logo.png";
 import type { LocaleKey } from "@/locales";
 
 export interface HostedMcpApp {
@@ -25,6 +24,9 @@ export interface HostedMcpApp {
   readonly notice: LocaleKey;
   /** Search words besides the label and the description. */
   readonly keywords: string;
+  /** True for a service that can read and send as the person: Connect asks which bot gets it, and shows what it can do,
+   * before sign-in. The server is then that one bot's own, never every bot's. */
+  readonly perBot?: true;
 }
 
 /** The hosted MCP apps with a one-click card in Plugins. Adding one is adding a row: its card, Connect, Disconnect and
@@ -106,12 +108,16 @@ export const HOSTED_MCP_APPS = [
     id: "wapilot",
     label: "WAPilot",
     url: "https://integrator.wapilot.id/v1/mcp",
-    icon: { image: wapilotLogo },
+    icon: { glyph: MessageCircle },
     description: "wapilot.description",
     notice: "wapilot.notice",
+    perBot: true,
     keywords: "wapilot whatsapp web chrome extension send messages chats contacts groups auto reply broadcast reminder template catalog knowledge guardrails",
   },
 ] as const satisfies readonly HostedMcpApp[];
+
+/** Whether Connect must first ask which bot gets this app. */
+export const hostedPerBot = (app: HostedMcpApp | undefined): boolean => app?.perBot === true;
 
 /** A row of the table, with its own literal id. */
 export type HostedApp = (typeof HOSTED_MCP_APPS)[number];
