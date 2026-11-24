@@ -31,7 +31,6 @@ const flow = parse(text) as Workflow;
 const publish = flow.jobs.publish!;
 const steps = publish.steps ?? [];
 const stepNamed = (name: string) => steps.find((step) => step.name === name)!;
-const IS_MAINTAINER = "(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor))";
 const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
 
 describe("npm publish workflow", () => {
@@ -44,29 +43,59 @@ describe("npm publish workflow", () => {
   it("keeps a read-only token, and asks for the OIDC token in the publish job only", () => {
     expect(flow.permissions).toEqual({ contents: "read" });
     expect(publish.permissions).toEqual({ contents: "read", "id-token": "write" });
-    for (const id of ["commit", "approval"]) {
+    for (const id of ["redispatch", "commit", "gate", "approval"]) {
       expect(JSON.stringify(flow.jobs[id]!.permissions ?? {}), id).not.toContain("id-token");
     }
   });
 
   it("stores and reads no npm token and no secret", () => {
-    for (const forbidden of ["NODE_AUTH_TOKEN", "NPM_TOKEN", "_authToken", "secrets.", "github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
+    for (const forbidden of ["NODE_AUTH_TOKEN", "NPM_TOKEN", "_authToken", "secrets.", "GITHUB_TOKEN"]) {
       expect(text, forbidden).not.toContain(forbidden);
     }
+    expect(JSON.stringify(publish), "publish").not.toMatch(/github\.token|GH_TOKEN/);
     expect(steps.some((step) => step.with?.["registry-url"] !== undefined)).toBe(false);
   });
 
-  it("publishes behind the release environment, after the commit lookup and the approval", () => {
+  it("publishes behind the release environment, on main only, after the gate passed or after an approval in this attempt", () => {
     expect(publish.environment).toBe("release");
-    expect(publish.needs).toEqual(["commit", "approval"]);
-    expect(publish.if).toBe(`\${{ !cancelled() && needs.commit.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`);
+    expect(publish.needs).toEqual(["commit", "gate", "approval"]);
+    expect(publish.if).toBe(
+      `\${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.commit.result == 'success' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (${APPROVED_NOW})) }}`,
+    );
+    expect(text).not.toContain("RELEASE_MAINTAINERS");
   });
 
-  it("asks a maintainer to approve a run that another person starts, with no permission and no secret", () => {
+  it("runs the release gate on the tag that the commit job found", () => {
+    const gate = flow.jobs.gate!;
+    expect(gate.needs).toBe("commit");
+    expect(gate.permissions).toEqual({ contents: "read", "pull-requests": "read" });
+    const run = gate.steps!.find((step) => step.id === "gate")!;
+    expect(run.env?.TAG).toBe("${{ needs.commit.outputs.tag }}");
+    expect(run.env?.SHA).toBe("${{ needs.commit.outputs.sha }}");
+    expect(run.run).toContain('node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA"');
+    expect(run.run).not.toContain("${{");
+  });
+
+  it("starts the workflow again on main when a release is published, and runs no other job for that event", () => {
+    const redispatch = flow.jobs.redispatch!;
+    expect(redispatch.if).toBe("github.event_name == 'release'");
+    expect(redispatch.permissions).toEqual({ actions: "write", contents: "read" });
+    expect(redispatch.environment).toBeUndefined();
+    const step = redispatch.steps![0]!;
+    expect(step.env).toEqual({ GH_TOKEN: "${{ github.token }}", TAG: "${{ github.event.release.tag_name }}" });
+    expect(step.run).toBe('gh workflow run npm-publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"');
+    for (const [id, job] of Object.entries(flow.jobs)) {
+      if (id === "redispatch") continue;
+      const guarded = id === "commit" ? job.if === "github.event_name == 'workflow_dispatch'" : id === "gate" || id === "approval" || id === "publish";
+      expect(guarded, id).toBe(true);
+    }
+  });
+
+  it("asks a person to approve a run that the gate flagged, with no permission and no secret", () => {
     const approval = flow.jobs.approval!;
     expect(approval.environment).toBe("release-approval");
-    expect(approval.needs).toBe("commit");
-    expect(approval.if).toBe(`\${{ !${IS_MAINTAINER} }}`);
+    expect(approval.needs).toBe("gate");
+    expect(approval.if).toBe("${{ needs.gate.outputs.pass == 'false' }}");
     expect(approval.permissions).toEqual({});
     expect(approval.outputs).toEqual({ attempt: "${{ github.run_attempt }}" });
   });
@@ -76,7 +105,7 @@ describe("npm publish workflow", () => {
     expect(checkout.with?.ref).toBe("${{ needs.commit.outputs.sha }}");
     expect(checkout.with?.["persist-credentials"]).toBe(false);
     const find = flow.jobs.commit!.steps![0]!;
-    expect(find.env?.TAG).toBe("${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}");
+    expect(find.env?.TAG).toBe("${{ inputs.tag }}");
     expect(find.run).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+$");
     expect(find.run).toContain("^[0-9a-f]{40}$");
   });

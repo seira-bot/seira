@@ -85,7 +85,10 @@ describe("package-macos.yml", () => {
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package"]);
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "gate", "approval", "package", "attach"]);
+    expect(flow.jobs.attach.environment).toBe("release");
+    expect(flow.jobs.attach.permissions).toEqual({ contents: "write" });
+    expect(JSON.stringify(flow.jobs.attach)).not.toContain("secrets.");
     expect(flow.jobs.commit.environment).toBeUndefined();
     expect(flow.jobs.commit.permissions).toBeUndefined();
     expect(JSON.stringify(flow.jobs.commit)).not.toContain("secrets.");
@@ -94,6 +97,17 @@ describe("package-macos.yml", () => {
     expect(flow.jobs.approval.environment).toBe("release-approval");
     expect(flow.jobs.approval.permissions).toEqual({});
     expect(JSON.stringify(flow.jobs.approval)).not.toContain("secrets.");
+  });
+
+  it("runs the release gate on the tag, or on the commit for another ref, and asks a person only when the gate flags the run", () => {
+    const gate = flow.jobs.gate as unknown as { needs: string; steps: Step[] };
+    expect(gate.needs).toBe("commit");
+    const run = gate.steps.find((each) => each.id === "gate")!.run!;
+    expect(run).toContain('node scripts/release-gate.mjs --tag "$REF" --sha "$SHA"');
+    expect(run).toContain('node scripts/release-gate.mjs --sha "$SHA"');
+    expect(run).not.toContain("${{");
+    expect((flow.jobs.approval as unknown as { if: string }).if).toBe("${{ needs.gate.outputs.pass == 'false' }}");
+    expect(text).not.toContain("RELEASE_MAINTAINERS");
   });
 
   it("checks out the commit that the commit job found, never the ref itself", () => {

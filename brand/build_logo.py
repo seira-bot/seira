@@ -334,7 +334,7 @@ def main():
 
     tile = app_icon_master()
     tiles = {size: tile if size == tile.width else tile.resize((size, size), LANCZOS)
-             for size in sorted({16, 24, 32, 48, 64, 128, 180, 192, 256, 512, 1024})}
+             for size in sorted({16, 24, 32, 48, 64, 96, 128, 180, 192, 256, 512, 1024})}
     for size in (180, 192, 512, 1024):
         write_png(LOGO / f"png/icon-{size}.png", tiles[size])
 
@@ -369,6 +369,7 @@ def main():
     write_png(ROOT / "public/app-icon-512.png", tiles[512])
     write_png(ROOT / "public/app-icon-192.png", tiles[192])
     write_png(ROOT / "public/apple-touch-icon.png", touch_icon())
+    write_png(ROOT / "apps/docs/public/app-icon-96.png", tiles[96])
 
     splash = build_splash(master)
     splash.save(ROOT / "electron/resources/splash-seira.webp", format="WEBP", quality=92, alpha_quality=100, method=6)

@@ -2,11 +2,14 @@ name: npm publish
 
 # Publishes `@seira-bot/seira` to npm with npm Trusted Publishing (docs/releasing.md).
 # No npm token exists in this repository. npm trusts this workflow file and the `release` environment through the GitHub OIDC token.
-# - It starts when a release is published, or by hand with a tag.
-# - The `commit` job finds the commit of the tag before the approval. The `publish` job builds that commit only.
-# - A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
-#   The `publish` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
-#   A re-run by another person therefore never reuses an approval of an earlier attempt.
+# - It starts by hand with a tag. A published release starts it again: the `redispatch` job runs this workflow on `main`.
+# - The `commit` job finds the commit of the tag. The `publish` job builds that commit only.
+# - The `gate` job runs scripts/release-gate.mjs. It reads every commit since the last version on npm.
+#   A run that passes the gate publishes with no person.
+#   A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait.
+#   A run that the gate refuses does not publish.
+# - The `publish` job runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
+#   A re-run therefore never reuses the wait of an earlier attempt.
 # - The `publish` job uses the `release` environment. The npm Trusted Publisher names that environment.
 # - A version that is already on npm is skipped, so a repeated run does nothing.
 # scripts/ci-workflow.test.ts and scripts/npm-publish-workflow.test.ts hold these rules.
@@ -29,8 +32,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  redispatch:
+    name: start the run on main
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Start this workflow again on main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh workflow run npm-publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
+
   commit:
     name: find the commit to publish
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -41,7 +61,7 @@ jobs:
         id: sha
         shell: bash
         env:
-          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -60,10 +80,46 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Tag \`$TAG\` is commit \`$sha\`." >> "$GITHUB_STEP_SUMMARY"
 
-  approval:
-    name: approval for a person outside the maintainers
+  gate:
+    name: release gate
     needs: commit
-    if: ${{ !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pass: ${{ steps.gate.outputs.pass }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Run the release gate
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
+          TAG: ${{ needs.commit.outputs.tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
+        run: |
+          set -uo pipefail
+          node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA"
+          status=$?
+          case "$status" in
+            0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+
+  approval:
+    name: approval for a run that the gate flagged
+    needs: gate
+    if: ${{ needs.gate.outputs.pass == 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: release-approval
@@ -71,12 +127,12 @@ jobs:
     outputs:
       attempt: ${{ github.run_attempt }}
     steps:
-      - run: echo "A maintainer approved this run."
+      - run: echo "The wait of the release-approval environment ended."
 
   publish:
     name: publish to npm
-    needs: [commit, approval]
-    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    needs: [commit, gate, approval]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.commit.result == 'success' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
