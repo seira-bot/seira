@@ -16,6 +16,9 @@ export interface PlaceAnchor {
   value: string;
 }
 
+/** The place card's request in the store: the host in App reads it, so the page change cannot unmount the spotlight. */
+export interface PlaceLook { id: string; nonce: number; phase: "looking" | "spot" | "missing"; anchor?: PlaceAnchor }
+
 export const anchorOf = (place: UiPlace): PlaceAnchor => (place.tour ? { attr: "tour", value: place.tour } : { attr: "ui", value: place.id });
 
 /** The place, then its parents. A control inside a closed menu is reached through the control that opens the menu, so the

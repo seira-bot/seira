@@ -407,6 +407,7 @@ import type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicyS
 export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary };
 
 import { configStatusFromFrame, type ConfigStatusFrame } from "@/lib/config-status-frame";
+import type { PlaceAnchor, PlaceLook } from "@/lib/ui-place-open";
 export { configStatusFromFrame, type ConfigStatusFrame };
 
 export type { EngineInstall } from "./engine-install";
@@ -497,10 +498,6 @@ export interface ModelVariantSession {
   acceptingUpdates: boolean;
   variants?: { options: ModelVariantOption[]; currentValue?: string };
 }
-
-/** Where the place card's spotlight points: the `data-ui` or the `data-tour` value of the element. */
-export interface PlaceLookAnchor { attr: "ui" | "tour"; value: string }
-export interface PlaceLook { id: string; nonce: number; phase: "looking" | "spot" | "missing"; anchor?: PlaceLookAnchor }
 
 export interface AppState {
   bots: Bot[];
@@ -737,7 +734,7 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "notice"; notice: AppState["notice"] }
   | { type: "revealThread"; threadId: string }
-  | { type: "lookForPlace"; id: string } | { type: "placeLookResult"; nonce: number; phase: "spot" | "missing"; anchor?: PlaceLookAnchor } | { type: "closePlaceLook" }
+  | { type: "lookForPlace"; id: string } | { type: "placeLookResult"; nonce: number; phase: "spot" | "missing"; anchor?: PlaceAnchor } | { type: "closePlaceLook" }
   | { type: "toggleSettings"; open?: boolean; section?: BotSettingsSection; botId?: string }
   | { type: "togglePlugins"; open?: boolean; surface?: "apps" | "mcp" }
   | { type: "toggleComputer"; open?: boolean; botId?: string }
