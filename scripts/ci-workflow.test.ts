@@ -47,6 +47,8 @@ const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
 const MILESTONES = "milestones.yml";
 const SMOKE = "server-image-smoke.yml";
+// Artifact-only candidate build of the patched Windows browser engine. It never publishes and has no secret.
+const VENDOR = "browser-vendor-windows.yml";
 const image = workflows.get(IMAGE)!;
 const smoke = workflows.get(SMOKE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
@@ -78,8 +80,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows and the two server image workflows only", () => {
-    expect(files).toEqual(["ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE]);
+  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows, the Windows browser vendor build and the two server image workflows only", () => {
+    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {

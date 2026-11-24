@@ -30,6 +30,7 @@ import {
   isMusl,
   isTemporaryBrowserSession,
   pinnedBinaryPath,
+  legacyBinaryPath,
   prepareBrowserSessionState,
   resolveAgentBrowserBinary,
   setBrowserViewport,
@@ -671,6 +672,17 @@ describe("finding the browser engine", () => {
     files.add(revised);
     expect(browserEngineStatus(options)).toMatchObject({ kind: "ready", binaryPath: revised, version: "0.36.0-omb.1" });
     expect(resolveAgentBrowserBinary({ ...options, env: { PATH: "", SEIRA_AGENT_BROWSER_PATH: old } })).toBe(old);
+  });
+
+  it("still reads a Windows engine installed under the pre-rename omb.1 folder", () => {
+    const dataDir = join(tmpdir(), "seira-legacy-browser-fixture");
+    const legacy = join(dataDir, "tools", "agent-browser", "0.36.0-omb.1", "agent-browser.exe");
+    expect(legacyBinaryPath(dataDir, "win32", (file) => file === legacy)).toBe(legacy);
+    expect(legacyBinaryPath(dataDir, "win32", () => false)).toBeNull();
+    expect(legacyBinaryPath(dataDir, "linux", () => true)).toBeNull();
+    const options = { dataDir, platform: "win32" as const, arch: "x64", env: { PATH: "" }, exists: (file: string) => file === legacy };
+    expect(resolveAgentBrowserBinary(options)).toBe(legacy);
+    expect(browserEngineStatus(options)).toMatchObject({ kind: "ready", binaryPath: legacy, version: "0.36.0-omb.1", managed: true });
   });
 
   it("retains default upstream versions and permits a pinned platform-specific asset URL", () => {

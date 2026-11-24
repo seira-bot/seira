@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { ensurePrivateDir } from "./data-dir.ts";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
@@ -20,6 +20,7 @@ import {
   AGENT_BROWSER_VERSION,
   agentBrowserReleaseUrl,
   agentBrowserReleaseVersion,
+  LEGACY_WINDOWS_ENGINE_VERSIONS,
   resolveAgentBrowserReleaseAsset,
   type AgentBrowserReleaseAsset,
 } from "./browser-engine-release.ts";
@@ -400,8 +401,20 @@ export function resolveAgentBrowserBinary(options: BrowserLookupOptions = {}): s
   if (bundle && exists(bundle.directory)) return completePackage(bundle, exists) ? bundle.engine : null;
   const pinned = pinnedBinaryPath(options.dataDir, platform, options.arch);
   if (exists(pinned)) return pinned;
+  const legacy = legacyBinaryPath(options.dataDir, platform, exists);
+  if (legacy) return legacy;
   if (options.managedOnly) return null;
   return onPath(env, platform, exists);
+}
+
+/** An engine installed under a pre-rename Windows revision folder (for example `0.36.0-omb.1`), if the current pin is not installed. */
+export function legacyBinaryPath(dataDir = DATA_DIR, platform: NodeJS.Platform = process.platform, exists: (p: string) => boolean = existsSync): string | null {
+  if (platform !== "win32") return null;
+  for (const version of LEGACY_WINDOWS_ENGINE_VERSIONS) {
+    const candidate = join(dataDir, ENGINE_DIR, version, executableName(platform));
+    if (exists(candidate)) return candidate;
+  }
+  return null;
 }
 
 /** Verifies size and SHA-256 before the file gets its final name. */
@@ -530,9 +543,10 @@ export function browserEngineStatus(options: BrowserLookupOptions = {}): Browser
   const bundle = packagedBrowser(options);
   if (binaryPath) {
     const platform = options.platform ?? process.platform;
-    const managed = binaryPath === bundle?.engine || binaryPath === pinnedBinaryPath(options.dataDir, platform, options.arch);
+    const legacy = legacyBinaryPath(options.dataDir, platform, options.exists);
+    const managed = binaryPath === bundle?.engine || binaryPath === pinnedBinaryPath(options.dataDir, platform, options.arch) || binaryPath === legacy;
     if (managed) {
-      const version = agentBrowserReleaseVersion(resolveAgentBrowserReleaseAsset(platform, options.arch));
+      const version = binaryPath === legacy ? basename(join(binaryPath, "..")) : agentBrowserReleaseVersion(resolveAgentBrowserReleaseAsset(platform, options.arch));
       return { kind: "ready", binaryPath, version, managed };
     }
     const actual = options.versionOf ? options.versionOf(binaryPath) : cachedAgentBrowserVersion(binaryPath);

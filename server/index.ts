@@ -111,6 +111,7 @@ import { parseToolScope } from "../shared/tool-scope.ts";
 import { liveDecisionRefusal } from "../shared/live-approval.ts"; import type { PersonWaitKind } from "../shared/person-wait.ts";
 import { vpsLeftBehindNotice, vpsNotChosenReason } from "./cloud-backend.ts";
 import * as composio from "./composio.ts";
+import { connectorStatusForSettings } from "./composio-no-auth.ts";
 import { appSandboxRule, connectorCallFromFrame, connectorRefusalText, connectorScopeRefusalText, connectorUnrecognizedText, evaluateConnectorTools } from "./connector-verdict.ts";
 import { signInCardText } from "./connector-card-text.ts";
 import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffPrompt, chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot } from "./default-bot.ts"; import { ensureProfileLook } from "./person-look.ts";
@@ -500,7 +501,7 @@ import { lazyClaimFailedText, lazyClaimRetryText, settledWithin, startAutoVmClai
 import { CONTROL_ACT_WITHIN_MS, CONTROL_BUSY, CONTROL_HANDED_BACK, CONTROL_WAIT_MS, CONTROL_WAITED, controlRefusal, type ControlState } from "./control-client.ts";
 import { computerFreeAfterText, computerParkedText, computerPersonAwayText, computerStoppedWaitingText, computerWaitingText, type ComputerHolder } from "./computer-wait.ts";
 import { modelContextWindow } from "./model-context-window.ts";
-import { browserIsThePlace, chosenPin, cloudPickWithoutComputer, noticeWithoutCloudComputer, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, failedOnHostPath, openBrowserBeside, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, WITHOUT_CLOUD_COMPUTER_NOTE, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
+import { NO_COMPUTER_FOR_COMMAND, browserIsThePlace, chosenPin, cloudPickWithoutComputer, noticeWithoutCloudComputer, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, failedOnHostPath, openBrowserBeside, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, WITHOUT_CLOUD_COMPUTER_NOTE, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
 import {
   PendingTurnCancellations,
   ProviderTurnGenerationRegistry,
@@ -12797,7 +12798,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const body = await readInternalBody();
         try {
           const vm = await attachmentVmForTurn(internalCapability);
-          if (!vm) return json(res, 409, { error: "You have no Local VM desktop in this turn, so there is nowhere to run a command." });
+          if (!vm) return json(res, 409, { error: NO_COMPUTER_FOR_COMMAND });
           const runtime = (await containerRuntimeStatus()).runtime;
           requireActiveInternalCapability();
           if (!runtime || !internalCapabilityIsActive({ ...internalCapability, localVmTarget: vm }) ||
@@ -14512,7 +14513,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           services: {},
         });
       }
-      const status = await composio.connectionStatus(cfg, services.length ? services : composio.CURATED_SLUGS); if (services.length) connectCardSettle.services(status); // Settings polls these after Connect: older open cards stop waiting.
+      const status = await connectorStatusForSettings(cfg, await composio.connectionStatus(cfg, services.length ? services : composio.CURATED_SLUGS), services.length ? connectCardSettle.services : undefined); // Settings polls these after Connect: older open cards stop waiting, judged by the real status.
       return json(res, 200, { configured: true, services: status });
     }
     m = path.match(/^\/api\/connectors\/([\w-]+)\/authorize$/);
