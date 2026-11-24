@@ -168,7 +168,7 @@ beforeAll(async () => {
     }
 
     const apiKey = String(req.headers["x-api-key"] ?? "");
-    if (!["ak_test", "ak_catalog_a", "ak_catalog_b", "ak_catalog_auth", "ak_catalog_pages", "ak_catalog_partial", "ak_catalog_stuck",
+    if (!["ak_test", "ak_catalog_a", "ak_catalog_b", "ak_catalog_auth", "ak_catalog_connector", "ak_catalog_pages", "ak_catalog_partial", "ak_catalog_stuck",
         "ak_catalog_page_stuck", "ak_catalog_exhausted", "ak_catalog_stalled_total", "ak_catalog_end_short",
         "ak_catalog_http_no_total", "ak_catalog_own", "ak_catalog_own_fail"].includes(apiKey)) {
       res.writeHead(401, { "content-type": "application/json" });
@@ -300,6 +300,12 @@ beforeAll(async () => {
       }
       if (apiKey === "ak_catalog_b") {
         return res.end(JSON.stringify({ items: [{ slug: "linear", name: "Catalog B" }] }));
+      }
+      if (apiKey === "ak_catalog_connector") {
+        return res.end(JSON.stringify({ items: [
+          { slug: "COMPOSIO", name: "Composio", no_auth: true },
+          { slug: "gmail", name: "Gmail" },
+        ], current_page: 1, total_pages: 1, total_items: 2 }));
       }
       if (apiKey === "ak_catalog_auth" || apiKey === "ak_catalog_own" || apiKey === "ak_catalog_own_fail") {
         return res.end(JSON.stringify({ items: [
@@ -500,6 +506,13 @@ describe.sequential("Composio Sessions", () => {
       "ak_catalog_a",
       "ak_catalog_b",
     ]);
+  });
+
+  it("does not offer Composio's own toolkit as an app", async () => {
+    const { cards, pagination } = await listToolkits({ composio: { apiKey: "ak_catalog_connector" } });
+
+    expect(cards.map((card) => card.slug)).toEqual(["gmail"]);
+    expect(pagination).toMatchObject({ items: 2, stalled: false, complete: true });
   });
 
   it("flags only the toolkits that Composio lists with no managed sign-in", async () => {

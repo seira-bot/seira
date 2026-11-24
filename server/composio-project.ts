@@ -48,6 +48,9 @@ export function canonicalToolkitSlug(slug: string): string {
   return normalized === "x" ? "twitter" : normalized;
 }
 
+/** Composio's own toolkit holds the connector tools, needs no sign-in, and refuses an authorize call. */
+export const isConnectorToolkit = (slug: string): boolean => canonicalToolkitSlug(slug) === "composio";
+
 export type AuthConfigMap = Record<string, string>;
 
 const authConfigItemSchema = z.object({

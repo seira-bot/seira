@@ -9,7 +9,7 @@ import {
   apiBase,
   canonicalToolkitSlug,
   deleteConnectedAccount,
-  inputError,
+  inputError, isConnectorToolkit,
   keepAuthConfigPick,
   listConnectedAccounts,
   MAX_CONNECTED_ACCOUNT_PAGES,
@@ -996,6 +996,7 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
         const uniqueCards = cards.filter(
           (card, index) => card.slug && cards.findIndex((candidate) => candidate.slug === card.slug) === index,
         );
+        const offered = uniqueCards.filter((card) => !isConnectorToolkit(card.slug));
         const shortOfReportedTotal = reportedTotalItems !== undefined && uniqueCards.length < reportedTotalItems;
         const pagingStoppedEarly = lastReportedPage !== undefined
           && reportedTotalPages !== undefined
@@ -1012,8 +1013,8 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
               + "; serving a partial marketplace",
           );
         }
-        toolkitCache = { at: Date.now(), cards: uniqueCards, identity: identity!, pagination };
-        return { cards: uniqueCards, source: "api", pagination };
+        toolkitCache = { at: Date.now(), cards: offered, identity: identity!, pagination };
+        return { cards: offered, source: "api", pagination };
       }
     } catch {}
   }

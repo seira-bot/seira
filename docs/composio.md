@@ -174,6 +174,10 @@ A bot can also name one auth config for an app: `COMPOSIO_MANAGE_CONNECTIONS` wi
 
 A connected-apps service named with `SEIRA_COMPOSIO_BROKER_URL` runs on its own Composio project, which cannot use an auth config in yours. For such an app it says so in one line: add your own Composio project key in **Settings → AI → Other services**; Seira then uses your auth config for that app from that project.
 
+## Composio's own toolkit
+
+The Apps catalog does not list the `composio` toolkit. It holds the connector tools that every bot already has. It needs no sign-in, so a Connect button would only show an error. Its tools keep working.
+
 ## Browser authorization recovery
 
 The web UI reserves an authorization tab during your click, before requesting
