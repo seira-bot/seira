@@ -2,7 +2,7 @@
 // docker standing in for a VPS: a bot's old desktop is never swapped for the person's own computer, an old Local VM updates
 // itself while nothing uses it and keeps its sign-ins, and a turn that needs that desktop waits for it.
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
