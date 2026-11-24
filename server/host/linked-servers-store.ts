@@ -9,6 +9,7 @@ import { z } from "zod";
 import { writeFileAtomic } from "../atomic.ts";
 import { placeSchema, type Place } from "../bot-link/protocol.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
+import { checkOriginText, loopbackAllowed } from "./linked-servers-egress.ts";
 
 export const GUEST_TOKEN_PREFIX = "lsk_";
 export const INVITE_TTL_MS = 15 * 60_000;
@@ -118,15 +119,13 @@ export function decodeInvite(text: string): Invite | null {
   } catch { return null; }
 }
 
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/** Security invariant: another server is asked only at https, or at http on this machine's loopback, and never at an
- * address that carries a user name or password. Null for any other address. */
-export function guestOrigin(value: string): string | null {
+/** Security invariant: another server is asked only at an https address that is not a local or private address literal,
+ * and never at an address that carries a user name or password. Whether a name resolves to a public address is checked
+ * at every connect, in `linked-servers-egress.ts`. Null for any other address. A test may allow this machine's loopback. */
+export function guestOrigin(value: string, allowLoopback = loopbackAllowed()): string | null {
   let url: URL;
   try { url = new URL(value); } catch { return null; }
-  if (url.username || url.password) return null;
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && LOOPBACK.has(url.hostname))) return null;
+  try { checkOriginText(url, allowLoopback); } catch { return null; }
   return url.origin;
 }
 
