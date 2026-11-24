@@ -1362,10 +1362,10 @@
   ],
   "third_party/browser/agent-browser-windows-stdio.patch": [
     "0f4d904791708de0",
-    "64941d86474a7bd3",
     "774d26ced4ea7b71",
     "774d26ced4ea7b71",
     "b8ef0bfbad7bd71a",
+    "d324ff00516a49bd",
     "fa43c5a6c1bb6ce3",
     "fa43c5a6c1bb6ce3",
     "ff180fac9c187dd7"

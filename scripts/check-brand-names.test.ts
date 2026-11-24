@@ -42,13 +42,23 @@ describe("old upstream names", () => {
     }
   });
 
+  it("counts two lines that differ only in spaces inside a string as two lines", () => {
+    const one = 'const a = "omb  x";';
+    const two = 'const a = "omb x";';
+    const found = find({ "a.ts": `${one}\n${two}` });
+    expect(new Set(found["a.ts"]).size).toBe(2);
+    const baseline = { "a.ts": [lineHash(two)] };
+    expect(compare(find({ "a.ts": one }), baseline)).toEqual([{ path: "a.ts", line: lineHash(one), found: 1, allowed: 0 }]);
+  });
+
   it("keeps no line text in the baseline: only 16-character hashes", () => {
     const text = 'const home = "/home/ada/.openmausbot";';
     const found = find({ "a.ts": text });
     expect(found["a.ts"]).toEqual([lineHash(text)]);
     expect(found["a.ts"][0]).toMatch(/^[0-9a-f]{16}$/);
     expect(JSON.stringify(found)).not.toContain("/home/");
-    expect(lineHash("  a   b ")).toBe(lineHash("a b"));
+    expect(lineHash("  a b ")).toBe(lineHash("a b"));
+    expect(lineHash("a   b")).not.toBe(lineHash("a b"));
     expect(lineHash("a")).not.toBe(lineHash("b"));
     expect(findLines(["a.ts"], () => text)).toEqual({ "a.ts": [text] });
   });

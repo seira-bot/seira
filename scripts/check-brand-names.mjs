@@ -50,8 +50,8 @@ export const KEEP_TOKENS = [
 /** The line without its kept tokens. */
 export const withoutKept = (line) => KEEP_TOKENS.reduce((rest, keep) => rest.replace(keep, " "), line);
 
-/** A line in the baseline: the first 16 hex characters of sha256 over the line with whitespace folded. */
-export const lineHash = (line) => createHash("sha256").update(line.trim().replace(/\s+/g, " ")).digest("hex").slice(0, 16);
+/** A line in the baseline: the first 16 hex characters of sha256 over the line. Only the ends are trimmed: spaces inside the line count, so two strings that differ in inner spaces are two lines. */
+export const lineHash = (line) => createHash("sha256").update(line.trim()).digest("hex").slice(0, 16);
 
 /** Offending lines per file, as text, with repeats. Used for the failure message only. */
 export function findLines(files, read) {
