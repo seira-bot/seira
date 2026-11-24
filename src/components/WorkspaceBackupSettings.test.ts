@@ -170,6 +170,60 @@ describe("Settings full backups", () => {
       expect(await exportNow()).not.toHaveProperty("leaveOut");
     });
 
+    it("shows a line and no numbers, no switch and a normal export when the server answers 403 (Team Cloud)", async () => {
+      await openWithSizes(Object.assign(new Error("Backup sizes are not available on a Team Cloud"), { status: 403 }));
+      const html = render().html;
+      expect(html).toContain("data-backup-sizes-unavailable");
+      expect(html).toContain("Sizes are not shown here");
+      expect(html).not.toContain("data-backup-sizes=");
+      expect(html).not.toContain("data-backup-total");
+      expect(html).not.toMatch(/\d+(\.\d)? (B|KB|MB|GB)/);
+      expect(render().nodes.some((node) => (node.props as Record<string, unknown>)["data-backup-leave-out"] !== undefined)).toBe(false);
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {} });
+    });
+
+    it("drops the late size reply of an earlier opening of the form and keeps the choice the person made", async () => {
+      await ready();
+      let lateReply!: (value: unknown) => void;
+      fixture.api.mockReturnValueOnce(new Promise((resolve) => { lateReply = resolve; }));
+      open("export");
+      render().nodes.find((node) => node.type === "button" && node.props.children === "Cancel")?.props.onClick?.();
+      fixture.api.mockResolvedValueOnce(sizesReply);
+      open("export"); await flush();
+      leaveOutSwitch().props.onClick!();
+      lateReply({ parts: { chats: 1, memory: 1, attachments: 1, "work-folders": 1, other: 1 }, total: 5, canLeaveOut: [] }); await flush();
+      const html = render().html;
+      expect(html).toMatch(/data-backup-total=""[^>]*>4\.8 MB</);
+      expect(leaveOutSwitch().props).toMatchObject({ checked: true });
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {}, leaveOut: ["work-folders"] });
+    });
+
+    it("drops a size reply that arrives after the form was closed", async () => {
+      await ready();
+      let lateReply!: (value: unknown) => void;
+      fixture.api.mockReturnValueOnce(new Promise((resolve) => { lateReply = resolve; }));
+      open("export");
+      render().nodes.find((node) => node.type === "button" && node.props.children === "Cancel")?.props.onClick?.();
+      lateReply(sizesReply); await flush();
+      expect(render().html).not.toContain("data-backup-sizes");
+    });
+
+    it("stops with a message, and sends nothing, when the chosen part can no longer be left out", async () => {
+      await openWithSizes(sizesReply);
+      leaveOutSwitch().props.onClick!();
+      const slot = fixture.values.findIndex((value) => !!value && typeof value === "object" && "request" in (value as object));
+      const state = fixture.values[slot] as { sizes: { canLeaveOut: string[] } };
+      fixture.values[slot] = { ...state, sizes: { ...state.sizes, canLeaveOut: [] } };
+      const passwords = render().nodes.filter((node) => node.type === "input" && node.props.type === "password");
+      change(passwords[0], "correct horse battery"); change(passwords[1], "correct horse battery");
+      const calls = fixture.api.mock.calls.length;
+      submit(formOf("backup-export")); await flush();
+      expect(fixture.api.mock.calls.length).toBe(calls);
+      const html = render().html;
+      expect(html).toMatch(/role="alert"[^>]*>The server can no longer leave out the part you chose, so no backup was made/);
+      expect(html).toContain('id="backup-export"');
+    });
+
     it("lists the parts that a backup left out in the restore preview, and nothing when it left none out", () => {
       const left = renderToStaticMarkup(createElement(WorkspaceBackupSummaryView, { summary: { ...summary, leftOut: ["work-folders"] } }));
       expect(left).toContain("Left out on purpose");

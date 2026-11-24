@@ -9,6 +9,11 @@ import { backupSizeText, readBackupSizes, sortedBackupParts, totalWithout, type 
 import { LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsRows, Switch } from "./SettingsPrimitives";
 import { SettingsDialog } from "./settings/SettingsDialog";
 
+/** The size report of one opening of the export form. `request` is 0 when no form is open. */
+type SizesState = { request: number; sizes: WorkspaceBackupSizes | null; unavailable: boolean };
+const NO_SIZES: SizesState = { request: 0, sizes: null, unavailable: false };
+let sizesRequestCounter = 0;
+
 /** `leftOut` is the part list that an export with the leave-out option puts in its summary. */
 type BackupSummary = WorkspaceBackupSummary & { leftOut?: string[] };
 
@@ -113,7 +118,8 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
   const [confirmation, setConfirmation] = useState("");
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [sizes, setSizes] = useState<WorkspaceBackupSizes | null>(null);
+  const [sizesState, setSizesState] = useState<SizesState>(NO_SIZES);
+  const sizes = sizesState.sizes;
   const [leaveOut, setLeaveOut] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [more, setMore] = useState(false);
@@ -148,8 +154,10 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
 
   const exportBackup = () => perform("export", async () => {
     if (!validPassword(exportPassword) || exportPassword !== confirmPassword) return;
-    // Only a part that the person switched off, and that the server says it can leave out, goes in the request.
-    const skipped = sizes ? leaveOut.filter((part) => sizes.canLeaveOut.includes(part)) : [];
+    // A part that the person switched off must go in the request. If the server no longer lists it as one it can
+    // leave out, stop with a message: a silent full export would put the files back in a backup the person trimmed.
+    if (leaveOut.some((part) => !sizes?.canLeaveOut.includes(part))) throw new Error(t("backup.leaveOutUnavailable"));
+    const skipped = leaveOut;
     const result: { id: string; filename: string } = await api("/api/workspace-backup/export", {
       method: "POST", body: JSON.stringify({ password: exportPassword, clientState: collectWorkspaceClientState(), ...(skipped.length ? { leaveOut: skipped } : {}) }),
     });
@@ -164,6 +172,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
     link.click();
     link.remove();
     setExporting(false);
+    setSizesState(NO_SIZES);
   });
 
   const previewBackup = () => perform("preview", async () => {
@@ -216,17 +225,22 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
   });
 
   const disabled = busy !== null || !status || status.busy || Boolean(status.pendingRestore);
-  const closeExport = () => { setExporting(false); setExportPassword(""); setConfirmPassword(""); setLeaveOut([]); };
+  const closeExport = () => { setExporting(false); setExportPassword(""); setConfirmPassword(""); setLeaveOut([]); setSizesState(NO_SIZES); };
   // The size report is read-only. A server without it (older version) answers with an error: the form then works as before, with no sizes.
+  // A Team Cloud answers 403: the totals would include other members' private data, so the form shows a line and no numbers.
+  // Each opening of the form has its own request number, and a reply for an earlier opening is dropped.
   const openExport = () => {
-    setExporting(true); setSizes(null); setLeaveOut([]);
+    const request = ++sizesRequestCounter;
+    setExporting(true); setSizesState({ request, sizes: null, unavailable: false }); setLeaveOut([]);
     void (async () => {
-      try { const reply: unknown = await api("/api/workspace-backup/sizes"); if (alive.current) setSizes(readBackupSizes(reply)); }
-      catch { if (alive.current) setSizes(null); }
+      let result: Pick<SizesState, "sizes" | "unavailable">;
+      try { result = { sizes: readBackupSizes(await api("/api/workspace-backup/sizes")), unavailable: false }; }
+      catch (cause) { result = { sizes: null, unavailable: cause instanceof Error && "status" in cause && cause.status === 403 }; }
+      if (alive.current) setSizesState((current) => current.request === request ? { request, ...result } : current);
     })();
   };
   const toggleLeaveOut = (part: string) => setLeaveOut((current) => current.includes(part) ? current.filter((item) => item !== part) : [...current, part]);
-  const sizeSection = () => sizes && <section data-backup-sizes="" className="flex flex-col gap-2 rounded-[12px] border-[0.5px] border-(--settings-edge) bg-menu p-3">
+  const sizeSection = () => sizesState.unavailable ? <p data-backup-sizes-unavailable="" role="status" className="text-[12px] leading-4 text-ink-secondary">{t("backup.sizes.unavailable")}</p> : sizes && <section data-backup-sizes="" className="flex flex-col gap-2 rounded-[12px] border-[0.5px] border-(--settings-edge) bg-menu p-3">
     <h3 className="text-[14px] font-medium text-ink">{t("backup.sizes.title")}</h3>
     <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-[13px]">
       {sortedBackupParts(sizes).map((part) => <Fragment key={part}>
