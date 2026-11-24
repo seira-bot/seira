@@ -13,9 +13,9 @@ import { createHash } from "node:crypto";
 import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep, win32 } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
-import type { BoxRequest } from "./bot-box/plan.ts";
+import { runnableInBox, type BoxRequest } from "./bot-box/plan.ts";
 import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
@@ -23,8 +23,8 @@ import { engineOwners } from "./engine-owners.ts";
 import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./engine-records.ts";
 import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
-import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
-import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { findCliCandidates, resolveCliSpawn, runnableFile, type ResolvedSpawn } from "./env-path.ts";
+import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, runsInSandbox, type HostSpawn } from "./flatpak-host.ts";
 import { botMemoryGuard } from "./bot-memory-guard.ts";
 import { memoryFence, type FencedSpawn } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
@@ -281,6 +281,36 @@ export function boxedSpawn(resolved: ResolvedSpawn, opts: CliSpawnOptions, owner
   const request = typeof opts.box === "object" ? opts.box : {};
   const home = homed ? { home: homed.home, shared: homed.shared } : {};
   return botBox.wrap({ command: resolved.command, args: resolved.args, cwd: typeof opts.cwd === "string" ? opts.cwd : undefined, env: opts.env ?? process.env, ...spawnConversation(), ...request, ...home });
+}
+
+/** Looks a program up by name where an engine launched with `cli` will run it, with the PATH and the files it will have there. */
+export interface ProgramView {
+  find(name: string): string | undefined;
+}
+
+/** The view of a spawn of `cli` as `spawnCli` will make it: in the bot box (its PATH, and only the files its plan shows), on
+ * the host a Flatpak launches from (the host's PATH and files), or on this computer without the folders the bots can write.
+ * Null when that view cannot be known now, so the caller never guesses: in a box in a Flatpak (refused at the launch), and
+ * in an engine home of a Team Cloud (made at the launch). Empty and relative PATH entries are never searched. */
+export function programViewFor(cli: string, opts: { cwd?: string; env: NodeJS.ProcessEnv; allowEnv?: string[] }): ProgramView | null {
+  const absolute = (path: string | undefined) => (path ?? "").split(delimiter).filter((dir) => dir && (isAbsolute(dir) || win32.isAbsolute(dir))).join(delimiter);
+  const conversation = spawnConversation();
+  const resolved = resolveCli(cli, [], opts.env);
+  if (botBox.takes({ cwd: opts.cwd, ...conversation })) {
+    if (inFlatpak() || (engineHomes.active() && engineHomes.thread() !== undefined)) return null;
+    const seen = botBox.view({ command: resolved.command, args: [], cwd: opts.cwd, env: opts.env, ...conversation, ...(opts.allowEnv ? { allowEnv: opts.allowEnv } : {}) });
+    if (!seen) return null;
+    const path = absolute(seen.path);
+    return { find: (name) => findCliCandidates(name, path).find((found) => runnableInBox(seen.plan, found, runnableFile)) };
+  }
+  if (inFlatpak()) {
+    // The host's own lookup tests each file there (flatpak-host.ts); an engine that runs inside the sandbox has another view.
+    if (runsInSandbox(resolved.command)) return null;
+    const path = absolute(opts.env.PATH);
+    return { find: (name) => findCliCandidates(name, path)[0] };
+  }
+  const path = absolute(programsDistrusted() ? serverPath(opts.env.PATH) : opts.env.PATH);
+  return { find: (name) => findCliCandidates(name, path).find((found) => runnableFile(found) !== null) };
 }
 
 /** What the audience rule and the bot's folders give a box in `cwd` now, as a key (null off a team with no folder

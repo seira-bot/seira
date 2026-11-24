@@ -140,7 +140,14 @@ export class BoxRunner {
     return this.lent.get(`${botId}/${threadId}`) ?? [];
   }
 
-  wrap(given: BoxRequest): WrappedSpawn {
+  /** What a spawn of `given` would get: its folder plan and the PATH it would run with, with nothing made, opened or minted.
+   * `wrap` is built on it, so a lookup and the launch cannot see different boxes. */
+  view(given: BoxRequest): { plan: BoxPlan; path: string | undefined } {
+    const made = this.prepare(given, false);
+    return { plan: made.plan, path: made.env.PATH };
+  }
+
+  private prepare(given: BoxRequest, make: boolean): { request: BoxRequest; plan: BoxPlan; env: Record<string, string>; seccomp: string | null } {
     const ids = given.cwd ? taskWorkspaceIds(given.cwd, this.options.setup.dataDir) : null;
     const { botId, threadId } = this.conversation(given);
     const lent = botId && threadId ? this.lentTo(botId, threadId) : [];
@@ -150,23 +157,22 @@ export class BoxRunner {
     const limitedOwn = folders?.limited && !given.home && !ids && botId ? { botId, threadId } : null;
     const uploads = ids ?? (limitedOwn?.threadId ? { botId: limitedOwn.botId, threadId: limitedOwn.threadId } : null);
     // Made before the box starts, so an upload a later turn adds shows up in a box that is still running.
-    if (uploads) try { mkdirSync(boxUploadsDir(this.options.setup.dataDir, uploads.botId, uploads.threadId), { recursive: true, mode: 0o700 }); } catch (error) {
+    if (make && uploads) try { mkdirSync(boxUploadsDir(this.options.setup.dataDir, uploads.botId, uploads.threadId), { recursive: true, mode: 0o700 }); } catch (error) {
       // The bind stays optional, but an upload named later would then be unreadable in this box: say so.
       console.error(`bot box: could not make the uploads folder, so uploads stay unreadable in this box: ${error instanceof Error ? error.message : String(error)}`);
     }
     // A room's turn in the bot's own folder: the team's notes and skills are bound read-only only where they exist, so
     // they are made first, or the turn could make them.
     const team = audience?.teamReadOnly && given.cwd ? teamFolderOf(botId, resolve(given.cwd), this.options.setup.dataDir) : null;
-    if (team && under(resolve(given.cwd!), team) && existsSync(team)) {
+    if (make && team && under(resolve(given.cwd!), team) && existsSync(team)) {
       for (const name of TEAM_FOLDER_KEPT) if (name !== "MEMORY.md") try { mkdirSync(join(team, name), { recursive: true, mode: 0o700 }); } catch {}
     }
     const request: BoxRequest = {
       ...given, ...(lent.length ? { rw: [...(given.rw ?? []), ...lent] } : {}), ...(audience ? { audience } : {}), ...(folders ? { folders } : {}),
       ...(limitedOwn && !given.botId ? { botId: limitedOwn.botId } : {}), ...(limitedOwn?.threadId && !given.threadId ? { threadId: limitedOwn.threadId } : {}),
     };
-    const extraFds: number[] = [];
     const seccomp = this.options.seccompFile && !this.options.setup.mutate?.has("no-seccomp") ? this.options.seccompFile : null;
-    if (request.folders?.limited && !request.home) makeSignInProgramFolders(this.options.setup.home, this.options.setup.dataDir);
+    if (make && request.folders?.limited && !request.home) makeSignInProgramFolders(this.options.setup.home, this.options.setup.dataDir);
     const plan = planBox({ ...this.options.setup, seccompFd: seccomp ? BOX_SECCOMP_FD : undefined }, request);
     const mutate = this.options.setup.mutate;
     const env = mutate?.has("env-all")
@@ -175,6 +181,12 @@ export class BoxRunner {
     // The server's own PATH leaves out the programs in HOME (program-trust.ts); inside the box they are the bot's own.
     const homePrograms = homeProgramDirs(resolve(request.home ?? this.options.setup.home)).filter((dir) => !(env.PATH ?? "").split(":").includes(dir));
     if (homePrograms.length) env.PATH = [...(env.PATH ? [env.PATH] : []), ...homePrograms].join(":");
+    return { request, plan, env, seccomp };
+  }
+
+  wrap(given: BoxRequest): WrappedSpawn {
+    const { request, plan, env, seccomp } = this.prepare(given, true);
+    const extraFds: number[] = [];
     if (plan.net === "isolated") {
       const proxy = `http://127.0.0.1:${this.options.egressPort ?? BOX_EGRESS_PORT}`;
       for (const name of BOX_PROXY_ENV) env[name] = proxy;
@@ -356,6 +368,14 @@ export class BotBox {
 
   /** The filter file each box gets, for a self-check. */
   seccomp(): string | null { return this.seccompFile; }
+
+  /** The plan and PATH of the box this spawn would run in, or null when it is not boxed here. Makes and opens nothing. */
+  view(request: BoxRequest): { plan: BoxPlan; path: string | undefined } | null {
+    if (!this.runner) return null;
+    const folders = this.boxScope === "limited" ? this.runner.foldersFor(request) : null;
+    if (this.boxScope === "limited" && folders?.limited !== true) return null;
+    return this.runner.view(folders ? { ...request, folders } : request);
+  }
 
   /** The box for one spawn, or null when this spawn is not boxed here. */
   wrap(request: BoxRequest): WrappedSpawn | null {
