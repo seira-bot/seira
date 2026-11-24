@@ -201,6 +201,13 @@ describe("CLI startup lifecycle", () => {
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
+  it("does not start the server when Funnel forwards to it", async () => {
+    mocks.tailscaleServe.mockResolvedValue({ failure: "funnel-open" });
+    await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: funnel-open");
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(mocks.tailscaleStop).not.toHaveBeenCalled();
+  });
+
   it.each([
     { outcome: "success", result: { origin: "https://fixture.tail.test", stop: mocks.tailscaleStop }, stops: 1 },
     { outcome: "failure", result: { failure: "unknown" }, stops: 0 },

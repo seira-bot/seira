@@ -25,6 +25,7 @@ export type TailscaleFailure =
   | "https-not-enabled"
   | "other-server"
   | "port-taken"
+  | "funnel-open"
   | "unknown";
 
 export function classifyTailscaleStderr(text: string): TailscaleFailure {
@@ -56,6 +57,8 @@ export function explainTailscaleFailure(reason: TailscaleFailure): string {
       return "this machine's tailnet name already fronts a different Seira server: stop that one, or pass --port for this one";
     case "port-taken":
       return "another tailscale serve rule or session already uses this port; run `tailscale serve status` to see it";
+    case "funnel-open":
+      return "Tailscale Funnel is on for a port that reaches this server, so the internet could reach it: turn Funnel off for that port (run `tailscale funnel status` to see it), then try again";
     default:
       return "Tailscale reported an error; run `tailscale status` and `tailscale serve status` to see it";
   }
@@ -109,6 +112,40 @@ export function servePortState(config: unknown, dnsName: string, httpsPort: numb
     return ours.includes(target) ? "ours" : "taken";
   }
   return sessionList.some((session) => field(field(session, "TCP"), key) !== undefined) ? "taken" : "free";
+}
+
+/** True when a serve target (`http://127.0.0.1:8799`, `localhost:8799`, `http://[::1]:8799/`) is this server's own port on this machine. */
+function targetsLocalServer(target: unknown, localPort: number): boolean {
+  if (typeof target !== "string") return false;
+  const text = target.trim();
+  let url: URL | null = null;
+  try { url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`); } catch { /* not a URL */ }
+  if (!url) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const port = url.port || (url.protocol === "https:" || url.protocol === "https+insecure:" ? "443" : "80");
+  return ["127.0.0.1", "localhost", "::1", "0.0.0.0", "::"].includes(host) && port === String(localPort);
+}
+
+/**
+ * The first port on which Tailscale Funnel, in the saved config or in a foreground session, forwards to this server,
+ * on any port and any name, whether or not Seira would use that port. Null when none does. Funnel sends internet
+ * traffic to its target, so a server that says only the tailnet can reach it must not start next to one.
+ */
+export function funnelPortToLocalServer(config: unknown, localPort: number): number | null {
+  const sessions = field(config, "Foreground");
+  const configs = [config, ...(typeof sessions === "object" && sessions !== null ? Object.values(sessions) : [])];
+  for (const one of configs) {
+    const open = field(one, "AllowFunnel");
+    if (typeof open !== "object" || open === null) continue;
+    for (const [hostPort, on] of Object.entries(open)) {
+      if (on !== true) continue;
+      const port = Number(hostPort.slice(hostPort.lastIndexOf(":") + 1));
+      const handlers = field(field(field(one, "Web"), hostPort), "Handlers");
+      const proxied = typeof handlers === "object" && handlers !== null && Object.values(handlers).some((handler) => targetsLocalServer(field(handler, "Proxy"), localPort));
+      if (proxied || targetsLocalServer(field(field(field(one, "TCP"), String(port)), "TCPForward"), localPort)) return Number.isInteger(port) ? port : 0;
+    }
+  }
+  return null;
 }
 
 export function parseTailscaleStatus(cli: string, stdout: string): TailscaleStatus | null {
@@ -240,6 +277,11 @@ export async function tailscaleServe(
   const serving: number[] = [];
   const stopAll = () => Promise.all(running.map((one) => one.stop())).then(() => undefined);
   const config = await (options.serveConfig ?? (async () => null))();
+  const exposed = funnelPortToLocalServer(config, localPort);
+  if (exposed !== null) {
+    options.log?.(`tailscale: Tailscale Funnel is on for port ${exposed} and forwards to this server, so the internet could reach it. Seira does not start and leaves that setting as it is (to close it: tailscale funnel --https=${exposed} off).`);
+    return { failure: "funnel-open" };
+  }
   for (const httpsPort of wanted) {
     const state = servePortState(config, dnsName, httpsPort, localPort);
     if (state === "funnel") {

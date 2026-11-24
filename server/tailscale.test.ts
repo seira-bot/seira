@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { chooseTailscaleHttpsPorts, classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, parseTailscaleStatus, servePortState, tailnetListenFallback, tailscaleHttpsProblem, tailscaleMarker, tailscalePortsFile, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
+import { chooseTailscaleHttpsPorts, classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, funnelPortToLocalServer, parseTailscaleStatus, servePortState, tailnetListenFallback, tailscaleHttpsProblem, tailscaleMarker, tailscalePortsFile, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
 
 describe("tailscale helpers", () => {
   it("reads the MagicDNS name, addresses and state from status --json", () => {
@@ -362,9 +362,9 @@ describe("tailscale serve rules that exist already", () => {
       dataDir: dir, httpsPorts: [443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
       serveConfig: async () => ({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:443": true } }),
     });
-    expect(result).toEqual({ failure: "port-taken" });
+    expect(result).toEqual({ failure: "funnel-open" });
     expect(fake.calls).toEqual([]);
-    expect(lines).toEqual([expect.stringContaining("port 443 is open to the internet through Tailscale Funnel, so Seira does not use it")]);
+    expect(lines).toEqual([expect.stringContaining("Tailscale Funnel is on for port 443 and forwards to this server")]);
     expect(existsSync(tailscalePortsFile(dir))).toBe(false);
     expect(existsSync(tailscaleMarker(dir))).toBe(false);
   }));
@@ -382,12 +382,40 @@ describe("tailscale serve rules that exist already", () => {
     expect(lines).toEqual(["tailscale: port 443 already has a tailscale serve rule for this server, so Seira uses that rule and leaves it on."]);
   }));
 
-  it("skips a second port that Funnel opens, serves the first, and does not touch the Funnel setting", () => inTempDir(async (dir) => {
+  it("does not start when Funnel on a second port forwards to this server, and does not touch the Funnel setting", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const result = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ ...rule(8443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:8443": true } }),
+    });
+    expect(result).toEqual({ failure: "funnel-open" });
+    expect(fake.calls).toEqual([]);
+    expect(lines).toEqual([expect.stringContaining("Tailscale Funnel is on for port 8443 and forwards to this server")]);
+    expect(existsSync(tailscalePortsFile(dir))).toBe(false);
+    expect(existsSync(tailscaleMarker(dir))).toBe(false);
+  }));
+
+  it("does not start when Funnel forwards to this server on a port Seira does not use", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const result = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ ...rule(10000, "http://localhost:8799/"), AllowFunnel: { "mini.tail1234.ts.net:10000": true } }),
+    });
+    expect(result).toEqual({ failure: "funnel-open" });
+    expect(fake.calls).toEqual([]);
+    expect(lines).toEqual([expect.stringContaining("port 10000")]);
+    expect(existsSync(tailscalePortsFile(dir))).toBe(false);
+    expect(existsSync(tailscaleMarker(dir))).toBe(false);
+  }));
+
+  it("skips a second port that Funnel opens to something else, serves the first, and does not touch the Funnel setting", () => inTempDir(async (dir) => {
     const fake = fakeSpawn();
     const lines: string[] = [];
     const served = await tailscaleServe(status, 8799, {
       dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
-      serveConfig: async () => ({ ...rule(8443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:8443": true } }),
+      serveConfig: async () => ({ ...rule(8443, "http://127.0.0.1:9000"), AllowFunnel: { "mini.tail1234.ts.net:8443": true } }),
     });
     if ("failure" in served) throw new Error(served.failure);
     expect(fake.calls).toEqual([["serve", "--https=443", "http://127.0.0.1:8799"]]);
@@ -396,6 +424,30 @@ describe("tailscale serve rules that exist already", () => {
     await served.stop();
     expect(fake.killed.map(([port]) => port)).toEqual(["443"]);
   }));
+
+  it("finds a Funnel that forwards to this server, in any port, session, name or target form, and ignores the rest", () => {
+    const name = "other.tail1234.ts.net";
+    const open = (port: number, host = name) => ({ [`${host}:${port}`]: true });
+    const web = (port: number, proxy: string, host = name) => ({ TCP: { [port]: { HTTPS: true } }, Web: { [`${host}:${port}`]: { Handlers: { "/api": { Proxy: proxy } } } } });
+    expect(funnelPortToLocalServer({ ...web(9443, "http://127.0.0.1:8799"), AllowFunnel: open(9443) }, 8799)).toBe(9443);
+    expect(funnelPortToLocalServer({ ...web(9443, "localhost:8799"), AllowFunnel: open(9443) }, 8799)).toBe(9443);
+    expect(funnelPortToLocalServer({ ...web(9443, "http://[::1]:8799"), AllowFunnel: open(9443) }, 8799)).toBe(9443);
+    expect(funnelPortToLocalServer({ Foreground: { abc123: { ...web(10000, "http://127.0.0.1:8799"), AllowFunnel: open(10000) } } }, 8799)).toBe(10000);
+    expect(funnelPortToLocalServer({ TCP: { 10000: { TCPForward: "127.0.0.1:8799" } }, AllowFunnel: open(10000) }, 8799)).toBe(10000);
+    expect(funnelPortToLocalServer({ ...web(9443, "http://127.0.0.1:9000"), AllowFunnel: open(9443) }, 8799)).toBeNull();
+    expect(funnelPortToLocalServer({ ...web(9443, "http://127.0.0.1:8799"), AllowFunnel: { [`${name}:9443`]: false } }, 8799)).toBeNull();
+    expect(funnelPortToLocalServer({ ...web(9443, "http://127.0.0.1:8799") }, 8799)).toBeNull();
+    expect(funnelPortToLocalServer({ ...web(9443, "http://192.0.2.10:8799"), AllowFunnel: open(9443) }, 8799)).toBeNull();
+    expect(funnelPortToLocalServer(null, 8799)).toBeNull();
+  });
+
+  it("never listens on the tailnet instead when Funnel reaches this server", () => {
+    const interfaces = { tailscale0: [{ address: "100.64.0.5" }] };
+    const withAddress = { ...status, addresses: ["100.64.0.5"] };
+    expect(tailnetListenFallback("https-not-enabled", withAddress, 8799, interfaces)).not.toBeNull();
+    expect(tailnetListenFallback("funnel-open", withAddress, 8799, interfaces)).toBeNull();
+    expect(explainTailscaleFailure("funnel-open")).toContain("Funnel");
+  });
 
   it("reports port-taken when tailscaled refuses the listener", () => inTempDir(async (dir) => {
     const fake = fakeSpawn([443], "error: listener already exists for port 443");
