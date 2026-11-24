@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addedLines, exemptFromGeneric, fileLines, findLeaks, privatePatterns } from "./check-local-leaks.mjs";
+import { addedLines, applyAuditAllow, exemptFromGeneric, fileLines, findLeaks, privatePatterns } from "./check-local-leaks.mjs";
 
 const labels = (lines, options) => findLeaks(lines, options).map((f) => `${f.path}:${f.line}: ${f.label}`);
 const one = (text, path = "docs/setup.md") => labels([{ path, line: 1, text }]);
@@ -160,5 +160,25 @@ describe("fileLines", () => {
   it("checks a binary file only for home paths and private patterns", () => {
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0]), Buffer.from("tEXt /home/alex/x/ -----BEGIN RSA PRIVATE KEY-----")]);
     expect(labels(fileLines("a.png", png))).toEqual(["a.png:0: home folder path (Linux)"]);
+  });
+});
+
+describe("applyAuditAllow", () => {
+  const found = [
+    { path: "a.ts", line: 1, label: "private key" },
+    { path: "b.ts", line: 2, label: "private key" },
+  ];
+  it("drops a finding that has a matching path and rule, and keeps the rest", () => {
+    const { kept, stale } = applyAuditAllow(found, [{ path: "a.ts", rule: "private key", reason: "x" }]);
+    expect(kept).toEqual([found[1]]);
+    expect(stale).toEqual([]);
+  });
+  it("does not allow another rule in the same file", () => {
+    const { kept } = applyAuditAllow(found, [{ path: "a.ts", rule: "provider API key", reason: "x" }]);
+    expect(kept).toEqual(found);
+  });
+  it("reports an entry that matches nothing as stale", () => {
+    const entry = { path: "gone.ts", rule: "private key", reason: "x" };
+    expect(applyAuditAllow(found, [entry]).stale).toEqual([entry]);
   });
 });

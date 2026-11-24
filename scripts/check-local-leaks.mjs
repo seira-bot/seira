@@ -4,7 +4,8 @@
 //
 //   node scripts/check-local-leaks.mjs            lines added since origin/main, plus untracked files
 //   node scripts/check-local-leaks.mjs --staged   lines added in the index (the pre-commit hook)
-//   node scripts/check-local-leaks.mjs --all      every line of every file (an audit of the whole tree)
+//   node scripts/check-local-leaks.mjs --all      every line of every file (an audit of the whole tree);
+//                                                 reads scripts/check-local-leaks.audit-allow.json
 //
 // .leakcheck.local (gitignored) holds one regular expression per line, matched without case:
 // your user name, host aliases, LAN addresses, private repo names. They apply to every file.
@@ -100,6 +101,20 @@ export function findLeaks(lines, { privateRules = [], generic = true } = {}) {
   return found;
 }
 
+// Only `--all` reads this list. Each entry names a file, a rule and one reason. The generic rules stay as they are.
+// An entry that no longer matches a finding is stale, and the audit fails so the list stays true.
+export function applyAuditAllow(found, allow) {
+  const used = new Set();
+  const kept = found.filter(({ path, label }) => {
+    const i = allow.findIndex((entry) => entry.path === path && entry.rule === label);
+    if (i < 0) return true;
+    used.add(i);
+    return false;
+  });
+  const stale = allow.filter((_, i) => !used.has(i));
+  return { kept, stale };
+}
+
 const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 1 << 30 });
 const gitOk = (args, cwd) => {
   try {
@@ -137,9 +152,15 @@ function main(argv) {
   const localFile = join(root, ".leakcheck.local");
   const privateRules = existsSync(localFile) ? privatePatterns(readFileSync(localFile, "utf8")) : [];
   const merging = gitOk(["rev-parse", "-q", "--verify", "MERGE_HEAD"], root);
-  const found = findLeaks(linesToCheck(mode, root), { privateRules, generic: !merging });
+  let found = findLeaks(linesToCheck(mode, root), { privateRules, generic: !merging });
+  let stale = [];
+  if (mode === "--all") {
+    const allowFile = join(root, "scripts/check-local-leaks.audit-allow.json");
+    ({ kept: found, stale } = applyAuditAllow(found, existsSync(allowFile) ? JSON.parse(readFileSync(allowFile, "utf8")) : []));
+  }
   for (const { path, line, label } of found) console.log(`${path}:${line}: ${label}`);
-  if (found.length === 0) return 0;
+  for (const { path, rule } of stale) console.log(`${path}: stale audit-allow entry (${rule})`);
+  if (found.length === 0 && stale.length === 0) return 0;
   console.log("\ncheck-local-leaks: remove these details, or move them to a *.local file or AGENTS.local.md.");
   console.log('See "Local details stay local" in AGENTS.md.');
   return 1;

@@ -1,0 +1,132 @@
+[
+  {
+    "path": "apps/docs/content/docs/connected-apps/self-hosted-composio.mdx",
+    "rule": "secret value in an assignment",
+    "reason": "Docs example: the key value is a placeholder."
+  },
+  {
+    "path": "docs/composio.md",
+    "rule": "secret value in an assignment",
+    "reason": "Docs example: the key value is a placeholder."
+  },
+  {
+    "path": "cloudflare/composio-broker/src/test-harness.ts",
+    "rule": "secret value in an assignment",
+    "reason": "Fixed test values in a test harness, not real secrets."
+  },
+  {
+    "path": "cloudflare/control-plane/.dev.vars.example",
+    "rule": "secret value in an assignment",
+    "reason": "Example file with placeholder values."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push-fcm.ts",
+    "rule": "private key",
+    "reason": "A regex that validates the PEM header; it holds no key."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push-fcm.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A token URL constant named GOOGLE_TOKEN_URL, not a secret."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push.ts",
+    "rule": "private key",
+    "reason": "A regex that validates the PEM header; it holds no key."
+  },
+  {
+    "path": "cloudflare/control-plane/vitest.config.ts",
+    "rule": "secret value in an assignment",
+    "reason": "Fixed values that are marked test-only."
+  },
+  {
+    "path": "companion/src/index.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A constant that reads a value by function call; the value is not in the source."
+  },
+  {
+    "path": "electron/companion-account-documents.mjs",
+    "rule": "secret value in an assignment",
+    "reason": "A constant whose value is a field name, not a secret."
+  },
+  {
+    "path": "electron/lent-folders.mjs",
+    "rule": "home folder path (Windows)",
+    "reason": "A code comment that explains case folding, with a made-up path."
+  },
+  {
+    "path": "electron/managed-companion-tunnel.mjs",
+    "rule": "secret value in an assignment",
+    "reason": "Constants whose values are field names, not secrets."
+  },
+  {
+    "path": "electron/move-failure.mjs",
+    "rule": "secret value in an assignment",
+    "reason": "A regex constant named TOKEN that redacts long strings."
+  },
+  {
+    "path": "scripts/capture-companion-fixtures.mjs",
+    "rule": "secret value in an assignment",
+    "reason": "A random token made at run time for a local fixture run."
+  },
+  {
+    "path": "scripts/verify-company-backups.mjs",
+    "rule": "secret value in an assignment",
+    "reason": "A fixed password for an isolated local backup check."
+  },
+  {
+    "path": "server/browser-steps.ts",
+    "rule": "secret value in an assignment",
+    "reason": "Regex constants that detect secret-like field names."
+  },
+  {
+    "path": "server/drivers/acp/exit-report.ts",
+    "rule": "private key",
+    "reason": "A redaction placeholder string; it holds no key."
+  },
+  {
+    "path": "server/drivers/acp/exit-report.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A constant that lists secret-like names for redaction."
+  },
+  {
+    "path": "server/drivers/acp/kimi.ts",
+    "rule": "secret value in an assignment",
+    "reason": "Code that sets an env variable from a function result; no literal value."
+  },
+  {
+    "path": "server/drivers/antigravity-skills.ts",
+    "rule": "home folder path (Windows)",
+    "reason": "A code comment with a made-up runner path."
+  },
+  {
+    "path": "server/mcp-gate-config.ts",
+    "rule": "secret value in an assignment",
+    "reason": "Code that sets a token-count limit, not a secret."
+  },
+  {
+    "path": "server/safety-floor.ts",
+    "rule": "home folder path (Windows)",
+    "reason": "A code comment that shows how Git Bash spells a path, with a made-up user."
+  },
+  {
+    "path": "server/setup-import.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A regex constant that detects secret-like words."
+  },
+  {
+    "path": "server/vault-store.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A file-name constant, not a secret."
+  },
+  {
+    "path": "shared/grok-import.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A regex constant that detects secret-like URL parameters."
+  },
+  {
+    "path": "shared/redact.ts",
+    "rule": "secret value in an assignment",
+    "reason": "A regex constant that redacts secret flags."
+  }
+]
