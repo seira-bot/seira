@@ -19,6 +19,7 @@ import { BrowserRuntime } from "../browser-runtime.ts";
 import { LentChromeDoors, type ChromeLender } from "../browser/lent-chrome.ts";
 import { audienceBrowserSuffix } from "../browser/audience.ts";
 import { chromeLauncher, ChromeLauncher } from "../browser/chrome/launcher.ts";
+import { SourceStillOpen } from "../browser/chrome/seed.ts";
 import type { ChromePlan } from "../browser/chrome/resolve.ts";
 import type { CdpSession, Params } from "../browser/cdp/connection.ts";
 import { FileChoosers } from "../browser/cdp/files.ts";
@@ -320,6 +321,37 @@ describe("a bot's first browser on Seira's own engine, from its agent-browser pr
     agentBrowserRunning(own.session);
     await host.agentBrowserProfileFor("bot:scout");
     expect(vi.mocked(closeBrowserSession).mock.calls.map(([binary, env]) => `${binary} ${env.AGENT_BROWSER_SESSION}`)).toEqual([`${ENGINE} ${own.session}`]);
+  });
+
+  it("names no folder when the agent-browser browser does not close: the copy stops and says why", async () => {
+    ready();
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    agentBrowserRunning(own.session);
+    vi.mocked(closeBrowserSession).mockResolvedValue(false);
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toBeInstanceOf(SourceStillOpen);
+    vi.mocked(closeBrowserSession).mockRejectedValue(new Error("no answer"));
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toThrow(/still open/);
+  });
+
+  it("names no folder when a browser runs and the engine is not ready to close it: nothing is copied", async () => {
+    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "unavailable", reason: "agent-browser is not installed on this machine yet", installable: true });
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    agentBrowserRunning(own.session);
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toBeInstanceOf(SourceStillOpen);
+    expect(closeBrowserSession).not.toHaveBeenCalled();
+  });
+
+  it("names the folder when the engine is not ready but no browser runs for the session", async () => {
+    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "unavailable", reason: "agent-browser is not installed on this machine yet", installable: true });
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    const folder = earlierProfile(own.session);
+    expect(await host.agentBrowserProfileFor("bot:scout")).toBe(folder);
+    expect(closeBrowserSession).not.toHaveBeenCalled();
   });
 
   it("closes nothing when no agent-browser browser runs for the session", async () => {

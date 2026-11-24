@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { LEGACY_PROFILE_RECORD } from "../../../electron/legacy-names.mjs";
 
 /** Every Chrome-related file Seira keeps lives under `<data dir>/browser`. */
@@ -171,6 +171,22 @@ export function versionOf(product: string): string {
   return /(\d+(?:\.\d+){1,3})/.exec(product)?.[1] ?? product;
 }
 
+/** Where a profile copied from another browser is built before it moves into place: one known folder under the browser root. */
+export function seedingDir(profile: string): string {
+  return join(dirname(dirname(profile)), "seeding", basename(profile));
+}
+
+/** The exact name an earlier version gave a copy in progress: `<hash>.seeding`, beside the profile. A profile hash is 24 hex characters. */
+export const OLD_STAGING_NAME = /^[0-9a-f]{24}\.seeding$/;
+
+/** The earlier layout's staging folder of `profile`, or null when `profile` is not a profile folder named by a hash. */
+export function oldSeedingDir(profile: string): string | null {
+  return /^[0-9a-f]{24}$/.test(basename(profile)) ? `${profile}.seeding` : null;
+}
+
 export function removeProfile(dir: string): void {
+  rmSync(seedingDir(dir), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  const old = oldSeedingDir(dir);
+  if (old) rmSync(old, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

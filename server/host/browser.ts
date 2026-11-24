@@ -37,6 +37,7 @@ import { namedUploadPaths } from "../browser-upload.ts";
 import { createBrowserDaemons } from "./browser-daemons.ts";
 import type { BrowserSitesRef } from "../routes/browser-sites.ts";
 import { chromeLauncher } from "../browser/chrome/launcher.ts";
+import { SourceStillOpen } from "../browser/chrome/seed.ts";
 import { LAUNCHER_SECCOMP_FD, browserLanguage, type LauncherBox } from "../browser/chrome/wrapper.ts";
 import type { HostKind } from "../browser/chrome/flags.ts";
 import { effectiveBrowserEngine, type BrowserEngineKind } from "../browser/config.ts";
@@ -179,7 +180,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     if (!session) return null;
     const folder = browserProfileDirectory(session, DATA_DIR);
     if (!existsSync(folder)) return null;
-    await closeLeftover(session, "before its profile was copied to the new browser");
+    if (!await closeLeftover(session, "before its profile was copied to the new browser", true)) throw new SourceStillOpen();
     return folder;
   }
   const lendRefusal = deps.lendRefusal ?? ((): LendRefusal => "unproven");
@@ -204,17 +205,24 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     // A browser already running when this server first opens the session's door was told another address: an earlier
     // server's door, gone after a restart, or none. An attached browser is never swept or idle-closed, so it is closed
     // before anything uses the new door.
-    if (!doors.owns(session)) leftovers.set(session, closeLeftover(session));
+    if (!doors.owns(session)) leftovers.set(session, closeLeftover(session).then(() => undefined));
     const url = await doors.door(session);
     await leftovers.get(session);
     doorUrls.set(session, url);
     return url;
   }
-  async function closeLeftover(session: string, reason = "before its door to your Chrome opened"): Promise<void> {
+  /** False only when a browser is running for the session and did not close. A profile copy (`copying`) also counts a
+   * browser it can't close because the engine is not ready; the door path leaves such a browser alone. */
+  async function closeLeftover(session: string, reason = "before its door to your Chrome opened", copying = false): Promise<boolean> {
     const engine = browserEngineStatus();
-    if (engine.kind !== "ready" || !browserRunning(session, undefined)) return;
+    if (!browserRunning(session, undefined)) return true;
+    if (engine.kind !== "ready") {
+      if (copying) console.warn(`browser ${session}: a browser is running and the engine can't close it ${reason}`);
+      return !copying;
+    }
     const closed = await closeBrowserSession(engine.binaryPath, browserRuntimeEnv({ AGENT_BROWSER_SESSION: session })).catch(() => false);
     if (!closed) console.warn(`browser ${session}: could not close the browser left running ${reason}`);
+    return closed;
   }
   /** A profile switched back to the built-in browser keeps its session name and its door, but its calls no longer use it. */
   function viaDoor(session: string, spec: { env: NodeJS.ProcessEnv }): boolean {

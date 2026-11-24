@@ -2,7 +2,7 @@
 // docker standing in for a VPS: a bot's old desktop is never swapped for the person's own computer, an old Local VM updates
 // itself while nothing uses it and keeps its sign-ins, and a turn that needs that desktop waits for it.
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -49,7 +49,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
   let home = "";
   let data = "";
   let stateFile = "";
-  let dumpFile = "";
+  let dumpDir = "";
   let finishFile = "";
   let fakeBin = "";
   let output = "";
@@ -79,14 +79,19 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
       await new Promise(resolve => setTimeout(resolve, 40));
     }
   }
-  /** The dump is rewritten by every dispatch; this waits for the turn that was sent `text`. */
+  const dumpNames = () => readdirSync(dumpDir).filter((name) => name.endsWith(".json"));
+  /** Every dispatch writes a dump file of its own; this waits for the one whose prompt holds `text`. A turn another run recovers
+   * after a restart writes a file of its own too, so it cannot overwrite the dump of the turn under test. */
   const dumpFor = (text: string) => until<any>(() => {
-    if (!existsSync(dumpFile)) return null;
-    try {
-      const sent = JSON.parse(readFileSync(dumpFile, "utf8"));
-      return JSON.stringify(sent.prompt ?? "").includes(text) ? sent : null;
-    } catch { return null; }
+    for (const name of dumpNames()) {
+      try {
+        const sent = JSON.parse(readFileSync(join(dumpDir, name), "utf8"));
+        if (JSON.stringify(sent.prompt ?? "").includes(text)) return sent;
+      } catch { /* written atomically, but a file may vanish between listing and reading */ }
+    }
+    return null;
   }, Boolean, `the turn for "${text}"`);
+  const dumps = () => dumpNames().length;
   const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).body.messages as any[];
   const idle = (botId: string, threadId: string) => until(() => api("GET", "/api/bots?messages=0").then(({ body }) =>
     body.bots.find((bot: any) => bot.id === botId)?.tasks.find((task: any) => task.threadId === threadId)), task => !task?.busy, "the turn ending");
@@ -145,7 +150,8 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     home = mkdtempSync(join(tmpdir(), "seira-desktop-updates-"));
     data = join(home, "data");
     stateFile = join(home, "vm.json");
-    dumpFile = join(home, "dump.json");
+    dumpDir = join(home, "dumps");
+    mkdirSync(dumpDir);
     finishFile = join(home, "finish");
     fakeBin = join(home, "fakebin");
     mkdirSync(data);
@@ -165,7 +171,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     }), { mode: 0o600 });
     writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
-      environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
+      environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP_DIR: dumpDir, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
     } } }));
   });
   afterAll(async () => {
@@ -174,7 +180,8 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
   });
   afterEach(async () => {
     await stop();
-    rmSync(dumpFile, { force: true });
+    rmSync(dumpDir, { recursive: true, force: true });
+    mkdirSync(dumpDir);
   });
 
   it("gives an Auto chat no computer and a plain note, updates the desktop by itself keeping sign-ins, then uses it", async () => {
@@ -221,7 +228,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     await apiOk("PATCH", `/api/bots/${bot.id}`, { computer: "vm" });
     const threadId = await send(bot.id, "Fill the form in your desktop.");
     await until(() => messages(threadId), list => list.some(m => m.tool?.name === LOCAL_VM_UPDATING), "the plain waiting line");
-    expect(existsSync(dumpFile)).toBe(false);
+    expect(dumps()).toBe(0);
     expect(actions()).toEqual([]);
     vm({ ...readVm(), holdPull: false });
     const sent = await dumpFor("Fill the form in your desktop.");
@@ -243,7 +250,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     const threadId = await until<string>(() => api("GET", "/api/routines").then(({ body }) =>
       body.runs.find((run: any) => run.id === started.run.id)?.threadId), Boolean, "the routine thread");
     await until(() => messages(threadId), list => list.some(m => m.tool?.name === LOCAL_VM_UPDATING), "the routine waiting for the desktop");
-    expect(existsSync(dumpFile)).toBe(false);
+    expect(dumps()).toBe(0);
     vm({ ...readVm(), holdPull: false });
     const sent = await dumpFor("Open the morning report on the desktop.");
     const computer = sent.mcpConfig.mcpServers.computer;

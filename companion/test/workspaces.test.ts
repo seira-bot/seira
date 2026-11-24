@@ -4,23 +4,33 @@ import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi
 
 import {
   parsePhoneWorkspaceList,
+  parsePhoneWorkspaceSwitch,
+  phoneWorkspaceSwitchStatusRoute,
   PHONE_WORKSPACE_SWITCH_ROUTE,
   PHONE_WORKSPACES_ROUTE,
   type PhoneWorkspace,
   type PhoneWorkspaceList,
+  type PhoneWorkspaceSwitch,
+  type PhoneWorkspaceSwitchResponse,
 } from "../../packages/phone-protocol/src/workspaces.ts";
 import { createProxyHandler, type ProxyListener } from "../src/proxy.ts";
 import {
   createWorkspaces,
   WORKSPACE_SWITCH_MESSAGE,
+  WORKSPACE_SWITCH_RESULT_MESSAGE,
   WORKSPACE_SWITCH_ROUTE,
   WORKSPACES_MESSAGE,
   WORKSPACES_ROUTE,
   type Workspace,
+  type WorkspaceSwitch,
 } from "../src/workspaces.ts";
 
+const OPERATION = expect.stringMatching(/^[0-9a-f]{32}$/);
 const TOKEN = "seira_test_token";
 const OTHER_TOKEN = "seira_other_token";
+const PEER_TOKEN = "seira_peer_token";
+const ENV_LOCAL = "0b1e6a52-4f7c-4a0e-9d8c-3a5f2b7c9e11";
+const ENV_WORK = "7d3f9c14-8a2b-4c5e-b6d7-1e9a0f3c5b28";
 
 const LIST = [
   { id: "local", name: "This PC", current: true, state: "ready" },
@@ -50,12 +60,13 @@ beforeAll(async () => {
     harnessPort: (harness.address() as AddressInfo).port,
     authenticate: (token) => {
       if (token === TOKEN) return !paired ? null : { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces };
+      if (token === PEER_TOKEN) return { id: "device-3", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces: true };
       if (token === OTHER_TOKEN) return { id: "device-2", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces: false };
       return null;
     },
     redeem: () => ({ error: "no", code: "pairing_invalid" }) as never,
     serverName: () => "Test computer",
-    workspaces: { list: () => workspaces.list(), switchTo: (body) => workspaces.switchTo(body) },
+    workspaces: { list: () => workspaces.list(), switchTo: (body, owner) => workspaces.switchTo(body, owner), operation: (id, owner) => workspaces.operation(id, owner) },
   });
   sidecar = createServer((req, res) => proxy(req, res, listener));
   await new Promise<void>((resolve) => sidecar.listen(0, "127.0.0.1", resolve));
@@ -200,7 +211,7 @@ describe("a request to switch", () => {
     workspaces = createWorkspaces({ send: (message) => sent.push(message as Record<string, unknown>), settleMs: 10_000 });
     facts(LIST);
     const pending = call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
-    await vi.waitFor(() => expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]));
+    await vi.waitFor(() => expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work", operation: OPERATION }]));
     facts([{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting", waitingFor: "Scout" }, { id: "home", current: false, state: "unavailable" }]);
     const { status, json } = await pending;
     expect(status).toBe(200);
@@ -219,13 +230,13 @@ describe("a request to switch", () => {
     await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
     expect(sent).toEqual([]);
     await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work", now: true });
-    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "hurry", id: "work" }]);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "hurry", id: "work", operation: OPERATION }]);
   });
 
   it("asks the app to cancel when the phone names the current workspace while a switch waits (AC 6)", async () => {
     facts([{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting", waitingFor: "Scout" }]);
     await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "local" });
-    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "cancel", id: "local" }]);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "cancel", id: "local", operation: OPERATION }]);
   });
 
   it("does nothing for the current workspace when no switch waits", async () => {
@@ -292,7 +303,7 @@ describe("a phone that may not open other workspaces", () => {
     expect(sent).toEqual([]);
     const allowed = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
     expect(allowed.status).toBe(200);
-    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work", operation: OPERATION }]);
     expect((await call("GET", WORKSPACES_ROUTE, undefined, OTHER_TOKEN)).json.workspaces).toHaveLength(1);
     expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
   });
@@ -362,7 +373,7 @@ describe("a phone that may not open other workspaces", () => {
     facts(LIST);
     const { status } = await callWhileBodyWaits({ id: "work" }, () => {});
     expect(status).toBe(200);
-    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work", operation: OPERATION }]);
   });
 
   it("lists the current workspace only, on the next request after the owner turns the phone off", async () => {
@@ -416,6 +427,9 @@ describe("the contract", () => {
     expect(WORKSPACE_SWITCH_ROUTE).toBe(PHONE_WORKSPACE_SWITCH_ROUTE);
     expectTypeOf<Workspace>().toEqualTypeOf<PhoneWorkspace>();
     expectTypeOf<{ workspaces: Workspace[] }>().toEqualTypeOf<PhoneWorkspaceList>();
+    expectTypeOf<WorkspaceSwitch>().toEqualTypeOf<PhoneWorkspaceSwitch>();
+    expectTypeOf<{ workspaces: Workspace[]; switch?: WorkspaceSwitch }>().toEqualTypeOf<PhoneWorkspaceSwitchResponse>();
+    expect(phoneWorkspaceSwitchStatusRoute("abc")).toBe(`${WORKSPACE_SWITCH_ROUTE}/abc`);
   });
 
   it("reads a state it does not know as unavailable, and drops what has no id", () => {
@@ -440,5 +454,215 @@ describe("the contract", () => {
     facts(LIST);
     const { json } = await call("GET", WORKSPACES_ROUTE);
     expect(parsePhoneWorkspaceList(json).workspaces).toEqual(json.workspaces);
+  });
+});
+
+const FACTS = [
+  { id: "local", name: "This PC", environmentId: ENV_LOCAL, current: true, state: "ready" },
+  { id: "work", name: "Work", environmentId: ENV_WORK, current: false, state: "ready" },
+  { id: "home", name: "Home", current: false, state: "ready" },
+];
+const statusOf = (id: string, token: string | null = TOKEN) => call("GET", `${WORKSPACE_SWITCH_ROUTE}/${id}`, undefined, token);
+const finish = (id: string, outcome: string) => workspaces.receive({ type: WORKSPACE_SWITCH_RESULT_MESSAGE, id, outcome });
+
+describe("the target environment of each workspace", () => {
+  it("lists the environmentId that the app knows, and leaves it out when it does not", async () => {
+    facts(FACTS);
+    const { json } = await call("GET", WORKSPACES_ROUTE);
+    expect(json.workspaces.map((workspace: Workspace) => workspace.environmentId)).toEqual([ENV_LOCAL, ENV_WORK, undefined]);
+    expect(Object.keys(json.workspaces[2]).sort()).toEqual(["current", "id", "name", "state"]);
+  });
+
+  it("drops a value that is not an environment id, whatever the app sent", async () => {
+    facts([{ id: "local", current: true, state: "ready", environmentId: "/home/someone/.seira" }, { id: "work", current: false, state: "ready", environmentId: 7 }, { id: "home", current: false, state: "ready", environmentId: ENV_WORK.toUpperCase() }]);
+    const { json } = await call("GET", WORKSPACES_ROUTE);
+    expect(json.workspaces.map((workspace: Workspace) => workspace.environmentId)).toEqual([undefined, undefined, ENV_WORK]);
+  });
+
+  it("is read by the phone protocol, and a bad value reads as absent", () => {
+    expect(parsePhoneWorkspaceList({ workspaces: [{ id: "a", environmentId: ENV_WORK, state: "ready" }, { id: "b", environmentId: "nope", state: "ready" }] }).workspaces.map((workspace) => workspace.environmentId)).toEqual([ENV_WORK, undefined]);
+  });
+});
+
+describe("the operation of a switch", () => {
+  it("answers a started switch with its id, the target environment and the state pending, next to the list", async () => {
+    facts(FACTS);
+    const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(status).toBe(200);
+    expect(json.workspaces).toHaveLength(3);
+    expect(json.switch).toEqual({ id: OPERATION, workspaceId: "work", environmentId: ENV_WORK, state: "pending" });
+    expect(Object.keys(json.switch).sort()).toEqual(["environmentId", "id", "state", "workspaceId"]);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work", operation: json.switch.id }]);
+  });
+
+  it("leaves the environment out for a target that has none, and gives each switch its own id", async () => {
+    facts(FACTS);
+    const first = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "home" })).json.switch;
+    const second = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "home" })).json.switch;
+    expect(first.environmentId).toBeUndefined();
+    expect(first.id).not.toBe(second.id);
+  });
+
+  it("answers the list alone when nothing starts, as before", async () => {
+    facts(FACTS);
+    const { json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "local" });
+    expect(Object.keys(json)).toEqual(["workspaces"]);
+  });
+
+  it("lets the phone read when the switch is complete, by id (done)", async () => {
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    expect((await statusOf(id)).json).toEqual({ switch: { id, workspaceId: "work", environmentId: ENV_WORK, state: "pending" } });
+    finish(id, "done");
+    expect((await statusOf(id)).json.switch.state).toBe("done");
+    finish(id, "failed");
+    expect((await statusOf(id)).json.switch.state, "an ended switch does not change").toBe("done");
+  });
+
+  it("reads a failed switch as failed", async () => {
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    finish(id, "failed");
+    expect((await statusOf(id)).json.switch.state).toBe("failed");
+  });
+
+  it("ignores a result with an unknown id or an unknown outcome", async () => {
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    expect(finish("f".repeat(32), "done")).toBe(true);
+    expect(finish(id, "exploded")).toBe(true);
+    expect(workspaces.receive({ type: WORKSPACE_SWITCH_RESULT_MESSAGE, id: 7, outcome: "done" })).toBe(true);
+    expect((await statusOf(id)).json.switch.state).toBe("pending");
+  });
+
+  it("changes only the switch that a result names, to the outcome it names", async () => {
+    facts(FACTS);
+    const first = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    facts([FACTS[0], { ...FACTS[1], state: "waiting", waitingFor: "Scout" }, FACTS[2]]);
+    const hurry = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work", now: true })).json.switch;
+    const cancel = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "local" })).json.switch;
+    finish(hurry.id, "done");
+    expect((await statusOf(first.id)).json.switch.state, "a hurry result does not reach an earlier switch").toBe("pending");
+    expect((await statusOf(cancel.id)).json.switch.state, "nor a later one").toBe("pending");
+    finish(cancel.id, "failed");
+    finish(first.id, "superseded");
+    expect((await statusOf(first.id)).json.switch.state, "a later cancel that failed is not the cause").toBe("superseded");
+    expect((await statusOf(hurry.id)).json.switch.state).toBe("done");
+    expect((await statusOf(cancel.id)).json.switch.state).toBe("failed");
+  });
+
+  it("reads each outcome that the app names: done, failed, superseded and cancelled", async () => {
+    facts(FACTS);
+    const ids: string[] = [];
+    for (const outcome of ["done", "failed", "superseded", "cancelled"]) {
+      const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+      finish(id, outcome);
+      ids.push(id);
+    }
+    expect(await Promise.all(ids.map(async (id) => (await statusOf(id)).json.switch.state))).toEqual(["done", "failed", "superseded", "cancelled"]);
+  });
+
+  it("does not let another phone's result end the switch of this phone", async () => {
+    facts(FACTS);
+    const older = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" }, TOKEN)).json.switch;
+    const newer = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "home" }, PEER_TOKEN)).json.switch;
+    finish(newer.id, "superseded");
+    expect((await statusOf(older.id)).json.switch.state).toBe("pending");
+  });
+
+  it("answers 404 switch_not_found for an unknown id, an id that cannot be one, and another phone's switch", async () => {
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    for (const wrong of ["f".repeat(32), "short", "%zz", "..%2f..%2fetc", "A".repeat(32), "x".repeat(300)]) {
+      const reply = await statusOf(wrong);
+      expect([reply.status, reply.json], wrong).toEqual([404, { error: "switch_not_found" }]);
+    }
+    const foreign = await statusOf(id, PEER_TOKEN);
+    expect([foreign.status, foreign.json]).toEqual([404, { error: "switch_not_found" }]);
+    expect((await statusOf(id)).status).toBe(200);
+    expect(JSON.stringify(foreign.json)).not.toContain(id);
+  });
+
+  it("refuses the read route to a phone that may not open other workspaces, an unpaired phone, and before the app sent facts", async () => {
+    expect((await statusOf("f".repeat(32))).status, "no facts yet").toBe(404);
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    expect((await statusOf(id, OTHER_TOKEN)).status).toBe(403);
+    expect((await statusOf(id, null)).status).toBe(401);
+    otherWorkspaces = false;
+    expect((await statusOf(id)).status, "turned off after the switch started").toBe(403);
+    otherWorkspaces = true;
+    paired = false;
+    expect((await statusOf(id)).status).toBe(401);
+    paired = true;
+    facts(null);
+    expect((await statusOf(id)).status, "home is not this computer").toBe(404);
+  });
+
+  it("answers itself, never asks the server, and takes no other path below the route", async () => {
+    facts(FACTS);
+    const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+    for (const way of ["lan", "origin"] as const) {
+      listener = way;
+      expect((await statusOf(id)).status).toBe(200);
+    }
+    expect((await call("GET", `${WORKSPACE_SWITCH_ROUTE}/${id}/more`)).status).toBe(404);
+    expect((await call("POST", `${WORKSPACE_SWITCH_ROUTE}/${id}`, {})).status).toBe(404);
+    expect(harnessHits).toEqual([]);
+  });
+
+  it("never holds more than 50 switches, not even right after an insert and before any read", async () => {
+    let counter = 0;
+    // The history is private, so a spy on Map.set finds it. A read prunes too, so only its size right after a switch counts.
+    const maps = new Set<Map<unknown, unknown>>();
+    const set = Map.prototype.set;
+    const spy = vi.spyOn(Map.prototype, "set").mockImplementation(function (this: Map<unknown, unknown>, key: unknown, value: unknown) {
+      if (typeof key === "string" && /^[0-9a-f]{32}$/.test(key)) maps.add(this);
+      return set.call(this, key, value);
+    });
+    try {
+      const channel = createWorkspaces({ send: () => {}, settleMs: 1, now: () => 1_000_000, newId: () => (++counter).toString(16).padStart(32, "0") });
+      channel.receive({ type: WORKSPACES_MESSAGE, workspaces: FACTS });
+      for (let index = 0; index < 53; index++) {
+        await channel.switchTo({ id: "work" }, "device-1");
+        for (const map of maps) expect(map.size, `after switch ${index + 1}`).toBeLessThanOrEqual(50);
+      }
+      expect(maps.size).toBeGreaterThan(0);
+      expect(channel.operation("00000000000000000000000000000035", "device-1").status).toBe(200);
+      expect(channel.operation("00000000000000000000000000000003", "device-1").status).toBe(404);
+      expect(channel.operation("00000000000000000000000000000004", "device-1").status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps a switch for 30 minutes, then forgets it, and keeps the last 50", () => {
+    let time = 1_000_000;
+    let counter = 0;
+    const channel = createWorkspaces({ send: () => {}, settleMs: 1, now: () => time, newId: () => (++counter).toString(16).padStart(32, "0") });
+    channel.receive({ type: WORKSPACES_MESSAGE, workspaces: FACTS });
+    return (async () => {
+      const first = (await channel.switchTo({ id: "work" }, "device-1")).body as { switch: WorkspaceSwitch };
+      expect(channel.operation(first.switch.id, "device-1").status).toBe(200);
+      time += 30 * 60_000;
+      expect(channel.operation(first.switch.id, "device-1").status, "30 minutes exactly is still kept").toBe(200);
+      time += 1;
+      expect(channel.operation(first.switch.id, "device-1").status).toBe(404);
+      const ids: string[] = [];
+      for (let index = 0; index < 52; index++) ids.push(((await channel.switchTo({ id: "work" }, "device-1")).body as { switch: WorkspaceSwitch }).switch.id);
+      expect(channel.operation(ids[0], "device-1").status).toBe(404);
+      expect(channel.operation(ids[1], "device-1").status).toBe(404);
+      expect(channel.operation(ids[2], "device-1").status).toBe(200);
+      expect(channel.operation(ids[51], "device-1").status).toBe(200);
+    })();
+  });
+});
+
+describe("the phone protocol reads a switch", () => {
+  it("reads the switch of a response and of the read route, and a state it does not know as pending", () => {
+    expect(parsePhoneWorkspaceSwitch({ id: "a", workspaceId: "work", environmentId: ENV_WORK, state: "done" })).toEqual({ id: "a", workspaceId: "work", environmentId: ENV_WORK, state: "done" });
+    expect(parsePhoneWorkspaceSwitch({ id: "a", workspaceId: "work", state: "teleporting" })).toEqual({ id: "a", workspaceId: "work", state: "pending" });
+    expect(parsePhoneWorkspaceSwitch({ id: "a", workspaceId: "work", environmentId: "/etc", state: "failed" })).toEqual({ id: "a", workspaceId: "work", state: "failed" });
+    for (const bad of [null, "x", {}, { id: "a" }, { workspaceId: "w" }]) expect(parsePhoneWorkspaceSwitch(bad)).toBeNull();
   });
 });

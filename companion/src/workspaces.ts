@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 /** The workspaces of this computer, as a paired phone lists them and asks for one to open. The wire contract is
  * packages/phone-protocol/src/workspaces.ts (this build cannot import from that package; a test keeps the two in step).
  *
@@ -9,12 +11,20 @@ export const WORKSPACE_SWITCH_ROUTE = "/api/phones/self/workspaces/switch";
 
 export const WORKSPACES_MESSAGE = "seira:companion-workspaces";
 export const WORKSPACE_SWITCH_MESSAGE = "seira:companion-workspace-switch";
+/** The desktop app tells the end of a switch with this message: `{ type, id: <operation id>, outcome }`. */
+export const WORKSPACE_SWITCH_RESULT_MESSAGE = "seira:companion-workspace-switch-result";
 
 const STATES = ["ready", "waiting", "unavailable"] as const;
 const MAX_WORKSPACES = 50;
+const ENVIRONMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A switch is kept for this long after it started, and no more than MAX_OPERATIONS at once, in memory only. */
+const OPERATION_TTL_MS = 30 * 60_000;
+const MAX_OPERATIONS = 50;
+const OUTCOMES = ["done", "failed", "superseded", "cancelled"] as const;
 
 export interface Workspace {
   id: string;
+  environmentId?: string;
   name?: string;
   color?: string;
   current: boolean;
@@ -24,22 +34,44 @@ export interface Workspace {
 
 export type WorkspaceSwitchAction = "open" | "hurry" | "cancel";
 
+export type SwitchState = "pending" | "done" | "failed" | "cancelled" | "superseded";
+
+export interface WorkspaceSwitch {
+  id: string;
+  workspaceId: string;
+  environmentId?: string;
+  state: SwitchState;
+}
+
 export interface WorkspaceReply {
   status: number;
   body: unknown;
 }
 
+/** `owner`: the id of the paired phone that asks. A switch belongs to its owner, and no other phone reads it. */
 export interface WorkspaceChannel {
   list(): Workspace[] | null;
-  switchTo(request: Record<string, unknown>): Promise<WorkspaceReply>;
+  switchTo(request: Record<string, unknown>, owner: string): Promise<WorkspaceReply>;
+  operation(id: string, owner: string): WorkspaceReply;
 }
 
-export type WorkspaceRoute = "list" | "switch";
+export type WorkspaceRoute = "list" | "switch" | "operation";
 
 export function workspaceRoute(method: string, path: string): WorkspaceRoute | null {
   if (method === "GET" && path === WORKSPACES_ROUTE) return "list";
   if (method === "POST" && path === WORKSPACE_SWITCH_ROUTE) return "switch";
+  if (method === "GET" && path.startsWith(`${WORKSPACE_SWITCH_ROUTE}/`) && !path.slice(WORKSPACE_SWITCH_ROUTE.length + 1).includes("/")) return "operation";
   return null;
+}
+
+/** The operation id the read route names, or "" for an id that cannot be one (so it answers 404 like an unknown id). */
+function operationIdOf(path: string): string {
+  try {
+    const id = decodeURIComponent(path.slice(WORKSPACE_SWITCH_ROUTE.length + 1));
+    return /^[0-9a-f]{32}$/.test(id) ? id : "";
+  } catch {
+    return "";
+  }
 }
 
 const text = (value: unknown, limit: number): string | undefined =>
@@ -65,7 +97,8 @@ function cleanList(value: unknown): Workspace[] | null {
     const name = text(raw.name, 80);
     const color = text(raw.color, 32);
     const waitingFor = state === "waiting" ? text(raw.waitingFor, 80) : undefined;
-    out.push({ id, ...(name ? { name } : {}), ...(color ? { color } : {}), current, state, ...(waitingFor ? { waitingFor } : {}) });
+    const environmentId = typeof raw.environmentId === "string" && ENVIRONMENT_ID.test(raw.environmentId) ? raw.environmentId.toLowerCase() : undefined;
+    out.push({ id, ...(environmentId ? { environmentId } : {}), ...(name ? { name } : {}), ...(color ? { color } : {}), current, state, ...(waitingFor ? { waitingFor } : {}) });
   }
   return out;
 }
@@ -74,12 +107,35 @@ function cleanList(value: unknown): Workspace[] | null {
  * bounded, and the phone gets the list as it is when the app does not answer in time. */
 const SETTLE_MS = 1_500;
 
-export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
+interface Operation extends WorkspaceSwitch {
+  owner: string;
+  action: WorkspaceSwitchAction;
+  startedAt: number;
+}
+
+export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, newId = () => randomBytes(16).toString("hex") }: {
   send: (message: unknown) => void;
   settleMs?: number;
+  now?: () => number;
+  newId?: () => string;
 }): WorkspaceChannel & { receive(message: Record<string, unknown>): boolean } {
   let facts: Workspace[] | null = null;
   let waiters: Array<() => void> = [];
+  // Insertion order is start order, so the oldest switch is the first entry.
+  const operations = new Map<string, Operation>();
+
+  function prune(): void {
+    for (const [id, operation] of operations) if (now() - operation.startedAt > OPERATION_TTL_MS) operations.delete(id);
+    while (operations.size > MAX_OPERATIONS) operations.delete(operations.keys().next().value as string);
+  }
+
+  const view = ({ id, workspaceId, environmentId, state }: Operation): WorkspaceSwitch => ({ id, workspaceId, ...(environmentId ? { environmentId } : {}), state });
+
+  /** The desktop app tells how one switch ended, by its id. Only that switch changes: the app knows which switch it cancelled
+   * or hurried, so nothing here guesses from the order of requests. An ended switch does not change again. */
+  function finish(operation: Operation, outcome: (typeof OUTCOMES)[number]): void {
+    if (operation.state === "pending") operation.state = outcome;
+  }
 
   const nextFacts = (): Promise<void> =>
     new Promise((resolve) => {
@@ -94,6 +150,12 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
 
   return {
     receive(message) {
+      if (message.type === WORKSPACE_SWITCH_RESULT_MESSAGE) {
+        const operation = typeof message.id === "string" ? operations.get(message.id) : undefined;
+        const outcome = OUTCOMES.find((known) => known === message.outcome);
+        if (operation && outcome) finish(operation, outcome);
+        return true;
+      }
       if (message.type !== WORKSPACES_MESSAGE) return false;
       facts = cleanList(message.workspaces);
       const pending = waiters;
@@ -102,7 +164,13 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
       return true;
     },
     list: () => facts,
-    async switchTo(request) {
+    operation(id, owner) {
+      prune();
+      const operation = id ? operations.get(id) : undefined;
+      if (!operation || operation.owner !== owner) return { status: 404, body: { error: "switch_not_found" } };
+      return { status: 200, body: { switch: view(operation) } };
+    },
+    async switchTo(request, owner) {
       const list = facts;
       if (!list) return { status: 404, body: { error: "no route" } };
       const id = typeof request.id === "string" ? request.id : "";
@@ -113,12 +181,17 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
       else if (target.state === "waiting") action = request.now === true ? "hurry" : null;
       else if (target.state === "ready") action = "open";
       else return { status: 409, body: { error: "workspace_unavailable" } };
+      let operation: Operation | null = null;
       if (action) {
+        operation = { id: newId(), owner, action, startedAt: now(), workspaceId: id, ...(target.environmentId ? { environmentId: target.environmentId } : {}), state: "pending" };
+        operations.set(operation.id, operation);
+        // Trim after the insert, so the history never holds more than MAX_OPERATIONS.
+        prune();
         const changed = nextFacts();
-        send({ type: WORKSPACE_SWITCH_MESSAGE, action, id });
+        send({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation: operation.id });
         await changed;
       }
-      return { status: 200, body: { workspaces: facts ?? [] } };
+      return { status: 200, body: { workspaces: facts ?? [], ...(operation ? { switch: view(operation) } : {}) } };
     },
   };
 }
@@ -134,6 +207,7 @@ export async function answerWorkspaces(
   path: string,
   readBody: () => Promise<Record<string, unknown>>,
   allowed: () => boolean,
+  owner: string,
 ): Promise<WorkspaceReply> {
   const absent: WorkspaceReply = { status: 404, body: { error: `no route: ${method} ${path}` } };
   const list = channel?.list();
@@ -141,6 +215,7 @@ export async function answerWorkspaces(
   const refused: WorkspaceReply = { status: 403, body: { error: "This phone cannot open other workspaces. Turn it on for this phone in Settings on the computer." } };
   if (route === "list") return { status: 200, body: { workspaces: allowed() ? list : list.filter((workspace) => workspace.current) } };
   if (!allowed()) return refused;
+  if (route === "operation") return channel.operation(operationIdOf(path), owner);
   let body: Record<string, unknown>;
   try {
     body = await readBody();
@@ -149,7 +224,7 @@ export async function answerWorkspaces(
   }
   // The owner may have turned this phone off, or unpaired it, while the body was read.
   if (!allowed()) return refused;
-  const reply = await channel.switchTo(body);
+  const reply = await channel.switchTo(body, owner);
   // The switch waits for the desktop's next facts. A phone turned off or unpaired during that wait gets no list.
   if (!allowed()) return refused;
   return reply.status === 404 && (reply.body as { error?: string }).error === "no route" ? absent : reply;

@@ -17,7 +17,7 @@ import {
 } from "../lib/session";
 import { pairedDestination } from "../lib/phone-pairing";
 import { t } from "../lib/i18n";
-import { formatPairingCode, PAIRING_INPUT_PROBLEM_KEY, readPairingInput } from "../../shared/pairing-code";
+import { PAIRING_INPUT_PROBLEM_KEY, readPairingInput } from "../../shared/pairing-code";
 import { isPrivateHost } from "../../shared/private-host";
 import { sentWireName } from "../../shared/phone-wire-names";
 
@@ -47,11 +47,10 @@ export function codeReady(code: string): boolean {
   return kind === "code" || kind === "credential";
 }
 
-/** The phone app opens this server with the code already filled in. */
-export function openInAppLink(origin: string, code: string): string {
-  const read = readPairingInput(code);
-  const filled = read.kind === "code" ? `&code=${encodeURIComponent(formatPairingCode(read.code))}` : "";
-  return `${sentWireName("linkScheme")}://pair?address=${encodeURIComponent(origin)}${filled}`;
+/** The app opens this server's pairing page. The link names the server only: the system hands a link to the app as a
+ * launch argument that other programs can read, so it never carries a pairing code. */
+export function openInAppLink(origin: string): string {
+  return `${sentWireName("linkScheme")}://pair?address=${encodeURIComponent(origin)}`;
 }
 
 /** Plain http to the open internet: the session cookie and every chat would cross it readable. */
@@ -275,7 +274,7 @@ export function PairPage({ initialCode, initialEmail = null, reason }: { initial
             {where?.origin ? (
               <p className="mt-3 text-[13px] text-ink-secondary">
                 {t("pair.onPhone")}{" "}
-                <a href={openInAppLink(where.origin, code)} className="text-accent underline">{t("pair.openInApp", { app: productName() })}</a>
+                <a href={openInAppLink(where.origin)} className="text-accent underline">{t("pair.openInApp", { app: productName() })}</a>
               </p>
             ) : null}
             {ownServer ? (

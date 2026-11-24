@@ -27,4 +27,5 @@ export declare function createServerConnect(deps: {
   probe: (address: string, code?: string) => Promise<ServerProbe>;
   connect: (address: string, code?: string) => Promise<ConnectOutcome>;
   connectAsking: (input: string, name?: string) => Promise<boolean>;
+  connectFromLink: (link: { address: string; secret: string | null }, confirmLink: (shown: { origin: string; withSecret: boolean }) => Promise<boolean>) => Promise<boolean>;
 };

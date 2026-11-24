@@ -9,7 +9,7 @@ import { launchChrome, type ChromeProcess, type LaunchOptions } from "./chrome/l
 import { clearSingleton, staleSingletonLock, type ProcessRegistry } from "./chrome/processes.ts";
 import { languageList } from "./chrome/wrapper.ts";
 import { downgradeRefusal, ensureProfile, forgetOpenTabs, markCleanExit, profileDir, profileHash, profileKind, readProfileRecord, recordOpenedBy, versionOf, workspaceId } from "./chrome/profile.ts";
-import { seedProfile } from "./chrome/seed.ts";
+import { SourceStillOpen, seedProfile } from "./chrome/seed.ts";
 
 export type BackendKind = "local" | "my-chrome" | "cdp-url";
 
@@ -104,7 +104,7 @@ export class LocalBackend implements Backend {
     }
   }
 
-  /** A failed copy opens the browser on an empty profile; it never stops the browser. */
+  /** A failed copy opens the browser on an empty profile; it never stops the browser. A source browser that is still open does: the copy waits, so a profile is not made empty for good. */
   async #seed(key: string, binaryVersion: string): Promise<void> {
     const { dataDir, seed, log } = this.#options;
     if (!seed || profileKind(key) === "temp") return;
@@ -116,6 +116,7 @@ export class LocalBackend implements Backend {
       const outcome = await seedProfile(source, target, binaryVersion);
       if (outcome === "newer-chrome") log?.(`browser profile ${key}: not copied, the earlier browser's profile was last opened by a newer Chrome than ${binaryVersion}`);
     } catch (error) {
+      if (error instanceof SourceStillOpen) throw error;
       log?.(`browser profile ${key}: not copied, ${error instanceof Error ? error.message : String(error)}`);
     }
   }

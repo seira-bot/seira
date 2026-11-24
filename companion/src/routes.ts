@@ -216,9 +216,11 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "PUT", path: /^\/api\/phones\/self$/ },
   { method: "GET", path: /^\/api\/phones\/self$/ },
   { method: "DELETE", path: /^\/api\/phones\/self$/ },
-  // Sidecar-owned: the workspaces of this computer, and a request to open one. The proxy answers both locally.
+  // Sidecar-owned: the workspaces of this computer, a request to open one, and the read of that request. The proxy answers all three locally.
   { method: "GET", path: /^\/api\/phones\/self\/workspaces$/ },
   { method: "POST", path: /^\/api\/phones\/self\/workspaces\/switch$/ },
+  // A phone reads how its own switch ended, by the operation id. No other path below the switch route.
+  { method: "GET", path: /^\/api\/phones\/self\/workspaces\/switch\/[^/]+$/ },
   { method: "GET", path: /^\/api\/phones\/self\/jobs$/ },
   { method: "POST", path: /^\/api\/phones\/self\/jobs\/[\w-]+\/(?:lease|result)$/ },
   // The phone's closed-app alert registration: its own device token, never another phone's.

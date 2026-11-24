@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
-import { browserRoot, compareVersions, downgradeRefusal, ensureProfile, markCleanExit, profileDir, profileHash, recordOpenedBy, versionOf, workspaceId } from "./profile.ts";
+import { browserRoot, compareVersions, downgradeRefusal, ensureProfile, markCleanExit, profileDir, profileHash, recordOpenedBy, removeProfile, seedingDir, versionOf, workspaceId } from "./profile.ts";
 
 const dirs: string[] = [];
 const scratch = () => {
@@ -81,5 +81,34 @@ describe("the profile record of an earlier version", () => {
       writeFileSync(join(dir, "seira-profile.json"), JSON.stringify({ key: "new", chromeVersion: null, createdAt: "2026-01-01" }));
       expect(readProfileRecord(dir)?.key).toBe("new");
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe("removing a profile", () => {
+  it("removes the copy of another browser's profile that a stopped process left in seeding too", () => {
+    const dataDir = scratch();
+    const dir = profileDir(dataDir, "bot:scout");
+    mkdirSync(join(dir, "Default"), { recursive: true });
+    mkdirSync(join(seedingDir(dir), "Default"), { recursive: true });
+    writeFileSync(join(seedingDir(dir), "Default", "Cookies"), "half a copy");
+    removeProfile(dir);
+    expect(existsSync(dir)).toBe(false);
+    expect(existsSync(seedingDir(dir))).toBe(false);
+  });
+
+  it("removes the earlier layout's `<hash>.seeding` beside the profile too, and nothing else beside it", () => {
+    const dataDir = scratch();
+    const dir = profileDir(dataDir, "bot:scout");
+    mkdirSync(join(dir, "Default"), { recursive: true });
+    mkdirSync(join(`${dir}.seeding`, "Default"), { recursive: true });
+    writeFileSync(join(`${dir}.seeding`, "Default", "Cookies"), "half a copy");
+    mkdirSync(`${dir}.seeding.bak`, { recursive: true });
+    const other = profileDir(dataDir, "bot:other");
+    mkdirSync(`${other}.seeding`, { recursive: true });
+    removeProfile(dir);
+    expect(existsSync(dir)).toBe(false);
+    expect(existsSync(`${dir}.seeding`)).toBe(false);
+    expect(existsSync(`${dir}.seeding.bak`), "a lookalike name stays").toBe(true);
+    expect(existsSync(`${other}.seeding`), "another profile's copy stays").toBe(true);
   });
 });

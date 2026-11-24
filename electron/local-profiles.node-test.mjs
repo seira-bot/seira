@@ -16,7 +16,7 @@ function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
   mkdirSync(dataDir, { recursive: true });
   if (frozen) writeFileSync(join(dataDir, "moved.json"), JSON.stringify({ v: 1, at: 1, cloud: "https://seira-t-1.fly.dev" }));
   let clock = 1_000;
-  const w = { dataDir, running: dataDir, swaps: [], home, shown: null, onScreen: "cloud", busy: [], trashed: [], trashFails: false, changes: 0, logs: [], waits: 0, remembered: [] };
+  const w = { dataDir, running: dataDir, swaps: [], home, shown: null, onScreen: "cloud", busy: [], trashed: [], trashFails: false, changes: 0, logs: [], waits: 0, busyCalls: 0, remembered: [] };
   w.now = () => clock;
   w.clean = createCleanWorkspace({ dataDir: () => dataDir, running: () => w.running,
     swap: async (dir) => { w.swaps.push(dir); await new Promise((resolve) => setImmediate(resolve)); w.running = dir; w.onScreen = "local"; return { ok: true }; } });
@@ -28,7 +28,7 @@ function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
       showCloud: async () => { w.shown = null; w.onScreen = "cloud"; },
     },
     showLocal: () => { w.onScreen = "local"; }, onLocal: () => w.onScreen === "local",
-    busy: async () => w.busy[0] ?? null,
+    busy: async () => { w.busyCalls++; await w.beforeBusy?.(); return w.busy[0] ?? null; },
     trash: async (dir) => { if (w.trashFails) throw new Error("no Trash here"); w.trashed.push(dir); rmSync(dir, { recursive: true, force: true }); },
     reserved: () => "This Mac", remember: (place) => w.remembered.push(place), changed: () => { w.changes++; }, log: (line) => w.logs.push(line), now: w.now,
     sleep: async (ms) => { clock += ms; w.waits++; w.onWait?.(); } });
@@ -221,7 +221,7 @@ test("with no home but this computer: This computer is the data folder as ever, 
   assert.equal(w.running, profileDir(w.dataDir, "work"));
   assert.deepEqual(w.profiles.places({ activeLocal: true }), [{ id: "work", name: "Work", color: null, swatch: null, active: true }]);
   w.busy = [{ name: "Juno", what: "bot" }];
-  w.onWait = () => { assert.deepEqual(w.profiles.settling(), { id: null, name: "Juno" }); w.busy = []; };
+  w.onWait = () => { const { turn, ...shown } = w.profiles.settling(); assert.equal(typeof turn, "number", "it names its turn, so a hurry can be checked against this switch"); assert.deepEqual(shown, { id: null, name: "Juno" }); w.busy = []; };
   assert.equal(await w.profiles.computer(), true);
   assert.equal(w.running, w.dataDir, "This computer's own server again");
   w.onScreen = "elsewhere";
@@ -357,4 +357,136 @@ test("a new workspace never takes the id a phone uses for This PC", (t) => {
   const made = w.registry.create({ name: "Local" });
   assert.equal(made.ok, true);
   assert.notEqual(made.profile.id, "local");
+});
+
+const ENVIRONMENT = "0b1e6a52-4f7c-4a0e-9d8c-3a5f2b7c9e11";
+const OTHER_ENVIRONMENT = "7D3F9C14-8A2B-4C5E-B6D7-1E9A0F3C5B28";
+
+test("a phone's list carries the environmentId that each workspace's server wrote, and leaves it out for one that never ran", (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  w.registry.create({ name: "Home" });
+  assert.equal(w.profiles.phoneFacts().some((workspace) => "environmentId" in workspace), false, "no file yet: no key, and no file is made");
+  assert.equal(existsSync(join(w.dataDir, "environment-id")), false);
+  writeFileSync(join(w.dataDir, "environment-id"), `${ENVIRONMENT}\n`);
+  mkdirSync(profileDir(w.dataDir, "work"), { recursive: true });
+  writeFileSync(join(profileDir(w.dataDir, "work"), "environment-id"), ` ${OTHER_ENVIRONMENT} `);
+  const facts = w.profiles.phoneFacts();
+  assert.deepEqual(facts.map(({ id, environmentId }) => [id, environmentId]), [["local", ENVIRONMENT], ["work", OTHER_ENVIRONMENT.toLowerCase()], ["home", undefined]]);
+  assert.equal(existsSync(join(profileDir(w.dataDir, "home"), "environment-id")), false, "reading never creates the file");
+});
+
+test("a file that is not an environment id reads as no id: a path or a long text never reaches a phone", (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  mkdirSync(profileDir(w.dataDir, "work"), { recursive: true });
+  for (const text of ["/home/someone/.seira", "x".repeat(10_000), "", "0b1e6a52-4f7c-4a0e-9d8c-3a5f2b7c9e1", `${ENVIRONMENT}\n${ENVIRONMENT}`]) {
+    writeFileSync(join(w.dataDir, "environment-id"), text);
+    writeFileSync(join(profileDir(w.dataDir, "work"), "environment-id"), text);
+    assert.deepEqual(w.profiles.phoneFacts().map((workspace) => workspace.environmentId), [undefined, undefined], text.slice(0, 20));
+  }
+  assert.doesNotMatch(JSON.stringify(w.profiles.phoneFacts()), /seira|\//);
+});
+
+test("takenBy names who took a switch's turn at the moment the turn changed: a request, the rail, or nobody yet", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  w.profiles.create({ name: "Personal" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  const first = {}, second = {}, third = {};
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let turns = [];
+  w.onWait = () => {
+    if (w.waits === 1) turns.push(w.profiles.settling().turn);
+    if (w.waits === 2) { assert.equal(w.profiles.takenBy(first), undefined, "nobody took it yet"); w.profiles.open("personal", second); }
+    if (w.waits === 3) { turns.push(w.profiles.settling().turn); w.profiles.open("work"); } // the rail: no cause
+    if (w.waits === 4) { w.busy = []; w.profiles.cancel(third); }
+  };
+  assert.equal(await w.profiles.open("work", first), null);
+  assert.equal(w.profiles.takenBy(first), second, "the first switch was taken by the second request, not by a later one");
+  assert.notEqual(turns[0], turns[1], "each switch has its own turn");
+  assert.equal(w.profiles.takenBy(second), null, "the second one was taken by the rail");
+  assert.equal(w.profiles.takenBy({}), undefined, "a request that never asked is unknown");
+  assert.equal(w.profiles.takenBy(undefined), undefined);
+  assert.equal(w.profiles.takenBy("first"), undefined);
+});
+
+test("takenBy: a cancel names itself as the taker of the switch it cancelled, and a rail action that came first is not overwritten", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  const open = {}, cancel = {}, late = {};
+  w.busy = [{ name: "Scout", what: "bot" }];
+  w.onWait = () => { if (w.waits === 1) w.profiles.cancel(cancel); if (w.waits === 2) w.profiles.cancel(late); };
+  assert.equal(await w.profiles.open("work", open), null);
+  assert.equal(w.profiles.takenBy(open), cancel);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  w.waits = 0;
+  const railed = {};
+  w.onWait = () => { if (w.waits === 1) w.profiles.cancel(); if (w.waits === 2) w.profiles.cancel(late); };
+  assert.equal(await w.profiles.open("work", railed), null);
+  assert.equal(w.profiles.takenBy(railed), null, "the rail took it first; a later phone cancel does not take the credit");
+});
+
+/** A switch waits on a busy bot, and a newer one has started but holds its own busy check. */
+async function heldNewer(t) {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  w.profiles.create({ name: "Personal" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let hold = null;
+  w.release = () => {};
+  w.beforeBusy = () => hold;
+  w.onWait = () => { if (w.waits === 1) hold = new Promise((resolve) => { w.release = resolve; }); };
+  const first = w.profiles.open("work");
+  await new Promise((resolve) => setImmediate(resolve));
+  const waiting = w.profiles.settling();
+  assert.equal(waiting.id, "work", "the first switch waits");
+  const newer = w.profiles.open("personal");
+  await new Promise((resolve) => setImmediate(resolve));
+  return { w, first, newer, waiting };
+}
+
+test("a hurry for the wait of a switch that a newer one replaced is refused, even while the newer switch still checks what is busy", async (t) => {
+  const { w, first, newer, waiting } = await heldNewer(t);
+  assert.equal(w.profiles.settling(), null, "the old wait record is gone as the newer switch starts");
+  assert.equal(await w.profiles.open("work", {}, waiting.turn), false, "refused, and no turn changes");
+  assert.equal(await w.profiles.computer({}, waiting.turn), false);
+  w.busy = [];
+  w.release();
+  assert.equal(await first, null);
+  assert.equal(await newer, true, "the newer switch was not displaced");
+  assert.equal(w.running, profileDir(w.dataDir, "personal"));
+  assert.equal(w.logs.some((line) => /opens though/.test(line)), false, "nothing was hurried");
+});
+
+test("a second click on the old target while the newer switch checks what is busy is a new switch, not a hurry", async (t) => {
+  const { w, first, newer } = await heldNewer(t);
+  const before = w.busyCalls;
+  const again = w.profiles.open("work");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(w.busyCalls > before, true, "it checks what is busy itself");
+  w.busy = [];
+  w.release();
+  assert.equal(await first, null);
+  assert.equal(await newer, null);
+  assert.equal(await again, true);
+  assert.equal(w.running, profileDir(w.dataDir, "work"));
+  assert.equal(w.logs.some((line) => /opens though/.test(line)), false, "it did not take the hurry path");
+});
+
+test("a hurry that names the wait that is active opens now; the wait record holds the turn of the switch that waits", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let hurried = null;
+  w.onWait = () => {
+    if (w.waits === 1) { const waiting = w.profiles.settling(); hurried = w.profiles.open("work", {}, waiting.turn); }
+  };
+  assert.equal(await w.profiles.open("work"), null, "the first switch is taken over by the hurry");
+  assert.equal(await hurried, true);
+  assert.equal(w.running, profileDir(w.dataDir, "work"));
+  assert.match(w.logs.join("\n"), /work opens though Scout still works/);
 });

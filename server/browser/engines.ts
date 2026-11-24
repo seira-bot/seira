@@ -14,6 +14,7 @@ import type { HostKind } from "./chrome/flags.ts";
 import { ChromeLauncher } from "./chrome/launcher.ts";
 import { ProcessRegistry, sweep } from "./chrome/processes.ts";
 import { browserRoot } from "./chrome/profile.ts";
+import { removeStaleSeeding } from "./chrome/seed.ts";
 import { browserLanguage, browserTimeZone, languageList } from "./chrome/wrapper.ts";
 import { displayScreen } from "./display.ts";
 import type { Download } from "./cdp/downloads.ts";
@@ -128,6 +129,7 @@ export class ChromeEngine {
   start({ inUse, prepare }: { inUse: boolean; prepare: boolean }): void {
     const starting = inUse && !this.#inUse;
     this.#inUse = inUse;
+    removeStaleSeeding(browserRoot(this.#options.dataDir), (profile) => this.#registry.reserved(profile));
     if (!inUse && !this.#cleared && this.#everUsed()) this.#tick();
     this.#cleared = true;
     if (inUse && prepare && this.launcher.plan().kind !== "legacy") void this.launcher.prepare();
