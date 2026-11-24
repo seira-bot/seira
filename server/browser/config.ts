@@ -40,8 +40,18 @@ export function browserEngineChoice(cfg: { browserEngine?: BrowserEngineConfig }
   return cfg.browserEngine?.engine ?? null;
 }
 
+/** Under vitest or a sealed test fixture (env-path.ts) only with SEIRA_BROWSER_ENGINE_DEFAULT=chrome: a test's fake
+ * agent-browser then stands for the bots' browser, and no test finds this machine's Chrome or downloads one. */
+export function seiraEngineByDefault(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.VITEST !== "true" && env.SEIRA_TEST_SEALED_PATH !== "1") || env.SEIRA_BROWSER_ENGINE_DEFAULT?.trim() === "chrome";
+}
+
 /** The engine that runs the bots' browsers: the saved choice, else Seira's own driver wherever it has a Chrome to run. Boxed, only agent-browser's Chrome is inside the box, so no choice moves it off agent-browser. */
-export function effectiveBrowserEngine(cfg: { browserEngine?: BrowserEngineConfig }, seiraEngineHasChrome: () => boolean, { boxed = false } = {}): BrowserEngineKind {
+export function effectiveBrowserEngine(
+  cfg: { browserEngine?: BrowserEngineConfig },
+  seiraEngineHasChrome: () => boolean,
+  { boxed = false, env = process.env }: { boxed?: boolean; env?: NodeJS.ProcessEnv } = {},
+): BrowserEngineKind {
   if (boxed) return "agent-browser";
-  return browserEngineChoice(cfg) ?? (seiraEngineHasChrome() ? "chrome" : "agent-browser");
+  return browserEngineChoice(cfg) ?? (seiraEngineByDefault(env) && seiraEngineHasChrome() ? "chrome" : "agent-browser");
 }

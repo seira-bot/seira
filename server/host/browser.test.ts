@@ -47,9 +47,11 @@ const plans: Array<{ mockRestore(): void }> = [];
 function seiraChrome(available: boolean): void {
   const plan: ChromePlan = available ? { kind: "chrome", chrome: { path: "/fake/chrome", source: "named" }, fallback: null } : { kind: "legacy", reason: "no Chrome", noChrome: true };
   plans.push(vi.spyOn(ChromeLauncher.prototype, "plan").mockReturnValue(plan));
+  vi.stubEnv("SEIRA_BROWSER_ENGINE_DEFAULT", "chrome");
 }
 afterEach(async () => {
   for (const spy of plans.splice(0)) spy.mockRestore();
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.browserRuntime.closeAll()));
 });
 
