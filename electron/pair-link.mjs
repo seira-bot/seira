@@ -6,16 +6,20 @@
 const MAX_LINK_LENGTH = 2048;
 const PARAMETERS = new Set(["address", "name"]);
 const UNSAFE_CHARACTER = /[\s\p{Cc}\\]/u;
+/** Any control character: C0 (U+0000-001F), DEL and C1 (U+0080-009F). The outer link is checked as the OS delivered it, and the
+ * address is checked again after decoding: `%0A` or `%09` is invisible text there, and the URL parser would drop it silently. */
+const CONTROL_CHARACTER = /\p{Cc}/u;
 /** The outer action as the OS delivered it, before any URL normalization: the scheme and host `pair`, then `?` and a query, and no
  * `#` at all (an empty fragment marker is also a fragment). The URL parser would drop what this refuses. */
 const ACTION = /^seira:\/\/pair\?[^#]*$/i;
 /** The server address as the link spelled it after decoding: a scheme, then a host and an optional port, then at most one `/`.
- * No user name, path, query, fragment, backslash or space. A path that normalizes to `/` (`/.`, `//`) is not this. */
+ * No user name, path, query, fragment, backslash, space or control character (C0, DEL, C1). A path that normalizes to `/`
+ * (`/.`, `//`) is not this. */
 const ORIGIN_TEXT = /^https?:\/\/[^/?#@\\\s]+\/?$/i;
 
 /** Whether `text` spells one server origin, before normalization (see ORIGIN_TEXT). */
 export function isPlainOriginText(text) {
-  return typeof text === "string" && ORIGIN_TEXT.test(text);
+  return typeof text === "string" && !CONTROL_CHARACTER.test(text) && ORIGIN_TEXT.test(text);
 }
 
 /** Whether the link is meant for this handler: it names the `pair` host, even with a user name, a port or a path on it. There is

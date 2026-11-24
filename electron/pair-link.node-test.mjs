@@ -58,6 +58,20 @@ test("a pair link that is not exactly the action is invalid, never repaired", ()
   ]) assert.deepEqual(pairLinkIntent(bad), { valid: false }, bad);
 });
 
+test("a control character that the link only spells (percent-encoded) is refused in the decoded address: C0, DEL and C1, at any place", () => {
+  const origin = "https%3A%2F%2Fseira.example.com";
+  const controls = ["%00", "%01", "%08", "%09", "%0A", "%0D", "%1F", "%7F", "%C2%80", "%C2%85", "%C2%9F"];
+  for (const control of controls) {
+    for (const bad of [`${origin}${control}`, `${control}${origin}`, `https%3A%2F%2Fseira${control}.example.com`, `${origin}%2F${control}`]) {
+      assert.deepEqual(pairLinkIntent(`seira://pair?address=${bad}`), { valid: false }, bad);
+    }
+  }
+  assert.deepEqual(pairLinkIntent(`seira://pair?address=${origin}&name=Mini%0A`), { valid: true, address: "https://seira.example.com" }, "the name is not an address and is not read");
+  for (const control of ["\u0000", "\u0009", "\u000a", "\u000d", "\u001f", "\u007f", "\u0080", "\u0085", "\u009f"]) {
+    for (const bad of [`https://seira.example.com${control}`, `${control}https://seira.example.com`, `https://seira${control}.example.com/`]) assert.equal(isPlainOriginText(bad), false, JSON.stringify(bad));
+  }
+});
+
 test("takes the link out of a command line so a relaunch does not open it again", () => {
   const argv = ["app", "--flag", LINK, "seira://pair?address=bad"];
   assert.deepEqual(pairLinkFromCommandLine(argv), { valid: false });
@@ -125,6 +139,18 @@ test("a link that names no clear origin is refused before the question and befor
     await assert.rejects(connect.connectFromLink({ address }), { message: "native.connect.notAnAddress" }, address);
   }
   assert.deepEqual(events, []);
+});
+
+test("an address with a control character is refused before the question and before any request, whatever reaches the connect step", async () => {
+  const { connect, events } = connectWith({ fetch: descriptor });
+  for (const control of ["\u0000", "\u0009", "\u000a", "\u007f", "\u0085"]) {
+    for (const address of [`https://seira.example.com${control}`, `https://seira.example.com/${control}`, `https://seira${control}.example.com`]) {
+      await assert.rejects(connect.connectFromLink({ address }), { message: "native.connect.notAnAddress" }, JSON.stringify(address));
+    }
+  }
+  assert.deepEqual(events, []);
+  const decoded = pairLinkIntent("seira://pair?address=https%3A%2F%2Fseira.example.com%0A");
+  assert.deepEqual(decoded, { valid: false }, "the link itself never reaches the connect step");
 });
 
 test("a server that fails or redirects is never opened", async () => {
