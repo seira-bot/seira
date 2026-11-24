@@ -40,7 +40,8 @@ export function browserEngineChoice(cfg: { browserEngine?: BrowserEngineConfig }
   return cfg.browserEngine?.engine ?? null;
 }
 
-/** The engine that runs the bots' browsers: the saved choice, else Seira's own driver wherever it has a Chrome to run. */
-export function effectiveBrowserEngine(cfg: { browserEngine?: BrowserEngineConfig }, seiraEngineHasChrome: () => boolean): BrowserEngineKind {
+/** The engine that runs the bots' browsers: the saved choice, else Seira's own driver wherever it has a Chrome to run. Boxed, only agent-browser's Chrome is inside the box, so no choice moves it off agent-browser. */
+export function effectiveBrowserEngine(cfg: { browserEngine?: BrowserEngineConfig }, seiraEngineHasChrome: () => boolean, { boxed = false } = {}): BrowserEngineKind {
+  if (boxed) return "agent-browser";
   return browserEngineChoice(cfg) ?? (seiraEngineHasChrome() ? "chrome" : "agent-browser");
 }

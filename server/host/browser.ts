@@ -394,7 +394,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
   }
   /** The engine that runs bots' browsers now; asked each time, as a Chrome can appear or go while the server runs. */
   function browserEngine(): BrowserEngineKind {
-    return effectiveBrowserEngine(cfg, () => chromeEngine.launcher.plan().kind !== "legacy");
+    return effectiveBrowserEngine(cfg, () => chromeEngine.launcher.plan().kind !== "legacy", { boxed });
   }
   /** Seira's own driver runs a bot's browser when it is the engine, except in the person's own Chrome. */
   function onChrome(profile: string | undefined): boolean {

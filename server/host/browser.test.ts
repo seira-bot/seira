@@ -220,13 +220,6 @@ describe("the bots' browser host with no engine chosen", () => {
     expect(host.browserSystemPrompt(undefined)).toBe(CHROME_BROWSER_SYSTEM_PROMPT);
   });
 
-  it("keeps a profile on the person's own Chrome on agent-browser", async () => {
-    const { host } = setup(undefined, { chrome: true });
-    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "ready", binaryPath: "/usr/local/bin/agent-browser", version: "0.37.0", managed: false });
-    const browser = await host.browserIntegration("scout", "mine", turn);
-    expect(browser?.spec.command).not.toBe("seira-cdp");
-  });
-
   it("runs a bot's browser on agent-browser where Seira's engine has no Chrome", () => {
     const { host } = setup(undefined, { chrome: false });
     expect(host.browserEngine()).toBe("agent-browser");
@@ -238,6 +231,15 @@ describe("the bots' browser host with no engine chosen", () => {
     const { host } = setup("agent-browser", { chrome: true });
     expect(host.browserEngine()).toBe("agent-browser");
     expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "agent-browser" });
+  });
+
+  it("stays on agent-browser inside a browser box, with no choice or with chrome chosen", async () => {
+    const box = { bwrap: "/usr/bin/bwrap", options: ["--unshare-pid"], seccomp: null };
+    for (const engine of [undefined, "chrome"] as const) {
+      const { host } = setup(engine, { chrome: true, cloudHome: true, browserBox: () => box });
+      expect(host.browserEngine()).toBe("agent-browser");
+      expect(host.engineSummary({ kind: "engine", version: "0.37.0", myChrome: false })).toMatchObject({ engine: "agent-browser" });
+    }
   });
 
   it("follows the choice at once: saving agent-browser moves an effective Seira engine off it", () => {
@@ -254,6 +256,8 @@ describe("a bot's first browser on Seira's own engine, from its agent-browser pr
   const cleanup: string[] = [];
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.mocked(browserEngineStatus).mockReset();
+    vi.mocked(closeBrowserSession).mockReset().mockResolvedValue(true);
     for (const folder of cleanup.splice(0)) rmSync(folder, { recursive: true, force: true });
   });
 

@@ -37,4 +37,10 @@ describe("the engine that runs the bots' browsers", () => {
     expect(effectiveBrowserEngine({ browserEngine: { engine: "chrome" } }, () => { asked = true; return false; })).toBe("chrome");
     expect(asked).toBe(false);
   });
+
+  it("is agent-browser when the host boxes its browsers, whatever is chosen or found", () => {
+    expect(effectiveBrowserEngine({}, has(true), { boxed: true })).toBe("agent-browser");
+    expect(effectiveBrowserEngine({ browserEngine: { engine: "chrome" } }, has(true), { boxed: true })).toBe("agent-browser");
+    expect(effectiveBrowserEngine({ browserEngine: { engine: "chrome" } }, has(true), { boxed: false })).toBe("chrome");
+  });
 });
