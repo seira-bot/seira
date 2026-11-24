@@ -14,7 +14,7 @@ import {
   type WorkspaceBackupSummary,
 } from "./workspace-backup.ts";
 import type { RequestAuth } from "./request-auth.ts";
-import { LEAVE_OUT_PARTS, parseLeaveOut, partSizes } from "./workspace-backup-parts.ts";
+import { LEAVE_OUT_PARTS, parseLeaveOut, singleFlightSizes } from "./workspace-backup-parts.ts";
 import { userErrorFields } from "./user-errors.ts";
 
 const PREFIX = "/api/workspace-backup";
@@ -70,6 +70,7 @@ export function createWorkspaceBackupRoutes(options: {
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
 }) {
+  const sizesOnce = singleFlightSizes();
   const artifacts = new Map<string, Artifact>();
   let operating = false;
   const json = (res: ServerResponse, status: number, body: unknown) => {
@@ -152,7 +153,7 @@ export function createWorkspaceBackupRoutes(options: {
       }
       if (method === "GET" && path === `${PREFIX}/sizes`) {
         // Read-only: bytes for each part of the data folder, so a person can see what makes a backup large.
-        const parts = partSizes(options.dataDir);
+        const parts = await sizesOnce(options.dataDir);
         json(res, 200, { parts, total: Object.values(parts).reduce((sum, bytes) => sum + bytes, 0), canLeaveOut: [...LEAVE_OUT_PARTS] });
         return true;
       }

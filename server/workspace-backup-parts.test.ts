@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { backupPartOf, partSizes, parseLeaveOut } from "./workspace-backup-parts.ts";
+import { backupPartOf, partSizes, partSizesAsync, parseLeaveOut, singleFlightSizes } from "./workspace-backup-parts.ts";
 import { dataBytes } from "./workspace-backup-space.ts";
 import { createWorkspaceBackup, createWorkspaceBackupSnapshot, stageWorkspaceBackup } from "./workspace-backup.ts";
 import { readFileSync } from "node:fs";
@@ -102,4 +102,27 @@ it("counts only the chosen parts in the space check", async () => {
   await expect(createWorkspaceBackupSnapshot(root, { password: PASSWORD }, undefined, { statfs: free })).rejects.toThrow(/needs about 80 MB of free disk space, and 70 MB is free/);
   const exported = await createWorkspaceBackupSnapshot(root, { password: PASSWORD, leaveOut: ["work-folders"] }, undefined, { statfs: free });
   expect(exported.summary.leftOut).toEqual(["work-folders"]);
+});
+
+it("gives the same sizes with the async walk as with the sync walk", async () => {
+  const root = fixture();
+  expect(await partSizesAsync(root)).toEqual(partSizes(root));
+  expect(await partSizesAsync(root, ["work-folders"])).toEqual(partSizes(root, ["work-folders"]));
+});
+
+it("does one walk for two calls at the same time, then a new walk for a later call", async () => {
+  const root = fixture();
+  let walks = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const once = singleFlightSizes(async (folder) => { walks += 1; await gate; return partSizes(folder); });
+  const first = once(root);
+  const second = once(root);
+  expect(walks).toBe(1);
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  expect(a).toBe(b);
+  expect(walks).toBe(1);
+  await once(root);
+  expect(walks).toBe(2);
 });

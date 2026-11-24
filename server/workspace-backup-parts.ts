@@ -1,4 +1,5 @@
 import { lstatSync, readdirSync } from "node:fs";
+import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 /** The parts of the data folder that a size report lists. */
@@ -58,4 +59,40 @@ export function partSizes(root: string, leaveOut: readonly BackupPart[] = []): R
   };
   walk(root, "");
   return sizes;
+}
+
+/** Same result as `partSizes`, but the walk is async, so a large data folder does not block the event loop. */
+export async function partSizesAsync(root: string, leaveOut: readonly BackupPart[] = []): Promise<Record<BackupPart, number>> {
+  const sizes = Object.fromEntries(BACKUP_PARTS.map((part) => [part, 0])) as Record<BackupPart, number>;
+  const skip = new Set<BackupPart>(leaveOut);
+  const walk = async (directory: string, prefix: string): Promise<void> => {
+    let names: string[];
+    try { names = await readdir(directory); } catch { return; }
+    for (const name of names) {
+      if ((!prefix && name === ".backups") || name === "node_modules") continue;
+      const path = prefix ? `${prefix}/${name}` : name;
+      const part = backupPartOf(path);
+      if (skip.has(part)) continue;
+      try {
+        const full = join(directory, name);
+        const stat = await lstat(full);
+        if (stat.isDirectory()) await walk(full, path);
+        else if (stat.isFile()) sizes[part] += stat.size;
+      } catch {}
+    }
+  };
+  await walk(root, "");
+  return sizes;
+}
+
+/** Runs one walk at a time for each folder: a call that arrives during a walk gets the result of that walk. */
+export function singleFlightSizes(walk: (root: string) => Promise<Record<BackupPart, number>> = partSizesAsync): (root: string) => Promise<Record<BackupPart, number>> {
+  const running = new Map<string, Promise<Record<BackupPart, number>>>();
+  return (root) => {
+    const active = running.get(root);
+    if (active) return active;
+    const started = walk(root).finally(() => running.delete(root));
+    running.set(root, started);
+    return started;
+  };
 }
