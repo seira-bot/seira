@@ -10,10 +10,12 @@ import { actorLabel, boundRetentionDays, pruneMonthFiles, type DecisionActor, ty
 import { redactSecrets } from "./redact.ts";
 import { csvCell, monthKey } from "./usage-ledger.ts";
 
-export const ADMIN_ACTIVITY_CATEGORIES = ["config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility"] as const;
+export const ADMIN_ACTIVITY_CATEGORIES = ["config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility", "linked-server"] as const;
 export type AdminActivityCategory = typeof ADMIN_ACTIVITY_CATEGORIES[number];
 
-export type AdminActor = DecisionActor | { kind: "cli" };
+/** Another server that acted through its link to this one; `name` is the name that server gave itself. */
+export type LinkedServerActor = { kind: "linked-server"; linkId: string; name: string };
+export type AdminActor = DecisionActor | { kind: "cli" } | LinkedServerActor;
 
 export interface AdminActionRow {
   at: string;
@@ -340,6 +342,7 @@ export function readAdminActivityRange(dataDir: string, range: { from: Date; to:
 
 export function adminActorLabel(actor: AdminActor | undefined): string {
   if (actor?.kind === "cli") return "Command line";
+  if (actor?.kind === "linked-server") return actor.name ? `${actor.name} (another Seira)` : "Another Seira";
   return actorLabel(actor as DecisionActor | undefined);
 }
 

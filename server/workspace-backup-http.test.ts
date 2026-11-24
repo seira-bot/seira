@@ -118,6 +118,53 @@ it("carries a fixed backup refusal and its redacted string path to the client", 
   expect(await response.json()).toEqual(userError("serverError.backup.recursiveLink", params));
 });
 
+it("reports the size of each part in a read-only route", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "bot"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "bot", "clip.bin"), Buffer.alloc(1234));
+  const response = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } });
+  expect(response.status).toBe(200);
+  const body = await response.json() as { parts: Record<string, number>; total: number; canLeaveOut: string[] };
+  expect(body.parts["work-folders"]).toBe(1234);
+  expect(body.total).toBe(Object.values(body.parts).reduce((sum, bytes) => sum + bytes, 0));
+  expect(body.canLeaveOut).toEqual(["work-folders"]);
+});
+
+it("does not count what the export leaves out", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "bot"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "bot", "clip.bin"), Buffer.alloc(1234));
+  // The export skips these top-level folders, so the report must too.
+  for (const name of ["tools", "browser", "cache", "tmp"]) {
+    mkdirSync(join(dataDir, name), { recursive: true });
+    writeFileSync(join(dataDir, name, "big.bin"), Buffer.alloc(5000));
+  }
+  const body = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } }).then((response) => response.json()) as { parts: Record<string, number>; total: number };
+  expect(body.parts.other).toBe(0);
+  expect(body.total).toBe(1234);
+});
+
+it("gives no sizes on a Team Cloud, where the raw folder holds other members' private data", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "member-chat"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "member-chat", "private.bin"), Buffer.alloc(4321));
+  vi.stubEnv("SEIRA_CLOUD_ROLE", "team");
+  try {
+    const response = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } });
+    expect(response.status).toBe(403);
+    const text = await response.text();
+    expect(text).toContain("not available on a Team Cloud");
+    expect(text).not.toContain("4321");
+    expect(text).not.toContain("parts");
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it("passes the parts to leave out to the export, and refuses an unknown part with a clear message", async () => {
+  expect((await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["work-folders"] })).status).toBe(200);
+  expect(archive.create).toHaveBeenLastCalledWith(dataDir, expect.objectContaining({ leaveOut: ["work-folders"] }));
+  const refused = await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["bots"] });
+  expect(refused.status).toBe(400);
+  expect(JSON.stringify(await refused.json())).toContain('Cannot leave out \\"bots\\". Allowed: work-folders.');
+  expect(archive.create).toHaveBeenCalledOnce();
+});
+
 it("names the exported file Seira-<date>.seirabackup in the reply and the download", async () => {
   const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string; filename: string };
   expect(exported.filename).toBe("Seira-2026-09-11.seirabackup");

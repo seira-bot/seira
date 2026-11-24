@@ -269,3 +269,43 @@ it("records explicit tool selection and connected-app permission changes", () =>
   expect(reset.flatMap(row => row.changed).sort()).toEqual(["connectorScopes", "connectorTools", "toolScope"]);
   expect(botChangeRows({ id: "b" }, after, after)).toEqual([]);
 });
+
+describe("linked servers", () => {
+  const PEER = { kind: "linked-server" as const, linkId: "0123456789abcdef", name: "Branch office" };
+
+  it("files link rows under their own heading and names the other server as the actor", async () => {
+    const dir = tempDir();
+    appendAdminAction(dir, { category: "linked-server", action: "linked-server.accept", target: { kind: "linked-server", id: PEER.linkId, name: PEER.name }, actor: PEER });
+    appendAdminAction(dir, {
+      category: "linked-server", action: "linked-server.handoff", target: { kind: "linked-server", id: PEER.linkId, name: PEER.name }, actor: PEER,
+      after: { direction: "received", bot: "ops", farBot: "helper", handoff: "h1", state: "started" },
+    });
+    appendAdminAction(dir, { category: "config", action: "config.update", actor: BOSS });
+    await flushAdminActivity(dir);
+    const now = Date.now();
+    const rows = readAdminActivityRange(dir, { from: new Date(now - 60_000), to: new Date(now + 60_000) });
+    const linked = activityEntries([], rows, { what: "linked-server" });
+    expect(linked.map((entry) => entry.type === "admin" && entry.action).sort()).toEqual(["linked-server.accept", "linked-server.handoff"]);
+    expect(linked.every((entry) => entry.who === "Branch office (another Seira)")).toBe(true);
+    expect(activityEntries([], rows, { what: "all", who: "branch" })).toHaveLength(2);
+    expect(parseActivityWhat("linked-server")).toBe("linked-server");
+  });
+
+  it("labels a linked server without a name plainly", () => {
+    const row: AdminActionRow = { at: "2026-09-21T09:00:00.000Z", category: "linked-server", action: "linked-server.remove", actor: { ...PEER, name: "" } };
+    expect(activityEntries([], [row], { what: "all" })[0]!.who).toBe("Another Seira");
+  });
+
+  it("hides a credential-named value that reaches a link row", async () => {
+    const dir = tempDir();
+    appendAdminAction(dir, {
+      category: "linked-server", action: "linked-server.update", actor: BOSS, changed: ["cap"],
+      before: { cap: "ask", token: "lsk_secret-value-that-must-not-show" }, after: { cap: "edits" },
+    });
+    await flushAdminActivity(dir);
+    const now = Date.now();
+    const text = JSON.stringify(readAdminActivityRange(dir, { from: new Date(now - 60_000), to: new Date(now + 60_000) }));
+    expect(text).toContain("\"cap\":\"edits\"");
+    expect(text).not.toContain("lsk_secret");
+  });
+});

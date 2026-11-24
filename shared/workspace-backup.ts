@@ -14,6 +14,8 @@ export interface WorkspaceBackupSummary {
   messages: number;
   exclusions: string[];
   warnings: string[];
+  /** Parts the person chose to leave out of this export (for example "work-folders"). Absent when nothing was left out. */
+  leftOut?: string[];
 }
 
 /** What a restore from another kind of computer (Windows to Linux, say) could not bring: folders and files outside

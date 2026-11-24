@@ -22,7 +22,8 @@ vi.mock("@/state/store", () => ({
 let host: HTMLDivElement;
 let root: Root;
 const render = () => flushSync(() => root.render(createElement(NewBrowserSettings)));
-const toggle = () => host.querySelector<HTMLButtonElement>('button[aria-label="Use the new browser"]')!;
+const maybeToggle = () => host.querySelector<HTMLButtonElement>('button[aria-label="Use the new browser"]');
+const toggle = () => maybeToggle()!;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -71,6 +72,15 @@ describe("New browser setting", () => {
       body: JSON.stringify({ browserEngine: { engine: "agent-browser" } }),
     });
     expect(toggle().getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("New browser setting where the host fixes the engine", () => {
+  it("shows no row, as no setting can change the engine there", () => {
+    fixture.config = { browserEngine: { kind: "engine", engine: "agent-browser", engineFixed: true } };
+    render();
+    expect(maybeToggle()).toBeNull();
+    expect(host.querySelector('[data-testid="new-browser-settings"]')).toBeNull();
   });
 });
 

@@ -2,7 +2,7 @@ import { machineMemoryBytes, maxBotMemoryGb, validBotMemoryGb } from "../bot-mem
 import { liveSavePatch } from "../live-config.ts";
 import { signInEnvRefusal } from "../sign-in-env.ts";
 import { browserEngineStatus, browserSessionId } from "../browser-engine.ts";
-import { browserEngineKind } from "../browser/config.ts";
+import type { BrowserEngineKind } from "../browser/config.ts";
 import type { BrowserCleanupCoordinator, BrowserCleanupRequest } from "../browser-lifecycle-cleanup.ts";
 import { finalizeBrowserCleanupMutation, requireBrowserCleanupAcknowledged } from "../browser-lifecycle-cleanup.ts";
 import type { BrowserLive } from "../browser-live.ts";
@@ -70,6 +70,8 @@ export interface ConfigRouteDeps {
   closeBrowser(session: string, spec: { command: string; env: Record<string, string> }): Promise<boolean>;
   /** After browserEngine.engine changed: closes the viewers and the browsers the other engine ran. */
   browserEngineSwitched(): void;
+  /** The engine that runs bots' browsers now, whether the person chose it or the host did. */
+  browserEngine(): BrowserEngineKind;
   decider: Pick<Decider, "testKey">;
   sharedComputers: Pick<SharedComputers, "close">;
   sharedComputerControl: Pick<SharedComputerControl, "close">;
@@ -116,7 +118,7 @@ export interface ConfigRouteDeps {
 export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
   const {
     store, cfg, registry, sessions, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
-    closeBrowser, browserEngineSwitched, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
+    closeBrowser, browserEngineSwitched, browserEngine, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy, localVmModeChanging,
     providerConfigBusy, computerProviderConfigTransitions, managedComputerOwners, providerOperationConflict,
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
@@ -211,7 +213,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         }
       }
       const disablingBuiltInBrowser = patch.features?.browser === false && builtInBrowserEnabled(cfg);
-      const switchingBrowserEngine = patch.browserEngine?.engine !== undefined && patch.browserEngine.engine !== browserEngineKind(cfg);
+      const switchingBrowserEngine = patch.browserEngine?.engine !== undefined && patch.browserEngine.engine !== browserEngine();
       const removedBrowserProfileIds = patch.browserProfiles === undefined
         ? []
         : (cfg.browserProfiles ?? [])

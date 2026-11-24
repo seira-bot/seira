@@ -125,11 +125,12 @@ export function BrowserProxyRow() {
   );
 }
 
-/** browserEngine.engine: the bots' browsers run on Seira's own Chrome driver instead of agent-browser. */
+/** On while the bots' browsers run on Seira's own Chrome driver, by default or by choice; off saves agent-browser. */
 export function NewBrowserSettings() {
   const { state } = useStore();
   const on = state.config?.browserEngine?.engine === "chrome";
   const { saving, error, save } = useConfigSave();
+  if (state.config?.browserEngine?.engineFixed === true) return null;
 
   return (
     <div data-testid="new-browser-settings" className="contents">

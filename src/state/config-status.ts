@@ -192,6 +192,9 @@ export interface ConfigStatus {
   /** This server is a Seira Cloud home: it offers no "this computer" and no
    * Local VM (server/cloud-home.ts). Absent everywhere else. */
   cloudHome?: boolean;
+  /** `no-bwrap`: every bot's commands were meant to run in the bot box, and it is off because this computer has no
+   * bubblewrap. Absent otherwise. */
+  boxMissing?: "no-bwrap";
   /** A Team Cloud: the team this server is the home of, and the Plan page (Seira Cloud) where its people and plan
    * are managed. Absent everywhere else. */
   team?: { id: string; name: string; cloudPage?: string };
@@ -228,8 +231,10 @@ export interface BrowserEngineSummary {
   myChromeOn?: { name: string; device: "PC" | "Mac" | "computer"; online: boolean };
   /** On My Cloud with no computer lending Chrome: it can be lent from the desktop app. */
   myChromeLendable?: true;
-  /** browserEngine.engine: "chrome" when the bots' browsers run on Seira's own Chrome driver. */
+  /** The engine that runs the bots' browsers now: the saved choice, else "chrome" where this host has a Chrome for Seira's own driver. */
   engine?: "agent-browser" | "chrome";
+  /** Present where the host fixes the engine at agent-browser, so no setting can change it. */
+  engineFixed?: true;
   /** Self-hosted servers only: whether bots' browsers may open this server's own sites and its local network
    * (browserEngine.egress.localNetwork, off by default). Absent on the desktop and on Seira Cloud. */
   serverSites?: boolean;

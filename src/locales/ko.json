@@ -3097,7 +3097,7 @@
   "settings.experimental.browserWindows": "이 Windows 머신에서는 아직 쓸 수 없어요: `seira browser install`로 브라우저를 설치하세요.",
   "settings.experimental.browserAria": "내장 브라우저 켜기",
   "settings.experimental.newBrowser": "새 브라우저",
-  "settings.experimental.newBrowserDetail": "기본값은 꺼짐이에요. 봇의 브라우저가 agent-browser 대신 {app} 자체 Chrome 드라이버로 실행돼요. 페이지가 내 화면 해상도로 선명하게 표시되고, 봇이 업로드, 다운로드, 대화상자, 팝업을 처리할 수 있어요. 내 Chrome을 쓰는 프로필에는 영향이 없어요. 전환하면 열린 브라우저가 닫히고, 한쪽에 저장된 로그인은 다른 쪽으로 넘어가지 않아요.",
+  "settings.experimental.newBrowserDetail": "기본으로 켜져 있습니다. 봇의 브라우저가 agent-browser 대신 {app} 자체 Chrome 드라이버로 실행됩니다. 페이지가 화면 해상도에 맞게 선명하게 표시되고, 봇이 업로드, 다운로드, 대화상자, 팝업을 처리할 수 있습니다. 내 Chrome을 쓰는 프로필에는 영향이 없습니다. 전환하면 열려 있는 브라우저가 닫힙니다. agent-browser에 저장된 로그인 정보는 봇이 처음 브라우저를 열 때 함께 옮겨집니다. 끄면 agent-browser로 돌아갑니다.",
   "settings.experimental.newBrowserAria": "새 브라우저 사용",
   "browser.panel.profileTitle": "브라우저 프로필: {name}",
   "browser.panel.profiles": "브라우저 프로필",
