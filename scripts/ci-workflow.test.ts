@@ -307,6 +307,7 @@ describe("Server image smoke workflow", () => {
     expect(smoke.on.workflow_call).toEqual({
       inputs: {
         tag: { description: expect.any(String), required: false, type: "string", default: "" },
+        sha: { description: expect.any(String), required: false, type: "string", default: "" },
         save: { description: expect.any(String), required: false, type: "boolean", default: false },
       },
     });
@@ -342,12 +343,34 @@ describe("Server image smoke workflow", () => {
     expect(step.run.indexOf('"$revision" = "$CHECKED_SHA"')).toBeLessThan(step.run.indexOf("imagetools create"));
   });
 
+  it("builds the commit that the gate approved for a release run, and keeps the normal checkout otherwise", () => {
+    expect(image.jobs.image!.needs).toBe("gate");
+    expect(image.jobs.image!.if).toBe("${{ !cancelled() && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}");
+    for (const id of ["image", "cloud-home", "connector"]) {
+      const checkout = stepsOf(smoke.jobs[id]!).find((each) => each.uses?.startsWith("actions/checkout@"))!;
+      expect(checkout.with?.ref, id).toBe("${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}");
+    }
+  });
+
+  it("checks the loaded connector image revision before the first registry push", () => {
+    const run = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!.run;
+    const check = run.indexOf('[ "$loaded" = "$CHECKED_SHA" ]');
+    expect(run).toContain("docker image inspect -f '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' seira-connector:amd64");
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(run.indexOf("docker push"));
+  });
+
+  it("keeps the single connector manifest when it adds the release tags", () => {
+    const run = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!.run;
+    expect(run).toContain('docker buildx imagetools create --prefer-index=false "${targets[@]}" "$ref"');
+  });
+
   it("promotes the digest that this job's push reported, under a build tag of this run, and checks the result", () => {
     const step = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!;
     expect(step.run).toContain('build="$image:build-amd64-$RUN_ID-$RUN_ATTEMPT"');
     expect(step.run).toContain("grep -Eo 'digest: sha256:[0-9a-f]{64}'");
     expect(step.run).toContain('ref="$image@$digest"');
-    expect(step.run).toContain('docker buildx imagetools create "${targets[@]}" "$ref"');
+    expect(step.run).toContain('"${targets[@]}" "$ref"');
     expect(step.run).not.toMatch(/imagetools inspect "\$image:build-amd64"/);
     expect(step.run).toContain('= "$digest" ]');
   });
@@ -389,7 +412,7 @@ describe("Server image smoke workflow", () => {
   it("checks out a release tag only by its full tag name, and the commit of the caller when there is no tag", () => {
     const checkouts = stepsOf(build).filter((step) => step.uses?.startsWith("actions/checkout@"));
     expect(checkouts).toHaveLength(1);
-    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}");
+    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}");
   });
 
   it("reads the tag only through env, and labels the image with the tag or main", () => {
@@ -422,7 +445,7 @@ describe("Server image workflow", () => {
 
   it("calls the smoke workflow with the tag, and saves the images only on main", () => {
     expect(build.uses).toBe("./.github/workflows/server-image-smoke.yml");
-    expect(build.with).toEqual({ tag: "${{ inputs.tag }}", save: "${{ github.ref == 'refs/heads/main' }}" });
+    expect(build.with).toEqual({ tag: "${{ inputs.tag }}", sha: "${{ needs.gate.outputs.sha }}", save: "${{ github.ref == 'refs/heads/main' }}" });
     expect(build.steps).toBeUndefined();
     expect(build.permissions).toBeUndefined();
     expect(build.environment).toBeUndefined();

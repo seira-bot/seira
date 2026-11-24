@@ -28,9 +28,13 @@ concurrency:
 jobs:
   image:
     name: build and smoke
+    # The images are built from the commit that the gate approved. Off main the gate is skipped and the run builds its own commit.
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}
     uses: ./.github/workflows/server-image-smoke.yml
     with:
       tag: ${{ inputs.tag }}
+      sha: ${{ needs.gate.outputs.sha }}
       save: ${{ github.ref == 'refs/heads/main' }}
 
   gate:
@@ -203,6 +207,9 @@ jobs:
           image="$image-connector"
           # One build tag for this run and attempt, so no other run can move it. The digest is the one that this push reports.
           build="$image:build-amd64-$RUN_ID-$RUN_ATTEMPT"
+          # The loaded image must come from the commit that the gate checked, before anything goes to the registry.
+          loaded=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' seira-connector:amd64)
+          [ "$loaded" = "$CHECKED_SHA" ] || { echo "The loaded image was built from $loaded, but the release gate checked $CHECKED_SHA."; exit 1; }
           docker tag seira-connector:amd64 "$build"
           pushed=$(docker push "$build" 2>&1 | tee /dev/stderr)
           digest=$(grep -Eo 'digest: sha256:[0-9a-f]{64}' <<<"$pushed" | tail -1 | cut -d' ' -f2)
@@ -218,7 +225,8 @@ jobs:
           if [ -n "$TAG" ]; then tags=("$TAG"); else tags=(latest "sha-$revision"); fi
           targets=()
           for tag in "${tags[@]}"; do targets+=(-t "$image:$tag"); done
-          docker buildx imagetools create "${targets[@]}" "$ref"
+          # One source: keep it a single manifest. Without this flag Buildx wraps it in an index, and the tag gets another digest.
+          docker buildx imagetools create --prefer-index=false "${targets[@]}" "$ref"
           for tag in "${tags[@]}"; do
             [ "$(docker buildx imagetools inspect "$image:$tag" --format '{{json .Manifest}}' | jq -r .digest)" = "$digest" ] || { echo "$image:$tag does not point at $digest."; exit 1; }
           done
