@@ -73,6 +73,11 @@ export function resolveTag(repo, tag, api) {
   return { commit: object.sha };
 }
 
+/** Patterns this script can read exactly: `~ALL`, or text made of safe name characters plus `*`, `**` and `?`. Bracket sets, `\\` and other `~` values are not read, so they are never guessed. */
+function supportedPattern(pattern) {
+  return pattern === "~ALL" || (typeof pattern === "string" && /^refs\/[A-Za-z0-9._\-/*?]*$/.test(pattern));
+}
+
 /** Does a ruleset ref pattern match `ref`? `~ALL`, an exact name, or a glob where `*` stays inside one path part and `**` crosses `/`. */
 function refMatches(pattern, ref) {
   if (pattern === "~ALL") return true;
@@ -103,6 +108,8 @@ export function ensureTagProtection(repo, tag, api) {
     try { rules = JSON.parse(detail.body); } catch { return `cannot read ruleset ${summary.id}: the answer is not JSON. Nothing was published.`; }
     const name = `ruleset "${rules?.name ?? summary.id}"`;
     const names = rules?.conditions?.ref_name;
+    const unsupported = [...(names?.include ?? []), ...(names?.exclude ?? [])].find((pattern) => !supportedPattern(pattern));
+    if (unsupported !== undefined) return `${name} uses the ref pattern ${JSON.stringify(unsupported)}, which this script cannot read exactly (only ~ALL, *, ** and ? are supported). Failing closed. Nothing was published.`;
     if (!(names?.include ?? []).some((pattern) => refMatches(pattern, ref)) || (names?.exclude ?? []).some((pattern) => refMatches(pattern, ref))) { why.push(`${name} does not cover ${ref}`); continue; }
     const types = new Set((rules.rules ?? []).map((rule) => rule?.type));
     const missing = ["update", "deletion"].filter((type) => !types.has(type));

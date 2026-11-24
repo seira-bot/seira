@@ -148,6 +148,21 @@ describe("publish-browser-engine-release", () => {
     expect(ensureTagProtection("o/r", TAG, ruleApi(["refs/tags/v*"]) as never)).toMatch(/no active tag ruleset protects refs\/tags\/browser-engine-v/);
   });
 
+  it("refuses before any tag or release write when an exclude pattern uses a bracket set that GitHub would apply (positive control: empty exclude passes)", () => {
+    const withExclude = (exclude: string[]) => (args: string[]) => {
+      if (!args[0].includes("/rulesets")) return NOT_FOUND;
+      const r = ruleApi(["refs/tags/browser-engine-v*"])(args) as { ok: boolean; body?: string };
+      if (!args[0].endsWith("/7")) return r;
+      const b = JSON.parse(r.body as string); b.conditions.ref_name.exclude = exclude; return { ok: true, body: JSON.stringify(b) };
+    };
+    const runs: string[][] = []; const calls: string[][] = [];
+    const bad = (args: string[]) => { calls.push(args); return withExclude(["refs/tags/browser-engine-[v]*"])(args); };
+    expect(quietly(() => realMain([TAG, "--target", SHA, "--", "a"], (args: string[]) => { runs.push(args); }, bad as never))).toBe(1);
+    expect(runs).toEqual([]);
+    expect(calls.some((args) => args.includes("POST"))).toBe(false);
+    expect(ensureTagProtection("o/r", TAG, withExclude([]) as never)).toBeNull();
+  });
+
   it("accepts a ruleset that covers the engine tag with update and deletion rules and no bypass, with the same commit", () => {
     const runs: string[][] = [];
     const api = (args: string[]) => (args[0].includes("/rulesets") ? ruleApi(["refs/tags/browser-engine-v*"])(args) : REF("commit", SHA));
@@ -165,6 +180,11 @@ describe("publish-browser-engine-release", () => {
     expect(ensureTagProtection("o/r", TAG, ruleApi(covered, ["update", "deletion"], [{ actor_id: 1, actor_type: "Team", bypass_mode: "always" }]) as never)).toMatch(/bypass actor/);
     const inactive = (args: string[]) => (args[0].includes("/rulesets?") ? { ok: true, body: JSON.stringify([{ id: 7, target: "tag", enforcement: "evaluate" }]) } : ruleApi(covered)(args));
     expect(ensureTagProtection("o/r", TAG, inactive as never)).toMatch(/no active tag ruleset/);
+    const bracketExclude = (args: string[]) => { const r = ruleApi(covered)(args) as { ok: boolean; body?: string }; if (!args[0].endsWith("/7")) return r; const b = JSON.parse(r.body as string); b.conditions.ref_name.exclude = ["refs/tags/browser-engine-[v]*"]; return { ok: true, body: JSON.stringify(b) }; };
+    expect(ensureTagProtection("o/r", TAG, bracketExclude as never)).toMatch(/cannot read exactly/);
+    const bracketInclude = ruleApi(["refs/tags/browser-engine-[v]*"]);
+    expect(ensureTagProtection("o/r", TAG, bracketInclude as never)).toMatch(/cannot read exactly/);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(covered) as never)).toBeNull();
     const excluded = ruleApi(covered, ["update", "deletion"], [], {});
     expect(ensureTagProtection("o/r", TAG, ((args: string[]) => { const r = excluded(args) as { ok: boolean; body?: string }; if (args[0].endsWith("/7")) { const b = JSON.parse(r.body as string); b.conditions.ref_name.exclude = [`refs/tags/${TAG}`]; return { ok: true, body: JSON.stringify(b) }; } return r; }) as never)).toMatch(/does not cover/);
   });
