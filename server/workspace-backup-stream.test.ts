@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -88,6 +88,20 @@ it("leaves no download and no job folder when an export fails", async () => {
   const next = await createWorkspaceBackupSnapshot(root, { password: PASSWORD });
   expect(existsSync(next.path)).toBe(true);
 });
+
+for (const roster of ["bots.json", "groups.json"]) {
+  it(`refuses a ${roster} roster above the 16 MiB metadata limit before it reads the bytes, and leaves no download`, async () => {
+    const root = folder();
+    put(root, "workspaces/bot/a.txt", "synthetic alpha");
+    put(root, roster, "[]");
+    // A sparse file: it is over the limit, but it takes no disk space and no memory until something reads it.
+    truncateSync(join(root, roster), 16 * 1024 ** 2 + 1);
+    await expect(createWorkspaceBackupSnapshot(root, { password: PASSWORD })).rejects.toThrow(/metadata limit/);
+    expect(jobs(root)).toEqual([]);
+    const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [e.name]));
+    expect(files(root).filter((name) => name.endsWith(".seirabackup"))).toEqual([]);
+  });
+}
 
 const LIMIT = 1024 ** 3;
 const identity = (path: string) => { const stat = statSync(path); return { dev: stat.dev, ino: stat.ino }; };
