@@ -242,6 +242,14 @@ describe("the bots' browser host with no engine chosen", () => {
     }
   });
 
+  it("marks the engine as fixed in the summary only inside a browser box", () => {
+    const box = { bwrap: "/usr/bin/bwrap", options: ["--unshare-pid"], seccomp: null };
+    const summary = { kind: "engine" as const, version: "0.37.0", myChrome: false };
+    expect(setup(undefined, { chrome: true, cloudHome: true, browserBox: () => box }).host.engineSummary(summary)).toMatchObject({ engineFixed: true });
+    expect(setup(undefined, { chrome: true }).host.engineSummary(summary)).not.toHaveProperty("engineFixed");
+    expect(setup("chrome").host.engineSummary(summary)).not.toHaveProperty("engineFixed");
+  });
+
   it("follows the choice at once: saving agent-browser moves an effective Seira engine off it", () => {
     const { cfg, host } = setup(undefined, { chrome: true });
     expect(host.browserEngine()).toBe("chrome");

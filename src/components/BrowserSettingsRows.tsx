@@ -130,6 +130,7 @@ export function NewBrowserSettings() {
   const { state } = useStore();
   const on = state.config?.browserEngine?.engine === "chrome";
   const { saving, error, save } = useConfigSave();
+  if (state.config?.browserEngine?.engineFixed === true) return null;
 
   return (
     <div data-testid="new-browser-settings" className="contents">
