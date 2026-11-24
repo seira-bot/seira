@@ -31,12 +31,14 @@ it("keeps the request loop answering while the files are read and encrypted", as
     const exporting = createWorkspaceBackup(directory, { password: "fixture-backup-password-only" }).finally(() => { finished = true; ticksBeforeEnd = ticks; });
     // Progress marker: the encrypted archive is written as the files are read, so a partial archive with bytes in it
     // proves hashing or encryption is running now. The main thread must still answer a request at that moment.
+    // The fixed header (magic, salt, IV) is written before the cipher starts, so only bytes past it show the cipher output.
+    const HEADER = Buffer.from("SEIRA-WORKSPACE-1\n").length + 16 + 12;
     const archive = () => {
       const root = join(directory, ".backups");
       if (!existsSync(root)) return 0;
       for (const id of readdirSync(root)) {
         const file = join(root, id, "workspace.seirabackup");
-        if (existsSync(file)) return statSync(file).size;
+        if (existsSync(file)) return Math.max(0, statSync(file).size - HEADER);
       }
       return 0;
     };
@@ -49,7 +51,7 @@ it("keeps the request loop answering while the files are read and encrypted", as
     expect(answeredWhileRunning).toBe(true);
     const result = await exporting;
     expect(finished).toBe(true);
-    expect(statSync(result.path).size).toBeGreaterThanOrEqual(written);
+    expect(statSync(result.path).size - HEADER).toBeGreaterThanOrEqual(written);
     expect(result.summary.files).toBe(321);
     expect(existsSync(result.path)).toBe(true);
     expect(ticksBeforeEnd).toBeGreaterThan(5);
