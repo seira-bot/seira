@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync
 import { cp } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-import { compareVersions, seedingDir, versionOf } from "./profile.ts";
+import { compareVersions, OLD_STAGING_NAME, seedingDir, versionOf } from "./profile.ts";
 
 const NEVER_COPIED = new Set([
   "SingletonLock", "SingletonSocket", "SingletonCookie", "DevToolsActivePort",
@@ -20,14 +20,28 @@ export class SourceStillOpen extends Error {
   }
 }
 
-/** Removes the copies a stopped process left under `<browser root>/seeding`, except those `busy` names (a copy running now). */
+/**
+ * Removes the copies a stopped process left, except those `busy` names (a copy running now): under `<browser root>/seeding`,
+ * and the earlier layout's `<hash>.seeding` folders beside the profiles. Only that exact old name is matched, never another
+ * folder in `profiles` or `temp`.
+ */
 export function removeStaleSeeding(browserRoot: string, busy: (profile: string) => boolean): void {
   const parent = join(browserRoot, "seeding");
-  let names: string[];
-  try { names = readdirSync(parent); } catch { return; }
+  let names: string[] = [];
+  try { names = readdirSync(parent); } catch {}
   for (const name of names) {
     if (busy(join(browserRoot, "profiles", name))) continue;
     rmSync(join(parent, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+  for (const kind of ["profiles", "temp"]) {
+    let beside: string[];
+    try { beside = readdirSync(join(browserRoot, kind)); } catch { continue; }
+    for (const name of beside) {
+      if (!OLD_STAGING_NAME.test(name)) continue;
+      const staging = join(browserRoot, kind, name);
+      if (busy(staging) || busy(staging.slice(0, -".seeding".length))) continue;
+      rmSync(staging, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    }
   }
 }
 

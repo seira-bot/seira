@@ -95,4 +95,20 @@ describe("removing a profile", () => {
     expect(existsSync(dir)).toBe(false);
     expect(existsSync(seedingDir(dir))).toBe(false);
   });
+
+  it("removes the earlier layout's `<hash>.seeding` beside the profile too, and nothing else beside it", () => {
+    const dataDir = scratch();
+    const dir = profileDir(dataDir, "bot:scout");
+    mkdirSync(join(dir, "Default"), { recursive: true });
+    mkdirSync(join(`${dir}.seeding`, "Default"), { recursive: true });
+    writeFileSync(join(`${dir}.seeding`, "Default", "Cookies"), "half a copy");
+    mkdirSync(`${dir}.seeding.bak`, { recursive: true });
+    const other = profileDir(dataDir, "bot:other");
+    mkdirSync(`${other}.seeding`, { recursive: true });
+    removeProfile(dir);
+    expect(existsSync(dir)).toBe(false);
+    expect(existsSync(`${dir}.seeding`)).toBe(false);
+    expect(existsSync(`${dir}.seeding.bak`), "a lookalike name stays").toBe(true);
+    expect(existsSync(`${other}.seeding`), "another profile's copy stays").toBe(true);
+  });
 });

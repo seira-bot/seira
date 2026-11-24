@@ -277,6 +277,15 @@ describe("the new engine's minute", () => {
     expect(existsSync(left)).toBe(false);
   });
 
+  it("removes the half copy that an earlier version left beside the profile, at the next start", () => {
+    const { value, dataDir } = engine();
+    const left = `${profileDir(dataDir, "bot:scout")}.seeding`;
+    mkdirSync(join(left, "Default"), { recursive: true });
+    writeFileSync(join(left, "Default", "Cookies"), "half a copy");
+    value.start({ inUse: false, prepare: false });
+    expect(existsSync(left)).toBe(false);
+  });
+
   it("closes idle browsers every minute while the engine is in use", async () => {
     vi.useFakeTimers();
     const { value, closeIdle } = engine();

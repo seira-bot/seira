@@ -176,7 +176,17 @@ export function seedingDir(profile: string): string {
   return join(dirname(dirname(profile)), "seeding", basename(profile));
 }
 
+/** The exact name an earlier version gave a copy in progress: `<hash>.seeding`, beside the profile. A profile hash is 24 hex characters. */
+export const OLD_STAGING_NAME = /^[0-9a-f]{24}\.seeding$/;
+
+/** The earlier layout's staging folder of `profile`, or null when `profile` is not a profile folder named by a hash. */
+export function oldSeedingDir(profile: string): string | null {
+  return /^[0-9a-f]{24}$/.test(basename(profile)) ? `${profile}.seeding` : null;
+}
+
 export function removeProfile(dir: string): void {
   rmSync(seedingDir(dir), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  const old = oldSeedingDir(dir);
+  if (old) rmSync(old, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
