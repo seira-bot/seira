@@ -6,6 +6,7 @@ import type { LookupAddress } from "node:dns";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 
 import { isPublicDomainAddress } from "../custom-domain.ts";
+import { testSwitchOn } from "../test-switches.ts";
 
 /** The address is not one this server may dial. The text is safe to show to the person. */
 export class LinkedServerDestinationError extends Error {
@@ -31,8 +32,9 @@ const isLoopback = (address: string): boolean => {
   return family !== 0 && loopback.check(address, family === 4 ? "ipv4" : "ipv6");
 };
 
-/** Tests of two servers on one machine set SEIRA_TEST_LINKED_LOOPBACK=1. No other code path allows a local address. */
-export const loopbackAllowed = (env: NodeJS.ProcessEnv = process.env): boolean => env.SEIRA_TEST_LINKED_LOOPBACK === "1";
+/** Tests of two servers on one machine set SEIRA_TEST_LINKED_LOOPBACK=1. No other code path allows a local address.
+ * Only a start that the test fixture made accepts it (server/test-switches.ts): a normal start ignores the variable. */
+export const loopbackAllowed = (env: NodeJS.ProcessEnv = process.env): boolean => testSwitchOn("SEIRA_TEST_LINKED_LOOPBACK", env);
 
 const bare = (hostname: string): string => hostname.replace(/^\[|\]$/gu, "");
 
