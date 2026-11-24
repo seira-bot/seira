@@ -326,6 +326,38 @@ describe("a phone that may not open other workspaces", () => {
     expect(sent).toEqual([]);
   });
 
+  it("answers 403 without the list when the owner turns the phone off while the desktop's answer is awaited", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    workspaces = createWorkspaces({
+      send: (message) => {
+        sent.push(message as Record<string, unknown>);
+        otherWorkspaces = false;
+        setTimeout(() => facts([{ id: "local", name: "This PC", current: false, state: "ready" }, { id: "work", name: "Work", current: true, state: "ready" }]), 1);
+      },
+      settleMs: 50,
+    });
+    facts(LIST);
+    const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(status).toBe(403);
+    expect(json.workspaces).toBeUndefined();
+    expect(JSON.stringify(json)).not.toMatch(/Work|home/);
+  });
+
+  it("answers 403 without the list when the phone is unpaired while the desktop's answer is awaited", async () => {
+    workspaces = createWorkspaces({
+      send: (message) => {
+        sent.push(message as Record<string, unknown>);
+        paired = false;
+      },
+      settleMs: 20,
+    });
+    facts(LIST);
+    const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(status).toBe(403);
+    expect(json.workspaces).toBeUndefined();
+  });
+
   it("still switches when the phone keeps its access while the body is read", async () => {
     facts(LIST);
     const { status } = await callWhileBodyWaits({ id: "work" }, () => {});

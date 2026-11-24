@@ -150,5 +150,7 @@ export async function answerWorkspaces(
   // The owner may have turned this phone off, or unpaired it, while the body was read.
   if (!allowed()) return refused;
   const reply = await channel.switchTo(body);
+  // The switch waits for the desktop's next facts. A phone turned off or unpaired during that wait gets no list.
+  if (!allowed()) return refused;
   return reply.status === 404 && (reply.body as { error?: string }).error === "no route" ? absent : reply;
 }
