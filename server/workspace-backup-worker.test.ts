@@ -20,17 +20,16 @@ vi.mock("node:worker_threads", async importOriginal => {
 // Real encrypted backups of 800+ files: about 3 s on Linux and macOS, about 25 s on the Windows runners.
 const TIMEOUT_MS = 120_000;
 
-it("keeps the request loop running during the snapshot copy, not just encryption", async () => {
+it("keeps the request loop running while the files are read and encrypted", async () => {
   const directory = mkdtempSync(join(tmpdir(), "seira-backup-worker-"));
-  const first = "file-0000.txt", last = "file-0319.txt";
   for (let i = 0; i < 320; i++) writeFileSync(join(directory, `file-${String(i).padStart(4, "0")}.txt`), "synthetic");
   let observedCopy = false;
   const timer = setInterval(() => {
     const root = join(directory, ".backups");
     if (!existsSync(root)) return;
     for (const job of readdirSync(root)) {
-      const snapshot = join(root, job, "snapshot", "data");
-      if (existsSync(join(snapshot, first)) && !existsSync(join(snapshot, last))) observedCopy = true;
+      // The export has no full copy any more: it runs while its job folder holds a snapshot.
+      if (existsSync(join(root, job, "snapshot", "data"))) observedCopy = true;
     }
   }, 1);
   try {
@@ -92,7 +91,7 @@ it("removes only the failed worker's partial snapshot after an abrupt exit", asy
       .then(() => ({}), error => ({ error }));
     const root = join(directory, ".backups");
     await expect.poll(() => readdirSync(root).some(id => id !== earlier.id &&
-      existsSync(join(root, id, "snapshot", "data", "file-0000.txt"))), { interval: 1, timeout: 10_000 }).toBe(true);
+      existsSync(join(root, id, "snapshot", "data"))), { interval: 1, timeout: 10_000 }).toBe(true);
     await running.worker!.terminate();
     expect((await pending).error).toMatchObject({ message: "The backup worker stopped before completing. Try again." });
     expect(readdirSync(root)).toEqual([earlier.id]);

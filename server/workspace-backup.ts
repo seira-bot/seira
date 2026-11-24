@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
+import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
 import { readBackupMagic, withCurrentSummary } from "./workspace-backup-legacy.ts";
@@ -21,6 +22,7 @@ import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
 import { backupPartOf, LEAVE_OUT_PARTS, parseLeaveOut, type LeaveOutPart } from "./workspace-backup-parts.ts";
 import { databaseCounts } from "./workspace-backup-counts.ts";
+import { archiveBlocks, copyRegular, hashRegular, type StreamSource } from "./workspace-backup-stream.ts";
 import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
 import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
 
@@ -219,39 +221,6 @@ function passwordKey(password: string, salt: Buffer): Promise<Buffer> {
 }
 
 // No link following, and a synchronous copy so this server cannot interleave a mutation.
-function copyRegular(source: string, destination: string): { size: number; mode: number; sha256: string } {
-  const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW);
-  let output: number | undefined;
-  try {
-    const before = fstatSync(input);
-    if (!before.isFile() || before.size > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("A workspace file is not regular or exceeds the 10 GB backup limit.");
-    const mode = before.mode & 0o100 ? 0o700 : 0o600;
-    output = openSync(destination, "wx", mode);
-    const chunk = Buffer.allocUnsafe(1024 * 1024);
-    const hash = createHash("sha256");
-    let size = 0;
-    for (;;) {
-      const count = readSync(input, chunk, 0, chunk.length, null);
-      if (!count) break;
-      size += count;
-      if (size > before.size) throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-      hash.update(chunk.subarray(0, count)); restoreBeat();
-      let offset = 0;
-      while (offset < count) offset += writeSync(output, chunk, offset, count - offset);
-    }
-    const after = fstatSync(input);
-    const current = lstatSync(source);
-    if (size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs ||
-      current.ino !== before.ino || current.dev !== before.dev || current.isSymbolicLink()) {
-      throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-    }
-    fsyncSync(output);
-    return { size, mode, sha256: hash.digest("hex") };
-  } finally {
-    closeSync(input);
-    if (output !== undefined) closeSync(output);
-  }
-}
 function hashFile(path: string): string {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
@@ -310,7 +279,7 @@ export async function createWorkspaceBackup(dataDir: string, options: CreateWork
   }
 }
 
-export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string, deps: { statfs?: FreeSpace } = {}): Promise<CreatedWorkspaceBackup> {
+export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string, deps: { statfs?: FreeSpace; /** Test seam: runs after pass 1 has read every file and before pass 2 streams them. */ betweenReads?: () => void } = {}): Promise<CreatedWorkspaceBackup> {
   if (Object.hasOwn(options, "credentials")) throw new Error("Workspace backups do not transfer credentials.");
   assertLocalAuthOutsideSnapshot(dataDir);
   const leaveOut = parseLeaveOut(options.leaveOut);
@@ -318,7 +287,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   const key = await passwordKey(options.password, salt);
   const job = newJob(dataDir, jobId);
   const snapshot = join(job.directory, "snapshot");
-  const entries: Entry[] = [];
+  const entries: Entry[] = []; const streams = new Map<string, StreamSource>();
   const foldedPaths = new Map<string, string>(); const problems: string[] = [];
   const warnings = ["Stop external editors and managed desktops before exporting; files written outside this server cannot be frozen by the backup gate.", "Conversation text and user files are not redacted and may contain secrets you pasted. Keep the encrypted backup private.", RESTORE_WARNING];
   let bytes = 0;
@@ -328,7 +297,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   let copiedLinks = 0;
   try {
     const root = realpathSync(dataDir);
-    assertBackupSpace(job.directory, root, deps.statfs, leaveOut);
+    assertBackupSpace(job.directory, root, deps.statfs, leaveOut, Object.keys(SNAPSHOT_DATABASES));
     folder(join(snapshot, "data"));
     for (const [name, snapshotName] of Object.entries(SNAPSHOT_DATABASES)) {
       const sourceDb = join(root, name);
@@ -408,7 +377,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           entries.push({ path, type: "directory", size: 0, mode: 0o700 });
           walk(source, path, [...chain, source]);
         } else if (stat.isFile()) {
-          let copied: { size: number; mode: number; sha256: string };
+          let copied: { size: number; mode: number; sha256: string }; let stream: StreamSource;
           if (path === "config.json" || path === "webhooks.json" || (privacy && (path === "bots.json" || path === "routines.json"))) {
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
@@ -420,8 +389,9 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
               if (Array.isArray(value.deleted)) for (const entry of value.deleted) if (record(entry) && record(entry.webhook)) delete entry.webhook.sealedSecret;
               writeJson(destination, value);
             }
-            copied = { size: lstatSync(destination).size, mode: 0o600, sha256: hashFile(destination) };
-          } else copied = copyRegular(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, destination);
+            ({ copied, stream } = hashRegular(destination, destination, MAX_WORKSPACE_BACKUP_BYTES));
+          } else ({ copied, stream } = hashRegular(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, join(directory, name), MAX_WORKSPACE_BACKUP_BYTES));
+          streams.set(path, stream);
           bytes += copied.size;
           if (bytes > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("The workspace exceeds the 10 GB backup limit.");
           entries.push({ path, type: "file", ...copied });
@@ -438,8 +408,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
       format: "seira.workspace-backup", version: 1, id: job.id, createdAt: new Date().toISOString(),
       appVersion: options.appVersion ?? "unknown", files: entries.filter((entry) => entry.type === "file").length,
       directories: entries.filter((entry) => entry.type === "directory").length, bytes,
-      bots: countJsonArray(join(snapshot, "data", "bots.json")), groups: countJsonArray(join(snapshot, "data", "groups.json")),
-      ...databaseCounts(join(snapshot, "data", "messages.db")),
+      bots: countJsonArray(streams.get("bots.json")?.source ?? join(snapshot, "data", "bots.json")), groups: countJsonArray(streams.get("groups.json")?.source ?? join(snapshot, "data", "groups.json")),
+      ...databaseCounts(join(snapshot, SNAPSHOT_DATABASES["messages.db"]!)),
       exclusions: EXCLUSION_NOTES, warnings,
       ...(leaveOut.length ? { leftOut: leaveOut } : {}),
     };
@@ -454,8 +424,8 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     const cipher = createCipheriv("aes-256-gcm", key, iv);
     cipher.setAAD(header);
     writeFileSync(path, header, { mode: 0o600, flag: "wx" });
-    const tar = await import("tar");
-    await pipeline(tar.c({ cwd: snapshot, portable: true, strict: true }, ["manifest.json", "data"]), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    deps.betweenReads?.();
+    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES), entries, streams)), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
     const fd = openSync(path, "a");
     try { writeSync(fd, cipher.getAuthTag()); fsyncSync(fd); } finally { closeSync(fd); }
     rmSync(snapshot, { recursive: true, force: true });
@@ -732,7 +702,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
   for (const entry of installed.filter((entry) => entry.type === "directory")) folder(join(prepared, entry.path));
   for (const entry of installed) {
     const destination = join(prepared, entry.path);
-    if (entry.type === "file") copyRegular(join(job, "staged", "data", entry.path), destination);
+    if (entry.type === "file") copyRegular(join(job, "staged", "data", entry.path), destination, MAX_WORKSPACE_BACKUP_BYTES);
   }
   const changeJson = (name: string, change: (value: unknown) => void) => {
     const path = join(prepared, name);
