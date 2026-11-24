@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
@@ -29,8 +29,27 @@ it("keeps the request loop answering while the files are read and encrypted", as
   const timer = setInterval(() => { ticks++; }, 1);
   try {
     const exporting = createWorkspaceBackup(directory, { password: "fixture-backup-password-only" }).finally(() => { finished = true; ticksBeforeEnd = ticks; });
+    // Progress marker: the encrypted archive is written as the files are read, so a partial archive with bytes in it
+    // proves hashing or encryption is running now. The main thread must still answer a request at that moment.
+    const archive = () => {
+      const root = join(directory, ".backups");
+      if (!existsSync(root)) return 0;
+      for (const id of readdirSync(root)) {
+        const file = join(root, id, "workspace.seirabackup");
+        if (existsSync(file)) return statSync(file).size;
+      }
+      return 0;
+    };
+    await expect.poll(() => finished || archive() > 0, { interval: 1, timeout: TIMEOUT_MS }).toBe(true);
+    expect(finished).toBe(false);
+    const written = archive();
+    expect(written).toBeGreaterThan(0);
+    await new Promise<void>(resolve => setTimeout(resolve, 1));
+    const answeredWhileRunning = !finished;
+    expect(answeredWhileRunning).toBe(true);
     const result = await exporting;
     expect(finished).toBe(true);
+    expect(statSync(result.path).size).toBeGreaterThanOrEqual(written);
     expect(result.summary.files).toBe(321);
     expect(existsSync(result.path)).toBe(true);
     expect(ticksBeforeEnd).toBeGreaterThan(5);
