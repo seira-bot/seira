@@ -56,6 +56,9 @@ export interface PhoneWorkspaceSwitchStatus {
   switch: PhoneWorkspaceSwitch;
 }
 
+/** The proof read of one switch: `POST` this path inside the encrypted phone connection, with no bearer. See `PhoneWorkspaceSwitchProof`. */
+export const phoneWorkspaceSwitchProofRoute = (id: string): string => `${PHONE_WORKSPACE_SWITCH_ROUTE}/${encodeURIComponent(id)}/proof`;
+
 /** A `ready` workspace other than the current one: start the switch. A `waiting` workspace with `now`: open it at once.
  * The current workspace while a switch waits: cancel that switch. An unknown `id` answers 404 `workspace_not_found`. */
 export interface PhoneWorkspaceSwitchRequest {
@@ -110,4 +113,109 @@ export function parsePhoneWorkspaceSwitch(value: unknown): PhoneWorkspaceSwitch 
   const state = PHONE_WORKSPACE_SWITCH_STATES.find((known) => known === raw.state) ?? "pending";
   const environmentId = environmentIdOf(raw.environmentId);
   return { id, workspaceId, ...(environmentId ? { environmentId } : {}), state };
+}
+
+/** The proof that a switch finished, version 1. After a switch the address shows another environment, so its own answer proves
+ * nothing: a different server can copy a known `environmentId`. The phone moves its pin only on this proof, and only when the
+ * signature verifies against the transport key `T.pub` that it pinned at pairing (companion/src/e2e/README.md, section 2).
+ *
+ * The phone sends `POST` `phoneWorkspaceSwitchProofRoute(id)` with a `PhoneWorkspaceSwitchProofRequest`, inside the encrypted
+ * connection (the Noise session), and sends no bearer. The computer answers 200 `{ proof }` once for each switch, only when the
+ * switch ended `done` for this phone, the phone may still open other workspaces, and the target workspace is the open one. An
+ * answer made for another connection, or a second answer for the same switch, does not exist: it is 403 `secure_channel_required`,
+ * 404 `switch_not_found`, 409 `switch_not_done`, 409 `switch_not_provable` or 409 `proof_used`. No proof, no pin change.
+ *
+ * Old computers answer 404 and old phones never ask: both keep today's behaviour. */
+export interface PhoneWorkspaceSwitchProofRequest {
+  /** b64u of 32 random bytes that the phone made for this request. */
+  nonce: string;
+}
+
+export interface PhoneWorkspaceSwitchProof {
+  v: 1;
+  operationId: string;
+  /** The workspace that was open when the switch started, and its environment when known. */
+  fromWorkspaceId: string;
+  fromEnvironmentId?: string;
+  /** The workspace that is open now, and the environment it shows as its own. */
+  workspaceId: string;
+  environmentId: string;
+  /** Milliseconds since the epoch, by the clock of the computer. The proof is short-lived. */
+  issuedAt: number;
+  expiresAt: number;
+  /** b64u of the 64-byte ECDSA P-256 / SHA-256 signature (r ‖ s) over `phoneWorkspaceSwitchProofMessage`. */
+  signature: string;
+}
+
+export const PHONE_SWITCH_PROOF_LABEL = "seira-switch-proof v1";
+
+export interface PhoneWorkspaceSwitchProofFields {
+  /** `SHA256(T.pub)[0:16]`. */
+  keyId: Uint8Array;
+  /** The handshake hash `h` of the Noise session that carries the proof (32 bytes). A proof for another session fails. */
+  binding: Uint8Array;
+  /** The id of the paired phone that asked: the phone knows it from pairing. */
+  deviceId: string;
+  operationId: string;
+  fromWorkspaceId: string;
+  fromEnvironmentId?: string;
+  workspaceId: string;
+  environmentId: string;
+  /** The 32 bytes behind the request's `nonce`. */
+  nonce: Uint8Array;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+const encoder = new TextEncoder();
+
+/** The exact bytes that the computer signs: the label, a zero byte, then the fields in this order. A string is a 2-byte
+ * big-endian length and its UTF-8 bytes (an absent `fromEnvironmentId` is the empty string); a time is 8 bytes big-endian. */
+export function phoneWorkspaceSwitchProofMessage(fields: PhoneWorkspaceSwitchProofFields): Uint8Array {
+  const parts: Uint8Array[] = [encoder.encode(PHONE_SWITCH_PROOF_LABEL), Uint8Array.of(0), fields.keyId, fields.binding];
+  const string = (value: string) => {
+    const bytes = encoder.encode(value);
+    parts.push(Uint8Array.of(bytes.length >> 8, bytes.length & 255), bytes);
+  };
+  const time = (value: number) => {
+    const bytes = new Uint8Array(8);
+    new DataView(bytes.buffer).setBigUint64(0, BigInt(value));
+    parts.push(bytes);
+  };
+  string(fields.deviceId);
+  string(fields.operationId);
+  string(fields.fromWorkspaceId);
+  string(fields.fromEnvironmentId ?? "");
+  string(fields.workspaceId);
+  string(fields.environmentId);
+  parts.push(fields.nonce);
+  time(fields.issuedAt);
+  time(fields.expiresAt);
+  const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+const SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
+const wireTime = (value: unknown): number | undefined => (typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined);
+
+/** Reads a proof from the wire. Null when a field is missing or malformed: the phone then keeps its pin. Reading does not
+ * verify anything; the phone checks the signature, the times, the nonce and the ids against what it asked for. */
+export function parsePhoneWorkspaceSwitchProof(value: unknown): PhoneWorkspaceSwitchProof | null {
+  const raw = value && typeof value === "object" ? ((value as { proof?: unknown }).proof as Record<string, unknown> | undefined) : undefined;
+  if (!raw || typeof raw !== "object" || raw.v !== 1) return null;
+  const operationId = text(raw.operationId, 128);
+  const fromWorkspaceId = text(raw.fromWorkspaceId, 128);
+  const workspaceId = text(raw.workspaceId, 128);
+  const environmentId = environmentIdOf(raw.environmentId);
+  const issuedAt = wireTime(raw.issuedAt);
+  const expiresAt = wireTime(raw.expiresAt);
+  if (!operationId || !fromWorkspaceId || !workspaceId || !environmentId || issuedAt === undefined || expiresAt === undefined) return null;
+  if (typeof raw.signature !== "string" || !SIGNATURE.test(raw.signature)) return null;
+  const fromEnvironmentId = environmentIdOf(raw.fromEnvironmentId);
+  return { v: 1, operationId, fromWorkspaceId, ...(fromEnvironmentId ? { fromEnvironmentId } : {}), workspaceId, environmentId, issuedAt, expiresAt, signature: raw.signature };
 }

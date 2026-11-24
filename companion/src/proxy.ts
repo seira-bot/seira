@@ -10,6 +10,7 @@ import { bearerToken, type DeviceRoutes, type PairingRefusal } from "./devices.t
 import type { E2EDescriptor } from "./e2e/descriptor.ts";
 import { e2eContextOf } from "./e2e/origin.ts";
 import type { E2EContext } from "./e2e/registry.ts";
+import type { SwitchProofSigner } from "./e2e/switch-proof.ts";
 import {
   COMPANION_ENDPOINT_KINDS,
   MAX_COMPANION_ENDPOINTS,
@@ -64,6 +65,10 @@ export interface ProxyOptions {
   e2ePaired?: (context: E2EContext, deviceId: string) => void;
   /** The computer's workspaces, answered here and never sent to the harness. */
   workspaces?: WorkspaceChannel;
+  /** The signer of the transport key, for the proof that a workspace switch finished; null when end-to-end is off. */
+  proofSigner?: () => SwitchProofSigner | null;
+  /** Whether a paired phone may open other workspaces now, read from the live device record at each use. */
+  otherWorkspacesAllowed?: (deviceId: string) => boolean;
 }
 
 /** Which listener a request reached. Only `lan` (port 8810, plain HTTP) refuses a device that has gone end-to-end;
@@ -454,6 +459,17 @@ export function createProxyHandler(options: ProxyOptions) {
     if (!e2e && listener === "lan" && device?.e2eAt && path !== "/api/health") return sendJson(res, 426, UPDATE_APP);
     const e2eDenial = e2e ? e2eRefusal(e2e, method, path, device?.id) : null;
     if (e2eDenial) return sendJson(res, 401, { error: e2eDenial });
+    // The proof of a finished switch is asked for with no bearer, and only inside the encrypted connection of a paired phone: that
+    // connection already proved both sides, and the proof names it. Every other way to reach this route is refused here.
+    if (workspaceRoute(method, path) === "proof") {
+      const signer = options.proofSigner?.() ?? null;
+      const context = e2e && e2e.peer.kind === "device" && e2e.binding && signer ? { deviceId: e2e.peer.id, binding: e2e.binding, signer } : undefined;
+      if (!context) return sendJson(res, 403, { error: "secure_channel_required" });
+      const phone = context.deviceId;
+      void answerWorkspaces(options.workspaces, "proof", method, path, () => readJson(req, 1024), () => options.otherWorkspacesAllowed?.(phone) === true, phone, context)
+        .then((reply) => sendJson(res, reply.status, reply.body));
+      return;
+    }
     const browserRequest = isBrowserControlAccess(method, path);
     const browserRefusal = () => {
       if (!browserRequest) return null;

@@ -6,6 +6,7 @@ import { admission, admissionHash, credentialHash, credentialHashFromHex, keyId,
 import { descriptorFor, type E2EDescriptor } from "./descriptor.ts";
 import { CLOSE, TRANSPORT_RELAY, type KeyPair, type PskCandidate, type TransportByte } from "./noise.ts";
 import { E2ESession, type RecordTransport } from "./session.ts";
+import { switchProofSigner, type SwitchProofSigner } from "./switch-proof.ts";
 
 export type LiveRoute = "wifi" | "tailscale" | "relay";
 /** A pairing peer carries the admission value its window had, so a relay session stays admitted after pairing. */
@@ -15,6 +16,8 @@ export type Peer = { kind: "device"; id: string } | { kind: "pairing"; admHash: 
 export interface E2EContext {
   peer: Peer;
   route: LiveRoute;
+  /** The handshake hash of this session, set once it is open. A proof made for this session names it. */
+  binding?: Buffer;
 }
 
 export interface RelayIdentity {
@@ -70,6 +73,11 @@ export class E2ERegistry {
 
   get enabled(): boolean {
     return this.#key !== null;
+  }
+
+  /** Signs a switch proof with the transport key; null when end-to-end is off. */
+  switchProofSigner(): SwitchProofSigner | null {
+    return this.#key ? switchProofSigner(this.#key) : null;
   }
 
   get relay(): RelayIdentity | null {
@@ -171,6 +179,7 @@ export class E2ERegistry {
       connectOrigin: () => connectOrigin(live.context),
       opened: (peer) => {
         live.context.peer = peer;
+        live.context.binding = live.session.handshakeHash ?? undefined;
         this.#live.add(live);
         if (peer.kind === "device") {
           this.#devices.confirm(peer.id);

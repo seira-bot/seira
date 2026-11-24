@@ -66,7 +66,7 @@ beforeAll(async () => {
     },
     redeem: () => ({ error: "no", code: "pairing_invalid" }) as never,
     serverName: () => "Test computer",
-    workspaces: { list: () => workspaces.list(), switchTo: (body, owner) => workspaces.switchTo(body, owner), operation: (id, owner) => workspaces.operation(id, owner) },
+    workspaces: { list: () => workspaces.list(), switchTo: (body, owner) => workspaces.switchTo(body, owner), operation: (id, owner) => workspaces.operation(id, owner), proof: (id, owner, body, context) => workspaces.proof(id, owner, body, context) },
   });
   sidecar = createServer((req, res) => proxy(req, res, listener));
   await new Promise<void>((resolve) => sidecar.listen(0, "127.0.0.1", resolve));

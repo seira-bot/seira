@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
 
+import { b64u, fromB64u } from "./e2e/credentials.ts";
+import { NONCE_BYTES, PROOF_TTL_MS, switchProofMessage, type SwitchProofSigner } from "./e2e/switch-proof.ts";
+
 /** The workspaces of this computer, as a paired phone lists them and asks for one to open. The wire contract is
  * packages/phone-protocol/src/workspaces.ts (this build cannot import from that package; a test keeps the two in step).
  *
@@ -53,21 +56,32 @@ export interface WorkspaceChannel {
   list(): Workspace[] | null;
   switchTo(request: Record<string, unknown>, owner: string): Promise<WorkspaceReply>;
   operation(id: string, owner: string): WorkspaceReply;
+  /** The signed proof that a switch finished, once for each switch. The route, the nonce and the context are checked here. */
+  proof(id: string, owner: string, request: Record<string, unknown>, context: ProofContext): WorkspaceReply;
 }
 
-export type WorkspaceRoute = "list" | "switch" | "operation";
+/** What a proof needs from the encrypted connection that carries the request: its handshake hash, the id of the paired phone
+ * that holds it, and the signer of the transport key. */
+export interface ProofContext {
+  deviceId: string;
+  binding: Uint8Array;
+  signer: SwitchProofSigner;
+}
+
+export type WorkspaceRoute = "list" | "switch" | "operation" | "proof";
 
 export function workspaceRoute(method: string, path: string): WorkspaceRoute | null {
   if (method === "GET" && path === WORKSPACES_ROUTE) return "list";
   if (method === "POST" && path === WORKSPACE_SWITCH_ROUTE) return "switch";
   if (method === "GET" && path.startsWith(`${WORKSPACE_SWITCH_ROUTE}/`) && !path.slice(WORKSPACE_SWITCH_ROUTE.length + 1).includes("/")) return "operation";
+  if (method === "POST" && path.startsWith(`${WORKSPACE_SWITCH_ROUTE}/`) && path.endsWith("/proof") && !path.slice(WORKSPACE_SWITCH_ROUTE.length + 1, -"/proof".length).includes("/")) return "proof";
   return null;
 }
 
 /** The operation id the read route names, or "" for an id that cannot be one (so it answers 404 like an unknown id). */
 function operationIdOf(path: string): string {
   try {
-    const id = decodeURIComponent(path.slice(WORKSPACE_SWITCH_ROUTE.length + 1));
+    const id = decodeURIComponent(path.slice(WORKSPACE_SWITCH_ROUTE.length + 1).replace(/\/proof$/, ""));
     return /^[0-9a-f]{32}$/.test(id) ? id : "";
   } catch {
     return "";
@@ -111,6 +125,11 @@ interface Operation extends WorkspaceSwitch {
   owner: string;
   action: WorkspaceSwitchAction;
   startedAt: number;
+  /** The workspace that was open when the switch started. */
+  fromWorkspaceId?: string;
+  fromEnvironmentId?: string;
+  /** A switch has one proof: set when it is made. */
+  proved?: boolean;
 }
 
 export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, newId = () => randomBytes(16).toString("hex") }: {
@@ -170,6 +189,54 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, n
       if (!operation || operation.owner !== owner) return { status: 404, body: { error: "switch_not_found" } };
       return { status: 200, body: { switch: view(operation) } };
     },
+    proof(id, owner, request, context) {
+      prune();
+      const operation = id ? operations.get(id) : undefined;
+      if (!operation || operation.owner !== owner || owner !== context.deviceId) return { status: 404, body: { error: "switch_not_found" } };
+      const nonce = typeof request.nonce === "string" ? fromB64u(request.nonce) : null;
+      if (!nonce || nonce.length !== NONCE_BYTES) return { status: 400, body: { error: "invalid_nonce" } };
+      if (operation.state !== "done") return { status: 409, body: { error: "switch_not_done" } };
+      // The workspace that the switch named is the open one now, and it shows an environment id (the one it showed at the start, when it had one).
+      const target = facts?.find((workspace) => workspace.id === operation.workspaceId);
+      const environmentId = target?.current ? target.environmentId : undefined;
+      if (operation.action === "cancel" || !operation.fromWorkspaceId || !environmentId || (operation.environmentId && operation.environmentId !== environmentId)) {
+        return { status: 409, body: { error: "switch_not_provable" } };
+      }
+      if (operation.proved) return { status: 409, body: { error: "proof_used" } };
+      const issuedAt = now();
+      const expiresAt = Math.min(issuedAt + PROOF_TTL_MS, operation.startedAt + OPERATION_TTL_MS);
+      const fields = {
+        keyId: context.signer.keyId,
+        binding: context.binding,
+        deviceId: owner,
+        operationId: operation.id,
+        fromWorkspaceId: operation.fromWorkspaceId,
+        ...(operation.fromEnvironmentId ? { fromEnvironmentId: operation.fromEnvironmentId } : {}),
+        workspaceId: operation.workspaceId,
+        environmentId,
+        nonce,
+        issuedAt,
+        expiresAt,
+      };
+      const signature = context.signer.sign(switchProofMessage(fields));
+      operation.proved = true;
+      return {
+        status: 200,
+        body: {
+          proof: {
+            v: 1,
+            operationId: fields.operationId,
+            fromWorkspaceId: fields.fromWorkspaceId,
+            ...(fields.fromEnvironmentId ? { fromEnvironmentId: fields.fromEnvironmentId } : {}),
+            workspaceId: fields.workspaceId,
+            environmentId,
+            issuedAt,
+            expiresAt,
+            signature: b64u(signature),
+          },
+        },
+      };
+    },
     async switchTo(request, owner) {
       const list = facts;
       if (!list) return { status: 404, body: { error: "no route" } };
@@ -183,7 +250,8 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, n
       else return { status: 409, body: { error: "workspace_unavailable" } };
       let operation: Operation | null = null;
       if (action) {
-        operation = { id: newId(), owner, action, startedAt: now(), workspaceId: id, ...(target.environmentId ? { environmentId: target.environmentId } : {}), state: "pending" };
+        const from = list.find((workspace) => workspace.current);
+        operation = { id: newId(), owner, action, startedAt: now(), ...(from ? { fromWorkspaceId: from.id, ...(from.environmentId ? { fromEnvironmentId: from.environmentId } : {}) } : {}), workspaceId: id, ...(target.environmentId ? { environmentId: target.environmentId } : {}), state: "pending" };
         operations.set(operation.id, operation);
         // Trim after the insert, so the history never holds more than MAX_OPERATIONS.
         prune();
@@ -208,6 +276,7 @@ export async function answerWorkspaces(
   readBody: () => Promise<Record<string, unknown>>,
   allowed: () => boolean,
   owner: string,
+  proof?: ProofContext,
 ): Promise<WorkspaceReply> {
   const absent: WorkspaceReply = { status: 404, body: { error: `no route: ${method} ${path}` } };
   const list = channel?.list();
@@ -224,6 +293,7 @@ export async function answerWorkspaces(
   }
   // The owner may have turned this phone off, or unpaired it, while the body was read.
   if (!allowed()) return refused;
+  if (route === "proof") return proof ? channel.proof(operationIdOf(path), owner, body, proof) : { status: 403, body: { error: "secure_channel_required" } };
   const reply = await channel.switchTo(body, owner);
   // The switch waits for the desktop's next facts. A phone turned off or unpaired during that wait gets no list.
   if (!allowed()) return refused;
