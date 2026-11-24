@@ -358,3 +358,32 @@ test("a new workspace never takes the id a phone uses for This PC", (t) => {
   assert.equal(made.ok, true);
   assert.notEqual(made.profile.id, "local");
 });
+
+const ENVIRONMENT = "0b1e6a52-4f7c-4a0e-9d8c-3a5f2b7c9e11";
+const OTHER_ENVIRONMENT = "7D3F9C14-8A2B-4C5E-B6D7-1E9A0F3C5B28";
+
+test("a phone's list carries the environmentId that each workspace's server wrote, and leaves it out for one that never ran", (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  w.registry.create({ name: "Home" });
+  assert.equal(w.profiles.phoneFacts().some((workspace) => "environmentId" in workspace), false, "no file yet: no key, and no file is made");
+  assert.equal(existsSync(join(w.dataDir, "environment-id")), false);
+  writeFileSync(join(w.dataDir, "environment-id"), `${ENVIRONMENT}\n`);
+  mkdirSync(profileDir(w.dataDir, "work"), { recursive: true });
+  writeFileSync(join(profileDir(w.dataDir, "work"), "environment-id"), ` ${OTHER_ENVIRONMENT} `);
+  const facts = w.profiles.phoneFacts();
+  assert.deepEqual(facts.map(({ id, environmentId }) => [id, environmentId]), [["local", ENVIRONMENT], ["work", OTHER_ENVIRONMENT.toLowerCase()], ["home", undefined]]);
+  assert.equal(existsSync(join(profileDir(w.dataDir, "home"), "environment-id")), false, "reading never creates the file");
+});
+
+test("a file that is not an environment id reads as no id: a path or a long text never reaches a phone", (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  mkdirSync(profileDir(w.dataDir, "work"), { recursive: true });
+  for (const text of ["/home/someone/.seira", "x".repeat(10_000), "", "0b1e6a52-4f7c-4a0e-9d8c-3a5f2b7c9e1", `${ENVIRONMENT}\n${ENVIRONMENT}`]) {
+    writeFileSync(join(w.dataDir, "environment-id"), text);
+    writeFileSync(join(profileDir(w.dataDir, "work"), "environment-id"), text);
+    assert.deepEqual(w.profiles.phoneFacts().map((workspace) => workspace.environmentId), [undefined, undefined], text.slice(0, 20));
+  }
+  assert.doesNotMatch(JSON.stringify(w.profiles.phoneFacts()), /seira|\//);
+});

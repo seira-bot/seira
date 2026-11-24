@@ -32,6 +32,19 @@ export function profileName(value) {
   return name || null;
 }
 
+const ENVIRONMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The id a workspace's server wrote in its data folder (server/environment.ts) and shows as its own; undefined when the folder
+ * has none yet (it never ran), or the file is not an id. Only reads, and never creates the file. */
+function environmentIdIn(dir, fs) {
+  try {
+    const id = fs.readFileSync(path.join(dir, "environment-id"), "utf8").trim();
+    return ENVIRONMENT_ID.test(id) ? id.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const swatch = (value) => (CLOUD_SWATCHES.includes(value) ? value : null);
 const sameName = (a, b) => typeof a === "string" && typeof b === "string" && a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
@@ -198,17 +211,18 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     /** The workspace a switch waits to open (`id` null: This computer), and the name of what it waits for. */
     settling: () => settling,
     /** What a paired phone may list: This PC (id `local`) and each workspace the rail offers, one current, a switch that
-     * waits marked on its target. No folder, address or port. Null unless this computer is home. */
+     * waits marked on its target, and the `environmentId` of each that has run. No folder, address or port. Null unless this computer is home. */
     phoneFacts() {
       if (!allowed() || home() !== "local") return null;
       const onScreen = running(), name = reserved();
       const waiting = settling ? { state: "waiting", ...(settling.name ? { waitingFor: settling.name } : {}) } : null;
       const state = (target, current) => (settling?.id === target && waiting ? waiting : current || !settling ? { state: "ready" } : { state: "unavailable" });
+      const environmentId = (dir) => { const id = environmentIdIn(dir, fs); return id ? { environmentId: id } : {}; };
       return [
-        { id: PHONE_LOCAL_ID, ...(name ? { name } : {}), current: onScreen === null, ...state(null, onScreen === null) },
+        { id: PHONE_LOCAL_ID, ...environmentId(dataDir()), ...(name ? { name } : {}), current: onScreen === null, ...state(null, onScreen === null) },
         ...registry.list().filter((entry) => offered(entry.id) && entry.id !== PHONE_LOCAL_ID).map((entry) => {
           const color = swatchColor(entry.color);
-          return { id: entry.id, ...(entry.name ? { name: entry.name } : {}), ...(color ? { color } : {}), current: entry.id === onScreen, ...state(entry.id, entry.id === onScreen) };
+          return { id: entry.id, ...environmentId(profileDir(dataDir(), entry.id)), ...(entry.name ? { name: entry.name } : {}), ...(color ? { color } : {}), current: entry.id === onScreen, ...state(entry.id, entry.id === onScreen) };
         }),
       ];
     },

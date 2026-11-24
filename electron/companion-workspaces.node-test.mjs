@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createCompanionWorkspaces, WORKSPACES_MESSAGE, WORKSPACE_SWITCH_MESSAGE } from "./companion-workspaces.mjs";
+import { createCompanionWorkspaces, WORKSPACES_MESSAGE, WORKSPACE_SWITCH_MESSAGE, WORKSPACE_SWITCH_RESULT_MESSAGE } from "./companion-workspaces.mjs";
 
 function setup({ facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "ready" }], settling = null } = {}) {
   const w = { facts, settling, calls: [], sent: [], running: true, order: [] };
@@ -107,4 +107,68 @@ test("a switch that fails is logged, and the facts are sent again after it", asy
   await w.ask("open", "work");
   assert.match(w.logs[0], /open failed \(no folder\)/);
   assert.equal(w.sent.length, 1);
+});
+
+const OPERATION = "0123456789abcdef0123456789abcdef";
+const results = (w) => w.sent.filter((message) => message.type === WORKSPACE_SWITCH_RESULT_MESSAGE);
+const askWith = async (w, action, id, operation) => { w.module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation }); await new Promise((resolve) => setImmediate(resolve)); };
+
+test("a switch that names an operation is answered with how it ended: done once the workspace opened", async () => {
+  const w = setup();
+  await askWith(w, "open", "work", OPERATION);
+  assert.deepEqual(results(w), [{ type: WORKSPACE_SWITCH_RESULT_MESSAGE, id: OPERATION, outcome: "done" }]);
+});
+
+test("a cancel and a hurry end as done, and a request that did nothing ends as failed", async () => {
+  const cancel = setup({ settling: { id: "work", name: "Scout" } });
+  await askWith(cancel, "cancel", "local", OPERATION);
+  assert.equal(results(cancel)[0].outcome, "done");
+  const hurry = setup({ facts: [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }], settling: { id: "work", name: "Scout" } });
+  await askWith(hurry, "hurry", "work", OPERATION);
+  assert.equal(results(hurry)[0].outcome, "done");
+  const wrong = setup({ settling: { id: "home", name: "Scout" } });
+  await askWith(wrong, "hurry", "work", OPERATION);
+  await askWith(wrong, "open", "nope", OPERATION);
+  assert.deepEqual(results(wrong).map((message) => message.outcome), ["failed", "failed"]);
+  const unavailable = setup({ facts: [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }] });
+  await askWith(unavailable, "open", "work", OPERATION);
+  assert.equal(results(unavailable)[0].outcome, "failed");
+});
+
+test("a workspace that did not open ends as failed, one that a newer switch took over as superseded, and a crash as failed", async () => {
+  const w = setup();
+  w.profiles.open = async () => false;
+  await askWith(w, "open", "work", OPERATION);
+  w.profiles.open = async () => null;
+  await askWith(w, "open", "work", OPERATION);
+  w.profiles.open = async () => { throw new Error("no way"); };
+  await askWith(w, "open", "work", OPERATION);
+  assert.deepEqual(results(w).map((message) => message.outcome), ["failed", "superseded", "failed"]);
+  assert.match(w.logs.join("\n"), /open failed \(no way\)/);
+});
+
+test("the answer comes after the facts, so the phone reads the new list before it reads the result", async () => {
+  const w = setup();
+  w.profiles.open = async () => { w.facts = [{ id: "local", current: false, state: "ready" }, { id: "work", current: true, state: "ready" }]; };
+  await askWith(w, "open", "work", OPERATION);
+  assert.deepEqual(w.sent.map((message) => message.type), [WORKSPACES_MESSAGE, WORKSPACE_SWITCH_RESULT_MESSAGE]);
+});
+
+test("a request with no operation id, or one that is not an id, sends no result and works as before", async () => {
+  const w = setup();
+  for (const operation of [undefined, 7, "", "short", "G".repeat(32), "../etc/passwd", OPERATION.toUpperCase()]) await askWith(w, "open", "work", operation);
+  assert.equal(results(w).length, 0);
+  assert.equal(w.calls.length, 7);
+});
+
+test("a companion that is gone does not break the switch: the result is dropped and logged only when it throws", async () => {
+  const w = setup();
+  w.running = false;
+  await askWith(w, "open", "work", OPERATION);
+  assert.deepEqual(w.calls, [["open", "work"]]);
+  const broken = setup();
+  const module = createCompanionWorkspaces({ profiles: broken.profiles, post: () => { throw new Error("pipe closed"); }, log: (line) => (broken.logs ??= []).push(line) });
+  module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work", operation: OPERATION });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(broken.logs.join("\n"), /could not report a switch \(pipe closed\)/);
 });

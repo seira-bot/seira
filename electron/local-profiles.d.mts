@@ -8,7 +8,7 @@ export declare const SETTLE_POLL_MS: number;
 export declare const PHONE_LOCAL_ID: "local";
 
 /** A workspace as a paired phone lists it (packages/phone-protocol/src/workspaces.ts). */
-export interface PhoneWorkspaceFact { id: string; name?: string; color?: string; current: boolean; state: "ready" | "waiting" | "unavailable"; waitingFor?: string }
+export interface PhoneWorkspaceFact { id: string; environmentId?: string; name?: string; color?: string; current: boolean; state: "ready" | "waiting" | "unavailable"; waitingFor?: string }
 
 /** One workspace of this computer's own, as the registry keeps it: `name` null is This Mac's own (This Mac or This PC). */
 export interface ProfileEntry { id: string; name: string | null; color: CloudSwatch | null; createdAt: number }

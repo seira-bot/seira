@@ -4,6 +4,9 @@ import { PHONE_LOCAL_ID } from "./local-profiles.mjs";
 
 export const WORKSPACES_MESSAGE = "seira:companion-workspaces";
 export const WORKSPACE_SWITCH_MESSAGE = "seira:companion-workspace-switch";
+/** Sent back to the companion when a switch that named an operation ends: `{ type, id, outcome: "done" | "failed" | "superseded" }`. */
+export const WORKSPACE_SWITCH_RESULT_MESSAGE = "seira:companion-workspace-switch-result";
+const OPERATION_ID = /^[0-9a-f]{32}$/;
 
 /**
  * @param {{
@@ -29,15 +32,20 @@ export function createCompanionWorkspaces({ profiles, post, settled = async () =
     if (post(next)) last = key;
   }
 
+  /** How the switch ended: `done` once the workspace is open or the cancel is made, `failed` when it did not open, `superseded` when a
+   * newer switch took over (`goTo` resolves null then). */
   async function run(action, id) {
     const listed = profiles.phoneFacts()?.find((workspace) => workspace.id === id);
-    if (!listed) return;
-    if (action === "cancel") { if (profiles.settling()) profiles.cancel(); return; }
-    if (action === "hurry" && profiles.settling()?.id !== profileOf(id)) return;
-    if (action === "open" && listed.state !== "ready") return;
+    if (!listed) return "failed";
+    if (action === "cancel") { if (profiles.settling()) profiles.cancel(); return "done"; }
+    if (action === "hurry" && profiles.settling()?.id !== profileOf(id)) return "failed";
+    if (action === "open" && listed.state !== "ready") return "failed";
     await settled();
-    await goTo(id);
+    const opened = await goTo(id);
+    return opened === null ? "superseded" : opened === false ? "failed" : "done";
   }
+
+  const report = (operation, outcome) => { try { if (operation) post({ type: WORKSPACE_SWITCH_RESULT_MESSAGE, id: operation, outcome }); } catch (error) { log(`companion workspaces: could not report a switch (${error?.message ?? error})`); } };
 
   return {
     /** The facts to send first to a companion that starts now. */
@@ -48,8 +56,11 @@ export function createCompanionWorkspaces({ profiles, post, settled = async () =
     receive(received) {
       if (received?.type !== WORKSPACE_SWITCH_MESSAGE) return false;
       const { action, id } = received;
+      const operation = typeof received.operation === "string" && OPERATION_ID.test(received.operation) ? received.operation : null;
       if (["open", "hurry", "cancel"].includes(action) && typeof id === "string") {
-        run(action, id).catch((error) => log(`companion workspaces: ${action} failed (${error?.message ?? error})`)).finally(changed);
+        run(action, id)
+          .catch((error) => { log(`companion workspaces: ${action} failed (${error?.message ?? error})`); return "failed"; })
+          .then((outcome) => { changed(); report(operation, outcome); });
       }
       return true;
     },
