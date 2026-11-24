@@ -4,7 +4,6 @@ import { reachablePeers } from "../peer-roster.ts";
 import { threadTitleFrom, type BotRecord, type Store, type TaskRecord } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
-import type { PendingSuggestedReplies } from "../suggested-replies-pending.ts";
 
 type ThreadState = "running" | "waiting-on-you" | "queued" | "idle" | "closed";
 
@@ -32,7 +31,8 @@ export function createInternalThreadRoutes(deps: {
   queuedReason(node: HandoffView, showTitle?: (threadId: string) => boolean): string;
   /** The caller's body, read only while its turn still holds the capability. */
   readBody(): Promise<unknown>;
-  suggestedReplies: Pick<PendingSuggestedReplies, "offer">;
+  /** Holds the list for the caller's own running turn. The host refuses it unless a person started that turn. */
+  suggestedReplies: { offer(threadId: string, raw: unknown): number };
 }): RouteHandler {
   const { store, coordinator, from, fromThreadId } = deps;
   return async ({ res, path, method, json }) => {
