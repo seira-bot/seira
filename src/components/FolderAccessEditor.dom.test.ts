@@ -148,4 +148,20 @@ describe("FolderAccessEditor", () => {
     await render({ access: { limited: true, folders: [] }, enforcement: "box" });
     expect(host.textContent).not.toContain(boxNote);
   });
+
+  it("names bubblewrap and the command to install it when its absence leaves commands unconfined", async () => {
+    const reason = "Commands are not held to these folders because bubblewrap is not installed. On Debian or Ubuntu, install it and restart Seira:";
+    const command = "sudo apt install bubblewrap";
+    await render({ access: { limited: true, folders: [] }, enforcement: "ai", boxMissing: "no-bwrap" });
+    expect(host.textContent).toContain(reason);
+    expect(host.querySelector("code")?.textContent).toBe(command);
+    await render({ access: reports, enforcement: "ai", boxMissing: "no-bwrap" });
+    expect(host.textContent).toContain(reason);
+    await render({ access: { limited: false, folders: [{ path: "/srv/shared/reports", write: true }] }, enforcement: "ai", boxMissing: "no-bwrap" });
+    expect(host.textContent).not.toContain(reason);
+    await render({ access: { limited: true, folders: [] }, enforcement: "ai", boxMissing: null });
+    expect(host.textContent).not.toContain(reason);
+    await render({ access: { limited: true, folders: [] }, enforcement: "box", boxMissing: "no-bwrap" });
+    expect(host.textContent).not.toContain(reason);
+  });
 });

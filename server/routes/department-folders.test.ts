@@ -24,10 +24,11 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 const admin = { kind: "loopback", scopes: ["admin", "client"] } as RequestAuth;
 const client = { kind: "loopback", scopes: ["client"] } as RequestAuth;
 
-function fixture(flags: { elsewhere?: boolean; enforcement?: FolderEnforcement } = {}) {
+function fixture(flags: { elsewhere?: boolean; enforcement?: FolderEnforcement; boxMissing?: "no-bwrap" } = {}) {
   const folders = new DepartmentFolders(join(root, `dept-${Math.random()}.json`));
   const handler = createDepartmentFolderRoutes({
     store: { sections: ["Sales"] }, folders, dataDir, home, setElsewhere: () => flags.elsewhere === true, enforcement: () => flags.enforcement ?? "ai",
+    boxMissing: () => flags.boxMissing ?? null,
   });
   const call = async (method: string, query: string, body?: unknown, auth: RequestAuth = admin) => {
     const sent: Array<{ status: number; body: any }> = [];
@@ -62,9 +63,14 @@ describe("/api/department-folders", () => {
     const put = await call("PUT", "?section=Sales", { limited: true, folders: [{ path: join(root, "docs"), write: true }] });
     expect(put).toEqual({ status: 200, body: { access: { limited: true, folders: [{ path: join(root, "docs"), write: true }] } } });
     const got = await call("GET", "");
-    expect(got.body).toEqual({ departments: { Sales: put.body.access }, enforcement: "ai", setHere: true });
+    expect(got.body).toEqual({ departments: { Sales: put.body.access }, enforcement: "ai", boxMissing: null, setHere: true });
     expect((await fixture({ enforcement: "box" }).call("GET", "")).body.enforcement).toBe("box");
     expect((await fixture({ enforcement: "limited" }).call("GET", "")).body.enforcement).toBe("limited");
+  });
+
+  it("says when the bot box is off because bubblewrap is not installed", async () => {
+    const { call } = fixture({ enforcement: "ai", boxMissing: "no-bwrap" });
+    expect((await call("GET", "")).body).toMatchObject({ enforcement: "ai", boxMissing: "no-bwrap" });
   });
 
   it("clears a department on null", async () => {
