@@ -420,9 +420,24 @@ client shows its own saved chips. A client that does not know the field ignores 
 
 The text is written by a model, so every side runs `cleanSuggestedReplies`
 (`packages/phone-protocol/src/suggested-replies.ts`) before a chip exists. It replaces control characters, trims
-whitespace and drops, whole and never cut, an entry with an empty or over-limit part, a link, a slash command, shell
-syntax or an action payload. A tap shows the exact text; it never sends on receipt or on render, and it never reaches a
-command, a tool, a link or an approval handler: the person sends it through the normal message path.
+whitespace and drops, whole and never cut, an entry with an empty or over-limit part, or with one of these in the title
+or the prompt:
+
+- A link: a scheme with `://`, `www.`, or `javascript:`, `data:`, `vbscript:`, `mailto:`, `tel:`, `sms:`, `file:` or
+  `blob:`.
+- A bare web address with no scheme and no `www.`: `name.tld` for one of the listed top-level domains (`BARE_ADDRESS_TLDS`
+  in the module: com, net, org, io, dev, app, ai, co, xyz, info, biz, gov, edu, uk, us, de, fr, jp, cn, ru, tv, id, me,
+  link, site, online, top, store, tech, cloud, page), an email address on one of them, `localhost`, or an IPv4 address.
+  A word such as `README.md` or `Node.js` is kept, and so is a domain that is not in the list.
+- A slash command: text that starts with `/` and a character.
+- Shell syntax: a backtick, `$(`, `${`, `&&`, `||`, `|`, a leading `$ `, `>>`, or `>` or `<` before a path.
+- A command line: text whose first word is one of `SHELL_WORDS` in the module (sudo, rm, curl, git, npm and the like).
+- An action payload: text that starts with `{` or `[`, or has a `"action"`, `"tool"`, `"command"`, `"cmd"` or `"url"` key.
+
+This filter is best effort, not a security boundary. It reads only the first word of a command line, so a command later
+in a sentence is not caught, and it knows only the listed domains. The boundary is the client rule: a tap puts the exact
+text in the composer and nothing else. It never sends on receipt or on render, and it never reaches a command, a tool, a
+link or an approval handler: the person reads the text and sends it through the normal message path.
 
 ## Phone apps as bot tools
 

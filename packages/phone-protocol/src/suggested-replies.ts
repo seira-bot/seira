@@ -1,6 +1,7 @@
 // Suggested replies on a finished bot turn: the chips a phone may show above its composer. A tap puts the model-written
 // `prompt` in front of the person, who sends it; so the server and every client run the same cleaner on the list before
-// a chip exists. Security: this module only keeps or drops text. It never opens a link, runs a command or sends a message.
+// a chip exists. The filter is best effort, not a security boundary: the boundary is the client rule that a tap only fills the
+// composer and the person sends. This module only keeps or drops text. It never opens a link, runs a command or sends a message.
 
 export const SUGGESTED_REPLIES_MAX = 4;
 export const SUGGESTED_REPLY_TITLE_MAX = 40;
@@ -20,13 +21,23 @@ export interface SuggestedRepliesField {
 }
 
 const CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
-/** A scheme, a bare web address or a mail or telephone link: no link in a chip. */
+/** A scheme, a `www.` address or a mail or telephone link: no link in a chip. */
 const LINK = /(?:^|[^\p{L}\p{N}])(?:[a-z][a-z0-9+.-]*:\/\/|www\.|(?:javascript|data|vbscript|mailto|tel|sms|file|blob):)/iu;
+/** The top-level domains that make a bare `name.tld` a web address. A short fixed list: a word such as `Node.js` or
+ * `README.md` is no address, and an unlisted domain is not caught (the client rule holds: a tap only fills the composer). */
+export const BARE_ADDRESS_TLDS = ["com", "net", "org", "io", "dev", "app", "ai", "co", "xyz", "info", "biz", "gov", "edu", "uk", "us", "de", "fr", "jp", "cn", "ru", "tv", "id", "me", "link", "site", "online", "top", "store", "tech", "cloud", "page"] as const;
+/** A bare web address with no scheme and no `www.`: `example.com`, `a.b.example.co`, `x@example.org`, `localhost`, or an
+ * IPv4 address, each with or without a port or a path. */
+const BARE_ADDRESS = new RegExp(
+  `(?:^|[^\\p{L}\\p{N}])(?:(?:[\\p{L}\\p{N}](?:[\\p{L}\\p{N}-]*[\\p{L}\\p{N}])?\\.)+(?:${BARE_ADDRESS_TLDS.join("|")})(?![\\p{L}\\p{N}-])|localhost(?![\\p{L}\\p{N}-])|\\d{1,3}(?:\\.\\d{1,3}){3}(?![\\p{L}\\p{N}]))`,
+  "iu",
+);
 /** A slash command at the start, as a command line reads it. */
 const SLASH_COMMAND = /^\s*\/\S/u;
-/** Shell syntax that has no place in a sentence: a backtick, a substitution, a pipe, a chained command or a prompt sign. */
+/** Shell syntax that has no place in a sentence: a backtick, `$(`, `${`, `&&`, `||`, `|`, a leading `$ `, `>>`, and `>` or `<` before a path. */
 const SHELL_SYNTAX = /`|\$\(|\$\{|&&|\|\||\||^\s*\$\s|>>|(?:^|\s)\d?>\s*\/|(?:^|\s)<\s*\//u;
-const SHELL_WORDS = new Set(["sudo", "rm", "curl", "wget", "chmod", "chown", "bash", "sh", "zsh", "npm", "npx", "pnpm", "yarn", "pip", "git", "ssh", "scp", "docker", "kubectl", "cd", "ls", "cat", "echo", "export", "eval", "exec", "kill", "dd", "mkfs"]);
+/** A first word that makes the text a command line. Only the first word is read: a command later in a sentence is not caught. */
+export const SHELL_WORDS = new Set(["sudo", "rm", "curl", "wget", "chmod", "chown", "bash", "sh", "zsh", "npm", "npx", "pnpm", "yarn", "pip", "git", "ssh", "scp", "docker", "kubectl", "cd", "ls", "cat", "echo", "export", "eval", "exec", "kill", "dd", "mkfs"]);
 /** A structured payload: JSON or a call written as an object. */
 const ACTION_PAYLOAD = /^\s*[{[]|"(?:action|tool|command|cmd|url)"\s*:/iu;
 
@@ -39,7 +50,7 @@ function clean(value: unknown): string | null {
 }
 
 function plain(text: string): boolean {
-  if (LINK.test(text) || SLASH_COMMAND.test(text) || SHELL_SYNTAX.test(text) || ACTION_PAYLOAD.test(text)) return false;
+  if (LINK.test(text) || BARE_ADDRESS.test(text) || SLASH_COMMAND.test(text) || SHELL_SYNTAX.test(text) || ACTION_PAYLOAD.test(text)) return false;
   return !SHELL_WORDS.has(text.split(" ", 1)[0]!);
 }
 

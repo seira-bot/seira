@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cleanSuggestedReplies, SUGGESTED_REPLIES_MAX, SUGGESTED_REPLY_PROMPT_MAX, SUGGESTED_REPLY_TITLE_MAX } from "../packages/phone-protocol/src/suggested-replies.ts";
+import { BARE_ADDRESS_TLDS, cleanSuggestedReplies, SHELL_WORDS, SUGGESTED_REPLIES_MAX, SUGGESTED_REPLY_PROMPT_MAX, SUGGESTED_REPLY_TITLE_MAX } from "../packages/phone-protocol/src/suggested-replies.ts";
 import type { WireMessage } from "../shared/wire.ts";
 
 const chip = (n: number) => ({ title: `Next ${n}`, prompt: `Please do step ${n}` });
@@ -69,6 +69,29 @@ describe("cleanSuggestedReplies", () => {
       expect(cleanSuggestedReplies([{ title: "Fine", prompt: text }]), `prompt: ${text}`).toBeUndefined();
       expect(cleanSuggestedReplies([{ title: text, prompt: "Fine" }]), `title: ${text}`).toBeUndefined();
     }
+  });
+
+  it("rejects a bare web address with no scheme and no www: a listed top-level domain, localhost or an IPv4 address", () => {
+    const bad = ["Open example.com", "Check example.com/pay now", "Try shop.example.co.", "See docs.example.dev:8080/x", "Mail me at a@example.org", "Visit ramadigital.id", "Go to localhost:3000", "Use 192.168.1.20:8799", "Ping 10.0.0.1"];
+    for (const text of bad) {
+      expect(cleanSuggestedReplies([{ title: "Fine", prompt: text }]), `prompt: ${text}`).toBeUndefined();
+      expect(cleanSuggestedReplies([{ title: text, prompt: "Fine" }]), `title: ${text}`).toBeUndefined();
+    }
+    for (const tld of BARE_ADDRESS_TLDS) expect(cleanSuggestedReplies([{ title: "Fine", prompt: `Open example.${tld}` }]), tld).toBeUndefined();
+  });
+
+  it("keeps a word with a dot that is no listed address: a file name, a product name, a version, a date", () => {
+    for (const text of ["Open README.md", "Fix main.ts and utils.py", "Is Node.js or Next.js better?", "Update to version 1.2.3", "Use the date 12.05.2026", "Explain e.g. a cache", "Visit example.community", "Read the example.company page", "Explain a.b.c"]) {
+      expect(cleanSuggestedReplies([{ title: "Ask", prompt: text }]), text).toEqual([{ title: "Ask", prompt: text }]);
+    }
+  });
+
+  it("the shell filter is best effort: it reads the first word and the listed syntax, and nothing else", () => {
+    for (const word of SHELL_WORDS) expect(cleanSuggestedReplies([{ title: "Fine", prompt: `${word} something` }]), word).toBeUndefined();
+    // Documented limit: a command later in a sentence, or a first word that is not listed, is not caught. The client rule
+    // is the boundary: a tap only fills the composer.
+    expect(cleanSuggestedReplies([{ title: "Fine", prompt: "Please run rm later" }])).toEqual([{ title: "Fine", prompt: "Please run rm later" }]);
+    expect(cleanSuggestedReplies([{ title: "Fine", prompt: "python script" }])).toEqual([{ title: "Fine", prompt: "python script" }]);
   });
 
   it("keeps ordinary sentences that mention these things in words", () => {
