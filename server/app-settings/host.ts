@@ -12,7 +12,7 @@ import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { ThemeTool } from "../themes/tool.ts";
 import { cardElsewhere, cardNotInRoom, cardShownStatus, SETTINGS_CARDS } from "./cards.ts";
 import type { TakenPicture } from "./picture-file.ts";
-import { findPlaces, findUiPlaces, placePath, placesList } from "./places.ts";
+import { findPlaces, findUiPlaceEntries, findUiPlaces, placePath, placesList, uiPlaceById, uiPlaceText } from "./places.ts";
 import { findSettings, personOnly, type SettingEntry, type WritableEntry } from "./registry.ts";
 
 export const TOOL = "app_settings";
@@ -198,6 +198,25 @@ export function createAppSettings(deps: AppSettingsDeps) {
     return reply(200, { text: cardShownStatus(card, deps.cards.on(body.card)) });
   }
 
+  /** Shows a place of the app in the conversation, as a card the person clicks to go there. Security invariant: the row holds
+   * the map's own words and the place id only; the model chooses an id and nothing else, so it writes no label, step or
+   * position. The bot never clicks the card and never hears what the person does with it. */
+  function showPlace(turn: Turn, body: Record<string, unknown>) {
+    const bot = store.bot(turn.botId);
+    if (!bot) return refuse(404, "This bot no longer exists.");
+    if (deps.guestDriven(turn.threadId) || deps.turnOwner(turn) === null) return refuse(403, "A place card shows only in the owner's own conversation, when they asked. This turn was not started by the owner here, so nothing was shown.");
+    if (deps.connectorThread(bot.id, turn.threadId)?.group) return refuse(403, "No place card shown: a place card is not drawn in a room. Tell the user in one line where it is, from action places, or ask them to ask you in your own chat, where you can show it.");
+    const place = uiPlaceById(body.place);
+    if (!place) {
+      const near = typeof body.place === "string" ? findUiPlaceEntries(body.place.slice(0, 200), 3) : [];
+      return refuse(404, `No place with id ${JSON.stringify(typeof body.place === "string" ? body.place.slice(0, 80) : null)}. ${near.length ? `Near matches: ${near.map((one) => `${one.id} (${one.label})`).join("; ")}.` : "No near match."} Use action places to find the id; do not guess one.`);
+    }
+    const budget = spendWrite(turn);
+    if (budget) return refuse(429, budget);
+    store.appendMessage(turn.threadId, { role: "bot", kind: "text", text: uiPlaceText(place), uiPlace: { id: place.id } });
+    return reply(200, { text: `Place card shown: ${place.label}. The person clicks the card to be taken there; you cannot click it and you never see what they do. Tell the user in one plain line that the card is in the chat.` });
+  }
+
   return {
     async handle(body: Record<string, unknown>, turn: Turn): Promise<{ status: number; body: Record<string, unknown> }> {
       if (body.action === "find") {
@@ -226,8 +245,9 @@ export function createAppSettings(deps: AppSettingsDeps) {
       }
       if (body.action === "set") return set(turn, body);
       if (body.action === "show_card") return showCard(turn, body);
+      if (body.action === "show_place") return showPlace(turn, body);
       if (typeof body.action === "string" && THEME_ACTIONS.includes(body.action)) return theme(turn, body);
-      return refuse(400, `action must be find, get, set, show_card, places, features, ${THEME_ACTIONS.join(", ")}.`);
+      return refuse(400, `action must be find, get, set, show_card, show_place, places, features, ${THEME_ACTIONS.join(", ")}.`);
     },
 
     /** Undo on an applied card: restores the value read before the change, unless it changed since. */

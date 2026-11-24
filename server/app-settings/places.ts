@@ -38,18 +38,33 @@ export function placesList(): string {
 const SCREENS: readonly UiPlace[] = UI_PLACES;
 const FILLER = new Set(["the", "of", "in", "is", "an", "to", "do", "how", "where", "can", "my", "it", "on", "and", "or", "for", "me", "find"]);
 
+/** The place with this exact id in the UI map, or undefined. Own keys only, so `__proto__` and `constructor` are no ids. */
+export function uiPlaceById(id: unknown): UiPlace | undefined {
+  return typeof id === "string" ? SCREENS.find((place) => place.id === id) : undefined;
+}
+
 function screenLine(place: UiPlace): string {
   const notes = [
     ...(place.advanced ? [place.simplePath ? `Shown in Advanced mode only; in Simple mode: ${place.simplePath}.` : "Shown in Advanced mode only; app_settings set appearance.advanced true turns it on."] : []),
     ...(place.advancedSteps ? [`In Advanced mode: ${place.advancedSteps.join(" → ")}.`] : []),
     ...(place.only ? [`Only on ${place.only}.`] : []),
   ];
-  return [`${place.label}: ${place.position}. Clicks: ${place.steps.join(" → ")}.`, ...notes].join(" ");
+  return [`${place.label}: ${place.position}. Clicks: ${place.steps.join(" → ")}.`, ...notes, `Id for show_place: ${place.id}.`].join(" ");
+}
+
+/** The words a place card carries for a client that does not draw it: the map's own text, never the model's. */
+export function uiPlaceText(place: UiPlace): string {
+  return `${place.label}: ${place.position}. Clicks: ${place.steps.join(" → ")}.`;
 }
 
 /** The controls, pages and panels outside Settings whose name or words match `query`, best first, with where each is, the
  * clicks from the main screen and when it shows. */
 export function findUiPlaces(query: string, limit = 5): string[] {
+  return findUiPlaceEntries(query, limit).map(screenLine);
+}
+
+/** The same search, as the places themselves. */
+export function findUiPlaceEntries(query: string, limit = 5): UiPlace[] {
   const all = query.toLowerCase().split(/[^\p{L}\p{N}&'-]+/u).filter((word) => word.length > 1);
   const words = all.filter((word) => !FILLER.has(word));
   if (!words.length) return [];
@@ -60,5 +75,5 @@ export function findUiPlaces(query: string, limit = 5): string[] {
     const extra = place.words ?? [];
     const score = words.reduce((sum, word) => sum + (labelWords.includes(word) ? 4 : extra.includes(word) ? 3 : extra.some((one) => one.includes(word)) || label.includes(word) || place.id.includes(word) ? 1 : 0), label === phrase ? 10 : 0);
     return { place, score };
-  }).filter((hit) => hit.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map((hit) => screenLine(hit.place));
+  }).filter((hit) => hit.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map((hit) => hit.place);
 }

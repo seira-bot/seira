@@ -1,7 +1,7 @@
 import { reactionAnswer } from "../shared/reactions.ts";
 import type { WidgetAction } from "../shared/widget.ts";
 import { contextText } from "./delta-context.ts";
-import { CARD_RECORDS_SOURCE, cardRecords, SETTINGS_CARD_RECORDS_SOURCE, SETUP_RECORDS_SOURCE } from "./records-block.ts";
+import { CARD_RECORDS_SOURCE, cardRecords, SETTINGS_CARD_RECORDS_SOURCE, SETUP_RECORDS_SOURCE, UI_PLACE_RECORDS_SOURCE } from "./records-block.ts";
 import type { Message } from "./store.ts";
 
 const MAX_REPLY_EXCERPT = 900;
@@ -32,10 +32,10 @@ export function speakerOf(name: PersonName, line: Pick<Message, "sender">): stri
 }
 
 /** A card the app posted, not the bot: a server-built widget, or the add-a-key suggestion or a settings control (plain text rows). */
-const appCard = (message: Pick<Message, "serverCard" | "setupSuggestion" | "settingsCard">): boolean => message.serverCard === true || message.setupSuggestion !== undefined || message.settingsCard !== undefined;
+const appCard = (message: Pick<Message, "serverCard" | "setupSuggestion" | "settingsCard" | "uiPlace">): boolean => message.serverCard === true || message.setupSuggestion !== undefined || message.settingsCard !== undefined || message.uiPlace !== undefined;
 /** An app card's records block: the add-a-key suggestion is the app's own fixed text, not built from mail, calendar or bots. */
-const appCardRecords = (card: Pick<Message, "setupSuggestion" | "settingsCard">, text: string): string =>
-  cardRecords(text, card.settingsCard ? SETTINGS_CARD_RECORDS_SOURCE : card.setupSuggestion ? SETUP_RECORDS_SOURCE : CARD_RECORDS_SOURCE);
+const appCardRecords = (card: Pick<Message, "setupSuggestion" | "settingsCard" | "uiPlace">, text: string): string =>
+  cardRecords(text, card.settingsCard ? SETTINGS_CARD_RECORDS_SOURCE : card.uiPlace ? UI_PLACE_RECORDS_SOURCE : card.setupSuggestion ? SETUP_RECORDS_SOURCE : CARD_RECORDS_SOURCE);
 
 export function replySpeaker(message: Message, userName: PersonName = "User"): string {
   return message.role === "user" ? personOf(userName, message) : (message.from?.name ?? "Assistant");

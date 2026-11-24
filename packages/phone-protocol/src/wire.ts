@@ -470,6 +470,9 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   /** A setting's own control, drawn in chat by a device that has it (app_settings show_card); `text` is the English for
    * every other client. */
   settingsCard?: import("./app-settings.ts").SettingsCardData;
+  /** A place of the app, drawn in chat as a card the person clicks to go there (app_settings show_place). `id` is a place id of
+   * the UI map; `text` is the map's own English for a client that does not know this field and shows it as plain text. */
+  uiPlace?: { id: string };
   /** A person's line Set me up turned into a setup request: the bot reads it as `/setup <text>`; the chat shows `text`. */
   setupRequest?: true;
   /** app rows (kind "app"): bot HTML or an MCP server's UI. `text` is always the readable fallback. */
