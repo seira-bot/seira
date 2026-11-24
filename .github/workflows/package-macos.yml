@@ -8,7 +8,7 @@
 # - for a signed build of a `v*` tag, the `attach` job also uploads the twelve files to the draft release of that tag.
 # The `attach` job reads no secret. It runs only scripts/release-assets.mjs from the workflow commit, never code from the built commit.
 # The `commit` job finds the commit of the ref. The `package` job builds that commit only.
-# The `gate` job runs scripts/release-gate.mjs. It reads every commit since the previous release.
+# The `gate` job runs scripts/release-gate.mjs. It reads every commit since the last version on npm.
 # A run that passes the gate does not wait for a person.
 # A run that the gate flags waits for a person in the `release-approval` environment.
 # A run that the gate refuses does not build.
@@ -93,7 +93,7 @@ jobs:
         run: |
           set -uo pipefail
           if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            node scripts/release-gate.mjs --tag "$REF"
+            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA"
           else
             node scripts/release-gate.mjs --sha "$SHA"
           fi

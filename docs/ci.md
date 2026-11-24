@@ -156,7 +156,7 @@ holds these rules for every `package-*.yml` file:
   summary shows the commit. The `package` job builds that commit, never the
   ref name, so a moved tag or branch changes nothing after the gate.
 - The `gate` job of `package-macos.yml` runs the release gate. It uses
-  `--tag` when `ref` is a `v*` tag, and `--sha` with the commit otherwise.
+  `--tag` with `--sha` when `ref` is a `v*` tag, and `--sha` only otherwise.
 - The `package` job of `package-macos.yml` needs the `commit`, `gate`, and
   `approval` jobs. It runs only when `commit` succeeded, it is not cancelled,
   the run is on `main`, `gate` succeeded, and one of these is true:
@@ -413,7 +413,19 @@ Set "Allow administrators to bypass configured protection rules" to off on the
 The `gate` job of `npm-publish.yml`, `package-macos.yml`, and `server-image.yml`
 runs it from the commit of the workflow.
 
-The gate reads every commit since the previous published release. It checks:
+The gate checks every commit since the last version on npm. Only the gated
+`npm-publish.yml` workflow can publish to npm, so each version on npm passed
+the gate or a person approved it. The gate reads the package name at the
+release commit, asks the npm registry for the versions, and takes the highest
+lower version as the baseline. The tag of the baseline must exist and must be
+an ancestor of the release commit. If not, the gate flags the run. If the
+registry answers with an error, the gate refuses the run.
+
+The workflow gives the gate the tag and the commit that its `commit` job found.
+The gate refuses the run when the tag points to another commit. The gate and
+the `publish` job therefore check the same commit.
+
+The gate checks:
 
 - The release commit is on `main`. If not, the gate refuses the run.
 - Each commit comes from a merged pull request into `main`. A commit without
@@ -423,7 +435,7 @@ The gate reads every commit since the previous published release. It checks:
 - Each pull request leaves these paths alone: `.github/**`, `scripts/release-*`,
   `scripts/git-hooks/**`, `pnpm-workspace.yaml`, and `.npmrc` files.
   A change to one of them flags the run.
-- A previous release exists. If not, the gate flags the run.
+- An earlier version of the package exists on npm. If not, the gate flags the run.
 
 A pull request that breaks a rule passes when a listed human reviewer approved
 it. The latest review of that reviewer must be an approval.

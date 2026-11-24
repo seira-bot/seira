@@ -4,7 +4,7 @@ name: npm publish
 # No npm token exists in this repository. npm trusts this workflow file and the `release` environment through the GitHub OIDC token.
 # - It starts by hand with a tag. A published release starts it again: the `redispatch` job runs this workflow on `main`.
 # - The `commit` job finds the commit of the tag. The `publish` job builds that commit only.
-# - The `gate` job runs scripts/release-gate.mjs. It reads every commit since the previous release.
+# - The `gate` job runs scripts/release-gate.mjs. It reads every commit since the last version on npm.
 #   A run that passes the gate publishes with no person.
 #   A run that the gate flags waits for a person in the `release-approval` environment.
 #   A run that the gate refuses does not publish.
@@ -105,9 +105,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
           TAG: ${{ needs.commit.outputs.tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
         run: |
           set -uo pipefail
-          node scripts/release-gate.mjs --tag "$TAG"
+          node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA"
           status=$?
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;

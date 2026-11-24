@@ -71,7 +71,8 @@ describe("npm publish workflow", () => {
     expect(gate.permissions).toEqual({ contents: "read", "pull-requests": "read" });
     const run = gate.steps!.find((step) => step.id === "gate")!;
     expect(run.env?.TAG).toBe("${{ needs.commit.outputs.tag }}");
-    expect(run.run).toContain('node scripts/release-gate.mjs --tag "$TAG"');
+    expect(run.env?.SHA).toBe("${{ needs.commit.outputs.sha }}");
+    expect(run.run).toContain('node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA"');
     expect(run.run).not.toContain("${{");
   });
 

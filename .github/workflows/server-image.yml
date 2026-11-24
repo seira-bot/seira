@@ -2,7 +2,7 @@ name: Server image
 
 # The repository allows GitHub's own actions only, so the runner's docker CLI
 # builds and publishes. Each platform builds on its own native runner.
-# The `gate` job runs scripts/release-gate.mjs on the commit of this run. It reads every commit since the previous release.
+# The `gate` job runs scripts/release-gate.mjs on the commit of this run. It reads every commit since the last version on npm.
 # A run that passes the gate publishes with no person.
 # A run that the gate flags waits for a person in the `release-approval` environment.
 # A run that the gate refuses does not publish.

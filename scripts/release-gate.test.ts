@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { globToRegExp, humanApproved, isSensitivePath, parseArgs, parseReviewers, previousRelease, releaseGate, sensitiveFiles } from "./release-gate.mjs";
+import { baselineTag, globToRegExp, humanApproved, isSensitivePath, npmVersions, parseArgs, parseReviewers, releaseGate, sensitiveFiles } from "./release-gate.mjs";
 
 const sha = (n: number) => String(n).padStart(40, "0");
 const TAG_SHA = sha(100);
@@ -18,7 +18,9 @@ interface Pull {
 interface World {
   tagCommit?: string | null;
   mainStatus?: string;
-  releases?: { tag_name: string; draft: boolean }[];
+  versions?: string[];
+  registry?: "error" | "badjson";
+  baselineMissing?: boolean;
   rangeStatus?: string;
   commits?: string[];
   pulls?: Record<string, Pull[]>;
@@ -47,11 +49,9 @@ function fake(world: World) {
       return { object: { type: "commit", sha: world.tagCommit ?? TAG_SHA } };
     }
     if (/\/compare\/[0-9a-f]{40}\.\.\.main$/.test(path)) return { status: world.mainStatus ?? "ahead" };
-    if (path.startsWith("repos/o/r/releases?")) {
-      const page = Number(/&page=(\d+)/.exec(path)![1]);
-      return page === 1 ? (world.releases ?? [{ tag_name: "v1.0.0", draft: false }]) : [];
-    }
+    if (path.startsWith("repos/o/r/contents/package.json?ref=")) return { content: Buffer.from(JSON.stringify({ name: "@o/r" })).toString("base64") };
     if ((match = /\/compare\/(v[\d.]+)\.\.\.[0-9a-f]{40}\?per_page=(\d+)&page=(\d+)/.exec(path))) {
+      if (world.baselineMissing) throw Object.assign(new Error("Not Found"), { status: 404 });
       const perPage = Number(match[2]);
       const page = Number(match[3]);
       return {
@@ -65,15 +65,22 @@ function fake(world: World) {
     if ((match = /\/pulls\/(\d+)\/reviews\?/.exec(path))) return world.reviews?.[Number(match[1])] ?? [];
     throw new Error(`unexpected api call ${path}`);
   };
-  return { api, calls };
+  const fetched: string[] = [];
+  const fetchJson = async (url: string) => {
+    fetched.push(url);
+    if (world.registry === "error") throw new Error("registry down");
+    if (world.registry === "badjson") return "<html>";
+    return { versions: Object.fromEntries((world.versions ?? ["1.0.0"]).map((version) => [version, {}])) };
+  };
+  return { api, fetchJson, calls, fetched };
 }
 
-const run = async (world: World, extra: { reviewers?: string; sha?: string } = {}) => {
-  const { api, calls } = fake(world);
+const run = async (world: World, extra: { reviewers?: string; sha?: string; pinned?: string } = {}) => {
+  const { api, fetchJson, calls, fetched } = fake(world);
   const out: string[] = [];
   const summaries: string[] = [];
-  const code = await releaseGate({ api, repo: REPO, tag: extra.sha ? null : "v1.1.0", sha: extra.sha ?? null, reviewers: extra.reviewers, log: (line) => out.push(line), summary: (text) => summaries.push(text) });
-  return { code, out: out.join("\n"), calls, summaries };
+  const code = await releaseGate({ api, fetchJson, repo: REPO, tag: extra.sha ? null : "v1.1.0", sha: extra.pinned ?? extra.sha ?? null, reviewers: extra.reviewers, log: (line) => out.push(line), summary: (text) => summaries.push(text) });
+  return { code, out: out.join("\n"), calls, summaries, fetched };
 };
 
 describe("release gate", () => {
@@ -148,14 +155,45 @@ describe("release gate", () => {
     expect(result.code).toBe(1);
   });
 
-  it("flags a run with no previous published release (exit 1)", async () => {
-    const result = await run({ releases: [{ tag_name: "v1.0.0", draft: true }] });
+  it("flags a run with no earlier version on npm (exit 1)", async () => {
+    const result = await run({ versions: ["1.1.0", "2.0.0"] });
     expect(result.code).toBe(1);
-    expect(result.out).toContain("no previous published release");
+    expect(result.out).toContain("no earlier version");
   });
 
-  it("flags a range that is behind or diverged (exit 1)", async () => {
-    expect((await run({ rangeStatus: "diverged" })).code).toBe(1);
+  it("reads the version list of the package from the npm registry, with the slash of a scoped name encoded", async () => {
+    const result = await run({});
+    expect(result.fetched).toEqual(["https://registry.npmjs.org/@o%2Fr"]);
+    expect(result.calls.some((call) => call.startsWith("repos/o/r/contents/package.json?ref=" + TAG_SHA))).toBe(true);
+  });
+
+  it("refuses a registry error or bad JSON (exit 2 through a thrown error)", async () => {
+    await expect(run({ registry: "error" })).rejects.toThrow("registry down");
+    await expect(run({ registry: "badjson" })).rejects.toThrow("no versions");
+  });
+
+  it("flags a baseline tag that does not exist", async () => {
+    const result = await run({ baselineMissing: true });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("does not exist");
+  });
+
+  it("flags a baseline that is not an ancestor of the commit", async () => {
+    for (const rangeStatus of ["behind", "diverged"]) {
+      const result = await run({ rangeStatus });
+      expect(result.code, rangeStatus).toBe(1);
+      expect(result.out).toContain("not an ancestor");
+    }
+  });
+
+  it("refuses a tag that does not point to the pinned commit (exit 2), and checks the pinned commit when it does", async () => {
+    const refused = await run({}, { pinned: sha(7) });
+    expect(refused.code).toBe(2);
+    expect(refused.out).toContain("FAIL");
+    expect(refused.out).toContain("does not point to the commit");
+    const accepted = await run({ tagCommit: sha(7) }, { pinned: sha(7) });
+    expect(accepted.code).toBe(0);
+    expect(accepted.calls.some((call) => call.includes(`...${sha(7)}?`))).toBe(true);
   });
 
   it("reads every page of the commits in the range", async () => {
@@ -177,8 +215,8 @@ describe("release gate", () => {
     }
   });
 
-  it("works with a sha and takes the highest published release as the previous one", async () => {
-    const result = await run({ releases: [{ tag_name: "v1.0.0", draft: false }, { tag_name: "v2.0.0", draft: false }] }, { sha: sha(50) });
+  it("works with a sha only and takes the highest version on npm as the baseline", async () => {
+    const result = await run({ versions: ["1.0.0", "2.0.0", "3.0.0-beta.1"] }, { sha: sha(50) });
     expect(result.code).toBe(0);
     expect(result.calls.some((call) => call.includes("/compare/v2.0.0..."))).toBe(true);
   });
@@ -218,17 +256,16 @@ describe("pure parts", () => {
     expect(sensitiveFiles([{ filename: "a.ts" }, { filename: "b", previous_filename: ".npmrc" }])).toEqual([".npmrc"]);
   });
 
-  it("picks the highest published tag below the current one", () => {
-    const releases = [
-      { tag_name: "v0.1.9", draft: false },
-      { tag_name: "v0.1.10", draft: false },
-      { tag_name: "v0.1.11", draft: true },
-      { tag_name: "v0.1.12", draft: false },
-      { tag_name: "nightly", draft: false },
-    ];
-    expect(previousRelease(releases, "v0.1.12")).toBe("v0.1.10");
-    expect(previousRelease(releases, "v0.1.9")).toBeNull();
-    expect(previousRelease(releases)).toBe("v0.1.12");
+  it("picks the highest plain version below the current one", () => {
+    const versions = ["0.1.9", "0.1.10", "0.1.12", "0.2.0-beta.1", "latest"];
+    expect(baselineTag(versions, "v0.1.12")).toBe("v0.1.10");
+    expect(baselineTag(versions, "v0.1.9")).toBeNull();
+    expect(baselineTag(versions)).toBe("v0.1.12");
+  });
+
+  it("reads the versions of the registry answer", async () => {
+    expect(await npmVersions(async () => ({ versions: { "1.0.0": {} } }), "pkg")).toEqual(["1.0.0"]);
+    await expect(npmVersions(async () => ({}), "pkg")).rejects.toThrow();
   });
 
   it("ignores a comment after an approval and keeps the latest real review", () => {
@@ -247,7 +284,8 @@ describe("pure parts", () => {
   it("reads the arguments", () => {
     expect(parseArgs(["--tag", "v1.2.3", "--repo", "a/b"])).toMatchObject({ tag: "v1.2.3", repo: "a/b" });
     expect(parseArgs(["--sha", sha(1)]).sha).toBe(sha(1));
-    for (const argv of [[], ["--tag", "1.2.3"], ["--tag", "v1.2.3", "--sha", sha(1)], ["--sha", "abc"], ["--nope"]]) {
+    expect(parseArgs(["--tag", "v1.2.3", "--sha", sha(1)])).toMatchObject({ tag: "v1.2.3", sha: sha(1) });
+    for (const argv of [[], ["--tag", "1.2.3"], ["--sha", "abc"], ["--nope"]]) {
       expect(() => parseArgs(argv)).toThrowError(expect.objectContaining({ exitCode: 2 }));
     }
   });

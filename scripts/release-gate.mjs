@@ -1,5 +1,6 @@
-// Decides if a release run needs a person. It reads every commit since the previous published release and the pull
-// request that merged it. It only reads from GitHub, through `gh api`.
+// Decides if a release run needs a person. It reads every commit since the last version on npm and the pull
+// request that merged it. Only the gated npm publish workflow can publish to npm, so each version on npm passed the gate
+// or a person approved it. It only reads from GitHub, through `gh api`.
 // Exit status: 0 the run may publish with no person, 1 a person must approve first, 2 refuse, wrong use or an API error.
 import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -9,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { repoFromRemote } from "./release-preflight.mjs";
 
 const SHA = /^[0-9a-f]{40}$/;
+const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
 const SEMVER = /^v(\d+)\.(\d+)\.(\d+)$/;
 const TRUSTED_AUTHORS = new Set(["OWNER", "MEMBER"]);
 const PAGE = 100;
@@ -17,6 +19,7 @@ export const SENSITIVE_PATTERNS = [".github/**", "scripts/release-*", "scripts/g
 
 export const USAGE = `Usage: node scripts/release-gate.mjs --tag v<x.y.z> [--repo <owner>/<name>]
        node scripts/release-gate.mjs --sha <40-hex sha> [--repo <owner>/<name>]
+       node scripts/release-gate.mjs --tag v<x.y.z> --sha <40-hex sha>  (the tag must point to the sha)
 Environment: RELEASE_HUMAN_REVIEWERS is a JSON array of the logins of the human reviewers.`;
 
 export class UsageError extends Error {
@@ -36,7 +39,7 @@ export function parseArgs(argv) {
     } else throw new UsageError(`unknown argument ${arg}`);
   }
   if (out.help) return out;
-  if (!out.tag === !out.sha) throw new UsageError("give exactly one of --tag and --sha");
+  if (!out.tag && !out.sha) throw new UsageError("give --tag, --sha, or both");
   if (out.tag && !SEMVER.test(out.tag)) throw new UsageError("--tag must look like v1.2.3");
   if (out.sha && !SHA.test(out.sha)) throw new UsageError("--sha must be a full 40-character sha");
   if (out.repo && !/^[\w.-]+\/[\w.-]+$/.test(out.repo)) throw new UsageError("--repo must look like owner/name");
@@ -98,17 +101,24 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-/** The highest published release tag that is lower than `currentTag`. With no `currentTag`, the highest published tag. */
-export function previousRelease(releases, currentTag = null) {
+/** The highest plain version lower than `currentTag`. With no `currentTag`, the highest version. Returns a tag or null. */
+export function baselineTag(versions, currentTag = null) {
   const current = currentTag ? versionOf(currentTag) : null;
   let best = null;
-  for (const release of releases) {
-    if (release.draft) continue;
-    const version = versionOf(String(release.tag_name));
-    if (!version || (current && compareVersions(version, current) >= 0)) continue;
-    if (!best || compareVersions(version, best.version) > 0) best = { tag: release.tag_name, version };
+  for (const name of versions) {
+    if (!PLAIN_VERSION.test(name)) continue;
+    const version = versionOf(`v${name}`);
+    if (current && compareVersions(version, current) >= 0) continue;
+    if (!best || compareVersions(version, best.version) > 0) best = { tag: `v${name}`, version };
   }
   return best ? best.tag : null;
+}
+
+/** The versions that npm lists for a package. A registry error or bad JSON throws. */
+export async function npmVersions(fetchJson, name) {
+  const body = await fetchJson(`https://registry.npmjs.org/${name.replace("/", "%2F")}`);
+  if (!body || typeof body !== "object" || !body.versions || typeof body.versions !== "object") throw new Error(`the npm registry answer for ${name} has no versions`);
+  return Object.keys(body.versions);
 }
 
 /** A listed person approved when the latest review of that person that counts is APPROVED. A comment changes nothing. */
@@ -166,15 +176,16 @@ async function commitsSince(api, repo, base, head) {
     const body = await api(`repos/${repo}/compare/${base}...${head}?per_page=${PAGE}&page=${page}`);
     status = body.status;
     total = body.total_commits ?? 0;
-    commits.push(...(body.commits ?? []));
-    if (commits.length >= total || (body.commits ?? []).length === 0) return { commits, status, total };
+    const batch = body.commits ?? [];
+    commits.push(...batch);
+    if (commits.length >= total || batch.length === 0) return { commits, status, total };
   }
 }
 
 const short = (sha) => sha.slice(0, 7);
 
 /** Runs every check, logs one line per check and returns the exit status. */
-export async function releaseGate({ api, repo = "owner/name", tag = null, sha = null, reviewers = "", log = console.log, summary = () => {} }) {
+export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = null, sha = null, reviewers = "", log = console.log, summary = () => {} }) {
   const lines = [];
   let flagged = false;
   const say = (kind, text) => {
@@ -197,11 +208,16 @@ export async function releaseGate({ api, repo = "owner/name", tag = null, sha = 
 
   let commit = sha;
   if (tag) {
-    commit = await tagCommit(api, repo, tag);
-    if (!commit) {
+    const tagged = await tagCommit(api, repo, tag);
+    if (!tagged) {
       say("FAIL", `tag ${tag} does not exist in ${repo}`);
       return finish(2, "Release gate refused: the tag does not exist.");
     }
+    if (sha && tagged !== sha) {
+      say("FAIL", `tag ${tag} points to ${tagged}, not to ${sha}`);
+      return finish(2, "Release gate refused: the tag does not point to the commit of this run.");
+    }
+    commit = tagged;
   }
   say("ok", `commit ${commit}`);
 
@@ -212,15 +228,26 @@ export async function releaseGate({ api, repo = "owner/name", tag = null, sha = 
   }
   say("ok", "commit is on main");
 
-  const releases = await paged(api, `repos/${repo}/releases`);
-  const previous = previousRelease(releases, tag);
+  const file = await api(`repos/${repo}/contents/package.json?ref=${commit}`);
+  const name = JSON.parse(Buffer.from(file.content, "base64").toString("utf8")).name;
+  if (typeof name !== "string" || name === "") throw new Error("package.json has no name");
+  const previous = baselineTag(await npmVersions(fetchJson, name), tag);
   let commits = [];
-  if (!previous) flag("no previous published release, so the whole history needs a person");
+  if (!previous) flag(`no earlier version of ${name} on npm, so the whole history needs a person`);
   else {
-    const range = await commitsSince(api, repo, previous, commit);
-    commits = range.commits;
-    say("ok", `${range.total} commit(s) since ${previous} (compare status: ${range.status})`);
-    if (range.status === "behind" || range.status === "diverged") flag(`the commit is ${range.status} relative to ${previous}`);
+    let range = null;
+    try {
+      range = await commitsSince(api, repo, previous, commit);
+    } catch (error) {
+      if (error.status !== 404) throw error;
+    }
+    if (!range) flag(`the tag ${previous} of the last npm version does not exist`);
+    else {
+      commits = range.commits;
+      say("ok", `${range.total} commit(s) since ${previous}, the last version on npm (compare status: ${range.status})`);
+      if (range.status !== "ahead" && range.status !== "identical") flag(`${previous} is not an ancestor of the commit (compare status: ${range.status})`);
+      if (commits.length < range.total) flag(`the commit list is cut short (${commits.length} of ${range.total})`);
+    }
   }
 
   const verdicts = new Map();
@@ -265,6 +292,11 @@ async function main() {
   const summaryFile = process.env.GITHUB_STEP_SUMMARY;
   process.exitCode = await releaseGate({
     api: async (path) => ghApi(path),
+    fetchJson: async (url) => {
+      const response = await fetch(url, { headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`);
+      return response.json();
+    },
     repo,
     tag: args.tag,
     sha: args.sha,

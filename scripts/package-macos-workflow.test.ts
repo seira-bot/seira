@@ -103,7 +103,7 @@ describe("package-macos.yml", () => {
     const gate = flow.jobs.gate as unknown as { needs: string; steps: Step[] };
     expect(gate.needs).toBe("commit");
     const run = gate.steps.find((each) => each.id === "gate")!.run!;
-    expect(run).toContain('node scripts/release-gate.mjs --tag "$REF"');
+    expect(run).toContain('node scripts/release-gate.mjs --tag "$REF" --sha "$SHA"');
     expect(run).toContain('node scripts/release-gate.mjs --sha "$SHA"');
     expect(run).not.toContain("${{");
     expect((flow.jobs.approval as unknown as { if: string }).if).toBe("${{ needs.gate.outputs.pass == 'false' }}");
