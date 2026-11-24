@@ -192,6 +192,9 @@ export interface ConfigStatus {
   /** This server is a Seira Cloud home: it offers no "this computer" and no
    * Local VM (server/cloud-home.ts). Absent everywhere else. */
   cloudHome?: boolean;
+  /** `no-bwrap`: every bot's commands were meant to run in the bot box, and it is off because this computer has no
+   * bubblewrap. Absent otherwise. */
+  boxMissing?: "no-bwrap";
   /** A Team Cloud: the team this server is the home of, and the Plan page (Seira Cloud) where its people and plan
    * are managed. Absent everywhere else. */
   team?: { id: string; name: string; cloudPage?: string };
