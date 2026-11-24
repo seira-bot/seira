@@ -20,7 +20,7 @@ beforeEach(() => {
   rmSync(DATA_DIR, { recursive: true, force: true });
 });
 
-function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig>; team?: BotCreateRouteDeps["team"]; afterCreate?: (bot: BotRecord) => void } = {}) {
+function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig>; team?: BotCreateRouteDeps["team"]; afterCreate?: (bot: BotRecord) => void; maxWorkspaceBots?: number } = {}) {
   const store = new Store(() => sonnet);
   const asked: ModelSelection[] = [];
   /** Conversations a person's audience no longer reaches: the fixture has no Team Cloud audiences of its own. */
@@ -33,7 +33,7 @@ function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"
     hostedWorkspace: false,
     hostedFullAccessRefusal: "",
     desktopManaged: true,
-    maxWorkspaceBots: 100,
+    maxWorkspaceBots: options.maxWorkspaceBots ?? 100,
     paused: () => false,
     cloudOwnerKey: null,
     hostedModels: null,
@@ -258,6 +258,17 @@ describe("a client that sends a creation again after a lost answer", () => {
     expect(second.status).toBe(404);
     expect(second.body).toEqual({ error: NO_SUCH_BOT });
     expect(fx.store.bots).toHaveLength(before + 1);
+  });
+
+  it("answers a retry with its bot, not a full workspace, when the first request took the last free place", async () => {
+    const fx = fixture({ maxWorkspaceBots: 1 });
+    const [first, second] = await Promise.all([fx.send({ name: "Last place", retryKey: KEY }), fx.send({ name: "Last place", retryKey: KEY })]);
+    expect(first.status).toBe(201);
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(second.body.bot.id).toBe(first.body.bot.id);
+    expect(fx.store.bots).toHaveLength(1);
+    // A different key still meets the limit.
+    expect((await fx.send({ name: "Another", retryKey: "other-retry-key-01" })).status).toBe(409);
   });
 
   it("is allowed to a Team Cloud member, who still may not name an id, a conversation id or a setting that is an admin's", () => {

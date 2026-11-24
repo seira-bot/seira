@@ -228,6 +228,10 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         selection = checked.selection;
       }
       if (hostedModels && !hostedModels.allows(selection)) return json(res, 400, { error: hostedModels.error() });
+      // Checked again beside the synchronous write, and before the capacity check: an await above let another request finish
+      // this same retry, perhaps in the last free place, and that retry is answered with its bot, not with a full workspace.
+      const finished = replay(retryScope, auth);
+      if (finished) return json(res, finished.status, finished.body);
       // The capacity check sits beside the synchronous write, after every await.
       if (store.bots.length >= MAX_WORKSPACE_BOTS) {
         return json(res, 409, { error: botLimitRefusal(MAX_WORKSPACE_BOTS) });
@@ -235,9 +239,6 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       // Apply the audience before creation can announce the bot to members.
       const created = body.visibility === undefined ? null : parseVisibility(body.visibility);
       if (created && !created.ok) return json(res, 400, { error: created.error });
-      // Checked again beside the synchronous write: an await above let another request take the same id or finish the same retry.
-      const finished = replay(retryScope, auth);
-      if (finished) return json(res, finished.status, finished.body);
       if (kept.id && "error" in keptBotIds(kept, store)) return json(res, 409, { error: "a bot with this id already exists here" });
       // A bot moved in from another computer keeps its own look; a new one fills what it names not from a fresh one.
       const look = kept.id ? undefined : freshLook(store.bots);
