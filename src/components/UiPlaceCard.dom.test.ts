@@ -1,17 +1,19 @@
 // @vitest-environment happy-dom
-import { createElement, type ReactNode } from "react";
+import { createContext, createElement, Fragment, useCallback, useContext, useReducer, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setLocale } from "@/lib/i18n";
-import type { Message } from "@/state/store";
+import { initialState, reducer, type AppState, type Message } from "@/state/store";
 
 type Action = { type: string; [key: string]: unknown };
-/** `appear` maps an action type to the elements the app draws after it, as attribute and value. */
-const f = vi.hoisted(() => ({ advanced: true, dispatch: null as unknown as (action: Action) => void, appear: {} as Record<string, [string, string][]> }));
+/** `appear` maps an action type to the elements the app draws after it, as attribute and value. `record` sees the actions the card sends, not the host's answers. */
+const f = vi.hoisted(() => ({ advanced: true, record: (_action: Action) => {}, appear: {} as Record<string, [string, string][]> }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => f.advanced, readAdvancedMode: () => f.advanced }));
-vi.mock("@/state/store", () => ({ useStore: () => ({ state: { config: {} }, dispatch: (action: Action) => f.dispatch(action) }), api: async () => ({}) }));
+// The store is the real reducer from the real initial state; only the provider is small, so a page change really changes `activeView`.
+const StoreContext = createContext<{ state: AppState; dispatch: (action: Action) => void } | null>(null);
+vi.mock("@/state/store", async (original) => ({ ...await original<typeof import("@/state/store")>(), useStore: () => useContext(StoreContext)! }));
 vi.mock("./onboarding/Spotlight", async () => {
   const { createElement: h } = await import("react");
   return { Spotlight: (props: { anchor: string; attr?: string; primary?: { label: string; onClick: () => void }; children: ReactNode }) =>
@@ -19,6 +21,7 @@ vi.mock("./onboarding/Spotlight", async () => {
 });
 
 const { RichMessageRow, richRowKind } = await import("./RichMessageRow");
+const { PlaceLookHost } = await import("./PlaceLookHost");
 
 const row = (id: string, text = "The server's own words."): Message => ({ id: "m1", role: "bot", kind: "text", text, uiPlace: { id } }) as unknown as Message;
 
@@ -27,6 +30,8 @@ let screen: HTMLDivElement;
 let root: Root;
 let actions: Action[];
 let clicked: string[];
+/** What each page, by `activeView`, draws when it is on the screen, as attribute and value. */
+let pages: Record<string, [string, string][]>;
 
 function draw(attr: string, value: string) {
   const el = document.createElement("button");
@@ -39,12 +44,10 @@ beforeEach(() => {
   setLocale("en");
   f.advanced = true;
   f.appear = {};
+  pages = {};
   actions = [];
   clicked = [];
-  f.dispatch = (action) => {
-    actions.push(action);
-    for (const [attr, value] of f.appear[action.type] ?? []) draw(attr, value);
-  };
+  f.record = (action) => { if (action.type !== "placeLookResult") actions.push(action); };
   vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) { return [{}] as unknown as DOMRectList; });
   host = document.createElement("div");
   screen = document.createElement("div");
@@ -58,8 +61,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function Provider({ children }: { children: ReactNode }) {
+  const [state, apply] = useReducer(reducer, initialState);
+  const dispatch = useCallback((action: Action) => {
+    f.record(action);
+    apply(action as never);
+    for (const [attr, value] of f.appear[action.type] ?? []) draw(attr, value);
+  }, []);
+  return createElement(StoreContext.Provider, { value: { state, dispatch } }, children);
+}
+
+/** Like App: the chat page or another page, and the host that stays mounted over the change. */
+function Shell({ message }: { message: Message }) {
+  const { state } = useContext(StoreContext)!;
+  const page = state.activeView === "chat"
+    ? createElement(RichMessageRow, { botId: "kiwi", botName: "Kiwi", threadId: "t-kiwi", message })
+    : createElement("div", { "data-page": state.activeView }, (pages[state.activeView] ?? []).map(([attr, value]) => createElement("button", { key: value, [`data-${attr}`]: value, onClick: () => clicked.push(`${attr}:${value}`) })));
+  return createElement(Fragment, null, page, createElement(PlaceLookHost));
+}
+
 function show(message: Message) {
-  flushSync(() => root.render(createElement(RichMessageRow, { botId: "kiwi", botName: "Kiwi", threadId: "t-kiwi", message })));
+  flushSync(() => root.render(createElement(Provider, null, createElement(Shell, { message }))));
 }
 const openButton = () => host.querySelector<HTMLButtonElement>("[data-ui-place-open]");
 const spot = () => host.querySelector<HTMLElement>("[data-spot]");
@@ -93,7 +115,7 @@ describe("a place card in chat", () => {
     expect(spot()).toBeNull();
     flushSync(() => openButton()!.click());
     await vi.waitFor(() => expect(spot()).not.toBeNull());
-    expect(actions.map((action) => action.type)).toEqual([actionType]);
+    expect(actions.map((action) => action.type)).toEqual([actionType, "lookForPlace"]);
     expect(spot()!.getAttribute("data-spot")).toBe(value);
     expect(spot()!.getAttribute("data-spot-attr")).toBe(attr);
     expect(host.querySelector("[data-ui-place-hint]")!.textContent).toContain("Click the highlighted control yourself");
@@ -105,7 +127,7 @@ describe("a place card in chat", () => {
     show(row("sidebar.new-bot"));
     flushSync(() => openButton()!.click());
     await vi.waitFor(() => expect(spot()).not.toBeNull());
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ type: "lookForPlace", id: "sidebar.new-bot" }]);
     expect(spot()!.getAttribute("data-spot")).toBe("sidebar.new");
     expect(host.textContent).toContain("Click New bot");
     expect(clicked).toEqual([]);
@@ -130,12 +152,52 @@ describe("a place card in chat", () => {
   });
 
   it("shows the clicks when the control is not on screen after the page opened", async () => {
-    show(row("board.new-task"));
+    show(row("chat.screen"));
     flushSync(() => openButton()!.click());
     await vi.waitFor(() => expect(host.querySelector("[data-ui-place-missing]")).not.toBeNull(), { timeout: 4000 });
     expect(spot()).toBeNull();
-    expect(host.querySelector("[data-ui-place-steps]")!.textContent).toContain("Click New task, at the top right of the page");
+    expect(host.querySelector("[data-ui-place-steps]")!.textContent).toContain("Click the monitor button at the top right of the chat");
     expect(clicked).toEqual([]);
+  });
+
+  // The actions of these places change `activeView`, and the page replaces the chat page: the card is gone before the control is.
+  it.each([
+    ["board.new-task", "showBoard", "board", ["ui", "board.new-task"]],
+    ["automations.page", "showRoutines", "routines", ["tour", "automations-page"]],
+    ["automations.workflows", "showRoutines", "routines", ["ui", "automations.workflows"]],
+  ] as const)("%s: the spotlight stays over the page change that unmounts the card", async (id, actionType, view, [attr, value]) => {
+    pages[view] = [[attr, value]];
+    show(row(id));
+    flushSync(() => openButton()!.click());
+    expect(openButton()).toBeNull();
+    expect(host.querySelector(`[data-page='${view}']`)).not.toBeNull();
+    await vi.waitFor(() => expect(spot()).not.toBeNull());
+    expect(actions.map((action) => action.type)).toEqual([actionType, "lookForPlace"]);
+    expect(spot()!.getAttribute("data-spot")).toBe(value);
+    expect(spot()!.getAttribute("data-spot-attr")).toBe(attr);
+    expect(host.querySelector("[data-ui-place-hint]")!.textContent).toContain("Click the highlighted control yourself");
+    expect(clicked).toEqual([]);
+    flushSync(() => host.querySelector<HTMLButtonElement>("[data-spot-done]")!.click());
+    expect(spot()).toBeNull();
+  });
+
+  it("says the control is not there on a page that replaced the chat, where the card is gone", async () => {
+    pages.board = [];
+    show(row("board.new-task"));
+    flushSync(() => openButton()!.click());
+    expect(openButton()).toBeNull();
+    await vi.waitFor(() => expect(host.querySelector("[data-ui-place-lost]")).not.toBeNull(), { timeout: 4000 });
+    expect(spot()).toBeNull();
+    expect(host.textContent).toContain("Click New task, at the top right of the page");
+    flushSync(() => host.querySelector<HTMLButtonElement>("[data-spot-done]")!.click());
+    expect(host.querySelector("[data-ui-place-lost]")).toBeNull();
+  });
+
+  it("drops the answer of an older look when the person asked again", () => {
+    const first = reducer(initialState, { type: "lookForPlace", id: "board.new-task" });
+    const second = reducer(first, { type: "lookForPlace", id: "files.upload" });
+    const late = reducer(second, { type: "placeLookResult", nonce: first.placeLook!.nonce, phase: "spot", anchor: { attr: "ui", value: "board.new-task" } });
+    expect(late.placeLook).toMatchObject({ id: "files.upload", phase: "looking" });
   });
 
   it("shows the row's fixed text for an id this client does not know", () => {

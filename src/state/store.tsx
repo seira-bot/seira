@@ -498,6 +498,10 @@ export interface ModelVariantSession {
   variants?: { options: ModelVariantOption[]; currentValue?: string };
 }
 
+/** Where the place card's spotlight points: the `data-ui` or the `data-tour` value of the element. */
+export interface PlaceLookAnchor { attr: "ui" | "tour"; value: string }
+export interface PlaceLook { id: string; nonce: number; phase: "looking" | "spot" | "missing"; anchor?: PlaceLookAnchor }
+
 export interface AppState {
   bots: Bot[];
   groups: Group[];
@@ -559,6 +563,8 @@ export interface AppState {
   error: string | null;
   notice: { kind: "thread-gone" | "bot-gone" | "steer-images" | "note" | "no-ai"; botName: string | null; text?: string } | null;
   revealThread: { threadId: string; nonce: number } | null;
+  /** The place card's request. The host in App reads it, so the page change that the card asks for cannot unmount it. */
+  placeLook: PlaceLook | null;
   mascotMotion: {
     botId: string;
     nonce: number;
@@ -731,6 +737,7 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "notice"; notice: AppState["notice"] }
   | { type: "revealThread"; threadId: string }
+  | { type: "lookForPlace"; id: string } | { type: "placeLookResult"; nonce: number; phase: "spot" | "missing"; anchor?: PlaceLookAnchor } | { type: "closePlaceLook" }
   | { type: "toggleSettings"; open?: boolean; section?: BotSettingsSection; botId?: string }
   | { type: "togglePlugins"; open?: boolean; surface?: "apps" | "mcp" }
   | { type: "toggleComputer"; open?: boolean; botId?: string }
@@ -1394,6 +1401,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, botCreationPending: action.on };
     case "notice":
       return { ...state, notice: action.notice };
+    case "lookForPlace":
+      return { ...state, placeLook: { id: action.id, nonce: (state.placeLook?.nonce ?? 0) + 1, phase: "looking" } };
+    case "placeLookResult":
+      return state.placeLook?.nonce === action.nonce && state.placeLook.phase === "looking" ? { ...state, placeLook: { ...state.placeLook, phase: action.phase, anchor: action.anchor } } : state;
+    case "closePlaceLook":
+      return state.placeLook ? { ...state, placeLook: null } : state;
     case "revealThread":
       return { ...state, appSettingsOpen: false, shortcutsOpen: false, pluginsOpen: false, revealThread: { threadId: action.threadId, nonce: (state.revealThread?.nonce ?? 0) + 1 } };
     case "focusMessage":
@@ -1845,6 +1858,7 @@ export const initialState: AppState = {
   error: null,
   notice: null,
   revealThread: null,
+  placeLook: null,
   mascotMotion: null,
   pendingQueued: {},
   consumedQueueIds: {},
