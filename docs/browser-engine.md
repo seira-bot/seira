@@ -16,8 +16,9 @@ browser that does. Seira's own driver never sends it. `browserEngine.engine`
 set to `"chrome"` or `"agent-browser"` is the person's saved choice and always
 wins; unset, the driver is used wherever it has a Chrome to run. Under vitest
 and in a sealed test fixture the default stays agent-browser, so a test's fake
-engine stands for the bots' browser and no test finds this machine's Chrome. Set
-`SEIRA_BROWSER_ENGINE_DEFAULT=chrome` to test the driver as the default.
+engine stands for the bots' browser and no test finds this machine's Chrome.
+`SEIRA_BROWSER_ENGINE_DEFAULT` set to `chrome` or `agent-browser` names the
+default everywhere; a test that starts its own server names `agent-browser`.
 
 The first time Seira's own driver opens a bot's profile, it copies the bot's
 agent-browser profile folder into the new profile, so saved sign-ins come along.

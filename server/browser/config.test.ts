@@ -29,6 +29,12 @@ describe("the engine that runs the bots' browsers", () => {
     expect(effectiveBrowserEngine({}, has(false), app)).toBe("agent-browser");
   });
 
+  it("is the engine SEIRA_BROWSER_ENGINE_DEFAULT names while nothing is chosen", () => {
+    expect(effectiveBrowserEngine({}, has(true), { env: { SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser" } })).toBe("agent-browser");
+    expect(effectiveBrowserEngine({}, has(false), { env: { SEIRA_BROWSER_ENGINE_DEFAULT: "chrome" } })).toBe("agent-browser");
+    expect(effectiveBrowserEngine({ browserEngine: { engine: "chrome" } }, has(true), { env: { SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser" } })).toBe("chrome");
+  });
+
   it("stays agent-browser by default under a test unless the test asks for Seira's driver", () => {
     expect(seiraEngineByDefault({})).toBe(true);
     for (const env of [{ VITEST: "true" }, { SEIRA_TEST_SEALED_PATH: "1" }]) {
