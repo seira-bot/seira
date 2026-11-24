@@ -125,6 +125,8 @@ described above; it is not a generic reverse-proxy secret.
 | Create and organize | `create_bot`, `update_bot_profile`, `create_channel`, `update_channel`, `create_task`, `switch_task`, `rename_task` |
 | Run work | `send_bot_message`, `send_channel_message`, `wait_for_conversation`, `interrupt_conversation`, `set_bot_model` |
 
+`create_bot` sends a retry key of its own and sends the request again with that key when no answer comes back, so a lost answer does not make a second bot.
+
 `wait_for_conversation` returns `settled`, `needs-user`, `failed`, `stalled`, or `timed-out`, along with a
 small redacted transcript tail. That `status` keeps its earlier meaning: `settled` says the conversation is
 no longer working (`failed` and `stalled` say its engine died or went silent, or its dispatch failed). The

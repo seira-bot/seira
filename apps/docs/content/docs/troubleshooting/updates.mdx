@@ -8,14 +8,12 @@ Seira checks for updates in the background and offers the download in a card at 
 
 | Build | What the button does |
 |---|---|
-| macOS, Windows, Linux AppImage | **Restart to update** — the app replaces itself and reopens. An AppImage is always rewritten at the path you launch, so your launcher, symlink or dock pin keeps working. |
+| Windows, Linux AppImage | **Restart to update** — the app replaces itself and reopens. An AppImage is always rewritten at the path you launch, so your launcher, symlink or dock pin keeps working. |
 | Snap and Flatpak | The store updates the app. Seira shows no update button for these builds. |
 
 ## The download keeps spinning
 
 Leave the app open long enough for one complete attempt, then quit and reopen it. A failed differential update should fall back to the full package. If the same release remains stuck, download the current installer from the [official releases page](https://github.com/seira-bot/seira/releases/latest) and install it over the existing copy.
-
-On macOS, **Preparing update** is a separate step after the download finishes. macOS must stage the update before **Restart to update** becomes available. A completed download does not mean this preparation is finished.
 
 If an update fails, its error stays visible instead of being replaced by a background update check. If a restart is taking longer than expected, quit the app completely before trying again; repeatedly clicking Restart cannot speed it up.
 

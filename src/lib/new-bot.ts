@@ -7,6 +7,7 @@ import type { BotSource } from "./analytics-allowlist";
 import { BotCreationDraft } from "./bot-creation-draft";
 import { isBotLimitRefusal, showCreatedPaused } from "./bot-limit";
 import { createConfiguredBot } from "./create-configured-bot";
+import { postNewBot } from "./post-new-bot";
 import { t } from "./i18n";
 import { botCreated } from "./product-events";
 
@@ -57,11 +58,11 @@ export function setNewBotNameAsker(ask: (() => Promise<string | null>) | null): 
  * `name`: the person's own choice, in place of a suggested one. */
 async function createNewBot(section: string | undefined, bots: readonly Bot[], team: TeamPeople | null, request: typeof api, name?: string) {
   if (team?.admin === false) {
-    const { bot, paused } = await request<{ bot: Bot; paused?: true }>("/api/bots", { method: "POST", body: JSON.stringify(name ? { name } : {}) });
+    const { bot, paused } = await postNewBot(name ? { name } : {}, request);
     return { bot, warnings: [] as string[], startsOnAsk: false, ...(paused ? { paused } : {}) };
   }
   if (typeof window !== "undefined" && window.ogb?.remoteClient?.active) {
-    const { bot, paused } = await request<{ bot: Bot; paused?: true }>("/api/bots", { method: "POST", body: JSON.stringify({ ...(section === undefined ? {} : { section }), ...(name ? { name } : {}) }) });
+    const { bot, paused } = await postNewBot({ ...(section === undefined ? {} : { section }), ...(name ? { name } : {}) }, request);
     return { bot, warnings: [] as string[], startsOnAsk: false, ...(paused ? { paused } : {}) };
   }
   const template = startingTemplate(await request<BotDefaultsAnswer>("/api/bot-defaults"), true);

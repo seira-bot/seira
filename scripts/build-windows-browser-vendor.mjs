@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { executableTarget } from "./prepare-cloudflared.mjs";
 import { bundleInventory, releaseBytes } from "./prepare-browser.mjs";
 
-export const WINDOWS_VENDOR_VERSION = "0.36.0-omb.2";
+export const WINDOWS_VENDOR_VERSION = "0.36.0-seira.2";
 export const WINDOWS_VENDOR_TARGET = "x86_64-pc-windows-gnu";
 export const WINDOWS_VENDOR_SOURCE = {
   commit: "eb05921bad874cd2a1b4fa5d1149f1ed26576cae",
@@ -19,7 +19,7 @@ export const WINDOWS_VENDOR_SOURCE = {
   bytes: 1904718,
   sha256: "ed24a72a5260d9c1ea454cd849c44159bac570a6939ac645e4c5bdb98a421646",
 };
-export const WINDOWS_VENDOR_PATCH_SHA256 = "a08f3fdfca63db5358c5354716e4216c365d1d37c08b5f32215062f937c35819";
+export const WINDOWS_VENDOR_PATCH_SHA256 = "09946d60471d82bb644977ade1837446c332c787e1506f0672f046394567f6a0";
 export const WINDOWS_VENDOR_RUST = "1.97.1";
 export const WINDOWS_VENDOR_PNPM = "11.1.3";
 const repository = fileURLToPath(new URL("../", import.meta.url));

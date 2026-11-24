@@ -47,6 +47,26 @@ describe("the connector protocol", () => {
     expect(image("self-update", HOME)).toBe(false);
   });
 
+  it("accepts the Seira names and still the names the images had before the rename, each only for its own kind", () => {
+    const image = (type: "start" | "update" | "self-update", value: string) => checkJob({ id: "j", type, args: type === "start" ? { image: value, env } : { image: value } }).ok;
+    const digest = `@sha256:${"a".repeat(64)}`;
+    expect(image("start", `ghcr.io/seira-bot/seira-cloud-home${digest}`)).toBe(true);
+    expect(image("update", `ghcr.io/seira-bot/seira-cloud-home${digest}`)).toBe(true);
+    expect(image("self-update", `ghcr.io/seira-bot/seira-connector${digest}`)).toBe(true);
+    for (const value of [
+      `ghcr.io/seira-bot/seira-cloud-home:latest`, `ghcr.io/seira-bot/seira${digest}`, `ghcr.io/seira-bot/seira-connector${digest}`,
+      `ghcr.io/seira-bot/seira-cloud-home${digest} --privileged`, `ghcr.io/seira-bot/seira-cloud-home@sha256:${"A".repeat(64)}`,
+      `ghcr.io/seira-bots/seira-cloud-home${digest}`, `ghcr.io/milind-soni/seira-cloud-home${digest}`,
+    ]) {
+      expect(image("start", value), value).toBe(false);
+      expect(image("update", value), value).toBe(false);
+    }
+    for (const value of [`ghcr.io/seira-bot/seira-connector:latest`, `ghcr.io/seira-bot/seira-cloud-home${digest}`, `ghcr.io/seira-bot/mausbot-connector${digest}`, `ghcr.io/milind-soni/seira-connector${digest}`]) {
+      expect(image("self-update", value), value).toBe(false);
+    }
+    expect(checkJob({ id: "j", type: "start", args: { image: "ghcr.io/x/y", env } })).toMatchObject({ ok: false, message: "image must be ghcr.io/seira-bot/seira-cloud-home@sha256:<digest>" });
+  });
+
   it("starts a home only with its contract, SEIRA_ settings the image does not own, and one-line values, and never echoes a value", () => {
     expect(checkHomeEnv(env)).toEqual({ ok: true, value: env });
     expect(checkHomeEnv({ ...env, SEIRA_COMPOSIO_BROKER_URL: "http://127.0.0.1:9", SEIRA_CLOUD_TEAM_ID: "t1" }).ok).toBe(true);

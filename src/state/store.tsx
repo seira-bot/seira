@@ -48,6 +48,7 @@ import {
 import type { Routine, RoutineInput, RoutineRun, RoutineRunStatusFilter } from "@/lib/routines";
 import type { WebhookAttempt, WebhookIngressStatus, WebhookTrigger } from "@/lib/webhooks";
 import { duplicateBotProfile, restrictedCopyRequest } from "@/lib/bot-duplicate";
+import { postNewBot } from "@/lib/post-new-bot";
 import { markVisibleBotThreadsRead, markVisibleGroupThreadsRead } from "./read-visible";
 import { applyWindowPref } from "@/lib/window-prefs"; import { applyThemeFrame } from "@/lib/theme/runtime";
 import { placeUnreadDivider, threadOpensUnread, threadReadCursor, unreadDividerFor, type UnreadDivider } from "@/lib/unread-divider";
@@ -2522,10 +2523,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (!source) break;
           const duplicateProfile = duplicateBotProfile(source);
           // A copy of a restricted bot is restricted from its first moment.
-          api("/api/bots", {
-            method: "POST",
-            body: JSON.stringify(restrictedCopyRequest(source)),
-          })
+          postNewBot(restrictedCopyRequest(source))
             .then(({ bot, paused }) =>
               api(`/api/bots/${bot.id}`, {
                 method: "PATCH",

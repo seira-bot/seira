@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { allowedServerOrigin, EXAMPLE_ADDRESS } from "../electron/server-address.mjs";
 import { isRecord, projectMessage } from "./mcp-message-projection.ts";
 import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
+import { createBotThrough } from "../shared/new-bot-request.ts";
 
 /** A server's base URL: https anywhere, http only on loopback or a private network (LAN, Tailscale). */
 export function validateBaseUrl(url: string): string {
@@ -862,16 +863,13 @@ export async function handleToolCall(
         throw new ToolInputError("instance_id and model must be provided together");
       }
       const selection = wantsModel ? await checkedModelSelection(args, fetcher) : undefined;
-      const created = await fetcher("/api/bots", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          ...(title !== undefined ? { title } : {}),
-          ...(description !== undefined ? { description } : {}),
-          ...(section !== undefined ? { section } : {}),
-          ...(selection ? { modelSelection: selection, requireAvailableModel: true } : {}),
-        }),
-      });
+      const created = await createBotThrough({
+        name,
+        ...(title !== undefined ? { title } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(section !== undefined ? { section } : {}),
+        ...(selection ? { modelSelection: selection, requireAvailableModel: true } : {}),
+      }, fetcher);
       if (!isRecord(created?.bot) || typeof created.bot.id !== "string") {
         throw new Error("Seira did not return the created bot");
       }
