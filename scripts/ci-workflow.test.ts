@@ -145,7 +145,7 @@ describe("CI workflows", () => {
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(3);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS || file === MILESTONES ? original.replace(READ_TOKEN, "") : original;
+      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS || file === MILESTONES ? original.replaceAll(READ_TOKEN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
