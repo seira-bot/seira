@@ -41,11 +41,11 @@ Seira turns agent CLIs into a messaging-style workspace. The harness normalizes 
 
 ## Desktop experience
 
-- macOS, Windows, and Ubuntu packages
+- Packages for Windows (`.exe`) and Linux (`.deb`, AppImage, Flatpak)
 - Theme switching and accessible contrast
 - Sidebar sections, compact headers, pinned messages, spoilers, and image attachments
-- Automatic updates on macOS and Windows
+- Automatic updates on Windows and Linux; the Flatpak updates through `flatpak update`
 
 <Callout type="info" title="Platform differences are intentional">
-  macOS has the broadest native integration. Ubuntu chat, preview, Cloud, and Local VM are available, while host control is temporarily disabled under an input-safety hold. Windows installers are not yet signed, and the iOS companion keeps sensitive workspace configuration on the computer.
+  There is no macOS download. On a Mac, run the server with Node or build Seira from source, as [Installation](/docs/getting-started/installation) shows. A Mac build gets the built-in Mac voices and on-device dictation. On Ubuntu, chat, screen preview, Cloud, and Local VM work. Bot control of the computer is a beta that you turn on under Xorg, and it stays off under Wayland. Windows installers are not signed, and the iOS companion keeps sensitive workspace configuration on the computer.
 </Callout>
