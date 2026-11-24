@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install Seira on macOS, Windows, or Ubuntu.
+description: Install Seira on Windows or Ubuntu. On a Mac, run the server with Node or build Seira from source.
 icon: Download
 ---
 
@@ -10,8 +10,7 @@ Choose your computer below. Each link always downloads the latest published buil
 
 | Platform | Recommended package | Notes |
 |---|---|---|
-| macOS Apple silicon | [Download `.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira.dmg) | Signed and notarized. Drag to Applications. |
-| macOS Intel | [Download `.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira-intel.dmg) | Signed and notarized. |
+| macOS | No download | [Run the server](/docs/self-hosting#on-your-own-computer-or-by-hand) with Node and open Seira in your browser, or [build Seira from source](#build-from-source). |
 | Windows x64 | [Download installer](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) | Per-user installer; Windows signing is not yet available. |
 | Ubuntu 24.04 x64 | [Download `.deb`](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) · [AppImage](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) | The `.deb` is recommended; the AppImage is portable. |
 
@@ -56,6 +55,10 @@ pnpm dev:server
 pnpm dev
 pnpm dev:desktop
 ```
+
+<Callout type="info" title="macOS">
+  There is no macOS download. The commands above run Seira on a Mac. To make your own app, run `pnpm package:mac`. It needs the Swift and Xcode command-line tools. A build that you make does not update itself. To update it, get the new code and build again.
+</Callout>
 
 ## Where data lives
 
