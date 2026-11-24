@@ -1,19 +1,22 @@
 # Seira for macOS: the Apple silicon (arm64) and Intel (x64) apps, built on a GitHub-hosted macOS runner (docs/releasing.md).
 #
 # It never creates a tag, never creates a release and never publishes one. Two things start it:
-# - a person with write access starts it by hand (`workflow_dispatch`). It builds and uploads a workflow artifact, and a maintainer attaches the artifact to the release by hand;
-# - a release is created (`release: created`, drafts included), by someone with write access. Then, only when all five Apple secrets are set:
-#   it builds the signed apps and the `attach` job puts the twelve files on that same release, through scripts/release-assets.mjs.
+# - a person with write access starts it by hand (`workflow_dispatch`) without `release_tag`. It builds and uploads a workflow artifact, and a maintainer attaches the artifact to the release by hand;
+# - the same dispatch with `release_tag` (a v1.2.3 tag) attaches the files to a DRAFT release, before the release is published.
+#   GitHub starts no workflow when a draft is created, so this is one manual step before publish (docs/releasing.md).
+#   The `draft` job checks first that the release of that tag exists and is still a draft, and that the tag points at the commit that is built.
+#   Then, only when all five Apple secrets are set: it builds the signed apps and the `attach` job puts the twelve files on that release.
+#   The `attach` job checks the release id, the draft state and the tag commit again before it uploads.
 #   When no Apple secret is set, it skips the build and says so in the run summary. The run does not fail, and no unsigned file is ever attached.
 # - a fork pull request never runs it;
-# - only the `attach` job has a write token, and only for `contents`. It reads no secret and runs no package script;
+# - only the `draft` and `attach` jobs have a write token, and only for `contents` (GitHub shows a draft release only to a token with write access). They read no secret and run no package script;
 # - it uses no dependency cache, so no other run can change what the packages contain.
 # A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
 # A maintainer's run does not wait.
 # The `package` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
 # A re-run by another person therefore never reuses an approval of an earlier attempt.
 # The `commit` job finds the commit of the ref before the approval. The `package` job builds that commit only.
-# The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
+# The `release` environment accepts `main` and the v* tags only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
 # - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE, built without the update feed file;
 # - some set: the run stops before it builds.
@@ -21,14 +24,17 @@
 name: Package macOS
 
 on:
-  release:
-    types: [created]
   workflow_dispatch:
     inputs:
       ref:
-        description: Tag, branch, or commit to build. A v* tag must match the version in package.json. A release event builds the tag of the release.
+        description: Tag, branch, or commit to build. A v* tag must match the version in package.json. With release_tag, give the same tag.
         required: true
         default: main
+        type: string
+      release_tag:
+        description: Optional. A v1.2.3 tag whose DRAFT release gets the signed macOS files. Leave it empty to build an artifact only.
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -46,18 +52,37 @@ jobs:
         id: sha
         shell: bash
         env:
-          REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}
+          REF: ${{ inputs.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if [ -n "$RELEASE_TAG" ]; then
+            [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::release_tag must look like v1.2.3."; exit 1; }
+            [ "$REF" = "$RELEASE_TAG" ] || { echo "::error::With release_tag, ref must be the same tag."; exit 1; }
+          fi
           if [ -z "$REF" ] || [[ "$REF" == -* ]] || [[ "$REF" == *..* ]] || [[ "$REF" =~ [^A-Za-z0-9._/-] ]]; then
             echo "::error::The ref is not a tag, branch or commit name."
             exit 1
           fi
-          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha) || {
-            echo "::error::The repository has no commit for this ref."
-            exit 1
-          }
+          if [ -n "$RELEASE_TAG" ]; then
+            # The full tag ref, not a branch of the same name. An annotated tag is followed to its commit.
+            read -r kind object < <(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type + " " + .object.sha') || {
+              echo "::error::The repository has no tag $RELEASE_TAG."
+              exit 1
+            }
+            for _ in 1 2 3; do
+              [ "$kind" = tag ] || break
+              read -r kind object < <(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object" --jq '.object.type + " " + .object.sha')
+            done
+            [ "$kind" = commit ] || { echo "::error::Tag $RELEASE_TAG does not point at a commit."; exit 1; }
+            sha="$object"
+          else
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha) || {
+              echo "::error::The repository has no commit for this ref."
+              exit 1
+            }
+          fi
           if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::The commit id is not a 40-character SHA."
             exit 1
@@ -78,10 +103,50 @@ jobs:
     steps:
       - run: echo "A maintainer approved this run."
 
+  draft:
+    name: check the draft release
+    needs: [commit, approval]
+    # Only a dispatch with release_tag. The token can write, because GitHub shows a draft release only to a token with write access. This job only reads.
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) && inputs.release_tag != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - name: Find the draft release of the tag
+        id: release
+        shell: bash
+        env:
+          TAG: ${{ inputs.release_tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::release_tag must look like v1.2.3."; exit 1; }
+          id=""
+          for page in 1 2 3 4 5 6 7 8 9 10; do
+            rows=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50&page=$page" --jq '.[] | select(.tag_name == "'"$TAG"'") | "\(.id) \(.draft)"')
+            if [ -n "$rows" ]; then
+              [ "$(printf '%s\n' "$rows" | wc -l)" = 1 ] || { echo "::error::More than one release has the tag $TAG."; exit 1; }
+              read -r id draft <<< "$rows"
+              break
+            fi
+            [ "$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50&page=$page" --jq length)" = 50 ] || break
+          done
+          [ -n "$id" ] || { echo "::error::No release has the tag $TAG. Create the draft release first."; exit 1; }
+          [ "$draft" = true ] || { echo "::error::The release of $TAG is already published. Files go on a draft only."; exit 1; }
+          [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::The release id is not a number."; exit 1; }
+          echo "release $id is a draft; the commit to build is $SHA"
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+          echo "Draft release $id of \`$TAG\` found. The files will be built from commit \`$SHA\`, the commit of the tag." >> "$GITHUB_STEP_SUMMARY"
+
   package:
     name: macOS arm64 and x64 apps
-    needs: [commit, approval]
-    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    needs: [commit, approval, draft]
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) && needs.draft.result != 'failure' }}
     runs-on: macos-15
     timeout-minutes: 120
     environment: release
@@ -95,7 +160,7 @@ jobs:
       - name: Choose a signed or an unsigned build
         id: mode
         env:
-          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -107,14 +172,14 @@ jobs:
           for name in MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
             if [ -n "${!name}" ]; then set_names="$set_names $name"; else missing="$missing $name"; fi
           done
-          if [ -z "$set_names" ] && [ "$EVENT" = release ]; then
-            # A release gets signed apps or nothing. Skipping is not a failure, so the release and the other workflows stay as they are.
-            echo "::notice::No Apple secret is set, so this release gets no macOS build. Nothing was built or attached."
+          if [ -z "$set_names" ] && [ -n "$RELEASE_TAG" ]; then
+            # A dispatch with release_tag gets signed apps or nothing. Skipping is not a failure, so the release and the other workflows stay as they are.
+            echo "::notice::No Apple secret is set, so this draft release gets no macOS build. Nothing was built or attached."
             {
               echo "### macOS build skipped"
               echo
-              echo "No Apple signing secret is set in the \`release\` environment, so this release has no macOS assets."
-              echo "Set all five secrets (docs/releasing.md, macOS signing secrets), then run **Package macOS** by hand with this tag and attach the files."
+              echo "No Apple signing secret is set in the \`release\` environment, so the draft release has no macOS assets."
+              echo "Set all five secrets (docs/releasing.md, macOS signing secrets), then run **Package macOS** again with this tag and release_tag."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -146,7 +211,7 @@ jobs:
         if: steps.mode.outputs.skip != 'true'
         id: version
         env:
-          REF: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}
+          REF: ${{ inputs.ref }}
           SIGNED: ${{ steps.mode.outputs.signed }}
         run: |
           version=$(node -p "require('./package.json').version")
@@ -468,10 +533,10 @@ jobs:
         run: security delete-keychain "$RUNNER_TEMP/seira-signing.keychain-db" || true
 
   attach:
-    name: attach the signed files to the release
-    needs: [commit, approval, package]
-    # Only a release event, and only a signed build. An ad-hoc build and a skipped build never reach this job.
-    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) && github.event_name == 'release' && needs.package.result == 'success' && needs.package.outputs.signed == 'true' }}
+    name: attach the signed files to the draft release
+    needs: [commit, approval, draft, package]
+    # Only a dispatch with release_tag whose draft check passed, and only a signed build. An ad-hoc build and a skipped build never reach this job.
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) && inputs.release_tag != '' && needs.draft.result == 'success' && needs.package.result == 'success' && needs.package.outputs.signed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -490,7 +555,9 @@ jobs:
       - name: Upload the twelve files, update feed last
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.release_tag }}
+          RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+          SHA: ${{ needs.commit.outputs.sha }}
           GH_TOKEN: ${{ github.token }}
           STAGE: ${{ runner.temp }}/seira-macos
         run: |
@@ -506,6 +573,22 @@ jobs:
           # The build already checked this set. Check it again here: nothing else may reach the release.
           [ "$(ls -A "$STAGE" | LC_ALL=C sort)" = "$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)" ] || {
             echo "::error::The artifact does not hold exactly the twelve macOS files."; exit 1; }
+          # Every entry is a regular file. A symbolic link or a folder is refused, so nothing outside the artifact can reach the release.
+          for file in "${files[@]}"; do
+            [ -f "$STAGE/$file" ] && [ ! -L "$STAGE/$file" ] || { echo "::error::$file is not a regular file."; exit 1; }
+          done
+          # Check again, now that the build is done: the same draft release, still a draft, and the tag still on the built commit.
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]] || { echo "::error::The release id is missing."; exit 1; }
+          [ "$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name + " " + (.draft | tostring)')" = "$TAG true" ] || {
+            echo "::error::Release $RELEASE_ID is no longer the draft of $TAG."; exit 1; }
+          kind_object=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha')
+          read -r kind object <<< "$kind_object"
+          for _ in 1 2 3; do
+            [ "$kind" = tag ] || break
+            read -r kind object < <(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object" --jq '.object.type + " " + .object.sha')
+          done
+          [ "$kind" = commit ] && [ "$object" = "$SHA" ] || { echo "::error::Tag $TAG no longer points at the built commit."; exit 1; }
+          # The helper runs in the artifact folder, outside the checkout. --repo and --release-id make it read no git remote.
           cd "$STAGE"
-          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
-          echo "The twelve macOS files are on release $TAG. The release was not published." >> "$GITHUB_STEP_SUMMARY"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --release-id "$RELEASE_ID"
+          echo "The twelve macOS files are on draft release $TAG ($RELEASE_ID). The release was not published." >> "$GITHUB_STEP_SUMMARY"
