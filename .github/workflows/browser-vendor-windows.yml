@@ -1,3 +1,6 @@
+# Copied from the upstream OpenMausBot repository (Apache-2.0, milind-soni/OpenMausBot,
+# .github/workflows/browser-vendor-windows.yml). Attribution stays in NOTICE.
+# Seira changes: none to the steps; the pinned versions and patch come from this repo.
 # Temporary, reviewed Windows-only agent-browser backport. This workflow
 # produces a candidate, never publishes it. Pin its verified artifact digest
 # before the normal package/release gates consume it.
