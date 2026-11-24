@@ -73,18 +73,8 @@ export function resolveTag(repo, tag, api) {
   return { commit: object.sha };
 }
 
-/** Patterns this script can read exactly: `~ALL`, or text made of safe name characters plus `*`, `**` and `?`. Bracket sets, `\\` and other `~` values are not read, so they are never guessed. */
-function supportedPattern(pattern) {
-  return pattern === "~ALL" || (typeof pattern === "string" && /^refs\/[A-Za-z0-9._\-/*?]*$/.test(pattern));
-}
-
-/** Does a ruleset ref pattern match `ref`? `~ALL`, an exact name, or a glob where `*` stays inside one path part and `**` crosses `/`. */
-function refMatches(pattern, ref) {
-  if (pattern === "~ALL") return true;
-  if (typeof pattern !== "string" || pattern.startsWith("~")) return false;
-  const source = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\uE000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\uE000/g, ".*");
-  return new RegExp(`^${source}$`).test(ref);
-}
+const REQUIRED_INCLUDE = "refs/tags/browser-engine-v*";
+const sameList = (value, expected) => Array.isArray(value) && value.length === expected.length && value.every((item, i) => item === expected[i]);
 
 /**
  * Requires an active tag ruleset that covers the exact engine tag with `update` and `deletion` rules and has no bypass actor,
@@ -101,16 +91,17 @@ export function ensureTagProtection(repo, tag, api) {
   if (rulesets.length >= 100) return "too many rulesets to check in one page. Nothing was published.";
   const why = [];
   for (const summary of rulesets) {
-    if (summary?.target !== "tag" || summary?.enforcement !== "active") continue;
+    if (summary?.target !== "tag") continue;
     const detail = api([`repos/${repo}/rulesets/${summary.id}`]);
     if (!detail.ok) return `cannot read ruleset ${summary.id}: ${detail.error || "no answer from GitHub"} (status ${detail.status ?? "unknown"}). Nothing was published.`;
     let rules;
     try { rules = JSON.parse(detail.body); } catch { return `cannot read ruleset ${summary.id}: the answer is not JSON. Nothing was published.`; }
     const name = `ruleset "${rules?.name ?? summary.id}"`;
+    // Policy on the detail response only (the list's enforcement is never trusted). No generic glob matching: GitHub's fnmatch rules are not reimplemented.
+    if (rules?.target !== "tag") { why.push(`${name} is not a tag ruleset`); continue; }
+    if (rules?.enforcement !== "active") { why.push(`${name} is not active (enforcement ${JSON.stringify(rules?.enforcement ?? null)})`); continue; }
     const names = rules?.conditions?.ref_name;
-    const unsupported = [...(names?.include ?? []), ...(names?.exclude ?? [])].find((pattern) => !supportedPattern(pattern));
-    if (unsupported !== undefined) return `${name} uses the ref pattern ${JSON.stringify(unsupported)}, which this script cannot read exactly (only ~ALL, *, ** and ? are supported). Failing closed. Nothing was published.`;
-    if (!(names?.include ?? []).some((pattern) => refMatches(pattern, ref)) || (names?.exclude ?? []).some((pattern) => refMatches(pattern, ref))) { why.push(`${name} does not cover ${ref}`); continue; }
+    if (!sameList(names?.include, [REQUIRED_INCLUDE]) || !sameList(names?.exclude, [])) { why.push(`${name} does not have exactly include [${REQUIRED_INCLUDE}] and an empty exclude list`); continue; }
     const types = new Set((rules.rules ?? []).map((rule) => rule?.type));
     const missing = ["update", "deletion"].filter((type) => !types.has(type));
     if (missing.length) { why.push(`${name} covers ${ref} but has no ${missing.join(" and ")} rule`); continue; }
@@ -118,7 +109,7 @@ export function ensureTagProtection(repo, tag, api) {
     if (rules.bypass_actors.length > 0) { why.push(`${name} has ${rules.bypass_actors.length} bypass actor(s)`); continue; }
     return null;
   }
-  return `no active tag ruleset protects ${ref} against update and deletion with no bypass${why.length ? ` (${why.join("; ")})` : ""}. Create the ruleset first (include refs/tags/browser-engine-v*, rules update and deletion, no bypass). Nothing was published.`;
+  return `no active tag ruleset protects ${ref} against update and deletion with no bypass${why.length ? ` (${why.join("; ")})` : ""}. Create the ruleset first (active, target tag, include exactly refs/tags/browser-engine-v*, empty exclude, rules update and deletion, no bypass). Nothing was published.`;
 }
 
 /**
