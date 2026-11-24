@@ -17,20 +17,12 @@ It runs more than 20 AI agents, such as Claude Code, Codex, and Gemini, as a tea
 Give each bot a job. Watch it work. Approve the steps that matter.</p>
 
 <p>
-  <a href="https://github.com/seira-bot/seira/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/seira-bot/seira?style=flat-square&logo=github&label=release&color=E11D48"></a>
-  <a href="https://github.com/seira-bot/seira/releases"><img alt="Downloads of all releases" src="https://img.shields.io/github/downloads/seira-bot/seira/total?style=flat-square&label=downloads&color=E11D48"></a>
-  <a href="https://www.npmjs.com/package/@seira-bot/seira"><img alt="npm version of @seira-bot/seira" src="https://img.shields.io/npm/v/@seira-bot/seira?style=flat-square&logo=npm&label=npm&color=E11D48"></a>
-  <a href="https://www.npmjs.com/package/@seira-bot/seira"><img alt="npm downloads each month" src="https://img.shields.io/npm/dm/@seira-bot/seira?style=flat-square&logo=npm&label=npm%20downloads&color=E11D48"></a>
-  <br>
-  <a href="https://github.com/seira-bot/seira/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI status on main" src="https://img.shields.io/github/actions/workflow/status/seira-bot/seira/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI"></a>
-  <a href="https://github.com/seira-bot/seira/actions/workflows/github-code-scanning/codeql"><img alt="CodeQL status" src="https://img.shields.io/github/actions/workflow/status/seira-bot/seira/github-code-scanning%2Fcodeql?style=flat-square&logo=github&label=CodeQL"></a>
-  <a href="https://github.com/seira-bot/seira/pkgs/container/seira"><img alt="Status of the server image on ghcr.io" src="https://img.shields.io/github/actions/workflow/status/seira-bot/seira/server-image.yml?branch=main&style=flat-square&logo=docker&logoColor=white&label=server%20image"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/seira-bot/seira?style=flat-square&color=blue"></a>
-  <br>
-  <a href="https://discord.gg/wAAgETJpFS"><img alt="Members of the Seira Discord server" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv9%2Finvites%2FwAAgETJpFS%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&label=Discord&style=flat-square&logo=discord&logoColor=white&color=5865F2"></a>
-  <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="https://img.shields.io/badge/WhatsApp-channel-25D366?style=flat-square&logo=whatsapp&logoColor=white"></a>
-  <a href="https://github.com/seira-bot/seira"><img alt="GitHub stars" src="https://img.shields.io/github/stars/seira-bot/seira?style=flat-square&logo=github&label=stars"></a>
-  <a href="https://github.com/seira-bot/seira/commits/main"><img alt="Commits each month" src="https://img.shields.io/github/commit-activity/m/seira-bot/seira?style=flat-square&logo=git&logoColor=white&label=commits"></a>
+  <a href="https://github.com/seira-bot/seira/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI status on main" src="https://github.com/seira-bot/seira/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/seira-bot/seira/actions/workflows/github-code-scanning/codeql"><img alt="CodeQL status" src="https://github.com/seira-bot/seira/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main"></a>
+  <a href="https://github.com/seira-bot/seira/pkgs/container/seira"><img alt="Status of the server image on ghcr.io" src="https://github.com/seira-bot/seira/actions/workflows/server-image.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="docs/assets/badges/license.svg"></a>
+  <a href="https://discord.gg/wAAgETJpFS"><img alt="Join the Seira Discord server" src="docs/assets/badges/discord.svg"></a>
+  <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="docs/assets/badges/whatsapp.svg"></a>
 </p>
 
 <p>
