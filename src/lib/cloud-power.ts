@@ -71,8 +71,9 @@ export function pageShown(signal?: AbortSignal): Promise<void> {
 
 /** An "asleep" answer from the home (held polls and refused background requests carry it). */
 export function asleepAnswer(response: Pick<Response, "status" | "headers">): boolean {
+  if (response.status !== 503) return false;
   const mark = response.headers.get(CLOUD_POWER_HEADER) ?? response.headers.get("x-omb-cloud-power");
-  return response.status === 503 && mark === "asleep";
+  return mark === "asleep";
 }
 
 /** The event stream's frame for it. */
