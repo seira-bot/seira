@@ -2861,7 +2861,7 @@
   "settings.experimental.browserWindows": "Nie jest jeszcze dostępna na tej maszynie z Windows: zainstaluj przeglądarkę przez `seira browser install`.",
   "settings.experimental.browserAria": "Włącz wbudowaną przeglądarkę",
   "settings.experimental.newBrowser": "Nowa przeglądarka",
-  "settings.experimental.newBrowserDetail": "Domyślnie wyłączona. Przeglądarki botów działają na własnym sterowniku Chrome {app} zamiast agent-browser: strony są renderowane z ostrością twojego ekranu, a boty mogą obsługiwać przesyłanie, pobieranie, okna dialogowe i wyskakujące okna. Profile korzystające z twojego własnego Chrome nie są objęte zmianą. Przełączenie zamyka otwarte przeglądarki, a logowania zapisane w jednej nie przenoszą się do drugiej.",
+  "settings.experimental.newBrowserDetail": "Domyślnie włączone. Przeglądarki botów działają na własnym sterowniku Chrome aplikacji {app} zamiast agent-browser: strony są wyświetlane z ostrością ekranu, a boty obsługują przesyłanie plików, pobieranie, okna dialogowe i wyskakujące okna. Profile korzystające z Twojego Chrome nie zmieniają się. Przełączenie zamyka otwarte przeglądarki. Logowania zapisane w agent-browser przechodzą do nowej przeglądarki, gdy bot otworzy ją po raz pierwszy. Wyłącz, aby wrócić do agent-browser.",
   "settings.experimental.newBrowserAria": "Użyj nowej przeglądarki",
   "browser.panel.profileTitle": "Profil przeglądarki: {name}",
   "browser.panel.profiles": "Profile przeglądarki",

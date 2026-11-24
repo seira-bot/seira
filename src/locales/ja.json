@@ -3230,7 +3230,7 @@
   "settings.browser.serverSites": "このサーバー上のサイトを開く",
   "settings.browser.serverSitesDetail": "既定ではオフです。オンにすると、ボットのブラウザーで、このサーバーとそのローカルネットワーク上にある Web サイトを開けるようになります。Seira 自体へのアクセスは引き続きブロックされます。",
   "settings.experimental.newBrowser": "新しいブラウザー",
-  "settings.experimental.newBrowserDetail": "既定ではオフです。ボットのブラウザーが、agent-browser ではなく {app} 独自の Chrome ドライバーで動作します。ページは画面の解像度で鮮明に表示され、ボットはアップロード、ダウンロード、ダイアログ、ポップアップを扱えるようになります。ご自身の Chrome を使うプロファイルには影響しません。切り替えると開いているブラウザーが閉じ、一方に保存されたサインイン情報はもう一方には引き継がれません。",
+  "settings.experimental.newBrowserDetail": "既定でオンです。ボットのブラウザーが、agent-browser ではなく {app} 独自の Chrome ドライバーで動作します。ページは画面の解像度で鮮明に表示され、ボットはアップロード、ダウンロード、ダイアログ、ポップアップを扱えます。ご自身の Chrome を使うプロファイルには影響しません。切り替えると開いているブラウザーが閉じます。agent-browser に保存されたサインイン情報は、ボットが初めてブラウザーを開くときに引き継がれます。オフにすると agent-browser に戻ります。",
   "settings.experimental.newBrowserAria": "新しいブラウザーを使用",
   "browser.panel.profileTitle": "ブラウザープロファイル：{name}",
   "browser.panel.profiles": "ブラウザープロファイル",

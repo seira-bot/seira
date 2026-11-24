@@ -24,7 +24,7 @@ export const browserEngineConfigSchema = z.object({
     { message: "browserEngine.attachCdpUrl must be a CDP port (1-65535) or an http(s)/ws(s) URL" }).optional(),
   idleTimeoutMinutes: z.number().int().min(1).max(60).optional(), // an unused browser closes after this; 10 when unset, 3 on Seira Cloud
   egress: browserEgressConfigSchema.optional(),
-  /** "chrome" runs the bots' browsers on Seira's own Chrome driver, an early test; agent-browser is the default. */
+  /** The engine the person chose for the bots' browsers. Unset, Seira's own Chrome driver runs them where this host has a Chrome for it, else agent-browser. */
   engine: z.enum(["agent-browser", "chrome"]).optional(),
 });
 
@@ -35,6 +35,12 @@ export interface BrowserEngineConfig {
   engine?: BrowserEngineKind;
 }
 
-export function browserEngineKind(cfg: { browserEngine?: BrowserEngineConfig }): BrowserEngineKind {
-  return cfg.browserEngine?.engine === "chrome" ? "chrome" : "agent-browser";
+/** The person's saved choice; null while they have not chosen, so the host decides. */
+export function browserEngineChoice(cfg: { browserEngine?: BrowserEngineConfig }): BrowserEngineKind | null {
+  return cfg.browserEngine?.engine ?? null;
+}
+
+/** The engine that runs the bots' browsers: the saved choice, else Seira's own driver wherever it has a Chrome to run. */
+export function effectiveBrowserEngine(cfg: { browserEngine?: BrowserEngineConfig }, seiraEngineHasChrome: () => boolean): BrowserEngineKind {
+  return browserEngineChoice(cfg) ?? (seiraEngineHasChrome() ? "chrome" : "agent-browser");
 }
