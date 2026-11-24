@@ -10,15 +10,18 @@ export interface SuggestionRequest {
   generations: ReadonlySet<string>;
   stopped?: boolean;
   kind?: string;
+  /** Never proof: the host sets it for a line typed in a chat, but only `origin` says who wrote the request. */
   personLine?: true;
+  /** The host's own origin for the request (`requestWorkOrigin`). Absent or not `user` means a person did not write it. */
   origin?: { kind: string };
 }
 
 /** True only for a turn that a person's own message started in this chat, not stopped, and that this generation belongs to.
- * A routine, webhook, API call, hand-off, continuation or guest turn is never one. */
+ * The request origin must be `user`: `personLine` never replaces it. A routine, webhook, API call, hand-off, continuation
+ * or guest turn is never one. */
 export function personStartedTurn(request: SuggestionRequest | undefined, generation: string | undefined): boolean {
   if (!request || generation === undefined || request.stopped || request.kind !== "person") return false;
-  if (request.personLine !== true && request.origin?.kind !== "user") return false;
+  if (request.origin?.kind !== "user") return false;
   return request.generations.has(generation);
 }
 
