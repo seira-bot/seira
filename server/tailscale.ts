@@ -88,21 +88,27 @@ export async function readTailscaleServeConfig(cli: string): Promise<unknown> {
 
 const field = (value: unknown, key: string): unknown => (typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined);
 
+const funnelOn = (config: unknown, hostPort: string): boolean => field(field(config, "AllowFunnel"), hostPort) === true;
+
 /**
  * What a ServeConfig says about one HTTPS port. `ours`: a rule from `tailscale serve --bg` proxies it to this server.
  * `taken`: another rule, or a foreground session, uses it. Tailscale 1.104 refuses a second listener on such a port.
+ * `funnel`: Tailscale Funnel is on for the port, in the saved config or in a foreground session, so the internet can reach it.
+ * Seira never uses such a port, whatever its target, because it tells people that only their tailnet can reach them.
  */
-export function servePortState(config: unknown, dnsName: string, httpsPort: number, localPort: number): "free" | "ours" | "taken" {
+export function servePortState(config: unknown, dnsName: string, httpsPort: number, localPort: number): "free" | "ours" | "taken" | "funnel" {
   const key = String(httpsPort);
+  const hostPort = `${dnsName}:${httpsPort}`;
+  const sessions = field(config, "Foreground");
+  const sessionList = typeof sessions === "object" && sessions !== null ? Object.values(sessions) : [];
+  if (funnelOn(config, hostPort) || sessionList.some((session) => funnelOn(session, hostPort))) return "funnel";
   if (field(field(config, "TCP"), key) !== undefined) {
     const proxy = field(field(field(field(field(config, "Web"), `${dnsName}:${httpsPort}`), "Handlers"), "/"), "Proxy");
     const target = typeof proxy === "string" ? proxy.replace(/\/+$/, "") : "";
     const ours = [`http://127.0.0.1:${localPort}`, `http://localhost:${localPort}`, `127.0.0.1:${localPort}`, `localhost:${localPort}`];
     return ours.includes(target) ? "ours" : "taken";
   }
-  const sessions = field(config, "Foreground");
-  const inForeground = typeof sessions === "object" && sessions !== null && Object.values(sessions).some((session) => field(field(session, "TCP"), key) !== undefined);
-  return inForeground ? "taken" : "free";
+  return sessionList.some((session) => field(field(session, "TCP"), key) !== undefined) ? "taken" : "free";
 }
 
 export function parseTailscaleStatus(cli: string, stdout: string): TailscaleStatus | null {
@@ -187,7 +193,9 @@ function savedTailscalePorts(dataDir: string): number[] | null {
 
 /**
  * The HTTPS ports to serve; the first is the address people see. Saved ports win and no listener is consulted. Without
- * them: 443, plus 8443 when another program listens on 443, so devices set up on either address keep working.
+ * them (a first start, or an upgrade from a version that saved nothing): 443 and 8443. Versions 0.1.189 to 0.1.191 moved
+ * the address to 8443 when another program listened on 443 and kept no record, so no start can tell that a device uses
+ * 8443. Serving both keeps those devices working, whether or not 443 is free now. The first start saves the ports.
  * `primaryBusy` tells whether another program listens on the first port on this server. That does not stop other
  * tailnet devices: tailscaled takes their traffic itself, and only its listener for connections from this server fails.
  */
@@ -195,8 +203,9 @@ export function chooseTailscaleHttpsPorts(dataDir: string, listening: Iterable<n
   const taken = new Set(listening);
   const saved = savedTailscalePorts(dataDir);
   if (saved) return { ports: saved, primaryBusy: taken.has(saved[0]!), line: null };
-  if (!taken.has(443)) return { ports: [443], primaryBusy: false, line: null };
-  return { ports: [443, FALLBACK_HTTPS_PORT], primaryBusy: true, line: `tailscale: port 443 is in use by another program, so the server also answers on port ${FALLBACK_HTTPS_PORT}, for devices set up with that address.` };
+  const busy = taken.has(443);
+  const why = busy ? "port 443 is in use by another program, so" : "so devices set up on an earlier version keep working,";
+  return { ports: [443, FALLBACK_HTTPS_PORT], primaryBusy: busy, line: `tailscale: ${why} the server also answers on port ${FALLBACK_HTTPS_PORT}. To serve port 443 alone, save {"ports":[443]} in tailscale-https.json in the data folder.` };
 }
 
 /** Why Tailscale cannot give phones an HTTPS address now, or null when it can. */
@@ -233,6 +242,12 @@ export async function tailscaleServe(
   const config = await (options.serveConfig ?? (async () => null))();
   for (const httpsPort of wanted) {
     const state = servePortState(config, dnsName, httpsPort, localPort);
+    if (state === "funnel") {
+      const line = `tailscale: port ${httpsPort} is open to the internet through Tailscale Funnel, so Seira does not use it. Seira leaves that setting as it is (to close it: tailscale funnel --https=${httpsPort} off).`;
+      if (serving.length === 0) { options.log?.(line); return { failure: "port-taken" }; }
+      options.log?.(line);
+      continue;
+    }
     if (state === "ours") {
       serving.push(httpsPort);
       options.log?.(`tailscale: port ${httpsPort} already has a tailscale serve rule for this server, so Seira uses that rule and leaves it on.`);

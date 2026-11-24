@@ -124,11 +124,13 @@ Ways in (pick one; --lan can join any):
              link uses this machine's MagicDNS name (needs Tailscale signed in
              and HTTPS certificates enabled for the tailnet); the share ends
              when serve stops. The link keeps the port it was first served
-             on: port 443, even when another program uses it. A server that
-             had another program on 443 also answers on 8443. When a web
-             server shares port 443, start Seira after it. On a laptop
-             with no address for this server, serve prints an ssh -L line,
-             then sign in once with pair.
+             on: port 443, even when another program uses it. The first
+             start also answers on 8443, for devices set up on versions
+             that moved the link there. A port that Tailscale Funnel opens
+             to the internet is never used. When a web server shares port
+             443, start Seira after it. On a laptop with no address for
+             this server, serve prints an ssh -L line, then sign in once
+             with pair.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is
              downloaded once and run alongside the server, and gets the
              certificate itself. Point the domain's DNS at this machine and

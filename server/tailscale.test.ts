@@ -165,13 +165,29 @@ describe("the tailnet HTTPS ports", () => {
     return { calls, killed, spawnImpl };
   };
 
-  it("is 443 alone when no ports are saved and nothing listens on 443", () => inTempDir((dir) => {
-    expect(chooseTailscaleHttpsPorts(dir, [22, 8799])).toEqual({ ports: [443], primaryBusy: false, line: null });
-  }));
-
   it("adds 8443 with one line that says so when another program listens on 443", () => inTempDir((dir) => {
     const choice = chooseTailscaleHttpsPorts(dir, new Set([22, 443]));
-    expect(choice).toEqual({ ports: [443, 8443], primaryBusy: true, line: "tailscale: port 443 is in use by another program, so the server also answers on port 8443, for devices set up with that address." });
+    expect(choice).toEqual({ ports: [443, 8443], primaryBusy: true, line: expect.stringContaining("port 443 is in use by another program, so the server also answers on port 8443.") });
+  }));
+
+  it("keeps 8443 for an install that has no saved ports yet, also when port 443 is free now", () => inTempDir(async (dir) => {
+    // An install from 0.1.189 to 0.1.191 may have devices on 8443 and saved nothing. It must not lose them at the upgrade.
+    const choice = chooseTailscaleHttpsPorts(dir, [22, 8799]);
+    expect(choice).toEqual({ ports: [443, 8443], primaryBusy: false, line: expect.stringContaining("so devices set up on an earlier version keep working, the server also answers on port 8443.") });
+    expect(choice.line).toContain('{"ports":[443]}');
+    const fake = fakeSpawn();
+    const served = await tailscaleServe(status, 8799, { dataDir: dir, httpsPorts: choice.ports, settleMs: 20, spawnImpl: fake.spawnImpl });
+    if ("failure" in served) throw new Error(served.failure);
+    expect(served.origins).toEqual(["https://mini.tail1234.ts.net", "https://mini.tail1234.ts.net:8443"]);
+    await served.stop();
+    // The restart after the upgrade reads the saved file: 8443 is served again, and no more line.
+    const again = chooseTailscaleHttpsPorts(dir, [22, 8799]);
+    expect(again).toEqual({ ports: [443, 8443], primaryBusy: false, line: null });
+    const second = fakeSpawn();
+    const restarted = await tailscaleServe(status, 8799, { dataDir: dir, httpsPorts: again.ports, settleMs: 20, spawnImpl: second.spawnImpl });
+    if ("failure" in restarted) throw new Error(restarted.failure);
+    expect(second.calls).toEqual([["serve", "--https=443", "http://127.0.0.1:8799"], ["serve", "--https=8443", "http://127.0.0.1:8799"]]);
+    await restarted.stop();
   }));
 
   it("uses the saved ports and ignores what listens", () => inTempDir((dir) => {
@@ -326,6 +342,59 @@ describe("tailscale serve rules that exist already", () => {
     expect(served.origins).toEqual(["https://mini.tail1234.ts.net"]);
     expect(lines).toEqual([expect.stringContaining("port 8443 could not start")]);
     await served.stop();
+  }));
+
+  it("reads a port with Funnel on as funnel, in the saved config or in a foreground session, whatever its target", () => {
+    const name = "mini.tail1234.ts.net";
+    const open = (port: number) => ({ [`${name}:${port}`]: true });
+    expect(servePortState({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: open(443) }, name, 443, 8799)).toBe("funnel");
+    expect(servePortState({ ...rule(443, "http://127.0.0.1:9000"), AllowFunnel: open(443) }, name, 443, 8799)).toBe("funnel");
+    expect(servePortState({ AllowFunnel: open(443) }, name, 443, 8799)).toBe("funnel");
+    expect(servePortState({ Foreground: { abc123: { ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: open(443) } } }, name, 443, 8799)).toBe("funnel");
+    expect(servePortState({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: open(8443) }, name, 443, 8799)).toBe("ours");
+    expect(servePortState({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: { [`${name}:443`]: false } }, name, 443, 8799)).toBe("ours");
+  });
+
+  it("refuses a rule for this server that Funnel opens to the internet, and leaves it as it is", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const result = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:443": true } }),
+    });
+    expect(result).toEqual({ failure: "port-taken" });
+    expect(fake.calls).toEqual([]);
+    expect(lines).toEqual([expect.stringContaining("port 443 is open to the internet through Tailscale Funnel, so Seira does not use it")]);
+    expect(existsSync(tailscalePortsFile(dir))).toBe(false);
+    expect(existsSync(tailscaleMarker(dir))).toBe(false);
+  }));
+
+  it("still uses a private rule for this server when Funnel is off for that port", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const served = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ ...rule(443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:443": false, "mini.tail1234.ts.net:8443": true } }),
+    });
+    if ("failure" in served) throw new Error(served.failure);
+    expect(fake.calls).toEqual([]);
+    expect(served.origins).toEqual(["https://mini.tail1234.ts.net"]);
+    expect(lines).toEqual(["tailscale: port 443 already has a tailscale serve rule for this server, so Seira uses that rule and leaves it on."]);
+  }));
+
+  it("skips a second port that Funnel opens, serves the first, and does not touch the Funnel setting", () => inTempDir(async (dir) => {
+    const fake = fakeSpawn();
+    const lines: string[] = [];
+    const served = await tailscaleServe(status, 8799, {
+      dataDir: dir, httpsPorts: [443, 8443], settleMs: 20, spawnImpl: fake.spawnImpl, log: (line) => lines.push(line),
+      serveConfig: async () => ({ ...rule(8443, "http://127.0.0.1:8799"), AllowFunnel: { "mini.tail1234.ts.net:8443": true } }),
+    });
+    if ("failure" in served) throw new Error(served.failure);
+    expect(fake.calls).toEqual([["serve", "--https=443", "http://127.0.0.1:8799"]]);
+    expect(served.origins).toEqual(["https://mini.tail1234.ts.net"]);
+    expect(lines).toEqual([expect.stringContaining("port 8443 is open to the internet through Tailscale Funnel")]);
+    await served.stop();
+    expect(fake.killed.map(([port]) => port)).toEqual(["443"]);
   }));
 
   it("reports port-taken when tailscaled refuses the listener", () => inTempDir(async (dir) => {
