@@ -84,6 +84,10 @@ processes the commands on WAPilot's servers. It then asks which one bot gets
 it, with no bot chosen at first, and only then opens sign-in. The server is that
 bot's own: no other bot can use it. Connect again to give it to another bot.
 
+The server holds this rule itself. It refuses to save, replace, import, switch on or sign in a WAPilot address that has
+no bot, or a bot that does not exist, and it matches the address, not the name. An older entry with no bot, or with a
+bot that is gone, serves no bot until you choose one. Redirects are not checked yet.
+
 ### Servers that ask you to sign in
 
 Some URL servers take no token; they want you to sign in with your browser

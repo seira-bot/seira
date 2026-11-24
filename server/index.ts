@@ -11952,7 +11952,7 @@ const mcpConfig = createMcpConfig({
   cloudHome: CLOUD_HOME,
   fallbackPublicUrl: FALLBACK_PUBLIC_URL,
   mcpConfigBusy: { get: () => mcpConfigBusy, set: (busy) => { mcpConfigBusy = busy; } },
-  mcpServerResponse, mcpPolicyRefusal, persistMcpServers, savedCustomDomain, appCatalog: chatAppsMcp, keys: mcpKeys, forgetPeople: (name) => teamConnections.forgetServer(name), health: mcpServersHost.health, botsPath: () => brokerPath(botBox),
+  mcpServerResponse, mcpPolicyRefusal, persistMcpServers, savedCustomDomain, appCatalog: chatAppsMcp, keys: mcpKeys, forgetPeople: (name) => teamConnections.forgetServer(name), health: mcpServersHost.health, botsPath: () => brokerPath(botBox), botExists: (id) => store.bot(id) !== null,
   connectionsChanged: (change) => void routineHolds?.connections(change), probeAs: mcpServersHost.probeAs, testElsewhere: (name, server, lender, signal) => lentMcp.test(name, server, lender, signal),
   changed: () => broadcast({ kind: "mcp.changed" }) });
 const persistAnnouncedMcpServers = (next: Record<string, unknown>) => { persistMcpServers(next); broadcast({ kind: "mcp.changed" }); };

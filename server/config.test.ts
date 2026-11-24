@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { WAPILOT_MCP_URL } from "../shared/one-bot-mcp.ts";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
@@ -2125,6 +2126,17 @@ describe("customMcpServers", () => {
 
   it("returns {} when the section is absent", () => {
     expect(customMcpServers({} as Parameters<typeof customMcpServers>[0])).toEqual({});
+  });
+
+  it("serves a one-bot endpoint to its own bot only, and to nobody when it has no bot", () => {
+    const entry = { type: "http", url: WAPILOT_MCP_URL, enabled: true };
+    const ownerless = cfg({ wa: entry, notes: { command: "a" } });
+    expect(Object.keys(customMcpServers(ownerless, undefined, "alpha"))).toEqual(["notes"]);
+    expect(Object.keys(customMcpServers(ownerless))).toEqual(["notes"]);
+    const owned = cfg({ wa: { ...entry, bot: "alpha" }, notes: { command: "a" } });
+    expect(Object.keys(customMcpServers(owned, undefined, "alpha"))).toEqual(["wa", "notes"]);
+    expect(Object.keys(customMcpServers(owned, undefined, "beta"))).toEqual(["notes"]);
+    expect(Object.keys(customMcpServers(owned))).toEqual(["notes"]);
   });
 
   it("narrows to a bot's own list when one is given, and to nothing for an empty list", () => {

@@ -9,6 +9,7 @@ import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
 import type { LocaleKey } from "@/locales";
+import { WAPILOT_MCP_URL } from "../../shared/one-bot-mcp";
 
 export interface HostedMcpApp {
   /** The card's id (`data-app-tile`) and the name the server is added under (then `-2`, `-3`…): a valid server name. */
@@ -107,7 +108,7 @@ export const HOSTED_MCP_APPS = [
   {
     id: "wapilot",
     label: "WAPilot",
-    url: "https://integrator.wapilot.id/v1/mcp",
+    url: WAPILOT_MCP_URL,
     icon: { glyph: MessageCircle },
     description: "wapilot.description",
     notice: "wapilot.notice",
