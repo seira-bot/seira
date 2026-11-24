@@ -100,18 +100,21 @@
     "9df137d1c67863fa"
   ],
   "connector/host/seira-update-runner.sh": [
-    "05b6e08f342618c0"
+    "05b6e08f342618c0",
+    "f11f221876276f81"
   ],
   "connector/install.sh": [
     "cd2688167a09acd1"
   ],
   "connector/src/adopted-home.ts": [
-    "35df960b94ee2f23"
+    "35df960b94ee2f23",
+    "f5c1ac957d3123d3"
   ],
   "connector/src/customer-run.ts": [
     "0025421cd2d3564a",
     "3eafd1db812d325a",
     "4c52ea54402096d5",
+    "97013e42b6092b0d",
     "d5896fa68b7af3c0",
     "e9269b3e439b4efd"
   ],
@@ -121,11 +124,13 @@
     "ed8f7827b945697b"
   ],
   "connector/src/protocol.ts": [
+    "008b4b3c3e927426",
     "0332ca9dfdb1d8b6",
     "0b9d15f6a74c51d7",
     "0b9d15f6a74c51d7",
     "1ca9cfe9fde9aebf",
     "1f2411a9b94d4761",
+    "768b2b4b9fc94b62",
     "d6c1eb602357dc7a",
     "f66488fae112d84d"
   ],
@@ -172,8 +177,10 @@
     "42fb565ed9d13522"
   ],
   "connector/test/protocol.test.ts": [
+    "0a5ad6a1c8c469bc",
     "42fb565ed9d13522",
     "a907841d4b80a80d",
+    "b40d108d46ec16ce",
     "b5daf609ab5fde11",
     "b5fbf290d1d3d900",
     "cbd3c66e6dd9615c"
@@ -184,6 +191,8 @@
     "5f5374454ef5a00c"
   ],
   "connector/test/update-runner.test.ts": [
+    "02ade7b3e1d8a588",
+    "3fbecb1920731bdc",
     "61cd4ace4c11bda7",
     "6373cd048b254b30",
     "73a0d33e5ecb3eab",
@@ -1368,6 +1377,7 @@
     "8fd759661912459b"
   ],
   "third_party/browser/README.md": [
+    "7efec32248006356",
     "942bd7cdd1542c55",
     "ac7eea0514957d11",
     "ded95619a27b5aee"
