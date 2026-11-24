@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ATTRIBUTION_PATHS, compare, findMatches, lowerBaseline, OLD_NAME, withoutKept } from "./check-brand-names.mjs";
+import { ATTRIBUTION_PATHS, compare, findLines, findMatches, lineHash, lowerBaseline, OLD_NAME, withoutKept } from "./check-brand-names.mjs";
 
 const find = (files: Record<string, string>) => findMatches(Object.keys(files), (path: string) => files[path]);
 
@@ -42,11 +42,23 @@ describe("old upstream names", () => {
     }
   });
 
+  it("keeps no line text in the baseline: only 16-character hashes", () => {
+    const text = 'const home = "/home/ada/.openmausbot";';
+    const found = find({ "a.ts": text });
+    expect(found["a.ts"]).toEqual([lineHash(text)]);
+    expect(found["a.ts"][0]).toMatch(/^[0-9a-f]{16}$/);
+    expect(JSON.stringify(found)).not.toContain("/home/");
+    expect(lineHash("  a   b ")).toBe(lineHash("a b"));
+    expect(lineHash("a")).not.toBe(lineHash("b"));
+    expect(findLines(["a.ts"], () => text)).toEqual({ "a.ts": [text] });
+  });
+
   it("fails a replacement at the same count", () => {
-    const baseline = { "a.ts": ['const x = "omb.1";', 'const y = "OMB_HOME";'] };
+    const old = 'const x = "omb.1";\nconst y = "OMB_HOME";';
+    const baseline = find({ "a.ts": old });
     const swapped = find({ "a.ts": 'const x = "omb.1";\nconst y = "omb_new";' });
     expect(Object.values(swapped)[0]).toHaveLength(2);
-    expect(compare(swapped, baseline)).toEqual([{ path: "a.ts", line: 'const y = "omb_new";', found: 1, allowed: 0 }]);
+    expect(compare(swapped, baseline)).toEqual([{ path: "a.ts", line: lineHash('const y = "omb_new";'), found: 1, allowed: 0 }]);
   });
 
   it("fails a new path, a rise in repeats, and passes the same or fewer", () => {
