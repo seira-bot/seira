@@ -156,7 +156,7 @@ describe("CI workflows", () => {
       const gate = workflows.get(file)!.jobs.gate!;
       expect(gate.permissions, file).toEqual({ contents: "read", "pull-requests": "read" });
       expect(gate.environment, file).toBeUndefined();
-      expect(gate.outputs, file).toEqual({ pass: "${{ steps.gate.outputs.pass }}" });
+      expect(gate.outputs, file).toEqual({ pass: "${{ steps.gate.outputs.pass }}", ...(file === IMAGE ? { sha: "${{ steps.gate.outputs.sha }}" } : {}) });
       expect(JSON.stringify(gate), file).not.toContain("secrets.");
       const step = stepsOf(gate).find((each) => each.id === "gate")!;
       expect(step.run, file).toContain(`node scripts/${GATE_SCRIPT}`);
@@ -307,11 +307,72 @@ describe("Server image smoke workflow", () => {
     expect(smoke.on.workflow_call).toEqual({
       inputs: {
         tag: { description: expect.any(String), required: false, type: "string", default: "" },
+        sha: { description: expect.any(String), required: false, type: "string", default: "" },
         save: { description: expect.any(String), required: false, type: "boolean", default: false },
       },
     });
     expect(smoke.concurrency).toBeUndefined();
-    expect(Object.keys(smoke.jobs)).toEqual(["image", "cloud-home"]);
+    expect(Object.keys(smoke.jobs)).toEqual(["image", "cloud-home", "connector"]);
+  });
+
+  it("builds the connector image for amd64 from connector/, saves it, and publishes it only from the publish job on main", () => {
+    const connector = smoke.jobs.connector!;
+    expect(connector.permissions).toBeUndefined();
+    expect(connector.environment).toBeUndefined();
+    expect(runs(connector).join("\n")).toContain("-t seira-connector:ci connector");
+    expect(runs(connector).join("\n")).not.toMatch(/docker (login|push)/);
+    const publish = image.jobs.publish!;
+    expect(publish.if).toContain("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
+    expect(publish.environment).toBe("release");
+    const step = stepsOf(publish).find((each) => each.name === "Publish the connector image")!;
+    expect(step.run).toContain('image="ghcr.io/${REPOSITORY,,}"');
+    expect(step.run).toContain('image="$image-connector"');
+    expect(step.run).toContain("imagetools create");
+  });
+
+  it("checks the commit that is built: the gate resolves the tag once, and the connector publish compares the image revision with it", () => {
+    const gate = stepsOf(image.jobs.gate!).find((each) => each.id === "gate")!;
+    expect(gate.env?.TAG).toBe("${{ inputs.tag }}");
+    expect(gate.run).toContain('commits/refs/tags/$TAG');
+    expect(gate.run).toContain('node scripts/release-gate.mjs --tag "$TAG" --sha "$sha"');
+    expect(gate.run).toContain('node scripts/release-gate.mjs --sha "$sha"');
+    expect(gate.run).toContain('echo "sha=$sha" >> "$GITHUB_OUTPUT"');
+    const step = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!;
+    expect(step.env?.CHECKED_SHA).toBe("${{ needs.gate.outputs.sha }}");
+    expect(step.run).toContain('[ "$revision" = "$CHECKED_SHA" ]');
+    expect(step.run.indexOf('"$revision" = "$CHECKED_SHA"')).toBeLessThan(step.run.indexOf("imagetools create"));
+  });
+
+  it("builds the commit that the gate approved for a release run, and keeps the normal checkout otherwise", () => {
+    expect(image.jobs.image!.needs).toBe("gate");
+    expect(image.jobs.image!.if).toBe("${{ !cancelled() && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}");
+    for (const id of ["image", "cloud-home", "connector"]) {
+      const checkout = stepsOf(smoke.jobs[id]!).find((each) => each.uses?.startsWith("actions/checkout@"))!;
+      expect(checkout.with?.ref, id).toBe("${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}");
+    }
+  });
+
+  it("checks the loaded connector image revision before the first registry push", () => {
+    const run = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!.run;
+    const check = run.indexOf('[ "$loaded" = "$CHECKED_SHA" ]');
+    expect(run).toContain("docker image inspect -f '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' seira-connector:amd64");
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(run.indexOf("docker push"));
+  });
+
+  it("keeps the single connector manifest when it adds the release tags", () => {
+    const run = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!.run;
+    expect(run).toContain('docker buildx imagetools create --prefer-index=false "${targets[@]}" "$ref"');
+  });
+
+  it("promotes the digest that this job's push reported, under a build tag of this run, and checks the result", () => {
+    const step = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!;
+    expect(step.run).toContain('build="$image:build-amd64-$RUN_ID-$RUN_ATTEMPT"');
+    expect(step.run).toContain("grep -Eo 'digest: sha256:[0-9a-f]{64}'");
+    expect(step.run).toContain('ref="$image@$digest"');
+    expect(step.run).toContain('"${targets[@]}" "$ref"');
+    expect(step.run).not.toMatch(/imagetools inspect "\$image:build-amd64"/);
+    expect(step.run).toContain('= "$digest" ]');
   });
 
   it("uses GitHub's own actions only", () => {
@@ -351,7 +412,7 @@ describe("Server image smoke workflow", () => {
   it("checks out a release tag only by its full tag name, and the commit of the caller when there is no tag", () => {
     const checkouts = stepsOf(build).filter((step) => step.uses?.startsWith("actions/checkout@"));
     expect(checkouts).toHaveLength(1);
-    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}");
+    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}");
   });
 
   it("reads the tag only through env, and labels the image with the tag or main", () => {
@@ -384,18 +445,19 @@ describe("Server image workflow", () => {
 
   it("calls the smoke workflow with the tag, and saves the images only on main", () => {
     expect(build.uses).toBe("./.github/workflows/server-image-smoke.yml");
-    expect(build.with).toEqual({ tag: "${{ inputs.tag }}", save: "${{ github.ref == 'refs/heads/main' }}" });
+    expect(build.with).toEqual({ tag: "${{ inputs.tag }}", sha: "${{ needs.gate.outputs.sha }}", save: "${{ github.ref == 'refs/heads/main' }}" });
     expect(build.steps).toBeUndefined();
     expect(build.permissions).toBeUndefined();
     expect(build.environment).toBeUndefined();
   });
 
-  it("runs the release gate on main only, on the commit of the run", () => {
+  it("runs the release gate on main only, on the commit of the run, or on the commit of the tag for a tagged run", () => {
     expect(gate.if).toBe(ON_MAIN);
     expect(gate.needs).toBeUndefined();
     const step = stepsOf(gate).find((each) => each.id === "gate")!;
     expect(step.env?.SHA).toBe("${{ github.sha }}");
-    expect(step.run).toContain('node scripts/release-gate.mjs --sha "$SHA"');
+    expect(step.run).toContain('sha="$SHA"');
+    expect(step.run).toContain('node scripts/release-gate.mjs --sha "$sha"');
   });
 
   it("asks a person to approve a run that the gate flagged", () => {
