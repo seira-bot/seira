@@ -141,6 +141,7 @@ describe("DeepSeek ACP support", () => {
     expect(deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: false }, {} as never)).toEqual(["--profile", "acp"]);
     expect(deepseekSupport.selectModel).toEqual({ configId: "model" });
     expect(deepseekSupport.modelVariants).toBe(true);
+    expect(deepseekSupport.absoluteMcpCommands).toBe(true);
     expect(deepseekSupport.resumeMethod).toBe("resume");
     expect(deepseekSupport.resolveModelsOnCreate).toBe(false);
     expect(deepseekSupport.credentialEnv).toEqual(["DEEPSEEK_API_KEY"]);
