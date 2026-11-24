@@ -26,3 +26,17 @@ export async function includeNoAuthServices<State extends ServiceStatus>(
   if (!needless.length) return status;
   return { ...status, ...Object.fromEntries(needless.map((slug) => [slug, { ...status[slug]!, connected: true, status: "ACTIVE" }])) };
 }
+
+/**
+ * The status Settings shows. Connect cards settle on the status the connector service reported, before the catalog adds
+ * anything: an app that needs no sign-in has no account, so it must not mark a card waiting for one as connected or
+ * resume the turn parked on it. Only the HTTP response carries the catalog's addition.
+ */
+export async function connectorStatusForSettings<State extends ServiceStatus>(
+  cfg: AppConfig,
+  reported: Record<string, State>,
+  settleCards?: (reported: Record<string, State>) => unknown,
+): Promise<Record<string, State>> {
+  settleCards?.(reported);
+  return includeNoAuthServices(cfg, reported);
+}

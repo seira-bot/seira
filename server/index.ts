@@ -111,7 +111,7 @@ import { parseToolScope } from "../shared/tool-scope.ts";
 import { liveDecisionRefusal } from "../shared/live-approval.ts"; import type { PersonWaitKind } from "../shared/person-wait.ts";
 import { vpsLeftBehindNotice, vpsNotChosenReason } from "./cloud-backend.ts";
 import * as composio from "./composio.ts";
-import { includeNoAuthServices } from "./composio-no-auth.ts";
+import { connectorStatusForSettings } from "./composio-no-auth.ts";
 import { appSandboxRule, connectorCallFromFrame, connectorRefusalText, connectorScopeRefusalText, connectorUnrecognizedText, evaluateConnectorTools } from "./connector-verdict.ts";
 import { signInCardText } from "./connector-card-text.ts";
 import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffPrompt, chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot } from "./default-bot.ts"; import { ensureProfileLook } from "./person-look.ts";
@@ -14513,7 +14513,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           services: {},
         });
       }
-      const status = await includeNoAuthServices(cfg, await composio.connectionStatus(cfg, services.length ? services : composio.CURATED_SLUGS)); if (services.length) connectCardSettle.services(status); // Settings polls these after Connect: older open cards stop waiting.
+      const status = await connectorStatusForSettings(cfg, await composio.connectionStatus(cfg, services.length ? services : composio.CURATED_SLUGS), services.length ? connectCardSettle.services : undefined); // Settings polls these after Connect: older open cards stop waiting, judged by the real status.
       return json(res, 200, { configured: true, services: status });
     }
     m = path.match(/^\/api\/connectors\/([\w-]+)\/authorize$/);
