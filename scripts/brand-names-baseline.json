@@ -21,10 +21,6 @@
   "apps/docs/content/docs/changelog/index.mdx": [
     "473903c7d23dd82a"
   ],
-  "apps/docs/content/docs/self-hosting/connected-servers.mdx": [
-    "7a25488022aab47d",
-    "de05c0dc914c66ca"
-  ],
   "apps/docs/content/docs/troubleshooting/logs.mdx": [
     "01c1dda517564e2e"
   ],
@@ -92,31 +88,24 @@
   "companion/test/control.test.ts": [
     "29b2817f639cda0f"
   ],
-  "connector/Dockerfile": [
-    "e80e979c637ff125"
-  ],
   "connector/e2e/run.sh": [
     "2f71825be9ea0661",
     "9df137d1c67863fa"
   ],
   "connector/host/seira-update-runner.sh": [
-    "05b6e08f342618c0",
     "f11f221876276f81"
   ],
   "connector/install.sh": [
     "cd2688167a09acd1"
   ],
   "connector/src/adopted-home.ts": [
-    "35df960b94ee2f23",
     "f5c1ac957d3123d3"
   ],
   "connector/src/customer-run.ts": [
-    "0025421cd2d3564a",
     "3eafd1db812d325a",
     "4c52ea54402096d5",
     "97013e42b6092b0d",
-    "d5896fa68b7af3c0",
-    "e9269b3e439b4efd"
+    "d5896fa68b7af3c0"
   ],
   "connector/src/home-health.ts": [
     "734286e6f8d44b1a",
@@ -125,14 +114,9 @@
   ],
   "connector/src/protocol.ts": [
     "008b4b3c3e927426",
-    "0332ca9dfdb1d8b6",
-    "0b9d15f6a74c51d7",
-    "0b9d15f6a74c51d7",
     "1ca9cfe9fde9aebf",
-    "1f2411a9b94d4761",
     "768b2b4b9fc94b62",
-    "d6c1eb602357dc7a",
-    "f66488fae112d84d"
+    "d6c1eb602357dc7a"
   ],
   "connector/src/settings.ts": [
     "0c1b16496c6f0fce",
@@ -194,9 +178,7 @@
     "02ade7b3e1d8a588",
     "3fbecb1920731bdc",
     "61cd4ace4c11bda7",
-    "6373cd048b254b30",
-    "73a0d33e5ecb3eab",
-    "cb0b8eb104728c1a"
+    "6373cd048b254b30"
   ],
   "deploy/docker-compose.yml": [
     "8feeeb411c05d522"
@@ -246,7 +228,6 @@
     "25a7c4509b980f18"
   ],
   "docs/browser-packaging.md": [
-    "459f0e2d08289f96",
     "4a536ca96812bc28"
   ],
   "docs/cloud-pro.md": [
@@ -257,10 +238,6 @@
   ],
   "docs/contributing.md": [
     "38c3a44b603557a0"
-  ],
-  "docs/design/self-hosted-design.md": [
-    "9d832f7f19af48df",
-    "d3f705540233b1c7"
   ],
   "docs/environment-variables.md": [
     "23c04cb998967194",
@@ -622,12 +599,6 @@
   "scripts/build-npm-package.test.mjs": [
     "d8fc32bd12e70ffd"
   ],
-  "scripts/build-windows-browser-vendor.mjs": [
-    "e6a3e0709f8acda9"
-  ],
-  "scripts/build-windows-browser-vendor.test.mjs": [
-    "af020ad0db4a865a"
-  ],
   "scripts/control-seira.ts": [
     "aa0d267625d9987a"
   ],
@@ -743,23 +714,14 @@
     "096d984c67310275"
   ],
   "server/browser-engine-release.ts": [
-    "14b3659b0828cfad",
-    "73c0ee2b83b51e2d",
-    "84860ef7d92b4374",
-    "dacc6fc519dd6f66"
+    "84860ef7d92b4374"
   ],
   "server/browser-engine.test.ts": [
     "023d52ed0f962373",
-    "14b3659b0828cfad",
     "2a33486a2034edc6",
-    "386d4d09fe870597",
     "3dcb38d5b38cb131",
-    "60634d074939e9cd",
-    "73c0ee2b83b51e2d",
     "814e869f4a2ed5fb",
-    "8e87df7c54006518",
-    "bc51f9a229d9f555",
-    "dacc6fc519dd6f66"
+    "bc51f9a229d9f555"
   ],
   "server/browser-engine.ts": [
     "36628838bc198bea"
@@ -1359,7 +1321,6 @@
     "24f140794dac6e51",
     "336db746bf595c99",
     "378a793da071bb3a",
-    "4dc36dfa5bce74e8",
     "54b9247b0b853aaa",
     "5936fda3fd204fee",
     "679b0c334e1b9990",
@@ -1378,8 +1339,6 @@
   ],
   "third_party/browser/README.md": [
     "7efec32248006356",
-    "942bd7cdd1542c55",
-    "ac7eea0514957d11",
     "ded95619a27b5aee"
   ],
   "third_party/browser/agent-browser-windows-stdio.patch": [
