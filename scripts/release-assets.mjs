@@ -12,7 +12,7 @@ const FEED = /^latest(-[\w-]+)?\.yml$/;
 const SUMS = /^SHA256SUMS-[\w.-]+\.txt$/;
 
 export const USAGE = `Usage: node scripts/release-assets.mjs check <tag> [--repo <owner>/<name>]
-       node scripts/release-assets.mjs upload <tag> <file>... [--repo <owner>/<name>]
+       node scripts/release-assets.mjs upload <tag> <file>... [--repo <owner>/<name>] [--release-id <number>]
        node scripts/release-assets.mjs publish <tag> [--repo <owner>/<name>]`;
 
 export class UsageError extends Error {
@@ -20,7 +20,7 @@ export class UsageError extends Error {
 }
 
 export function parseArgs(argv) {
-  const out = { command: null, tag: null, files: [], repo: null, help: false };
+  const out = { command: null, tag: null, files: [], repo: null, releaseId: null, help: false };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -29,6 +29,10 @@ export function parseArgs(argv) {
       const value = argv[++i];
       if (value === undefined || value.startsWith("--")) throw new UsageError("--repo needs a value");
       out.repo = value;
+    } else if (arg === "--release-id") {
+      const value = argv[++i];
+      if (value === undefined || !/^\d+$/.test(value)) throw new UsageError("--release-id needs a number");
+      out.releaseId = Number(value);
     } else if (arg.startsWith("--")) throw new UsageError(`unknown argument ${arg}`);
     else rest.push(arg);
   }
@@ -38,6 +42,7 @@ export function parseArgs(argv) {
   if (!out.tag || !TAG.test(out.tag)) throw new UsageError("the tag must look like v1.2.3");
   if (out.command !== "upload" && out.files.length) throw new UsageError(`${out.command} takes no files`);
   if (out.command === "upload" && !out.files.length) throw new UsageError("upload needs at least one file");
+  if (out.releaseId !== null && out.command !== "upload") throw new UsageError("--release-id is only for upload");
   if (out.repo && !/^[\w.-]+\/[\w.-]+$/.test(out.repo)) throw new UsageError("--repo must look like owner/name");
   return out;
 }
@@ -157,8 +162,15 @@ export async function findRelease(api, repo, tag) {
   return null;
 }
 
-export async function check({ api, repo = "owner/name", tag, log = console.log }) {
-  const release = await findRelease(api, repo, tag);
+/** With a release id, the release is read by its id and must carry the tag. The tag alone could name another release. */
+async function releaseOf(api, repo, tag, releaseId) {
+  if (releaseId === undefined || releaseId === null) return findRelease(api, repo, tag);
+  const release = await api(`repos/${repo}/releases/${releaseId}`);
+  return release && release.tag_name === tag ? release : null;
+}
+
+export async function check({ api, repo = "owner/name", tag, releaseId, log = console.log }) {
+  const release = await releaseOf(api, repo, tag, releaseId);
   if (!release) {
     log(`FAIL no release for tag ${tag} in ${repo}`);
     return 1;
@@ -180,7 +192,18 @@ export async function check({ api, repo = "owner/name", tag, log = console.log }
   return 0;
 }
 
-export async function upload({ api, run, repo = "owner/name", tag, files, log = console.log, exists = existsSync }) {
+export async function upload({ api, run, repo = "owner/name", tag, releaseId, files, log = console.log, exists = existsSync }) {
+  if (releaseId !== undefined && releaseId !== null) {
+    const release = await releaseOf(api, repo, tag, releaseId);
+    if (!release) {
+      log(`FAIL release ${releaseId} is not the release of ${tag}`);
+      return 1;
+    }
+    if (!release.draft) {
+      log(`FAIL release ${releaseId} is published. Files go on a draft only.`);
+      return 1;
+    }
+  }
   const missing = files.filter((file) => !exists(file));
   for (const file of missing) log(`FAIL ${file} does not exist`);
   if (missing.length) return 2;
@@ -196,12 +219,12 @@ export async function upload({ api, run, repo = "owner/name", tag, files, log = 
     }
   };
   for (const file of first) if (!(await send(file))) return 1;
-  if ((await check({ api, repo, tag, log })) !== 0) {
+  if ((await check({ api, repo, tag, releaseId, log })) !== 0) {
     log(last.length ? "Update feeds not uploaded." : "Check failed.");
     return 1;
   }
   for (const file of last) if (!(await send(file))) return 1;
-  return check({ api, repo, tag, log });
+  return check({ api, repo, tag, releaseId, log });
 }
 
 export async function publish({ api, run, repo = "owner/name", tag, log = console.log }) {
@@ -254,17 +277,25 @@ function ghApi(path, options = {}) {
   return JSON.parse(gh(["api", path]));
 }
 
+function gitOrigin() {
+  try {
+    return execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return "";
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
-  const origin = execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" });
-  const repo = args.repo ?? repoFromRemote(origin);
+  // --repo comes first. Git is read only without it, so the helper also runs in a folder that is not a checkout.
+  const repo = args.repo ?? repoFromRemote(gitOrigin());
   if (!repo) throw new UsageError("could not read the GitHub repository from the origin remote; pass --repo");
   const api = async (path, options) => ghApi(path, options);
   const run = async (list) => gh(list, { stdio: "inherit" });
   if (args.command === "check") process.exitCode = await check({ api, repo, tag: args.tag });
   else if (args.command === "publish") process.exitCode = await publish({ api, run, repo, tag: args.tag });
-  else process.exitCode = await upload({ api, run, repo, tag: args.tag, files: args.files });
+  else process.exitCode = await upload({ api, run, repo, tag: args.tag, releaseId: args.releaseId ?? undefined, files: args.files });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

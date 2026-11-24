@@ -134,17 +134,18 @@ Two workflows read secrets in the `release` environment:
 A package workflow builds a package and uploads it as a workflow artifact.
 It does not create a tag or a release, and it never publishes one. A
 maintainer attaches the artifact to the release by hand (see
-[Releasing](releasing.md)), with one exception: the `attach` job of
+[Releasing](releasing.md)), with one exception: the `draft` and `attach` jobs of
 `package-macos.yml`. `scripts/ci-workflow.test.ts` holds these rules for every
 `package-*.yml` file:
 
 - The only trigger is `workflow_dispatch`. Only a person with write access can
-  start it, and a pull request never runs it. The one exception is
-  `package-macos.yml`, which also starts on `release: created`. Only a person
-  with write access can create a release.
+  start it, and a pull request never runs it. A release event is no
+  trigger, because GitHub starts no workflow for a draft release. To attach
+  files to a draft, a person starts `package-macos.yml` by hand with the input
+  `release_tag`.
 - No job asks for a permission, so the token can only read the repository.
-  The `approval` job sets `permissions: {}`, which grants nothing. The one
-  exception is the `attach` job of `package-macos.yml` (see below).
+  The `approval` job sets `permissions: {}`, which grants nothing. The only
+  exceptions are the `draft` and `attach` jobs of `package-macos.yml` (see below).
 - A job uses an environment only to read the signing secrets, and only the
   `release` environment. Today only `package-macos.yml` does this. The one
   exception is an `approval` job in the `release-approval` environment. It
@@ -164,16 +165,30 @@ maintainer attaches the artifact to the release by hand (see
   person who is not a maintainer cannot re-run a failed `package` job and
   reuse an earlier approval. That person must re-run all jobs, which asks for
   a new approval, or ask a maintainer to re-run.
+- The `commit` job of `package-macos.yml` also takes `release_tag`. With it, `ref`
+  must be the same `v1.2.3` tag, and the commit is the one of the full tag ref
+  (an annotated tag is followed to its commit).
+- The `draft` job of `package-macos.yml` has `contents: write` and the `release`
+  environment, reads no secret, and only reads. GitHub shows a draft release only
+  to a token that can write. It runs only when `release_tag` is set, with the same
+  approval condition as `package`, and before it. It stops the run when no release
+  has the tag, when two have it, or when the release is published. It outputs the
+  release id. `package` needs `draft` and does not run when `draft` failed.
 - The `attach` job of `package-macos.yml` has `contents: write` and the
-  `release` environment, and reads no secret. It runs only for a release event
-  after a signed build: all five Apple secrets set, and every gate passed. It
-  needs `commit`, `approval` and `package`, with the same approval condition as
-  `package`. It checks out the built commit, downloads the artifact of the same
-  run, checks that the artifact holds exactly the twelve macOS files, and
-  uploads them with `scripts/release-assets.mjs upload`. It installs no
-  package, runs no package script, and never publishes the release. When no
-  Apple secret is set, a release event skips the build with a notice and a run
-  summary. The run does not fail and nothing is attached.
+  `release` environment, and reads no secret. It runs only when `release_tag` is
+  set, `draft` passed and the build is signed: all five Apple secrets set, and
+  every gate passed. It needs `commit`, `approval`, `draft` and `package`, with
+  the same approval condition as `package`. It checks out the built commit and
+  downloads the artifact of the same run. It checks that the artifact holds
+  exactly the twelve macOS files and that each is a regular file, not a symbolic
+  link or a folder. It checks again that the release id is still the draft of the
+  tag and that the tag still points at the built commit. Then it uploads the files
+  with `scripts/release-assets.mjs upload --repo --release-id`. The helper reads
+  no git remote when `--repo` is given, so it runs in the artifact folder outside
+  the checkout. It installs no package, runs no package script, and never
+  publishes the release. When no Apple secret is set, a run with `release_tag`
+  skips the build with a notice and a run summary. The run does not fail and
+  nothing is attached.
 - A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
   goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or

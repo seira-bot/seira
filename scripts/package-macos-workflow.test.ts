@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,12 +12,13 @@ interface Step {
   uses?: string;
   run?: string;
   if?: string;
+  env?: Record<string, string>;
   with?: Record<string, unknown>;
 }
 
 interface Workflow {
   on: {
-    release?: { types?: string[] };
+    release?: unknown;
     workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> };
   };
   jobs: Record<
@@ -46,7 +47,8 @@ const position = (name: string) => {
   expect(found, name).toBeGreaterThanOrEqual(0);
   return found;
 };
-const step = (name: string) => steps.find((each) => each.name === name) ?? findSha.find((each) => each.name === name)!;
+const step = (name: string) =>
+  steps.find((each) => each.name === name) ?? findSha.find((each) => each.name === name) ?? flow.jobs.draft.steps.find((each) => each.name === name)!;
 const gates = steps.filter((each) => each.name?.startsWith("Gate: "));
 const notarize = position("Notarize the two dmg and the two zip files");
 
@@ -84,23 +86,23 @@ function runStep(name: string, cwd: string, env: Record<string, string>, path: s
 }
 
 describe("package-macos.yml", () => {
-  it("starts by hand from a ref that a maintainer names, or when a release is created", () => {
-    expect(Object.keys(flow.on).sort()).toEqual(["release", "workflow_dispatch"]);
+  it("starts only by hand, never on a release event, because GitHub starts no workflow for a draft release", () => {
+    expect(Object.keys(flow.on)).toEqual(["workflow_dispatch"]);
+    expect(flow.on.release).toBeUndefined();
     expect(flow.on.workflow_dispatch?.inputs?.ref?.required).toBe(true);
-    // Not `published`: a release stays a draft until the maintainer publishes it, and the files must be on it by then.
-    expect(flow.on.release?.types).toEqual(["created"]);
+    expect(flow.on.workflow_dispatch?.inputs?.release_tag).toMatchObject({ required: false, default: "", type: "string" });
+    expect(text).not.toMatch(/github\.event\.release|github\.event_name/);
   });
 
-  it("reads the tag of a release event, and the ref input otherwise, in both jobs that name the ref", () => {
-    const expression = "${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref }}";
-    expect(text.split(expression)).toHaveLength(3);
-    expect(text).not.toMatch(/REF: \$\{\{ inputs\.ref \}\}/);
+  it("reads the ref and the release tag from the dispatch inputs only", () => {
+    expect(text.split("REF: ${{ inputs.ref }}")).toHaveLength(3);
+    expect(text.split("${{ inputs.release_tag }}").length - 1).toBeGreaterThanOrEqual(4);
   });
 
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package", "attach"]);
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "draft", "package", "attach"]);
     expect(flow.jobs.commit.environment).toBeUndefined();
     expect(flow.jobs.commit.permissions).toBeUndefined();
     expect(JSON.stringify(flow.jobs.commit)).not.toContain("secrets.");
@@ -108,6 +110,9 @@ describe("package-macos.yml", () => {
     expect(job.permissions).toBeUndefined();
     expect(flow.jobs.approval.environment).toBe("release-approval");
     expect(flow.jobs.approval.permissions).toEqual({});
+    expect(flow.jobs.draft.environment).toBe("release");
+    expect(flow.jobs.draft.permissions).toEqual({ contents: "write" });
+    expect(JSON.stringify(flow.jobs.draft)).not.toContain("secrets.");
     expect(JSON.stringify(flow.jobs.approval)).not.toContain("secrets.");
   });
 
@@ -119,12 +124,12 @@ describe("package-macos.yml", () => {
 
   describe("finds the commit of the ref", () => {
     const SHA = "0123456789abcdef0123456789abcdef01234567";
-    const find = (ref: string, ghScript: string) => {
+    const find = (ref: string, ghScript: string, releaseTag = "") => {
       const cwd = folder();
       const bin = join(cwd, "bin");
       mkdirSync(bin);
       writeFileSync(join(bin, "gh"), `#!/bin/bash\n${ghScript}\n`, { mode: 0o755 });
-      return { ...runStep("Find the commit of the ref", cwd, { REF: ref, GH_TOKEN: "x", GITHUB_REPOSITORY: "owner/repo" }, [bin]), cwd };
+      return { ...runStep("Find the commit of the ref", cwd, { REF: ref, RELEASE_TAG: releaseTag, GH_TOKEN: "x", GITHUB_REPOSITORY: "owner/repo" }, [bin]), cwd };
     };
 
     it.each(["../x", "-x", "a b", "", "a;b", "$(id)"])("refuses the ref %j without echoing it", (ref) => {
@@ -155,6 +160,47 @@ describe("package-macos.yml", () => {
       expect(result.status).toBe(1);
       expect(result.outputs).toEqual({});
     });
+
+    describe("for a release tag", () => {
+      // The fake gh answers like `gh api ... --jq`: the object type and the object SHA of the full tag ref, then of the tag object.
+      const TAG_OBJECT = "fedcba9876543210fedcba9876543210fedcba98";
+      const lightweight = `case "$*" in *git/ref/tags/v1.2.3*) echo "commit ${SHA}";; *) exit 1;; esac`;
+      const annotated = `case "$*" in *git/ref/tags/v1.2.3*) echo "tag ${TAG_OBJECT}";; *git/tags/${TAG_OBJECT}*) echo "commit ${SHA}";; *) exit 1;; esac`;
+
+      it("takes the commit of the full tag ref, and follows an annotated tag to its commit", () => {
+        for (const script of [lightweight, annotated]) {
+          const result = find("v1.2.3", script, "v1.2.3");
+          expect(result.status, result.stdout + result.stderr).toBe(0);
+          expect(result.outputs).toEqual({ sha: SHA });
+        }
+      });
+
+      it("asks for the tag ref, never for a branch or a commit of the same name", () => {
+        const result = find("v1.2.3", `echo "$*" >> calls.log\n${lightweight}`, "v1.2.3");
+        expect(result.status).toBe(0);
+        const calls = readFileSync(join(result.cwd, "calls.log"), "utf8");
+        expect(calls).toContain("git/ref/tags/v1.2.3");
+        expect(calls).not.toContain("/commits/");
+      });
+
+      it.each([
+        ["a ref that is not the release tag", "main", "v1.2.3"],
+        ["a release tag that is not v1.2.3", "v1.2", "v1.2"],
+        ["a release tag with a suffix", "v1.2.3-rc.1", "v1.2.3-rc.1"],
+        ["a release tag that holds a path", "../v1.2.3", "../v1.2.3"],
+      ])("stops for %s", (_name, ref, tag) => {
+        const result = find(ref, lightweight, tag);
+        expect(result.status).toBe(1);
+        expect(result.outputs).toEqual({});
+      });
+
+      it("stops when the tag does not exist, or points at something that is not a commit", () => {
+        expect(find("v1.2.3", "exit 1", "v1.2.3").status).toBe(1);
+        const tree = find("v1.2.3", `echo "tree ${SHA}"`, "v1.2.3");
+        expect(tree.status).toBe(1);
+        expect(tree.outputs).toEqual({});
+      });
+    });
   });
 
   describe("chooses a signed or an unsigned build", () => {
@@ -176,32 +222,32 @@ describe("package-macos.yml", () => {
       expect(result.stdout).toContain("NOT FOR RELEASE");
     });
 
-    it("skips the build of a release when no Apple secret is set, without failing and with a clear message", () => {
+    it("skips the build of a draft release when no Apple secret is set, without failing and with a clear message", () => {
       const cwd = folder();
       const result = runStep("Choose a signed or an unsigned build", cwd, {
-        EVENT: "release",
+        RELEASE_TAG: "v1.2.3",
         ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, ""])),
       });
       expect(result.status, result.stdout).toBe(0);
       expect(result.outputs).toEqual({ signed: "false", skip: "true" });
-      expect(result.stdout).toContain("::notice::No Apple secret is set, so this release gets no macOS build.");
+      expect(result.stdout).toContain("::notice::No Apple secret is set, so this draft release gets no macOS build.");
       const summary = readFileSync(join(cwd, "summary.md"), "utf8");
       expect(summary).toContain("macOS build skipped");
       expect(summary).toContain("no macOS assets");
     });
 
-    it("signs a release when all five Apple secrets are set, and does not skip", () => {
+    it("signs the build for a draft release when all five Apple secrets are set, and does not skip", () => {
       const result = runStep("Choose a signed or an unsigned build", folder(), {
-        EVENT: "release",
+        RELEASE_TAG: "v1.2.3",
         ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, "value"])),
       });
       expect(result.status, result.stdout).toBe(0);
       expect(result.outputs).toEqual({ signed: "true" });
     });
 
-    it("stops a release when only some Apple secrets are set, so a half-made setup is not hidden", () => {
+    it("stops a draft release run when only some Apple secrets are set, so a half-made setup is not hidden", () => {
       const result = runStep("Choose a signed or an unsigned build", folder(), {
-        EVENT: "release",
+        RELEASE_TAG: "v1.2.3",
         ...Object.fromEntries(APPLE_SECRETS.map((name) => [name, name === "MAC_CERT_PASSWORD" ? "value" : ""])),
       });
       expect(result.status).toBe(1);
@@ -212,7 +258,7 @@ describe("package-macos.yml", () => {
       const after = steps.slice(position("Choose a signed or an unsigned build") + 1);
       for (const each of after) {
         const name = each.name ?? each.uses;
-        if (each.if === undefined) expect.fail(`${name} has no condition, so it would run on a skipped release`);
+        if (each.if === undefined) expect.fail(`${name} has no condition, so it would run on a skipped build`);
         expect(each.if === NOT_SKIPPED || each.if.includes(SIGNED), name).toBe(true);
       }
     });
@@ -425,21 +471,175 @@ describe("package-macos.yml", () => {
     });
   });
 
-  describe("attaches the signed files to the release", () => {
+
+  describe("checks the draft release", () => {
+    const draft = flow.jobs.draft;
+    const SHA = "0123456789abcdef0123456789abcdef01234567";
+
+    it("runs only for a dispatch with a release tag, behind the same approval as the build, before the build", () => {
+      expect(draft.needs).toEqual(["commit", "approval"]);
+      expect(draft.if).toContain("inputs.release_tag != ''");
+      expect(draft.if).toContain("needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt");
+      expect(draft.if).toContain("!cancelled() && needs.commit.result == 'success'");
+      expect(flow.jobs.package.needs).toEqual(["commit", "approval", "draft"]);
+      expect(flow.jobs.package.if).toContain("needs.draft.result != 'failure'");
+      expect(draft.outputs).toEqual({ release_id: "${{ steps.release.outputs.release_id }}" });
+    });
+
+    it("only reads: it creates, edits and deletes nothing", () => {
+      const script = draft.steps.map((each) => each.run ?? "").join("\n");
+      expect(script).not.toMatch(/--method|-X |gh release|\bPOST\b|\bPATCH\b|\bDELETE\b|git push/);
+    });
+
+    // The fake gh answers `gh api ... --jq` from a list of releases, like the real API: a draft is listed for a token that can write.
+    const run = (releases: Array<{ id: number; tag_name: string; draft: boolean }>, tag = "v1.2.3") => {
+      const cwd = folder();
+      const bin = join(cwd, "bin");
+      mkdirSync(bin);
+      const lines = releases.filter((each) => each.tag_name === tag).map((each) => `${each.id} ${each.draft}`).join("\\n");
+      writeFileSync(
+        join(bin, "gh"),
+        `#!/bin/bash\ncase "$*" in *"--jq length"*) echo ${releases.length};; *releases*) printf '${lines}${lines ? "\\n" : ""}';; *) exit 1;; esac\n`,
+        { mode: 0o755 },
+      );
+      return runStep("Find the draft release of the tag", cwd, { TAG: tag, SHA, GH_TOKEN: "x", GITHUB_REPOSITORY: "owner/repo" }, [bin]);
+    };
+
+    it("writes the id of the draft release of the tag", () => {
+      const result = run([{ id: 5, tag_name: "v1.2.2", draft: false }, { id: 77, tag_name: "v1.2.3", draft: true }]);
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(result.outputs).toEqual({ release_id: "77" });
+    });
+
+    it("stops when no release has the tag", () => {
+      const result = run([{ id: 5, tag_name: "v1.2.2", draft: true }]);
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+      expect(result.stdout).toContain("No release has the tag v1.2.3");
+    });
+
+    it("stops when the release is already published", () => {
+      const result = run([{ id: 77, tag_name: "v1.2.3", draft: false }]);
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+      expect(result.stdout).toContain("already published");
+    });
+
+    it("stops when two releases have the tag", () => {
+      const result = run([{ id: 76, tag_name: "v1.2.3", draft: true }, { id: 77, tag_name: "v1.2.3", draft: true }]);
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+    });
+
+    it.each(["main", "v1.2", "v1.2.3-rc.1", "../v1.2.3", ""])("stops for the tag %j", (tag) => {
+      const result = run([{ id: 77, tag_name: tag, draft: true }], tag);
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+    });
+  });
+
+  describe("attaches the signed files to the draft release", () => {
     const attach = flow.jobs.attach;
     const upload = () => attach.steps.find((each) => each.name === "Upload the twelve files, update feed last")!;
+    const VERSION = "1.2.3";
+    const SHA = "0123456789abcdef0123456789abcdef01234567";
+    const NAMES = [
+      ...["arm64.dmg", "x64.dmg", "arm64.zip", "x64.zip"].flatMap((end) => [`Seira-${VERSION}-${end}`, `Seira-${VERSION}-${end}.blockmap`]),
+      "latest-mac.yml", "Seira.dmg", "Seira-intel.dmg", "SHA256SUMS-mac.txt",
+    ];
 
-    it("is the only job with a write token, only for contents, and reads no secret", () => {
+    // A fake gh in Node. `release upload` copies the file, `api` answers like GitHub, and every call goes to a log with its folder.
+    const FAKE_GH = `#!/usr/bin/env node
+const fs = require("fs"), path = require("path");
+const dir = process.env.FAKE_DIR;
+const state = JSON.parse(process.env.FAKE_STATE);
+const args = process.argv.slice(2);
+fs.mkdirSync(dir + "/up", { recursive: true });
+fs.appendFileSync(dir + "/log", process.cwd() + " | " + args.join(" ") + "\\n");
+const rest = [];
+for (let i = 0; i < args.length; i++) { if (args[i] === "-H" || args[i] === "--jq") { i++; continue; } rest.push(args[i]); }
+const jq = args.includes("--jq");
+const files = () => fs.readdirSync(dir + "/up").sort();
+const out = (value) => process.stdout.write(typeof value === "string" ? value : JSON.stringify(value));
+if (rest[0] === "release" && rest[1] === "upload") { fs.copyFileSync(rest[3], dir + "/up/" + path.basename(rest[3])); process.exit(0); }
+if (rest[0] !== "api") process.exit(1);
+const target = rest[1];
+let match;
+if ((match = /^repos\\/owner\\/repo\\/releases\\/(\\d+)\\/assets\\?/.exec(target))) {
+  out(files().map((name, index) => ({ id: index + 1, name, state: "uploaded", size: fs.statSync(dir + "/up/" + name).size })));
+} else if ((match = /^repos\\/owner\\/repo\\/releases\\/assets\\/(\\d+)$/.exec(target))) {
+  out(fs.readFileSync(dir + "/up/" + files()[Number(match[1]) - 1], "utf8"));
+} else if ((match = /^repos\\/owner\\/repo\\/releases\\/(\\d+)$/.exec(target))) {
+  const release = { id: Number(match[1]), tag_name: state.tag, draft: state.draft };
+  out(jq ? release.tag_name + " " + release.draft : release);
+} else if (target === "repos/owner/repo/git/ref/tags/" + state.tag) {
+  out(state.tagKind + " " + state.tagSha);
+} else process.exit(1);
+`;
+
+    interface Options {
+      tag?: string;
+      extra?: string;
+      real?: boolean;
+      state?: Partial<{ tag: string; draft: boolean; tagSha: string }>;
+      releaseId?: string;
+      makeStage?: (stage: string) => void;
+    }
+    const run = (options: Options = {}) => {
+      const tag = options.tag ?? `v${VERSION}`;
+      const cwd = folder();
+      const stageDir = join(folder(), "artifact");
+      const bin = join(cwd, "bin");
+      const fake = join(cwd, "fake");
+      mkdirSync(stageDir);
+      mkdirSync(bin);
+      mkdirSync(fake);
+      for (const name of options.extra ? [...NAMES, options.extra] : NAMES) writeFileSync(join(stageDir, name), "x");
+      mkdirSync(join(cwd, "scripts"));
+      if (options.real) {
+        // The files of a real build: the feed and the checksum file name only files that the release holds, with their sizes.
+        const packages = NAMES.filter((name) => /\.(dmg|zip)$/.test(name) && name.startsWith(`Seira-${VERSION}-`));
+        for (const name of NAMES.filter((each) => each.endsWith(".dmg") || each.endsWith(".zip"))) writeFileSync(join(stageDir, name), name);
+        const entries = packages.map((name) => `  - url: ${name}\n    sha512: abc\n    size: ${name.length}\n`).join("");
+        writeFileSync(join(stageDir, "latest-mac.yml"), `version: ${VERSION}\nfiles:\n${entries}path: ${packages[2]}\n`);
+        writeFileSync(join(stageDir, "SHA256SUMS-mac.txt"), packages.map((name) => `${"a".repeat(64)}  ${name}\n`).join(""));
+        copyFileSync(new URL("./release-assets.mjs", import.meta.url), join(cwd, "scripts", "release-assets.mjs"));
+      } else {
+        writeFileSync(join(cwd, "scripts", "release-assets.mjs"), "console.log('UPLOAD', process.argv.slice(2).join(' '));\n");
+      }
+      options.makeStage?.(stageDir);
+      writeFileSync(join(bin, "gh"), FAKE_GH, { mode: 0o755 });
+      const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", upload().run!], {
+        cwd,
+        env: {
+          PATH: [bin, dirname(process.execPath), process.env.PATH].join(delimiter),
+          HOME: cwd,
+          TAG: tag, STAGE: stageDir, GH_TOKEN: "x", GITHUB_WORKSPACE: cwd, GITHUB_REPOSITORY: "owner/repo",
+          RELEASE_ID: options.releaseId ?? "77", SHA,
+          GITHUB_STEP_SUMMARY: join(cwd, "summary.md"),
+          FAKE_DIR: fake,
+          FAKE_STATE: JSON.stringify({ tag, draft: true, tagKind: "commit", tagSha: SHA, ...options.state }),
+        },
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      const log = existsSync(join(fake, "log")) ? readFileSync(join(fake, "log"), "utf8") : "";
+      return { ...result, log, stageDir, uploaded: existsSync(join(fake, "up")) ? readdirSync(join(fake, "up")).sort() : [] };
+    };
+
+    it("is a job with a write token only for contents, and reads no secret", () => {
       expect(attach.permissions).toEqual({ contents: "write" });
       expect(attach.environment).toBe("release");
       expect(JSON.stringify(attach)).not.toContain("secrets.");
-      for (const id of ["commit", "approval", "package"]) expect(JSON.stringify(flow.jobs[id].permissions ?? {})).not.toContain("write");
-      expect(attach.needs).toEqual(["commit", "approval", "package"]);
+      expect(JSON.stringify(flow.jobs.commit.permissions ?? {})).not.toContain("write");
+      expect(JSON.stringify(flow.jobs.package.permissions ?? {})).not.toContain("write");
+      expect(attach.needs).toEqual(["commit", "approval", "draft", "package"]);
     });
 
-    it("runs only for a release event, after a signed build, behind the same approval as the build", () => {
+    it("runs only after a passed draft check and a signed build, behind the same approval as the build", () => {
       const condition = attach.if!;
-      expect(condition).toContain("github.event_name == 'release'");
+      expect(condition).toContain("inputs.release_tag != ''");
+      expect(condition).toContain("needs.draft.result == 'success'");
       expect(condition).toContain("needs.package.result == 'success'");
       expect(condition).toContain("needs.package.outputs.signed == 'true'");
       expect(condition).toContain("needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt");
@@ -455,52 +655,93 @@ describe("package-macos.yml", () => {
       expect(attach.steps.some((each) => each.uses?.startsWith("actions/download-artifact@"))).toBe(true);
     });
 
-    it("uploads the twelve files through release-assets.mjs, in one command, and never publishes", () => {
+    it("binds the upload to the release id and the repository, and never publishes", () => {
       const script = upload().run!;
-      expect(script).toContain("scripts/release-assets.mjs\" upload \"$TAG\"");
+      expect(script).toContain('release-assets.mjs" upload "$TAG"');
+      expect(script).toContain('--repo "$GITHUB_REPOSITORY" --release-id "$RELEASE_ID"');
       expect(script).not.toMatch(/release-assets\.mjs"? publish/);
       expect(script).toContain("latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt");
       expect(script).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+$");
+      expect(upload().env).toMatchObject({
+        TAG: "${{ inputs.release_tag }}",
+        RELEASE_ID: "${{ needs.draft.outputs.release_id }}",
+        SHA: "${{ needs.commit.outputs.sha }}",
+      });
+    });
+
+    it("passes the stub helper the twelve files, the repository and the release id", () => {
+      const ok = run();
+      expect(ok.status, ok.stderr + ok.stdout).toBe(0);
+      expect(ok.stdout).toContain(`UPLOAD upload v${VERSION} Seira-${VERSION}-arm64.dmg`);
+      expect(ok.stdout).toContain("latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt --repo owner/repo --release-id 77");
     });
 
     it("refuses a tag that is not v1.2.3, and an artifact with another file set, before it uploads", () => {
-      const run = (tag: string, extra?: string) => {
-        const cwd = folder();
-        const stageDir = join(cwd, "stage");
-        const bin = join(cwd, "bin");
-        mkdirSync(stageDir);
-        mkdirSync(bin);
-        const version = "1.2.3";
-        const names = [
-          ...["arm64.dmg", "x64.dmg", "arm64.zip", "x64.zip"].flatMap((end) => [`Seira-${version}-${end}`, `Seira-${version}-${end}.blockmap`]),
-          "latest-mac.yml", "Seira.dmg", "Seira-intel.dmg", "SHA256SUMS-mac.txt",
-        ];
-        for (const name of extra ? [...names, extra] : names) writeFileSync(join(stageDir, name), "x");
-        mkdirSync(join(cwd, "scripts"));
-        writeFileSync(join(cwd, "scripts", "release-assets.mjs"), "console.log('UPLOAD', process.argv.slice(2).join(' '));\n");
-        const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", upload().run!], {
-          cwd,
-          env: {
-            PATH: [dirname(process.execPath), process.env.PATH].join(delimiter),
-            TAG: tag, STAGE: stageDir, GH_TOKEN: "x", GITHUB_WORKSPACE: cwd, GITHUB_REPOSITORY: "owner/repo",
-            GITHUB_STEP_SUMMARY: join(cwd, "summary.md"),
-          },
-          encoding: "utf8",
-        });
-        return result;
-      };
-      const ok = run("v1.2.3");
-      expect(ok.status, ok.stderr + ok.stdout).toBe(0);
-      expect(ok.stdout).toContain("UPLOAD upload v1.2.3 Seira-1.2.3-arm64.dmg");
-      expect(ok.stdout).toContain("latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt --repo owner/repo");
       for (const tag of ["main", "v1.2", "v1.2.3-rc.1", "../v1.2.3"]) {
-        const result = run(tag);
+        const result = run({ tag });
         expect(result.status, tag).toBe(1);
         expect(result.stdout).not.toContain("UPLOAD");
       }
-      const extra = run("v1.2.3", "Seira-unsigned.dmg");
+      const extra = run({ extra: "Seira-unsigned.dmg" });
       expect(extra.status).toBe(1);
       expect(extra.stdout).not.toContain("UPLOAD");
+    });
+
+    it.each([
+      ["a symbolic link", (stage: string) => { rmSync(join(stage, "Seira.dmg")); symlinkSync("/etc/hostname", join(stage, "Seira.dmg")); }],
+      ["a dangling symbolic link", (stage: string) => { rmSync(join(stage, "latest-mac.yml")); symlinkSync("/nonexistent", join(stage, "latest-mac.yml")); }],
+      ["a folder", (stage: string) => { rmSync(join(stage, "Seira-intel.dmg")); mkdirSync(join(stage, "Seira-intel.dmg")); }],
+    ])("refuses an entry that is %s, before it uploads", (_name, makeStage) => {
+      const result = run({ makeStage });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("is not a regular file");
+      expect(result.stdout).not.toContain("UPLOAD");
+      expect(result.uploaded).toEqual([]);
+    });
+
+    it("stops before it uploads when the release is not the draft of the tag", () => {
+      for (const state of [{ draft: false }, { tag: "v9.9.9" }]) {
+        const result = run({ state });
+        expect(result.status, JSON.stringify(state)).toBe(1);
+        expect(result.stdout).toContain("is no longer the draft");
+        expect(result.stdout).not.toContain("UPLOAD");
+      }
+      const missing = run({ releaseId: "" });
+      expect(missing.status).toBe(1);
+      expect(missing.stdout).toContain("release id is missing");
+    });
+
+    it("stops before it uploads when the tag no longer points at the built commit", () => {
+      const result = run({ state: { tagSha: "f".repeat(40) } });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("no longer points at the built commit");
+      expect(result.stdout).not.toContain("UPLOAD");
+    });
+
+    describe("with the real helper, a fake gh and an artifact folder outside the checkout", () => {
+      it("uploads the twelve files, the feed last, without reading any git remote", () => {
+        const result = run({ real: true });
+        expect(result.status, result.stdout + result.stderr).toBe(0);
+        expect(result.uploaded).toEqual([...NAMES].sort());
+        const uploads = result.log.split("\n").filter((line) => line.includes("release upload"));
+        expect(uploads).toHaveLength(12);
+        expect(uploads.at(-1)).toContain("latest-mac.yml");
+        for (const line of uploads) {
+          expect(line).toContain(`release upload v${VERSION} `);
+          expect(line).toContain("--repo owner/repo");
+          expect(line.split(" | ")[0], "the helper runs in the artifact folder").toBe(result.stageDir);
+        }
+        expect(result.stdout).toContain("every file that latest-mac.yml names is an uploaded asset");
+        expect(result.stdout).not.toMatch(/FAIL|fatal|not a git repository/);
+      });
+
+      it("uploads nothing when the release is not the draft that the id names", () => {
+        for (const state of [{ draft: false }, { tag: "v9.9.9" }]) {
+          const result = run({ real: true, state });
+          expect(result.status, JSON.stringify(state)).toBe(1);
+          expect(result.uploaded).toEqual([]);
+        }
+      });
     });
   });
 });

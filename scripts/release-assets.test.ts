@@ -59,6 +59,14 @@ describe("parseArgs", () => {
     expect(parseArgs(["publish", "v1.2.3"])).toMatchObject({ command: "publish", tag: "v1.2.3", files: [] });
   });
 
+  it("reads --release-id for upload only, and only a number", () => {
+    expect(parseArgs(["upload", "v1.0.0", "a", "--release-id", "77"])).toMatchObject({ releaseId: 77 });
+    expect(parseArgs(["upload", "v1.0.0", "a"])).toMatchObject({ releaseId: null });
+    for (const argv of [["upload", "v1.0.0", "a", "--release-id"], ["upload", "v1.0.0", "a", "--release-id", "x7"], ["check", "v1.0.0", "--release-id", "7"]]) {
+      expect(() => parseArgs(argv), argv.join(" ")).toThrowError(expect.objectContaining({ exitCode: 2 }));
+    }
+  });
+
   it("reads the repository from a remote", () => {
     expect(repoFromRemote("git@github.com:o/r.git")).toBe("o/r");
     expect(repoFromRemote("https://example.test/o/r")).toBeNull();
@@ -246,6 +254,41 @@ describe("upload", () => {
     expect(status).toBe(2);
     expect(h.uploaded).toEqual([]);
     expect(lines.join("\n")).toContain("Seira-setup.exe does not exist");
+  });
+});
+
+describe("upload with a release id", () => {
+  const send = async (releaseId: number, release: Record<string, unknown>) => {
+    const uploaded: string[] = [];
+    const paths: string[] = [];
+    const lines: string[] = [];
+    const api = async (path: string) => {
+      paths.push(path);
+      if (path === `repos/o/r/releases/${releaseId}`) return { id: releaseId, tag_name: "v1.0.0", draft: true, ...release };
+      if (path.startsWith(`repos/o/r/releases/${releaseId}/assets`)) return [];
+      throw new Error(`unexpected ${path}`);
+    };
+    const status = await upload({
+      api, run: async (args: string[]) => void uploaded.push(args[3]), repo: "o/r", tag: "v1.0.0", releaseId, files: ["Seira-setup.exe"],
+      log: (text: string) => lines.push(text), exists: () => true,
+    });
+    return { status, uploaded, paths, lines };
+  };
+
+  it("reads the release by its id, never lists the releases, and uploads to a draft", async () => {
+    const result = await send(77, {});
+    expect(result.uploaded).toEqual(["Seira-setup.exe"]);
+    expect(result.paths).toContain("repos/o/r/releases/77");
+    expect(result.paths.some((path) => path.startsWith("repos/o/r/releases?"))).toBe(false);
+    expect(result.paths.some((path) => path.startsWith("repos/o/r/releases/77/assets"))).toBe(true);
+  });
+
+  it("uploads nothing when the id names another tag, or a published release", async () => {
+    for (const release of [{ tag_name: "v9.9.9" }, { draft: false }]) {
+      const result = await send(77, release);
+      expect(result.status).toBe(1);
+      expect(result.uploaded).toEqual([]);
+    }
   });
 });
 

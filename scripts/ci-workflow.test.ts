@@ -128,9 +128,9 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository and the milestones step once to call the GitHub API", () => {
+  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit, draft and attach steps to read the repository and the milestones step once to call the GitHub API", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
-    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(3);
+    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
       const text =
@@ -400,16 +400,16 @@ describe("Package workflows", () => {
     expect(packageFiles).toContain("package-macos.yml");
   });
 
-  it("start only by hand, so a pull request never runs them. The macOS workflow also starts when a release is created", () => {
+  it("start only by hand, so a pull request never runs them, and a draft release, which starts no workflow, is no trigger", () => {
     for (const [file, flow] of packageWorkflows) {
-      expect(Object.keys(flow.on).sort(), file).toEqual(file === MACOS ? ["release", "workflow_dispatch"] : ["workflow_dispatch"]);
+      expect(Object.keys(flow.on), file).toEqual(["workflow_dispatch"]);
     }
   });
 
   it("ask for no job permission, so the token stays read-only", () => {
     for (const [file, flow] of packageWorkflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
-        const expected = id === "approval" ? {} : file === MACOS && id === "attach" ? { contents: "write" } : undefined;
+        const expected = id === "approval" ? {} : file === MACOS && (id === "attach" || id === "draft") ? { contents: "write" } : undefined;
         expect(job.permissions, `${file} job ${id}`).toEqual(expected);
       }
     }
@@ -420,8 +420,8 @@ describe("Package workflows", () => {
       for (const [id, job] of Object.entries(flow.jobs)) {
         if (job.environment === undefined || id === "approval") continue;
         expect(job.environment, `${file} job ${id}`).toBe("release");
-        // The attach job reads no secret. It needs the environment for its write token, and the tests of the macOS workflow pin its shape.
-        if (file === MACOS && id === "attach") continue;
+        // The draft and attach jobs read no secret. They need the environment for their write token, and the tests of the macOS workflow pin their shape.
+        if (file === MACOS && (id === "attach" || id === "draft")) continue;
         expect(JSON.stringify(job), `${file} job ${id}`).toContain("secrets.");
       }
     }
@@ -436,11 +436,23 @@ describe("Package workflows", () => {
       expect(flow.jobs.approval?.needs, file).toBe("commit");
       for (const [id, job] of gated) {
         const gate = `!cancelled() && needs.commit.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW}))`;
+        if (file === MACOS && id === "draft") {
+          // The draft job runs only for a dispatch that names a release tag, and runs before the build.
+          expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval"]);
+          expect(job.if, `${file} job ${id}`).toBe(`\${{ ${gate} && inputs.release_tag != '' }}`);
+          continue;
+        }
+        if (file === MACOS && id === "package") {
+          // The build waits for the draft check. The check is skipped when no release tag is named.
+          expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval", "draft"]);
+          expect(job.if, `${file} job ${id}`).toBe(`\${{ ${gate} && needs.draft.result != 'failure' }}`);
+          continue;
+        }
         if (file === MACOS && id === "attach") {
-          // The attach job follows the build, and adds three conditions: a release event, a finished build, and a signed one.
-          expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval", "package"]);
+          // The attach job follows the build, and adds conditions: a release tag, a passed draft check, a finished build, and a signed one.
+          expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval", "draft", "package"]);
           expect(job.if, `${file} job ${id}`).toBe(
-            `\${{ ${gate} && github.event_name == 'release' && needs.package.result == 'success' && needs.package.outputs.signed == 'true' }}`,
+            `\${{ ${gate} && inputs.release_tag != '' && needs.draft.result == 'success' && needs.package.result == 'success' && needs.package.outputs.signed == 'true' }}`,
           );
           continue;
         }
@@ -825,6 +837,7 @@ describe("Release job conditions", () => {
             result: each.approval,
             outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt },
           },
+          draft: { result: "skipped", outputs: {} },
         };
         const vars = !("variable" in each)
           ? { RELEASE_MAINTAINERS: MAINTAINERS }

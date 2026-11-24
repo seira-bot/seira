@@ -9,8 +9,8 @@ Seira ships three desktop packages:
   `Package macOS` workflow builds, signs, and notarizes on a GitHub-hosted
   macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
   Until a maintainer sets them, a release has no macOS assets. With them set,
-  creating the release starts that workflow, which attaches the macOS assets
-  to the same release (see step 6).
+  one manual run of that workflow on the draft release attaches the macOS
+  assets (see step 6).
 
 A maintainer creates the tag and the GitHub release, and attaches the Linux
 and Windows files by hand. No workflow creates a tag, creates a release or
@@ -339,24 +339,50 @@ Rules for the package:
 ### 6. Build and attach the macOS apps
 
 Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set. Creating the draft release in step 4 starts it. Do it by hand only
-when that run did not attach the files.
+are set.
 
-**A release starts the build.** `Package macOS` also starts when a release is
-created (a draft counts). It builds the tag of the release, then its `attach`
-job puts the twelve files on that same release with
-`scripts/release-assets.mjs upload`, feed last. That job has a write token for
-`contents` and nothing else. The release stays a draft.
+**This step is one manual dispatch before publish.** GitHub starts no
+workflow when someone creates a draft release, so creating the draft in step 4
+does not start `Package macOS`. A maintainer starts it by hand on the draft,
+after the tag and the draft release exist and before step 7:
+
+```sh
+gh workflow run package-macos.yml --repo seira-bot/seira \
+  --ref main -f ref=v<version> -f release_tag=v<version>
+```
+
+`ref` and `release_tag` are the same `v<version>` tag. Start the run from
+`main` or from the tag itself, because the `release` environment accepts only
+those. The run does this, in this order:
+
+1. The `commit` job takes the commit of the full tag ref (`refs/tags/v<version>`,
+   an annotated tag is followed to its commit). It never takes a branch of the
+   same name.
+2. The `draft` job finds the release of the tag. It stops the run, before any
+   build, when there is no such release, when two releases have the tag, or
+   when the release is already published. Files go on a draft only. It passes
+   the id of that draft on.
+3. The `package` job builds that commit.
+4. The `attach` job checks again, just before it uploads: the release with that
+   id still has the tag and is still a draft, the tag still points at the built
+   commit, and each of the twelve entries of the artifact is a regular file (a
+   symbolic link or a folder stops the run). Then it uploads the twelve files
+   with `scripts/release-assets.mjs upload --repo ... --release-id ...`, feed
+   last. The helper reads no git remote, so it runs in the artifact folder
+   outside the checkout. The `draft` and `attach` jobs have a write token for
+   `contents` and nothing else, because GitHub shows a draft release only to a
+   token that can write. The release stays a draft.
 
 - All five secrets set: the files are attached after every gate below passes.
 - No secret set: the build is skipped. The run does not fail. Its summary says
-  that the release has no macOS assets. No unsigned file is attached, ever.
+  that the draft release has no macOS assets. No unsigned file is attached, ever.
 - Only some secrets set: the run stops and names the missing ones.
 - A run that someone outside `RELEASE_MAINTAINERS` causes waits for the
   `release-approval` environment, as a manual run does.
 - A re-run that fails halfway can upload again: the script stops at the first
   upload that GitHub refuses, for example a file that is already there. Delete
   the macOS assets of the draft and re-run all jobs, or attach by hand as below.
+- Without `release_tag`, the same workflow only builds an artifact (see below).
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -378,11 +404,11 @@ commit only. The run summary shows the commit. Before it uploads anything:
 - it makes sure that Gatekeeper accepts both apps and both disk images, and
   that `latest-mac.yml` names each package with the correct SHA-512 and size.
 
-It uploads the twelve macOS assets as one workflow artifact. Only its `attach`
-job can write, and only to the release that started the run. Neither job can
+It uploads the twelve macOS assets as one workflow artifact. Only the `draft` and
+`attach` jobs can write, and only for a run that names `release_tag`. Neither job can
 publish the release.
 
-To build by hand, or when the run of the release did not attach the files:
+To build an artifact without `release_tag`, or when the run did not attach the files:
 
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
