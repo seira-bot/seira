@@ -22,6 +22,20 @@ const BASELINE = "scripts/brand-names-baseline.json";
 /** The old name, without matching words such as "bomb" or "combo". */
 export const OLD_NAME = /(?<![a-z0-9])omb(?![a-z0-9])|OMB_|openmausbot|mausbot|milind-soni/i;
 
+/**
+ * Lines that keep the old name on purpose, never counted (issue #468 "Keep"):
+ *  - the `.ombbackup` file extension, which restore must still accept;
+ *  - links to upstream issues, pull requests and commits, and `owner/repo#123` references (history, not product text);
+ *  - the receive side of a wire name: reading `x-omb-*` from a header, so an old sender still works.
+ */
+export const KEEP_LINES = [
+  /\.ombbackup/i,
+  /milind-soni\/OpenMausBot\/(?:pull|issues|commit|compare)\b/i,
+  /milind-soni\/OpenMausBot#\d+/i,
+  /\bheaders\.get\(\s*["'`]x-omb-/i,
+  /\bheaders\.get\([^)]*["'`]x-omb-[a-z-]+["'`]\s*\)/i,
+];
+
 /** Attribution that Apache-2.0 requires, and this guard itself. */
 export const ATTRIBUTION_PATHS = new Set([
   "NOTICE", "LICENSING.md", "brand/README.md",
@@ -35,7 +49,7 @@ export function countMatches(files, read) {
     let text;
     try { text = read(path); } catch { continue; }
     if (text.includes("\0")) continue;
-    const n = text.split("\n").filter((line) => OLD_NAME.test(line)).length;
+    const n = text.split("\n").filter((line) => OLD_NAME.test(line) && !KEEP_LINES.some((keep) => keep.test(line))).length;
     if (n > 0) counts[path] = n;
   }
   return counts;

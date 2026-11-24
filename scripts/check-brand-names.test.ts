@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ATTRIBUTION_PATHS, compare, countMatches, lowered, OLD_NAME } from "./check-brand-names.mjs";
+import { ATTRIBUTION_PATHS, KEEP_LINES, compare, countMatches, lowered, OLD_NAME } from "./check-brand-names.mjs";
 
 describe("old upstream names", () => {
   it("matches the old names and not ordinary words", () => {
@@ -16,6 +16,19 @@ describe("old upstream names", () => {
     const files: Record<string, string> = { NOTICE: "OpenMausBot", "a.ts": "omb\nok\nOMB_X", "b.ts": "clean" };
     expect([...ATTRIBUTION_PATHS]).toContain("NOTICE");
     expect(countMatches(Object.keys(files), (p: string) => files[p])).toEqual({ "a.ts": 2 });
+  });
+
+  it("does not count the kept lines: .ombbackup, upstream history links, and reading x-omb-* headers", () => {
+    const text = [
+      'const SUFFIX = ".ombbackup";',
+      "see https://github.com/milind-soni/OpenMausBot/pull/2547",
+      "fixed in milind-soni/OpenMausBot#2547",
+      'const v = request.headers.get("x-omb-poller");',
+      'headers: { "x-omb-cloud-power": "asleep" }',
+      "import { OpenMausBot } from './x'",
+    ].join("\n");
+    expect(KEEP_LINES.length).toBeGreaterThan(0);
+    expect(countMatches(["f.ts"], () => text)).toEqual({ "f.ts": 2 });
   });
 
   it("fails a new file and a rise, passes the same or a lower count", () => {
