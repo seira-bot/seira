@@ -218,9 +218,11 @@ This uses the yamux wire format (`hashicorp/yamux` spec): a 12-byte header of `v
 A switch to another workspace can end on a different server, and that server can copy the expected `environmentId`. So the
 phone does not trust the id that the endpoint announces. It moves its pin only on a proof that the paired computer signs.
 
-- **Request:** `POST /api/companion/workspaces/switch/<operationId>/proof` with `{ "nonce": "<b64u, 32 bytes>" }`.
+- **Request:** `POST /api/phones/self/workspaces/switch/<operationId>/proof` with `{ "nonce": "<b64u, 32 bytes>" }`.
   - The phone sends it inside the Noise session and sends no bearer.
-  - The sidecar answers only for an E2E device peer. Any other listener or peer gets 403 `secure_channel_required`.
+  - The sidecar answers only for an E2E device peer whose session has a 32-byte handshake hash.
+  - A connection that is not an E2E session gets 403 `secure_channel_required`, with or without a bearer. A session that has no handshake hash gets the same answer.
+  - A pairing session gets 401 (it has no device). A legacy plain LAN request from a device that already completed E2E gets 426 `update_app` before the route is reached.
 - **Signature:** ECDSA P-256 / SHA-256, `r ‖ s` (64 bytes), made with the transport key `T`. The phone verifies it with the
   `T.pub` that it pinned from the QR descriptor `k`.
 - **Signed bytes:** see `phoneWorkspaceSwitchProofMessage` (`packages/phone-protocol/src/workspaces.ts`). They hold the label

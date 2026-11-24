@@ -463,7 +463,7 @@ export function createProxyHandler(options: ProxyOptions) {
     // connection already proved both sides, and the proof names it. Every other way to reach this route is refused here.
     if (workspaceRoute(method, path) === "proof") {
       const signer = options.proofSigner?.() ?? null;
-      const context = e2e && e2e.peer.kind === "device" && e2e.binding && signer ? { deviceId: e2e.peer.id, binding: e2e.binding, signer } : undefined;
+      const context = e2e && e2e.peer.kind === "device" && e2e.binding?.length === 32 && signer ? { deviceId: e2e.peer.id, binding: e2e.binding, signer } : undefined;
       if (!context) return sendJson(res, 403, { error: "secure_channel_required" });
       const phone = context.deviceId;
       void answerWorkspaces(options.workspaces, "proof", method, path, () => readJson(req, 1024), () => options.otherWorkspacesAllowed?.(phone) === true, phone, context)

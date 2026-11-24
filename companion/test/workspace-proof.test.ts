@@ -261,6 +261,8 @@ describe("the proof that a workspace switch finished", () => {
     }
     // A session that is open but has no handshake hash yet is not enough.
     expect((await ask(id, nonce(), { peer: { kind: "device", id: "device-1" }, route: "wifi" })).json).toEqual({ error: "secure_channel_required" });
+    // A binding of the wrong length is not a handshake hash.
+    expect((await ask(id, nonce(), { peer: { kind: "device", id: "device-1" }, route: "wifi", binding: Buffer.alloc(31, 1) })).json).toEqual({ error: "secure_channel_required" });
     expect(harnessHits).toEqual([]);
     // The switch is still provable by its owner: none of the above used it.
     expect((await ask(id)).status).toBe(200);
