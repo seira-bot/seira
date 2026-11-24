@@ -35,7 +35,7 @@ import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
 import { postToServer } from "./server-message.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
-import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs";
+import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs"; import { createRemoteVisor } from "./glance-remote-visor.mjs"; import { spawn } from "node:child_process";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
 import { windowBackground, windowChromeOptions } from "./window-chrome.mjs";
 import { createAllWindowsClosedQuit } from "./window-all-closed.mjs";
@@ -466,7 +466,7 @@ import { companionAdvertisedHostedUrl, companionEnabledAtRest, companionOriginTa
 import { createDesktopCompanionE2E, deviceCounts } from "./companion-e2e-desktop.mjs"; import { startCheckedManagedConnection } from "./managed-companion-start.mjs"; import { createCompanionWorkspaces } from "./companion-workspaces.mjs";
 import { autoStartCompanion } from "./companion-autostart.mjs";
 import { migrateHomeFolders, migrateInnerFiles } from "./legacy-migrate.mjs";
-import { createPhoneLinkRoutes } from "./phone-link-routes.mjs"; import { reachableForKeepAwake } from "./keep-awake.mjs";
+import { createPhoneLinkRoutes } from "./phone-link-routes.mjs"; import { reachableForKeepAwake, createCompanionAwakeHold } from "./keep-awake.mjs";
 import { createRoutineWakeHold, rememberRoutineWake, routineWakeSettings } from "./routine-wake.mjs";
 import { CREDENTIAL_PATCH, credentialSaveError } from "./credential-patch.mjs";
 import { sentWireName } from "./phone-wire-names.mjs";
@@ -477,17 +477,8 @@ const { isLocalSender: senderIsLocal, localOnly, localOnlySync, setLocalOrigin }
 /** This computer's page, or My Cloud's own page once it is home (home-window.mjs). */
 const localOrHome = (channel, handler) => (event, ...args) => (homeWindow.homePage(event) ? handler : localOnly(channel, handler))(event, ...args);
 
-let companionPowerBlocker = null;
-
-function syncCompanionKeepAwake(companionEnabled, keepAwake) {
-  const shouldBlock = companionEnabled && keepAwake;
-  if (shouldBlock && companionPowerBlocker === null) {
-    companionPowerBlocker = powerSaveBlocker.start("prevent-app-suspension");
-  } else if (!shouldBlock && companionPowerBlocker !== null) {
-    if (powerSaveBlocker.isStarted(companionPowerBlocker)) powerSaveBlocker.stop(companionPowerBlocker);
-    companionPowerBlocker = null;
-  }
-}
+const companionAwake = createCompanionAwakeHold({ blocker: powerSaveBlocker, isOnBattery: () => powerMonitor.isOnBatteryPower(), log: (line) => slog(line) });
+const syncCompanionKeepAwake = (companionEnabled, keepAwake) => companionAwake.want(companionEnabled && keepAwake);
 
 const routineWake = createRoutineWakeHold({
   fetchStatus: () => (serverReady
@@ -2615,7 +2606,7 @@ const rail = installCloudRail({ t: nativeT, ipcMain, clipboard, openCloud: openO
 const announceAddedCloud = createAddedCloudNotice({ t: nativeT, Notification, focused: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()), sheetOpen: rail.sheetOpen,
   open: id => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); void openOwnCloud(id); }, shown: () => cloudAccount?.addDone() }); const desktopNotifications = installDesktopNotifications({ ipcMain, Notification, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), window: () => mainWindow, mayNotify: (contents, url) => appPermissions?.check(contents, "notifications", url, { isMainFrame: true }) === true, reveal: revealForLink, openPlace: origin => (origin === homeWindow.cloudOrigin() ? showHome({ place: "cloud" }) : workspaceMenuAction(() => switchEnvironment(origin === rendererOrigin() ? LOCAL_ID : environmentsState.environments.find(entry => entry.origin === origin)?.id))) });
 glanceControl = installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), getMainWindow: () => mainWindow, prefs: nativeText.prefs, t: nativeT, onHiddenChange: refreshApplicationMenu,
-  revealChat: target => { revealForLink(); mainWindow?.webContents.send("desktop-notifications:open", target); }, isWayland: isWaylandSession({ platform: process.platform, env: process.env, switches: Object.fromEntries(["ozone-platform", "ozone-platform-hint"].map(name => [name, app.commandLine.getSwitchValue(name)])) }) });
+  revealChat: target => { revealForLink(); mainWindow?.webContents.send("desktop-notifications:open", target); }, isWayland: isWaylandSession({ platform: process.platform, env: process.env, switches: Object.fromEntries(["ozone-platform", "ozone-platform-hint"].map(name => [name, app.commandLine.getSwitchValue(name)])), }), x11Available: Boolean(process.env.DISPLAY), createHelperVisor: hooks => createRemoteVisor({ spawn, execPath: process.execPath, appArgs: process.defaultApp ? [app.getAppPath()] : [], switches: app.commandLine.hasSwitch("no-sandbox") ? ["--no-sandbox"] : [], env: process.env, folder: path.join(app.getPath("userData"), "glance-helper"), ...hooks }) });
 // A place's colour (place-look.mjs): the Admin's for a Cloud, this app's for This computer and a server connected by
 // hand; changed on the place's own page or from the window's rail, whatever that server runs.
 installPlaceLook({ ipcMain, guard: workspaceOnly, place: () => savedPlace(environmentsState), session: () => ({ clouds: desktopRemoteAccess ? null : cloudAccount?.state().clouds ?? null, homeOrigin: myCloud() }),
@@ -3042,7 +3033,7 @@ app.whenReady().then(async () => {
     slog("skipping connected-apps registration: the credential store was unreadable this launch");
   }
   checkInManagedComposio();
-  startUpdater(quietSignals({ powerMonitor, window: () => mainWindow, lastInput: oneHome.lastInput, local: localServerRequest, place: () => homeWindow.placeOrigin(), cloudFetch: (...args) => session.defaultSession.fetch(...args), asleep: origin => homeWindow.asleepAt(origin), busy: () => ((oneHome.oneHome.busy() || ownHome?.busy()) && "move") || (computerSharing?.busy() && "lending") || (talk.busy() && "talk") || (companyBackupController || companyRestoreCommitting ? "backup" : null) })); alwaysOnHome.start(powerMonitor);
+  startUpdater(quietSignals({ powerMonitor, window: () => mainWindow, lastInput: oneHome.lastInput, local: localServerRequest, place: () => homeWindow.placeOrigin(), cloudFetch: (...args) => session.defaultSession.fetch(...args), asleep: origin => homeWindow.asleepAt(origin), busy: () => ((oneHome.oneHome.busy() || ownHome?.busy()) && "move") || (computerSharing?.busy() && "lending") || (talk.busy() && "talk") || (companyBackupController || companyRestoreCommitting ? "backup" : null) })); alwaysOnHome.start(powerMonitor); companionAwake.watch(powerMonitor);
   refreshApplicationMenu();
   openWindowForLink = () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow({ deferNavigation: homeWindow.current().kind !== "computer" });

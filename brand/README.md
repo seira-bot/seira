@@ -47,6 +47,7 @@ Write like a calm, competent colleague.
 
 Every logo comes from one master image: the 3D Seira head with its resting face.
 The app icons and the favicons come from `brand/logo/app-icon-source.png`, the same image as the mobile app icon.
+The app icon shows the head with one open eye, one winking eye, and a smile, on a night tile.
 `python3 brand/build_logo.py` makes all the files, and `python3 brand/check_logo.py` checks them.
 Do not edit a generated file by hand. Change a source image or the script, then build again.
 
@@ -59,6 +60,7 @@ Do not edit a generated file by hand. Change a source image or the script, then 
 | `brand/logo/png/icon-*.png` | App icons (180, 192, 512, 1024 px) |
 | `brand/logo/png/mark-*.png` | The head alone, without a tile |
 | `brand/logo/favicon.ico`, `brand/logo/png/favicon-*.png` | Browser tabs |
+| `apps/docs/public/app-icon-96.png` | Icon of the docs site |
 | `docs/assets/brand/` | Copies for the README and the docs, plus the social preview image |
 
 Rules:

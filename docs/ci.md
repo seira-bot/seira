@@ -132,15 +132,17 @@ Two workflows read secrets in the `release` environment:
 | `package-macos.yml` | The macOS arm64 and x64 apps as `.dmg` and `.zip`, their block maps, `latest-mac.yml`, `Seira.dmg`, `Seira-intel.dmg`, and `SHA256SUMS-mac.txt`. Without the Apple secrets it builds test apps only, in an artifact named `NOT-FOR-RELEASE`. |
 
 A package workflow builds a package and uploads it as a workflow artifact.
-It does not create a tag or a release. A maintainer attaches the artifact to
-the release by hand (see [Releasing](releasing.md)). `scripts/ci-workflow.test.ts`
+It does not create a tag or publish a release. A maintainer attaches the
+Windows artifact to the release by hand. For a signed `v*` tag, `package-macos.yml`
+attaches the macOS files to the draft release itself (see [Releasing](releasing.md)). `scripts/ci-workflow.test.ts`
 holds these rules for every `package-*.yml` file:
 
 - The only trigger is `workflow_dispatch`. Only a person with write access can
   start it, and a pull request never runs it.
 - No job asks for a permission, so the token can only read the repository.
-  The `approval` job sets `permissions: {}`, which grants nothing.
-- A job uses an environment only to read the signing secrets, and only the
+  The `approval` job sets `permissions: {}`, which grants nothing. The one
+  exception is the `attach` job of `package-macos.yml` (see below).
+- A job uses an environment only to read the signing secrets (the `attach` job is the exception), and only the
   `release` environment. Today only `package-macos.yml` does this. The one
   exception is an `approval` job in the `release-approval` environment. It
   has `permissions: {}` and reads no secret.
@@ -159,6 +161,20 @@ holds these rules for every `package-*.yml` file:
   person who is not a maintainer cannot re-run a failed `package` job and
   reuse an earlier approval. That person must re-run all jobs, which asks for
   a new approval, or ask a maintainer to re-run.
+- The `attach` job of `package-macos.yml` uploads the twelve macOS files to the
+  draft release of a signed `v*` tag. It is the only package job with a write
+  permission:
+  - It needs `commit`, `approval`, and `package`. It runs only when `package`
+    succeeded, the build is signed, and `ref` starts with `v`.
+  - Like `package`, it runs only when a maintainer started this attempt, or
+    when the approval came in this attempt.
+  - It runs in the `release` environment with `contents: write` and no secret.
+  - It checks out only `scripts/release-assets.mjs` from the workflow commit,
+    without credentials. It never runs code from the built commit.
+  - It stops before the upload when the files, or `sha256sum -c SHA256SUMS-mac.txt`,
+    do not match.
+  - It never publishes the release. The draft release must exist before the
+    run. If it did not, re-run the failed `attach` job after you create it.
 - A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
   goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
@@ -346,7 +362,7 @@ Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the de
 ### The `release` environment
 
 `package-macos.yml` reads the Apple signing secrets from the environment
-`release`, the `publish` job of `server-image.yml` uses it to write to
+`release`, its `attach` job writes to the draft release in it, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
 npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 

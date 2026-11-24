@@ -59,7 +59,7 @@ function profiles(): Record<string, Profile> {
   };
   // The person's Seira holds a Chief's powers and adds its notification pair; SEIRA_ADDS bounds what that costs.
   for (const name of ["default", "skills+shared+voice"]) all[`${name}+seira`] = { env: { ...all[name]!.env, SEIRA_SEIRA: "1" } };
-  // A chat that can never pick its computer: its Works on is Off, or it works on its team's computer. A room is one too.
+  // A chat that can never pick its computer: its Works on is Off. A room is one too.
   all["default+no-computer-pick"] = { env: { ...all.default!.env, SEIRA_COMPUTER_SELECTION: "0" } };
   for (const name of ["default", "non-chief"]) all[`${name}+room`] = { env: { ...all[name]!.env, SEIRA_COMPUTER_SELECTION: "0", SEIRA_ROOM: "1" } };
   all["default+images"] = { env: { ...all.default!.env, SEIRA_IMAGE_GENERATION: "1" } };
