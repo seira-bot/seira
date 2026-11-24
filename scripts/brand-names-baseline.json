@@ -2,6 +2,10 @@
   ".claude/skills/windows-release/SKILL.md": [
     "6b8c04a176d14c2d"
   ],
+  ".github/workflows/browser-vendor-windows.yml": [
+    "367db5c27d0c07c8",
+    "7e947a8caf1aa37b"
+  ],
   ".github/workflows/server-image-smoke.yml": [
     "44de7596b75f3b92"
   ],
@@ -233,7 +237,8 @@
     "25a7c4509b980f18"
   ],
   "docs/browser-packaging.md": [
-    "2dec45057ff31dd4"
+    "459f0e2d08289f96",
+    "4a536ca96812bc28"
   ],
   "docs/cloud-pro.md": [
     "3337112331d9e90d",
@@ -731,17 +736,24 @@
   "server/browser-engine-release.ts": [
     "14b3659b0828cfad",
     "73c0ee2b83b51e2d",
+    "84860ef7d92b4374",
     "dacc6fc519dd6f66"
   ],
   "server/browser-engine.test.ts": [
     "023d52ed0f962373",
     "14b3659b0828cfad",
+    "2a33486a2034edc6",
     "386d4d09fe870597",
     "3dcb38d5b38cb131",
     "60634d074939e9cd",
     "73c0ee2b83b51e2d",
+    "814e869f4a2ed5fb",
     "8e87df7c54006518",
+    "bc51f9a229d9f555",
     "dacc6fc519dd6f66"
+  ],
+  "server/browser-engine.ts": [
+    "36628838bc198bea"
   ],
   "server/browser/chrome/profile.test.ts": [
     "1d5347b8fac4d511"
@@ -1356,19 +1368,15 @@
     "8fd759661912459b"
   ],
   "third_party/browser/README.md": [
-    "59f3cf67a65772d3",
-    "d106478c27d936ec",
-    "e40ce7dafae5bd38"
+    "942bd7cdd1542c55",
+    "ac7eea0514957d11",
+    "ded95619a27b5aee"
   ],
   "third_party/browser/agent-browser-windows-stdio.patch": [
-    "0f4d904791708de0",
-    "774d26ced4ea7b71",
-    "774d26ced4ea7b71",
-    "b8ef0bfbad7bd71a",
-    "d324ff00516a49bd",
-    "fa43c5a6c1bb6ce3",
-    "fa43c5a6c1bb6ce3",
-    "ff180fac9c187dd7"
+    "1d0c945b85fbbdc9",
+    "7b63b59c20c67c13",
+    "7b63b59c20c67c13",
+    "85f734fbe53a5e20"
   ],
   "third_party/puppeteer/README.md": [
     "77835e8ff9df18ee"
