@@ -148,6 +148,16 @@ export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnv
   return { outcome: "problem", ...failure };
 }
 
+/** The one origin an outside link names (scheme, host and port, normalized), or null for anything else. */
+function linkOrigin(address, secret) {
+  if (typeof address !== "string" || !/^https?:\/\/[^/?#]/i.test(address)) return null;
+  let url;
+  try { url = new URL(address); } catch { return null; }
+  if ((url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) return null;
+  const parsed = parseServerInput(address, secret ?? "");
+  return parsed.ok && parsed.candidates.length === 1 && parsed.candidates[0] === url.origin ? url.origin : null;
+}
+
 /** The window's bundle reads this file too, so the module that runs Tailscale's tool loads only here, in the app's main process. */
 const TAILSCALE_CHECK = "./tailscale-check.mjs";
 const readMagicDns = async () => (await import(/* @vite-ignore */ TAILSCALE_CHECK)).magicDnsEnabled();
@@ -155,7 +165,8 @@ const readMagicDns = async () => (await import(/* @vite-ignore */ TAILSCALE_CHEC
 /**
  * Connecting from the desktop: `probe` for the sheet's line under the field; `connect` for its button, which names the
  * server already, so it opens exactly what it finds or resolves with the problem; `connectAsking` for a link from the
- * clipboard or Settings, which names the server in main's own dialog (`ask(found)`) first and throws a problem's sentence.
+ * clipboard or Settings, which names the server in main's own dialog (`ask(found)`) first and throws a problem's sentence;
+ * `connectFromLink` for a link another app opened, which names the normalized origin in `confirmLink` before any request.
  * `open(found, name)` saves the server and opens its /pair page.
  */
 export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, open, t, tailnet, magicDns = readMagicDns }) {
@@ -173,6 +184,19 @@ export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, o
       if (found.outcome !== "found") throw new Error(t(CONNECT_PROBLEM_KEYS[found.problem], { host: found.host ?? "", example: EXAMPLE_ADDRESS }));
       if (!(await ask(found))) return false;
       open(found, name);
+      return true;
+    },
+    /**
+     * A `{ address, secret }` an outside link carried. Only an http(s) origin is taken, and `confirmLink({ origin, withSecret })`
+     * must say yes before any request goes out. A link that is not that throws one fixed sentence that repeats nothing from it.
+     */
+    async connectFromLink({ address, secret }, confirmLink) {
+      const origin = linkOrigin(address, secret);
+      if (!origin) throw new Error(t(CONNECT_PROBLEM_KEYS.notAnAddress, { host: "", example: EXAMPLE_ADDRESS }));
+      if (!(await confirmLink({ origin, withSecret: Boolean(secret) }))) return false;
+      const found = await probe(origin, secret ?? "");
+      if (found.outcome !== "found") throw new Error(t(CONNECT_PROBLEM_KEYS[found.problem], { host: found.host ?? "", example: EXAMPLE_ADDRESS }));
+      open(found);
       return true;
     },
   };

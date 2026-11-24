@@ -80,6 +80,14 @@ server it found ("✓ hetzner-1 · Seira 0.1.147 · HTTPS"), and **Connect to
 hetzner-1** finishes. You can also type the address (`seira.example.com`,
 `192.168.1.20:8799`) and the pairing code in their own fields.
 
+The **Open in the Seira app** button on a server's `/pair` page makes an
+`seira://pair?address=…&code=…` link. The desktop app opens it from the system.
+It asks first, and it names the server (scheme, host and port) before it sends
+any request. If you choose **Cancel**, nothing is saved. The app accepts only
+an exact `https://` or `http://` address and the `address`, `code`, `token`
+and `name` parts. Any other link shows one fixed error. The link and its code
+are not written to the app log.
+
 `serve` with no way in mints no code. It lists the ways in instead. Every
 command the CLI prints starts the way you started it (`npx @seira-bot/seira`,
 `seira`, `pnpm seira`, or `docker compose exec seira seira`), so you
