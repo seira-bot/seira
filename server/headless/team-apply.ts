@@ -225,10 +225,7 @@ export async function reconcile(client: HeadlessClient, file: TeamFile, options:
         useDefaults: false, name: desired.name, ...(desired.title !== undefined ? { title: desired.title } : {}),
         ...(desired.description !== undefined ? { description: desired.description } : {}), ...(teamOf(desired) ? { section: teamOf(desired) } : {}),
         ...(desired.model ? { modelSelection: { ...desired.model, ...(desired.effort ? { effort: desired.effort } : {}) }, requireAvailableModel: true } : {}),
-      }, {
-        send: (body) => write("/api/bots", { method: "POST", body: JSON.stringify(body) }),
-        find: (id) => client.json<Rec>(`/api/bots/${enc(id)}`).then((found) => (found?.bot ? found : null), () => null),
-      });
+      }, (body) => write("/api/bots", { method: "POST", body: JSON.stringify(body) }));
       const { patch } = botPatch(desired, made.bot, teamOf(desired));
       if (Object.keys(patch).length) await write(`/api/bots/${enc(made.bot.id)}`, { method: "PATCH", body: JSON.stringify(patch) });
       continue;

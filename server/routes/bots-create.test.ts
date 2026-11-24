@@ -18,7 +18,7 @@ beforeEach(() => {
   rmSync(DATA_DIR, { recursive: true, force: true });
 });
 
-function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig> } = {}) {
+function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig>; team?: BotCreateRouteDeps["team"] } = {}) {
   const store = new Store(() => sonnet);
   const asked: ModelSelection[] = [];
   const deps = {
@@ -40,6 +40,7 @@ function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"
     checkedModelSelection: (raw: unknown) => ({ ok: true, selection: raw as ModelSelection }),
     cloudOwnerSession: () => false,
     wireBot: (record: BotRecord) => record as unknown as WireBot,
+    ...(options.team ? { team: options.team } : {}),
     ...(options.newBotComputer ? { newBotComputer: (selection: ModelSelection) => { asked.push(selection); return options.newBotComputer!(selection); } } : {}),
   } as unknown as BotCreateRouteDeps;
   const handler = createBotCreateRoutes(deps);
@@ -125,48 +126,99 @@ describe("a new bot from a paired phone", () => {
   });
 });
 
-describe("a client that names the id of its own new bot", () => {
-  const ID = "client-made-0001";
+describe("a client that sends a creation again after a lost answer", () => {
+  const KEY = "retry-key-0000001";
+  const member = (email: string) =>
+    ({ kind: "session", via: "bearer", scopes: ["client"], session: { id: `s-${email}`, label: "Member", scopes: ["client"], email, membershipAuthority: "team" } }) as unknown as RequestAuth;
+  const team = { name: "Fixture Team", people: { has: () => true } };
 
-  it("makes the bot once: the same request sent again is refused with 409 and makes no second bot", async () => {
+  it("makes the bot once: the same retry key sent again gets the same bot and makes no second one", async () => {
     const fx = fixture();
     const before = fx.store.bots.length;
-    const first = await fx.send({ name: "Ada", id: ID, fresh: true });
+    const first = await fx.send({ name: "Ada", retryKey: KEY });
     expect(first.status).toBe(201);
-    expect(first.body.bot.id).toBe(ID);
-    const again = await fx.send({ name: "Ada", id: ID, fresh: true });
-    expect(again.status).toBe(409);
-    expect(fx.store.bots.filter((bot) => bot.name === "Ada")).toHaveLength(1);
+    const again = await fx.send({ name: "Ada", retryKey: KEY });
+    expect(again.status).toBe(200);
+    expect(again.body.bot.id).toBe(first.body.bot.id);
     expect(fx.store.bots).toHaveLength(before + 1);
   });
 
-  it("still gets the greeting and a look of its own, which a bot moved in from another computer does not", async () => {
+  it("makes one bot when the same key is sent again while the first request is still being made", async () => {
     const fx = fixture();
-    const fresh = await fx.create({ name: "Ada", id: ID, fresh: true });
-    expect(fx.store.messagesFor(fresh.threadId)).toHaveLength(1);
-    expect(fx.store.bot(ID)?.id).toBe(ID);
-    const moved = await fx.create({ name: "Bea", id: "moved-in-0001" });
-    expect(fx.store.messagesFor(moved.threadId)).toHaveLength(0);
+    const before = fx.store.bots.length;
+    const [first, second] = await Promise.all([fx.send({ name: "Ada", retryKey: KEY }), fx.send({ name: "Ada", retryKey: KEY })]);
+    expect([first.status, second.status].sort()).toEqual([200, 201]);
+    expect(first.body.bot.id).toBe(second.body.bot.id);
+    expect(fx.store.bots).toHaveLength(before + 1);
   });
 
-  it("takes only true or false for fresh", async () => {
+  it("never takes the id from the request: the server makes it, and a retry key is no setting", async () => {
     const fx = fixture();
-    const refused = await fx.send({ name: "Ada", id: ID, fresh: "yes" });
-    expect(refused.status).toBe(400);
-    expect(fx.store.bot(ID)).toBeFalsy();
+    const made = await fx.create({ name: "Ada", retryKey: KEY });
+    expect(made.id).not.toContain(KEY);
+    expect((made as unknown as Record<string, unknown>).retryKey).toBeUndefined();
+    expect(fx.store.messagesFor(made.threadId)).toHaveLength(1);
   });
 
-  it("is allowed to a Team Cloud member, who still may not name a conversation id or a setting that is an admin's", () => {
-    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true })).toBeNull();
-    expect(memberBotCreateViolation({ name: "Ada", id: ID })).toBe("id");
-    expect(memberBotCreateViolation({ name: "Ada", settings: { id: ID, fresh: true } })).toBe("id");
-    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true, threadId: "thread-0001" })).toBe("threadId");
-    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true, computer: "local" })).toBe("computer");
+  it("refuses a retry key that is not 16 to 128 letters, digits, - and _", async () => {
+    const fx = fixture();
+    const before = fx.store.bots.length;
+    for (const retryKey of ["short", 7, "has a space in it 0000", "x".repeat(129)]) {
+      expect((await fx.send({ name: "Ada", retryKey })).status, String(retryKey)).toBe(400);
+    }
+    expect(fx.store.bots).toHaveLength(before);
+  });
+
+  it("replays only for the member who sent the key: another member gets a bot of their own and learns nothing of the first", async () => {
+    const fx = fixture({ team });
+    const ada = member("ada@example.test");
+    const bea = member("bea@example.test");
+    const before = fx.store.bots.length;
+    const first = await fx.send({ name: "Private plan", retryKey: KEY }, ada);
+    expect(first.status).toBe(201);
+    const stranger = await fx.send({ name: "Bea's bot", retryKey: KEY }, bea);
+    expect(stranger.status).toBe(201);
+    expect(stranger.body.bot.id).not.toBe(first.body.bot.id);
+    expect(stranger.body.bot.threadId).not.toBe(first.body.bot.threadId);
+    expect(stranger.body.bot.name).toBe("Bea's bot");
+    expect(JSON.stringify(stranger.body)).not.toContain(first.body.bot.id);
+    expect(fx.store.bots).toHaveLength(before + 2);
+    expect(fx.store.bot(stranger.body.bot.id)?.createdBy).toBe("bea@example.test");
+  });
+
+  it("makes exactly one bot when the original member retries, whatever another member sent in between", async () => {
+    const fx = fixture({ team });
+    const ada = member("ada@example.test");
+    const before = fx.store.bots.length;
+    const first = await fx.send({ name: "Ada's bot", retryKey: KEY }, ada);
+    await fx.send({ name: "Bea's bot", retryKey: KEY }, member("bea@example.test"));
+    const again = await fx.send({ name: "Ada's bot", retryKey: KEY }, member("ADA@example.test"));
+    expect(again.status).toBe(200);
+    expect(again.body.bot.id).toBe(first.body.bot.id);
+    expect(fx.store.bots.filter((bot) => bot.createdBy === "ada@example.test")).toHaveLength(1);
+    expect(fx.store.bots).toHaveLength(before + 2);
+  });
+
+  it("answers a member's unknown, taken or foreign ids the same way: the id of a bot is not a thing to probe", async () => {
+    const fx = fixture({ team });
+    const private1 = await fx.create({ name: "Hidden" });
+    for (const body of [{ name: "Probe", id: private1.id }, { name: "Probe", id: private1.threadId }, { name: "Probe", id: "never-made-0001" }]) {
+      const out = await fx.send(body, member("bea@example.test"));
+      expect(out.status).toBe(403);
+      expect(out.body).toEqual({ error: 'forbidden: "id" is an admin\'s to set' });
+    }
+  });
+
+  it("is allowed to a Team Cloud member, who still may not name an id, a conversation id or a setting that is an admin's", () => {
+    expect(memberBotCreateViolation({ name: "Ada", retryKey: KEY })).toBeNull();
+    expect(memberBotCreateViolation({ name: "Ada", id: KEY })).toBe("id");
+    expect(memberBotCreateViolation({ name: "Ada", retryKey: KEY, threadId: "thread-0001" })).toBe("threadId");
+    expect(memberBotCreateViolation({ name: "Ada", retryKey: KEY, computer: "local" })).toBe("computer");
   });
 
   it("does not make a paired phone's request an admin's setting", async () => {
     const fx = fixture();
     const phone = { kind: "session", via: "bearer", scopes: ["admin", "client"], session: { id: "s1", label: "Device", scopes: ["admin", "client"], pairedDevice: true } } as unknown as RequestAuth;
-    expect((await fx.send({ name: "Ada", id: ID, fresh: true }, phone)).status).toBe(201);
+    expect((await fx.send({ name: "Ada", retryKey: KEY }, phone)).status).toBe(201);
   });
 });

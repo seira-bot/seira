@@ -76,11 +76,11 @@ describe("New bot", () => {
     setTeamPeople({ ...team, admin: false });
     const { calls, request } = server();
     const sent = await newBot(request, { section: "Sales" });
-    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { id: expect.stringMatching(/^[\w-]{8,128}$/), fresh: true } }]);
+    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { retryKey: expect.stringMatching(/^[\w-]{16,128}$/) } }]);
     expect(sent[0]).toMatchObject({ type: "botAdded", bot: { id: "created" } });
   });
 
-  it("makes one bot when the answer is lost and the request is sent again with the same id", async () => {
+  it("makes one bot when the answer is lost and the request is sent again with the same retry key", async () => {
     vi.useFakeTimers();
     try {
       setTeamPeople({ ...team, admin: false });
@@ -89,13 +89,13 @@ describe("New bot", () => {
       const request = vi.fn(async (path: string, init?: RequestInit) => {
         if (path === "/api/bots" && init?.method === "POST") {
           const body = JSON.parse(String(init.body));
-          posted.push(body.id);
-          if (saved.has(body.id)) throw Object.assign(new Error("a bot with this id already exists here"), { status: 409 });
-          saved.set(body.id, { id: body.id, threadId: "made-main", name: "Pixel", messages: [] } as unknown as Bot);
+          posted.push(body.retryKey);
+          const known = saved.get(body.retryKey);
+          if (known) return { bot: known };
+          saved.set(body.retryKey, { id: "made", threadId: "made-main", name: "Pixel", messages: [] } as unknown as Bot);
           if (posted.length === 1) throw new TypeError("Failed to fetch");
-          return { bot: saved.get(body.id) };
+          return { bot: saved.get(body.retryKey) };
         }
-        if (path.startsWith("/api/bots/") && init?.method === undefined) return { bot: saved.get(decodeURIComponent(path.slice("/api/bots/".length))) };
         return {};
       });
       const dispatch = vi.fn<(action: Action) => void>();
@@ -204,7 +204,7 @@ describe("New bot", () => {
     vi.stubGlobal("window", { ogb: { remoteClient: { active: true } } });
     const { calls, request } = server();
     const sent = await newBot(request, { section: "Sales" });
-    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { section: "Sales", id: expect.stringMatching(/^[\w-]{8,128}$/), fresh: true } }]);
+    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { section: "Sales", retryKey: expect.stringMatching(/^[\w-]{16,128}$/) } }]);
     expect(sent.map((action) => action.type)).toEqual(["botAdded"]);
   });
 });
