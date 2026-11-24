@@ -5,7 +5,7 @@ import { api, useStore } from "@/state/store";
 import { intlLocale, t } from "@/lib/i18n";
 import { applyWorkspaceClientState, collectWorkspaceClientState, WORKSPACE_RESTORE_MARKER } from "@/lib/workspace-backup-client";
 import { uploadBackupInChunks } from "@/lib/workspace-backup-upload";
-import { readDoneItems, readRestoreChecklist, writeDoneItems, type ChecklistItem, type ChecklistItemId } from "@/lib/workspace-restore-checklist";
+import { hasAutomationItem, readDoneItems, readRestoreChecklist, writeDoneItems, type ChecklistItem, type ChecklistItemId } from "@/lib/workspace-restore-checklist";
 import { LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsRows } from "./SettingsPrimitives";
 import { SettingsDialog } from "./settings/SettingsDialog";
 
@@ -91,7 +91,13 @@ export function WorkspaceRestoreChecklist({ items, done, onToggle, onOpen }: {
   items: ChecklistItem[] | null; done: readonly string[]; onToggle: (id: ChecklistItemId) => void; onOpen: () => void;
 }) {
   if (items === null) return <SettingsRows><SettingRow title={t("backup.checklist.title")} subtitle={t("backup.checklist.legacy")}>{null}</SettingRow></SettingsRows>;
-  if (items.length === 0) return <SettingsRows><SettingRow title={t("backup.checklist.title")} subtitle={t("backup.checklist.none")}>{null}</SettingRow></SettingsRows>;
+  // No automation item is not proof that nothing is paused (an older restore has no list), so the warning stays.
+  const unlisted = !hasAutomationItem(items)
+    ? <SettingRow title={t("backup.checklist.noneListedTitle")} subtitle={t("backup.checklist.noneListed")}>
+      <button type="button" className="ui-button" data-restore-open="unlisted" onClick={onOpen}>{t("backup.checklist.open")}</button>
+    </SettingRow>
+    : null;
+  if (items.length === 0) return <SettingsRows><SettingRow title={t("backup.checklist.title")} subtitle={t("backup.checklist.subtitle")}>{null}</SettingRow>{unlisted}</SettingsRows>;
   const open = items.filter((item) => !done.includes(item.id)).length;
   return <SettingsRows>
     <SettingRow title={t("backup.checklist.title")} subtitle={open === 0 ? t("backup.checklist.allDone") : t("backup.checklist.subtitle")}>{null}</SettingRow>
@@ -106,6 +112,7 @@ export function WorkspaceRestoreChecklist({ items, done, onToggle, onOpen }: {
         </span>
       </SettingRow>;
     })}
+    {unlisted}
   </SettingsRows>;
 }
 

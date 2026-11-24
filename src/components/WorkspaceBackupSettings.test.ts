@@ -422,11 +422,41 @@ describe("Settings after-restore checklist", () => {
     expect(render().html).toContain("data-restore-done=\"webhooks-on\"");
   });
 
-  it("says that nothing needs attention when the list is empty", async () => {
+  it("never says that nothing needs attention when the list is empty: an older restore has no list, so the warning stays", async () => {
     await withStatus({ lastRestoreId: "r1", needsAction: [], leftBehind: null });
     const html = render().html;
-    expect(html).toContain("Nothing needs your attention after the last restore.");
-    expect(html).not.toContain("data-restore-open");
+    expect(html).not.toContain("Nothing needs your attention");
+    expect(html).toContain("A restore from an older version has no list, so they can still be paused");
+    expect(html.match(/data-restore-open=/g)).toHaveLength(1);
+    checklistProps().onOpen();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines" });
+  });
+
+  it("keeps the warning next to a left-behind row when no automation kind is listed, and drops it when one is", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [], leftBehind: { bots: 1 } });
+    let html = render().html;
+    expect(html).toContain("Bots with a work folder that stayed on the old computer: 1");
+    expect(html).toContain("can still be paused");
+    fixture.values = []; await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "webhooks-on", count: 1 }], leftBehind: { bots: 1 } });
+    html = render().html;
+    expect(html).not.toContain("can still be paused");
+  });
+
+  it("keeps the backup buttons on when the browser throws as the localStorage property is read", async () => {
+    const saved = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new DOMException("denied", "SecurityError"); } });
+    try {
+      await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }] });
+      const html = render().html;
+      expect(html).toContain("Turn routines back on");
+      expect(html).not.toContain("data-restore-done");
+      const exportButton = render().nodes.find((node) => (node.props as Record<string, unknown>)["data-backup-export"] === "")!;
+      expect(exportButton.props.disabled).toBeFalsy();
+      expect(() => checklistProps().onToggle("routines-on")).not.toThrow();
+      expect(render().html).toContain("data-restore-done=\"routines-on\"");
+    } finally {
+      if (saved) Object.defineProperty(globalThis, "localStorage", saved); else delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 
   it("shows the old static line when the server sends no list, and nothing when there was no restore", async () => {

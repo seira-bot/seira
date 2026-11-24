@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readDoneItems, readRestoreChecklist, writeDoneItems } from "./workspace-restore-checklist";
+import { hasAutomationItem, readDoneItems, readRestoreChecklist, writeDoneItems } from "./workspace-restore-checklist";
 
 describe("readRestoreChecklist", () => {
   it("returns null when the server sends no list", () => {
@@ -19,6 +19,14 @@ describe("readRestoreChecklist", () => {
   });
 });
 
+describe("hasAutomationItem", () => {
+  it("is false for an empty list or a list with only left-behind work folders", () => {
+    expect(hasAutomationItem([])).toBe(false);
+    expect(hasAutomationItem([{ id: "left-behind", count: 2 }])).toBe(false);
+    expect(hasAutomationItem([{ id: "left-behind", count: 2 }, { id: "webhooks-on", count: 1 }])).toBe(true);
+  });
+});
+
 describe("done marks", () => {
   const memory = () => { const map = new Map<string, string>(); return { map, getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => { map.set(key, value); } }; };
   it("round-trips for one restore and ignores a damaged value", () => {
@@ -34,5 +42,15 @@ describe("done marks", () => {
   it("does not throw when storage is blocked", () => {
     expect(() => writeDoneItems("r1", ["x"], { setItem: () => { throw new Error("blocked"); } })).not.toThrow();
     expect(readDoneItems("r1", { getItem: () => { throw new Error("blocked"); } })).toEqual([]);
+  });
+  it("does not throw when reading the localStorage property itself throws", () => {
+    const saved = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new DOMException("denied", "SecurityError"); } });
+    try {
+      expect(() => writeDoneItems("r1", ["x"])).not.toThrow();
+      expect(readDoneItems("r1")).toEqual([]);
+    } finally {
+      if (saved) Object.defineProperty(globalThis, "localStorage", saved); else delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 });
