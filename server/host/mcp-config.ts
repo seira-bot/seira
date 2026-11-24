@@ -256,6 +256,9 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
       if (raw === undefined) return { status: 404, error: mcpServerNotFound(name) };
       const parsed = parseStoredMcpServer(name, raw);
       if (!parsed.ok) return { status: 400, error: parsed.error };
+      // A saved entry that predates the one-bot rule stays blocked on every remote-call path until a bot owns it: no key is read and nothing is sent.
+      const oneBot = oneBotRefusal(parsed.server);
+      if (oneBot) return oneBot;
       const { runsOn } = parsed.server;
       if (runsOn) return deps.testElsewhere ? deps.testElsewhere(name, { ...parsed.server, runsOn }, lender ?? null, signal) : { status: 409, error: runsElsewhere(runsOn) };
       if (mcpProbesInFlight >= MAX_CONCURRENT_MCP_PROBES) {
@@ -288,6 +291,9 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
             sentSignIn = true;
           }
         }
+        // The destination that is about to be called, after any key or sign-in change, meets the same rule as the saved entry.
+        const effective = oneBotRefusal({ ...target, ...(parsed.server.bot ? { bot: parsed.server.bot } : {}) } as StoredMcpServer);
+        if (effective) return effective;
         const options = { tryReadOnlyTool: true, ...(personal ? {} : appCatalog?.probeOptions(name, cataloged) ?? {}), ...(asBot ? { asBot } : isRemoteMcpServer(target) ? {} : { asBot: deps.probeAs?.(target) ?? {} }) };
         const viaBots = isRemoteMcpServer(target) ? deps.botsPath?.() ?? null : null;
         const result = viaBots && isRemoteMcpServer(target)
