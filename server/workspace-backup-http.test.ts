@@ -118,6 +118,26 @@ it("carries a fixed backup refusal and its redacted string path to the client", 
   expect(await response.json()).toEqual(userError("serverError.backup.recursiveLink", params));
 });
 
+it("reports the size of each part in a read-only route", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "bot"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "bot", "clip.bin"), Buffer.alloc(1234));
+  const response = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } });
+  expect(response.status).toBe(200);
+  const body = await response.json() as { parts: Record<string, number>; total: number; canLeaveOut: string[] };
+  expect(body.parts["work-folders"]).toBe(1234);
+  expect(body.total).toBe(Object.values(body.parts).reduce((sum, bytes) => sum + bytes, 0));
+  expect(body.canLeaveOut).toEqual(["work-folders"]);
+});
+
+it("passes the parts to leave out to the export, and refuses an unknown part with a clear message", async () => {
+  expect((await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["work-folders"] })).status).toBe(200);
+  expect(archive.create).toHaveBeenLastCalledWith(dataDir, expect.objectContaining({ leaveOut: ["work-folders"] }));
+  const refused = await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["bots"] });
+  expect(refused.status).toBe(400);
+  expect(JSON.stringify(await refused.json())).toContain('Cannot leave out \\"bots\\". Allowed: work-folders.');
+  expect(archive.create).toHaveBeenCalledOnce();
+});
+
 it("names the exported file Seira-<date>.seirabackup in the reply and the download", async () => {
   const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string; filename: string };
   expect(exported.filename).toBe("Seira-2026-09-11.seirabackup");

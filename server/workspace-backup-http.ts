@@ -14,6 +14,7 @@ import {
   type WorkspaceBackupSummary,
 } from "./workspace-backup.ts";
 import type { RequestAuth } from "./request-auth.ts";
+import { LEAVE_OUT_PARTS, parseLeaveOut, partSizes } from "./workspace-backup-parts.ts";
 import { userErrorFields } from "./user-errors.ts";
 
 const PREFIX = "/api/workspace-backup";
@@ -149,6 +150,12 @@ export function createWorkspaceBackupRoutes(options: {
         });
         return true;
       }
+      if (method === "GET" && path === `${PREFIX}/sizes`) {
+        // Read-only: bytes for each part of the data folder, so a person can see what makes a backup large.
+        const parts = partSizes(options.dataDir);
+        json(res, 200, { parts, total: Object.values(parts).reduce((sum, bytes) => sum + bytes, 0), canLeaveOut: [...LEAVE_OUT_PARTS] });
+        return true;
+      }
       if (method === "POST" && path === `${PREFIX}/client-state`) {
         const body = z.object({ restoreId: z.string().uuid() }).parse(await options.readBody(req));
         check(req, auth);
@@ -157,14 +164,16 @@ export function createWorkspaceBackupRoutes(options: {
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/export`) {
-        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}) }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
+        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}), leaveOut: z.unknown().optional() }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
         if (Buffer.byteLength(JSON.stringify(body.clientState)) > MAX_CLIENT_STATE_BYTES) throw failure("Saved drafts exceed the 2 MB backup preference limit.", 413);
+        let leaveOut: string[];
+        try { leaveOut = parseLeaveOut(body.leaveOut); } catch (error) { throw failure((error as Error).message); }
         const clientState = Object.fromEntries(Object.entries(body.clientState).filter(([key]) => WORKSPACE_BACKUP_CLIENT_KEYS.includes(key as typeof WORKSPACE_BACKUP_CLIENT_KEYS[number])));
         const result = await operate(() => options.exclusive(async () => {
           check(req, auth);
           replacePrevious(auth, ["download"]);
           if (artifacts.size >= 4) throw failure("There are already four backup files in progress. Restart or wait an hour before creating another.", 409);
-          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion });
+          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion, leaveOut });
         }));
         try { check(req, auth); } catch (error) { removeWorkspaceBackupJob(options.dataDir, result.id); throw error; }
         artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });
