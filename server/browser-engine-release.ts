@@ -43,11 +43,11 @@ const RELEASES = new Map<string, AgentBrowserReleaseAsset>([
     "win32-x64",
     {
       // Upstream 0.37.0 still lacks vercel-labs/agent-browser#1781's Windows cold-start fix.
-      // Retain the native-verified revision until its replacement is tested.
-      target: "win32-x64", version: "0.36.0-omb.1",
-      asset: "agent-browser-win32-x64-0.36.0-omb.1.exe",
-      url: "https://github.com/milind-soni/OpenMausBot/releases/download/browser-engine-v0.36.0-omb.1/agent-browser-win32-x64-0.36.0-omb.1.exe",
-      sha256: "33bee834f6a6072ec8688b0914726e0262874d758f69f27e8baf7eaac6b5ed15", bytes: 13806080,
+      // Seira build, native-verified by Actions run 45378887105 and published from seira-bot/seira.
+      target: "win32-x64", version: "0.36.0-seira.2",
+      asset: "agent-browser-win32-x64-0.36.0-seira.2.exe",
+      url: "https://github.com/seira-bot/seira/releases/download/browser-engine-v0.36.0-seira.2/agent-browser-win32-x64-0.36.0-seira.2.exe",
+      sha256: "686a44ca1b6c66062deb2b9194c557367e7019e8299a2547ba29e872e21c8ba2", bytes: 13806080,
     },
   ],
 ]);

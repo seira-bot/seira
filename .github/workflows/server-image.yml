@@ -28,9 +28,13 @@ concurrency:
 jobs:
   image:
     name: build and smoke
+    # The images are built from the commit that the gate approved. Off main the gate is skipped and the run builds its own commit.
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}
     uses: ./.github/workflows/server-image-smoke.yml
     with:
       tag: ${{ inputs.tag }}
+      sha: ${{ needs.gate.outputs.sha }}
       save: ${{ github.ref == 'refs/heads/main' }}
 
   gate:
@@ -43,6 +47,7 @@ jobs:
       pull-requests: read
     outputs:
       pass: ${{ steps.gate.outputs.pass }}
+      sha: ${{ steps.gate.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,10 +63,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
           SHA: ${{ github.sha }}
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -uo pipefail
-          node scripts/release-gate.mjs --sha "$SHA"
+          # The commit that the gate checks is the commit that is built and published.
+          # For a tagged run it is the commit of the tag, resolved once here; the publish job compares the image revision with it.
+          sha="$SHA"
+          if [ -n "$TAG" ]; then
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "The tag must look like v0.1.173."; exit 1; }
+            sha=$(gh api "repos/$REPOSITORY/commits/refs/tags/$TAG" --jq .sha) || { echo "Cannot resolve $TAG."; exit 1; }
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "$TAG did not resolve to a full commit sha."; exit 1; }
+            node scripts/release-gate.mjs --tag "$TAG" --sha "$sha"
+          else
+            node scripts/release-gate.mjs --sha "$sha"
+          fi
           status=$?
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
             1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
@@ -105,6 +123,12 @@ jobs:
           path: images
       - name: Load the cloud-home image
         run: gunzip -c images/seira-cloud-home-amd64.tar.gz | docker load
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: seira-connector-amd64
+          path: images
+      - name: Load the connector image
+        run: gunzip -c images/seira-connector-amd64.tar.gz | docker load
       - name: Sign in to ghcr.io
         env:
           REGISTRY_USER: ${{ github.actor }}
@@ -168,6 +192,47 @@ jobs:
           {
             echo "Published \`$image\` with the tags: ${tags[*]}"
             echo "Digest: \`$(docker buildx imagetools inspect "$image:${tags[0]}" --format '{{json .Manifest}}' | jq -r .digest)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish the connector image
+        env:
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          CHECKED_SHA: ${{ needs.gate.outputs.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          [[ "$CHECKED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "The release gate gave no commit sha."; exit 1; }
+          image="ghcr.io/${REPOSITORY,,}"
+          image="$image-connector"
+          # One build tag for this run and attempt, so no other run can move it. The digest is the one that this push reports.
+          build="$image:build-amd64-$RUN_ID-$RUN_ATTEMPT"
+          # The loaded image must come from the commit that the gate checked, before anything goes to the registry.
+          loaded=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' seira-connector:amd64)
+          [ "$loaded" = "$CHECKED_SHA" ] || { echo "The loaded image was built from $loaded, but the release gate checked $CHECKED_SHA."; exit 1; }
+          docker tag seira-connector:amd64 "$build"
+          pushed=$(docker push "$build" 2>&1 | tee /dev/stderr)
+          digest=$(grep -Eo 'digest: sha256:[0-9a-f]{64}' <<<"$pushed" | tail -1 | cut -d' ' -f2)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "The push gave no digest."; exit 1; }
+          ref="$image@$digest"
+          config=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' | jq -c 'if has("architecture") then . else .["linux/amd64"] end')
+          [ "$(jq -r .architecture <<<"$config")" = amd64 ] || { echo "The connector image is not an amd64 image."; exit 1; }
+          revision=$(jq -r '.config.Labels["org.opencontainers.image.revision"]' <<<"$config")
+          [ "$revision" = "$CHECKED_SHA" ] || { echo "The image was built from $revision, but the release gate checked $CHECKED_SHA."; exit 1; }
+          version=$(jq -r '.config.Labels["org.opencontainers.image.version"]' <<<"$config")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "The connector image has no semver version label."; exit 1; }
+          [ -z "$TAG" ] || [ "$version" = "${TAG#v}" ] || { echo "The connector image has the wrong version label."; exit 1; }
+          if [ -n "$TAG" ]; then tags=("$TAG"); else tags=(latest "sha-$revision"); fi
+          targets=()
+          for tag in "${tags[@]}"; do targets+=(-t "$image:$tag"); done
+          # One source: keep it a single manifest. Without this flag Buildx wraps it in an index, and the tag gets another digest.
+          docker buildx imagetools create --prefer-index=false "${targets[@]}" "$ref"
+          for tag in "${tags[@]}"; do
+            [ "$(docker buildx imagetools inspect "$image:$tag" --format '{{json .Manifest}}' | jq -r .digest)" = "$digest" ] || { echo "$image:$tag does not point at $digest."; exit 1; }
+          done
+          {
+            echo "Published \`$image\` with the tags: ${tags[*]}"
+            echo "Digest: \`$digest\`, revision \`$revision\`"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Sign out of ghcr.io
         if: always()

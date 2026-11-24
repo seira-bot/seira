@@ -20,8 +20,9 @@ The desktop application ships two separate components:
   `CREATE_NO_WINDOW` flag for Chrome children and a native console regression test.
   The earlier revision `0.36.0-omb.1` was built from the OpenMausBot project
   (Apache-2.0, attribution kept in `NOTICE`). The release resolver pins
-  `0.36.0-omb.1` until `0.36.0-seira.2` passes native checks and its published
-  digest is reviewed. It still reads an installed `omb.1` folder after the pin moves.
+  `0.36.0-seira.2`, published from the `seira-bot/seira` release
+  `browser-engine-v0.36.0-seira.2` after native Windows checks (Actions run 45378887105).
+  It still reads an installed `omb.1` folder.
   The separate MCP output-reader
   rewrite is deliberately excluded. `agent-browser-windows-stdio.patch`
   includes the exact changes and modification notices, plus package-version

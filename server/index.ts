@@ -501,7 +501,7 @@ import { lazyClaimFailedText, lazyClaimRetryText, settledWithin, startAutoVmClai
 import { CONTROL_ACT_WITHIN_MS, CONTROL_BUSY, CONTROL_HANDED_BACK, CONTROL_WAIT_MS, CONTROL_WAITED, controlRefusal, type ControlState } from "./control-client.ts";
 import { computerFreeAfterText, computerParkedText, computerPersonAwayText, computerStoppedWaitingText, computerWaitingText, type ComputerHolder } from "./computer-wait.ts";
 import { modelContextWindow } from "./model-context-window.ts";
-import { browserIsThePlace, chosenPin, cloudPickWithoutComputer, noticeWithoutCloudComputer, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, failedOnHostPath, openBrowserBeside, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, WITHOUT_CLOUD_COMPUTER_NOTE, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
+import { NO_COMPUTER_FOR_COMMAND, browserIsThePlace, chosenPin, cloudPickWithoutComputer, noticeWithoutCloudComputer, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, failedOnHostPath, openBrowserBeside, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, WITHOUT_CLOUD_COMPUTER_NOTE, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
 import {
   PendingTurnCancellations,
   ProviderTurnGenerationRegistry,
@@ -12798,7 +12798,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const body = await readInternalBody();
         try {
           const vm = await attachmentVmForTurn(internalCapability);
-          if (!vm) return json(res, 409, { error: "You have no Local VM desktop in this turn, so there is nowhere to run a command." });
+          if (!vm) return json(res, 409, { error: NO_COMPUTER_FOR_COMMAND });
           const runtime = (await containerRuntimeStatus()).runtime;
           requireActiveInternalCapability();
           if (!runtime || !internalCapabilityIsActive({ ...internalCapability, localVmTarget: vm }) ||

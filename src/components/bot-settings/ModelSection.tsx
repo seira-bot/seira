@@ -8,11 +8,16 @@ import { ThreadModelsLine } from "../ThreadModelsLine";
 import { t } from "@/lib/i18n";
 import { Select } from "../Select";
 import { backupNote } from "@/lib/engine-rail";
+import { engineMayLackShell } from "@/lib/engine-shell-note";
+import { useDesktopCapabilities } from "../DesktopCapabilities";
 
 export function ModelSection({ bot }: { bot: Bot }) {
   const { state, dispatch } = useStore();
   const { draft } = useBotEditor();
-  const modelVariants = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.modelVariants;
+  const instance = state.instances.find((candidate) => candidate.instanceId === bot.modelSelection.instanceId);
+  const modelVariants = instance?.capabilities?.modelVariants;
+  const { capabilities } = useDesktopCapabilities();
+  const noShell = engineMayLackShell({ instance, capabilities, config: state.config });
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl bg-card p-4">
@@ -29,6 +34,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
             </div>
           }
         />
+        {noShell && <p role="status" className="mt-3 text-[13px] text-warning">{t("model.section.noShell")}</p>}
         {!draft && <ThreadModelsLine bot={bot} className="mt-3" />}
         {!draft && <div className="mt-3 text-[13px] text-ink-secondary">{t("model.section.installationDefault")}</div>}
       </div>
