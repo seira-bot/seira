@@ -647,11 +647,13 @@ export function memberBotPatchViolation(body: unknown, level: "view" | "chat" | 
 
 /** What a Team Cloud member may say of a bot they make: what someone who can edit a bot may change, and nothing else.
  * Its sharing, its department, whom it answers to, what it may do and where it runs are not theirs to set at creation:
- * the bot starts private to them with the server's own defaults. The first field beyond that; null when there is none. */
+ * the bot starts private to them with the server's own defaults. A member may name the id of a new bot (`fresh: true`), so
+ * a request sent again after a lost answer makes no second bot; an id that is not for a new bot is an admin's.
+ * The first field beyond that; null when there is none. */
 export function memberBotCreateViolation(body: Record<string, unknown>): string | null {
-  const { settings, useDefaults: _useDefaults, ...asked } = body;
+  const { settings, useDefaults: _useDefaults, id, fresh, ...asked } = body;
   const nested = settings && typeof settings === "object" && !Array.isArray(settings) ? Object.keys(settings) : settings === undefined ? [] : ["settings"];
-  return [...Object.keys(asked), ...nested].find((key) => key === "threadId" || !EDITOR_BOT_PATCH_FIELDS.has(key)) ?? null;
+  return [...(id !== undefined && fresh !== true ? ["id"] : []), ...Object.keys(asked), ...nested].find((key) => key === "threadId" || !EDITOR_BOT_PATCH_FIELDS.has(key)) ?? null;
 }
 
 /** Same for a room: name and reading state, never its folder or who answers. */

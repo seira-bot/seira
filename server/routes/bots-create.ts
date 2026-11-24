@@ -60,7 +60,9 @@ export interface BotCreateRouteDeps {
 const OWN_ID = /^[\w-]{8,128}$/;
 
 /** A bot sent from the person's other computer keeps its id and its conversation's, so later sends and Bring newer
- * chats find it. Only ids in the server's own form, and only while nothing here uses them. */
+ * chats find it. A client making a new bot may name its id too, with `fresh: true`: the bot then gets its greeting and its
+ * own look, and sending the same request again after a lost answer is refused with 409 instead of making a second bot.
+ * Only ids in the server's own form, and only while nothing here uses them. */
 export function keptBotIds(body: Record<string, unknown>, store: Pick<Store, "bot" | "botByThread" | "groupByThread">): { id?: string; threadId?: string } | { error: string } {
   const { id, threadId } = body;
   if (id === undefined && threadId === undefined) return {};
@@ -76,7 +78,7 @@ export function keptBotIds(body: Record<string, unknown>, store: Pick<Store, "bo
 
 /** The fields a request to make a bot asks for itself. The New bot defaults it may take are the host owner's choice. */
 function askedSettings(body: Record<string, unknown>): Record<string, unknown> {
-  const { id: _id, threadId: _threadId, useDefaults: _useDefaults, settings, ...asked } = body;
+  const { id: _id, threadId: _threadId, fresh: _fresh, useDefaults: _useDefaults, settings, ...asked } = body;
   return { ...(settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {}), ...asked };
 }
 
@@ -108,9 +110,11 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         // The saved New bot defaults are an admin's choices, some of them an admin's alone to make.
         body = { ...body, useDefaults: false };
       }
+      if (body.fresh !== undefined && typeof body.fresh !== "boolean") return json(res, 400, { error: "fresh must be true or false" });
       const kept = keptBotIds(body, store);
       if ("error" in kept) return json(res, kept.error.includes("already") ? 409 : 400, { error: kept.error });
-      const { id: _id, threadId: _threadId, ...rest } = body;
+      const movedIn = kept.id !== undefined && body.fresh !== true;
+      const { id: _id, threadId: _threadId, fresh: _fresh, ...rest } = body;
       body = rest;
       const template = resolveBotCreationDefaults(cfg.newBotDefaults, body);
       const settings = template.profile;
@@ -198,13 +202,13 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       // Checked again beside the synchronous write: an await above let another request take the same id.
       if (kept.id && "error" in keptBotIds(kept, store)) return json(res, 409, { error: "a bot with this id already exists here" });
       // A bot moved in from another computer keeps its own look; a new one fills what it names not from a fresh one.
-      const look = kept.id ? undefined : freshLook(store.bots);
+      const look = movedIn ? undefined : freshLook(store.bots);
       const character = settings.mascotBody || settings.mascotAccessories?.length ? undefined : look;
       const bot = store.createBot({ ...profile.patch, soul: settings.soul, section, modelSelection: selection,
         toolScope: settings.toolScope ?? undefined, color: settings.color ?? look?.color, mascotBody: settings.mascotBody ?? character?.mascotBody,
         mascotAccessories: settings.mascotAccessories ?? character?.mascotAccessories,
         ...(deps.team && creator ? { createdBy: creator } : {}), ...(reportsTo ? { reportsTo } : {}),
-        ...(created?.ok ? { visibility: created.visibility } : {}) }, kept.id ? { ...kept, seedMessages: false } : {});
+        ...(created?.ok ? { visibility: created.visibility } : {}) }, movedIn ? { ...kept, seedMessages: false } : kept);
       const createdRoutines: Array<{ id: string; enabled: boolean }> = [];
       try {
         const { chiefOfStaff: _chief, managedSections: _managed, toolScope: _toolScope, ...ordinary } = settings;

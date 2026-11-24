@@ -239,13 +239,44 @@ describe("MCP tool execution", () => {
   it("creates a bot through the safe profile boundary", async () => {
     const fetcher = vi.fn(async (path: string, options?: RequestInit) => {
       if (path === "/api/bots" && options?.method === "POST") {
-        expect(JSON.parse(String(options.body))).toEqual({ name: "Mira", title: "Researcher", section: "Work" });
+        expect(JSON.parse(String(options.body))).toEqual({ name: "Mira", title: "Researcher", section: "Work", id: expect.stringMatching(/^[\w-]{8,128}$/), fresh: true });
         return { bot: { id: "bot-new", name: "Mira", title: "Researcher", section: "Work", threadId: "task-new", tasks: [] } };
       }
       throw new Error(`unexpected path ${path}`);
     });
     const result: any = await handleToolCall("create_bot", { name: "Mira", title: "Researcher", section: "Work" }, fetcher);
     expect(result.bot).toMatchObject({ id: "bot-new", name: "Mira", section: "Work" });
+  });
+
+  it("makes one bot when the answer to its creation is lost and the tool sends it again", async () => {
+    const saved = new Map<string, Record<string, unknown>>();
+    const ids: unknown[] = [];
+    const fetcher = vi.fn(async (path: string, options?: RequestInit) => {
+      if (path === "/api/bots" && options?.method === "POST") {
+        const body = JSON.parse(String(options.body));
+        ids.push(body.id);
+        if (saved.has(body.id)) throw new SeiraApiError(409, "Seira API error (409): a bot with this id already exists here");
+        saved.set(body.id, { id: body.id, name: body.name, threadId: "task-new", tasks: [] });
+        if (ids.length === 1) throw new TypeError("fetch failed");
+        return { bot: saved.get(body.id) };
+      }
+      if (options?.method === undefined && path.startsWith("/api/bots/")) {
+        const found = saved.get(decodeURIComponent(path.slice("/api/bots/".length)));
+        return found ? { bot: found } : Promise.reject(new SeiraApiError(404, "no such bot"));
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+    vi.useFakeTimers();
+    try {
+      const pending = handleToolCall("create_bot", { name: "Mira" }, fetcher);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result: any = await pending;
+      expect(result.bot).toMatchObject({ name: "Mira" });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(saved.size).toBe(1);
+    expect(new Set(ids).size).toBe(1);
   });
 
   it("leaves single-request bot-create failures to the server without destructive rollback", async () => {

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { WireBot } from "../../shared/wire.ts";
 import { DATA_DIR, type AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
-import type { RequestAuth } from "../request-auth.ts";
+import { memberBotCreateViolation, type RequestAuth } from "../request-auth.ts";
 import { Store, type BotRecord } from "../store.ts";
 import { createBotCreateRoutes, type BotCreateRouteDeps } from "./bots-create.ts";
 import { PASS, type RouteContext } from "./table.ts";
@@ -122,5 +122,51 @@ describe("a new bot from a paired phone", () => {
     expect(refused.body.error).toMatch(/^forbidden: a paired device may say who a new bot is and how it looks, not "computer"/);
     expect(fx.store.bots).toHaveLength(before);
     expect((await fx.send({ name: "Ada", computer: "off" }, session({}))).status, "an admin's other session").toBe(201);
+  });
+});
+
+describe("a client that names the id of its own new bot", () => {
+  const ID = "client-made-0001";
+
+  it("makes the bot once: the same request sent again is refused with 409 and makes no second bot", async () => {
+    const fx = fixture();
+    const before = fx.store.bots.length;
+    const first = await fx.send({ name: "Ada", id: ID, fresh: true });
+    expect(first.status).toBe(201);
+    expect(first.body.bot.id).toBe(ID);
+    const again = await fx.send({ name: "Ada", id: ID, fresh: true });
+    expect(again.status).toBe(409);
+    expect(fx.store.bots.filter((bot) => bot.name === "Ada")).toHaveLength(1);
+    expect(fx.store.bots).toHaveLength(before + 1);
+  });
+
+  it("still gets the greeting and a look of its own, which a bot moved in from another computer does not", async () => {
+    const fx = fixture();
+    const fresh = await fx.create({ name: "Ada", id: ID, fresh: true });
+    expect(fx.store.messagesFor(fresh.threadId)).toHaveLength(1);
+    expect(fx.store.bot(ID)?.id).toBe(ID);
+    const moved = await fx.create({ name: "Bea", id: "moved-in-0001" });
+    expect(fx.store.messagesFor(moved.threadId)).toHaveLength(0);
+  });
+
+  it("takes only true or false for fresh", async () => {
+    const fx = fixture();
+    const refused = await fx.send({ name: "Ada", id: ID, fresh: "yes" });
+    expect(refused.status).toBe(400);
+    expect(fx.store.bot(ID)).toBeFalsy();
+  });
+
+  it("is allowed to a Team Cloud member, who still may not name a conversation id or a setting that is an admin's", () => {
+    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true })).toBeNull();
+    expect(memberBotCreateViolation({ name: "Ada", id: ID })).toBe("id");
+    expect(memberBotCreateViolation({ name: "Ada", settings: { id: ID, fresh: true } })).toBe("id");
+    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true, threadId: "thread-0001" })).toBe("threadId");
+    expect(memberBotCreateViolation({ name: "Ada", id: ID, fresh: true, computer: "local" })).toBe("computer");
+  });
+
+  it("does not make a paired phone's request an admin's setting", async () => {
+    const fx = fixture();
+    const phone = { kind: "session", via: "bearer", scopes: ["admin", "client"], session: { id: "s1", label: "Device", scopes: ["admin", "client"], pairedDevice: true } } as unknown as RequestAuth;
+    expect((await fx.send({ name: "Ada", id: ID, fresh: true }, phone)).status).toBe(201);
   });
 });
