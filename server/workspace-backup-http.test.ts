@@ -394,3 +394,11 @@ it("still refuses a download without a session", async () => {
   expect(response.status).toBeGreaterThanOrEqual(401);
   await response.arrayBuffer();
 });
+
+it("shows what a restore left behind and what needs action in the status, and an empty list when none", async () => {
+  expect(await status()).toMatchObject({ leftBehind: null, needsAction: [] });
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111", leftBehind: { bots: 1, paths: ["C:\\Work"] }, needsAction: [{ kind: "routines-on", count: 2 }] } });
+  expect(await status()).toMatchObject({ leftBehind: { bots: 1, paths: ["C:\\Work"] }, needsAction: [{ kind: "routines-on", count: 2 }] });
+});
