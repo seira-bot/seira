@@ -2,7 +2,7 @@
 // app's background work (Files, lending) never calls My Cloud while the Admin says it sleeps, nor after My Cloud
 // answered that it is going to sleep. Without the session's `cloud.power` and without such an answer, nothing here acts.
 
-export const CLOUD_POWER_HEADER = "x-omb-cloud-power";
+export const CLOUD_POWER_HEADER = "x-seira-cloud-power";
 /** The home never counts a request with this header as the person using My Cloud. */
 export const BACKGROUND_HEADERS = Object.freeze({ "x-seira-background": "1" });
 /** Longer than the home's own "going to sleep" state (120 s): a sleep that never came stops holding work back. */
@@ -19,8 +19,14 @@ export class CloudAsleepError extends Error {
   }
 }
 
+/** The new name wins when both are present. A Cloud that has not been updated sends only the old name. */
+function cloudPowerMark(headers) {
+  if (typeof headers?.get !== "function") return null;
+  return headers.get(CLOUD_POWER_HEADER) ?? headers.get("x-omb-cloud-power");
+}
+
 /** My Cloud's answer to a held or new background call while it goes to sleep. */
-export const asleepAnswer = response => response?.status === 503 && response.headers?.get?.(CLOUD_POWER_HEADER) === "asleep";
+export const asleepAnswer = response => response?.status === 503 && cloudPowerMark(response.headers) === "asleep";
 
 /** `power()`: the Admin's last word (`{ state, since, sleeps }`) or null. `wanted()`: background work waits for My Cloud. */
 export function createCloudPowerGate({ power = () => null, wanted = () => true, now = Date.now, holdMs = ASLEEP_HOLD_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
