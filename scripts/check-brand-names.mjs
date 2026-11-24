@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Stops a NEW use of the old upstream names (`omb`, `OMB_`, OpenMausBot, MausBot, milind-soni) in tracked files.
-// Product text must say Seira. See issue #468.
+// Product text must say Seira.
 //
 // Two lists decide what passes:
 //   ATTRIBUTION_PATHS   files that must keep the upstream name (Apache-2.0 notices). Never counted.
 //   scripts/brand-names-baseline.json
-//                       lines that still match today, per file: documented legacy fallbacks (#192, upgrade cleanup),
-//                       their tests, and wire names that wait for #468 slice 3. A file may keep or lower its count.
+//                       lines that still match today, per file: documented legacy fallbacks (env fallbacks, upgrade cleanup),
+//                       their tests, and wire names that wait for the wire-name migration. A file may keep or lower its count.
 //                       A file may not gain a match, and a file that is not listed may not have one.
 //
 //   node scripts/check-brand-names.mjs            check the tracked files
@@ -23,9 +23,9 @@ const BASELINE = "scripts/brand-names-baseline.json";
 export const OLD_NAME = /(?<![a-z0-9])omb(?![a-z0-9])|OMB_|openmausbot|mausbot|milind-soni/i;
 
 /**
- * Lines that keep the old name on purpose, never counted (issue #468 "Keep"):
+ * Lines that keep the old name on purpose, never counted (the documented "Keep" list):
  *  - the `.ombbackup` file extension, which restore must still accept;
- *  - links to upstream issues, pull requests and commits, and `owner/repo#123` references (history, not product text);
+ *  - links to upstream issues, pull requests and commits, and short owner/repo references (history, not product text);
  *  - the receive side of a wire name: reading `x-omb-*` from a header, so an old sender still works.
  */
 export const KEEP_LINES = [

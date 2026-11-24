@@ -78,5 +78,5 @@ path. The pre-commit hook and CI run it.
 
 Product text says Seira, not the old upstream name. `node scripts/check-brand-names.mjs`
 fails a new match outside the attribution files and `scripts/brand-names-baseline.json`
-(documented legacy fallbacks, their tests, and wire names that wait for issue #468).
+(documented legacy fallbacks, their tests, and wire names that wait for the wire-name migration).
 CI runs it. After you remove matches, run it with `--update` to lower the baseline.
