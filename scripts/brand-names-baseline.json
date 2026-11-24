@@ -1,7 +1,6 @@
 {
   ".claude/skills/windows-release/SKILL.md": 1,
   ".github/workflows/server-image-smoke.yml": 1,
-  "AGENTS.md": 1,
   "Dockerfile": 4,
   "apps/docs/components/release-changelog.tsx": 1,
   "apps/docs/content/docs/changelog/index.mdx": 1,
