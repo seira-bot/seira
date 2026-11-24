@@ -49,8 +49,20 @@ esac
 describe.skipIf(!posix)("seira-update-runner.sh", () => {
   it("is plain POSIX sh and accepts the image the connector accepts", () => {
     expect(spawnSync("sh", ["-n", SCRIPT]).status).toBe(0);
-    expect(readFileSync(SCRIPT, "utf8")).toContain("'ghcr\\.io/milind-soni/openmausbot@sha256:[0-9a-f]{64}'");
-    expect(CUSTOMER_HOME_IMAGE.source).toBe("^ghcr\\.io\\/milind-soni\\/openmausbot@sha256:[0-9a-f]{64}$");
+    expect(readFileSync(SCRIPT, "utf8")).toContain("'ghcr\\.io/(seira-bot/seira|milind-soni/openmausbot)@sha256:[0-9a-f]{64}'");
+    expect(CUSTOMER_HOME_IMAGE.source).toBe("^ghcr\\.io\\/(?:seira-bot\\/seira|milind-soni\\/openmausbot)@sha256:[0-9a-f]{64}$");
+  });
+
+  it("hands over a Seira-named image, and refuses names that only look like it", () => {
+    const named = `ghcr.io/seira-bot/seira@sha256:${"c".repeat(64)}`;
+    const done = run(`id=n1\nimage=${named}\n`);
+    expect(done.calls).toEqual([`--dir ${done.install} --image ${named}`]);
+    expect(done.answer).toBe("id=n1\ncode=0\n");
+    for (const image of [`ghcr.io/seira-bot/seira:latest`, `ghcr.io/seira-bot/seira-cloud-home@sha256:${"c".repeat(64)}`, `ghcr.io/seira-bots/seira@sha256:${"c".repeat(64)}`, `ghcr.io/seira-bot/seira@sha256:${"c".repeat(64)};reboot`]) {
+      const refused = run(`id=n2\nimage=${image}\n`);
+      expect(refused.calls, image).toEqual([]);
+      expect(refused.answer, image).toBe("id=n2\ncode=4\n");
+    }
   });
 
   it("hands a request to the install's own update.sh with the image, and writes down how it ended", () => {

@@ -9,11 +9,14 @@ import {
   fsyncSync,
   lstatSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+
+import { join } from "node:path";
 
 import { timeBlocking } from "./perf/loop-stalls.ts";
 
@@ -78,6 +81,50 @@ function writeWhole(path: string, data: string | Uint8Array, options: AtomicWrit
     }
     throw e;
   }
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process exists and belongs to someone else. Only ESRCH says that it is gone.
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+/**
+ * A crash or a kill between the temp file and the rename leaves `<file>.<pid>.<uuid>.tmp` behind (it holds a whole copy of
+ * the file, souls and settings included). This removes those in `dir` for each of `files` when the process in the name is
+ * gone. A temp file of a live process, and of this process (a save here is synchronous, so none is under way at the start
+ * but a pid can come back in a container), stays; so does anything that is not a regular file. Returns the names removed.
+ * One that cannot be removed stays for the next start.
+ */
+export function removeDeadTempFiles(
+  dir: string,
+  files: readonly string[],
+  isAlive: (pid: number) => boolean = processIsAlive,
+): string[] {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const removed: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const match = /^(.+)\.(\d+)\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/u.exec(entry.name);
+    if (!match || !files.includes(match[1]!)) continue;
+    const pid = Number(match[2]);
+    if (pid === process.pid || isAlive(pid)) continue;
+    try {
+      unlinkSync(join(dir, entry.name));
+      removed.push(entry.name);
+    } catch {
+    }
+  }
+  return removed;
 }
 
 /** Any doubt answers false, so this check is never why a save fails; it reads the disk, since a restore or hand edit may have changed it. */
