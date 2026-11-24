@@ -21,9 +21,9 @@ describe("paired phones", () => {
     }
   });
 
-  it("offers the workspace switch only where this computer has workspaces, on by default", () => {
+  it("offers the workspace switch only where this computer has workspaces, off by default", () => {
     expect(row(phone(), state())).not.toContain("Can open other workspaces");
-    for (const [otherWorkspaces, checked] of [[undefined, true], [true, true], [false, false]] as const) {
+    for (const [otherWorkspaces, checked] of [[undefined, false], [true, true], [false, false]] as const) {
       const markup = row(phone({ otherWorkspaces }), state({ workspaces: true }));
       expect(markup).toContain("Can open other workspaces");
       expect(markup.match(/<button[^>]*aria-label="Ada can open other workspaces"[^>]*>/)?.[0]).toContain(`aria-checked="${checked}"`);

@@ -541,34 +541,46 @@ describe("other workspaces switch", () => {
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
-  it("is on for a new device and for a record written before it existed", () => {
+  it("is off for a new device and for a record written before it existed", () => {
     const registry = new DeviceRegistry();
     const { device } = pair(registry);
-    expect(device.otherWorkspaces).toBe(true);
+    expect(device.otherWorkspaces).toBe(false);
     const path = join(DATA_DIR, "devices.json");
     const stored = JSON.parse(readFileSync(path, "utf8"));
     delete stored.devices[0].otherWorkspaces;
     writeFileSync(path, JSON.stringify(stored));
-    expect(new DeviceRegistry().list()[0].otherWorkspaces).toBe(true);
+    expect(new DeviceRegistry().list()[0].otherWorkspaces).toBe(false);
   });
 
-  it("turns off per device, survives a restart, and refuses an unknown device", () => {
+  it("stays off for an older record that holds a value other than true", () => {
+    const registry = new DeviceRegistry();
+    pair(registry);
+    const path = join(DATA_DIR, "devices.json");
+    for (const value of [null, "true", 1, "yes", {}]) {
+      const stored = JSON.parse(readFileSync(path, "utf8"));
+      stored.devices[0].otherWorkspaces = value;
+      writeFileSync(path, JSON.stringify(stored));
+      expect(new DeviceRegistry().list()[0].otherWorkspaces).toBe(false);
+    }
+  });
+
+  it("turns on for one device only, survives a restart, and refuses an unknown device", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry, "First").device;
     const second = pair(registry, "Second").device;
-    expect(registry.setOtherWorkspaces(first.id, false)).toBe(true);
-    const byId = (id: string) => new DeviceRegistry().list().find((d) => d.id === id)!;
-    expect(byId(first.id).otherWorkspaces).toBe(false);
-    expect(byId(second.id).otherWorkspaces).toBe(true);
     expect(registry.setOtherWorkspaces(first.id, true)).toBe(true);
+    const byId = (id: string) => new DeviceRegistry().list().find((d) => d.id === id)!;
     expect(byId(first.id).otherWorkspaces).toBe(true);
-    expect(registry.setOtherWorkspaces("nobody", false)).toBe(false);
+    expect(byId(second.id).otherWorkspaces).toBe(false);
+    expect(registry.setOtherWorkspaces(first.id, false)).toBe(true);
+    expect(byId(first.id).otherWorkspaces).toBe(false);
+    expect(registry.setOtherWorkspaces("nobody", true)).toBe(false);
   });
 
-  it("stays off when the phone pairs again", () => {
+  it("is off again when the phone pairs again, as every grant is", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry);
-    registry.setOtherWorkspaces(first.device.id, false);
+    registry.setOtherWorkspaces(first.device.id, true);
     const { token: credential } = registry.openPairing();
     const result = registry.redeem(credential, "iPhone", undefined, first.token);
     if ("error" in result) throw new Error(`pairing failed: ${result.error}`);

@@ -20,6 +20,7 @@ import {
 } from "../src/workspaces.ts";
 
 const TOKEN = "seira_test_token";
+const OTHER_TOKEN = "seira_other_token";
 
 const LIST = [
   { id: "local", name: "This PC", current: true, state: "ready" },
@@ -33,7 +34,7 @@ let harnessHits: string[] = [];
 let sent: Array<Record<string, unknown>> = [];
 let listener: ProxyListener = "lan";
 let workspaces = createWorkspaces({ send: () => {}, settleMs: 5 });
-let otherWorkspaces: boolean | undefined;
+let otherWorkspaces: boolean | undefined = true;
 
 const facts = (list: unknown) => workspaces.receive({ type: WORKSPACES_MESSAGE, workspaces: list });
 
@@ -46,7 +47,11 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => harness.listen(0, "127.0.0.1", resolve));
   const proxy = createProxyHandler({
     harnessPort: (harness.address() as AddressInfo).port,
-    authenticate: (token) => (token === TOKEN ? { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces } : null),
+    authenticate: (token) => {
+      if (token === TOKEN) return { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces };
+      if (token === OTHER_TOKEN) return { id: "device-2", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces: false };
+      return null;
+    },
     redeem: () => ({ error: "no", code: "pairing_invalid" }) as never,
     serverName: () => "Test computer",
     workspaces: { list: () => workspaces.list(), switchTo: (body) => workspaces.switchTo(body) },
@@ -64,13 +69,13 @@ beforeEach(() => {
   harnessHits = [];
   sent = [];
   listener = "lan";
-  otherWorkspaces = undefined;
+  otherWorkspaces = true;
   workspaces = createWorkspaces({ send: (message) => sent.push(message as Record<string, unknown>), settleMs: 5 });
 });
 
-function call(method: string, path: string, body?: unknown, token: string | null = TOKEN): Promise<{ status: number; json: any }> {
+function call(method: string, path: string, body?: unknown, token: string | null = TOKEN, raw = false): Promise<{ status: number; json: any }> {
   return new Promise((resolve, reject) => {
-    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const payload = body === undefined ? undefined : raw ? String(body) : JSON.stringify(body);
     const req = request(
       {
         host: "127.0.0.1",
@@ -235,13 +240,41 @@ describe("a request to switch", () => {
 });
 
 describe("a phone that may not open other workspaces", () => {
-  it("keeps the default on for a device that has no such setting", async () => {
+  it("is the default: a device with no such setting lists one workspace and cannot switch", async () => {
     facts(LIST);
-    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+    otherWorkspaces = undefined;
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(1);
+    expect((await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).status).toBe(403);
+    expect(sent).toEqual([]);
+  });
+
+  it("lists every workspace and switches for a device the owner allowed", async () => {
+    facts(LIST);
     otherWorkspaces = true;
     expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
     expect((await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).status).toBe(200);
     expect(sent).toHaveLength(1);
+  });
+
+  it("answers one device with 403 and another with a switch, on the same computer at the same time", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    const refused = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" }, OTHER_TOKEN);
+    expect(refused.status).toBe(403);
+    expect(sent).toEqual([]);
+    const allowed = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(allowed.status).toBe(200);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+    expect((await call("GET", WORKSPACES_ROUTE, undefined, OTHER_TOKEN)).json.workspaces).toHaveLength(1);
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+  });
+
+  it("is refused before the body is read, so a body that cannot be read is still 403", async () => {
+    facts(LIST);
+    otherWorkspaces = false;
+    const { status } = await call("POST", WORKSPACE_SWITCH_ROUTE, "{ not json", TOKEN, true);
+    expect(status).toBe(403);
+    expect(sent).toEqual([]);
   });
 
   it("lists only the current workspace", async () => {

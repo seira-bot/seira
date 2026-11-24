@@ -120,10 +120,10 @@ export function PhoneRow({ device, connected, state, c, onRemoved, onPairAgain, 
                 <div className="text-[12px] leading-4 text-ink-secondary">{t("remote.devices.allowWorkspacesDetail")}</div>
               </div>
               <Switch
-                checked={device.otherWorkspaces !== false}
+                checked={device.otherWorkspaces === true}
                 aria-label={t("remote.devices.workspacesAria", { name: device.name })}
                 disabled={c.busy}
-                onClick={() => void c.act((companion) => (companion.workspaceAccess ? companion.workspaceAccess(device.id, device.otherWorkspaces === false) : companion.state()))}
+                onClick={() => void c.act((companion) => (companion.workspaceAccess ? companion.workspaceAccess(device.id, device.otherWorkspaces !== true) : companion.state()))}
               />
             </div>
           )}

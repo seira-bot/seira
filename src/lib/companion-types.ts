@@ -11,7 +11,7 @@ export interface PhoneDevice {
   browserControlAccess?: boolean;
   /** "local": Wi-Fi and Tailscale only. Absent on older sidecars. */
   routes?: "any" | "local";
-  /** False: the phone lists only the current workspace. Absent on older sidecars, which offer no workspaces. */
+  /** True: the owner lets the phone list and open the other workspaces. False or absent: it lists only the current one. */
   otherWorkspaces?: boolean;
   /** Its first end-to-end session; a device without one is on the old, unencrypted connection. */
   e2eAt?: number;

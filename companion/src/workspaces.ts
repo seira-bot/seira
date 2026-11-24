@@ -131,7 +131,7 @@ export async function answerWorkspaces(
   method: string,
   path: string,
   readBody: () => Promise<Record<string, unknown>>,
-  allowed = true,
+  allowed: boolean,
 ): Promise<WorkspaceReply> {
   const absent: WorkspaceReply = { status: 404, body: { error: `no route: ${method} ${path}` } };
   const list = channel?.list();

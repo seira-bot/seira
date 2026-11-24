@@ -545,7 +545,7 @@ export function createProxyHandler(options: ProxyOptions) {
 
     const workspaces = workspaceRoute(method, path);
     if (workspaces) {
-      void answerWorkspaces(options.workspaces, workspaces, method, path, () => readJson(req, 1024), device?.otherWorkspaces !== false)
+      void answerWorkspaces(options.workspaces, workspaces, method, path, () => readJson(req, 1024), device?.otherWorkspaces === true)
         .then((reply) => sendJson(res, reply.status, reply.body));
       return;
     }
