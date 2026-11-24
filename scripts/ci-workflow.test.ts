@@ -311,7 +311,21 @@ describe("Server image smoke workflow", () => {
       },
     });
     expect(smoke.concurrency).toBeUndefined();
-    expect(Object.keys(smoke.jobs)).toEqual(["image", "cloud-home"]);
+    expect(Object.keys(smoke.jobs)).toEqual(["image", "cloud-home", "connector"]);
+  });
+
+  it("builds the connector image for amd64 from connector/, saves it, and publishes it only from the publish job on main", () => {
+    const connector = smoke.jobs.connector!;
+    expect(connector.permissions).toBeUndefined();
+    expect(connector.environment).toBeUndefined();
+    expect(runs(connector).join("\n")).toContain("-t seira-connector:ci connector");
+    expect(runs(connector).join("\n")).not.toMatch(/docker (login|push)/);
+    const publish = image.jobs.publish!;
+    expect(publish.if).toContain("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
+    expect(publish.environment).toBe("release");
+    const step = stepsOf(publish).find((each) => each.name === "Publish the connector image")!;
+    expect(step.run).toContain('image="ghcr.io/${REPOSITORY,,}-connector"');
+    expect(step.run).toContain("imagetools create");
   });
 
   it("uses GitHub's own actions only", () => {
