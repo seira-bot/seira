@@ -77,7 +77,7 @@ export function resolveTag(repo, tag, api) {
 function refMatches(pattern, ref) {
   if (pattern === "~ALL") return true;
   if (typeof pattern !== "string" || pattern.startsWith("~")) return false;
-  const source = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\u0000/g, ".*");
+  const source = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\uE000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\uE000/g, ".*");
   return new RegExp(`^${source}$`).test(ref);
 }
 
