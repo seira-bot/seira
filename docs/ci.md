@@ -415,9 +415,9 @@ runs it from the commit of the workflow.
 
 The gate checks every commit since the last version on npm. Only the gated
 `npm-publish.yml` workflow can publish to npm, so each version on npm passed
-the gate or a person approved it. The gate reads the package name at the
-release commit, asks the npm registry for the versions, and takes the highest
-lower version as the baseline. The tag of the baseline must exist and must be
+the gate or a person approved it. The gate asks the npm registry for the
+versions of `@seira-bot/seira` and takes the highest lower version as the
+baseline. A run with a commit and no tag takes the highest version. The tag of the baseline must exist and must be
 an ancestor of the release commit. If not, the gate flags the run. If the
 registry answers with an error, the gate refuses the run.
 
@@ -436,9 +436,12 @@ The gate checks:
   `scripts/git-hooks/**`, `pnpm-workspace.yaml`, and `.npmrc` files.
   A change to one of them flags the run.
 - An earlier version of the package exists on npm. If not, the gate flags the run.
+- A tag run has at least one commit since the baseline. If not, the gate flags the run.
+- GitHub returns the full list of commits and of changed files. A cut list flags the run.
 
 A pull request that breaks a rule passes when a listed human reviewer approved
-it. The latest review of that reviewer must be an approval.
+it. The latest review of that reviewer must be an approval of the final commit
+of the pull request.
 
 The gate has three results:
 

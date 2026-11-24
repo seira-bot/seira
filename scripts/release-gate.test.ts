@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
-import { baselineTag, globToRegExp, humanApproved, isSensitivePath, npmVersions, parseArgs, parseReviewers, releaseGate, sensitiveFiles } from "./release-gate.mjs";
+import { NPM_PACKAGE, baselineTag, globToRegExp, humanApproved, isSensitivePath, npmVersions, parseArgs, parseReviewers, releaseGate, sensitiveFiles } from "./release-gate.mjs";
 
 const sha = (n: number) => String(n).padStart(40, "0");
 const TAG_SHA = sha(100);
@@ -53,7 +55,6 @@ function fake(world: World) {
       return { object: { type: "commit", sha: world.tagCommit ?? TAG_SHA } };
     }
     if (/\/compare\/[0-9a-f]{40}\.\.\.main$/.test(path)) return { status: world.mainStatus ?? "ahead" };
-    if (path.startsWith("repos/o/r/contents/package.json?ref=")) return { content: Buffer.from(JSON.stringify({ name: "@o/r" })).toString("base64") };
     if ((match = /\/compare\/(v[\d.]+)\.\.\.[0-9a-f]{40}\?per_page=(\d+)&page=(\d+)/.exec(path))) {
       if (world.baselineMissing) throw Object.assign(new Error("Not Found"), { status: 404 });
       const perPage = Number(match[2]);
@@ -90,7 +91,7 @@ const run = async (world: World, extra: { reviewers?: string; sha?: string; pinn
   const { api, fetchJson, calls, fetched } = fake(world);
   const out: string[] = [];
   const summaries: string[] = [];
-  const code = await releaseGate({ api, fetchJson, repo: REPO, tag: extra.sha ? null : "v1.1.0", sha: extra.pinned ?? extra.sha ?? null, reviewers: extra.reviewers, log: (line) => out.push(line), summary: (text) => summaries.push(text) });
+  const code = await releaseGate({ api, fetchJson, repo: REPO, npmPackage: "@o/r", tag: extra.sha ? null : "v1.1.0", sha: extra.pinned ?? extra.sha ?? null, reviewers: extra.reviewers, log: (line) => out.push(line), summary: (text) => summaries.push(text) });
   return { code, out: out.join("\n"), calls, summaries, fetched };
 };
 
@@ -187,6 +188,12 @@ describe("release gate", () => {
     expect(result.out).toContain("no commits since the previous release");
   });
 
+  it("passes a run with a sha only on the commit of the last version on npm", async () => {
+    const result = await run({ commits: [], rangeStatus: "identical" }, { sha: sha(50) });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("the last version on npm");
+  });
+
   it("flags a commit list that is cut short", async () => {
     const result = await run({ commits: [sha(1)], total: 5 });
     expect(result.code).toBe(1);
@@ -202,7 +209,13 @@ describe("release gate", () => {
   it("reads the version list of the package from the npm registry, with the slash of a scoped name encoded", async () => {
     const result = await run({});
     expect(result.fetched).toEqual(["https://registry.npmjs.org/@o%2Fr"]);
-    expect(result.calls.some((call) => call.startsWith("repos/o/r/contents/package.json?ref=" + TAG_SHA))).toBe(true);
+    expect(result.calls.some((call) => call.includes("/contents/"))).toBe(false);
+  });
+
+  it("reads the baseline of the package that npm-publish.yml publishes", () => {
+    const workflow = readFileSync(new URL("../.github/workflows/npm-publish.yml", import.meta.url), "utf8");
+    expect(NPM_PACKAGE).toBe("@seira-bot/seira");
+    expect(workflow).toContain(`npm view "${NPM_PACKAGE}@$VERSION"`);
   });
 
   it("refuses a registry error or bad JSON (exit 2 through a thrown error)", async () => {

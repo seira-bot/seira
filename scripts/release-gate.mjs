@@ -15,6 +15,9 @@ const SEMVER = /^v(\d+)\.(\d+)\.(\d+)$/;
 const TRUSTED_AUTHORS = new Set(["OWNER", "MEMBER"]);
 const PAGE = 100;
 
+/** The npm package that npm-publish.yml publishes. A fixed name: a pull request cannot move the baseline to another package. */
+export const NPM_PACKAGE = "@seira-bot/seira";
+
 export const SENSITIVE_PATTERNS = [".github/**", "scripts/release-*", "scripts/git-hooks/**", "pnpm-workspace.yaml", ".npmrc", "**/.npmrc"];
 
 export const USAGE = `Usage: node scripts/release-gate.mjs --tag v<x.y.z> [--repo <owner>/<name>]
@@ -189,7 +192,7 @@ async function commitsSince(api, repo, base, head) {
 const short = (sha) => sha.slice(0, 7);
 
 /** Runs every check, logs one line per check and returns the exit status. */
-export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = null, sha = null, reviewers = "", log = console.log, summary = () => {} }) {
+export async function releaseGate({ api, fetchJson, repo = "owner/name", npmPackage = NPM_PACKAGE, tag = null, sha = null, reviewers = "", log = console.log, summary = () => {} }) {
   const lines = [];
   let flagged = false;
   const say = (kind, text) => {
@@ -232,12 +235,9 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = n
   }
   say("ok", "commit is on main");
 
-  const file = await api(`repos/${repo}/contents/package.json?ref=${commit}`);
-  const name = JSON.parse(Buffer.from(file.content, "base64").toString("utf8")).name;
-  if (typeof name !== "string" || name === "") throw new Error("package.json has no name");
-  const previous = baselineTag(await npmVersions(fetchJson, name), tag);
+  const previous = baselineTag(await npmVersions(fetchJson, npmPackage), tag);
   let commits = [];
-  if (!previous) flag(`no earlier version of ${name} on npm, so the whole history needs a person`);
+  if (!previous) flag(`no earlier version of ${npmPackage} on npm, so the whole history needs a person`);
   else {
     let range = null;
     try {
@@ -249,7 +249,8 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", tag = n
     else {
       commits = range.commits;
       say("ok", `${range.total} commit(s) since ${previous}, the last version on npm (compare status: ${range.status})`);
-      if (range.total === 0) flag(`no commits since the previous release ${previous}`);
+      if (range.total === 0 && tag) flag(`no commits since the previous release ${previous}`);
+      if (range.total === 0 && !tag && range.status === "identical") say("ok", `the commit is ${previous}, the last version on npm`);
       if (range.status !== "ahead" && range.status !== "identical") flag(`${previous} is not an ancestor of the commit (compare status: ${range.status})`);
       if (commits.length < range.total) flag(`the commit list is cut short (${commits.length} of ${range.total})`);
     }
