@@ -1,19 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPairLinks, pairLinkFromCommandLine, pairLinkIntent } from "./pair-link.mjs";
+import { createPairLinks, isPlainOriginText, pairLinkFromCommandLine, pairLinkIntent } from "./pair-link.mjs";
 import { installPairLinks } from "./pair-link-main.mjs";
 import { createServerConnect } from "./server-probe.mjs";
 
 const CODE = "7KQ2-M9XD-H4TP";
-const LINK = `seira://pair?address=${encodeURIComponent("https://seira.example.com")}&code=${CODE}`;
+const LINK = `seira://pair?address=${encodeURIComponent("https://seira.example.com")}`;
+const WITH_CODE = `${LINK}&code=${CODE}`;
 
 test("reads the link a server's Open in app button makes, and nothing else", () => {
-  assert.deepEqual(pairLinkIntent(LINK), { valid: true, address: "https://seira.example.com", secret: CODE });
-  assert.deepEqual(pairLinkIntent("seira://pair?address=http%3A%2F%2F192.168.1.20%3A8799"), { valid: true, address: "http://192.168.1.20:8799", secret: null });
-  const token = `seira_pair_${"a".repeat(43)}`;
-  assert.deepEqual(pairLinkIntent(`seira://pair?address=https%3A%2F%2Fmini.example&token=${token}&name=mini`), { valid: true, address: "https://mini.example", secret: token });
-  assert.deepEqual(pairLinkIntent("SEIRA://pair?address=https%3A%2F%2Fseira.example.com"), { valid: true, address: "https://seira.example.com", secret: null });
+  assert.deepEqual(pairLinkIntent(LINK), { valid: true, address: "https://seira.example.com" });
+  assert.deepEqual(pairLinkIntent("seira://pair?address=http%3A%2F%2F192.168.1.20%3A8799"), { valid: true, address: "http://192.168.1.20:8799" });
+  assert.deepEqual(pairLinkIntent("seira://pair?address=https%3A%2F%2Fmini.example&name=mini"), { valid: true, address: "https://mini.example" });
+  assert.deepEqual(pairLinkIntent("SEIRA://pair?address=https%3A%2F%2Fseira.example.com"), { valid: true, address: "https://seira.example.com" });
+  assert.equal("secret" in pairLinkIntent(LINK), false);
 });
 
 test("leaves every other link to its own handler", () => {
@@ -28,18 +29,29 @@ test("a pair link that is not exactly the action is invalid, never repaired", ()
     "seira://pair",
     "seira://pair?",
     `seira://pair?code=${CODE}`,
+    `seira://pair?${address}&code=${CODE}`,
+    `seira://pair?${address}&token=seira_pair_${"a".repeat(43)}`,
     "seira://pair?address=seira.example.com",
     "seira://pair?address=ftp%3A%2F%2Fseira.example.com",
     "seira://pair?address=javascript%3Aalert(1)",
     `seira://pair?${address}&${address}`,
-    `seira://pair?${address}&code=${CODE}&code=${CODE}`,
-    `seira://pair?${address}&code=${CODE}&token=seira_pair_x`,
     `seira://pair?${address}&redirect=https%3A%2F%2Fevil.example`,
     `seira://pair/extra?${address}`,
     `seira://user@pair?${address}`,
     `seira://pair:80?${address}`,
     `seira://pair?${address}#more`,
-    `seira://pair?${address}&code=${"A".repeat(300)}`,
+    `seira://pair?${address}#`,
+    `seira://pair?${address}&name=x#`,
+    `seira://pair#?${address}`,
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%2F.",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%2F%2F",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%2F%2e",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%2Fx",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%3F",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%23",
+    "seira://pair?address=https%3A%2F%2Fuser%40seira.example.com",
+    "seira://pair?address=https%3A%2F%2F",
+    "seira://pair?address=https%3A%2F%2Fseira.example.com%5C",
     `seira://pair?${address}&x=${"a".repeat(3000)}`,
     `seira://pair?${address}\nseira://pair?${address}`,
     `seira://pair?${address} `.replace(" ", "\u0000"),
@@ -56,13 +68,35 @@ test("takes the link out of a command line so a relaunch does not open it again"
   assert.deepEqual(one, ["app"]);
 });
 
+test("a known pair link leaves the relaunch arguments whatever its length or content, so a secret in it does not come back", () => {
+  const long = `${LINK}&name=${"a".repeat(20_000)}`, huge = `${LINK}&name=${"a".repeat(200_000)}`;
+  const argv = ["app", WITH_CODE, long, "--x", huge, "seira://user@pair?address=x", `seira://pair?address=https%3A%2F%2Fa.example#${CODE}`];
+  assert.deepEqual(pairLinkFromCommandLine(argv), { valid: false });
+  assert.deepEqual(argv, ["app", "--x"]);
+  assert.equal(JSON.stringify(argv).includes(CODE), false);
+  assert.deepEqual(pairLinkFromCommandLine(["app", long]), { valid: false });
+});
+
+test("a link that carries a pairing code or token is refused whole, and the code is not kept anywhere", () => {
+  for (const key of ["code", "token"]) {
+    const intent = pairLinkIntent(`${LINK}&${key}=${CODE}`);
+    assert.deepEqual(intent, { valid: false });
+    assert.equal(JSON.stringify(intent).includes(CODE), false);
+  }
+});
+
+test("the origin text is checked as spelled: one scheme, one host, an optional port, at most one slash", () => {
+  for (const good of ["https://seira.example.com", "https://seira.example.com/", "HTTP://192.168.1.20:8799", "https://[fd00::1]:8443/", "https://seira.example.com:443/"]) assert.equal(isPlainOriginText(good), true, good);
+  for (const bad of ["https://seira.example.com/.", "https://seira.example.com//", "https://seira.example.com/%2e", "https://seira.example.com/a", "https://seira.example.com?", "https://seira.example.com#", "https://u@seira.example.com", "https://", "https:///x", "seira.example.com", "ftp://x.example", "https://a.example\\", "https://a b.example", "", null, 7]) assert.equal(isPlainOriginText(bad), false, String(bad));
+});
+
 function connectWith({ fetch, answers = [true], log = [] } = {}) {
   const events = [];
   const connect = createServerConnect({
-    fetch: async (url, options) => { events.push(["fetch", String(url), options.redirect]); return fetch(url); },
+    fetch: async (url, options) => { events.push(["fetch", String(url), options.redirect, JSON.stringify(options)]); return fetch(url); },
     ownEnvironmentId: async () => null,
     ask: async () => { events.push(["ask"]); return true; },
-    open: (found) => events.push(["open", found.origin, found.code]),
+    open: (found) => events.push(["open", found.origin, found.code ?? "", found.credential ?? ""]),
     t: (key) => key,
   });
   const confirm = async (shown) => { events.push(["confirm", shown]); return answers.shift() ?? false; };
@@ -70,36 +104,55 @@ function connectWith({ fetch, answers = [true], log = [] } = {}) {
 }
 const descriptor = () => new Response(JSON.stringify({ environmentId: "env-a", label: "mini" }), { headers: { "content-type": "application/json" } });
 
-test("asks about the normalized origin before any network request, then opens the pairing page once", async () => {
+test("asks about the normalized origin before any network request, then opens the pairing page once, with no code", async () => {
   const { connect, events } = connectWith({ fetch: descriptor });
-  assert.equal(await connect.connectFromLink({ address: "HTTPS://Seira.Example.com:443/", secret: CODE }), true);
+  assert.equal(await connect.connectFromLink({ address: "HTTPS://Seira.Example.com:443/" }), true);
   assert.deepEqual(events.map((event) => event[0]), ["confirm", "fetch", "open"]);
-  assert.deepEqual(events[0], ["confirm", { origin: "https://seira.example.com", withSecret: true }]);
+  assert.deepEqual(events[0], ["confirm", { origin: "https://seira.example.com" }]);
   assert.equal(events[1][2], "error");
-  assert.deepEqual(events[2], ["open", "https://seira.example.com", CODE]);
+  assert.deepEqual(events[2], ["open", "https://seira.example.com", "", ""]);
 });
 
 test("a declined question makes no request and saves nothing", async () => {
   const { connect, events } = connectWith({ fetch: descriptor, answers: [false] });
-  assert.equal(await connect.connectFromLink({ address: "https://seira.example.com", secret: CODE }), false);
+  assert.equal(await connect.connectFromLink({ address: "https://seira.example.com" }), false);
   assert.deepEqual(events.map((event) => event[0]), ["confirm"]);
 });
 
 test("a link that names no clear origin is refused before the question and before any request", async () => {
   const { connect, events } = connectWith({ fetch: descriptor });
-  for (const address of ["seira.example.com", "http://203.0.113.9", "https://user:pw@seira.example.com", "https://seira.example.com/other"]) {
-    await assert.rejects(connect.connectFromLink({ address, secret: CODE }), { message: "native.connect.notAnAddress" });
+  for (const address of ["seira.example.com", "http://203.0.113.9", "https://user:pw@seira.example.com", "https://seira.example.com/other", "https://seira.example.com/.", "https://seira.example.com//", "https://seira.example.com/%2e", "https://seira.example.com#", "https://seira.example.com?"]) {
+    await assert.rejects(connect.connectFromLink({ address }), { message: "native.connect.notAnAddress" }, address);
   }
   assert.deepEqual(events, []);
 });
 
-test("a server that fails or redirects is never opened, and the error does not repeat the code", async () => {
+test("a server that fails or redirects is never opened", async () => {
   const redirected = connectWith({ fetch: async () => { throw new TypeError("redirect mode is set to error"); } });
-  await assert.rejects(redirected.connect.connectFromLink({ address: "https://seira.example.com", secret: CODE }), (error) => !String(error.message).includes(CODE));
+  await assert.rejects(redirected.connect.connectFromLink({ address: "https://seira.example.com" }));
   assert.deepEqual(redirected.events.map((event) => event[0]), ["confirm", "fetch"]);
   const stranger = connectWith({ fetch: async () => new Response("<html>") });
-  await assert.rejects(stranger.connect.connectFromLink({ address: "https://seira.example.com", secret: null }), { message: "native.connect.notSeira" });
+  await assert.rejects(stranger.connect.connectFromLink({ address: "https://seira.example.com" }), { message: "native.connect.notSeira" });
   assert.equal(stranger.events.some((event) => event[0] === "open"), false);
+});
+
+test("the handoff stays on the confirmed origin: every request and the page that opens name that origin only, and no code is sent", async () => {
+  const link = pairLinkIntent(`${LINK}&name=mini`);
+  const { connect, events } = connectWith({ fetch: descriptor });
+  assert.equal(await connect.connectFromLink({ address: link.address }), true);
+  const confirmed = events.find((event) => event[0] === "confirm")[1].origin;
+  for (const event of events.filter((one) => one[0] === "fetch")) {
+    assert.equal(new URL(event[1]).origin, confirmed, "a request left the confirmed origin");
+    assert.equal(event[2], "error", "a redirect would be followed");
+    assert.equal(event[3].includes("credentials\":\"omit"), true);
+  }
+  assert.deepEqual(events.filter((event) => event[0] === "open").map((event) => event[1]), [confirmed]);
+  assert.equal(JSON.stringify(events).includes(CODE), false);
+  // A server that answers with a redirect to another origin gets nothing further: the request fails and no page opens.
+  const hop = connectWith({ fetch: async () => { throw new TypeError("redirect mode is set to error"); } });
+  await assert.rejects(hop.connect.connectFromLink({ address: link.address }));
+  assert.deepEqual(hop.events.filter((event) => event[0] === "fetch").map((event) => new URL(event[1]).origin), [confirmed]);
+  assert.equal(hop.events.some((event) => event[0] === "open"), false);
 });
 
 function pairLinks(overrides = {}) {
@@ -159,7 +212,7 @@ test("main's dialogs: Cancel is the default, the question names the normalized o
   const argv = ["app", LINK];
   let connected = 0;
   const links = installPairLinks({ dialog, t: (key, params) => `${key}${params?.host ? `|${params.host}` : ""}`, argv, reveal: () => {},
-    connect: async (link, confirm) => { connected++; return confirm({ origin: new URL(link.address).origin, withSecret: Boolean(link.secret) }); } });
+    connect: async (link, confirm) => { connected++; return confirm({ origin: new URL(link.address).origin }); } });
   assert.deepEqual(argv, ["app"]);
   links.ready();
   await new Promise((resolve) => setImmediate(resolve));
@@ -167,7 +220,7 @@ test("main's dialogs: Cancel is the default, the question names the normalized o
   assert.equal(shown.length, 1);
   assert.equal(shown[0].defaultId, 1);
   assert.equal(shown[0].message, "native.dialog.connect.title|https://seira.example.com");
-  assert.equal(shown[0].detail, "native.dialog.connect.withCode");
+  assert.equal(shown[0].detail, "native.dialog.connect.noCode");
   assert.equal(JSON.stringify(shown).includes(CODE), false);
   assert.equal(links.fromUrl("seira://pair?address=ftp%3A%2F%2Fx"), true);
   await new Promise((resolve) => setImmediate(resolve));

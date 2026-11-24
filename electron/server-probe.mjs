@@ -3,6 +3,7 @@
 import { EXAMPLE_ADDRESS, isLoopbackHost, parseServerInput, serverTransport } from "./server-address.mjs";
 import { inTailscaleRange, isTailnetName } from "./tailnet.mjs";
 import { sentWireName } from "./phone-wire-names.mjs";
+import { isPlainOriginText } from "./pair-link.mjs";
 
 const DESCRIPTOR = sentWireName("environmentPath");
 /** A Seira desktop app's Remote access (companion/src/routes.ts) refuses the descriptor with this until a phone pairs. */
@@ -148,13 +149,13 @@ export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnv
   return { outcome: "problem", ...failure };
 }
 
-/** The one origin an outside link names (scheme, host and port, normalized), or null for anything else. */
-function linkOrigin(address, secret) {
-  if (typeof address !== "string" || !/^https?:\/\/[^/?#]/i.test(address)) return null;
+/** The one origin an outside link names (scheme, host and port, normalized), or null for anything else. The spelling is checked
+ * before the URL parser normalizes it, so a path or marker that the parser would drop does not pass. */
+function linkOrigin(address) {
+  if (!isPlainOriginText(address)) return null;
   let url;
   try { url = new URL(address); } catch { return null; }
-  if ((url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) return null;
-  const parsed = parseServerInput(address, secret ?? "");
+  const parsed = parseServerInput(address, "");
   return parsed.ok && parsed.candidates.length === 1 && parsed.candidates[0] === url.origin ? url.origin : null;
 }
 
@@ -187,14 +188,15 @@ export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, o
       return true;
     },
     /**
-     * A `{ address, secret }` an outside link carried. Only an http(s) origin is taken, and `confirmLink({ origin, withSecret })`
-     * must say yes before any request goes out. A link that is not that throws one fixed sentence that repeats nothing from it.
+     * An `{ address }` an outside link carried. Only an http(s) origin is taken, and `confirmLink({ origin })` must say yes before
+     * any request goes out. A link that is not that throws one fixed sentence that repeats nothing from it. No pairing code
+     * comes with a link: the server's own page asks for it after this, at the confirmed origin only.
      */
-    async connectFromLink({ address, secret }, confirmLink) {
-      const origin = linkOrigin(address, secret);
+    async connectFromLink({ address }, confirmLink) {
+      const origin = linkOrigin(address);
       if (!origin) throw new Error(t(CONNECT_PROBLEM_KEYS.notAnAddress, { host: "", example: EXAMPLE_ADDRESS }));
-      if (!(await confirmLink({ origin, withSecret: Boolean(secret) }))) return false;
-      const found = await probe(origin, secret ?? "");
+      if (!(await confirmLink({ origin }))) return false;
+      const found = await probe(origin, "");
       if (found.outcome !== "found") throw new Error(t(CONNECT_PROBLEM_KEYS[found.problem], { host: found.host ?? "", example: EXAMPLE_ADDRESS }));
       open(found);
       return true;

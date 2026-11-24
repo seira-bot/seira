@@ -262,7 +262,7 @@ app.on("second-instance", (_event, commandLine) => {
     queueOrganizationEntry("seira://organization");
     return;
   }
-  if (pairLinks.fromArgs(commandLine) || cloudEntry.fromArgs(commandLine)) return; if (teamLinks.fromArgs(commandLine)) return;
+  if (pairLinks.fromArgs(commandLine)) return; if (cloudEntry.fromArgs(commandLine)) return; if (teamLinks.fromArgs(commandLine)) return;
   const packageUrl = packageUrlFromCommandLine(commandLine);
   if (packageUrl) pendingPackageInstallUrl = packageUrl;
   const chatLink = chatLinkFromCommandLine(commandLine);

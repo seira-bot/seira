@@ -1,44 +1,56 @@
-// seira://pair?address=<server origin>&code=<pairing code>: the Open in app button of a server's /pair page, and the QR
-// a server prints. A link comes from outside the app, so it is data and never a decision: this file only reads it,
-// strictly and without a network request. The person confirms the normalized server first (server-probe.mjs,
-// connectFromLink), and the code stays in memory, out of every log.
+// seira://pair?address=<server origin>: the Open in app button of a server's /pair page. A link comes from outside the app, so it
+// is data and never a decision: this file only reads it, strictly and without a network request. The person confirms the
+// normalized server first (server-probe.mjs, connectFromLink); the server's own page then asks for the pairing code.
+// A link never carries a pairing code or token: an OS link reaches the app as a launch argument, and a launch argument stays
+// in the process command line, where other programs read it. A link that carries one is refused, not repaired.
 const MAX_LINK_LENGTH = 2048;
-const MAX_SECRET_LENGTH = 256;
-const PARAMETERS = new Set(["address", "code", "token", "name"]);
+const PARAMETERS = new Set(["address", "name"]);
 const UNSAFE_CHARACTER = /[\s\p{Cc}\\]/u;
+/** The outer action as the OS delivered it, before any URL normalization: the scheme and host `pair`, then `?` and a query, and no
+ * `#` at all (an empty fragment marker is also a fragment). The URL parser would drop what this refuses. */
+const ACTION = /^seira:\/\/pair\?[^#]*$/i;
+/** The server address as the link spelled it after decoding: a scheme, then a host and an optional port, then at most one `/`.
+ * No user name, path, query, fragment, backslash or space. A path that normalizes to `/` (`/.`, `//`) is not this. */
+const ORIGIN_TEXT = /^https?:\/\/[^/?#@\\\s]+\/?$/i;
 
-/** Whether the link is meant for this handler: it names the `pair` host, even with a user name, a port or a path on it. */
+/** Whether `text` spells one server origin, before normalization (see ORIGIN_TEXT). */
+export function isPlainOriginText(text) {
+  return typeof text === "string" && ORIGIN_TEXT.test(text);
+}
+
+/** Whether the link is meant for this handler: it names the `pair` host, even with a user name, a port or a path on it. There is
+ * no length limit here: a link that is too long is invalid, and it must still be taken out of a command line. */
 function claims(value) {
-  if (typeof value !== "string" || value.length > MAX_LINK_LENGTH * 4) return false;
-  if (/^seira:\/\/pair(?:[?/#:]|$)/i.test(value)) return true;
+  if (typeof value !== "string") return false;
+  if (/^seira:\/\/pair(?:[?/#:@]|$)/i.test(value)) return true;
   try { const url = new URL(value); return url.protocol === "seira:" && url.hostname === "pair"; } catch { return false; }
 }
 
 function readStrictly(value) {
-  if (value.length > MAX_LINK_LENGTH || UNSAFE_CHARACTER.test(value)) return null;
+  if (value.length > MAX_LINK_LENGTH || UNSAFE_CHARACTER.test(value) || !ACTION.test(value)) return null;
   let url;
   try { url = new URL(value); } catch { return null; }
   if (url.protocol !== "seira:" || url.hostname !== "pair" || url.pathname !== "" || url.hash || url.username || url.password || url.port) return null;
-  const seen = new Map();
+  const seen = new Set();
+  let address = "";
   for (const [key, text] of url.searchParams) {
     if (!PARAMETERS.has(key) || seen.has(key)) return null;
-    seen.set(key, text);
+    seen.add(key);
+    if (key === "address") address = text;
   }
-  const address = seen.get("address") ?? "";
-  if (!/^https?:\/\/[^/?#]/i.test(address)) return null;
-  if (seen.has("code") && seen.has("token")) return null;
-  const secret = seen.get("code") ?? seen.get("token") ?? null;
-  if (secret !== null && (!secret || secret.length > MAX_SECRET_LENGTH)) return null;
-  return { valid: true, address, secret };
+  if (!isPlainOriginText(address)) return null;
+  return { valid: true, address };
 }
 
-/** null for any link that is not a pair link; otherwise `{ valid: true, address, secret }` or `{ valid: false }`. */
+/** null for any link that is not a pair link; otherwise `{ valid: true, address }` or `{ valid: false }`. */
 export function pairLinkIntent(value) {
   if (!claims(value)) return null;
   return readStrictly(value) ?? { valid: false };
 }
 
-/** The last pair link on a command line, taken out of it so a relaunch with the same arguments does not open it again. */
+/** The last pair link on a command line, taken out of the array so a relaunch with the same arguments does not open it again, however
+ * long it is. This changes the array only: the process command line of this launch stays as the OS made it, so a link never
+ * carries a secret. */
 export function pairLinkFromCommandLine(argv) {
   let found = null;
   for (let index = argv.length - 1; index >= 0; index--) {
@@ -65,7 +77,7 @@ export function createPairLinks({ ready, reveal, connect, fail, invalid = () => 
         await ready;
         reveal();
         if (!intent.valid) throw invalid();
-        await connect({ address: intent.address, secret: intent.secret });
+        await connect({ address: intent.address });
       } catch (error) {
         await fail(error).catch(() => {});
       } finally {
