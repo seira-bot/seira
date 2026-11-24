@@ -119,7 +119,7 @@ export function baselineTag(versions, currentTag = null) {
 
 /** The versions that npm lists for a package. A registry error or bad JSON throws. */
 export async function npmVersions(fetchJson, name) {
-  const body = await fetchJson(`https://registry.npmjs.org/${name.replace("/", "%2F")}`);
+  const body = await fetchJson(`https://registry.npmjs.org/${name.replaceAll("/", "%2F")}`);
   if (!body || typeof body !== "object" || !body.versions || typeof body.versions !== "object") throw new Error(`the npm registry answer for ${name} has no versions`);
   return Object.keys(body.versions);
 }
