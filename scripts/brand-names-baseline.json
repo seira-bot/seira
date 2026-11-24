@@ -1109,10 +1109,11 @@
     "3ba0e2e4d0a9415a"
   ],
   "server/research.test.ts": [
+    "4434d649bfee65c3",
     "8e58f1ea1baab2a5"
   ],
   "server/research.ts": [
-    "f4277426ca02a8aa"
+    "be8594c970f76b09"
   ],
   "server/routes/cloud-signed-box.test.ts": [
     "a368143f0e779b52"

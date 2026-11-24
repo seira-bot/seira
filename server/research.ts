@@ -281,18 +281,26 @@ export function createResearchClient(credential: ServiceCredential, options: { f
       }
       if (!answer) throw new XResearchError("unavailable", own ? "Couldn't reach treg. Try again in a minute." : RESEARCH_MESSAGES.unavailable);
       const { body, headers } = answer;
-      const costUsd = own ? costOf(headers.get("x-treg-cost-micro"), 1_000_000) : costOf(headers.get("x-omb-research-charged-usd"), 1);
-      const failed = headers.get(own ? "x-treg-upstream-failed" : "x-omb-research-upstream-failed")?.slice(0, 200);
+      const costUsd = own ? costOf(headers.get("x-treg-cost-micro"), 1_000_000) : costOf(relayHeader(headers, "charged-usd"), 1);
+      const failed = (own ? headers.get("x-treg-upstream-failed") : relayHeader(headers, "upstream-failed"))?.slice(0, 200);
       const callId = headers.get("x-treg-call-id")?.trim();
       return {
         result: body,
         ...(costUsd === undefined ? {} : { costUsd }),
-        ...(!own && headers.get("x-omb-research-pending") === "true" ? { costPending: true as const } : {}),
+        ...(!own && relayHeader(headers, "pending") === "true" ? { costPending: true as const } : {}),
         ...(callId ? { callId } : {}),
         ...(failed ? { upstreamFailed: failed } : {}),
       };
     },
   };
+}
+
+const RELAY_HEADER_PREFIX = "x-seira-research-";
+/** The old name of the same headers. The relay may still send only this one, so it stays a fallback until a removal date is set. */
+const LEGACY_RELAY_HEADER_PREFIX = "x-omb-research-";
+/** One relay header, read under the `seira` name first and under the old name when the new one is absent. */
+export function relayHeader(headers: Pick<Headers, "get">, name: "charged-usd" | "upstream-failed" | "pending"): string | null {
+  return headers.get(`${RELAY_HEADER_PREFIX}${name}`) ?? headers.get(`${LEGACY_RELAY_HEADER_PREFIX}${name}`);
 }
 
 /** The cost line a bot can relay with a research answer. */
