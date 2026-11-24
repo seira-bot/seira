@@ -86,7 +86,9 @@ export function hashRegular(source: string, origin: string, limit: number, label
   const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const before = fstatSync(input);
-    if (!before.isFile() || before.size > limit) throw new Error(`A workspace file is not regular or exceeds the 10 GB backup limit: ${label}`);
+    if (!before.isFile() || before.size > limit) {
+      throw new Error(scope.keep ? `A workspace roster is not regular or exceeds the 16 MiB metadata limit: ${label}` : `A workspace file is not regular or exceeds the 10 GB backup limit: ${label}`);
+    }
     if (scope.walked && (before.dev !== scope.walked.dev || before.ino !== scope.walked.ino)) throw CHANGED(label);
     const rel = relative(scope.root, source).split(sep).join("/");
     if (scope.allowed && !scope.allowed(rel)) throw CHANGED(label);

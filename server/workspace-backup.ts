@@ -319,7 +319,9 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     if (privacy) warnings.push(TEAM_PRIVATE_NOTE);
     // Pass 1. A roster is counted from the bytes this read saw; pass 2 proves the archive holds the same bytes.
     const hashed = (file: string, origin: string, path: string, scope: HashScope) => {
-      const read = hashRegular(file, origin, MAX_WORKSPACE_BACKUP_BYTES, path, { ...scope, keep: path === "bots.json" || path === "groups.json" });
+      // A roster is kept in memory, and the restore reads it with the metadata limit: the same limit applies here, before any byte is read.
+      const keep = path === "bots.json" || path === "groups.json";
+      const read = hashRegular(file, origin, keep ? MAX_METADATA_BYTES : MAX_WORKSPACE_BACKUP_BYTES, path, { ...scope, keep });
       if (read.bytes) rosters.set(path, read.bytes.toString("utf8"));
       return read;
     };
