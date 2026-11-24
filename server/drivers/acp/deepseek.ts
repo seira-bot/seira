@@ -308,6 +308,7 @@ export const deepseekSupport: AcpSupport = {
   displayName: "DeepSeek Harness",
   // @deepseek-ai/dsh declares engines.node ">=24.9.0"; on older Node it quits before answering.
   minNodeVersion: "24.9.0",
+  absoluteMcpCommands: true,
   models: DEEPSEEK_MODELS,
   defaultCli: "dsh",
   nativeSource: "deepseek.acp",

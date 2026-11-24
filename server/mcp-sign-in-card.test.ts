@@ -14,7 +14,7 @@ import type { McpServerSpec } from "./contracts.ts";
 import { createMcpSignInCards, isCardOwnerLive } from "./host/mcp-sign-in-cards.ts";
 import { resumableCards } from "./host/resumable-cards.ts";
 import { createTeamConnectionsHost } from "./host/team-connections-host.ts";
-import { McpOAuthManager, type McpSignInPhase } from "./mcp-oauth.ts";
+import { McpOAuthManager, cardOwner, type McpSignInPhase } from "./mcp-oauth.ts";
 import { personKey } from "./person-key.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import { createInternalMcpRoutes, type InternalMcpDeps } from "./routes/internal-mcp.ts";
@@ -391,6 +391,19 @@ describe("the Sign in card", () => {
     expect(f.answers).toEqual([{ messageId: card.id, text: expect.stringContaining(NOT_SIGNED_IN) }]);
     expect(await f.approve(link).catch(() => "listener closed")).toBe("listener closed");
     expect(f.mcpOAuth.authState("linear", f.url)).not.toBe("signed-in");
+  });
+
+  it("Not now only sets the card aside: a sign-in made elsewhere stays, no new sign-in starts, and the bot is told not to ask again", async () => {
+    const f = await setup();
+    const { card } = await f.signIn();
+    await f.mcpOAuth.start("linear", f.url, undefined, "loopback", { remote: false }).then((started) => f.approve(started.authorizationUrl!));
+    expect(f.mcpOAuth.authState("linear", f.url)).toBe("signed-in");
+    expect(await f.route("dismiss", card)).toEqual({ status: 200, body: { dismissed: true } });
+    expect(f.current(card).connector).toMatchObject({ dismissed: true, status: "required" });
+    expect(f.mcpOAuth.authState("linear", f.url)).toBe("signed-in");
+    expect(f.mcpOAuth.waiting("linear", cardOwner("main-chat", card.id))).toBeFalsy();
+    expect(f.answers).toEqual([{ messageId: card.id, text: expect.stringContaining("Do not show this sign-in card again unless the person asks you to.") }]);
+    expect(f.answers[0]!.text).not.toMatch(/retry|try again/i);
   });
 
   it("on a Team Cloud a non-admin member cannot authorize a shared server's card; the turn's person can authorize their personal server's card and another member cannot", async () => {

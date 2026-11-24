@@ -34,7 +34,7 @@ describe("configured bot creation", () => {
     const f = fixture("ask");
     await createConfiguredBot(f.draft, f.request, persistBotUpdate, f.approvals, "admins");
     expect(f.events[0]).toBe("POST /api/bots");
-    expect(f.bodies[0]).toMatchObject({ visibility: "admins", useDefaults: false });
+    expect(f.bodies[0]).toMatchObject({ visibility: "admins", useDefaults: false, retryKey: expect.stringMatching(/^[\w-]{16,128}$/) });
   });
 
   it("names who a new team bot reports to in the creation request, and nobody anywhere else", async () => {

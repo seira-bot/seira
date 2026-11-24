@@ -81,7 +81,7 @@ const signedInText = (name: string, on: boolean) => (on
   : `Seira MCP sign-in: the person signed in to ${name}, but it is off, so its tools aren't yours yet. Call mcp_server with action enable, then continue the task that paused for this sign-in. Do not ask them to sign in again.`);
 const signedInUnreachableText = (name: string, reason: string) =>
   `Seira MCP sign-in: the person signed in to ${name}, but its tools aren't yours: ${reason} Continue the task that paused for this sign-in without them. Do not ask them to sign in again.`;
-const notSignedInText = (name: string) => `Seira MCP sign-in for ${name}: The person didn't sign in. The server stays on but signed out.`;
+const notSignedInText = (name: string) => `Seira MCP sign-in for ${name}: The person didn't sign in. The server stays on but signed out. Do not show this sign-in card again unless the person asks you to.`;
 
 export function createMcpSignInCards(deps: McpSignInCardDeps) {
   const { store } = deps;

@@ -19,7 +19,7 @@ const INVOICES = { url: "https://example.com/invoices", html: "<title>Invoices</
 /** `cuaRecord`: the desktop app's driver record, handed to this server as the app hands it to its own. */
 async function browserFixture(url: string, cuaRecord?: string) {
   const page = new FakeLoginPage(url, LOGIN_FORM);
-  const port = await freePortBlock([0], 19_960, 40);
+  const port = await freePortBlock([0]);
   const engineArgs: string[][] = [];
   // The proxy each browser command carries (a version probe starts no browser): a bot's browser goes through its egress gate.
   const proxies = new Set<string>();

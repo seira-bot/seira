@@ -10,6 +10,8 @@ export interface DepartmentFolders {
   departments: Record<string, FolderAccess>;
   /** "limited": the bot box holds only bots limited to chosen folders. */
   enforcement: "box" | "limited" | "ai";
+  /** `no-bwrap`: commands are not held to the folders because this computer has no bubblewrap. */
+  boxMissing?: "no-bwrap" | null;
   setHere: boolean;
 }
 

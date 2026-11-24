@@ -8,6 +8,7 @@ import { stringify as stringifyYaml } from "yaml";
 import { approvalModeFor } from "../../shared/approval-mode.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
 import { lineDiff } from "../../shared/line-diff.ts";
+import { createBotOnce } from "../../shared/new-bot-request.ts";
 import { mask, redactSecretsInText } from "../../shared/redact.ts";
 import { describeMs, EXIT, flag, HeadlessError, parseDuration, usageError } from "./args.ts";
 import { explain, type HeadlessClient } from "./client.ts";
@@ -220,11 +221,11 @@ export async function reconcile(client: HeadlessClient, file: TeamFile, options:
       note(`bot "${desired.name}": create${describeNew(desired) ? ` (${describeNew(desired)})` : ""}`, "created");
       created.add(key(desired.name));
       if (!options.apply) continue;
-      const made = await write("/api/bots", { method: "POST", body: JSON.stringify({
+      const made = await createBotOnce<Rec>({
         useDefaults: false, name: desired.name, ...(desired.title !== undefined ? { title: desired.title } : {}),
         ...(desired.description !== undefined ? { description: desired.description } : {}), ...(teamOf(desired) ? { section: teamOf(desired) } : {}),
         ...(desired.model ? { modelSelection: { ...desired.model, ...(desired.effort ? { effort: desired.effort } : {}) }, requireAvailableModel: true } : {}),
-      }) });
+      }, (body) => write("/api/bots", { method: "POST", body: JSON.stringify(body) }));
       const { patch } = botPatch(desired, made.bot, teamOf(desired));
       if (Object.keys(patch).length) await write(`/api/bots/${enc(made.bot.id)}`, { method: "PATCH", body: JSON.stringify(patch) });
       continue;

@@ -31,7 +31,7 @@ export const CUSTOMER_RUN_LOCAL_JOBS = ["self-update", "restore"] as const satis
  * - `backup`: nothing. Copies the data to a Docker volume on this server; it never removes a copy the owner made.
  * - `status`, `host-health`: nothing. They read.
  */
-export const CUSTOMER_HOME_IMAGE = /^ghcr\.io\/milind-soni\/openmausbot@sha256:[0-9a-f]{64}$/;
+export const CUSTOMER_HOME_IMAGE = /^ghcr\.io\/(?:seira-bot\/seira|milind-soni\/openmausbot)@sha256:[0-9a-f]{64}$/;
 
 /** Who sent a job: the Admin over the connection, or root on this server. */
 export type JobSource = "admin" | "local";
@@ -97,7 +97,7 @@ export function checkCustomerRunJob(message: unknown, by: JobSource): CheckedJob
   }
   const image = (args as Record<string, unknown>).image;
   if (keys.length !== 1 || typeof image !== "string" || !CUSTOMER_HOME_IMAGE.test(image)) {
-    return { ok: false, id: shape.job.id, code: "invalid_args", message: "image must be ghcr.io/milind-soni/openmausbot@sha256:<digest>" };
+    return { ok: false, id: shape.job.id, code: "invalid_args", message: "image must be ghcr.io/seira-bot/seira@sha256:<digest>" };
   }
   return { ok: true, job: { id: shape.job.id, type, args: { image } } };
 }

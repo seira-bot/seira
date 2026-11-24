@@ -33,6 +33,8 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
   <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><b>Android app</b></a>
 </p>
 
+<p>If Seira helps you, a ⭐ on GitHub helps other people find it.</p>
+
 </div>
 
 <p align="center">

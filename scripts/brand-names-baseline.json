@@ -1,0 +1,1353 @@
+{
+  ".claude/skills/windows-release/SKILL.md": [
+    "6b8c04a176d14c2d"
+  ],
+  ".github/workflows/browser-vendor-windows.yml": [
+    "367db5c27d0c07c8",
+    "7e947a8caf1aa37b"
+  ],
+  ".github/workflows/server-image-smoke.yml": [
+    "44de7596b75f3b92"
+  ],
+  "Dockerfile": [
+    "4eb10f49fdc07946",
+    "76d3e16b266a33e0",
+    "c8ad8ea1a0fe4284",
+    "ddc04c2dd6181fc3"
+  ],
+  "apps/docs/components/release-changelog.tsx": [
+    "cbcadd1b5ad25d6e"
+  ],
+  "apps/docs/content/docs/changelog/index.mdx": [
+    "473903c7d23dd82a"
+  ],
+  "apps/docs/content/docs/troubleshooting/logs.mdx": [
+    "01c1dda517564e2e"
+  ],
+  "build/linux-after-install.sh": [
+    "035351321edd6433",
+    "5ab4dbca4fcc00fb",
+    "cd3be9b510375c27"
+  ],
+  "build/linux-after-remove.sh": [
+    "1c6673d8aeeb1f2d",
+    "7b8ea1def10266f0",
+    "89c4854d7d5c69fd"
+  ],
+  "cloudflare/composio-broker/README.md": [
+    "067aea639df69e07",
+    "422e189607d93207",
+    "c05ac985bf0cde8a",
+    "ede9ad98726da67d",
+    "eead4bd8f80b0808"
+  ],
+  "cloudflare/composio-broker/src/app-events.test.ts": [
+    "5deabeeb0ee7ac50",
+    "bcd0aaccc01bd652",
+    "c3282ba8bd5cd30e",
+    "deff65f4f6b14a80"
+  ],
+  "cloudflare/composio-broker/src/app-events.ts": [
+    "9ea1e59b00c13348",
+    "b9d1c1b3b178517c",
+    "c4e2e220950ac0ca",
+    "dff1c736b9425939",
+    "fade52e56ae0a0f5"
+  ],
+  "cloudflare/composio-broker/src/sharing.ts": [
+    "105ab5ea25297056"
+  ],
+  "cloudflare/composio-broker/src/test-harness.ts": [
+    "277bd550a8cf54e4"
+  ],
+  "cloudflare/control-plane/src/push-activity.ts": [
+    "0e0e3f1e17dc4a28"
+  ],
+  "cloudflare/control-plane/src/seira-cloud.ts": [
+    "58cb1dfc2e4db34e"
+  ],
+  "cloudflare/push-relay/src/auth.test.ts": [
+    "9bbf96bf540b6c00"
+  ],
+  "cloudflare/push-relay/src/push.test.ts": [
+    "be800ffbc3feba87"
+  ],
+  "companion/src/mdns.ts": [
+    "27f6d1466c3e6ce7",
+    "e79bfe7999fec2a5"
+  ],
+  "companion/src/wire-names.ts": [
+    "22762181e82f0973",
+    "24e3b9749498e8b2",
+    "72226d2c32a3c03f",
+    "80d5188a750415df",
+    "cb3e0adee12da59d",
+    "d2b7e4be340da6bc",
+    "f168349def4db27e"
+  ],
+  "companion/test/control.test.ts": [
+    "29b2817f639cda0f"
+  ],
+  "connector/e2e/run.sh": [
+    "2f71825be9ea0661",
+    "9df137d1c67863fa"
+  ],
+  "connector/host/seira-update-runner.sh": [
+    "f11f221876276f81"
+  ],
+  "connector/install.sh": [
+    "cd2688167a09acd1"
+  ],
+  "connector/src/adopted-home.ts": [
+    "f5c1ac957d3123d3"
+  ],
+  "connector/src/customer-run.ts": [
+    "3eafd1db812d325a",
+    "4c52ea54402096d5",
+    "97013e42b6092b0d",
+    "d5896fa68b7af3c0"
+  ],
+  "connector/src/home-health.ts": [
+    "734286e6f8d44b1a",
+    "b42b84da88d21d69",
+    "ed8f7827b945697b"
+  ],
+  "connector/src/protocol.ts": [
+    "008b4b3c3e927426",
+    "1ca9cfe9fde9aebf",
+    "768b2b4b9fc94b62",
+    "d6c1eb602357dc7a"
+  ],
+  "connector/src/settings.ts": [
+    "0c1b16496c6f0fce",
+    "3a97be2e41ef200d",
+    "69800cb9d2b6871b",
+    "94ee751652938ea7",
+    "b568c78dd4c26e57",
+    "d00a235713a5fdc9"
+  ],
+  "connector/test/audit.test.ts": [
+    "42fb565ed9d13522",
+    "89325fb38d02f613"
+  ],
+  "connector/test/customer-run.test.ts": [
+    "341d92eb194021c1",
+    "5711e191bb986e7a",
+    "68ff2dfddd1cddf6",
+    "73cbb7e997c38c35",
+    "a1bfcdf69fd3c3db",
+    "ba43d67b66719b07",
+    "e2d79e40821a1b6b",
+    "fceab757e7b0d66b"
+  ],
+  "connector/test/home-health-headers.test.ts": [
+    "0c8b1bf28dbf20a5",
+    "fd071cfae95e80f7"
+  ],
+  "connector/test/home.test.ts": [
+    "678a003d71e9b3ee",
+    "d72d8064c5e67390"
+  ],
+  "connector/test/host.test.ts": [
+    "5ce5180eb41e5614",
+    "a5de405bf719e2d5"
+  ],
+  "connector/test/install-script.test.ts": [
+    "3de6f484494db6ae",
+    "a9ac431026aafcc8",
+    "d48101fd9e244823"
+  ],
+  "connector/test/jobs.test.ts": [
+    "42fb565ed9d13522"
+  ],
+  "connector/test/protocol.test.ts": [
+    "0a5ad6a1c8c469bc",
+    "42fb565ed9d13522",
+    "a907841d4b80a80d",
+    "b40d108d46ec16ce",
+    "b5daf609ab5fde11",
+    "b5fbf290d1d3d900",
+    "cbd3c66e6dd9615c"
+  ],
+  "connector/test/self-update.test.ts": [
+    "09368298bdc9e197",
+    "3c69fb72d081b48b",
+    "5f5374454ef5a00c"
+  ],
+  "connector/test/update-runner.test.ts": [
+    "02ade7b3e1d8a588",
+    "3fbecb1920731bdc",
+    "61cd4ace4c11bda7",
+    "6373cd048b254b30"
+  ],
+  "deploy/docker-compose.yml": [
+    "8feeeb411c05d522"
+  ],
+  "deploy/e2e/podman.sh": [
+    "cb83f07e352be753"
+  ],
+  "deploy/e2e/run.sh": [
+    "6d0319d257b154d1",
+    "8feeeb411c05d522",
+    "baf0aef974e7398d"
+  ],
+  "deploy/e2e/update.sh": [
+    "2a019caa9543e928",
+    "8feeeb411c05d522"
+  ],
+  "deploy/install.sh": [
+    "8feeeb411c05d522",
+    "8feeeb411c05d522",
+    "df3124984bf1d21f",
+    "efeec20ace0c3b67"
+  ],
+  "deploy/local/README.md": [
+    "aed3dc6474dc120e",
+    "bc3a75e27bd2abde"
+  ],
+  "deploy/podman/compose.yaml": [
+    "a4e20423f9dda83a"
+  ],
+  "deploy/podman/install.sh": [
+    "34686a750b8961db",
+    "5d2ddb4d6dce7c73",
+    "af3260db2ba2dd3e"
+  ],
+  "deploy/update.sh": [
+    "24ef10fba8a3b7ed",
+    "2a4f1b8499e5daa7",
+    "4c834607a624eacf",
+    "58262212619fd840",
+    "62a112ba516fe7ef",
+    "8feeeb411c05d522",
+    "8feeeb411c05d522",
+    "9c28d2992e7acd67",
+    "f691d7ecdf3f6b5b"
+  ],
+  "docs/announcements.md": [
+    "25a7c4509b980f18"
+  ],
+  "docs/browser-packaging.md": [
+    "4a536ca96812bc28"
+  ],
+  "docs/cloud-pro.md": [
+    "3337112331d9e90d",
+    "91e7e0a0cfc92a41",
+    "a66a35357dca327c",
+    "d9ab5649e70e9a23"
+  ],
+  "docs/contributing.md": [
+    "38c3a44b603557a0"
+  ],
+  "docs/environment-variables.md": [
+    "23c04cb998967194",
+    "7ff55bf5dbd012d8",
+    "9116e11ff5e39260",
+    "92885d58fac5c650",
+    "a949c68a3b04c83c",
+    "f7b96efefc6fca0b",
+    "fa63aa9388754cd8"
+  ],
+  "docs/ios-companion.md": [
+    "cbb54bd82b33db90"
+  ],
+  "docs/linux-desktop.md": [
+    "a6740de6bee3c70c"
+  ],
+  "docs/self-hosting.md": [
+    "7893348e509b191c"
+  ],
+  "docs/team-cloud.md": [
+    "60410b49c22db3b4"
+  ],
+  "docs/team-slack.md": [
+    "ddbe5426e51aec7e"
+  ],
+  "docs/verification/tool-selection.md": [
+    "69449395a2cc3945"
+  ],
+  "electron-builder.yml": [
+    "131751a65b4b9b61",
+    "1d6fff6168a1db22",
+    "35b8a1a3b1925984",
+    "4961abb82f90c616",
+    "519fdfa75aa7b90e",
+    "726241a6e7671a87",
+    "8516a730b46b495b"
+  ],
+  "electron/bot-link-main.node-test.mjs": [
+    "043280a91bf6d462"
+  ],
+  "electron/chat-link.node-test.mjs": [
+    "21d40f77a956d560",
+    "3ed0a22faf650719"
+  ],
+  "electron/clean-workspace.node-test.mjs": [
+    "3bbf02979c15fe80",
+    "8c0b6dc53f5fd315"
+  ],
+  "electron/cloud-account.mjs": [
+    "6911afd189008d9e"
+  ],
+  "electron/cloud-account.node-test.mjs": [
+    "7d3d0fa8857990c1"
+  ],
+  "electron/cloud-first-open.node-test.mjs": [
+    "5ef99553d67fedac"
+  ],
+  "electron/cloud-lending.node-test.mjs": [
+    "42b6ccece4add34b"
+  ],
+  "electron/cloud-power.mjs": [
+    "6edafdac9e55018c"
+  ],
+  "electron/cloud-power.node-test.mjs": [
+    "877e5930590fc596",
+    "9806c80e2eb36d95",
+    "ba615e59011b4d1e"
+  ],
+  "electron/cloud-send-big.node-test.mjs": [
+    "07d9a0215ac9dcda",
+    "07d9a0215ac9dcda",
+    "930c0f61a6cea62a"
+  ],
+  "electron/cloud-send-move.node-test.mjs": [
+    "7582147bac46eee1",
+    "f54ce1687164d753"
+  ],
+  "electron/cloud-send-team.node-test.mjs": [
+    "07d9a0215ac9dcda"
+  ],
+  "electron/cloud-staging.node-test.mjs": [
+    "50892efbd63ba268",
+    "60d55f62a6ad1cba",
+    "d76a75c6f5871334",
+    "fd0397d31be02ec8"
+  ],
+  "electron/cloud-sync-client.node-test.mjs": [
+    "a52c30e2a82d7bbc"
+  ],
+  "electron/cloud-sync-rules.mjs": [
+    "6a4653f9ff47c6f3",
+    "bc11f7509a076cd7"
+  ],
+  "electron/cloud-sync-rules.node-test.mjs": [
+    "fc2b425fe2971bdd"
+  ],
+  "electron/cloud-sync-scan.node-test.mjs": [
+    "33bec7f182df3ed5",
+    "941f8533eb1e72c4",
+    "e8fb0dfe2d229d0b"
+  ],
+  "electron/cloud-sync.d.mts": [
+    "8936945bc0dff1de"
+  ],
+  "electron/companion-origin-gateway.test.mjs": [
+    "bd14fbba5f88c0bb"
+  ],
+  "electron/computer-asks.node-test.mjs": [
+    "649d35bca95ded01"
+  ],
+  "electron/computer-sharing-races.node-test.mjs": [
+    "3b38d6e709308b5d"
+  ],
+  "electron/desktop-companion-client.test.mjs": [
+    "033da090707de32e",
+    "0a236ae946b0e42e",
+    "9e7aceeae7865512",
+    "df1c71b065e4303f"
+  ],
+  "electron/environments.node-test.mjs": [
+    "f242d2d5be103215"
+  ],
+  "electron/fixtures/home-window-world.mjs": [
+    "1aa81ff79b3713f0"
+  ],
+  "electron/home-window.node-test.mjs": [
+    "8ea19042030e9747",
+    "a2c3a4c9cf53054e"
+  ],
+  "electron/included-pages.test.mjs": [
+    "c53fd2778442a885"
+  ],
+  "electron/legacy-env.mjs": [
+    "21e359549dfa0ca2",
+    "8141ef3aadc012b0"
+  ],
+  "electron/legacy-env.node-test.mjs": [
+    "005428804f881c56",
+    "096da14772968428",
+    "120e14c5c1a9daeb",
+    "1cd4598c4e2f5edf",
+    "1da8ccc78a9089fd",
+    "4f69a3073744e0fc",
+    "5804711dda4f65b1",
+    "5f47f53033364694",
+    "6d531c73fc6241c1",
+    "75a5a0c305d950d4",
+    "7896160d61d754e2",
+    "876c0cf1e47370a4",
+    "a3b2ff4992d20ec5",
+    "a5c6bf2232020fc7",
+    "a8bd898c0e52e2d9",
+    "b9b82927b74b5a74",
+    "cd5cbe1f6f072989",
+    "ee4c6b671f5e4023"
+  ],
+  "electron/legacy-migrate.mjs": [
+    "ab68c94bcbb90ba8",
+    "b0c4cd2b0758bae0"
+  ],
+  "electron/legacy-migrate.node-test.mjs": [
+    "1a9caecdbe49dc05",
+    "1cdfd8a8b98f16a4",
+    "20f5a646a1654986",
+    "20f5a646a1654986",
+    "2296e58cd6daad76",
+    "24d59cf317685f4a",
+    "26aa95905092289a",
+    "26aa95905092289a",
+    "29bb186b0f8dd78f",
+    "2b1ae70ddf5f10a4",
+    "2b56ac37b354185f",
+    "2e28e84efb16b723",
+    "389d484c409067d5",
+    "4b650ec3df239b18",
+    "4da8db3f7180b393",
+    "603793db86df3de6",
+    "611515deaf5268df",
+    "7643557ce4369a1b",
+    "797420067acfcc82",
+    "7b305033e7ad9387",
+    "8a090c59687b10f5",
+    "97bdc4968ebc8b55",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a011afa5e59f4629",
+    "a07413b2b5dec86d",
+    "a4cba20cca0aae77",
+    "a95abd67c3b66695",
+    "ac4fa77437e47f1a",
+    "adc396ed628a7c93",
+    "b3d116134340af7c",
+    "b41493ba0fb9e2d3",
+    "b41493ba0fb9e2d3",
+    "b41493ba0fb9e2d3",
+    "bdf3d03992ed0027",
+    "bdf3d03992ed0027",
+    "be7645033a52126e",
+    "c10ce648c693d394",
+    "c37c88286732dad5",
+    "cc74afa14c5140a5",
+    "f803306ee2174569",
+    "f803306ee2174569"
+  ],
+  "electron/legacy-names.mjs": [
+    "0083e593ecb0aa13",
+    "01ea435921958dae",
+    "056a8dcd7be1a609",
+    "066c1c9e61040c73",
+    "0f8a0aa83520f80b",
+    "0fa94c9ce36b7e92",
+    "130c857aa83cf4ef",
+    "185dccbed026a7e0",
+    "1b1b6e16f94540dc",
+    "1c955eae28729ef5",
+    "1cc162461161e7ec",
+    "1dfcce6f84316cea",
+    "1ead310a312763a6",
+    "2ac4f38f6ade741f",
+    "2f623e7808eecbc6",
+    "3433d41d8e63ba7f",
+    "47911c8103997cb8",
+    "54bdd41773cef4a9",
+    "590b971cad25e9bf",
+    "6a6891c9c38096af",
+    "74f3f456bba5ca5c",
+    "75fe0121e1e92ae4",
+    "80c631c1787f96f9",
+    "875258b0bfa82fa5",
+    "8e2e8ce0144200e4",
+    "910d0e96283256c1",
+    "a820992fae0b8dd6",
+    "ae5e70972a2d1b27",
+    "b20b2a9d67a9bf23",
+    "b6869b79a1ecddce",
+    "b74afeea4bad45ef",
+    "ba911801389f70ef",
+    "c853e15d95822e93",
+    "d2949ce996bfc308",
+    "e091bf2522fa3b81",
+    "e5f8232e910e48ec",
+    "ef2a8362c20130df",
+    "f2f0a42290bd74d1",
+    "fa70d6392870e441"
+  ],
+  "electron/lend-automatically.node-test.mjs": [
+    "0e7bd6d3786368ab"
+  ],
+  "electron/lend-own-server.node-test.mjs": [
+    "2369b1fa301658f6"
+  ],
+  "electron/lending-accounts.node-test.mjs": [
+    "e2447ec016bd05a8"
+  ],
+  "electron/lending-goodbyes.node-test.mjs": [
+    "d441a261b8f6f830"
+  ],
+  "electron/lending-guards.node-test.mjs": [
+    "fb14ea1fa0d8fe1c"
+  ],
+  "electron/open-at-login.node-test.mjs": [
+    "52ec993c402f7a61",
+    "52ec993c402f7a61",
+    "7d80b9fcee018dca",
+    "f243cfb965e0ab72",
+    "f3ee26e5dc2c83eb"
+  ],
+  "electron/own-home-main.node-test.mjs": [
+    "d6ccaf252cd22a44",
+    "f162f6d13bd7084a"
+  ],
+  "electron/phone-wire-names.mjs": [
+    "22762181e82f0973",
+    "24e3b9749498e8b2",
+    "72226d2c32a3c03f",
+    "80d5188a750415df",
+    "cb3e0adee12da59d",
+    "d2b7e4be340da6bc",
+    "f168349def4db27e"
+  ],
+  "electron/places-together.node-test.mjs": [
+    "8d5e051c45f01948"
+  ],
+  "electron/seira-cloud-sign-in.test.mjs": [
+    "3164e7b8433699e1"
+  ],
+  "electron/seira-hosts.mjs": [
+    "9aac6b7446191b81"
+  ],
+  "electron/server-address.mjs": [
+    "bed3d8df8208982a",
+    "c94ecfe694552d1c"
+  ],
+  "electron/server-address.node-test.mjs": [
+    "62f0b04e83db6813",
+    "b36071de07a27050",
+    "e0cce43786cb1c59"
+  ],
+  "electron/server-boot-probe.node-test.mjs": [
+    "a4849306757ee5ee"
+  ],
+  "electron/server-status.node-test.mjs": [
+    "40e2f7f10029abcc",
+    "5108125dd482a3c9",
+    "5dbcc76393572308",
+    "f1f8187979168b97"
+  ],
+  "electron/shared-computer-access.node-test.mjs": [
+    "6c9953a924486e08"
+  ],
+  "electron/sharing-persistence.node-test.mjs": [
+    "39ec9faebd5b1b11"
+  ],
+  "electron/use-my-mac.node-test.mjs": [
+    "0e7bd6d3786368ab"
+  ],
+  "evals/live/judge/prompts/open-ended-v1.md": [
+    "1a052a44b627f234"
+  ],
+  "evals/live/judge/prompts/reply-habits-v1.md": [
+    "67fb6407d684555f"
+  ],
+  "evals/live/live-server.ts": [
+    "4dc48f44992599fb"
+  ],
+  "package.json": [
+    "1fa742140f6348b9"
+  ],
+  "packages/phone-protocol/src/phone-push.ts": [
+    "b25132d0099ff106"
+  ],
+  "packages/phone-protocol/src/phone-secret-envelope.ts": [
+    "7c20ae759d32df6b"
+  ],
+  "packages/phone-protocol/src/wire-names.ts": [
+    "22762181e82f0973",
+    "24e3b9749498e8b2",
+    "72226d2c32a3c03f",
+    "80d5188a750415df",
+    "cb3e0adee12da59d",
+    "d2b7e4be340da6bc",
+    "f168349def4db27e"
+  ],
+  "scripts/after-pack.test.mjs": [
+    "15c001b941a4095f",
+    "d09b2f07b4044935"
+  ],
+  "scripts/bench-desktop.ts": [
+    "ffc7597282e54c94"
+  ],
+  "scripts/build-npm-package.test.mjs": [
+    "d8fc32bd12e70ffd"
+  ],
+  "scripts/control-seira.ts": [
+    "aa0d267625d9987a"
+  ],
+  "scripts/docker-image.test.ts": [
+    "0429443361bf9949",
+    "5d93c80399b2b7ca"
+  ],
+  "scripts/git-hooks/pre-commit": [
+    "c2cfe95622ae5e3d",
+    "f487dd15dc1ac2ed"
+  ],
+  "scripts/git-hooks/pre-push": [
+    "84205482bbd5a078",
+    "c2cfe95622ae5e3d"
+  ],
+  "scripts/install-git-hooks.mjs": [
+    "4fda8be67e920f00",
+    "7a5f1bf2180706ff",
+    "869c9c58305975ab",
+    "fd5f29f701c50247"
+  ],
+  "scripts/linux-after-install.test.mjs": [
+    "aedf556cc76eaaa8"
+  ],
+  "scripts/pre-push-check.test.ts": [
+    "0b3648d2a207e16a",
+    "628498e08ffd3944",
+    "7d08473765a649d8",
+    "9cdee7e82db58a50"
+  ],
+  "scripts/server-installer.test.ts": [
+    "8f81c6f8b34f032e",
+    "fc1b017096f7ea23"
+  ],
+  "scripts/smoke-deb-upgrade.mjs": [
+    "1351b3af1df45d76",
+    "590d875b469425c1",
+    "73b843075c4c8a01",
+    "96f642097c3b5ad4",
+    "9c1de1752db425c1",
+    "fab260b92e28d83d"
+  ],
+  "scripts/smoke-linux-package.mjs": [
+    "287c34957193bbcb"
+  ],
+  "scripts/testing/automations-journey.ui.e2e.test.ts": [
+    "beced3ad79c1d8ec"
+  ],
+  "scripts/testing/cloud-send-fixture.ts": [
+    "8c4d9c6909c711f4",
+    "8c4d9c6909c711f4",
+    "ce540dd5ea961b67",
+    "fd4899b2989d1be0"
+  ],
+  "scripts/testing/cloud-sleep-wake.e2e.test.ts": [
+    "23e2e594a807ca7a",
+    "d8d5241d9700469f",
+    "e625773a040f73db"
+  ],
+  "scripts/testing/deploy-update.test.ts": [
+    "137cb518c8912df8",
+    "630be0bdc2bf378b",
+    "978cbab0d05c2f8c",
+    "b837a95b59bb82cb",
+    "dd50c7a5b9d6a768",
+    "dee7a62bc18bc12b"
+  ],
+  "scripts/testing/fake-compose-docker.mjs": [
+    "272b3c4dcab15137"
+  ],
+  "scripts/testing/one-workspace-fixture.ts": [
+    "c941e10cf14b4de2"
+  ],
+  "scripts/testing/podman-installer.test.ts": [
+    "28b8cab8fc3efb92",
+    "5ce0f4e106115861",
+    "cf42583d8e53de35"
+  ],
+  "scripts/testing/stable-channel.test.ts": [
+    "098624dde8d82643",
+    "9ad6b45fe1c69411",
+    "c0f82e58a21e7280"
+  ],
+  "scripts/testing/update-runner.test.ts": [
+    "9316f76ebdec6be2"
+  ],
+  "scripts/verify-codex-browser-acceptance.ts": [
+    "b473de3a92f64251",
+    "b7cf517afd5abd25"
+  ],
+  "scripts/verify-linux-package.mjs": [
+    "2daad0fad79470d0",
+    "37a6ad97a58fa638",
+    "e9454db44020e827",
+    "f15949c985fa9925"
+  ],
+  "scripts/verify-workspace-backup.ts": [
+    "b2a969e99a604cec"
+  ],
+  "server/app-events-cloud.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/app-settings/cards.test.ts": [
+    "3ad769c2829e0114"
+  ],
+  "server/app-trigger-broker.test.ts": [
+    "8dc51a20573c53fb"
+  ],
+  "server/bot-box/env.ts": [
+    "723bab029ddc9e8a"
+  ],
+  "server/bot-link/dial.ts": [
+    "096d984c67310275"
+  ],
+  "server/browser-engine-release.ts": [
+    "84860ef7d92b4374"
+  ],
+  "server/browser-engine.test.ts": [
+    "023d52ed0f962373",
+    "2a33486a2034edc6",
+    "3dcb38d5b38cb131",
+    "814e869f4a2ed5fb",
+    "bc51f9a229d9f555"
+  ],
+  "server/browser-engine.ts": [
+    "36628838bc198bea"
+  ],
+  "server/browser/chrome/profile.test.ts": [
+    "1d5347b8fac4d511"
+  ],
+  "server/checkpoints.ts": [
+    "fffc0f77c48da167"
+  ],
+  "server/cli-data-move.test.ts": [
+    "1a93e73ee927124f"
+  ],
+  "server/cli-lifecycle.test.ts": [
+    "11ec45616cd2ddfa",
+    "2390eb0fb32e145b",
+    "5fa635feb35f88c9",
+    "8634540c8cc47325",
+    "b73ebdaac17b843d",
+    "f086627b3b7e7590"
+  ],
+  "server/cli-pair.test.ts": [
+    "c250db2eefcad1dd",
+    "d0edb4cceb63e20b"
+  ],
+  "server/cli.test.ts": [
+    "55c0d3a0d66b64ca",
+    "9cbf1eba4618f790"
+  ],
+  "server/cloud-connected-apps.e2e.test.ts": [
+    "175cc800539e4510",
+    "3df2795de07905b3"
+  ],
+  "server/cloud-credit.e2e.test.ts": [
+    "175cc800539e4510",
+    "3df2795de07905b3"
+  ],
+  "server/cloud-guest-shell.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-health.test.ts": [
+    "51c9246230705ac1",
+    "7954b66685122cc7",
+    "d0651205eef0b00f",
+    "d396bd7c7cf7cf3d"
+  ],
+  "server/cloud-home-server.test.ts": [
+    "175cc800539e4510",
+    "175cc800539e4510",
+    "175cc800539e4510",
+    "2d1aa7f2bf2bb27e",
+    "3df2795de07905b3",
+    "3df2795de07905b3",
+    "3df2795de07905b3",
+    "f6606e9244da95c7"
+  ],
+  "server/cloud-home-start.ts": [
+    "f43c5582719a05eb"
+  ],
+  "server/cloud-legacy-origin.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-lending-browser.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-lending-chrome.e2e.test.ts": [
+    "f5e3cdf913e42b64"
+  ],
+  "server/cloud-lending-memory.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-lending.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-lent-mcp.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-onepassword.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-personal-slack.e2e.test.ts": [
+    "03e405acca7881fb",
+    "2d7fc227f812f360",
+    "70bfa33de2a69e85",
+    "d23df7e586e77c9c",
+    "d715857931d42e24"
+  ],
+  "server/cloud-personal.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-power.test.ts": [
+    "9902d299e60225b1"
+  ],
+  "server/cloud-power.ts": [
+    "6edafdac9e55018c",
+    "b33fedb6286fddf6"
+  ],
+  "server/cloud-routine-level.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-sharing.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/cloud-signed-headers.test.ts": [
+    "1c9211a3322c715c",
+    "88291d123bb30783",
+    "e3da6136265a812d"
+  ],
+  "server/cloud-signed-headers.ts": [
+    "16f025706ca1deb7",
+    "969e4f211119698b",
+    "c292861291639a6f",
+    "ce3e193cbfc98447"
+  ],
+  "server/cloud-sync.e2e.test.ts": [
+    "175cc800539e4510",
+    "3df2795de07905b3"
+  ],
+  "server/cloud-team-admin.e2e.test.ts": [
+    "5511dcea338d19c9",
+    "639b4653fb1643ff"
+  ],
+  "server/cloud-team-away.e2e.test.ts": [
+    "2712ac9c11544ac2"
+  ],
+  "server/cloud-team-policy.test.ts": [
+    "a7dfdbe4ab6acd96"
+  ],
+  "server/cloud-team-policy.ts": [
+    "7f27e464cbe68251"
+  ],
+  "server/cloud-team-roster.test.ts": [
+    "f8e49cab3bce7e66"
+  ],
+  "server/cloud-team-roster.ts": [
+    "67325080e8181af9"
+  ],
+  "server/cloud-team-rules.e2e.test.ts": [
+    "2050c68451d79a83"
+  ],
+  "server/cloud-team-slack.e2e.test.ts": [
+    "03e405acca7881fb",
+    "45123d30385e99fb",
+    "70bfa33de2a69e85",
+    "d23df7e586e77c9c",
+    "f1eb05e2ec6ee08a"
+  ],
+  "server/cloud-team-sleep.e2e.test.ts": [
+    "38022d16314aec38",
+    "90ed740d270fbbbe"
+  ],
+  "server/cloud-woke.test.ts": [
+    "bb21891ca4c5c185",
+    "d04a972f5fe32621"
+  ],
+  "server/cloud-woke.ts": [
+    "4b0cae6d396cc065"
+  ],
+  "server/composio-reuse.test.ts": [
+    "1a02ee7439330f7a",
+    "56ae9f649f6da5df"
+  ],
+  "server/config.test.ts": [
+    "a6b927ad15f75eca",
+    "fe874887eb7b3b18"
+  ],
+  "server/container-computer.test.ts": [
+    "96108c08adaf6cea",
+    "ac632fd736c514fe",
+    "c71901ac4f657b99"
+  ],
+  "server/container-tunnel.ts": [
+    "cd08adc892447403"
+  ],
+  "server/credential-env.ts": [
+    "ae80fe25dcbf156c",
+    "da573461717f35c9",
+    "e663e39da0630bf5"
+  ],
+  "server/default-bot.test.ts": [
+    "1a82a207e7b8f93d",
+    "b46d0381c68134c2"
+  ],
+  "server/desktop-updates.test.ts": [
+    "83e50317bed41687"
+  ],
+  "server/devs-report-send.test.ts": [
+    "107e4d3bb57ea44f",
+    "af1588ea98074e3c",
+    "decffc3cd23c4ccc",
+    "f1a592087420b31c"
+  ],
+  "server/devs-report-send.ts": [
+    "45408fc5fe753651"
+  ],
+  "server/devs-reports.e2e.test.ts": [
+    "2a5ddc42fd64b24a"
+  ],
+  "server/drivers/acp/acp.test.ts": [
+    "1610dfa7101ce50f",
+    "420e23a510d498fa",
+    "af81c39b74b52965"
+  ],
+  "server/drivers/agents-proxy.test.ts": [
+    "cefe71bcd0ed6d0c"
+  ],
+  "server/drivers/muse-code.test.ts": [
+    "53c61890abacec95",
+    "749160346103a9fe"
+  ],
+  "server/first-hour.e2e.test.ts": [
+    "7c495fb35b84d17b"
+  ],
+  "server/headless/connect.test.ts": [
+    "2ab15c3ea9468c6a",
+    "60d18ddc1eb5b5ea"
+  ],
+  "server/headless/doctor.test.ts": [
+    "2c5b172460f1fc46"
+  ],
+  "server/host/room-transcript.test.ts": [
+    "a5db04cf704fa18e",
+    "b59b7bc3bac7e046"
+  ],
+  "server/host/team-away.test.ts": [
+    "79128e87f5d5ce70",
+    "7d7c56ebe5a68598",
+    "ca6c85accc5f1d84"
+  ],
+  "server/host/team-away.ts": [
+    "16ce081c9dae7207"
+  ],
+  "server/host/team-own-key-person-apps.test.ts": [
+    "1a491c32318a63e8",
+    "882b66c5b448c69b"
+  ],
+  "server/incidents.e2e.test.ts": [
+    "5ce014ece5c30ad7"
+  ],
+  "server/incidents.test.ts": [
+    "54e83f39a576d4fb",
+    "878149bd54452889"
+  ],
+  "server/index.test.ts": [
+    "87c9084a2f50b22b",
+    "b14978e79c1c23a1"
+  ],
+  "server/jsx-compile.test.ts": [
+    "27c75d6e1d9b695d"
+  ],
+  "server/legacy-env.test.ts": [
+    "04afcf1057a7fcab",
+    "11137c0594cd8b0f",
+    "37cb112a922c1180",
+    "46ea1937c7813653",
+    "4b8803b479537cd0",
+    "6e8f1af286d2932b",
+    "72029a99b56f4df0",
+    "7ada1a36ff81453d",
+    "7c626ac722bb8988",
+    "8f3adf93d6e041fe",
+    "a1b64808e5bfe5e0",
+    "a27c9c359f35330c",
+    "a2ef32e8caa9223c",
+    "b384c5f677a7aa4a",
+    "b384c5f677a7aa4a",
+    "bfa711d5e02a49be",
+    "bfa711d5e02a49be",
+    "c84c35cf25ee4da8",
+    "c91fcc760e21c53a",
+    "d31787fc5f68b7e2",
+    "de5ba9a4de7fa1ce",
+    "e1530b7e7371edf4"
+  ],
+  "server/lent-computers.test.ts": [
+    "39e9501575058877"
+  ],
+  "server/lent-folders.e2e.test.ts": [
+    "175cc800539e4510",
+    "3df2795de07905b3"
+  ],
+  "server/live-azure-access.e2e.test.ts": [
+    "b0fb5c0ced04713d"
+  ],
+  "server/live-call.e2e.test.ts": [
+    "694a7599d417de6d",
+    "d8d5241d9700469f"
+  ],
+  "server/live-call.test.ts": [
+    "fb387f046f66363f"
+  ],
+  "server/local-vm-browser-profiles.test.ts": [
+    "255b8459b9632eff",
+    "7498e55d5af07fb7",
+    "f0d40753da3ee648",
+    "fcdf71ea0b062d62"
+  ],
+  "server/message-db.test.ts": [
+    "c916f40bbd44dda8"
+  ],
+  "server/moved-paths-repair.test.ts": [
+    "1af5608aac53f75f",
+    "4502bd31a20dcea9",
+    "d0a3d3d6e376ef28"
+  ],
+  "server/one-home-outdated.e2e.test.ts": [
+    "17f1db0bf459488b"
+  ],
+  "server/opencode-provider-keys.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/org-library.test.ts": [
+    "7c1875b09065d09c"
+  ],
+  "server/package-import.ts": [
+    "004e59cdcf3f3657"
+  ],
+  "server/pages/access.ts": [
+    "0adac75a9513384d",
+    "2811f167f9bee383",
+    "c7e455efbabb06c5",
+    "f57e8945d4d86cdf"
+  ],
+  "server/parallel-threads.e2e.test.ts": [
+    "65d6797a350ed6fd",
+    "f8339a653a02b664"
+  ],
+  "server/peer-provenance.test.ts": [
+    "0659f255e4015e01",
+    "08edf2b6042f742d",
+    "35902aaed4e19d97",
+    "889abbc7a31f877e",
+    "8df67c8cc2d7a82c",
+    "9a2dacf379f884a9",
+    "a62037e784fb6f76",
+    "bb6d9bbbf41e57a2",
+    "c9d3c6c75e218c51",
+    "ca2474b1c79679e2",
+    "dae8bb210588a13f",
+    "ed51fe5587d864f4"
+  ],
+  "server/peer-provenance.ts": [
+    "2f4f53cd24baf52c",
+    "4108afb01e3316fd"
+  ],
+  "server/phone-activity.test.ts": [
+    "2a9b03ac28a11d59",
+    "2e4c23992d7fac7e",
+    "ed7bfad7a5b092a1"
+  ],
+  "server/phone-activity.ts": [
+    "328ca9f169780525"
+  ],
+  "server/phone-secret.test.ts": [
+    "2d61606e9d2ae3b6"
+  ],
+  "server/phone-secret.ts": [
+    "2d61606e9d2ae3b6"
+  ],
+  "server/phone-wire-compat.test.ts": [
+    "14279d37e940a57b",
+    "198df584f97759f6",
+    "1fdac1b95b0b5b59",
+    "62f0b04e83db6813",
+    "8db2336acb829343",
+    "a1764f1daacbeb51",
+    "a79241cee439b25e",
+    "af9e262b8d5a1f1f",
+    "b36071de07a27050",
+    "d9933b443b54644c"
+  ],
+  "server/phone-wire-names.test.ts": [
+    "76b554a147c46121"
+  ],
+  "server/records-block.test.ts": [
+    "0063aab924f2e508",
+    "502c60a5ebba5398"
+  ],
+  "server/records-block.ts": [
+    "25ab0a6926e2a75e",
+    "582c96fcdbee4bb3"
+  ],
+  "server/request-auth.e2e.test.ts": [
+    "9d9ec2f813513f73"
+  ],
+  "server/request-auth.test.ts": [
+    "3ba0e2e4d0a9415a"
+  ],
+  "server/research.test.ts": [
+    "8e58f1ea1baab2a5"
+  ],
+  "server/research.ts": [
+    "f4277426ca02a8aa"
+  ],
+  "server/routes/cloud-signed-box.test.ts": [
+    "a368143f0e779b52"
+  ],
+  "server/routes/cloud-signed-header-names.test.ts": [
+    "af0c1def7b05f8ba"
+  ],
+  "server/routes/cloud-signed-plan.test.ts": [
+    "23834d11cdd2ab0f",
+    "5473ffec4fadefa7"
+  ],
+  "server/routes/cloud-signed-team-admin.test.ts": [
+    "409092a30db0f1af"
+  ],
+  "server/routes/instances.test.ts": [
+    "8f3249934af2417a",
+    "f7fb28daf96d544e"
+  ],
+  "server/routes/status.ts": [
+    "0d06c98c4348d6f9"
+  ],
+  "server/runtime/runtime.test.ts": [
+    "33088817ea88fcd8"
+  ],
+  "server/safety-floor.ts": [
+    "8275f81594b78b58",
+    "d3cd3a8c29b353ce",
+    "d558c54bd848f040",
+    "fe079ee6168def4e"
+  ],
+  "server/secret-folder.test.ts": [
+    "13acd2310b753eee",
+    "4939e3261f5671c1",
+    "5e17c2ee57f3b602",
+    "9a112cb787b94278",
+    "a9f41093a884a151",
+    "b32973617e2fdb42",
+    "b36f0ab22708d55d"
+  ],
+  "server/secret-requests.e2e.test.ts": [
+    "5e540b7d05b7a77d"
+  ],
+  "server/share-publish.ts": [
+    "a46592e510efd495",
+    "df0edd432a3c6b1c"
+  ],
+  "server/share.test.ts": [
+    "169ba049bd2aba70",
+    "9a2819afc586e19c",
+    "dc110b04b5521585",
+    "dc4fe28bb675a4ae",
+    "e57b93808a28ee62"
+  ],
+  "server/starter-bots.e2e.test.ts": [
+    "c879b9c158cc0ea3",
+    "d46f50a253018566"
+  ],
+  "server/system-prompt.test.ts": [
+    "e1cf1415f72128c7"
+  ],
+  "server/team-slack.test.ts": [
+    "2edfb9fa54d81652",
+    "91ed34f8a8f4e9f2",
+    "a3eaa42c6ff73837",
+    "cbb70a58d8f11607"
+  ],
+  "server/team-slack.ts": [
+    "98988cd213254e6e"
+  ],
+  "server/temp-folders.test.ts": [
+    "3c6a77c3322948bc",
+    "5fad97d398a279af",
+    "69d7fecb626a4ff7",
+    "d6f7fc184a0f485e"
+  ],
+  "server/temp-folders.ts": [
+    "3661f9db28e9adda",
+    "d5861a9544940b4e"
+  ],
+  "server/testing/cloud-signed-assert.ts": [
+    "4fbd2a57b31abb73"
+  ],
+  "server/testing/fake-acp-cli.ts": [
+    "ff0ed2dda7175c97"
+  ],
+  "server/testing/fake-pages.test.ts": [
+    "b247f4c694d5ce2e",
+    "d1dc19767b8dbec6"
+  ],
+  "server/testing/fake-pages.ts": [
+    "d35f9b2435e4142d"
+  ],
+  "server/testing/seira-env.ts": [
+    "a7bfc0478b140a04",
+    "c8d45862f8f736e1"
+  ],
+  "server/testing/setup.ts": [
+    "33b90b7b55eca571",
+    "6156af20583cab80"
+  ],
+  "server/update-check.test.ts": [
+    "a2206dd4522d0662"
+  ],
+  "server/use-my-mac.e2e.test.ts": [
+    "23e2e594a807ca7a"
+  ],
+  "server/vps-computer.test.ts": [
+    "44fea3f62993c9f4",
+    "6f375965a9bad1eb",
+    "86d960b47b371bfc"
+  ],
+  "server/vps-inventory.test.ts": [
+    "83399f571476b947"
+  ],
+  "server/workspace-backup-legacy.test.ts": [
+    "02845cbe247f65a9",
+    "7a6f28f73a3a23de"
+  ],
+  "server/x-research.e2e.test.ts": [
+    "5e5c07fed545893e"
+  ],
+  "shared/announcements.test.ts": [
+    "5ae9d05aeed51b53"
+  ],
+  "shared/app-frame/jsx-page.test.ts": [
+    "4b1f7b67b8a9af20"
+  ],
+  "shared/legacy-formats.test.ts": [
+    "17969cef4b96709d"
+  ],
+  "shared/pairing-code.test.ts": [
+    "2796b5dde1980d99",
+    "c12b17b23a16a3cd",
+    "e6e4fd26a50ab9f7"
+  ],
+  "src/components/AboutDialog.test.ts": [
+    "a73883c053192162",
+    "bcf9189e2f2dcbdc"
+  ],
+  "src/components/CloudCancelPlan.tsx": [
+    "7004a648faf95751"
+  ],
+  "src/components/LinkHoverCard.test.ts": [
+    "eb03d276c7c5c755"
+  ],
+  "src/components/ProIntroduction.test.ts": [
+    "995c7b9e5aa31783"
+  ],
+  "src/components/SidebarBotListItem.test.ts": [
+    "34c6409fde1e9e4d",
+    "b6c56296d82c2607"
+  ],
+  "src/components/whats-new/WhatsNewPopup.test.ts": [
+    "6a70d0d092af9f6f"
+  ],
+  "src/lib/cloud-power.test.ts": [
+    "a9b57b95f906bf42",
+    "ae34aef1bfd83dd1"
+  ],
+  "src/lib/cloud-power.ts": [
+    "6edafdac9e55018c"
+  ],
+  "src/lib/github-refs.test.ts": [
+    "9f1a76d4b233f603",
+    "e70a33ece79c2a58"
+  ],
+  "src/lib/legacy-storage.test.ts": [
+    "08b33ec6ed037756",
+    "11e28d041d811400",
+    "51aa07d90771aa11",
+    "f2ba416996b2f9cb",
+    "fb4a0a962f902b79"
+  ],
+  "src/lib/peer-message.test.ts": [
+    "75de256ae933dc07"
+  ],
+  "src/lib/peer-message.ts": [
+    "8e9ef5730666ae1f"
+  ],
+  "src/lib/plain-preview.test.ts": [
+    "2cb1d2c64856222a",
+    "c937b320a99e71d8"
+  ],
+  "src/lib/thread-refs.test.ts": [
+    "02b89eed48a29f8d",
+    "0338fbd24cde7190",
+    "0994827cdec1064e",
+    "9db59e3c31a2406d"
+  ],
+  "src/lib/unread-divider.test.ts": [
+    "846ca99e93e9c353"
+  ],
+  "src/lib/whats-new.test.ts": [
+    "422ad9000a4549f1",
+    "56af69fe37c1b7ac"
+  ],
+  "src/locales/old-product-name.test.ts": [
+    "3010789c0cf3be50"
+  ],
+  "src/locales/vocabulary.test.ts": [
+    "0d3d6cc7c34c8672",
+    "16df9b9d21174437",
+    "2468cd4d5611f3c3",
+    "24f140794dac6e51",
+    "336db746bf595c99",
+    "378a793da071bb3a",
+    "54b9247b0b853aaa",
+    "5936fda3fd204fee",
+    "679b0c334e1b9990",
+    "6f62b5c09716b3e0",
+    "9afcb89e8a2e8c8b",
+    "9ca5be299bdb3e33",
+    "a17eb41abee3d6d9",
+    "abff57d7f0daf5ed",
+    "b9ddd7f8058b5293",
+    "d7c07e41f6792b7e",
+    "f010ac7c1a5758d6",
+    "fff5166ca6074834"
+  ],
+  "src/state/api-background.test.ts": [
+    "8fd759661912459b"
+  ],
+  "third_party/browser/README.md": [
+    "7efec32248006356",
+    "ded95619a27b5aee"
+  ],
+  "third_party/browser/agent-browser-windows-stdio.patch": [
+    "1d0c945b85fbbdc9",
+    "7b63b59c20c67c13",
+    "7b63b59c20c67c13",
+    "85f734fbe53a5e20"
+  ],
+  "third_party/puppeteer/README.md": [
+    "77835e8ff9df18ee"
+  ]
+}

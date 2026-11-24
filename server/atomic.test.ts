@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:fs", { spy: true });
 vi.resetModules();
 const spied = await import("node:fs");
-const { renameWithRetry, writeFileAtomic, writeFileAtomicIfChanged } = await import("./atomic.ts");
+const { removeDeadTempFiles, renameWithRetry, writeFileAtomic, writeFileAtomicIfChanged } = await import("./atomic.ts");
 
 describe("writeFileAtomic", () => {
   let dir: string;
@@ -247,6 +247,71 @@ describe("renameWithRetry", () => {
       const stub = failing(Number.MAX_SAFE_INTEGER, code);
       expect(() => renameWithRetry("a.tmp", "a", stub.rename)).toThrow(new RegExp(code));
       expect(stub.calls).toBe(1);
+    }
+  });
+});
+
+describe("removeDeadTempFiles", () => {
+  const uuid = "0b9c3a52-7d1e-4f6a-9b2c-5e8d1a3f7c60";
+  const deadPid = 4_000_001;
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "seira-atomic-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const touch = (name: string) => writeFileSync(join(dir, name), "{}");
+  const gone = (pid: number) => pid === deadPid;
+
+  it("removes the temp file of a process that is gone and keeps the file itself", () => {
+    touch("bots.json");
+    touch(`bots.json.${deadPid}.${uuid}.tmp`);
+
+    expect(removeDeadTempFiles(dir, ["bots.json"], (pid) => !gone(pid))).toEqual([`bots.json.${deadPid}.${uuid}.tmp`]);
+    expect(readdirSync(dir)).toEqual(["bots.json"]);
+  });
+
+  it("keeps the temp file of a live process and of this process", () => {
+    const live = `bots.json.4000002.${uuid}.tmp`;
+    const mine = `bots.json.${process.pid}.${uuid}.tmp`;
+    touch(live);
+    touch(mine);
+
+    expect(removeDeadTempFiles(dir, ["bots.json"], (pid) => pid !== deadPid)).toEqual([]);
+    expect(readdirSync(dir).sort()).toEqual([live, mine].sort());
+  });
+
+  it("leaves other files, other names and anything that is not a regular file", () => {
+    const others = [`groups.json.${deadPid}.${uuid}.tmp`, `bots.json.${deadPid}.tmp`, `bots.json.${deadPid}.${uuid}.tmp.bak`, `notes.${deadPid}.${uuid}.tmp`];
+    others.forEach(touch);
+    mkdirSync(join(dir, `bots.json.${deadPid}.${"1".repeat(8)}-1111-1111-1111-${"1".repeat(12)}.tmp`));
+
+    expect(removeDeadTempFiles(dir, ["bots.json"], () => false)).toEqual([]);
+    expect(readdirSync(dir)).toHaveLength(others.length + 1);
+  });
+
+  it("handles every name it is given, and a folder that is not there", () => {
+    touch(`bots.json.${deadPid}.${uuid}.tmp`);
+    touch(`groups.json.${deadPid}.${uuid}.tmp`);
+
+    expect(removeDeadTempFiles(dir, ["bots.json", "groups.json"], () => false)).toHaveLength(2);
+    expect(removeDeadTempFiles(join(dir, "missing"), ["bots.json"], () => false)).toEqual([]);
+  });
+
+  it("says a process that cannot be asked about is alive, as EPERM does", () => {
+    touch(`bots.json.${deadPid}.${uuid}.tmp`);
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+    });
+    try {
+      expect(removeDeadTempFiles(dir, ["bots.json"])).toEqual([]);
+      kill.mockImplementation(() => {
+        throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
+      });
+      expect(removeDeadTempFiles(dir, ["bots.json"])).toHaveLength(1);
+    } finally {
+      kill.mockRestore();
     }
   });
 });
