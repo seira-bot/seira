@@ -681,6 +681,16 @@ describe("pages access", () => {
     expect(applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } })).toBe(true);
   });
 
+  it("takes a pages token with the Seira prefix as well as the released prefix, and no other prefix", () => {
+    const message = (token: string) => ({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token } });
+    const body = "d".repeat(43);
+    expect(applyIncludedPagesMessage(message(`seira_pd_${body}`))).toBe(true);
+    expect(applyIncludedPagesMessage(message(FAKE_DESKTOP_TOKEN))).toBe(true);
+    for (const token of [`other_pd_${body}`, `seira_pu_${body}`, `seira_pd_${body.slice(1)}`, `seira_pd_${body}x`, `xseira_pd_${body}`]) {
+      expect(() => applyIncludedPagesMessage(message(token)), token).toThrow();
+    }
+  });
+
   it("signs a home's request exactly as the Admin checks it", () => {
     expect(pagesHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"action":"create"}')).toBe("smys7kDYS99REKsdwsd9OaXv6pH_hP1Wajaq3KrTiVo");
   });

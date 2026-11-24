@@ -692,6 +692,11 @@ test("pages access: this sign-in's own pages token on any plan, null without the
   f.pages = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/pages/token", token } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: `seira_xd_${"a".repeat(43)}` } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
+  const seiraToken = `seira_pd_${"a".repeat(43)}`;
+  f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: seiraToken } }; assert.deepEqual(await f.client.pagesAccess(), { url, token: seiraToken });
+  for (const bad of [`other_pd_${"a".repeat(43)}`, `seira_pu_${"a".repeat(43)}`, `seira_pd_${"a".repeat(42)}`, `xseira_pd_${"a".repeat(43)}`]) {
+    f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: bad } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
+  }
   f.pages = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.pagesAccess());
 });
 
