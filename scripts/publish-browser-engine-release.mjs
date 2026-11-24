@@ -5,6 +5,8 @@
 // the script resolves the exact tag ref, creates a missing one at the build commit without force, reads it again and requires a match.
 // Then `gh release create --verify-tag` runs, so GitHub never makes or moves a tag by itself.
 // A lookup error other than a confirmed 404 stops the script. An existing tag is never moved.
+// Before any tag or release is made, an active tag ruleset must cover this exact tag with `update` and `deletion` rules and no
+// bypass actor. If the ruleset cannot be read, or its bypass list cannot be read, the script stops (fail closed).
 // Exit status: 0 created, 1 `gh` failed or the tag is not on the build commit, 2 wrong use.
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -71,6 +73,47 @@ export function resolveTag(repo, tag, api) {
   return { commit: object.sha };
 }
 
+/** Does a ruleset ref pattern match `ref`? `~ALL`, an exact name, or a glob where `*` stays inside one path part and `**` crosses `/`. */
+function refMatches(pattern, ref) {
+  if (pattern === "~ALL") return true;
+  if (typeof pattern !== "string" || pattern.startsWith("~")) return false;
+  const source = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\u0000/g, ".*");
+  return new RegExp(`^${source}$`).test(ref);
+}
+
+/**
+ * Requires an active tag ruleset that covers the exact engine tag with `update` and `deletion` rules and has no bypass actor,
+ * so the verified tag cannot be moved or deleted between the check and the release. Returns null when it does, else the reason.
+ * Fails closed: a list or detail that cannot be read, or a ruleset without a readable `bypass_actors` list, never counts as protection.
+ */
+export function ensureTagProtection(repo, tag, api) {
+  const ref = `refs/tags/${tag}`;
+  const list = api([`repos/${repo}/rulesets?per_page=100`]);
+  if (!list.ok) return `cannot read the rulesets of ${repo}: ${list.error || "no answer from GitHub"} (status ${list.status ?? "unknown"}). The engine tag cannot be shown to be protected. Nothing was published.`;
+  let rulesets;
+  try { rulesets = JSON.parse(list.body); } catch { return "cannot read the rulesets: the answer is not JSON. Nothing was published."; }
+  if (!Array.isArray(rulesets)) return "cannot read the rulesets: the answer is not a list. Nothing was published.";
+  if (rulesets.length >= 100) return "too many rulesets to check in one page. Nothing was published.";
+  const why = [];
+  for (const summary of rulesets) {
+    if (summary?.target !== "tag" || summary?.enforcement !== "active") continue;
+    const detail = api([`repos/${repo}/rulesets/${summary.id}`]);
+    if (!detail.ok) return `cannot read ruleset ${summary.id}: ${detail.error || "no answer from GitHub"} (status ${detail.status ?? "unknown"}). Nothing was published.`;
+    let rules;
+    try { rules = JSON.parse(detail.body); } catch { return `cannot read ruleset ${summary.id}: the answer is not JSON. Nothing was published.`; }
+    const name = `ruleset "${rules?.name ?? summary.id}"`;
+    const names = rules?.conditions?.ref_name;
+    if (!(names?.include ?? []).some((pattern) => refMatches(pattern, ref)) || (names?.exclude ?? []).some((pattern) => refMatches(pattern, ref))) { why.push(`${name} does not cover ${ref}`); continue; }
+    const types = new Set((rules.rules ?? []).map((rule) => rule?.type));
+    const missing = ["update", "deletion"].filter((type) => !types.has(type));
+    if (missing.length) { why.push(`${name} covers ${ref} but has no ${missing.join(" and ")} rule`); continue; }
+    if (!Array.isArray(rules.bypass_actors)) return `${name} covers ${ref}, but its bypass actors cannot be read with this token. Failing closed. Nothing was published.`;
+    if (rules.bypass_actors.length > 0) { why.push(`${name} has ${rules.bypass_actors.length} bypass actor(s)`); continue; }
+    return null;
+  }
+  return `no active tag ruleset protects ${ref} against update and deletion with no bypass${why.length ? ` (${why.join("; ")})` : ""}. Create the ruleset first (include refs/tags/browser-engine-v*, rules update and deletion, no bypass). Nothing was published.`;
+}
+
 /**
  * Makes sure `refs/tags/<tag>` exists and points at the build commit. Returns null when it does, else the reason.
  * An existing tag is never moved. A missing tag is created at the build commit without force, then read again and compared.
@@ -100,7 +143,8 @@ export function main(argv, run = (args) => execFileSync("gh", args, { stdio: "in
     console.error(`${error.message}\n${USAGE}`);
     return 2;
   }
-  const problem = ensureTag(opts.repo ?? "seira-bot/seira", opts.tag, opts.target, api);
+  const repo = opts.repo ?? "seira-bot/seira";
+  const problem = ensureTagProtection(repo, opts.tag, api) ?? ensureTag(repo, opts.tag, opts.target, api);
   if (problem) {
     console.error(problem);
     return 1;

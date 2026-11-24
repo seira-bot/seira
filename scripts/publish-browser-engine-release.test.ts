@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { engineReleaseArgs, ensureTag, main, parseArgs, resolveTag } from "./publish-browser-engine-release.mjs";
+import { engineReleaseArgs, ensureTag, ensureTagProtection, main as realMain, parseArgs, resolveTag } from "./publish-browser-engine-release.mjs";
 
 const TAG = "browser-engine-v0.36.0-seira.2";
 const SHA = "c521eab".padEnd(40, "0");
@@ -46,6 +46,16 @@ describe("publish-browser-engine-release", () => {
     expect(() => parseArgs([TAG, "--bogus"])).toThrow(/unknown option/);
     expect(() => parseArgs([TAG, "--target"])).toThrow(/needs a value/);
   });
+
+  // A fake ruleset API. `main` goes through `protectedApi`, so the older tests see a protected engine-tag namespace.
+  const ruleApi = (include: string[], types = ["update", "deletion"], bypass: unknown = [], extra: Record<string, unknown> = {}) => (args: string[]) => {
+    if (args[0].includes("/rulesets?")) return { ok: true, body: JSON.stringify([{ id: 7, target: "tag", enforcement: "active" }, { id: 8, target: "branch", enforcement: "active" }]) };
+    if (args[0].endsWith("/rulesets/7")) return { ok: true, body: JSON.stringify({ id: 7, name: "browser engine tags", conditions: { ref_name: { include, exclude: [] } }, rules: types.map((type) => ({ type })), ...(bypass === "absent" ? {} : { bypass_actors: bypass }), ...extra }) };
+    return { ok: false, status: 404, error: "unexpected call" };
+  };
+  const PROTECTED = ruleApi(["refs/tags/browser-engine-v*"]);
+  const protectedApi = (api: (args: string[]) => unknown) => (args: string[]) => (args[0].includes("/rulesets") ? PROTECTED(args) : api(args));
+  const main = (argv: string[], run?: (args: string[]) => void, api?: (args: string[]) => unknown) => realMain(argv, run, protectedApi(api as never) as never);
 
   const REF = (type: string, sha: string) => ({ ok: true, body: JSON.stringify({ object: { type, sha } }) });
   const NOT_FOUND = { ok: false, status: 404, error: "gh: Not Found (HTTP 404)" };
@@ -126,6 +136,52 @@ describe("publish-browser-engine-release", () => {
     expect(ensureTag("o/r", TAG, SHA, (args: string[]) => { if (args.includes("POST")) { made = true; return post; } return made ? REF("commit", OTHER) : NOT_FOUND; })).toMatch(/after it was created/);
     made = false;
     expect(ensureTag("o/r", TAG, SHA, (args: string[]) => { if (args.includes("POST")) { made = true; return post; } return made ? { ok: false, status: 500, error: "x" } : NOT_FOUND; })).toMatch(/cannot read/);
+  });
+
+  it("rejects a release when only the app tag ruleset (refs/tags/v*) exists, even if the tag has the right commit: nonzero exit and no release command", () => {
+    const runs: string[][] = [];
+    const calls: string[][] = [];
+    const api = (args: string[]) => { calls.push(args); return args[0].includes("/rulesets") ? ruleApi(["refs/tags/v*"])(args) : REF("commit", SHA); };
+    expect(quietly(() => realMain([TAG, "--target", SHA, "--", "a"], (args: string[]) => { runs.push(args); }, api as never))).toBe(1);
+    expect(runs).toEqual([]);
+    expect(calls.some((args) => args.includes("POST"))).toBe(false);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(["refs/tags/v*"]) as never)).toMatch(/no active tag ruleset protects refs\/tags\/browser-engine-v/);
+  });
+
+  it("accepts a ruleset that covers the engine tag with update and deletion rules and no bypass, with the same commit", () => {
+    const runs: string[][] = [];
+    const api = (args: string[]) => (args[0].includes("/rulesets") ? ruleApi(["refs/tags/browser-engine-v*"])(args) : REF("commit", SHA));
+    expect(realMain([TAG, "--target", SHA, "--", "a"], (args: string[]) => { runs.push(args); }, api as never)).toBe(0);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toContain("--verify-tag");
+    for (const pattern of ["~ALL", `refs/tags/${TAG}`, "refs/tags/browser-engine-v*-seira.*", "refs/tags/**"]) expect(ensureTagProtection("o/r", TAG, ruleApi([pattern]) as never), pattern).toBeNull();
+  });
+
+  it("rejects a ruleset that does not stop updates or deletions, or that lets someone bypass them", () => {
+    const covered = ["refs/tags/browser-engine-v*"];
+    expect(ensureTagProtection("o/r", TAG, ruleApi(covered, ["deletion"]) as never)).toMatch(/no update rule/);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(covered, ["update"]) as never)).toMatch(/no deletion rule/);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(covered, ["creation", "non_fast_forward"]) as never)).toMatch(/no update and deletion rule/);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(covered, ["update", "deletion"], [{ actor_id: 1, actor_type: "Team", bypass_mode: "always" }]) as never)).toMatch(/bypass actor/);
+    const inactive = (args: string[]) => (args[0].includes("/rulesets?") ? { ok: true, body: JSON.stringify([{ id: 7, target: "tag", enforcement: "evaluate" }]) } : ruleApi(covered)(args));
+    expect(ensureTagProtection("o/r", TAG, inactive as never)).toMatch(/no active tag ruleset/);
+    const excluded = ruleApi(covered, ["update", "deletion"], [], {});
+    expect(ensureTagProtection("o/r", TAG, ((args: string[]) => { const r = excluded(args) as { ok: boolean; body?: string }; if (args[0].endsWith("/7")) { const b = JSON.parse(r.body as string); b.conditions.ref_name.exclude = [`refs/tags/${TAG}`]; return { ok: true, body: JSON.stringify(b) }; } return r; }) as never)).toMatch(/does not cover/);
+  });
+
+  it("fails closed when the rulesets or their bypass list cannot be read", () => {
+    for (const status of [401, 403, 404, 500, null]) expect(ensureTagProtection("o/r", TAG, (() => ({ ok: false, status, error: "no access" })) as never), String(status)).toMatch(/cannot read the rulesets/);
+    expect(ensureTagProtection("o/r", TAG, ruleApi(["refs/tags/browser-engine-v*"], ["update", "deletion"], "absent") as never)).toMatch(/bypass actors cannot be read/);
+    const noDetail = (args: string[]) => (args[0].includes("/rulesets?") ? ruleApi([])(args) : { ok: false, status: 403, error: "forbidden" });
+    expect(ensureTagProtection("o/r", TAG, noDetail as never)).toMatch(/cannot read ruleset 7/);
+    expect(ensureTagProtection("o/r", TAG, (() => ({ ok: true, body: "{}" })) as never)).toMatch(/not a list/);
+  });
+
+  it("checks the protection before it creates a missing tag", () => {
+    const calls: string[][] = [];
+    const api = (args: string[]) => { calls.push(args); return args[0].includes("/rulesets") ? ruleApi(["refs/tags/v*"])(args) : NOT_FOUND; };
+    expect(quietly(() => realMain([TAG, "--target", SHA, "--", "a"], () => {}, api as never))).toBe(1);
+    expect(calls.some((args) => args.includes("POST") || args[0].includes("/git/ref/"))).toBe(false);
   });
 
   it("main exits 2 on wrong use, 1 when gh fails, 0 on success", () => {
