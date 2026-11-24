@@ -20,7 +20,7 @@ const ENVIRONMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 /** A switch is kept for this long after it started, and no more than MAX_OPERATIONS at once, in memory only. */
 const OPERATION_TTL_MS = 30 * 60_000;
 const MAX_OPERATIONS = 50;
-const OUTCOMES = ["done", "failed", "superseded"] as const;
+const OUTCOMES = ["done", "failed", "superseded", "cancelled"] as const;
 
 export interface Workspace {
   id: string;
@@ -111,8 +111,6 @@ interface Operation extends WorkspaceSwitch {
   owner: string;
   action: WorkspaceSwitchAction;
   startedAt: number;
-  /** The order of start, which a clock that does not move between two requests cannot give. */
-  seq: number;
 }
 
 export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, newId = () => randomBytes(16).toString("hex") }: {
@@ -125,7 +123,6 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, n
   let waiters: Array<() => void> = [];
   // Insertion order is start order, so the oldest switch is the first entry.
   const operations = new Map<string, Operation>();
-  let sequence = 0;
 
   function prune(): void {
     for (const [id, operation] of operations) if (now() - operation.startedAt > OPERATION_TTL_MS) operations.delete(id);
@@ -134,23 +131,10 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, n
 
   const view = ({ id, workspaceId, environmentId, state }: Operation): WorkspaceSwitch => ({ id, workspaceId, ...(environmentId ? { environmentId } : {}), state });
 
-  /** The desktop app tells how a switch ended. A hurry request follows the switch that it hurries, so both end alike. A switch
-   * that a newer one took over ends as `cancelled` when a cancel request came after it, and as `superseded` otherwise; it stays
-   * `pending` while a hurry request for the same workspace still runs, because that request carries it on. */
+  /** The desktop app tells how one switch ended, by its id. Only that switch changes: the app knows which switch it cancelled
+   * or hurried, so nothing here guesses from the order of requests. An ended switch does not change again. */
   function finish(operation: Operation, outcome: (typeof OUTCOMES)[number]): void {
-    if (operation.state !== "pending") return;
-    const mine = (other: Operation) => other.owner === operation.owner;
-    const later = [...operations.values()].filter((other) => other.seq > operation.seq && mine(other));
-    let state: SwitchState = outcome;
-    if (outcome === "superseded") {
-      if (later.some((other) => other.action === "hurry" && other.workspaceId === operation.workspaceId && other.state === "pending")) return;
-      state = later.some((other) => other.action === "cancel") ? "cancelled" : "superseded";
-    }
-    operation.state = state;
-    if (operation.action !== "hurry") return;
-    for (const earlier of operations.values()) {
-      if (earlier.state === "pending" && earlier.seq < operation.seq && mine(earlier) && earlier.workspaceId === operation.workspaceId) earlier.state = state;
-    }
+    if (operation.state === "pending") operation.state = outcome;
   }
 
   const nextFacts = (): Promise<void> =>
@@ -199,9 +183,10 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS, now = Date.now, n
       else return { status: 409, body: { error: "workspace_unavailable" } };
       let operation: Operation | null = null;
       if (action) {
-        prune();
-        operation = { id: newId(), owner, action, startedAt: now(), seq: ++sequence, workspaceId: id, ...(target.environmentId ? { environmentId: target.environmentId } : {}), state: "pending" };
+        operation = { id: newId(), owner, action, startedAt: now(), workspaceId: id, ...(target.environmentId ? { environmentId: target.environmentId } : {}), state: "pending" };
         operations.set(operation.id, operation);
+        // Trim after the insert, so the history never holds more than MAX_OPERATIONS.
+        prune();
         const changed = nextFacts();
         send({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation: operation.id });
         await changed;

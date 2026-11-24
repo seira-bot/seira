@@ -535,34 +535,39 @@ describe("the operation of a switch", () => {
     expect((await statusOf(id)).json.switch.state).toBe("pending");
   });
 
-  it("ends the switch that a hurry request hurries together with it", async () => {
+  it("changes only the switch that a result names, to the outcome it names", async () => {
     facts(FACTS);
     const first = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
     facts([FACTS[0], { ...FACTS[1], state: "waiting", waitingFor: "Scout" }, FACTS[2]]);
     const hurry = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work", now: true })).json.switch;
-    finish(first.id, "superseded");
-    expect((await statusOf(first.id)).json.switch.state, "a hurry request carries it on").toBe("pending");
+    const cancel = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "local" })).json.switch;
     finish(hurry.id, "done");
-    expect((await statusOf(first.id)).json.switch.state).toBe("done");
+    expect((await statusOf(first.id)).json.switch.state, "a hurry result does not reach an earlier switch").toBe("pending");
+    expect((await statusOf(cancel.id)).json.switch.state, "nor a later one").toBe("pending");
+    finish(cancel.id, "failed");
+    finish(first.id, "superseded");
+    expect((await statusOf(first.id)).json.switch.state, "a later cancel that failed is not the cause").toBe("superseded");
     expect((await statusOf(hurry.id)).json.switch.state).toBe("done");
+    expect((await statusOf(cancel.id)).json.switch.state).toBe("failed");
   });
 
-  it("reads a switch that a cancel request ended as cancelled, and one that a newer switch took over as superseded", async () => {
+  it("reads each outcome that the app names: done, failed, superseded and cancelled", async () => {
     facts(FACTS);
-    const first = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
-    facts([FACTS[0], { ...FACTS[1], state: "waiting", waitingFor: "Scout" }, FACTS[2]]);
-    const cancel = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "local" })).json.switch;
-    expect(cancel.workspaceId).toBe("local");
-    finish(cancel.id, "done");
-    finish(first.id, "superseded");
-    expect((await statusOf(first.id)).json.switch.state).toBe("cancelled");
-    expect((await statusOf(cancel.id)).json.switch.state).toBe("done");
+    const ids: string[] = [];
+    for (const outcome of ["done", "failed", "superseded", "cancelled"]) {
+      const { id } = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).json.switch;
+      finish(id, outcome);
+      ids.push(id);
+    }
+    expect(await Promise.all(ids.map(async (id) => (await statusOf(id)).json.switch.state))).toEqual(["done", "failed", "superseded", "cancelled"]);
+  });
+
+  it("does not let another phone's result end the switch of this phone", async () => {
     facts(FACTS);
     const older = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" }, TOKEN)).json.switch;
     const newer = (await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "home" }, PEER_TOKEN)).json.switch;
-    finish(older.id, "superseded");
-    expect((await statusOf(older.id)).json.switch.state, "another phone's cancel or hurry does not count").toBe("superseded");
-    expect(newer.state).toBe("pending");
+    finish(newer.id, "superseded");
+    expect((await statusOf(older.id)).json.switch.state).toBe("pending");
   });
 
   it("answers 404 switch_not_found for an unknown id, an id that cannot be one, and another phone's switch", async () => {
@@ -604,6 +609,31 @@ describe("the operation of a switch", () => {
     expect((await call("GET", `${WORKSPACE_SWITCH_ROUTE}/${id}/more`)).status).toBe(404);
     expect((await call("POST", `${WORKSPACE_SWITCH_ROUTE}/${id}`, {})).status).toBe(404);
     expect(harnessHits).toEqual([]);
+  });
+
+  it("never holds more than 50 switches, not even right after an insert and before any read", async () => {
+    let counter = 0;
+    // The history is private, so a spy on Map.set finds it. A read prunes too, so only its size right after a switch counts.
+    const maps = new Set<Map<unknown, unknown>>();
+    const set = Map.prototype.set;
+    const spy = vi.spyOn(Map.prototype, "set").mockImplementation(function (this: Map<unknown, unknown>, key: unknown, value: unknown) {
+      if (typeof key === "string" && /^[0-9a-f]{32}$/.test(key)) maps.add(this);
+      return set.call(this, key, value);
+    });
+    try {
+      const channel = createWorkspaces({ send: () => {}, settleMs: 1, now: () => 1_000_000, newId: () => (++counter).toString(16).padStart(32, "0") });
+      channel.receive({ type: WORKSPACES_MESSAGE, workspaces: FACTS });
+      for (let index = 0; index < 53; index++) {
+        await channel.switchTo({ id: "work" }, "device-1");
+        for (const map of maps) expect(map.size, `after switch ${index + 1}`).toBeLessThanOrEqual(50);
+      }
+      expect(maps.size).toBeGreaterThan(0);
+      expect(channel.operation("00000000000000000000000000000035", "device-1").status).toBe(200);
+      expect(channel.operation("00000000000000000000000000000003", "device-1").status).toBe(404);
+      expect(channel.operation("00000000000000000000000000000004", "device-1").status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("keeps a switch for 30 minutes, then forgets it, and keeps the last 50", () => {

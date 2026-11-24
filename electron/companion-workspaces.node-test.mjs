@@ -172,3 +172,103 @@ test("a companion that is gone does not break the switch: the result is dropped 
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(broken.logs.join("\n"), /could not report a switch \(pipe closed\)/);
 });
+
+// A result names the switch that ended, and only that one.
+const OP_A = "a".repeat(32), OP_B = "b".repeat(32), OP_C = "c".repeat(32), OP_H = "d".repeat(32);
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+const gate = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
+const FACTS_3 = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "ready" }, { id: "home", current: false, state: "ready" }];
+/** Each `open(id)` waits for its own gate, so a test ends each switch when it wants. */
+function held() {
+  const w = setup({ facts: FACTS_3 });
+  w.gates = [];
+  w.profiles.open = async (id) => { const g = gate(); w.gates.push({ id, ...g }); return g.promise; };
+  w.start = async (action, id, operation) => { w.module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation }); await tick(); };
+  return w;
+}
+const reported = (w) => results(w).map((message) => [message.id, message.outcome]);
+
+test("a cancel that cancelled the waiting switch ends that switch as cancelled, by its id", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.settling = { id: "work", name: "Scout" };
+  await w.start("cancel", "local", OP_C);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_C, "done"], [OP_A, "cancelled"]]);
+});
+
+test("a later cancel that cancelled nothing does not change a switch that ended otherwise", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  await w.start("open", "home", OP_B);
+  w.gates[0].resolve(null);
+  await tick();
+  w.settling = null;
+  await w.start("cancel", "local", OP_C);
+  assert.deepEqual(reported(w), [[OP_A, "superseded"], [OP_C, "done"]]);
+  assert.deepEqual(w.calls.filter(([name]) => name === "cancel"), [], "nothing waited, so nothing was cancelled");
+});
+
+test("the first request that took the turn is the cause, so a cancel after a newer switch does not turn superseded into cancelled", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  await w.start("open", "home", OP_B);
+  w.settling = { id: "home", name: "Scout" };
+  await w.start("cancel", "local", OP_C);
+  w.gates[0].resolve(null);
+  w.gates[1].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_C, "done"], [OP_A, "superseded"], [OP_B, "cancelled"]]);
+});
+
+test("a switch that the rail took over ends as superseded, and a cancel of the rail's own switch names no phone switch", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_A, "superseded"]]);
+  w.settling = { id: "home", name: "Scout" };
+  await w.start("cancel", "local", OP_C);
+  assert.deepEqual(reported(w), [[OP_A, "superseded"], [OP_C, "done"]]);
+});
+
+test("a hurry that fails ends the hurried switch as failed, and does not touch a switch for another workspace", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.settling = { id: "work", name: "Scout" };
+  await w.start("hurry", "work", OP_H);
+  await w.start("open", "home", OP_B);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [], "the hurried switch waits for the hurry to end");
+  w.gates[1].resolve(false);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_H, "failed"], [OP_A, "failed"]]);
+  assert.equal(results(w).some((message) => message.id === OP_B), false, "the switch for another workspace got no result");
+});
+
+test("a hurry that reports before the hurried switch does ends it with the hurry's outcome when its own end comes", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.settling = { id: "work", name: "Scout" };
+  await w.start("hurry", "work", OP_H);
+  w.gates[1].resolve(true);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_H, "done"]]);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_H, "done"], [OP_A, "done"]]);
+});
+
+test("a hurry that a newer switch takes over ends the hurried switch as that one ends", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.settling = { id: "work", name: "Scout" };
+  await w.start("hurry", "work", OP_H);
+  await w.start("open", "home", OP_B);
+  w.gates[0].resolve(null);
+  w.gates[1].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_H, "superseded"], [OP_A, "superseded"]]);
+});
