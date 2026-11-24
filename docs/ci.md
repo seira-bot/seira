@@ -358,6 +358,11 @@ sets them in GitHub **Settings → Actions → General**:
 | Allow GitHub Actions to create and approve pull requests | Off |
 
 Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the default branch with no bypass actor.
+An organization admin's merge then also needs a green `CI` check.
+
+In **Settings → General → Releases**, turn on release immutability. After a
+release is published, nobody can add, change, or delete its assets, or move
+its tag.
 
 ### The `release` environment
 
@@ -389,11 +394,20 @@ GitHub **Settings → Environments**:
 | Setting | Value |
 | --- | --- |
 | Required reviewers | The `maintainers` team |
-| Deployment branches and tags | Selected branches and tags: `main` only |
+| Deployment branches and tags | Selected branches and tags: `main` and the tag pattern `v*` |
+| Allow administrators to bypass configured protection rules | Off |
 | Environment secrets | None |
+
+Set "Allow administrators to bypass configured protection rules" to off on the
+`release` environment too.
 
 The repository variable `RELEASE_MAINTAINERS` holds the maintainers' GitHub
 logins as a JSON array, for example `["login-a", "login-b"]`.
+
+Seira keeps the variable at `[]`. Every release run then waits for a person in
+the `maintainers` team to approve it, also a run that a maintainer starts. An
+agent that works with a maintainer's account cannot publish to npm or
+`ghcr.io` without that approval.
 
 - A maintainer's run skips the `approval` job and does not wait.
 - Another person's run waits until a maintainer approves the `approval` job.

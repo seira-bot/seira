@@ -378,8 +378,8 @@ release must exist before the run. Step 4 creates it.
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
 gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
-# A person who is not a maintainer: open the run page, select "Review deployments",
-# and ask a maintainer to approve "release-approval".
+# Each run waits: a maintainer opens the run page, selects "Review deployments",
+# and approves "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
 node scripts/release-assets.mjs check v<version>
 ```
@@ -459,15 +459,14 @@ install the image of the newest release, so publish it for every release.
 ```sh
 gh workflow run server-image.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run list --repo seira-bot/seira --workflow server-image.yml --limit 1
-# A person who is not a maintainer: open the run page, select "Review deployments",
-# and ask a maintainer to approve "release-approval".
+# Each run waits: a maintainer opens the run page, selects "Review deployments",
+# and approves "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
 docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ```
 
 - Start the run from `main`. The `release` environment refuses other branches.
-- A run that a maintainer starts needs no approval. For another person, the
-  approval request shows after both builds pass. A maintainer approves it
+- The approval request shows after both builds pass. A maintainer approves it
   within 7 days, or the saved images expire. Then start a new run.
 - Maintainers are the logins in the repository variable `RELEASE_MAINTAINERS`.
   When the variable is missing, empty, or not a JSON array, every run waits
@@ -496,8 +495,8 @@ node ../../scripts/release-assets.mjs check v<version>
 ```
 
 Each check must print `OK`, and the `check` command must print no `FAIL`
-line. If a check fails, delete the release assets and upload them again. Never
-edit an asset in place.
+line. A published release is immutable: nobody can change, delete, or add an
+asset. If a check fails, publish a new patch release with correct files.
 
 ## Publish to npm
 
@@ -519,19 +518,15 @@ npm view @seira-bot/seira@<version> version
 - The tag must be equal to `v` and the version in `package.json`. The workflow
   stops when they differ.
 - The workflow finds the commit of the tag first, and builds that commit only.
-- A run that a maintainer starts needs no approval. For another person, a
-  maintainer approves `release-approval` (see
+- Each run waits until a maintainer approves `release-approval` (see
   [CI](ci.md#the-release-approval-environment)). The `publish` job then uses
   the `release` environment, as the other release jobs do.
 - When the version is already on npm, the workflow skips the build and the
   publish. A repeated run changes nothing.
 - npm adds a provenance statement that links the package to this commit and run.
-- The `release` environment accepts the `main` branch and the `v*` tags, so a
-  run that starts from a published release can use it. The `release-approval`
-  environment accepts `main` only. So a run that starts from a published
-  release, and that a person outside the maintainers starts, fails at the
-  `approval` job. It does not publish. This is intended. That person starts the
-  workflow by hand from `main` instead.
+- The `release` and `release-approval` environments accept the `main` branch
+  and the `v*` tags, so a run that starts from a published release waits for
+  the approval and then publishes.
 - A person who is not a maintainer cannot re-run a failed `publish` job alone.
   The job reuses no approval of an earlier attempt. Re-run all jobs for a new
   approval, or ask a maintainer to re-run.

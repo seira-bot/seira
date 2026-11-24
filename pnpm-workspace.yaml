@@ -13,6 +13,11 @@ supportedArchitectures:
   cpu:
     - arm64
     - x64
+# Security: a hijacked npm release is usually found and removed within days. pnpm installs no version younger than
+# 7 days (in minutes), and refuses a version that has less publish trust (provenance) than the versions before it.
+# For an urgent fix, add the package to minimumReleaseAgeExclude or trustPolicyExclude in the same pull request.
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
 allowBuilds:
   electron: true # postinstall downloads the Electron dist
   esbuild: true # postinstall validates the platform binary
