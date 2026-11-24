@@ -123,24 +123,34 @@ export function createWorkspaces({ send, settleMs = SETTLE_MS }: {
   };
 }
 
-/** Answers one of the two routes. `readBody` reads the bounded JSON body of the switch request. */
+/** Answers one of the two routes. `readBody` reads the bounded JSON body of the switch request. `allowed` reads the owner's
+ * choice for this phone from the live device record: off, it lists the current workspace only and refuses every switch.
+ * It is a function, not a value, because the body is read after an await: a phone revoked while its request waits must
+ * not switch, so the choice is read again right before the list is built and right before the switch. */
 export async function answerWorkspaces(
   channel: WorkspaceChannel | undefined,
   route: WorkspaceRoute,
   method: string,
   path: string,
   readBody: () => Promise<Record<string, unknown>>,
+  allowed: () => boolean,
 ): Promise<WorkspaceReply> {
   const absent: WorkspaceReply = { status: 404, body: { error: `no route: ${method} ${path}` } };
   const list = channel?.list();
   if (!channel || !list) return absent;
-  if (route === "list") return { status: 200, body: { workspaces: list } };
+  const refused: WorkspaceReply = { status: 403, body: { error: "This phone cannot open other workspaces. Turn it on for this phone in Settings on the computer." } };
+  if (route === "list") return { status: 200, body: { workspaces: allowed() ? list : list.filter((workspace) => workspace.current) } };
+  if (!allowed()) return refused;
   let body: Record<string, unknown>;
   try {
     body = await readBody();
   } catch {
     return { status: 400, body: { error: "invalid request" } };
   }
+  // The owner may have turned this phone off, or unpaired it, while the body was read.
+  if (!allowed()) return refused;
   const reply = await channel.switchTo(body);
+  // The switch waits for the desktop's next facts. A phone turned off or unpaired during that wait gets no list.
+  if (!allowed()) return refused;
   return reply.status === 404 && (reply.body as { error?: string }).error === "no route" ? absent : reply;
 }

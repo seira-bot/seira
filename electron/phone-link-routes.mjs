@@ -11,7 +11,7 @@ const SLEEP_CHECK_MS = 60_000;
  *
  * `wake()` starts the sidecar when the launch rule now holds (a way in is on and something is paired).
  */
-export function createPhoneLinkRoutes({ rememberRoute, routeOn, tailscaleRoute = () => null, dismissNotice, state, running, wake, sleep, changed = () => {}, check = checkTailscale, shareChanged = async () => {}, now = Date.now, setTimer = setInterval, log = () => {} }) {
+export function createPhoneLinkRoutes({ workspaceAccess = (deviceId, allowed) => import("./companion.mjs").then((companion) => companion.companionWorkspaceAccess(deviceId, allowed)), rememberRoute, routeOn, tailscaleRoute = () => null, dismissNotice, state, running, wake, sleep, changed = () => {}, check = checkTailscale, shareChanged = async () => {}, now = Date.now, setTimer = setInterval, log = () => {} }) {
   let activeSince = 0;
   let timer = null;
 
@@ -72,6 +72,11 @@ export function createPhoneLinkRoutes({ rememberRoute, routeOn, tailscaleRoute =
       if (on === true) await wake();
       return state();
     },
+    /** One phone may or may not list and open the other workspaces of this computer. */
+    async setWorkspaceAccess(deviceId, allowed) {
+      await workspaceAccess(deviceId, allowed);
+      return state();
+    },
     async dismissNotice(route) {
       dismissNotice(route);
       return state();
@@ -94,6 +99,7 @@ export function createPhoneLinkRoutes({ rememberRoute, routeOn, tailscaleRoute =
       handle("companion:tailscale", (_event, on) => api.setTailscale(on === true));
       handle("companion:tailscale-computers", (_event, on) => api.setTailscaleComputers(on === true));
       handle("companion:route", (_event, route, on) => api.setRoute(String(route), on === true));
+      handle("companion:workspace-access", (_event, deviceId, allowed) => api.setWorkspaceAccess(String(deviceId), allowed === true));
       handle("companion:notice-dismiss", (_event, route) => api.dismissNotice(String(route)));
     },
     start() {

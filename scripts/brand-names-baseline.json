@@ -298,10 +298,8 @@
   "electron/cloud-lending.node-test.mjs": [
     "42b6ccece4add34b"
   ],
-  "electron/cloud-power.mjs": [
-    "6edafdac9e55018c"
-  ],
   "electron/cloud-power.node-test.mjs": [
+    "5c58d153da82ee6e",
     "877e5930590fc596",
     "9806c80e2eb36d95",
     "ba615e59011b4d1e"
@@ -709,9 +707,6 @@
   ],
   "server/bot-box/env.ts": [
     "723bab029ddc9e8a"
-  ],
-  "server/bot-link/dial.ts": [
-    "096d984c67310275"
   ],
   "server/browser-engine-release.ts": [
     "84860ef7d92b4374"
@@ -1271,11 +1266,9 @@
     "6a70d0d092af9f6f"
   ],
   "src/lib/cloud-power.test.ts": [
+    "5c58d153da82ee6e",
     "a9b57b95f906bf42",
     "ae34aef1bfd83dd1"
-  ],
-  "src/lib/cloud-power.ts": [
-    "6edafdac9e55018c"
   ],
   "src/lib/github-refs.test.ts": [
     "9f1a76d4b233f603",
@@ -1349,5 +1342,8 @@
   ],
   "third_party/puppeteer/README.md": [
     "77835e8ff9df18ee"
+  ],
+  "server/bot-link/dial-power.test.ts": [
+    "5c58d153da82ee6e"
   ]
 }

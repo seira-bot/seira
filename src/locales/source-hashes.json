@@ -37949,7 +37949,11 @@
       "hostedMcp.allBots": "cfb719dd7fdcff57bb5cbb3eb3975a0a55e3469967c78c78f5b253ef32b21609",
       "hostedMcp.disconnectBot": "dfc9094891457d13137506c2f4dd59272b69e256931f1649e525f27569e56f1e",
       "hostedMcp.connectedFor": "4207af1ab41edb2cf539440b93165c483e7ca45ca7fed4d3e8587f040cdb6f9a",
-      "hostedMcp.signedInOff": "a8efff5efab7954e3b3990aecebfbc80af376e2fb9d40e27c7e3048da70fb50e"
+      "hostedMcp.signedInOff": "a8efff5efab7954e3b3990aecebfbc80af376e2fb9d40e27c7e3048da70fb50e",
+      "remote.devices.allowWorkspaces": "6869eabb91e58720b5eb5c2071a0ddb529fe9efeb76c7a95c05ef69460ffdcc1",
+      "remote.devices.allowWorkspacesDetail": "2d1592fd03e80cdd039d82f3e4794bff3da794e89eb7ffedb2ea8b3a3cd3a098",
+      "remote.devices.workspacesAria": "2dbb594dec2b5d1366ca92d86e027cf6a7236529a4ef8f2802f905dc0ebc9e28",
+      "aiImport.drop.backup": "ed9ad239c8e8552237ab7db26c296a8f8b32212d9eea0bb47fab1e22d7811207"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",

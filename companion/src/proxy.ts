@@ -34,7 +34,7 @@ export interface ProxyOptions {
   mutationToken?: () => string | null;
   authenticate: (
     token: string | undefined,
-  ) => { id?: string; cloudDesktopAccess: boolean; browserControlAccess: boolean; e2eAt?: number; routes?: DeviceRoutes } | null;
+  ) => { id?: string; cloudDesktopAccess: boolean; browserControlAccess: boolean; otherWorkspaces?: boolean; e2eAt?: number; routes?: DeviceRoutes } | null;
   /** Where one device may connect from. Read when the endpoint list is built for a device that is not in a request. */
   deviceRoutes?: (deviceId: string) => DeviceRoutes | undefined;
   /** Pairing is handled here and never forwarded: the harness has no such route. */
@@ -545,7 +545,11 @@ export function createProxyHandler(options: ProxyOptions) {
 
     const workspaces = workspaceRoute(method, path);
     if (workspaces) {
-      void answerWorkspaces(options.workspaces, workspaces, method, path, () => readJson(req, 1024))
+      void answerWorkspaces(options.workspaces, workspaces, method, path, () => readJson(req, 1024), () => {
+        // Read from the registry at each use: the device seen at the start of the request may be revoked or unpaired by now.
+        const current = options.authenticate(token);
+        return Boolean(device) && current?.id === device?.id && current?.otherWorkspaces === true;
+      })
         .then((reply) => sendJson(res, reply.status, reply.body));
       return;
     }

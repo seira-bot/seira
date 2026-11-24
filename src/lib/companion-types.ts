@@ -11,6 +11,8 @@ export interface PhoneDevice {
   browserControlAccess?: boolean;
   /** "local": Wi-Fi and Tailscale only. Absent on older sidecars. */
   routes?: "any" | "local";
+  /** True: the owner lets the phone list and open the other workspaces. False or absent: it lists only the current one. */
+  otherWorkspaces?: boolean;
   /** Its first end-to-end session; a device without one is on the old, unencrypted connection. */
   e2eAt?: number;
   /** Its best live encrypted route right now. */
@@ -37,6 +39,8 @@ export interface CompanionState {
   devices: PhoneDevice[];
   connectedDeviceIds?: string[];
   pairing: { code: string; token: string; expiresAt: number } | null;
+  /** True when this computer has workspaces for a phone to open. */
+  workspaces?: boolean;
   addresses?: string[];
   tailscale?: string;
   tailnetName?: string;
@@ -93,4 +97,5 @@ export type CompanionBridge = {
   /** Absent on an app build before the encrypted connection. */
   renewPairing?: () => Promise<CompanionState>;
   routes?: (deviceId: string, routes: "any" | "local") => Promise<CompanionState>;
+  workspaceAccess?: (deviceId: string, allowed: boolean) => Promise<CompanionState>;
 };

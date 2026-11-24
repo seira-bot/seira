@@ -20,6 +20,7 @@ import {
 } from "../src/workspaces.ts";
 
 const TOKEN = "seira_test_token";
+const OTHER_TOKEN = "seira_other_token";
 
 const LIST = [
   { id: "local", name: "This PC", current: true, state: "ready" },
@@ -33,6 +34,8 @@ let harnessHits: string[] = [];
 let sent: Array<Record<string, unknown>> = [];
 let listener: ProxyListener = "lan";
 let workspaces = createWorkspaces({ send: () => {}, settleMs: 5 });
+let otherWorkspaces: boolean | undefined = true;
+let paired = true;
 
 const facts = (list: unknown) => workspaces.receive({ type: WORKSPACES_MESSAGE, workspaces: list });
 
@@ -45,7 +48,11 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => harness.listen(0, "127.0.0.1", resolve));
   const proxy = createProxyHandler({
     harnessPort: (harness.address() as AddressInfo).port,
-    authenticate: (token) => (token === TOKEN ? { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false } : null),
+    authenticate: (token) => {
+      if (token === TOKEN) return !paired ? null : { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces };
+      if (token === OTHER_TOKEN) return { id: "device-2", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces: false };
+      return null;
+    },
     redeem: () => ({ error: "no", code: "pairing_invalid" }) as never,
     serverName: () => "Test computer",
     workspaces: { list: () => workspaces.list(), switchTo: (body) => workspaces.switchTo(body) },
@@ -63,12 +70,14 @@ beforeEach(() => {
   harnessHits = [];
   sent = [];
   listener = "lan";
+  otherWorkspaces = true;
+  paired = true;
   workspaces = createWorkspaces({ send: (message) => sent.push(message as Record<string, unknown>), settleMs: 5 });
 });
 
-function call(method: string, path: string, body?: unknown, token: string | null = TOKEN): Promise<{ status: number; json: any }> {
+function call(method: string, path: string, body?: unknown, token: string | null = TOKEN, raw = false): Promise<{ status: number; json: any }> {
   return new Promise((resolve, reject) => {
-    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const payload = body === undefined ? undefined : raw ? String(body) : JSON.stringify(body);
     const req = request(
       {
         host: "127.0.0.1",
@@ -85,6 +94,32 @@ function call(method: string, path: string, body?: unknown, token: string | null
     );
     req.on("error", reject);
     req.end(payload);
+  });
+}
+
+/** Sends the headers of a switch request, runs `whileWaiting` while the sidecar waits for the body, then sends the body. */
+function callWhileBodyWaits(body: unknown, whileWaiting: () => void): Promise<{ status: number; json: any }> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port: (sidecar.address() as AddressInfo).port,
+        path: WORKSPACE_SWITCH_ROUTE,
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      },
+      (res) => {
+        let text = "";
+        res.on("data", (chunk) => (text += chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, json: text ? JSON.parse(text) : null }));
+      },
+    );
+    req.on("error", reject);
+    req.flushHeaders();
+    setTimeout(() => {
+      whileWaiting();
+      req.end(JSON.stringify(body));
+    }, 50);
   });
 }
 
@@ -229,6 +264,149 @@ describe("a request to switch", () => {
     });
     expect(reply).toBe(400);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("a phone that may not open other workspaces", () => {
+  it("is the default: a device with no such setting lists one workspace and cannot switch", async () => {
+    facts(LIST);
+    otherWorkspaces = undefined;
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(1);
+    expect((await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).status).toBe(403);
+    expect(sent).toEqual([]);
+  });
+
+  it("lists every workspace and switches for a device the owner allowed", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+    expect((await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).status).toBe(200);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("answers one device with 403 and another with a switch, on the same computer at the same time", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    const refused = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" }, OTHER_TOKEN);
+    expect(refused.status).toBe(403);
+    expect(sent).toEqual([]);
+    const allowed = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(allowed.status).toBe(200);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+    expect((await call("GET", WORKSPACES_ROUTE, undefined, OTHER_TOKEN)).json.workspaces).toHaveLength(1);
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+  });
+
+  it("is refused before the body is read, so a body that cannot be read is still 403", async () => {
+    facts(LIST);
+    otherWorkspaces = false;
+    const { status } = await call("POST", WORKSPACE_SWITCH_ROUTE, "{ not json", TOKEN, true);
+    expect(status).toBe(403);
+    expect(sent).toEqual([]);
+  });
+
+  it("refuses a switch when the owner turns the phone off while the body is still being read", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    const { status, json } = await callWhileBodyWaits({ id: "work" }, () => {
+      otherWorkspaces = false;
+    });
+    expect(status).toBe(403);
+    expect(json.error).toMatch(/cannot open other workspaces/);
+    expect(sent).toEqual([]);
+    expect(workspaces.list()?.filter((workspace) => workspace.current).map((workspace) => workspace.id)).toEqual(["local"]);
+  });
+
+  it("refuses a switch when the phone is unpaired while the body is still being read", async () => {
+    facts(LIST);
+    const { status } = await callWhileBodyWaits({ id: "work" }, () => {
+      paired = false;
+    });
+    expect(status).toBe(403);
+    expect(sent).toEqual([]);
+  });
+
+  it("answers 403 without the list when the owner turns the phone off while the desktop's answer is awaited", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    workspaces = createWorkspaces({
+      send: (message) => {
+        sent.push(message as Record<string, unknown>);
+        otherWorkspaces = false;
+        setTimeout(() => facts([{ id: "local", name: "This PC", current: false, state: "ready" }, { id: "work", name: "Work", current: true, state: "ready" }]), 1);
+      },
+      settleMs: 50,
+    });
+    facts(LIST);
+    const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(status).toBe(403);
+    expect(json.workspaces).toBeUndefined();
+    expect(JSON.stringify(json)).not.toMatch(/Work|home/);
+  });
+
+  it("answers 403 without the list when the phone is unpaired while the desktop's answer is awaited", async () => {
+    workspaces = createWorkspaces({
+      send: (message) => {
+        sent.push(message as Record<string, unknown>);
+        paired = false;
+      },
+      settleMs: 20,
+    });
+    facts(LIST);
+    const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" });
+    expect(status).toBe(403);
+    expect(json.workspaces).toBeUndefined();
+  });
+
+  it("still switches when the phone keeps its access while the body is read", async () => {
+    facts(LIST);
+    const { status } = await callWhileBodyWaits({ id: "work" }, () => {});
+    expect(status).toBe(200);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+  });
+
+  it("lists the current workspace only, on the next request after the owner turns the phone off", async () => {
+    facts(LIST);
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+    otherWorkspaces = false;
+    const { status, json } = await call("GET", WORKSPACES_ROUTE);
+    expect(status).toBe(200);
+    expect(json.workspaces.map((workspace: Workspace) => workspace.id)).toEqual(["local"]);
+  });
+
+  it("lists only the current workspace", async () => {
+    facts(LIST);
+    otherWorkspaces = false;
+    const { status, json } = await call("GET", WORKSPACES_ROUTE);
+    expect(status).toBe(200);
+    expect(json.workspaces).toEqual([{ id: "local", name: "This PC", current: true, state: "ready" }]);
+  });
+
+  it("refuses every switch with 403 and sends nothing to the app", async () => {
+    facts([{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting", waitingFor: "Scout" }, { id: "home", current: false, state: "ready" }]);
+    otherWorkspaces = false;
+    for (const body of [{ id: "home" }, { id: "work", now: true }, { id: "local" }]) {
+      const { status, json } = await call("POST", WORKSPACE_SWITCH_ROUTE, body);
+      expect(status).toBe(403);
+      expect(json.error).toMatch(/cannot open other workspaces/);
+      expect(json.error).not.toMatch(/\/api|workspace_|403/);
+    }
+    expect(sent).toEqual([]);
+  });
+
+  it("still answers 404 on both routes while the app has sent no facts", async () => {
+    otherWorkspaces = false;
+    expect((await call("GET", WORKSPACES_ROUTE)).status).toBe(404);
+    expect((await call("POST", WORKSPACE_SWITCH_ROUTE, { id: "work" })).status).toBe(404);
+  });
+
+  it("cannot change its own access through any phone route", async () => {
+    facts(LIST);
+    for (const [method, path] of [["POST", "/devices/device-1/other-workspaces"], ["DELETE", "/devices/device-1/other-workspaces"], ["PUT", "/api/phones/self/workspaces/access"], ["POST", "/api/phones/self/workspaces/access"]]) {
+      const { status } = await call(method, path, { allowed: true });
+      expect([403, 404], `${method} ${path}`).toContain(status);
+    }
+    expect(harnessHits).toEqual([]);
   });
 });
 

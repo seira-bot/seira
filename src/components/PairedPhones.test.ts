@@ -21,6 +21,15 @@ describe("paired phones", () => {
     }
   });
 
+  it("offers the workspace switch only where this computer has workspaces, off by default", () => {
+    expect(row(phone(), state())).not.toContain("Can open other workspaces");
+    for (const [otherWorkspaces, checked] of [[undefined, false], [true, true], [false, false]] as const) {
+      const markup = row(phone({ otherWorkspaces }), state({ workspaces: true }));
+      expect(markup).toContain("Can open other workspaces");
+      expect(markup.match(/<button[^>]*aria-label="Ada can open other workspaces"[^>]*>/)?.[0]).toContain(`aria-checked="${checked}"`);
+    }
+  });
+
   it("offers Connect from only once the computer serves the encrypted connection", () => {
     const e2e = { enabled: true, relay: "connected" as const, node: "relay1.seira.bot", descriptor: null };
     expect(row(phone(), state())).not.toContain("Connect from");

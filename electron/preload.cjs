@@ -340,6 +340,7 @@ const bridge = {
     pairing: (open, expectedToken) => ipcRenderer.invoke("companion:pairing", open, expectedToken),
     cloudDesktop: (deviceId, allowed) => ipcRenderer.invoke("companion:cloud-desktop", deviceId, allowed),
     browserControl: (deviceId, allowed) => ipcRenderer.invoke("companion:browser-control", deviceId, allowed),
+    workspaceAccess: (deviceId, allowed) => ipcRenderer.invoke("companion:workspace-access", String(deviceId), allowed === true),
     revoke: (deviceId) => ipcRenderer.invoke("companion:revoke", deviceId),
     renewPairing: () => ipcRenderer.invoke("companion:pairing-renew"),
     routes: (deviceId, routes) => ipcRenderer.invoke("companion:routes", deviceId, routes),

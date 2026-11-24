@@ -2,7 +2,8 @@
  * asks for one to open. The companion on the computer answers both routes itself; a computer without a companion, or whose
  * home is not this computer, answers 404 and the phone shows no picker.
  *
- * The list holds no folder path, address or port. */
+ * The list holds no folder path, address or port. The computer owner lets each paired phone open other workspaces, off by
+ * default: without it the list holds only the current workspace and the switch route answers 403. */
 
 export const PHONE_WORKSPACES_ROUTE = "/api/phones/self/workspaces";
 export const PHONE_WORKSPACE_SWITCH_ROUTE = "/api/phones/self/workspaces/switch";
