@@ -156,7 +156,7 @@ describe("CI workflows", () => {
       const gate = workflows.get(file)!.jobs.gate!;
       expect(gate.permissions, file).toEqual({ contents: "read", "pull-requests": "read" });
       expect(gate.environment, file).toBeUndefined();
-      expect(gate.outputs, file).toEqual({ pass: "${{ steps.gate.outputs.pass }}" });
+      expect(gate.outputs, file).toEqual({ pass: "${{ steps.gate.outputs.pass }}", ...(file === IMAGE ? { sha: "${{ steps.gate.outputs.sha }}" } : {}) });
       expect(JSON.stringify(gate), file).not.toContain("secrets.");
       const step = stepsOf(gate).find((each) => each.id === "gate")!;
       expect(step.run, file).toContain(`node scripts/${GATE_SCRIPT}`);
@@ -327,6 +327,29 @@ describe("Server image smoke workflow", () => {
     expect(step.run).toContain('image="ghcr.io/${REPOSITORY,,}"');
     expect(step.run).toContain('image="$image-connector"');
     expect(step.run).toContain("imagetools create");
+  });
+
+  it("checks the commit that is built: the gate resolves the tag once, and the connector publish compares the image revision with it", () => {
+    const gate = stepsOf(image.jobs.gate!).find((each) => each.id === "gate")!;
+    expect(gate.env?.TAG).toBe("${{ inputs.tag }}");
+    expect(gate.run).toContain('commits/refs/tags/$TAG');
+    expect(gate.run).toContain('node scripts/release-gate.mjs --tag "$TAG" --sha "$sha"');
+    expect(gate.run).toContain('node scripts/release-gate.mjs --sha "$sha"');
+    expect(gate.run).toContain('echo "sha=$sha" >> "$GITHUB_OUTPUT"');
+    const step = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!;
+    expect(step.env?.CHECKED_SHA).toBe("${{ needs.gate.outputs.sha }}");
+    expect(step.run).toContain('[ "$revision" = "$CHECKED_SHA" ]');
+    expect(step.run.indexOf('"$revision" = "$CHECKED_SHA"')).toBeLessThan(step.run.indexOf("imagetools create"));
+  });
+
+  it("promotes the digest that this job's push reported, under a build tag of this run, and checks the result", () => {
+    const step = stepsOf(image.jobs.publish!).find((each) => each.name === "Publish the connector image")!;
+    expect(step.run).toContain('build="$image:build-amd64-$RUN_ID-$RUN_ATTEMPT"');
+    expect(step.run).toContain("grep -Eo 'digest: sha256:[0-9a-f]{64}'");
+    expect(step.run).toContain('ref="$image@$digest"');
+    expect(step.run).toContain('docker buildx imagetools create "${targets[@]}" "$ref"');
+    expect(step.run).not.toMatch(/imagetools inspect "\$image:build-amd64"/);
+    expect(step.run).toContain('= "$digest" ]');
   });
 
   it("uses GitHub's own actions only", () => {
