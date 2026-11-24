@@ -55,6 +55,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. It is not the steps of the work; those belong to a workflow.",
     tools: ["trigger_info", "trigger", "delete_trigger"],
     automationViews: ["list", "calendar"],
+    releaseNotes: ["sleepWhenIdle"],
   },
   {
     id: "workflows",
@@ -173,6 +174,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Text size",
     place: "Settings → Appearance → Text size (desktop app); the View menu; Ctrl or Cmd with plus, minus or 0",
     does: "Makes the whole app larger or smaller, from 90 % to 200 %, on this device. A bot can read and set it as appearance.textSize, with a number such as 1.25.",
+    releaseNotes: ["textSize"],
   },
   {
     id: "ai-engines",
@@ -343,7 +345,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Backups",
     place: "Settings → Import & export → Take things out → Export full backup",
     does: "A full backup of chats, bots and settings. Backup files end in .seirabackup, and older backup files still open.",
-    releaseNotes: ["backupName", "backupParts"],
+    releaseNotes: ["backupName", "backupParts", "backupCheck"],
   },
   {
     id: "whats-new",
@@ -357,7 +359,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "The Seira app",
     place: "the whole app",
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
-    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers"],
+    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon"],
   },
   {
     id: "crash-reports",
@@ -370,7 +372,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Glance",
     place: "The top centre of the screen while a bot works (a tray icon only when Linux has no X11 support); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
-    releaseNotes: ["glance"],
+    releaseNotes: ["glance", "glanceWayland"],
   },
 ];
 
