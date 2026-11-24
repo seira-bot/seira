@@ -428,12 +428,13 @@ describe("Server image workflow", () => {
     expect(build.environment).toBeUndefined();
   });
 
-  it("runs the release gate on main only, on the commit of the run", () => {
+  it("runs the release gate on main only, on the commit of the run, or on the commit of the tag for a tagged run", () => {
     expect(gate.if).toBe(ON_MAIN);
     expect(gate.needs).toBeUndefined();
     const step = stepsOf(gate).find((each) => each.id === "gate")!;
     expect(step.env?.SHA).toBe("${{ github.sha }}");
-    expect(step.run).toContain('node scripts/release-gate.mjs --sha "$SHA"');
+    expect(step.run).toContain('sha="$SHA"');
+    expect(step.run).toContain('node scripts/release-gate.mjs --sha "$sha"');
   });
 
   it("asks a person to approve a run that the gate flagged", () => {
