@@ -335,6 +335,25 @@ describe("a bot's first browser on Seira's own engine, from its agent-browser pr
     await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toThrow(/still open/);
   });
 
+  it("names no folder when a browser runs and the engine is not ready to close it: nothing is copied", async () => {
+    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "unavailable", reason: "agent-browser is not installed on this machine yet", installable: true });
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    earlierProfile(own.session);
+    agentBrowserRunning(own.session);
+    await expect(host.agentBrowserProfileFor("bot:scout")).rejects.toBeInstanceOf(SourceStillOpen);
+    expect(closeBrowserSession).not.toHaveBeenCalled();
+  });
+
+  it("names the folder when the engine is not ready but no browser runs for the session", async () => {
+    vi.mocked(browserEngineStatus).mockReturnValue({ kind: "unavailable", reason: "agent-browser is not installed on this machine yet", installable: true });
+    const { host } = setup("chrome");
+    const own = (await host.browserIntegration("scout", undefined, turn))!;
+    const folder = earlierProfile(own.session);
+    expect(await host.agentBrowserProfileFor("bot:scout")).toBe(folder);
+    expect(closeBrowserSession).not.toHaveBeenCalled();
+  });
+
   it("closes nothing when no agent-browser browser runs for the session", async () => {
     ready();
     const { host } = setup("chrome");
