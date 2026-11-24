@@ -118,6 +118,10 @@ no secret. The test pins its exact shape (see
 [Milestones workflow](#milestones-workflow)). A job with no secret and no permission can use the
 environment `release-approval`. It holds the approval (see
 [The `release-approval` environment](#the-release-approval-environment)).
+A `gate` job with read-only permissions runs the release gate (see
+[The release gate](#the-release-gate)). The `redispatch` job of
+`npm-publish.yml` has `actions: write` and no environment. It starts the
+workflow again on `main`.
 Two workflows read secrets in the `release` environment:
 
 - `package-macos.yml` reads the Apple signing secrets;
@@ -140,34 +144,36 @@ holds these rules for every `package-*.yml` file:
 - The only trigger is `workflow_dispatch`. Only a person with write access can
   start it, and a pull request never runs it.
 - No job asks for a permission, so the token can only read the repository.
-  The `approval` job sets `permissions: {}`, which grants nothing. The one
+  The `approval` job sets `permissions: {}`, which grants nothing. The `gate`
+  job asks for `contents: read` and `pull-requests: read` only. The one
   exception is the `attach` job of `package-macos.yml` (see below).
 - A job uses an environment only to read the signing secrets (the `attach` job is the exception), and only the
   `release` environment. Today only `package-macos.yml` does this. The one
   exception is an `approval` job in the `release-approval` environment. It
   has `permissions: {}` and reads no secret.
 - The `commit` job of `package-macos.yml` finds the commit of the `ref` input
-  before the approval. It refuses a ref with unusual characters. The run
+  first. It refuses a ref with unusual characters. The run
   summary shows the commit. The `package` job builds that commit, never the
-  ref name, so a moved tag or branch changes nothing after the approval.
-- The `package` job of `package-macos.yml` needs the `commit` and `approval`
-  jobs. It runs only when `commit` succeeded, it is not cancelled, and one of
-  these is true:
-  - a maintainer started this attempt;
+  ref name, so a moved tag or branch changes nothing after the gate.
+- The `gate` job of `package-macos.yml` runs the release gate. It uses
+  `--tag` when `ref` is a `v*` tag, and `--sha` with the commit otherwise.
+- The `package` job of `package-macos.yml` needs the `commit`, `gate`, and
+  `approval` jobs. It runs only when `commit` succeeded, it is not cancelled,
+  the run is on `main`, `gate` succeeded, and one of these is true:
+  - the gate passed;
   - `approval` succeeded in this same attempt. The `approval` job writes the
     attempt number as its output, and `package` compares it with the current
     attempt.
   A re-run keeps the result of a job that succeeded or was skipped. So a
-  person who is not a maintainer cannot re-run a failed `package` job and
-  reuse an earlier approval. That person must re-run all jobs, which asks for
-  a new approval, or ask a maintainer to re-run.
+  re-run of a failed `package` job cannot reuse an earlier approval. Re-run
+  all jobs for a new approval.
 - The `attach` job of `package-macos.yml` uploads the twelve macOS files to the
   draft release of a signed `v*` tag. It is the only package job with a write
   permission:
-  - It needs `commit`, `approval`, and `package`. It runs only when `package`
-    succeeded, the build is signed, and `ref` starts with `v`.
-  - Like `package`, it runs only when a maintainer started this attempt, or
-    when the approval came in this attempt.
+  - It needs `commit`, `gate`, `approval`, and `package`. It runs only when
+    `package` succeeded, the build is signed, and `ref` starts with `v`.
+  - Like `package`, it runs only on `main`, when the gate passed or when the
+    approval came in this attempt.
   - It runs in the `release` environment with `contents: write` and no secret.
   - It checks out only `scripts/release-assets.mjs` from the workflow commit,
     without credentials. It never runs code from the built commit.
@@ -228,14 +234,15 @@ for more rights than `ci.yml` has, and `publish` needs `packages: write`.
 - The smoke workflow has no permission, no secret, no environment, and no
   `concurrency` group. It pushes nothing. It reads the tag only through `env`.
 - The `image` job of `server-image.yml` calls the smoke workflow.
-- The `approval` job needs `image`. It runs only for a person who is not a
-  maintainer, in the `release-approval` environment.
-- The `publish` job runs only by hand from `main`, after `image` succeeded. It
-  needs `approval`. It runs only when a maintainer started this attempt, or
-  when `approval` succeeded in this same attempt. A person who is not a
-  maintainer cannot re-run a failed `publish` job and reuse an earlier
-  approval. That person must re-run all jobs or ask a maintainer. It uses the
-  `release` environment.
+- The `gate` job runs the release gate on the commit of the run. It runs only
+  by hand from `main`.
+- The `approval` job needs `gate`. It runs only when the gate flagged the run,
+  in the `release-approval` environment.
+- The `publish` job runs only by hand from `main`, after `image` and `gate`
+  succeeded. It needs `approval`. It runs only when the gate passed, or when
+  `approval` succeeded in this same attempt. A re-run of a failed `publish` job
+  cannot reuse an earlier approval. Re-run all jobs for a new approval. It
+  uses the `release` environment.
 - Only the `publish` job gets `packages: write`, and only it can run
   `docker push` or `imagetools create`. The workflow token goes only into the
   `env` of its sign-in step.
@@ -374,44 +381,69 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 | Setting | Value |
 | --- | --- |
 | Required reviewers | None. The `release-approval` environment holds the approval. |
-| Deployment branches and tags | Selected branches and tags: `main` and the tag pattern `v*` |
+| Deployment branches and tags | Selected branches and tags: `main` only |
 | Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
 
-- A job in `release` never waits for a person. The `approval` job before it
-  decides if a maintainer must approve the run.
-- With `main` and `v*` as the only deployment refs, a workflow file changed on
-  another branch cannot read the secrets. Only an organization admin can create
-  a `v*` tag.
+- A job in `release` never waits for a person. The `gate` and `approval` jobs
+  before it decide if a person must approve the run.
+- With `main` as the only deployment ref, a workflow file changed on
+  another branch cannot read the secrets.
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
 
 ### The `release-approval` environment
 
-The `approval` jobs of `package-macos.yml` and `server-image.yml` use the
+The `approval` jobs of `npm-publish.yml`, `package-macos.yml`, and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
 GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
-| Required reviewers | The `maintainers` team |
-| Deployment branches and tags | Selected branches and tags: `main` and the tag pattern `v*` |
+| Required reviewers | The team of human reviewers, with no bot account |
+| Deployment branches and tags | Selected branches and tags: `main` only |
 | Allow administrators to bypass configured protection rules | Off |
 | Environment secrets | None |
 
 Set "Allow administrators to bypass configured protection rules" to off on the
 `release` environment too.
 
-The repository variable `RELEASE_MAINTAINERS` holds the maintainers' GitHub
-logins as a JSON array, for example `["login-a", "login-b"]`.
+### The release gate
 
-Seira keeps the variable at `[]`. Every release run then waits for a person in
-the `maintainers` team to approve it, also a run that a maintainer starts. An
-agent that works with a maintainer's account cannot publish to npm or
-`ghcr.io` without that approval.
+`scripts/release-gate.mjs` checks every release run. It only reads from GitHub.
+The `gate` job of `npm-publish.yml`, `package-macos.yml`, and `server-image.yml`
+runs it from the commit of the workflow.
 
-- A maintainer's run skips the `approval` job and does not wait.
-- Another person's run waits until a maintainer approves the `approval` job.
-- When the variable is missing, empty, or not a JSON array, every run waits
-  for approval.
-- Each attempt checks the person who started that attempt. An approval from
-  an earlier attempt never counts.
+The gate reads every commit since the previous published release. It checks:
+
+- The release commit is on `main`. If not, the gate refuses the run.
+- Each commit comes from a merged pull request into `main`. A commit without
+  one flags the run.
+- The author of each pull request is an owner or member of the organization.
+  Another author flags the run.
+- Each pull request leaves these paths alone: `.github/**`, `scripts/release-*`,
+  `scripts/git-hooks/**`, `pnpm-workspace.yaml`, and `.npmrc` files.
+  A change to one of them flags the run.
+- A previous release exists. If not, the gate flags the run.
+
+A pull request that breaks a rule passes when a listed human reviewer approved
+it. The latest review of that reviewer must be an approval.
+
+The gate has three results:
+
+| Exit status | Meaning | What the workflow does |
+| --- | --- | --- |
+| 0 | Pass | The run publishes with no person |
+| 1 | Flagged | The `approval` job waits for a person in `release-approval` |
+| 2 | Refused, wrong use, or API error | The `gate` job fails and nothing publishes |
+
+The repository variable `RELEASE_HUMAN_REVIEWERS` holds the logins of the human
+reviewers as a JSON array, for example `["login-a", "login-b"]`. When the
+variable is missing, empty, or not a JSON array, it counts as an empty list.
+Do not add a bot account to it.
+
+- The `release` and `release-approval` environments accept `main` only.
+- Each attempt checks the approval of that attempt. An approval from an
+  earlier attempt never counts.
+- A published release starts `npm-publish.yml` again on `main`. The
+  `redispatch` job does it with the workflow token. GitHub makes a new run for
+  this kind of start.
