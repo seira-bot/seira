@@ -48,7 +48,7 @@ function fake(world: World) {
     }
     if (/\/compare\/[0-9a-f]{40}\.\.\.main$/.test(path)) return { status: world.mainStatus ?? "ahead" };
     if (path.startsWith("repos/o/r/releases?")) {
-      const page = Number(/page=(\d+)/.exec(path)![1]);
+      const page = Number(/&page=(\d+)/.exec(path)![1]);
       return page === 1 ? (world.releases ?? [{ tag_name: "v1.0.0", draft: false }]) : [];
     }
     if ((match = /\/compare\/(v[\d.]+)\.\.\.[0-9a-f]{40}\?per_page=(\d+)&page=(\d+)/.exec(path))) {
