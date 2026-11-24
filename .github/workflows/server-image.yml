@@ -181,7 +181,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          image="ghcr.io/${REPOSITORY,,}-connector"
+          image="ghcr.io/${REPOSITORY,,}"
+          image="$image-connector"
           docker tag seira-connector:amd64 "$image:build-amd64"
           docker push -q "$image:build-amd64"
           ref="$image@$(docker buildx imagetools inspect "$image:build-amd64" --format '{{json .Manifest}}' | jq -r .digest)"

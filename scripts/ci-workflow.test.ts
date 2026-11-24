@@ -324,7 +324,8 @@ describe("Server image smoke workflow", () => {
     expect(publish.if).toContain("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
     expect(publish.environment).toBe("release");
     const step = stepsOf(publish).find((each) => each.name === "Publish the connector image")!;
-    expect(step.run).toContain('image="ghcr.io/${REPOSITORY,,}-connector"');
+    expect(step.run).toContain('image="ghcr.io/${REPOSITORY,,}"');
+    expect(step.run).toContain('image="$image-connector"');
     expect(step.run).toContain("imagetools create");
   });
 
