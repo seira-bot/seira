@@ -72,7 +72,7 @@ describe("cleanSuggestedReplies", () => {
   });
 
   it("rejects a bare web address with no scheme and no www: a listed top-level domain, localhost or an IPv4 address", () => {
-    const bad = ["Open example.com", "Check example.com/pay now", "Try shop.example.co.", "See docs.example.dev:8080/x", "Mail me at a@example.org", "Visit ramadigital.id", "Go to localhost:3000", "Use 192.168.1.20:8799", "Ping 10.0.0.1"];
+    const bad = ["Open example.com", "Check example.com/pay now", "Try shop.example.co.", "See docs.example.dev:8080/x", "Mail me at a@example.org", "Visit example.id", "Go to localhost:3000", "Use 192.168.1.20:8799", "Ping 10.0.0.1"];
     for (const text of bad) {
       expect(cleanSuggestedReplies([{ title: "Fine", prompt: text }]), `prompt: ${text}`).toBeUndefined();
       expect(cleanSuggestedReplies([{ title: text, prompt: "Fine" }]), `title: ${text}`).toBeUndefined();
