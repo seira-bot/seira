@@ -8,6 +8,7 @@ import grupyLogo from "@/assets/grupy/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
+import wapilotLogo from "@/assets/wapilot/logo.png";
 import type { LocaleKey } from "@/locales";
 
 export interface HostedMcpApp {
@@ -100,6 +101,15 @@ export const HOSTED_MCP_APPS = [
     description: "grupy.description",
     notice: "grupy.notice",
     keywords: "grupy whatsapp group groups community summary summaries recap members export join requests approval",
+  },
+  {
+    id: "wapilot",
+    label: "WAPilot",
+    url: "https://integrator.wapilot.id/v1/mcp",
+    icon: { image: wapilotLogo },
+    description: "wapilot.description",
+    notice: "wapilot.notice",
+    keywords: "wapilot whatsapp web chrome extension send messages chats contacts groups auto reply broadcast reminder template catalog knowledge guardrails",
   },
 ] as const satisfies readonly HostedMcpApp[];
 

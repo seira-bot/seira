@@ -11652,6 +11652,8 @@
   "dalekta.notice": "Entre com o Dalekta. Não é preciso ter uma chave de API. Um bot que pode usar o Dalekta pode ler e alterar seus leads, chats, links de rastreamento e ajustes de anúncios da Meta. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "grupy.description": "Resumos com IA, membros e pedidos de entrada dos seus grupos de WhatsApp no Grupy.chat.",
   "grupy.notice": "Entre com o Grupy.chat. Não é preciso ter uma chave de API. Um bot que pode usar o Grupy.chat pode ler os resumos e os membros dos seus grupos. Se você permitir no Grupy.chat, ele também pode ler mensagens, aprovar pedidos de entrada e alterar ajustes dos grupos. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
+  "wapilot.description": "Envie mensagens pelo WhatsApp, leia conversas e use respostas automáticas, transmissões e lembretes pela extensão do WAPilot no Chrome.",
+  "wapilot.notice": "Entre com o WAPilot. Não é preciso ter uma chave de API. O WAPilot funciona pela extensão dele no Chrome, então mantenha o WhatsApp Web aberto no Chrome. Um bot que pode usar o WAPilot pode ler suas conversas e contatos, enviar mensagens pelo WhatsApp e alterar suas respostas automáticas e transmissões. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "aiImport.title": "Migrar de outra IA",
   "aiImport.subtitle": "Traga a persona, as memórias, as habilidades, as ferramentas, as rotinas e as conversas de outra IA.",
   "aiImport.source.chatgpt": "ChatGPT",

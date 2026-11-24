@@ -11652,6 +11652,8 @@
   "dalekta.notice": "Sign in with Dalekta. No API key needed. A bot that can use Dalekta can read and change your leads, chats, tracking links and Meta ads settings, so choose which bots get it under Bot access.",
   "grupy.description": "AI summaries, members and join requests of your WhatsApp groups in Grupy.chat.",
   "grupy.notice": "Sign in with Grupy.chat. No API key needed. A bot that can use Grupy.chat can read the summaries and members of your groups. If you allow it in Grupy.chat, it can also read messages, approve join requests and change group settings, so choose which bots get it under Bot access.",
+  "wapilot.description": "Send WhatsApp messages, read chats and run auto replies, broadcasts and reminders through the WAPilot Chrome extension.",
+  "wapilot.notice": "Sign in with WAPilot. No API key needed. WAPilot works through its Chrome extension, so keep WhatsApp Web open in Chrome. A bot that can use WAPilot can read your chats and contacts, send WhatsApp messages and change your auto replies and broadcasts, so choose which bots get it under Bot access.",
   "aiImport.title": "Move from another AI",
   "aiImport.subtitle": "Bring over the persona, memories, skills, tools, routines and chats of another AI.",
   "aiImport.source.chatgpt": "ChatGPT",
