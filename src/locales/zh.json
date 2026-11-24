@@ -3445,7 +3445,7 @@
   "settings.experimental.browserWindows": "此 Windows 机器上尚不可用：用 `seira browser install` 安装浏览器。",
   "settings.experimental.browserAria": "启用内置浏览器",
   "settings.experimental.newBrowser": "新浏览器",
-  "settings.experimental.newBrowserDetail": "默认关闭。机器人的浏览器改用 {app} 自带的 Chrome 驱动，而不是 agent-browser：页面按你的屏幕清晰度渲染，机器人也能处理上传、下载、对话框和弹窗。使用你自己 Chrome 的配置不受影响。切换会关闭已打开的浏览器，其中保存的登录也不会带到另一边。",
+  "settings.experimental.newBrowserDetail": "默认开启。机器人的浏览器使用 {app} 自带的 Chrome 驱动，而不是 agent-browser：页面按你的屏幕清晰度渲染，机器人可以处理上传、下载、对话框和弹出窗口。使用你自己 Chrome 的配置文件不受影响。切换时会关闭已打开的浏览器。在 agent-browser 中保存的登录信息，会在机器人第一次打开浏览器时一并带过来。关闭后会回到 agent-browser。",
   "settings.experimental.newBrowserAria": "使用新浏览器",
   "settings.experimental.usbPhoneTakeover": "观看并接管 USB 手机",
   "settings.experimental.usbPhoneTakeoverShort": "在「屏幕」面板中实时显示机器人的 USB Android 手机，并让你可以接管它。",

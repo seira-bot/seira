@@ -12,7 +12,9 @@ export interface DropZoneProps {
   onFiles: (files: DroppedFile[]) => void;
 }
 
-const isBackup = (file: DroppedFile) => file.name.toLowerCase().endsWith(".seirabackup");
+/** Backup file names. `.ombbackup` is the documented legacy name: restore still accepts it, so it is a backup here too. */
+const BACKUP_SUFFIXES = [".seirabackup", ".ombbackup"];
+const isBackup = (file: DroppedFile) => BACKUP_SUFFIXES.some((suffix) => file.name.toLowerCase().endsWith(suffix));
 
 export function DropZone({ sending, failed = false, onFiles }: DropZoneProps) {
   const [over, setOver] = useState(false);

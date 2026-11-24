@@ -162,6 +162,19 @@ describe("a Seira backup in the drop zone", () => {
     expect(host.querySelector("[data-ai-import-backup]")).not.toBeNull();
   });
 
+  it("treats the legacy .ombbackup name as a backup too, as Import backup does", () => {
+    const onFiles = pickFrom(["Old.OmbBackup"]);
+    expect(onFiles).not.toHaveBeenCalled();
+    expect(host.querySelector("[data-ai-import-backup]")).not.toBeNull();
+  });
+
+  it("sends the other files when a legacy backup comes with them", () => {
+    const onFiles = pickFrom(["a.zip", "b.ombbackup"]);
+    expect(onFiles).toHaveBeenCalledTimes(1);
+    expect((onFiles.mock.calls[0]![0] as Array<{ name: string }>).map((file) => file.name)).toEqual(["a.zip"]);
+    expect(host.querySelector("[data-ai-import-backup]")).not.toBeNull();
+  });
+
   it("shows no message for an export", () => {
     expect(pickFrom(["a.zip"])).toHaveBeenCalledTimes(1);
     expect(host.querySelector("[data-ai-import-backup]")).toBeNull();

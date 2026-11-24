@@ -198,7 +198,7 @@ async function boot() {
       HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
       SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
       SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
-      SEIRA_AGENT_BROWSER_PATH: join(home, "agent-browser"),
+      SEIRA_AGENT_BROWSER_PATH: join(home, "agent-browser"), SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

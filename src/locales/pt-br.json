@@ -3706,7 +3706,7 @@
   "settings.browser.serverSites": "Abrir sites neste servidor",
   "settings.browser.serverSitesDetail": "Desligado por padrão. Ligue para permitir que os navegadores dos bots abram sites hospedados neste servidor e na rede local dele. O próprio Seira continua bloqueado.",
   "settings.experimental.newBrowser": "Novo navegador",
-  "settings.experimental.newBrowserDetail": "Desligado por padrão. Os navegadores dos bots usam o driver Chrome do próprio app {app} em vez do agent-browser. As páginas aparecem com a nitidez da sua tela, e os bots podem lidar com envios, downloads, diálogos e pop-ups. Perfis que usam seu próprio Chrome não são afetados. A mudança fecha os navegadores abertos, e os logins salvos em um não passam para o outro.",
+  "settings.experimental.newBrowserDetail": "Ativado por padrão. Os navegadores dos bots rodam no driver de Chrome próprio do {app} em vez do agent-browser: as páginas aparecem com a nitidez da sua tela, e os bots lidam com uploads, downloads, caixas de diálogo e pop-ups. Perfis que usam o seu próprio Chrome não mudam. Ao alternar, os navegadores abertos fecham. Os logins salvos no agent-browser passam para o novo navegador na primeira vez que um bot o abre. Desative para voltar ao agent-browser.",
   "settings.experimental.newBrowserAria": "Usar o novo navegador",
   "settings.experimental.usbPhoneTakeover": "Ver e assumir o controle do celular USB",
   "settings.experimental.usbPhoneTakeoverShort": "Mostra ao vivo o celular Android USB dos bots no painel Tela e permite que você assuma o controle dele.",

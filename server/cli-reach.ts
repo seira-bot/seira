@@ -100,6 +100,15 @@ export function reachLines(route: Route, origin: string, port: number, prefix: s
   return [`Reach    ✗ ${origin} doesn't reach this server (${check.reason ?? "no answer"}).`, `           Point your tunnel or proxy at http://127.0.0.1:${port} (on another machine: add --lan and use this machine's address), then run: ${prefix} status`];
 }
 
+/**
+ * The Reach lines while another program listens on the tailnet address's port on this server. A check from here reaches
+ * that program, so it says nothing about tailnet devices; `other` is a second tailnet address that can be checked.
+ */
+export function busyPortReachLines(origin: string, port: number, prefix: string, other: { origin: string; check: ReachCheck } | null): string[] {
+  if (!other) return [`Reach    ${origin}   your tailnet · another program uses this port on this server, so a check from here cannot test tailnet devices`];
+  return [`Reach    ${origin}   your tailnet · not checked from here: another program uses this port on this server. Checked ${other.origin} instead:`, ...reachLines("tailscale", other.origin, port, prefix, other.check).map((line) => `  ${line}`)];
+}
+
 /** `serve` with no way in: nothing to pair from elsewhere yet, so no code; the ways in, as commands that paste. */
 export function noRouteLines(port: number, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
   const tunnel = controlPlaneProblem(env) === null ? [`  ${prefix} serve --tunnel                   a public address through a Cloudflare tunnel; sign in first: ${prefix} login`] : [];

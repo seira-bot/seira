@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { credentialIsConfigured, CREDENTIAL_TARGETS, PROVIDER_CREDENTIAL_TARGETS, type CredentialConfig, type CredentialTargetId } from "../../shared/credential-request.ts";
 import { WINDOW_PREFS, type WindowPrefId } from "../../shared/app-settings.ts";
+import type { BrowserEngineKind } from "../browser/config.ts";
 import { defaultBotThreads, MAX_CONCURRENT_BOT_THREADS } from "../bot-thread-limits.ts";
 import { isClaudeBedrock } from "../claude-bedrock.ts";
 import { isClaudeEndpoint } from "../claude-endpoints.ts";
@@ -77,6 +78,8 @@ export interface RegistryDeps {
   read(route: AppRoute, path: string): Promise<Record<string, unknown> | null>;
   /** On a Starter Cloud, the bots paused past the plan's limit now. */
   paused(): string[];
+  /** The engine that runs bots' browsers now; unset, the saved choice or agent-browser. */
+  browserEngine?(): BrowserEngineKind;
   credentials(): CredentialConfig;
   window: { read(id: WindowPrefId): unknown; write(id: WindowPrefId, value: unknown): string | null };
   /** The engines Settings → AI lists; never a key. */
@@ -362,6 +365,7 @@ export function routeBackedRegistry(deps: {
   credentials(): CredentialConfig;
   window: RegistryDeps["window"];
   paused(): string[];
+  browserEngine?: RegistryDeps["browserEngine"];
 }): SettingEntry[] {
   const auth: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
   const refusal = async (reply: Promise<RouteReply>) => {
@@ -373,7 +377,7 @@ export function routeBackedRegistry(deps: {
     }
   };
   return createSettingsRegistry({
-    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused,
+    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine,
     saveConfig: (patch) => refusal(callRoute(deps.routes.config, { method: "PUT", path: "/api/config", body: patch, auth })),
     reorderBots: (botIds) => refusal(callRoute(deps.routes.botOrder, { method: "PUT", path: "/api/bots/order", body: { botIds }, auth })),
     pinBot: (botId, pinned) => refusal(callRoute(deps.routes.botPatch, { method: "PATCH", path: `/api/bots/${encodeURIComponent(botId)}`, body: { pinned }, auth })),

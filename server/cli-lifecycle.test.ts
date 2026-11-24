@@ -36,7 +36,7 @@ vi.mock("node:fs", async (original) => {
   };
 });
 vi.mock("./tailscale.ts", () => ({
-  pickTailscaleHttpsPort: () => ({ port: 443, line: null }), tailscaleHttpsProblem: async () => null,
+  chooseTailscaleHttpsPorts: () => ({ ports: [443], primaryBusy: false, line: null }), tailscaleHttpsProblem: async () => null, readTailscaleServeConfig: async () => null,
   tailscaleStatus: mocks.tailscaleStatus, tailscaleServe: mocks.tailscaleServe, tailnetListenFallback: mocks.tailnetListenFallback,
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));
@@ -199,6 +199,20 @@ describe("CLI startup lifecycle", () => {
     mocks.tailscaleServe.mockResolvedValue({ failure: "unknown" });
     await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: ");
     expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
+  it("does not start the server when the Serve settings cannot be read", async () => {
+    mocks.tailscaleServe.mockResolvedValue({ failure: "serve-unreadable" });
+    await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: serve-unreadable");
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(mocks.tailscaleStop).not.toHaveBeenCalled();
+  });
+
+  it("does not start the server when Funnel forwards to it", async () => {
+    mocks.tailscaleServe.mockResolvedValue({ failure: "funnel-open" });
+    await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("--tailscale: funnel-open");
+    expect(mocks.spawn).not.toHaveBeenCalled();
+    expect(mocks.tailscaleStop).not.toHaveBeenCalled();
   });
 
   it.each([

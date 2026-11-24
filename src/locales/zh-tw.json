@@ -3410,7 +3410,7 @@
   "settings.browser.serverSites": "開啟這台伺服器上的網站",
   "settings.browser.serverSitesDetail": "預設關閉。開啟後，機器人的瀏覽器可以開啟這台伺服器及其區域網路上託管的網站。Seira 本身仍會被封鎖。",
   "settings.experimental.newBrowser": "新瀏覽器",
-  "settings.experimental.newBrowserDetail": "預設關閉。機器人的瀏覽器會改用 {app} 自己的 Chrome 驅動程式，而不是 agent-browser：頁面會以你螢幕的清晰度呈現，機器人也能處理上傳、下載、對話框和彈出視窗。使用你自己 Chrome 的設定檔不受影響。切換時會關閉已開啟的瀏覽器，且在其中一個儲存的登入不會帶到另一個。",
+  "settings.experimental.newBrowserDetail": "預設開啟。機器人的瀏覽器使用 {app} 自有的 Chrome 驅動程式，而不是 agent-browser：頁面依你的螢幕清晰度呈現，機器人可以處理上傳、下載、對話方塊和彈出視窗。使用你自己 Chrome 的設定檔不受影響。切換時會關閉已開啟的瀏覽器。在 agent-browser 中儲存的登入資訊，會在機器人第一次開啟瀏覽器時一併帶過來。關閉後會回到 agent-browser。",
   "settings.experimental.newBrowserAria": "使用新瀏覽器",
   "settings.experimental.usbPhoneTakeover": "觀看並接手 USB 手機",
   "settings.experimental.usbPhoneTakeoverShort": "在「畫面」面板中即時顯示機器人的 USB Android 手機，並讓你可以接手控制。",

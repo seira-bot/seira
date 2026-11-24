@@ -265,7 +265,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const child = spawn(process.execPath, ["--import", offline, ...extra, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir,
-        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), SEIRA_BOT_BOX: "0", ...env, ...own },
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), SEIRA_BOT_BOX: "0",
+        SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser", ...env, ...own },
       stdio: ["ignore", "pipe", "pipe", ...(ipc ? ["ipc" as const] : [])],
     });
     children.add(child);
