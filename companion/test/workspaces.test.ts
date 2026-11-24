@@ -35,6 +35,7 @@ let sent: Array<Record<string, unknown>> = [];
 let listener: ProxyListener = "lan";
 let workspaces = createWorkspaces({ send: () => {}, settleMs: 5 });
 let otherWorkspaces: boolean | undefined = true;
+let paired = true;
 
 const facts = (list: unknown) => workspaces.receive({ type: WORKSPACES_MESSAGE, workspaces: list });
 
@@ -48,7 +49,7 @@ beforeAll(async () => {
   const proxy = createProxyHandler({
     harnessPort: (harness.address() as AddressInfo).port,
     authenticate: (token) => {
-      if (token === TOKEN) return { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces };
+      if (token === TOKEN) return !paired ? null : { id: "device-1", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces };
       if (token === OTHER_TOKEN) return { id: "device-2", cloudDesktopAccess: false, browserControlAccess: false, otherWorkspaces: false };
       return null;
     },
@@ -70,6 +71,7 @@ beforeEach(() => {
   sent = [];
   listener = "lan";
   otherWorkspaces = true;
+  paired = true;
   workspaces = createWorkspaces({ send: (message) => sent.push(message as Record<string, unknown>), settleMs: 5 });
 });
 
@@ -92,6 +94,32 @@ function call(method: string, path: string, body?: unknown, token: string | null
     );
     req.on("error", reject);
     req.end(payload);
+  });
+}
+
+/** Sends the headers of a switch request, runs `whileWaiting` while the sidecar waits for the body, then sends the body. */
+function callWhileBodyWaits(body: unknown, whileWaiting: () => void): Promise<{ status: number; json: any }> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port: (sidecar.address() as AddressInfo).port,
+        path: WORKSPACE_SWITCH_ROUTE,
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      },
+      (res) => {
+        let text = "";
+        res.on("data", (chunk) => (text += chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, json: text ? JSON.parse(text) : null }));
+      },
+    );
+    req.on("error", reject);
+    req.flushHeaders();
+    setTimeout(() => {
+      whileWaiting();
+      req.end(JSON.stringify(body));
+    }, 50);
   });
 }
 
@@ -275,6 +303,43 @@ describe("a phone that may not open other workspaces", () => {
     const { status } = await call("POST", WORKSPACE_SWITCH_ROUTE, "{ not json", TOKEN, true);
     expect(status).toBe(403);
     expect(sent).toEqual([]);
+  });
+
+  it("refuses a switch when the owner turns the phone off while the body is still being read", async () => {
+    facts(LIST);
+    otherWorkspaces = true;
+    const { status, json } = await callWhileBodyWaits({ id: "work" }, () => {
+      otherWorkspaces = false;
+    });
+    expect(status).toBe(403);
+    expect(json.error).toMatch(/cannot open other workspaces/);
+    expect(sent).toEqual([]);
+    expect(workspaces.list()?.filter((workspace) => workspace.current).map((workspace) => workspace.id)).toEqual(["local"]);
+  });
+
+  it("refuses a switch when the phone is unpaired while the body is still being read", async () => {
+    facts(LIST);
+    const { status } = await callWhileBodyWaits({ id: "work" }, () => {
+      paired = false;
+    });
+    expect(status).toBe(403);
+    expect(sent).toEqual([]);
+  });
+
+  it("still switches when the phone keeps its access while the body is read", async () => {
+    facts(LIST);
+    const { status } = await callWhileBodyWaits({ id: "work" }, () => {});
+    expect(status).toBe(200);
+    expect(sent).toEqual([{ type: WORKSPACE_SWITCH_MESSAGE, action: "open", id: "work" }]);
+  });
+
+  it("lists the current workspace only, on the next request after the owner turns the phone off", async () => {
+    facts(LIST);
+    expect((await call("GET", WORKSPACES_ROUTE)).json.workspaces).toHaveLength(3);
+    otherWorkspaces = false;
+    const { status, json } = await call("GET", WORKSPACES_ROUTE);
+    expect(status).toBe(200);
+    expect(json.workspaces.map((workspace: Workspace) => workspace.id)).toEqual(["local"]);
   });
 
   it("lists only the current workspace", async () => {
