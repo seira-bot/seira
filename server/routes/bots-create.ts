@@ -1,8 +1,9 @@
+import { NO_SUCH_BOT } from "../../shared/bot-read.ts";
 import type { BotCreateResponse, WireBot } from "../../shared/wire.ts";
 import { freshLook } from "../bot-look.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
-import { parseVisibility } from "../bot-visibility.ts";
+import { memberBot, parseVisibility, type VisibleSet } from "../bot-visibility.ts";
 import type { createCloudRoutineAuthors } from "../cloud-lending.ts";
 import type { AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
@@ -49,6 +50,8 @@ export interface BotCreateRouteDeps {
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
   cloudOwnerSession(auth: RequestAuth): boolean;
   wireBot(bot: BotRecord): WireBot;
+  /** What this requester may see now: the same set the read routes use. A retry is answered from it, never from what was true when the bot was made. */
+  visibleTo(auth: RequestAuth): VisibleSet;
   /** A Team Cloud: a new bot records who created it, and may name who it reports to. */
   team?: { name: string; people: Pick<TeamPeople, "has"> } | null;
   /** Starts writing personal answers for a new bot's setup card; never awaited. */
@@ -101,6 +104,23 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
     ...(deps.paused(bot.id) ? { paused: true } : {}),
     bot: { ...wireBot(bot), messages: store.messagesFor(bot.threadId), activeLeafId: store.activeLeaf(bot.threadId) },
   } satisfies BotCreateResponse<ReturnType<typeof store.messagesFor>[number]>);
+  /** The answer to a retry that finds its bot. It is the bot as this requester may read it now, as the read routes show it:
+   * a bot they may no longer see is refused as a missing one, and no new bot is made for that retry; the conversation sent
+   * is one they may read. */
+  const replay = (retryScope: string | null, auth: RequestAuth): { status: number; body: unknown } | undefined => {
+    const bot = replayed(retryScope);
+    if (!bot) return undefined;
+    const visible = deps.visibleTo(auth);
+    if (!visible.bot(bot.id)) return { status: 404, body: { error: NO_SUCH_BOT } };
+    const wired = wireBot(bot);
+    const shown = memberBot({ ...wired, tasks: wired.tasks ?? [] }, visible);
+    const threadId = typeof shown.threadId === "string" && visible.thread(shown.threadId) ? shown.threadId : undefined;
+    return {
+      status: 200,
+      body: { ...(deps.paused(bot.id) ? { paused: true } : {}),
+        bot: { ...shown, messages: threadId ? store.messagesFor(threadId) : [], activeLeafId: threadId ? store.activeLeaf(threadId) : null } },
+    };
+  };
   return async ({ req, res, path, method, auth, json, readBody }) => {
     const routines = deps.routines();
     if (method === "POST" && path === "/api/bots") {
@@ -126,8 +146,8 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       }
       const retryScope = typeof body.retryKey === "string"
         ? `${auth.kind === "session" && auth.session.membershipAuthority === "team" ? auth.session.email?.toLowerCase() ?? "" : ""}\u0000${body.retryKey}` : null;
-      const again = replayed(retryScope);
-      if (again) return json(res, 200, created201(again));
+      const again = replay(retryScope, auth);
+      if (again) return json(res, again.status, again.body);
       const kept = keptBotIds(body, store);
       if ("error" in kept) return json(res, kept.error.includes("already") ? 409 : 400, { error: kept.error });
       const { id: _id, threadId: _threadId, retryKey: _retryKey, ...rest } = body;
@@ -216,8 +236,8 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       const created = body.visibility === undefined ? null : parseVisibility(body.visibility);
       if (created && !created.ok) return json(res, 400, { error: created.error });
       // Checked again beside the synchronous write: an await above let another request take the same id or finish the same retry.
-      const finished = replayed(retryScope);
-      if (finished) return json(res, 200, created201(finished));
+      const finished = replay(retryScope, auth);
+      if (finished) return json(res, finished.status, finished.body);
       if (kept.id && "error" in keptBotIds(kept, store)) return json(res, 409, { error: "a bot with this id already exists here" });
       // A bot moved in from another computer keeps its own look; a new one fills what it names not from a fresh one.
       const look = kept.id ? undefined : freshLook(store.bots);

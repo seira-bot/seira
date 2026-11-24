@@ -4,7 +4,9 @@ import { rmSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { NO_SUCH_BOT } from "../../shared/bot-read.ts";
 import type { WireBot } from "../../shared/wire.ts";
+import { VisibleSet, type Viewer } from "../bot-visibility.ts";
 import { DATA_DIR, type AppConfig } from "../config.ts";
 import type { ModelSelection } from "../contracts.ts";
 import { memberBotCreateViolation, type RequestAuth } from "../request-auth.ts";
@@ -18,9 +20,11 @@ beforeEach(() => {
   rmSync(DATA_DIR, { recursive: true, force: true });
 });
 
-function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig>; team?: BotCreateRouteDeps["team"] } = {}) {
+function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"]; cfg?: Partial<AppConfig>; team?: BotCreateRouteDeps["team"]; afterCreate?: (bot: BotRecord) => void } = {}) {
   const store = new Store(() => sonnet);
   const asked: ModelSelection[] = [];
+  /** Conversations a person's audience no longer reaches: the fixture has no Team Cloud audiences of its own. */
+  const hiddenThreads = new Set<string>();
   const deps = {
     store,
     cfg: { ...options.cfg } as AppConfig,
@@ -40,6 +44,13 @@ function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"
     checkedModelSelection: (raw: unknown) => ({ ok: true, selection: raw as ModelSelection }),
     cloudOwnerSession: () => false,
     wireBot: (record: BotRecord) => record as unknown as WireBot,
+    // The same set the read routes use: built from the bots as they are now, for whoever asks.
+    visibleTo: (auth: RequestAuth) => {
+      const viewer: Viewer = auth.kind === "session" && auth.session.membershipAuthority === "team" ? { kind: "member", email: auth.session.email } : { kind: "all" };
+      const set = new VisibleSet(store.bots as never, store.groups as never, viewer);
+      return Object.assign(set, { thread: (threadId: string) => !hiddenThreads.has(threadId) && VisibleSet.prototype.thread.call(set, threadId) });
+    },
+    ...(options.afterCreate ? { personaliseSetupCard: options.afterCreate } : {}),
     ...(options.team ? { team: options.team } : {}),
     ...(options.newBotComputer ? { newBotComputer: (selection: ModelSelection) => { asked.push(selection); return options.newBotComputer!(selection); } } : {}),
   } as unknown as BotCreateRouteDeps;
@@ -65,7 +76,7 @@ function fixture(options: { newBotComputer?: BotCreateRouteDeps["newBotComputer"
     expect(sent.status, JSON.stringify(sent.body)).toBe(201);
     return store.bot(sent.body.bot.id)!;
   };
-  return { create, send, store, asked };
+  return { create, send, store, asked, hiddenThreads };
 }
 
 describe("where a new bot works", () => {
@@ -207,6 +218,46 @@ describe("a client that sends a creation again after a lost answer", () => {
       expect(out.status).toBe(403);
       expect(out.body).toEqual({ error: 'forbidden: "id" is an admin\'s to set' });
     }
+  });
+
+  it("refuses a retry for a bot the member may no longer see, with the refusal of a missing bot, and makes no other bot", async () => {
+    const fx = fixture({ team });
+    const ada = member("ada@example.test");
+    const first = await fx.send({ name: "Private plan", retryKey: KEY }, ada);
+    expect(first.status).toBe(201);
+    // An admin took the bot back: it is no longer shared with the member who made it.
+    fx.store.patchBot(first.body.bot.id, { visibility: "admins" });
+    const before = fx.store.bots.length;
+    const again = await fx.send({ name: "Private plan", retryKey: KEY }, ada);
+    expect(again.status).toBe(404);
+    expect(again.body).toEqual({ error: NO_SUCH_BOT });
+    expect(JSON.stringify(again.body)).not.toContain("Private plan");
+    expect(fx.store.bots).toHaveLength(before);
+  });
+
+  it("sends a retry no conversation the member's audience does not reach", async () => {
+    const fx = fixture({ team });
+    const ada = member("ada@example.test");
+    const first = await fx.send({ name: "Ada's bot", retryKey: KEY }, ada);
+    expect(first.body.bot.messages.length).toBeGreaterThan(0);
+    fx.hiddenThreads.add(first.body.bot.threadId);
+    const again = await fx.send({ name: "Ada's bot", retryKey: KEY }, ada);
+    expect(again.status).toBe(200);
+    expect(again.body.bot.messages).toEqual([]);
+    expect(again.body.bot.activeLeafId).toBeNull();
+    expect(fx.store.bots.filter((bot) => bot.createdBy === "ada@example.test")).toHaveLength(1);
+  });
+
+  it("checks again for a retry that waited on a creation which finished meanwhile", async () => {
+    const hide = (bot: BotRecord) => { fx.store.patchBot(bot.id, { visibility: "admins" }); };
+    const fx = fixture({ team, afterCreate: hide });
+    const ada = member("ada@example.test");
+    const before = fx.store.bots.length;
+    const [first, second] = await Promise.all([fx.send({ name: "Ada's bot", retryKey: KEY }, ada), fx.send({ name: "Ada's bot", retryKey: KEY }, ada)]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(404);
+    expect(second.body).toEqual({ error: NO_SUCH_BOT });
+    expect(fx.store.bots).toHaveLength(before + 1);
   });
 
   it("is allowed to a Team Cloud member, who still may not name an id, a conversation id or a setting that is an admin's", () => {
