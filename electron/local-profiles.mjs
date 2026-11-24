@@ -155,6 +155,19 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
   remember = () => {}, changed = () => {}, log = () => {}, fs = nodeFs, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = Date.now }) {
   /** Each switch asked for; a newer one (another tile, My Cloud) ends the wait of the one before. */
   let turn = 0;
+  /** Who started the turn now: the `cause` a caller gave (a phone request's own record), or null when the rail did. */
+  let holder = null;
+  /** For each cause whose turn a later request took: that request's cause, or null when the rail took it. The record is
+   * written at the moment the turn changes, so a request that comes later never takes the credit. */
+  const taken = new WeakMap();
+  const objectOrNull = (value) => (value !== null && typeof value === "object" ? value : null);
+  /** Starts the next turn for `cause` and notes who the turn it ends belonged to lost it to. */
+  function bump(cause) {
+    const before = holder;
+    holder = objectOrNull(cause);
+    if (before && !taken.has(before)) taken.set(before, holder);
+    return ++turn;
+  }
   /** The workspace a switch waits to open (null: This computer's own copy), and for whom. */
   let settling = null;
   const listed = (id) => registry.list().find((entry) => entry.id === id && offered(entry.id)) ?? null;
@@ -172,7 +185,7 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
       try { who = await busy(); } catch {}
       if (mine !== turn) return false;
       if (!who) break;
-      if (settling?.id !== target || settling.name !== who.name) { settling = { id: target, name: who.name || "" }; tell(); }
+      if (settling?.id !== target || settling.name !== who.name) { settling = { id: target, name: who.name || "", turn: mine }; tell(); }
       await sleep(SETTLE_POLL_MS);
     }
     if (settling && mine === turn) { settling = null; tell(); }
@@ -187,10 +200,11 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     return true;
   }
 
-  /** True once workspace `id` is on screen, false when it can't open, null when a newer switch took over. */
-  async function open(id) {
+  /** True once workspace `id` is on screen, false when it can't open, null when a newer switch took over. `cause`: the
+   * request that asks (an object); none for the rail. */
+  async function open(id, cause) {
     const again = settling?.id === id;
-    const mine = ++turn;
+    const mine = bump(cause);
     if (!allowed() || !listed(id)) return false;
     const stops = running() !== id && (home() === "local" || running() !== null);
     if (!(again ? hurry() : await settle(mine, id, stops))) return null;
@@ -208,7 +222,8 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
       return registry.list().filter((entry) => offered(entry.id)).map((entry) => ({ id: entry.id, name: entry.name, color: swatchColor(entry.color), swatch: entry.color,
         ...(entry.id === onScreen ? { active: true } : {}), ...(settling?.id === entry.id ? { settling: settling.name } : {}) }));
     },
-    /** The workspace a switch waits to open (`id` null: This computer), and the name of what it waits for. */
+    /** The workspace a switch waits to open (`id` null: This computer), the name of what it waits for, and the `turn` of
+     * the switch that waits. */
     settling: () => settling,
     /** What a paired phone may list: This PC (id `local`) and each workspace the rail offers, one current, a switch that
      * waits marked on its target, and the `environmentId` of each that has run. No folder, address or port. Null unless this computer is home. */
@@ -230,9 +245,9 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     creatable: () => allowed() && home() !== null,
     open,
     /** Back to This computer's own copy from a workspace (no home but this computer). */
-    async computer() {
+    async computer(cause) {
       const again = settling?.id === null;
-      const mine = ++turn;
+      const mine = bump(cause);
       if (running() === null) { await showLocal(); remember(null); return true; }
       if (!(again ? hurry() : await settle(mine, null, true))) return null;
       const left = await clean.leave();
@@ -240,7 +255,10 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
       return left;
     },
     /** Another place was chosen: a switch still waiting ends. */
-    cancel() { turn++; if (settling) { settling = null; tell(); } },
+    cancel(cause) { bump(cause); if (settling) { settling = null; tell(); } },
+    /** What took the turn of `cause` (an object that was given to open, computer or cancel): undefined while nothing
+     * has, null when the rail did, else the cause of the request that did. */
+    takenBy: (cause) => (objectOrNull(cause) && taken.has(cause) ? taken.get(cause) : undefined),
     /** A new workspace's entry; the rail opens it next (cloud-rail.mjs), so a switch that waits shows on its circle. */
     create({ name, color }) {
       if (!allowed() || home() === null) return { outcome: "unavailable" };
@@ -265,7 +283,7 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
      * to the Trash, then its entry. */
     async remove(id) {
       if (!listed(id)) return { outcome: "gone" };
-      turn++;
+      bump();
       if (running() === id) {
         if (!(await clean.leave()) || running() === id) return { outcome: "failed" };
         if (home() === "cloud") await shown.showCloud();

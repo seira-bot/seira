@@ -221,7 +221,7 @@ test("with no home but this computer: This computer is the data folder as ever, 
   assert.equal(w.running, profileDir(w.dataDir, "work"));
   assert.deepEqual(w.profiles.places({ activeLocal: true }), [{ id: "work", name: "Work", color: null, swatch: null, active: true }]);
   w.busy = [{ name: "Juno", what: "bot" }];
-  w.onWait = () => { assert.deepEqual(w.profiles.settling(), { id: null, name: "Juno" }); w.busy = []; };
+  w.onWait = () => { const { turn, ...shown } = w.profiles.settling(); assert.equal(typeof turn, "number", "it names its turn, so a hurry can be checked against this switch"); assert.deepEqual(shown, { id: null, name: "Juno" }); w.busy = []; };
   assert.equal(await w.profiles.computer(), true);
   assert.equal(w.running, w.dataDir, "This computer's own server again");
   w.onScreen = "elsewhere";
@@ -386,4 +386,44 @@ test("a file that is not an environment id reads as no id: a path or a long text
     assert.deepEqual(w.profiles.phoneFacts().map((workspace) => workspace.environmentId), [undefined, undefined], text.slice(0, 20));
   }
   assert.doesNotMatch(JSON.stringify(w.profiles.phoneFacts()), /seira|\//);
+});
+
+test("takenBy names who took a switch's turn at the moment the turn changed: a request, the rail, or nobody yet", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  w.profiles.create({ name: "Personal" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  const first = {}, second = {}, third = {};
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let turns = [];
+  w.onWait = () => {
+    if (w.waits === 1) turns.push(w.profiles.settling().turn);
+    if (w.waits === 2) { assert.equal(w.profiles.takenBy(first), undefined, "nobody took it yet"); w.profiles.open("personal", second); }
+    if (w.waits === 3) { turns.push(w.profiles.settling().turn); w.profiles.open("work"); } // the rail: no cause
+    if (w.waits === 4) { w.busy = []; w.profiles.cancel(third); }
+  };
+  assert.equal(await w.profiles.open("work", first), null);
+  assert.equal(w.profiles.takenBy(first), second, "the first switch was taken by the second request, not by a later one");
+  assert.notEqual(turns[0], turns[1], "each switch has its own turn");
+  assert.equal(w.profiles.takenBy(second), null, "the second one was taken by the rail");
+  assert.equal(w.profiles.takenBy({}), undefined, "a request that never asked is unknown");
+  assert.equal(w.profiles.takenBy(undefined), undefined);
+  assert.equal(w.profiles.takenBy("first"), undefined);
+});
+
+test("takenBy: a cancel names itself as the taker of the switch it cancelled, and a rail action that came first is not overwritten", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  const open = {}, cancel = {}, late = {};
+  w.busy = [{ name: "Scout", what: "bot" }];
+  w.onWait = () => { if (w.waits === 1) w.profiles.cancel(cancel); if (w.waits === 2) w.profiles.cancel(late); };
+  assert.equal(await w.profiles.open("work", open), null);
+  assert.equal(w.profiles.takenBy(open), cancel);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  w.waits = 0;
+  const railed = {};
+  w.onWait = () => { if (w.waits === 1) w.profiles.cancel(); if (w.waits === 2) w.profiles.cancel(late); };
+  assert.equal(await w.profiles.open("work", railed), null);
+  assert.equal(w.profiles.takenBy(railed), null, "the rail took it first; a later phone cancel does not take the credit");
 });

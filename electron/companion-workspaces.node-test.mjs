@@ -5,14 +5,21 @@ import { createCompanionWorkspaces, WORKSPACES_MESSAGE, WORKSPACE_SWITCH_MESSAGE
 
 function setup({ facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "ready" }], settling = null } = {}) {
   const w = { facts, settling, calls: [], sent: [], running: true, order: [] };
+  // The fake keeps the same rule as the real profiles: each turn change names its cause (a request object, or none for the rail),
+  // and `takenBy` answers who took the turn of a request: undefined while nobody did, null for the rail, else the request.
+  let holder = null;
+  const taken = new WeakMap();
+  const objectOrNull = (value) => (value !== null && typeof value === "object" ? value : null);
+  w.bump = (cause) => { const before = holder; holder = objectOrNull(cause); if (before && !taken.has(before)) taken.set(before, holder); };
   w.profiles = {
     phoneFacts: () => w.facts,
     settling: () => w.settling,
-    open: async (id) => { w.order.push("open"); w.calls.push(["open", id]); },
-    computer: async () => { w.calls.push(["computer"]); },
-    cancel: () => { w.calls.push(["cancel"]); },
+    open: async (id, cause) => { w.bump(cause); w.order.push("open"); w.calls.push(["open", id]); },
+    computer: async (cause) => { w.bump(cause); w.calls.push(["computer"]); },
+    cancel: (cause) => { w.bump(cause); w.calls.push(["cancel"]); },
+    takenBy: (cause) => (objectOrNull(cause) && taken.has(cause) ? taken.get(cause) : undefined),
   };
-  w.module = createCompanionWorkspaces({ profiles: w.profiles, post: (message) => { w.sent.push(message); return w.running; }, settled: async () => { w.order.push("settled"); }, log: (line) => (w.logs ??= []).push(line) });
+  w.module = createCompanionWorkspaces({ profiles: w.profiles, post: (message) => { w.sent.push(message); return w.running; }, settled: async () => { w.order.push("settled"); await w.hold; }, log: (line) => (w.logs ??= []).push(line) });
   w.ask = async (action, id) => { assert.equal(w.module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action, id }), true); await new Promise((resolve) => setImmediate(resolve)); };
   return w;
 }
@@ -182,7 +189,8 @@ const FACTS_3 = [{ id: "local", current: true, state: "ready" }, { id: "work", c
 function held() {
   const w = setup({ facts: FACTS_3 });
   w.gates = [];
-  w.profiles.open = async (id) => { const g = gate(); w.gates.push({ id, ...g }); return g.promise; };
+  w.profiles.open = async (id, cause) => { w.bump(cause); const g = gate(); w.gates.push({ id, ...g }); return g.promise; };
+  w.rail = () => w.bump(undefined); // the rail starts or cancels a switch itself: no phone request is its cause
   w.start = async (action, id, operation) => { w.module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation }); await tick(); };
   return w;
 }
@@ -271,4 +279,86 @@ test("a hurry that a newer switch takes over ends the hurried switch as that one
   w.gates[1].resolve(null);
   await tick();
   assert.deepEqual(reported(w), [[OP_H, "superseded"], [OP_A, "superseded"]]);
+});
+
+test("a rail action that replaced a phone switch is the cause, so a later phone cancel does not take the credit", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.rail();
+  w.settling = { id: "home", name: "Scout" };
+  await w.start("cancel", "local", OP_C);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_C, "done"], [OP_A, "superseded"]]);
+});
+
+test("a rail action that replaced a phone switch is the cause, so a later phone open for the same workspace does not carry it on", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  w.rail();
+  await w.start("open", "work", OP_B);
+  w.gates[0].resolve(null);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_A, "superseded"]], "the first switch ends now and does not wait for the later request");
+  w.gates[1].resolve(true);
+  await tick();
+  assert.deepEqual(reported(w), [[OP_A, "superseded"], [OP_B, "done"]]);
+});
+
+test("phone and rail actions in a row: each switch ends by its own cause and operation id", async () => {
+  const w = held();
+  await w.start("open", "work", OP_A);
+  await w.start("open", "home", OP_B);
+  w.rail();
+  w.settling = { id: "home", name: "Scout" };
+  await w.start("cancel", "local", OP_C);
+  for (const g of w.gates) g.resolve(null);
+  await tick();
+  assert.deepEqual(reported(w).sort(), [[OP_A, "superseded"], [OP_B, "superseded"], [OP_C, "done"]].sort());
+});
+
+test("a hurry is checked again after the wait: a switch that replaced the waiting one in that time fails the hurry", async () => {
+  const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }, { id: "home", current: false, state: "ready" }];
+  const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 1 } });
+  let release;
+  w.hold = new Promise((resolve) => { release = resolve; });
+  await askWith(w, "hurry", "work", OP_H);
+  w.settling = { id: "home", name: "Scout", turn: 2 }; // the rail started another switch during the wait
+  release();
+  await tick();
+  assert.deepEqual(w.calls, [], "the hurry opened nothing");
+  assert.deepEqual(reported(w), [[OP_H, "failed"]]);
+});
+
+test("a hurry is checked again after the wait: a new switch for the same workspace is another switch, so the hurry fails", async () => {
+  const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }];
+  const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 1 } });
+  let release;
+  w.hold = new Promise((resolve) => { release = resolve; });
+  await askWith(w, "hurry", "work", OP_H);
+  w.settling = { id: "work", name: "Scout", turn: 2 };
+  release();
+  await tick();
+  assert.deepEqual(w.calls, []);
+  assert.deepEqual(reported(w), [[OP_H, "failed"]]);
+  const none = setup({ facts, settling: { id: "work", name: "Scout", turn: 1 } });
+  let free;
+  none.hold = new Promise((resolve) => { free = resolve; });
+  await askWith(none, "hurry", "work", OP_H);
+  none.settling = null;
+  free();
+  await tick();
+  assert.deepEqual(none.calls, [], "the switch ended during the wait, so nothing is hurried");
+});
+
+test("a hurry that finds the same switch after the wait still opens the workspace", async () => {
+  const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }];
+  const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 4 } });
+  let release;
+  w.hold = new Promise((resolve) => { release = resolve; });
+  await askWith(w, "hurry", "work", OP_H);
+  release();
+  await tick();
+  assert.deepEqual(w.calls, [["open", "work"]]);
+  assert.deepEqual(reported(w), [[OP_H, "done"]]);
 });
