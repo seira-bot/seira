@@ -3693,6 +3693,7 @@
   "onboarding.meet.connected": "Connected to {name}",
   "onboarding.meet.otherWays": "Other ways to connect",
   "onboarding.meet.setupLater": "Set up later",
+  "onboarding.meet.noBwrap": "Commands are not isolated because bubblewrap is not installed. On Debian or Ubuntu, install it and restart Seira:",
   "onboarding.meet.connectAi": "Connect an AI",
   "onboarding.meet.connectNamed": "Connect {name}",
   "onboarding.meet.signIn": "Sign in with {name}",

@@ -6,6 +6,7 @@ import { SeiraCharacter } from "@/components/seira-character";
 import { brand, productName } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { activeLocale, t } from "@/lib/i18n";
+import { INSTALL_BWRAP } from "@/lib/folder-access";
 import { aiChoices, aiWorks } from "@/lib/onboarding";
 import { useStore } from "@/state/store";
 import { ConnectAiDialog } from "./ConnectAi";
@@ -110,6 +111,12 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           </p>
         )}
         {signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}
+        {state.config?.boxMissing === "no-bwrap" && (
+          <div data-box-missing="" className="mt-6 text-[13px] leading-[18px] text-ink-secondary">
+            <p>{t("onboarding.meet.noBwrap")}</p>
+            <code dir="ltr" className="mt-1.5 block select-all rounded-md bg-control px-2 py-1 text-ink">{INSTALL_BWRAP}</code>
+          </div>
+        )}
       </div>
       {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
     </div>
