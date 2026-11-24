@@ -11,6 +11,7 @@
 // your user name, host aliases, LAN addresses, private repo names. They apply to every file.
 // The generic rules skip tests, fixtures and generated files, and a merge commit.
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,24 +96,44 @@ export function findLeaks(lines, { privateRules = [], generic = true } = {}) {
       rules.push(...(binary ? GENERIC_RULES.slice(0, 3) : GENERIC_RULES));
     }
     for (const { label, re } of rules) {
-      if (re.test(text) || re.test(path)) found.push({ path, line, label });
+      if (re.test(text) || re.test(path)) found.push({ path, line, label, text });
     }
   }
   return found;
 }
 
-// Only `--all` reads this list. Each entry names a file, a rule and one reason. The generic rules stay as they are.
-// An entry that no longer matches a finding is stale, and the audit fails so the list stays true.
+// Only `--all` reads this list. Each entry pins one finding: a file, a rule, the SHA-256 of the trimmed line text, and one reason.
+// An entry hides one finding only. A new finding of the same rule in the same file stays in `kept`.
+// An entry that no longer matches a finding is stale, and the audit fails so the list stays true. The generic rules stay as they are.
+export const lineHash = (text) => createHash("sha256").update(text.trim()).digest("hex");
+
 export function applyAuditAllow(found, allow) {
   const used = new Set();
-  const kept = found.filter(({ path, label }) => {
-    const i = allow.findIndex((entry) => entry.path === path && entry.rule === label);
+  const kept = found.filter(({ path, label, text }) => {
+    const hash = lineHash(text ?? "");
+    const i = allow.findIndex((entry, n) => !used.has(n) && entry.path === path && entry.rule === label && entry.match === hash);
     if (i < 0) return true;
     used.add(i);
     return false;
   });
   const stale = allow.filter((_, i) => !used.has(i));
   return { kept, stale };
+}
+
+// Returns the entries, or throws an Error with one clear line when the file is not usable.
+export function parseAuditAllow(raw, name = "check-local-leaks.audit-allow.json") {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`${name} is not valid JSON (${error.message})`);
+  }
+  if (!Array.isArray(data)) throw new Error(`${name} must be a JSON array`);
+  data.forEach((entry, n) => {
+    const ok = entry && typeof entry.path === "string" && typeof entry.rule === "string" && typeof entry.reason === "string" && /^[0-9a-f]{64}$/.test(entry.match ?? "");
+    if (!ok) throw new Error(`${name} entry ${n + 1} needs path, rule, reason and a 64-digit hex match`);
+  });
+  return data;
 }
 
 const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 1 << 30 });
@@ -156,7 +177,14 @@ function main(argv) {
   let stale = [];
   if (mode === "--all") {
     const allowFile = join(root, "scripts/check-local-leaks.audit-allow.json");
-    ({ kept: found, stale } = applyAuditAllow(found, existsSync(allowFile) ? JSON.parse(readFileSync(allowFile, "utf8")) : []));
+    let allow = [];
+    try {
+      allow = existsSync(allowFile) ? parseAuditAllow(readFileSync(allowFile, "utf8")) : [];
+    } catch (error) {
+      console.log(`check-local-leaks: ${error.message}`);
+      return 1;
+    }
+    ({ kept: found, stale } = applyAuditAllow(found, allow));
   }
   for (const { path, line, label } of found) console.log(`${path}:${line}: ${label}`);
   for (const { path, rule } of stale) console.log(`${path}: stale audit-allow entry (${rule})`);

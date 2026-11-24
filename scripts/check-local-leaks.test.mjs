@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addedLines, applyAuditAllow, exemptFromGeneric, fileLines, findLeaks, privatePatterns } from "./check-local-leaks.mjs";
+import { addedLines, applyAuditAllow, exemptFromGeneric, fileLines, findLeaks, lineHash, parseAuditAllow, privatePatterns } from "./check-local-leaks.mjs";
 
 const labels = (lines, options) => findLeaks(lines, options).map((f) => `${f.path}:${f.line}: ${f.label}`);
 const one = (text, path = "docs/setup.md") => labels([{ path, line: 1, text }]);
@@ -165,20 +165,53 @@ describe("fileLines", () => {
 
 describe("applyAuditAllow", () => {
   const found = [
-    { path: "a.ts", line: 1, label: "private key" },
-    { path: "b.ts", line: 2, label: "private key" },
+    { path: "a.ts", line: 1, label: "private key", text: "  const a = 1; // first  " },
+    { path: "b.ts", line: 2, label: "private key", text: "const b = 2;" },
+    { path: "a.ts", line: 9, label: "private key", text: "const second = 3;" },
   ];
-  it("drops a finding that has a matching path and rule, and keeps the rest", () => {
-    const { kept, stale } = applyAuditAllow(found, [{ path: "a.ts", rule: "private key", reason: "x" }]);
-    expect(kept).toEqual([found[1]]);
+  const entry = (f, extra = {}) => ({ path: f.path, rule: f.label, match: lineHash(f.text), reason: "x", ...extra });
+  it("drops a finding whose path, rule and line hash match, and keeps the rest", () => {
+    const { kept, stale } = applyAuditAllow(found, [entry(found[1])]);
+    expect(kept).toEqual([found[0], found[2]]);
     expect(stale).toEqual([]);
   });
+  it("hashes the trimmed line text", () => {
+    expect(applyAuditAllow([found[0]], [entry({ ...found[0], text: "const a = 1; // first" })]).kept).toEqual([]);
+  });
+  it("keeps a second finding of the same rule in the same file", () => {
+    const { kept } = applyAuditAllow(found, [entry(found[0])]);
+    expect(kept).toEqual([found[1], found[2]]);
+  });
+  it("lets one entry hide one finding only", () => {
+    const twin = { ...found[0], line: 20 };
+    expect(applyAuditAllow([found[0], twin], [entry(found[0])]).kept).toEqual([twin]);
+  });
   it("does not allow another rule in the same file", () => {
-    const { kept } = applyAuditAllow(found, [{ path: "a.ts", rule: "provider API key", reason: "x" }]);
-    expect(kept).toEqual(found);
+    expect(applyAuditAllow(found, [entry(found[0], { rule: "provider API key" })]).kept).toEqual(found);
   });
   it("reports an entry that matches nothing as stale", () => {
-    const entry = { path: "gone.ts", rule: "private key", reason: "x" };
-    expect(applyAuditAllow(found, [entry]).stale).toEqual([entry]);
+    const gone = entry({ path: "gone.ts", label: "private key", text: "x" });
+    expect(applyAuditAllow(found, [gone]).stale).toEqual([gone]);
+  });
+  it("reports an entry as stale when the line text changed", () => {
+    const edited = entry({ ...found[1], text: "const b = 3;" });
+    const { kept, stale } = applyAuditAllow(found, [edited]);
+    expect(kept).toEqual(found);
+    expect(stale).toEqual([edited]);
+  });
+});
+
+describe("parseAuditAllow", () => {
+  const good = { path: "a.ts", rule: "private key", match: "a".repeat(64), reason: "x" };
+  it("reads a valid list", () => {
+    expect(parseAuditAllow(JSON.stringify([good]))).toEqual([good]);
+  });
+  it("throws one clear line for text that is not JSON", () => {
+    expect(() => parseAuditAllow("[{ nope")).toThrow(/audit-allow\.json is not valid JSON/);
+  });
+  it("rejects a list that is not an array, or an entry without a hash", () => {
+    expect(() => parseAuditAllow("{}")).toThrow(/must be a JSON array/);
+    expect(() => parseAuditAllow(JSON.stringify([{ ...good, match: undefined }]))).toThrow(/entry 1 needs/);
+    expect(() => parseAuditAllow(JSON.stringify([{ ...good, match: "xyz" }]))).toThrow(/entry 1 needs/);
   });
 });
