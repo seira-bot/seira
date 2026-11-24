@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ATTRIBUTION_PATHS, KEEP_LINES, compare, countMatches, lowered, OLD_NAME } from "./check-brand-names.mjs";
+import { ATTRIBUTION_PATHS, compare, findMatches, lowerBaseline, OLD_NAME, withoutKept } from "./check-brand-names.mjs";
+
+const find = (files: Record<string, string>) => findMatches(Object.keys(files), (path: string) => files[path]);
 
 describe("old upstream names", () => {
   it("matches the old names and not ordinary words", () => {
@@ -12,30 +14,52 @@ describe("old upstream names", () => {
     }
   });
 
-  it("skips attribution files and counts matching lines", () => {
-    const files: Record<string, string> = { NOTICE: "OpenMausBot", "a.ts": "omb\nok\nOMB_X", "b.ts": "clean" };
+  it("skips attribution files", () => {
     expect([...ATTRIBUTION_PATHS]).toContain("NOTICE");
-    expect(countMatches(Object.keys(files), (p: string) => files[p])).toEqual({ "a.ts": 2 });
+    expect(find({ NOTICE: "OpenMausBot", "b.ts": "clean" })).toEqual({});
   });
 
-  it("does not count the kept lines: .ombbackup, upstream history links, and reading x-omb-* headers", () => {
+  it("does not count an allowed token alone on a line", () => {
     const text = [
       'const SUFFIX = ".ombbackup";',
       "see https://github.com/milind-soni/OpenMausBot/pull/2547",
       "fixed in milind-soni/OpenMausBot#2547",
       'const v = request.headers.get("x-omb-poller");',
-      'headers: { "x-omb-cloud-power": "asleep" }',
-      "import { OpenMausBot } from './x'",
     ].join("\n");
-    expect(KEEP_LINES.length).toBeGreaterThan(0);
-    expect(countMatches(["f.ts"], () => text)).toEqual({ "f.ts": 2 });
+    expect(find({ "f.ts": text })).toEqual({});
   });
 
-  it("fails a new file and a rise, passes the same or a lower count", () => {
-    expect(compare({ "new.ts": 1 }, {})).toEqual([{ path: "new.ts", found: 1, allowed: 0 }]);
-    expect(compare({ "a.ts": 3 }, { "a.ts": 2 })).toEqual([{ path: "a.ts", found: 3, allowed: 2 }]);
-    expect(compare({ "a.ts": 2 }, { "a.ts": 2 })).toEqual([]);
-    expect(compare({ "a.ts": 1 }, { "a.ts": 2 })).toEqual([]);
-    expect(lowered({ "a.ts": 1 }, { "a.ts": 2, "gone.ts": 1 })).toEqual(["a.ts", "gone.ts"]);
+  it("still checks the rest of a line that holds an allowed token", () => {
+    const lines = [
+      'const a = ".ombbackup"; const label = "OpenMausBot";',
+      'const h = request.headers.get("x-omb-poller"); send({ "x-omb-cloud-power": "asleep" });',
+      "see https://github.com/milind-soni/OpenMausBot/pull/2547 and milind-soni/OpenMausBot/releases/x",
+      'headers.get("x-omb-a") ?? headers.get("x-omb-b") + "omb_pd_"',
+    ];
+    for (const line of lines) {
+      expect(withoutKept(line), line).toMatch(OLD_NAME);
+      expect(Object.keys(find({ "f.ts": line })), line).toEqual(["f.ts"]);
+    }
+  });
+
+  it("fails a replacement at the same count", () => {
+    const baseline = { "a.ts": ['const x = "omb.1";', 'const y = "OMB_HOME";'] };
+    const swapped = find({ "a.ts": 'const x = "omb.1";\nconst y = "omb_new";' });
+    expect(Object.values(swapped)[0]).toHaveLength(2);
+    expect(compare(swapped, baseline)).toEqual([{ path: "a.ts", line: 'const y = "omb_new";', found: 1, allowed: 0 }]);
+  });
+
+  it("fails a new path, a rise in repeats, and passes the same or fewer", () => {
+    expect(compare({ "new.ts": ["omb"] }, {})).toHaveLength(1);
+    expect(compare({ "a.ts": ["omb", "omb"] }, { "a.ts": ["omb"] })).toEqual([{ path: "a.ts", line: "omb", found: 2, allowed: 1 }]);
+    expect(compare({ "a.ts": ["omb"] }, { "a.ts": ["omb"] })).toEqual([]);
+    expect(compare({ "a.ts": ["omb"] }, { "a.ts": ["omb", "omb"] })).toEqual([]);
+  });
+
+  it("--update only lowers: it drops gone entries and never adds a path, a line or a repeat", () => {
+    const baseline = { "a.ts": ["omb", "omb", "OMB_X"], "gone.ts": ["omb"] };
+    const found = { "a.ts": ["omb", "OMB_NEW"], "new.ts": ["omb"] };
+    expect(lowerBaseline(found, baseline)).toEqual({ "a.ts": ["omb"] });
+    expect(lowerBaseline({ "a.ts": ["omb", "omb", "omb"] }, { "a.ts": ["omb"] })).toEqual({ "a.ts": ["omb"] });
   });
 });
