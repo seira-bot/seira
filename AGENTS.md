@@ -73,3 +73,10 @@ When you are unsure, keep the file local and ask the maintainer.
 
 `node scripts/check-public-paths.mjs` blocks a new file under a known private
 path. The pre-commit hook and CI run it.
+
+## Old upstream names
+
+Product text says Seira, not the old upstream name. `node scripts/check-brand-names.mjs`
+fails a new match outside the attribution files and `scripts/brand-names-baseline.json`
+(documented legacy fallbacks, their tests, and wire names that wait for the wire-name migration).
+CI runs it. After you remove matches, run it with `--update` to lower the baseline.

@@ -812,7 +812,7 @@ describe("CI server image job", () => {
 describe("CI required checks", () => {
   it("runs the locale, lint and local-detail checks in the checks job", () => {
     const commands = runs(workflow.jobs.checks);
-    for (const command of ["pnpm i18n:check", "pnpm lint", "node scripts/check-local-leaks.mjs"]) {
+    for (const command of ["pnpm i18n:check", "pnpm lint", "node scripts/check-local-leaks.mjs", "node scripts/check-brand-names.mjs"]) {
       expect(commands.some((run) => run.includes(command)), command).toBe(true);
     }
   });
