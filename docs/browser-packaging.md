@@ -350,3 +350,7 @@ same native cold-start and restart tests.
 Complete upstream notices and provenance are in
 [`third_party/browser`](../third_party/browser/README.md). The full Google
 Chrome distribution and its proprietary Widevine component are not bundled.
+
+## Publishing an engine release
+
+Create it with `node scripts/publish-browser-engine-release.mjs browser-engine-vX.Y.Z-seira.N <files>`. The script always passes `--latest=false`. An engine release must never be Latest: `releases/latest` must stay the app release, because the installer, the update check and electron-updater (`latest.yml`) read it.
