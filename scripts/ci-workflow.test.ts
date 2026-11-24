@@ -21,6 +21,7 @@ interface Job {
   if?: string;
   outputs?: Record<string, string>;
   uses?: string;
+  "timeout-minutes"?: number;
   environment?: unknown;
   permissions?: Record<string, string> | string;
   strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; include?: Record<string, string>[]; worker?: string; runner?: string[] } };
@@ -55,6 +56,16 @@ const IS_MAINTAINER = `(${MAINTAINER_CHECK})`;
 const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
 const MACOS = "package-macos.yml";
 const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
+const ATTACH = "attach";
+const isAttach = (file: string, id: string) => file === MACOS && id === ATTACH;
+const ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`;
+const MAC_FILES = [
+  "Seira-$VERSION-arm64.dmg", "Seira-$VERSION-x64.dmg",
+  "Seira-$VERSION-arm64.zip", "Seira-$VERSION-x64.zip",
+  "Seira-$VERSION-arm64.dmg.blockmap", "Seira-$VERSION-x64.dmg.blockmap",
+  "Seira-$VERSION-arm64.zip.blockmap", "Seira-$VERSION-x64.zip.blockmap",
+  "latest-mac.yml", "Seira.dmg", "Seira-intel.dmg", "SHA256SUMS-mac.txt",
+];
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -128,12 +139,12 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository and the milestones step once to call the GitHub API", () => {
+  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS attach step once to upload to the release and the milestones step once to call the GitHub API", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
-    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(2);
+    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(3);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS || file === MILESTONES ? original.replace(READ_TOKEN, "") : original;
+      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS || file === MILESTONES ? original.replaceAll(READ_TOKEN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -400,7 +411,8 @@ describe("Package workflows", () => {
   it("ask for no job permission, so the token stays read-only", () => {
     for (const [file, flow] of packageWorkflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
-        expect(job.permissions, `${file} job ${id}`).toEqual(id === "approval" ? {} : undefined);
+        const expected = id === "approval" ? {} : isAttach(file, id) ? { contents: "write" } : undefined;
+        expect(job.permissions, `${file} job ${id}`).toEqual(expected);
       }
     }
   });
@@ -410,6 +422,7 @@ describe("Package workflows", () => {
       for (const [id, job] of Object.entries(flow.jobs)) {
         if (job.environment === undefined || id === "approval") continue;
         expect(job.environment, `${file} job ${id}`).toBe("release");
+        if (isAttach(file, id)) continue;
         expect(JSON.stringify(job), `${file} job ${id}`).toContain("secrets.");
       }
     }
@@ -417,7 +430,7 @@ describe("Package workflows", () => {
 
   it("ask a maintainer to approve a run that another person starts, before the job that reads the secrets", () => {
     for (const [file, flow] of packageWorkflows) {
-      const gated = Object.entries(flow.jobs).filter(([, job]) => job.environment === "release");
+      const gated = Object.entries(flow.jobs).filter(([id, job]) => job.environment === "release" && !isAttach(file, id));
       if (gated.length === 0) continue;
       expect(flow.jobs.approval?.environment, file).toBe("release-approval");
       expect(flow.jobs.approval?.if, file).toBe(`\${{ ${NOT_MAINTAINER} }}`);
@@ -480,6 +493,119 @@ describe("Package workflows", () => {
     ]);
     expect(uploads[1].with?.path).toBe("${{ runner.temp }}/seira-windows-x64-store/");
     expect(uploads[1].with?.["retention-days"]).toBe(14);
+  });
+});
+
+describe("macOS attach job", () => {
+  const flow = workflows.get(MACOS)!;
+  const text = texts.get(MACOS)!;
+  const job = flow.jobs[ATTACH]!;
+  const steps = stepsOf(job);
+  const upload = steps.find((step) => step.run?.includes('release-assets.mjs" upload'))!;
+  const check = steps.find((step) => step.run?.includes("sha256sum -c SHA256SUMS-mac.txt"))!;
+  const download = steps.findIndex((step) => step.uses?.startsWith("actions/download-artifact@"));
+
+  it("is the last job of the macOS workflow, and the package job hands it three outputs", () => {
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package", ATTACH]);
+    expect(flow.jobs.package!.outputs).toEqual({
+      signed: "${{ steps.mode.outputs.signed }}",
+      version: "${{ steps.version.outputs.version }}",
+      artifact: "${{ steps.version.outputs.artifact }}",
+    });
+  });
+
+  it("runs only for a signed build of a v* tag, after the package job succeeded, for a maintainer or after an approval in the same attempt", () => {
+    expect(job.if).toBe(ATTACH_IF);
+  });
+
+  it("needs the commit, approval and package jobs", () => {
+    expect(job.needs).toEqual(["commit", "approval", "package"]);
+  });
+
+  it("runs on a GitHub-hosted runner with a short timeout, behind the release environment", () => {
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job["timeout-minutes"]).toBe(15);
+    expect(job.environment).toBe("release");
+  });
+
+  it("asks for the write permission on contents and nothing else", () => {
+    expect(job.permissions).toEqual({ contents: "write" });
+  });
+
+  it("reads no secret", () => {
+    expect(JSON.stringify(job)).not.toContain("secrets.");
+    expect(job).not.toHaveProperty("secrets");
+    expect(text.slice(text.indexOf("\n  attach:"))).not.toContain("secrets.");
+  });
+
+  it("checks out only the script, from the workflow commit, without credentials", () => {
+    const checkouts = steps.filter((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkouts).toHaveLength(1);
+    expect(checkouts[0]!.with).toEqual({
+      ref: "${{ github.sha }}",
+      "persist-credentials": false,
+      "sparse-checkout": "scripts/release-assets.mjs",
+      "sparse-checkout-cone-mode": false,
+    });
+  });
+
+  it("downloads the artifact that the package job names, into a folder of the runner", () => {
+    const downloads = steps.filter((step) => step.uses?.startsWith("actions/download-artifact@"));
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0]!.uses).toMatch(/^actions\/download-artifact@[0-9a-f]{40}$/);
+    expect(downloads[0]!.with).toEqual({
+      name: "${{ needs.package.outputs.artifact }}",
+      path: "${{ runner.temp }}/seira-macos",
+    });
+  });
+
+  it("checks the file set and the SHA-256 sums after the download and before the upload", () => {
+    expect(steps.indexOf(check)).toBeGreaterThan(download);
+    expect(steps.indexOf(check)).toBeLessThan(steps.indexOf(upload));
+    expect(check.run).toContain("set -euo pipefail");
+    expect(check.run).toContain("exactly the twelve expected files");
+    for (const file of MAC_FILES) expect(check.run, file).toContain(file);
+  });
+
+  it("uploads the twelve files in the documented order, to this repository, then checks the release", () => {
+    expect(upload.run).toContain('release-assets.mjs" upload "$TAG"');
+    expect(upload.run).toContain('--repo "$GITHUB_REPOSITORY"');
+    const listed = [...upload.run!.matchAll(/"(Seira-\$VERSION-[^"]+)"|\b(latest-mac\.yml|Seira\.dmg|Seira-intel\.dmg|SHA256SUMS-mac\.txt)\b/g)].map(
+      (match) => match[1] ?? match[2],
+    );
+    expect(listed).toEqual(MAC_FILES);
+    const checkCommand = 'release-assets.mjs" check "$TAG" --repo "$GITHUB_REPOSITORY"';
+    expect(upload.run!.indexOf(checkCommand)).toBeGreaterThan(upload.run!.indexOf('--repo "$GITHUB_REPOSITORY"'));
+  });
+
+  it("stops when the ref is not v plus the version of the build", () => {
+    expect(upload.run).toContain('[ "$TAG" = "v$VERSION" ]');
+  });
+
+  it("passes the token, the tag and the version through env only", () => {
+    expect(upload.env).toEqual({
+      GH_TOKEN: "${{ github.token }}",
+      TAG: "${{ inputs.ref }}",
+      VERSION: "${{ needs.package.outputs.version }}",
+      STAGE: "${{ runner.temp }}/seira-macos",
+    });
+    for (const run of runs(job)) expect(run).not.toContain("${{");
+  });
+
+  it("never publishes, creates, edits or uploads a release from a command line", () => {
+    const all = runs(job).join("\n");
+    for (const forbidden of ["publish", "gh release create", "gh release edit", "gh release upload", "gh release", "git tag", "git push"]) {
+      expect(all, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it("leaves every other job of the package workflows without a write permission", () => {
+    for (const [file, flow] of packageWorkflows) {
+      for (const [id, other] of Object.entries(flow.jobs)) {
+        if (isAttach(file, id)) continue;
+        expect(other.permissions, `${file} job ${id}`).toEqual(id === "approval" ? {} : undefined);
+      }
+    }
   });
 });
 

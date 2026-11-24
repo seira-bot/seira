@@ -1,16 +1,18 @@
 # Seira for macOS: the Apple silicon (arm64) and Intel (x64) apps, built on a GitHub-hosted macOS runner (docs/releasing.md).
 #
-# This workflow only builds. It cannot publish:
+# This workflow builds the apps. It never creates a tag and never publishes a release:
 # - only a person with write access can start it (`workflow_dispatch`), so a fork pull request never runs it;
-# - the token can only read the repository;
+# - the token of every job except `attach` can only read the repository;
 # - it uses no dependency cache, so no other run can change what the packages contain;
-# - it uploads the packages as a workflow artifact. A maintainer attaches the artifact to the release by hand.
+# - it uploads the packages as a workflow artifact;
+# - for a signed build of a `v*` tag, the `attach` job also uploads the twelve files to the draft release of that tag.
+# The `attach` job reads no secret. It runs only scripts/release-assets.mjs from the workflow commit, never code from the built commit.
 # A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
 # A maintainer's run does not wait.
 # The `package` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
 # A re-run by another person therefore never reuses an approval of an earlier attempt.
 # The `commit` job finds the commit of the ref before the approval. The `package` job builds that commit only.
-# The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
+# The `release` environment accepts `main` and `v*` tags only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
 # - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE, built without the update feed file;
 # - some set: the run stops before it builds.
@@ -80,6 +82,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 120
     environment: release
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+      version: ${{ steps.version.outputs.version }}
+      artifact: ${{ steps.version.outputs.artifact }}
     defaults:
       run:
         shell: bash
@@ -432,3 +438,65 @@ jobs:
       - name: Delete the temporary keychain
         if: always() && steps.mode.outputs.signed == 'true'
         run: security delete-keychain "$RUNNER_TEMP/seira-signing.keychain-db" || true
+
+  attach:
+    name: attach the macOS files to the release
+    needs: [commit, approval, package]
+    if: ${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/release-assets.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: ${{ runner.temp }}/seira-macos
+
+      - name: Check the downloaded files
+        shell: bash
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-macos
+        run: |
+          set -euo pipefail
+          cd "$STAGE"
+          files=(
+            "Seira-$VERSION-arm64.dmg" "Seira-$VERSION-x64.dmg"
+            "Seira-$VERSION-arm64.zip" "Seira-$VERSION-x64.zip"
+            "Seira-$VERSION-arm64.dmg.blockmap" "Seira-$VERSION-x64.dmg.blockmap"
+            "Seira-$VERSION-arm64.zip.blockmap" "Seira-$VERSION-x64.zip.blockmap"
+            latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
+          )
+          expected=$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+          found=$(find . -mindepth 1 -type f -printf '%P\n' | LC_ALL=C sort)
+          [ "$found" = "$expected" ] || { echo "::error::The artifact does not hold exactly the twelve expected files."; echo "$found"; exit 1; }
+          sha256sum -c SHA256SUMS-mac.txt
+
+      - name: Upload the files to the draft release and check it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.ref }}
+          VERSION: ${{ needs.package.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-macos
+        run: |
+          set -euo pipefail
+          [ "$TAG" = "v$VERSION" ] || { echo "::error::The ref $TAG is not v$VERSION."; exit 1; }
+          cd "$STAGE"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" \
+            "Seira-$VERSION-arm64.dmg" "Seira-$VERSION-x64.dmg" \
+            "Seira-$VERSION-arm64.zip" "Seira-$VERSION-x64.zip" \
+            "Seira-$VERSION-arm64.dmg.blockmap" "Seira-$VERSION-x64.dmg.blockmap" \
+            "Seira-$VERSION-arm64.zip.blockmap" "Seira-$VERSION-x64.zip.blockmap" \
+            latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt \
+            --repo "$GITHUB_REPOSITORY"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" check "$TAG" --repo "$GITHUB_REPOSITORY"
