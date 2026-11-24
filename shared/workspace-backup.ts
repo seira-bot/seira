@@ -27,6 +27,15 @@ export interface WorkspaceLeftBehind {
   paths: string[];
 }
 
+/** What a restore leaves to do by hand. Fixed kinds and counts only; never a name, address or secret. */
+export const NEEDS_ACTION_KINDS = ["routines-on", "webhooks-on", "app-automations-on"] as const;
+export type WorkspaceNeedsActionKind = typeof NEEDS_ACTION_KINDS[number];
+export interface WorkspaceNeedsAction {
+  kind: WorkspaceNeedsActionKind;
+  /** How many of that kind were on in the backup. At least 1: a kind with none is not listed. */
+  count: number;
+}
+
 export type WorkspaceBackupClientState = Record<string, string>;
 
 export interface WorkspaceBackupPrivateMetadata {

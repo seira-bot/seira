@@ -25,10 +25,11 @@ export function SpendingPage() {
 
 export function ImportExportPage() {
   return <AdminOnly>
-    <WorkspaceBackupSettings layout={({ importRow, exportRow }) => <>
+    <WorkspaceBackupSettings layout={({ importRow, exportRow, checklist }) => <>
       <SettingsGroup label={t("settings.data.bringIn")} block="bring-in">
         <ImportSettings>{importRow}</ImportSettings>
       </SettingsGroup>
+      {checklist}
       <SettingsGroup label={t("settings.data.takeOut")} block="take-out">
         <SettingsRows>{exportRow}</SettingsRows>
         <CompanyBackupSettings />

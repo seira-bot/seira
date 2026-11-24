@@ -18,11 +18,11 @@ import { cjkSearchText } from "./cjk-search.ts";
 import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEnginePath, managedTaskSkillLink, portableWorkspaceConfig, redownloadedOrgLibraryPath, restoredWorkspaceConfig } from "./workspace-backup-policy.ts";
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
-import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
+import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind, WorkspaceNeedsAction } from "../shared/workspace-backup.ts";
 import { backupPartOf, LEAVE_OUT_PARTS, parseLeaveOut, type LeaveOutPart } from "./workspace-backup-parts.ts";
 import { databaseCounts } from "./workspace-backup-counts.ts";
 import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
-import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
+import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts"; import { cleanNeedsAction, readNeedsAction, recordNeedsAction } from "./workspace-backup-needs-action.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
@@ -98,7 +98,7 @@ export interface WorkspaceRestoreResult {
   id?: string;
   safetyCopyPath?: string;
   summary?: WorkspaceBackupSummary;
-  leftBehind?: WorkspaceLeftBehind;
+  leftBehind?: WorkspaceLeftBehind; /** null: a receipt from before the list existed. [] only for a restore that has nothing to do by hand. */ needsAction?: WorkspaceNeedsAction[] | null;
   clientState?: WorkspaceBackupClientState;
 }
 /** `pathsRewritten`: the source data folder was rewritten in text too, by the restore or by repairMovedWorkspacePaths. */
@@ -782,6 +782,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     folder(join(prepared, home));
     cpSync(source, join(prepared, home, ".browser-profiles"), { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false });
   }
+  recordNeedsAction(prepared, job);
   changeJson("routines.json", (value) => {
     if (!record(value)) throw new Error("Invalid routine definitions in workspace backup.");
     if (Array.isArray(value.routines)) for (const routine of value.routines) if (record(routine)) {
@@ -886,8 +887,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     } finally { db.close(); }
   }
   const leftBehind = paths.leftBehind();
-  if (leftBehind) writeJson(join(job, "left-behind.json"), leftBehind);
-  else rmSync(join(job, "left-behind.json"), { force: true });
+  if (leftBehind) writeJson(join(job, "left-behind.json"), leftBehind); else rmSync(join(job, "left-behind.json"), { force: true });
   return prepared;
 }
 
@@ -897,7 +897,7 @@ export function readLastWorkspaceRestore(dataDir: string): LastWorkspaceRestore 
   if (!existsSync(path)) return null;
   const raw = privateJson(path);
   if (!record(raw) || raw.restored !== true || typeof raw.id !== "string" || !ID.test(raw.id)) throw new Error("Invalid workspace restore receipt.");
-  return raw as unknown as LastWorkspaceRestore;
+  return { ...raw, needsAction: Array.isArray(raw.needsAction) ? cleanNeedsAction(raw.needsAction) : null } as unknown as LastWorkspaceRestore;
 }
 function finishRestore(dataDir: string, id: string, consumePending = true): LastWorkspaceRestore {
   const root = backupRoot(dataDir);
@@ -912,7 +912,7 @@ function finishRestore(dataDir: string, id: string, consumePending = true): Last
     } catch {}
   }
   const leftBehind = join(jobPath(dataDir, id), "left-behind.json");
-  const result: LastWorkspaceRestore = { restored: true, id, safetyCopyPath: join(root, `safety-${id}`), summary, clientState, pathsRewritten: true,
+  const result: LastWorkspaceRestore = { restored: true, id, safetyCopyPath: join(root, `safety-${id}`), summary, clientState, pathsRewritten: true, needsAction: readNeedsAction(jobPath(dataDir, id)),
     ...(existsSync(leftBehind) ? { leftBehind: privateJson(leftBehind) as WorkspaceLeftBehind } : {}) };
   writeJson(join(root, "last-restore.json"), result);
   if (consumePending) rmSync(join(root, "pending-restore.json"), { force: true });

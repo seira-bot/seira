@@ -441,3 +441,25 @@ it("still refuses a download without a session", async () => {
   expect(response.status).toBeGreaterThanOrEqual(401);
   await response.arrayBuffer();
 });
+
+it("shows how many bots a restore left behind and what needs action in the status, and no path", async () => {
+  expect(await status()).toMatchObject({ leftBehind: null, needsAction: null });
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111", leftBehind: { bots: 1, paths: ["C:\\Work"] }, needsAction: [{ kind: "routines-on", count: 2 }] } });
+  const shown = await status();
+  expect(shown).toMatchObject({ leftBehind: { bots: 1 }, needsAction: [{ kind: "routines-on", count: 2 }] });
+  expect(shown.leftBehind).toEqual({ bots: 1 });
+  expect(JSON.stringify(shown)).not.toContain("Work");
+});
+
+it("keeps an empty list for a new restore with nothing to do, and null for an old receipt", async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111", needsAction: [] } });
+  expect((await status()).needsAction).toEqual([]);
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111" } });
+  expect((await status()).needsAction).toBeNull();
+});
