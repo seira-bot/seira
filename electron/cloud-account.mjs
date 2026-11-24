@@ -926,7 +926,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       catch (error) { if (error?.status === 404 || error?.status === 501) return null; throw error; }
       let target = null;
       try { target = typeof result?.url === "string" ? new URL(result.url) : null; } catch { target = null; }
-      if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
+      if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^(omb|seira)_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
         throw new Error("Invalid Cloud pages response.");
       }
       return { url: result.url, token: result.token };

@@ -54,7 +54,7 @@ export function applyIncludedPagesMessage(message: unknown): boolean {
   }
   const { url, token } = (access && typeof access === "object" ? access : {}) as { url?: unknown; token?: unknown };
   const target = adminUrl(url);
-  if (typeof token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
+  if (typeof token !== "string" || !/^(omb|seira)_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
   desktopPages = { url: target, token };
   desktopPagesNotOffered = false;
   return true;
