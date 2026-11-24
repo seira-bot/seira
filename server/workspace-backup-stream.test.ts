@@ -73,3 +73,17 @@ it("counts the archive and the database copies in the space rule", () => {
   expect(backupSpaceNeeded(100, 40) - backupSpaceNeeded(100)).toBe(40);
   expect(backupSpaceNeeded(100)).toBeGreaterThan(100);
 });
+
+it("leaves no download and no job folder when an export fails", async () => {
+  const root = folder();
+  put(root, "workspaces/bot/a.txt", "synthetic alpha");
+  await expect(createWorkspaceBackupSnapshot(root, { password: PASSWORD }, undefined, {
+    betweenReads: () => appendFileSync(join(root, "workspaces/bot/a.txt"), " more"),
+  })).rejects.toThrow(/changed during backup/);
+  expect(jobs(root)).toEqual([]);
+  const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [e.name]));
+  expect(files(root).filter((name) => name.endsWith(".seirabackup"))).toEqual([]);
+  // The next export, once the writer has stopped, works.
+  const next = await createWorkspaceBackupSnapshot(root, { password: PASSWORD });
+  expect(existsSync(next.path)).toBe(true);
+});

@@ -20,23 +20,20 @@ vi.mock("node:worker_threads", async importOriginal => {
 // Real encrypted backups of 800+ files: about 3 s on Linux and macOS, about 25 s on the Windows runners.
 const TIMEOUT_MS = 120_000;
 
-it("keeps the request loop running while the files are read and encrypted", async () => {
+it("keeps the request loop answering while the files are read and encrypted", async () => {
   const directory = mkdtempSync(join(tmpdir(), "seira-backup-worker-"));
   for (let i = 0; i < 320; i++) writeFileSync(join(directory, `file-${String(i).padStart(4, "0")}.txt`), "synthetic");
-  let observedCopy = false;
-  const timer = setInterval(() => {
-    const root = join(directory, ".backups");
-    if (!existsSync(root)) return;
-    for (const job of readdirSync(root)) {
-      // The export has no full copy any more: it runs while its job folder holds a snapshot.
-      if (existsSync(join(root, job, "snapshot", "data"))) observedCopy = true;
-    }
-  }, 1);
+  writeFileSync(join(directory, "big.bin"), Buffer.alloc(32 * 1024 * 1024, 7));
+  // Stands in for a request: the main thread must keep answering ticks until the export is done, because the work runs in a worker.
+  let ticks = 0, finished = false, ticksBeforeEnd = 0;
+  const timer = setInterval(() => { ticks++; }, 1);
   try {
-    const result = await createWorkspaceBackup(directory, { password: "fixture-backup-password-only" });
-    expect(result.summary.files).toBe(320);
+    const exporting = createWorkspaceBackup(directory, { password: "fixture-backup-password-only" }).finally(() => { finished = true; ticksBeforeEnd = ticks; });
+    const result = await exporting;
+    expect(finished).toBe(true);
+    expect(result.summary.files).toBe(321);
     expect(existsSync(result.path)).toBe(true);
-    expect(observedCopy).toBe(true);
+    expect(ticksBeforeEnd).toBeGreaterThan(5);
   } finally {
     clearInterval(timer);
     rmSync(directory, { recursive: true, force: true });
