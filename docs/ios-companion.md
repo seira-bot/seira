@@ -411,6 +411,19 @@ cursor is committed only after a cold hydration succeeds; replayed streams
 advance it one folded frame at a time, so a disconnect during recovery cannot
 skip the remaining gap.
 
+## Suggested replies
+
+The last bot line of a finished turn may carry `suggestedReplies`: a list of at most 4 chips, each with a `title` (the
+label, at most 40 characters) and a `prompt` (the text a tap puts in the composer, at most 500 characters). The field is
+optional. A line without it, and a turn that failed, was cancelled or has no useful next step, gets no field; then the
+client shows its own saved chips. A client that does not know the field ignores it.
+
+The text is written by a model, so every side runs `cleanSuggestedReplies`
+(`packages/phone-protocol/src/suggested-replies.ts`) before a chip exists. It replaces control characters, trims
+whitespace and drops, whole and never cut, an entry with an empty or over-limit part, a link, a slash command, shell
+syntax or an action payload. A tap shows the exact text; it never sends on receipt or on render, and it never reaches a
+command, a tool, a link or an approval handler: the person sends it through the normal message path.
+
 ## Phone apps as bot tools
 
 The phone registers the apps it allows with `PUT /api/phones/self`. Behind the sidecar it is identified by the companion header; on a Cloud home it uses its own session. It long-polls `GET /api/phones/self/jobs` (20 s), leases a job with `POST /api/phones/self/jobs/:id/lease`, and answers with `POST /api/phones/self/jobs/:id/result`, sending `{ ok: true, result }` or `{ ok: false, error, code }`. Results over 256 KB are refused as `too_large`. The SSE frame `{ kind: "device.job", phone, id }` tells an open app to poll now.
