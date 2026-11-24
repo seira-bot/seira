@@ -219,6 +219,9 @@ const PLACE_NAMES: Record<Surface, string> = {
   cloud: "its Cloud desktop", vm: "its Private desktop", local: "This computer", browser: "the built-in Browser",
 };
 
+/** What vm_exec answers when no computer is lent to the turn: why, and what the person can do, so the bot reports the real fix and does not pass the task to a teammate with the same limit. */
+export const NO_COMPUTER_FOR_COMMAND = "You have no Local VM desktop in this turn, so there is nowhere to run a command. A bot on an API engine (an OpenAI-compatible endpoint) runs commands only on a computer Seira lends it: This computer, a Local VM or a Cloud VPS. None is lent to this turn. Tell the person that one of these fixes it: choose a CLI engine for you (Codex, Claude Code, OpenCode or DeepSeek Harness), set up a Local VM, or lend a computer. Do not ask a teammate to run the command: a bot on the same kind of engine has the same limit.";
+
 /** What a bot says and does when work needs this computer's own files but the turn works elsewhere. `canSelect`: this
  * turn may call select_computer, the switch the person allows with one tap; otherwise only the person's own choice moves
  * it. `botId`: the bot's own id, so a person's own request can keep This computer as its Works on through app_settings;
