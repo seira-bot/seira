@@ -85,7 +85,7 @@ const OWN_CLOUD_TOOLS = ["ask_for_computer"];
 /** The fullest profile, checked in whole; every other one is pinned by tool names, bytes and sha256. */
 const FULL = "skills+shared+voice+x+team+images+hosting";
 
-/** Bytes when the budget was last set; a profile may move at most 2% either way (lower it to lock in a win). Every profile gained 308 bytes on purpose: app_settings now lists show_place, its description and its place parameter. The profiles that list thread tools gained 1029 bytes more from suggest_replies. */
+/** Bytes when the budget was last set; a profile may move at most 2% either way (lower it to lock in a win). Every profile gained 308 bytes on purpose: app_settings now lists show_place, its description and its place parameter. Most profiles gained 1029 bytes more from suggest_replies. */
 const BUDGET_BASELINE: Record<string, number> = {
   "default": 63600,
   "voice": 64381,
