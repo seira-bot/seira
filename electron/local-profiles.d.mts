@@ -35,8 +35,9 @@ export interface LocalProfiles {
   phoneFacts(): PhoneWorkspaceFact[] | null;
   creatable(): boolean;
   /** `cause`: the request that asks, an object; none for the rail. */
-  open(id: string, cause?: object): Promise<boolean | null>;
-  computer(cause?: object): Promise<boolean | null>;
+  /** `hurryTurn`: the `turn` of the wait the caller means to hurry; false, and no turn changes, unless that wait is the active switch's. */
+  open(id: string, cause?: object, hurryTurn?: number): Promise<boolean | null>;
+  computer(cause?: object, hurryTurn?: number): Promise<boolean | null>;
   cancel(cause?: object): void;
   /** What took the turn of `cause`: undefined while nothing has, null when the rail did, else that request's cause. */
   takenBy(cause: object): object | null | undefined;

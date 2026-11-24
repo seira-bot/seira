@@ -16,7 +16,7 @@ function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
   mkdirSync(dataDir, { recursive: true });
   if (frozen) writeFileSync(join(dataDir, "moved.json"), JSON.stringify({ v: 1, at: 1, cloud: "https://seira-t-1.fly.dev" }));
   let clock = 1_000;
-  const w = { dataDir, running: dataDir, swaps: [], home, shown: null, onScreen: "cloud", busy: [], trashed: [], trashFails: false, changes: 0, logs: [], waits: 0, remembered: [] };
+  const w = { dataDir, running: dataDir, swaps: [], home, shown: null, onScreen: "cloud", busy: [], trashed: [], trashFails: false, changes: 0, logs: [], waits: 0, busyCalls: 0, remembered: [] };
   w.now = () => clock;
   w.clean = createCleanWorkspace({ dataDir: () => dataDir, running: () => w.running,
     swap: async (dir) => { w.swaps.push(dir); await new Promise((resolve) => setImmediate(resolve)); w.running = dir; w.onScreen = "local"; return { ok: true }; } });
@@ -28,7 +28,7 @@ function computer(t, { home = "cloud", frozen = home === "cloud" } = {}) {
       showCloud: async () => { w.shown = null; w.onScreen = "cloud"; },
     },
     showLocal: () => { w.onScreen = "local"; }, onLocal: () => w.onScreen === "local",
-    busy: async () => w.busy[0] ?? null,
+    busy: async () => { w.busyCalls++; await w.beforeBusy?.(); return w.busy[0] ?? null; },
     trash: async (dir) => { if (w.trashFails) throw new Error("no Trash here"); w.trashed.push(dir); rmSync(dir, { recursive: true, force: true }); },
     reserved: () => "This Mac", remember: (place) => w.remembered.push(place), changed: () => { w.changes++; }, log: (line) => w.logs.push(line), now: w.now,
     sleep: async (ms) => { clock += ms; w.waits++; w.onWait?.(); } });
@@ -426,4 +426,67 @@ test("takenBy: a cancel names itself as the taker of the switch it cancelled, an
   w.onWait = () => { if (w.waits === 1) w.profiles.cancel(); if (w.waits === 2) w.profiles.cancel(late); };
   assert.equal(await w.profiles.open("work", railed), null);
   assert.equal(w.profiles.takenBy(railed), null, "the rail took it first; a later phone cancel does not take the credit");
+});
+
+/** A switch waits on a busy bot, and a newer one has started but holds its own busy check. */
+async function heldNewer(t) {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  w.profiles.create({ name: "Personal" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let hold = null;
+  w.release = () => {};
+  w.beforeBusy = () => hold;
+  w.onWait = () => { if (w.waits === 1) hold = new Promise((resolve) => { w.release = resolve; }); };
+  const first = w.profiles.open("work");
+  await new Promise((resolve) => setImmediate(resolve));
+  const waiting = w.profiles.settling();
+  assert.equal(waiting.id, "work", "the first switch waits");
+  const newer = w.profiles.open("personal");
+  await new Promise((resolve) => setImmediate(resolve));
+  return { w, first, newer, waiting };
+}
+
+test("a hurry for the wait of a switch that a newer one replaced is refused, even while the newer switch still checks what is busy", async (t) => {
+  const { w, first, newer, waiting } = await heldNewer(t);
+  assert.equal(w.profiles.settling(), null, "the old wait record is gone as the newer switch starts");
+  assert.equal(await w.profiles.open("work", {}, waiting.turn), false, "refused, and no turn changes");
+  assert.equal(await w.profiles.computer({}, waiting.turn), false);
+  w.busy = [];
+  w.release();
+  assert.equal(await first, null);
+  assert.equal(await newer, true, "the newer switch was not displaced");
+  assert.equal(w.running, profileDir(w.dataDir, "personal"));
+  assert.equal(w.logs.some((line) => /opens though/.test(line)), false, "nothing was hurried");
+});
+
+test("a second click on the old target while the newer switch checks what is busy is a new switch, not a hurry", async (t) => {
+  const { w, first, newer } = await heldNewer(t);
+  const before = w.busyCalls;
+  const again = w.profiles.open("work");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(w.busyCalls > before, true, "it checks what is busy itself");
+  w.busy = [];
+  w.release();
+  assert.equal(await first, null);
+  assert.equal(await newer, null);
+  assert.equal(await again, true);
+  assert.equal(w.running, profileDir(w.dataDir, "work"));
+  assert.equal(w.logs.some((line) => /opens though/.test(line)), false, "it did not take the hurry path");
+});
+
+test("a hurry that names the wait that is active opens now; the wait record holds the turn of the switch that waits", async (t) => {
+  const w = computer(t);
+  w.profiles.create({ name: "Work" });
+  await w.profiles.open(DEFAULT_PROFILE);
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let hurried = null;
+  w.onWait = () => {
+    if (w.waits === 1) { const waiting = w.profiles.settling(); hurried = w.profiles.open("work", {}, waiting.turn); }
+  };
+  assert.equal(await w.profiles.open("work"), null, "the first switch is taken over by the hurry");
+  assert.equal(await hurried, true);
+  assert.equal(w.running, profileDir(w.dataDir, "work"));
+  assert.match(w.logs.join("\n"), /work opens though Scout still works/);
 });

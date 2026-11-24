@@ -10,12 +10,15 @@ function setup({ facts = [{ id: "local", current: true, state: "ready" }, { id: 
   let holder = null;
   const taken = new WeakMap();
   const objectOrNull = (value) => (value !== null && typeof value === "object" ? value : null);
+  w.refuses = (id, hurryTurn) => hurryTurn !== undefined && !(w.settling && w.settling.id === id && w.settling.turn === hurryTurn);
   w.bump = (cause) => { const before = holder; holder = objectOrNull(cause); if (before && !taken.has(before)) taken.set(before, holder); };
   w.profiles = {
     phoneFacts: () => w.facts,
     settling: () => w.settling,
-    open: async (id, cause) => { w.bump(cause); w.order.push("open"); w.calls.push(["open", id]); },
-    computer: async (cause) => { w.bump(cause); w.calls.push(["computer"]); },
+    // A hurry names the wait it means (its turn). Like the real profiles, the fake refuses it, and changes no turn, unless that
+    // wait is still the waiting one.
+    open: async (id, cause, hurryTurn) => { if (w.refuses(id, hurryTurn)) return false; w.bump(cause); w.order.push("open"); w.calls.push(["open", id]); },
+    computer: async (cause, hurryTurn) => { if (w.refuses(null, hurryTurn)) return false; w.bump(cause); w.calls.push(["computer"]); },
     cancel: (cause) => { w.bump(cause); w.calls.push(["cancel"]); },
     takenBy: (cause) => (objectOrNull(cause) && taken.has(cause) ? taken.get(cause) : undefined),
   };
@@ -189,7 +192,7 @@ const FACTS_3 = [{ id: "local", current: true, state: "ready" }, { id: "work", c
 function held() {
   const w = setup({ facts: FACTS_3 });
   w.gates = [];
-  w.profiles.open = async (id, cause) => { w.bump(cause); const g = gate(); w.gates.push({ id, ...g }); return g.promise; };
+  w.profiles.open = async (id, cause, hurryTurn) => { if (w.refuses(id, hurryTurn)) return false; w.bump(cause); const g = gate(); w.gates.push({ id, ...g }); return g.promise; };
   w.rail = () => w.bump(undefined); // the rail starts or cancels a switch itself: no phone request is its cause
   w.start = async (action, id, operation) => { w.module.receive({ type: WORKSPACE_SWITCH_MESSAGE, action, id, operation }); await tick(); };
   return w;
@@ -317,7 +320,7 @@ test("phone and rail actions in a row: each switch ends by its own cause and ope
   assert.deepEqual(reported(w).sort(), [[OP_A, "superseded"], [OP_B, "superseded"], [OP_C, "done"]].sort());
 });
 
-test("a hurry is checked again after the wait: a switch that replaced the waiting one in that time fails the hurry", async () => {
+test("a hurry names the wait it means, and the profiles refuse it after the wait when another switch replaced that wait", async () => {
   const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }, { id: "home", current: false, state: "ready" }];
   const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 1 } });
   let release;
@@ -330,7 +333,7 @@ test("a hurry is checked again after the wait: a switch that replaced the waitin
   assert.deepEqual(reported(w), [[OP_H, "failed"]]);
 });
 
-test("a hurry is checked again after the wait: a new switch for the same workspace is another switch, so the hurry fails", async () => {
+test("a hurry names the wait it means: a new switch for the same workspace is another wait, so the hurry is refused", async () => {
   const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }];
   const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 1 } });
   let release;
@@ -351,7 +354,7 @@ test("a hurry is checked again after the wait: a new switch for the same workspa
   assert.deepEqual(none.calls, [], "the switch ended during the wait, so nothing is hurried");
 });
 
-test("a hurry that finds the same switch after the wait still opens the workspace", async () => {
+test("a hurry that finds the same wait after the wait still opens the workspace, and passes the turn it saw", async () => {
   const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }];
   const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 4 } });
   let release;
@@ -361,4 +364,27 @@ test("a hurry that finds the same switch after the wait still opens the workspac
   await tick();
   assert.deepEqual(w.calls, [["open", "work"]]);
   assert.deepEqual(reported(w), [[OP_H, "done"]]);
+});
+
+test("the turn a hurry carries is the one it saw before the wait, not one read again after it", async () => {
+  const facts = [{ id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "waiting" }];
+  const w = setup({ facts, settling: { id: "work", name: "Scout", turn: 7 } });
+  const seen = [];
+  const open = w.profiles.open;
+  w.profiles.open = async (id, cause, hurryTurn) => { seen.push(hurryTurn); return open(id, cause, hurryTurn); };
+  let release;
+  w.hold = new Promise((resolve) => { release = resolve; });
+  await askWith(w, "hurry", "work", OP_H);
+  w.settling = { id: "work", name: "Scout", turn: 8 }; // an older and a newer record look alike: same id, same name
+  release();
+  await tick();
+  assert.deepEqual(seen, [7]);
+  assert.deepEqual(w.calls, [], "the profiles refused it");
+  assert.deepEqual(reported(w), [[OP_H, "failed"]]);
+  const plain = setup();
+  const turns = [];
+  const plainOpen = plain.profiles.open;
+  plain.profiles.open = async (id, cause, hurryTurn) => { turns.push(hurryTurn); return plainOpen(id, cause, hurryTurn); };
+  await askWith(plain, "open", "work", OP_A);
+  assert.deepEqual(turns, [undefined], "an open names no wait to hurry");
 });

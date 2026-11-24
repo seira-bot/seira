@@ -12,7 +12,7 @@ const OPERATION_ID = /^[0-9a-f]{32}$/;
 /**
  * @param {{
  *   profiles: { phoneFacts(): Array<{ id: string, state: string }> | null, settling(): { id: string | null, turn?: number } | null,
- *     open(id: string, cause?: object): Promise<unknown>, computer(cause?: object): Promise<unknown>, cancel(cause?: object): void,
+ *     open(id: string, cause?: object, hurryTurn?: number): Promise<unknown>, computer(cause?: object, hurryTurn?: number): Promise<unknown>, cancel(cause?: object): void,
  *     takenBy?(cause: object): object | null | undefined },
  *   post(message: unknown): boolean,
  *   settled?(): Promise<unknown>,
@@ -24,7 +24,7 @@ export function createCompanionWorkspaces({ profiles, post, settled = async () =
   let last = null;
   const message = () => ({ type: WORKSPACES_MESSAGE, workspaces: profiles.phoneFacts() });
   const profileOf = (id) => (id === PHONE_LOCAL_ID ? null : id);
-  const goTo = (id, cause) => (id === PHONE_LOCAL_ID ? profiles.computer(cause) : profiles.open(id, cause));
+  const goTo = (id, cause, hurryTurn) => (id === PHONE_LOCAL_ID ? profiles.computer(cause, hurryTurn) : profiles.open(id, cause, hurryTurn));
 
   const changed = () => { try { push(); } catch (error) { log(`companion workspaces: ${error?.message ?? error}`); } };
 
@@ -40,16 +40,13 @@ export function createCompanionWorkspaces({ profiles, post, settled = async () =
     const listed = profiles.phoneFacts()?.find((workspace) => workspace.id === id);
     if (!listed) return "failed";
     if (action === "cancel") { if (profiles.settling()) profiles.cancel(record); return "done"; }
-    // A hurry carries on the switch that waits now. It is read again after the wait below, against the same switch.
+    // A hurry carries on the switch that waits now, and names it by its turn. The profiles module checks that turn against the
+    // active one when it applies the hurry, after the wait below; a switch that replaced it in the meantime refuses the hurry.
     const waiting = action === "hurry" ? profiles.settling() : null;
     if (action === "hurry" && waiting?.id !== profileOf(id)) return "failed";
     if (action === "open" && listed.state !== "ready") return "failed";
     await settled();
-    if (action === "hurry") {
-      const now = profiles.settling();
-      if (!now || now.id !== profileOf(id) || now.turn !== waiting.turn) return "failed";
-    }
-    const opened = await goTo(id, record);
+    const opened = await goTo(id, record, waiting ? waiting.turn : undefined);
     return opened === null ? "superseded" : opened === false ? "failed" : "done";
   }
 
