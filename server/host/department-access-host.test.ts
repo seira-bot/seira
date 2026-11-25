@@ -468,6 +468,8 @@ describe("relaying a message for a limited person", () => {
     expect(host.relayRefusal(sales(), undefined, false)).toBe(unnamed);
     host.change(give("bob@acme.test", [{ name: "Sales", level: "chat" }]));
     expect(host.relayRefusal(sales(), undefined, false)).toBeNull();
+    expect(host.relayRefusal(sales({ people: ["cy@other.test"] }), undefined, false)).toBe(unnamed);
+    expect(host.relayRefusal(sales({ people: ["bob@acme.test"] }), undefined, false)).toBeNull();
     host.change(give(ADA, [], [{ id: "s", level: "view" }]));
     expect(host.relayRefusal(sales(), undefined, false)).toBe(unnamed);
     expect(fixture({ content: "{ broken" }).host.relayRefusal(sales(), undefined, false)).toBe(unnamed);

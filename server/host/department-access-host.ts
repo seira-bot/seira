@@ -287,12 +287,13 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
   const chatsWith = (grant: ResolvedGrant, bot: Wallable): boolean =>
     grant.bots.get(bot.id) === "chat" || grant.departments.get(sectionKey(bot.section)) === "chat";
 
-  /** Whether every grant lets its people chat with the bot: what a relay that names nobody needs, since it may be any of them. */
+  /** Whether every grant lets its people chat with the bot, and its audience admits them all: what a relay that names
+   * nobody needs, since it may be any of them. */
   function everyGrantChats(bot: Wallable): boolean {
     if (deps.elsewhere()) return true;
     if (deps.access.unreadable) return false;
     try {
-      return Object.values(deps.access.all()).every((stored) => chatsWith(resolve(stored), bot));
+      return Object.entries(deps.access.all()).every(([entry, stored]) => chatsWith(resolve(stored), bot) && audienceWithin({ people: [entry] }, bot.visibility));
     } catch {
       return false;
     }
