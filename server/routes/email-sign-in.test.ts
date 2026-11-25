@@ -72,11 +72,13 @@ describe("email sign-in verify", () => {
 
 describe("email sign-in and the free people limit", () => {
   const roster = (count: number) => Array.from({ length: count }, (_, index) => `p${index + 1}@corp.test`);
-  function fullTeam() {
+  /** Five people signed in; `listed` names more addresses that hold no place yet, as an environment list does. */
+  function fullTeam(listed: string[] = ["@corp.test"]) {
     const dataDir = mkdtempSync(join(tmpdir(), "seira-email-limit-"));
     dirs.push(dataDir);
-    const lists = { admins: [...roster(5), "@corp.test"], members: [] };
+    const lists = { admins: [...roster(5), ...listed], members: [] };
     const people = createPeopleLimit({ dataDir, env: {}, lists: () => lists, sessions: () => [], revoke() {}, applies: true, enterpriseUnlimited: () => false });
+    for (const email of roster(5)) people.admit(email);
     return people;
   }
   const refusal = { errorKey: "serverError.email.workspaceFull", code: "workspace_full" };
@@ -98,5 +100,14 @@ describe("email sign-in and the free people limit", () => {
     expect(reply.status).toBe(403);
     expect(await reply.json()).toMatchObject(refusal);
     expect(issue).not.toHaveBeenCalled();
+  });
+
+  it("AC-05 refuses a sixth listed address that holds no place, at the start", async () => {
+    const people = fullTeam(["p6@corp.test"]);
+    const { post, start } = await fixture(async () => ({ ok: true, email: "p6@corp.test", userId: "u", scopes: ["admin"] }), people, "/api/auth/email/start");
+    const reply = await post("p6@corp.test");
+    expect(reply.status).toBe(403);
+    expect(await reply.json()).toMatchObject(refusal);
+    expect(start).not.toHaveBeenCalled();
   });
 });
