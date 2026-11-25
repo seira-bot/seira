@@ -112,6 +112,11 @@ export function describeTunnelAccount(document: CredentialDocument): TunnelAccou
   };
 }
 
+/** True once `seira login` has signed this machine in to a Seira account. It reads the file each time, since `login` runs in another process. */
+export function signedInToSeira(dataDir: string): boolean {
+  return describeTunnelAccount(openTunnelCredentials(dataDir).read()).email !== null;
+}
+
 /** The saved access, or null when its address is not one this server may use. */
 export function tunnelAccess(document: CredentialDocument, env: NodeJS.ProcessEnv = process.env): ManagedTunnelAccess | null {
   const access = managedCompanionTunnelAccess(document);

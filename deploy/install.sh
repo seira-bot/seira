@@ -134,7 +134,7 @@ usage() {
   say "  --tunnel           serve at the address your Seira account gives this server, with no domain and no open port"
   say "  --account-email A  the email of your Seira account, which sends the code that signs this server in (with --tunnel)"
   say "  --events           print one machine-readable ::seira line per check, step and question, for an app that runs this installer; its output holds a one-time sign-in link, so do not send it to a log"
-  say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code (needs a mail server: SEIRA_SIGNIN_SMTP_URL in .env)"
+  say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code (needs a mail server, SEIRA_SIGNIN_SMTP_URL in .env, unless you use --tunnel)"
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
   say "  --dir PATH         where the install lives (default /opt/seira)"
   say "  --no-sandbox       do not prepare this server for the bots' sandbox (only for a server you alone sign in to)"
@@ -1446,7 +1446,7 @@ finish() {
   fi
   admins=$(env_value SEIRA_SIGNIN_EMAILS)
   if [ -n "$admins" ]; then
-    if [ -n "$(env_value SEIRA_SIGNIN_SMTP_URL)" ]; then
+    if [ -n "$(env_value SEIRA_SIGNIN_SMTP_URL)" ] || [ "$TUNNEL" = yes ]; then
       say "Or open $ADDRESS/pair and sign in with an emailed code as: $admins"
     else
       say "Signing in with an emailed code needs a mail server: set SEIRA_SIGNIN_SMTP_URL (and SEIRA_SIGNIN_SMTP_FROM) in $INSTALL_DIR/.env, then run this again. The pairing link works without it."
