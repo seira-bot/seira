@@ -150,9 +150,11 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
     listsChanging(asked) {
       if (!asked || !options.applies) return { saved() {} };
       const before = options.lists();
+      const pinned = signInFromEnv(options.env ?? process.env);
+      // A save replaces the whole section: a list left out is empty afterwards, unless the environment names it.
       const after: SignInAllowList = {
-        admins: asked.admins ? parseAllowList(asked.admins.join(",")) : before.admins,
-        members: asked.members ? parseAllowList(asked.members.join(",")) : before.members,
+        admins: asked.admins ? parseAllowList(asked.admins.join(",")) : pinned.admins ?? [],
+        members: asked.members ? parseAllowList(asked.members.join(",")) : pinned.members ?? [],
       };
       const nextListed = listed(after);
       const removed = new Set([...listed(before)].filter((email) => !nextListed.has(email)));
