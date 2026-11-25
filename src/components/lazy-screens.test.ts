@@ -263,7 +263,7 @@ describe("launch bundle", () => {
     const deferred = [
       "ActivityPanel", "BotSettingsDialog", "CloudAddDialog", "ComputerPanel", "InspectorPanel", "KeyboardShortcutsModal",
       "LocalVmWorkspace", "NewBotDialog", "PhoneAppDialog", "PhoneSetupFlow", "PluginsPanel", "published-apps/PublishedAppsPage", "RemoteAgentSettingsPanel", "remote-desktop-panel", "RoutineCalendarPage",
-      "RoutinesPage", "SettingsModal", "ShareDepartmentDialog", "ImportDialog", "TeamLibraryPanel", "TeamMapPage", "team-files/TeamFilesPage", "TriggersPage", "WebhookTrigger", "room-panel/RoomPanel",
+      "RoutinesPage", "SettingsModal", "ShareDepartmentDialog", "ImportDialog", "InviteDialog", "TeamLibraryPanel", "TeamMapPage", "team-files/TeamFilesPage", "TriggersPage", "WebhookTrigger", "room-panel/RoomPanel",
     ].map((name) => `components/${name}.tsx`);
     expect(deferred.filter((file) => reached.has(file))).toEqual([]);
     expect(reached.has("lib/template-details.ts"), "the team library brings the YAML parser in").toBe(false);
