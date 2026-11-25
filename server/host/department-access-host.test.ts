@@ -245,7 +245,7 @@ describe("the grant body", () => {
     const { host, state, bots, path } = fixture();
     state.sections = Array.from({ length: 201 }, (_, index) => `Dept ${index}`);
     expect(host.change(asked(state.sections.map((name) => ({ name, level: "chat" as const }))))).toMatchObject({ ok: false, status: 400 });
-    for (let index = 0; index < 201; index++) bots.push({ id: `bulk-${index}`, threadId: `t-${index}` });
+    for (let index = 0; index < 201; index++) bots.push({ id: `bulk-${index}`, name: `Bulk ${index}`, threadId: `t-${index}` });
     expect(host.change(asked([], bots.slice(3).map((bot) => ({ id: bot.id, level: "chat" as const }))))).toMatchObject({ ok: false, status: 400 });
     expect(host.view().people).toEqual({});
     expect(() => readFileSync(path, "utf8")).toThrow();
