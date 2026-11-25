@@ -56,12 +56,13 @@ describe("people table", () => {
     expect(html).toContain('aria-label="Invite link"');
   });
 
-  it("lays the header and every row on one grid so each header sits over its column", () => {
+  it("lays the header and every row on one grid, with the access under the person and the actions on a line of their own", () => {
     const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access: {} }));
     expect(html.startsWith('<div class="grid ')).toBe(true);
-    expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto_auto_auto]");
+    expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]");
     expect(html.match(/col-span-full grid grid-cols-subgrid/g)).toHaveLength(people.length + 1);
-    expect(html).toContain("data-person-access-stacked");
+    expect(html.match(/data-person-access="true"/g)).toHaveLength(people.length);
+    expect(html.match(/data-person-actions="true" class="col-span-full /g)).toHaveLength(people.length);
   });
 
   it("says so when nobody is on the list", () => {

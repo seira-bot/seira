@@ -113,27 +113,26 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
   botName?: (id: string) => string;
 }) {
   if (people.length === 0) return <p className="text-[13px] text-ink-secondary">{t(readOnly ? "people.portal.empty" : "people.empty")}</p>;
-  const columns = cn("grid gap-x-4 grid-cols-[auto_auto_minmax(0,1fr)]", access ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]");
-  const line = "col-span-full grid grid-cols-subgrid items-center gap-y-1 sm:gap-y-0";
+  // The person and their access sit beside the role and the numbers; the actions take a line of their own.
+  // On a phone the person takes the first line too.
+  const columns = "grid gap-x-4 grid-cols-[auto_auto_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]";
+  const line = "col-span-full grid grid-cols-subgrid items-center gap-y-1";
   const accessOf = (person: Person) => (person.role === "member" && access ? accessLine(grantFor(access, person.entry), botName) : t("people.access.whole"));
   return (
     <div className={columns}>
       <div className={cn(line, "border-b border-hairline/40 pb-2 text-[12px] font-medium uppercase tracking-wide text-ink-secondary")}>
         <span className="col-span-full sm:col-span-1">{t("people.colPerson")}</span>
-        {access && <span className="hidden sm:block">{t("people.colAccess")}</span>}
         <span>{t("people.colRole")}</span>
         <span className="sm:text-right">{t("people.colLastSeen")}</span>
         <span className="text-right">{t("people.colMonth")}</span>
-        <span className="hidden sm:block" />
       </div>
       {people.map((person) => (
         <div key={person.entry} className={cn(line, "border-b border-hairline/20 py-2 text-[13px]")}>
           <span className="col-span-full min-w-0 sm:col-span-1">
             <span className="block text-ink [overflow-wrap:anywhere]">{person.isDomain ? t("people.everyoneAt", { domain: person.entry.slice(1) }) : person.entry}</span>
             {person.devices > 0 && <span className="block text-[12px] text-ink-secondary">{t("people.devices", { count: String(person.devices) })}</span>}
-            {access && <span data-person-access-stacked className="block text-[12px] text-ink-secondary [overflow-wrap:anywhere] sm:hidden">{accessOf(person)}</span>}
+            {access && <span data-person-access className="block text-[12px] text-ink-secondary [overflow-wrap:anywhere]">{accessOf(person)}</span>}
           </span>
-          {access && <span data-person-access className="hidden min-w-0 text-[12px] text-ink-secondary [overflow-wrap:anywhere] sm:block">{accessOf(person)}</span>}
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", person.role === "admin" ? "bg-accent/15 text-accent" : "bg-control text-ink-secondary")}>
             {person.role === "admin" ? t("people.roleAdmin") : t("people.roleMember")}
           </span>
@@ -141,7 +140,7 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
           <span className="text-right tabular-nums text-ink" title={t("people.turns", { turns: String(person.turns) })}>
             {hasFiniteCost(person.costUsd) ? `${person.estimated ? "~" : ""}${formatUsd(person.costUsd)}` : "—"}
           </span>
-          {readOnly ? <span className="hidden sm:block" /> : <span className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] sm:col-span-1 sm:justify-end sm:gap-x-2">
+          {!readOnly && <span data-person-actions className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] sm:justify-end">
             <button type="button" disabled={busy} onClick={() => onLink(person)} aria-label={t("people.link")} title={t("people.link")} className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><Link2 size={13} /></button>
             {access && onAccess && person.role === "member" && <button type="button" disabled={busy} onClick={() => onAccess(person)} className="text-ink-secondary hover:text-ink disabled:opacity-50">{t("people.access.change")}</button>}
             <button type="button" disabled={busy} onClick={() => onRole(person, person.role === "admin" ? "member" : "admin")} className="text-ink-secondary hover:text-ink disabled:opacity-50">
