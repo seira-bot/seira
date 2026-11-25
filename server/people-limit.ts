@@ -1,7 +1,8 @@
 // Security: the free limit only ever refuses a new person. Nobody who holds a place loses it to the limit: not when a
 // Premium key ends, not when the saved key cannot be read, not on the first start of a server that already has more.
 // A listed address holds a place once Settings or `seira access add` adds it, or once it signs in. An address that only
-// the environment, a hand edit of config.json or `seira fleet users` lists is checked when it first signs in.
+// the environment, a hand edit of config.json or `seira fleet users` lists is checked when it first signs in. An address
+// that the lists no longer let in loses its place, so a list that names it again cannot bring it back unchecked.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -96,6 +97,9 @@ export interface PeopleLimitOptions extends PlanKeyOptions {
   applies: boolean;
   /** An Enterprise licence grants `people-unlimited`. */
   enterpriseUnlimited(): boolean;
+  /** The CLI: the running server's environment can name lists that this process cannot see. Every kept address and live
+   * session then counts, no place is dropped, and a missing sign-in-people.json stays for the server's first start. */
+  partialLists?: boolean;
   now?: () => number;
 }
 
@@ -118,15 +122,16 @@ export interface PeopleLimit {
 
 export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const now = options.now ?? Date.now;
-  // An unreadable file could name anyone: everyone listed keeps a place while it stays unreadable.
+  // An unreadable file could name anyone: everyone listed keeps a place while it stays unreadable. So does a missing file
+  // in the CLI, where everyone listed gets a place at the server's first start on an earlier data folder.
   const kept = (lists: SignInAllowList = options.lists()): string[] => {
     const read = readKept(options.dataDir);
-    return read.state === "ok" ? read.people : read.state === "unreadable" ? [...listed(lists)] : [];
+    return read.state === "ok" ? read.people : read.state === "unreadable" || options.partialLists ? [...listed(lists)] : [];
   };
   /** Changes the saved places; never writes over a file it could not read, so no place in it is lost. */
   const keep = (change: (people: string[]) => string[]) => {
     const read = readKept(options.dataDir);
-    if (read.state === "unreadable") return;
+    if (read.state === "unreadable" || (read.state === "missing" && options.partialLists)) return;
     const was = read.state === "ok" ? read.people : [];
     const next = [...new Set(change(was))];
     if (read.state === "ok" && next.length === was.length && next.every((email) => was.includes(email))) return;
@@ -139,9 +144,18 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const key = () => premiumKeyStatus(options, now());
   const enterprise = () => options.applies && options.enterpriseUnlimited();
   const limited = () => options.applies && !enterprise() && !premiumUnlimited(key());
+  const holdingOf = (lists: SignInAllowList, sessions: readonly PeopleSession[], people: readonly string[]) => options.partialLists
+    ? new Set([...sessions.flatMap((session) => (session.email && !session.token ? [address(session.email)] : [])), ...people])
+    : peopleHolding(lists, sessions, people);
+  // Not in the CLI, and not on empty lists, which a config.json that cannot be read leaves: a bad start frees no place.
+  const prune = (lists: SignInAllowList) => {
+    if (!options.applies || options.partialLists || (!lists.admins.length && !lists.members.length)) return;
+    keep((people) => people.filter((email) => allowedScopes(email, lists)));
+  };
   const holding = () => {
     const lists = options.lists();
-    return peopleHolding(lists, options.sessions(), kept(lists));
+    prune(lists);
+    return holdingOf(lists, options.sessions(), kept(lists));
   };
   const endSessions = (emails: ReadonlySet<string>) => {
     for (const session of options.sessions()) if (session.email && !session.token && emails.has(address(session.email))) options.revoke(session.id);
@@ -153,6 +167,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
     const lists = options.lists();
     keep(() => [...peopleHolding(lists, options.sessions(), existsSync(join(options.dataDir, EARLIER_RUN_FILE)) ? [...listed(lists)] : [])]);
   }
+  prune(options.lists());
 
   const refuses = (email: string) => {
     const person = address(email);
@@ -183,9 +198,10 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       const removed = new Set([...beforeListed].filter((email) => !nextListed.has(email)));
       const added = [...nextListed].filter((email) => !beforeListed.has(email));
       const sessions = options.sessions();
+      prune(before);
       const people = kept(before);
-      const current = peopleHolding(before, sessions, people);
-      const next = peopleHolding(after, sessions.filter((session) => !session.email || !removed.has(address(session.email))), people.filter((email) => !removed.has(email)));
+      const current = holdingOf(before, sessions, people);
+      const next = holdingOf(after, sessions.filter((session) => !session.email || !removed.has(address(session.email))), people.filter((email) => !removed.has(email)));
       for (const email of added) next.add(email);
       const adds = [...next].some((email) => !current.has(email));
       if (adds && next.size > FREE_PEOPLE_LIMIT && limited()) return { refusal: { limit: FREE_PEOPLE_LIMIT } };
@@ -193,7 +209,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
         saved() {
           if (removed.size) endSessions(removed);
           const lists = options.lists();
-          keep((was) => [...was, ...added].filter((email) => !removed.has(email) && allowedScopes(email, lists)));
+          keep((was) => [...was, ...added].filter((email) => !removed.has(email) && (options.partialLists || allowedScopes(email, lists))));
         },
       };
     },
@@ -247,15 +263,15 @@ export function peopleLimitApplies(env: NodeJS.ProcessEnv = process.env): boolea
 }
 
 /** For `seira access add`, which edits config.json beside a running server or without one: why the new lists would pass
- * the free limit, else the step to run once config.json is saved (it gives each added address its place). `before` and
- * `after` are config.json's lists; a list the environment names stays in force. */
+ * the free limit, else the step to run once config.json is saved (it gives each added address its place, once the server
+ * has started on this version). `before` and `after` are config.json's lists; a list the environment names stays in force. */
 export async function accessChange(dataDir: string, before: SignInAllowList, after: SignInAllowList, env: NodeJS.ProcessEnv = process.env): Promise<string | { saved(): void }> {
   const pinned = signInFromEnv(env);
   const inForce = (lists: SignInAllowList): SignInAllowList => ({ admins: pinned.admins ?? lists.admins, members: pinned.members ?? lists.members });
   await loadEnterpriseLayer({ env });
   let lists = inForce(before);
   const people = createPeopleLimit({
-    dataDir, env, lists: () => lists, sessions: () => sessionsFromFile(dataDir), revoke() {},
+    dataDir, env, lists: () => lists, sessions: () => sessionsFromFile(dataDir), revoke() {}, partialLists: true,
     applies: peopleLimitApplies(env), enterpriseUnlimited: () => entitled("people-unlimited"),
   });
   const change = people.listsChanging(inForce(after));

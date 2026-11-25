@@ -1297,6 +1297,8 @@ SEIRA_TEAM_KEY="seira-team.…"
   hand edit of `config.json` or `seira fleet users add` lists also counts from
   its first sign-in. An address that Settings or `seira access add` adds counts
   at once.
+- An address taken off the list in any way loses its place. If a list names it
+  again, it counts from its next sign-in, while there is a free place.
 - Settings and `seira access add` refuse an address that would go past the
   limit. A new person who would go past it when they sign in sees
   "This installation is full. Ask your admin to make room for you."

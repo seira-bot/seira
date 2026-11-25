@@ -81,17 +81,13 @@ describe("the people limit in /api/config", () => {
     expect(result.revalidate).not.toHaveBeenCalled();
   });
 
-  it("AC-03 counts kept people that an @domain lets back in, and refuses the save past five", async () => {
-    // p2..p5 joined through @corp.test; a hand edit of config.json took the entry out and left their places.
-    const kept = names(5);
-    const current = { admins: ["p1@corp.test"], members: [] };
-    const back = await putSignIn({ admins: ["p1@corp.test", "@corp.test"], members: [] }, current, [], { kept });
-    expect(back.replies[0]?.status).toBe(200);
-    expect(back.people.status()).toMatchObject({ people: 5 });
-    const past = await putSignIn({ admins: ["p1@corp.test", "@corp.test", "p6@corp.test"], members: [] }, current, [], { kept });
-    expect(past.replies).toHaveLength(1);
-    expect(past.replies[0]).toMatchObject({ status: 409, body: { code: "people_full", errorParams: { limit: 5 } } });
-    expect(past.unchanged).toBe(true);
+  it("AC-03 lets an @domain entry bring back no place that a hand edit took off: that person is checked at sign-in", async () => {
+    // x@corp.test joined through @corp.test; a hand edit of config.json took the entry out, and the start dropped the place.
+    const current = { admins: names(5), members: [] };
+    const result = await putSignIn({ admins: [...names(5), "@corp.test"], members: [] }, current, [], { kept: [...names(5), "x@corp.test"] });
+    expect(result.replies[0]?.status).toBe(200);
+    expect(result.people.status()).toMatchObject({ people: 5, full: true });
+    expect(result.people.admit("x@corp.test")).toBe("full");
   });
 
   it("AC-03 checks again after the awaits, so a person who signs in meanwhile keeps the last place", async () => {

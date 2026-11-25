@@ -184,6 +184,41 @@ describe("the free people limit", () => {
     expect(people.admit("p6@corp.test")).toBeNull();
   });
 
+  it("AC-08 drops the place of an address taken off, so listing it again after a sixth person joined is refused", () => {
+    const { people, state, dataDir } = setup({ admins: named(5), members: [] }, { earlier: true });
+    const fleet = (action: "add" | "remove", email: string) => { state.lists = JSON.parse(applySignIn(JSON.stringify({ signIn: state.lists }), action, email, false).config).signIn; };
+    fleet("remove", "p5@corp.test");
+    fleet("add", "p6@corp.test");
+    expect(people.admit("p6@corp.test")).toBeNull();
+    expect([...kept(dataDir)].sort()).toEqual([...named(4), "p6@corp.test"]);
+    fleet("add", "p5@corp.test");
+    expect(people.refuses("p5@corp.test")).toBe(true);
+    expect(people.admit("p5@corp.test")).toBe("full");
+    expect(people.status()).toMatchObject({ people: 5, full: true });
+  });
+
+  it("AC-08 drops the places of a swapped @domain entry, so listing both domains lets nobody past five", () => {
+    const at = (domainName: string, count: number) => Array.from({ length: count }, (_, index) => `x${index + 1}@${domainName}`);
+    const { people, state } = setup({ admins: ["@a.test"], members: [] });
+    for (const email of at("a.test", 5)) expect(people.admit(email)).toBeNull();
+    state.lists = { admins: ["@b.test"], members: [] };
+    for (const email of at("b.test", 5)) expect(people.admit(email)).toBeNull();
+    state.lists = { admins: ["@a.test", "@b.test"], members: [] };
+    expect(people.admit("x1@a.test")).toBe("full");
+    expect(people.status()).toMatchObject({ people: 5 });
+  });
+
+  it("drops a kept address the lists no longer let in when it starts, but never on empty lists", () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
+    dirs.push(dataDir);
+    writeFileSync(join(dataDir, PEOPLE_FILE), JSON.stringify({ version: 1, people: named(5) }));
+    const start = (lists: SignInAllowList) => createPeopleLimit({ dataDir, env: {}, lists: () => lists, sessions: () => [], revoke() {}, applies: true, enterpriseUnlimited: () => false });
+    start({ admins: [], members: [] });
+    expect(kept(dataDir)).toEqual(named(5));
+    start({ admins: named(4), members: [] });
+    expect(kept(dataDir)).toEqual(named(4));
+  });
+
   it("AC-03 gives an address that Settings adds its place at once", () => {
     const { people, state, dataDir } = setup({ admins: named(1), members: [] });
     expect(people.admit("p1@corp.test")).toBeNull();
@@ -231,8 +266,24 @@ describe("the free people limit", () => {
       change.saved();
       admins = [...admins, email];
     }
-    expect([...kept(dataDir)].sort()).toEqual(named(5));
+    // Before the server's first start on this version, everyone listed counts and the file is left for that start.
+    expect(existsSync(join(dataDir, PEOPLE_FILE))).toBe(false);
     expect(await accessChange(dataDir, { admins, members: [] }, { admins: [...admins, "p6@corp.test"], members: [] }, env)).toMatch(/free plan includes 5 people/);
+  });
+
+  it("never drops a place in the CLI, which cannot see the server's environment lists", async () => {
+    // The server let j1 and j2 in through SEIRA_SIGNIN_EMAILS=@corp.test; the CLI runs without that variable.
+    const { dataDir, people } = setup({ admins: ["p1@corp.test", "@corp.test"], members: [] });
+    for (const email of ["p1@corp.test", "j1@corp.test", "j2@corp.test"]) expect(people.admit(email)).toBeNull();
+    const add = async (admins: string[], email: string) => accessChange(dataDir, { admins, members: [] }, { admins: [...admins, email], members: [] }, {});
+    const change = await add(["p1@corp.test"], "p2@corp.test");
+    if (typeof change === "string") throw new Error(change);
+    change.saved();
+    expect([...kept(dataDir)].sort()).toEqual(["j1@corp.test", "j2@corp.test", "p1@corp.test", "p2@corp.test"]);
+    const fifth = await add(["p1@corp.test", "p2@corp.test"], "p3@corp.test");
+    if (typeof fifth === "string") throw new Error(fifth);
+    fifth.saved();
+    expect(await add(["p1@corp.test", "p2@corp.test", "p3@corp.test"], "p4@corp.test")).toMatch(/free plan includes 5 people/);
   });
 
   it("AC-18 never calls the network for a check, a save or a status", () => {
