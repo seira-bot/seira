@@ -236,8 +236,10 @@ posixOnly("a person limited to some departments", () => {
       const ada = openStream(ADA);
       try {
         expect(await ada.ready()).toBeTruthy();
-        expect((await api("POST", `/api/bots/${ids.fin}/messages`, { text: "FIN-SECRET-1", threadId: extra.finThread }, BOSS)).status).toBe(202);
-        expect((await api("POST", `/api/bots/${ids.sales}/messages`, { text: "SALES-OPEN-1", threadId: extra.salesThread }, BOSS)).status).toBe(202);
+        const finSend = await api("POST", `/api/bots/${ids.fin}/messages`, { text: "FIN-SECRET-1", threadId: extra.finThread }, BOSS);
+        expect(finSend.status, JSON.stringify(finSend.body)).toBe(202);
+        const salesSend = await api("POST", `/api/bots/${ids.sales}/messages`, { text: "SALES-OPEN-1", threadId: extra.salesThread }, BOSS);
+        expect(salesSend.status, JSON.stringify(salesSend.body)).toBe(202);
         expect(await waitFor(() => ada.frames.some((frame) => frame.kind === "message" && frame.threadId === extra.salesThread))).toBe(true);
         const seen = JSON.stringify(ada.frames);
         for (const hidden of [ids.fin, extra.finThread, "FIN-SECRET-1", "Finance Zebra"]) expect(seen).not.toContain(hidden);
@@ -332,7 +334,7 @@ posixOnly("a person limited to some departments", () => {
       const token = await capability(ids.sales, extra.salesThread);
       const ask = (to: string) => fetch(`${BASE}/api/internal/coordinate-bots`, {
         method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ botIds: [to], message: "Please look at this.", reply: "none", thread: "fresh" }),
+        body: JSON.stringify({ botIds: [to], message: "Please look at this.", reply: "none" }),
       });
       const refused = await ask(ids.fin);
       const words = await refused.text();
