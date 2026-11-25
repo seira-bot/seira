@@ -452,12 +452,25 @@ describe("relaying a message for a limited person", () => {
   const give = (entry: string, departments: Array<{ name: string; level: "view" | "chat" }>, bots: Array<{ id: string; level: "view" | "chat" }> = []) => ({ entry, access: { departments, bots }, admitBots: true });
   const refusal = `${ADA} can't chat with Sam here.`;
 
-  it("passes when nobody is named, for an admin, and for a person with no grant", () => {
+  it("passes for an admin and for a person with no grant", () => {
     const { host } = fixture();
     host.change(give("bob@acme.test", [], [{ id: "f", level: "view" }]));
-    expect(host.relayRefusal(sales(), undefined, false)).toBeNull();
     expect(host.relayRefusal(sales(), "bob@acme.test", true)).toBeNull();
     expect(host.relayRefusal(sales(), ADA, false)).toBeNull();
+  });
+
+  it("passes a relay that names nobody only when every grant lets its people chat with the bot", () => {
+    const unnamed = "Someone outside the people added can't chat with Sam here.";
+    const none = fixture().host;
+    expect(none.relayRefusal(sales(), undefined, false)).toBeNull();
+    const { host } = fixture();
+    host.change(give("bob@acme.test", [], [{ id: "f", level: "chat" }]));
+    expect(host.relayRefusal(sales(), undefined, false)).toBe(unnamed);
+    host.change(give("bob@acme.test", [{ name: "Sales", level: "chat" }]));
+    expect(host.relayRefusal(sales(), undefined, false)).toBeNull();
+    host.change(give(ADA, [], [{ id: "s", level: "view" }]));
+    expect(host.relayRefusal(sales(), undefined, false)).toBe(unnamed);
+    expect(fixture({ content: "{ broken" }).host.relayRefusal(sales(), undefined, false)).toBe(unnamed);
   });
 
   it("refuses a bot the grant gives as view, and passes one it gives as chat", () => {

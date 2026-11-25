@@ -284,14 +284,29 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     return deps.visible(auth).departmentAllowed(section) ? null : "You do not have access to that department.";
   }
 
+  const chatsWith = (grant: ResolvedGrant, bot: Wallable): boolean =>
+    grant.bots.get(bot.id) === "chat" || grant.departments.get(sectionKey(bot.section)) === "chat";
+
+  /** Whether every grant lets its people chat with the bot: what a relay that names nobody needs, since it may be any of them. */
+  function everyGrantChats(bot: Wallable): boolean {
+    if (deps.elsewhere()) return true;
+    if (deps.access.unreadable) return false;
+    try {
+      return Object.values(deps.access.all()).every((stored) => chatsWith(resolve(stored), bot));
+    } catch {
+      return false;
+    }
+  }
+
   /** Security: a message that another app relays for a person whose access is limited needs what Seira itself needs from
-   * that person: the bot in their access at "chat", and an audience that admits them. Admins and people without limits pass. */
+   * that person: the bot in their access at "chat", and an audience that admits them. One that names nobody may be any
+   * limited person, so it needs every grant to allow chat. Admins and people without limits pass. */
   function relayRefusal(bot: Wallable & { name: string }, email: string | undefined, admin: boolean): string | null {
-    if (!email || admin) return null;
+    if (admin) return null;
+    if (!email) return everyGrantChats(bot) ? null : `Someone outside the people added can't chat with ${bot.name} here.`;
     const grant = grantFor(email);
     if (!grant) return null;
-    const chats = grant.bots.get(bot.id) === "chat" || grant.departments.get(sectionKey(bot.section)) === "chat";
-    return chats && viewerSees({ kind: "member", email }, bot.visibility) ? null : `${email} can't chat with ${bot.name} here.`;
+    return chatsWith(grant, bot) && viewerSees({ kind: "member", email }, bot.visibility) ? null : `${email} can't chat with ${bot.name} here.`;
   }
 
   return { grantFor, walled, wallBetween, view, change, refuses, sectionRefusal, relayRefusal, departmentsChanged, botDeleted, changed };
