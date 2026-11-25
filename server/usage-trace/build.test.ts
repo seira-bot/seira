@@ -121,7 +121,7 @@ describe("trace service", () => {
     expect(await ledgerRows(...range)).toHaveLength(6);
   });
 
-  it("builds a 500-span trace from disk in well under 100 ms and pages the runs list", async () => {
+  it("builds a 500-span trace from disk in well under 25 ms and pages the runs list", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "seira-trace-service-"));
     dirs.push(dataDir);
     const now = Date.UTC(2026, 9, 22, 12, 0, 0);
@@ -151,13 +151,13 @@ describe("trace service", () => {
     const cold = performance.now() - coldBegin;
     // The fastest of several warm runs: a busy CI runner can stall any one run, but a slower build shows in all of them.
     const runs: number[] = [];
-    for (let run = 0; run < 5; run += 1) {
+    for (let run = 0; run < 10; run += 1) {
       const begin = performance.now();
       await service.detail("worker~w1", T0, () => true);
       runs.push(performance.now() - begin);
     }
     console.log(`trace service: 500-span trace built from disk in ${runs.map((ms) => ms.toFixed(1)).join(", ")} ms (first run ${cold.toFixed(1)} ms)`);
-    expect(Math.min(...runs)).toBeLessThan(100);
+    expect(Math.min(...runs)).toBeLessThan(25);
     expect(detail!.root).toMatchObject({ id: "chief~c1", title: "Tidy the CRM please", tools: 250 });
     const worker = detail!.turns[0]!.children.find((node): node is TraceTurn => node.kind === "turn")!;
     expect(worker.children.map((node) => node.kind)).toEqual(["step", "group"]);
