@@ -43,11 +43,12 @@ in the app.
 
 ## Before you commit a new clip
 
-1. Look at every frame. Check for real account names, paths, host names, IP
+1. Check that no frame shows the words "fake", "mock" or "test" in the app itself (the job text and the command `pnpm test` are fine). The script gives the fixture model the name "Demo model" through a `config.toml` in the temporary home. Do not use the name of a real model. A quick check: run `tesseract` over frames cut with `ffmpeg -vf fps=2`.
+2. Look at every frame. Check for real account names, paths, host names, IP
    addresses, and user data.
-2. Keep `docs/screenshots/readme-demo.gif` below about 5 MB.
-3. Run `node scripts/check-local-leaks.mjs` and `node scripts/check-brand-names.mjs`.
-4. Keep the static screenshot below the clip in the README as a fallback.
+3. Keep `docs/screenshots/readme-demo.gif` below about 5 MB.
+4. Run `node scripts/check-local-leaks.mjs` and `node scripts/check-brand-names.mjs`.
+5. Keep the static screenshot below the clip in the README as a fallback.
 
 Update the clip when the chat screen or the approval card changes in a way
 that a person can see.

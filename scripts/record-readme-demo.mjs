@@ -29,6 +29,8 @@ const base = `http://127.0.0.1:${port}`;
 
 const JOB = "Run the tests for the Acme website and tell me if anything fails.";
 const COMMAND = "pnpm test";
+const MODEL_ID = "demo-model";
+const MODEL_NAME = "Demo model";
 const REPLY = "All 128 tests passed. Nothing failed, so the Acme website is ready to ship.";
 
 const home = mkdtempSync(join(tmpdir(), "seira-readme-demo-"));
@@ -36,6 +38,9 @@ const data = home;
 const fakeCli = join(root, "server", "testing", "fake-acp-cli.ts");
 chmodSync(fakeCli, 0o755);
 mkdirSync(data, { recursive: true });
+// The model chip shows the name of the model. A neutral name keeps the clip from looking like a test, and does not claim a real model.
+mkdirSync(join(data, ".grok"), { recursive: true });
+writeFileSync(join(data, ".grok", "config.toml"), `[model.${MODEL_ID}]\nname = "${MODEL_NAME}"\n`);
 writeFileSync(join(data, "config.json"), JSON.stringify({
   // A setup card's choices would sit between the greeting and the job.
   features: { smartSetupChoices: false },
@@ -86,7 +91,7 @@ try {
   const bots = [];
   for (const name of ["Scout", "Mira", "Atlas"]) {
     const { bot } = await api("POST", "/api/bots", { name });
-    await api("PATCH", `/api/bots/${bot.id}`, { modelSelection: { instanceId: "grok", model: "fake-model" }, approvalMode: "ask" });
+    await api("PATCH", `/api/bots/${bot.id}`, { modelSelection: { instanceId: "grok", model: MODEL_ID }, approvalMode: "ask" });
     bots.push(bot);
   }
 
