@@ -29,7 +29,7 @@ import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
 import { useDesktopCapabilities, windowFramed } from "./DesktopCapabilities";
 import { MIN_QUERY, SearchResults } from "./SearchResults";
-import { ImportDialog, ShareDepartmentDialog, TeamLibraryPanel } from "./lazy-screens";
+import { ImportDialog, InviteDialog, ShareDepartmentDialog, TeamLibraryPanel } from "./lazy-screens";
 import { SidebarNewChatPanel } from "./SidebarNewChatPanel";
 import { openCommandPalette } from "./CommandPalette";
 import { TeamSettingsDialog } from "./TeamSettingsDialog";
@@ -79,6 +79,7 @@ import { useCloudOwner } from "./CloudOwner"; import { OtherPlaceBots, OwnBotHom
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { NeedsYouButton, OwnerPickerHost } from "./TeamOwner"; import { SidebarPeople } from "./SidebarPeople"; import { SidebarInboxRow } from "./SidebarInboxRow"; import { TeamSideSwitch, useTeamSideLists } from "./TeamSideSwitch"; import { SidebarActiveThreads } from "./SidebarActiveThreads"; import { setAttentionPinned, useAttentionPinned } from "./inbox/attention-pinned"; import { useInboxSupport } from "@/state/inbox";
 import { TeamMenuItems } from "./SidebarTeamMenu";
+import { useMayInvite } from "@/lib/invite-access";
 import { MENU_ITEM, MENU_ITEM_SEPARATOR, MENU_SHEET } from "./menu-recipe";
 import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
@@ -938,6 +939,8 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const [teamMenu, setTeamMenu] = useState<{ name: string; x: number; y: number } | null>(null);
   const [teamSettings, setTeamSettings] = useState<string | null>(null);
   const teamSettingsAllowed = useOwnerOrAdmin();
+  const mayInvite = useMayInvite();
+  const [inviteTo, setInviteTo] = useState<{ departments?: string[]; bots?: string[] } | null>(null);
   const teamMotion = useHeldMenuMotion(teamMenu);
   const teamMenuReturn = useRef<HTMLElement | null>(null);
   const closeTeamMenu = () => {
@@ -1520,6 +1523,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onNewTaskFolder={setNewTaskFolderBotId}
           onRename={(botId) => setRenameRequest((current) => ({ botId, nonce: (current?.nonce ?? 0) + 1 }))}
           onNewSection={density === "icons" ? undefined : (botId) => botDrag.startNew([botId])}
+          onInvite={mayInvite ? (botId) => setInviteTo({ bots: [botId] }) : undefined}
         />
       {showThreads && newFolderBotId && state.bots.find((bot) => bot.id === newFolderBotId) && <BotProjectDialog bot={state.bots.find((bot) => bot.id === newFolderBotId)!} onClose={() => setNewFolderBotId(null)} />}
       {showThreads && newTaskFolderBot && <NewTaskFolderDialog bot={newTaskFolderBot} onClose={() => setNewTaskFolderBotId(null)} onReturnFocus={() => {
@@ -1543,6 +1547,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             onRename={() => { closeTeamMenu(); (advanced ? setRenameTeam : botDrag.startRename)(teamMotion.value!.name); }}
             onShare={() => { closeTeamMenu(); setShareTeam(teamMotion.value!.name); }}
             onDelete={() => { closeTeamMenu(); setDeletingTeam(teamMotion.value!.name); }}
+            onInvite={mayInvite ? () => { const name = teamMotion.value!.name; closeTeamMenu(); setInviteTo({ departments: [name] }); } : undefined}
             onSetForAll={teamSettingsAllowed === true ? () => { closeTeamMenu(); setTeamSettings(teamMotion.value!.name); } : undefined}
           />
         </div>
@@ -1561,6 +1566,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             .finally(() => { teamDeleteRunning.current = false; setTeamDeletePending(false); });
         }} />
       {moveToTeam && <TeamDialog section={moveToTeam} onClose={() => setMoveToTeam(null)} />}
+      {inviteTo !== null && <InviteDialog open preset={inviteTo} onClose={() => setInviteTo(null)} />}
       {shareTeam !== null && <ShareDepartmentDialog department={shareTeam} onClose={() => setShareTeam(null)} />}
       {teamSettings !== null && <TeamSettingsDialog team={teamSettings} onClose={() => setTeamSettings(null)} />}
       <SectionPicker

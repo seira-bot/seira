@@ -107,8 +107,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "people-access",
     name: "People and access",
-    place: "Settings → People",
-    does: "An admin invites a person by email or a whole @domain, as admin or member. A member can be kept to chosen departments: they see only the bots and chats of those departments, and bots there reach only each other.",
+    place: "Settings → People; a department's menu, Invite to this department; a bot's menu, Invite to this bot",
+    does: "An admin invites a person by email or @domain, as admin or user. Access is the whole team, chosen departments or chosen bots, each Can chat or Can view. A user sees only what was chosen.",
     releaseNotes: ["departmentAccess"],
   },
   {
