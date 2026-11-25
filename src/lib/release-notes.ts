@@ -1,4 +1,4 @@
-import { Activity, AppWindow, Eye, HardDrive, Inbox, Moon, Smile, Type, MapPin, Power, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
+import { Activity, AppWindow, Eye, Globe, HardDrive, ListChecks, Inbox, Moon, Smile, Type, MapPin, Power, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,12 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.193", items: [
+    { id: "browserSignIn", icon: Globe },
+    { id: "backupSizes", icon: HardDrive },
+    { id: "restoreChecklist", icon: ListChecks },
+    { id: "placeCard", icon: MapPin },
+  ] },
   { version: "0.1.192", items: [
     { id: "appIcon", icon: Smile },
     { id: "textSize", icon: Type },
