@@ -1170,8 +1170,8 @@ second user for engines, a separate change.
 
 A pairing code is fine for the owner's own devices. For a workspace other
 people use every day, let them sign in with an emailed code instead: set an
-allow-list and a way to send the code (below), and `/pair` on your server
-offers "Sign in with your email" first.
+allow-list and a mail server (below), and `/pair` on your server offers
+"Sign in with your email" first.
 
 ```sh
 SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
@@ -1199,16 +1199,8 @@ is bootstrapped; while it does, Settings refuses to change that list and says
 which variable to change instead. One that is empty, as `.env.example` and the
 Compose files leave them, leaves the list to Settings.
 
-Emailed sign-in needs a way to send the code. A server that is signed in to a
-Seira account needs nothing more: that is any server set up with
-`npx @seira-bot/seira login` or with the installer's `--tunnel --account-email`
-(the [quick start without a domain](deploy-vps.md#quick-start-without-a-domain)).
-Seira's account service then sends the code, and your server checks it. This
-sends the address of each person who signs in to Seira. If that address has no
-Seira account, Seira may create one for it. To keep the addresses on your own
-mail server, give the server an SMTP address as below; it then sends every
-code itself. `SEIRA_CONTROL_PLANE_URL`, the address of an account service that
-you run, takes the place of Seira's.
+Emailed sign-in needs a mail server, so that your server can send the code.
+Give the server an SMTP address:
 
 ```sh
 SEIRA_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"

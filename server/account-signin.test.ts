@@ -120,6 +120,7 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     }
   };
 
+  const operatorEnv = { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test", SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" };
   const startBody = { cloudContractVersion: 1, attempt: "a".repeat(43), expiresIn: 600, resendAfter: 30, signupOpen: true };
   const serviceAnswering = (start: { status: number; body: unknown }, verify: { status: number; body: unknown }) =>
     (async (input: Parameters<typeof fetch>[0]) => {
@@ -161,34 +162,66 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     });
   });
 
-  it("is on for a server signed in to a Seira account, and sends the code to Seira's own services", async () => {
+  it("uses only the account service that the operator names", async () => {
     const asked: string[] = [];
     const service = serviceAnswering({ status: 200, body: startBody }, { status: 500, body: {} });
     const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       asked.push(String(input));
       return service(input, init);
     }) as typeof fetch;
-    const signedOut = createEmailSignIn({ allow, env: {}, seiraAccount: () => false, fetchImpl });
-    expect(signedOut.enabled()).toBe(false);
-    const signedIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl });
-    expect(signedIn.enabled()).toBe(true);
-    expect(await signedIn.start("milind@example.test")).toEqual({ ok: true });
-    expect(asked).toEqual(["https://accounts.seira.bot/healthz", "https://cloud.seira.bot/api/cloud/app/sign-in/start"]);
-    expect(createEmailSignIn({ allow: { admins: [], members: [] }, env: {}, seiraAccount: () => true }).enabled()).toBe(false);
+    const unnamed = createEmailSignIn({ allow, env: {}, fetchImpl });
+    expect(unnamed.enabled()).toBe(false);
+    expect(await unnamed.start("milind@example.test")).toMatchObject({ ok: false, status: 502 });
+    expect(await unnamed.verify("milind@example.test", "12345678")).toMatchObject({ ok: false, status: 502 });
+    expect(asked).toEqual([]);
+    const named = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
+    expect(named.enabled()).toBe(true);
+    expect(await named.start("milind@example.test")).toEqual({ ok: true });
+    expect(asked).toEqual(["https://accounts.example.test/healthz", "https://cloud.example.test/api/cloud/app/sign-in/start"]);
+    expect(createEmailSignIn({ allow: { admins: [], members: [] }, env: operatorEnv }).enabled()).toBe(false);
   });
 
-  it("lets SEIRA_CONTROL_PLANE_URL win over the Seira account, and an invalid one switch it off", () => {
-    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" }, seiraAccount: () => true }).enabled()).toBe(false);
-    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" }, seiraAccount: () => false }).enabled()).toBe(true);
+  it("does not send an address to Seira's own Cloud unless the operator names its origin", async () => {
+    const asked: string[] = [];
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 200, body: {} });
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL }, fetchImpl });
+    await signIn.start("milind@example.test");
+    await signIn.verify("milind@example.test", "12345678");
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
+    const staging = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL, SEIRA_CLOUD_STAGING: "1" }, fetchImpl });
+    asked.length = 0;
+    await staging.start("milind@example.test");
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
   });
 
-  it("keeps the mail server path when SEIRA_SIGNIN_SMTP_URL is set, even when signed in to a Seira account", async () => {
+  it("gives a session only to the address that asked for the code", async () => {
+    const answeringAs = (email: string) =>
+      serviceAnswering(
+        { status: 200, body: startBody },
+        { status: 200, body: { accessToken: `omc_${"b".repeat(43)}`, expiresAt: Date.now() + 60_000, device: { id: "device_test" }, account: { id: "account_test", email } } },
+      );
+    const asking = (email: string) => createEmailSignIn({ allow, env: operatorEnv, fetchImpl: answeringAs(email) });
+
+    const other = asking("milind@example.test");
+    expect(await other.start("guest@example.test")).toEqual({ ok: true });
+    expect(await other.verify("guest@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
+
+    const same = asking("GUEST@example.test");
+    expect(await same.start("guest@example.test")).toEqual({ ok: true });
+    expect(await same.verify("guest@example.test", "12345678")).toEqual({ ok: true, email: "guest@example.test", userId: "account_test", scopes: ["client"] });
+  });
+
+  it("keeps the mail server path when SEIRA_SIGNIN_SMTP_URL is set, even when an account service is named", async () => {
     const sent: string[] = [];
     const signIn = createEmailSignIn({
       allow,
-      env: { SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
+      env: { ...operatorEnv, SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
       mailTransport: { sendMail: async (message) => { sent.push(String(message.to)); } },
-      seiraAccount: () => true,
       fetchImpl: (async () => { throw new Error("the account service must not be asked"); }) as typeof fetch,
     });
     expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
@@ -202,7 +235,7 @@ describe("emailed codes from Seira's account service, with no mail server", () =
       asked.push(String(input));
       return service(input, init);
     }) as typeof fetch;
-    const signIn = createEmailSignIn({ allow: { admins: [], members: ["@crowd.test"] }, env: {}, seiraAccount: () => true, fetchImpl });
+    const signIn = createEmailSignIn({ allow: { admins: [], members: ["@crowd.test"] }, env: operatorEnv, fetchImpl });
     for (let person = 0; person < 1001; person += 1) expect(await signIn.start(`person${person}@crowd.test`)).toEqual({ ok: true });
     asked.length = 0;
     await signIn.verify("person1@crowd.test", "12345678");
@@ -213,13 +246,13 @@ describe("emailed codes from Seira's account service, with no mail server", () =
 
   it("tells a person to wait when Seira asks for a pause", async () => {
     const fetchImpl = serviceAnswering({ status: 429, body: { error: "rate_limited" } }, { status: 500, body: {} });
-    const signIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl });
+    const signIn = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
     expect(await signIn.start("milind@example.test")).toMatchObject({ ok: false, status: 429 });
   });
 
   it("calls a code that Seira says has expired wrong or expired", async () => {
     const fetchImpl = serviceAnswering({ status: 200, body: startBody }, { status: 410, body: { error: "expired" } });
-    const signIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl });
+    const signIn = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
     expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
     expect(await signIn.verify("milind@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
   });
