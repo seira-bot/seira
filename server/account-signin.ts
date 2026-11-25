@@ -50,7 +50,7 @@ const CODE_WRONG: SignInFailure = { ok: false, status: 401, ...userError("server
 const CODE_FORMAT: SignInFailure = { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
 const TOO_MANY: SignInFailure = { ok: false, status: 429, ...userError("serverError.email.tooMany") };
 
-const MAX_OPEN_CODES = 64;
+const MAX_OPEN_CODES = 1000;
 
 const codeShapeOk = (code: string): boolean => code.length <= 32 && /^\d{8}$/.test(code.replace(/[\s-]/g, ""));
 

@@ -195,6 +195,22 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     expect(sent).toEqual(["milind@example.test"]);
   });
 
+  it("keeps a thousand open codes, then forgets the oldest", async () => {
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 200, body: {} });
+    const asked: string[] = [];
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow: { admins: [], members: ["@crowd.test"] }, env: {}, seiraAccount: () => true, fetchImpl });
+    for (let person = 0; person < 1001; person += 1) expect(await signIn.start(`person${person}@crowd.test`)).toEqual({ ok: true });
+    asked.length = 0;
+    await signIn.verify("person1@crowd.test", "12345678");
+    expect(asked.some((url) => url.endsWith("/healthz"))).toBe(false);
+    await signIn.verify("person0@crowd.test", "12345678");
+    expect(asked.some((url) => url.endsWith("/healthz"))).toBe(true);
+  });
+
   it("tells a person to wait when Seira asks for a pause", async () => {
     const fetchImpl = serviceAnswering({ status: 429, body: { error: "rate_limited" } }, { status: 500, body: {} });
     const signIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl });
