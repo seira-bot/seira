@@ -1,5 +1,7 @@
 // Security: the free limit only ever refuses a new person. Nobody who holds a place loses it to the limit: not when a
 // Premium key ends, not when the saved key cannot be read, not on the first start of a server that already has more.
+// A listed address holds a place once Settings or `seira access add` adds it, or once it signs in. An address that only
+// the environment, a hand edit of config.json or `seira fleet users` lists is checked when it first signs in.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -12,8 +14,12 @@ import { entitled, hostedWorkspaceConfigured, loadEnterpriseLayer } from "./ente
 import { premiumKeyStatus, premiumUnlimited, savePlanKey, TEAM_KEY_ENV, type PlanKeyOptions, type PlanKeyRefusal } from "./plan-key.ts";
 import { signInFromEnv } from "./sign-in-env.ts";
 
-/** Everyone who signed in with an email here, and everyone who held a place when this file was first written. */
+/** Everyone who holds a place: each address that signed in with an email here or that Settings or the CLI added, and,
+ * on a data folder from an earlier version, everyone who could sign in when this file was first written. */
 export const PEOPLE_FILE = "sign-in-people.json";
+
+/** Every earlier version wrote its messages here on its first start, and this version opens it only after the limit. */
+const EARLIER_RUN_FILE = "messages.db";
 
 export interface PeopleSession {
   id: string;
@@ -31,10 +37,10 @@ function listed(lists: SignInAllowList): Set<string> {
   return new Set([...lists.admins, ...lists.members].filter((entry) => !entry.startsWith("@")).map(address));
 }
 
-/** Who holds a place: each listed address, each address with a live session, each kept address. Never a device paired by
- * code (it has no address), never an API token, never someone the lists no longer let in. */
+/** Who holds a place: each kept address and each address with a live session. Never a device paired by code (it has no
+ * address), never an API token, never someone the lists no longer let in. */
 export function peopleHolding(lists: SignInAllowList, sessions: readonly PeopleSession[], kept: readonly string[]): Set<string> {
-  const people = listed(lists);
+  const people = new Set<string>();
   for (const session of sessions) {
     if (session.token || !session.email) continue;
     const email = address(session.email);
@@ -85,7 +91,8 @@ export interface PeopleLimitOptions extends PlanKeyOptions {
   lists(): SignInAllowList;
   sessions(): readonly PeopleSession[];
   revoke(sessionId: string): void;
-  /** False on a Team Cloud, a hosted workspace with portal membership and My Cloud: the server does not decide who comes in. */
+  /** False on a Team Cloud, a hosted workspace with portal membership and My Cloud: the server does not decide who comes in.
+   * The CLI uses peopleLimitApplies(), the same rule. */
   applies: boolean;
   /** An Enterprise licence grants `people-unlimited`. */
   enterpriseUnlimited(): boolean;
@@ -93,12 +100,14 @@ export interface PeopleLimitOptions extends PlanKeyOptions {
 }
 
 export interface PeopleLimit {
-  /** True when the free plan has no place for this new person. Null-safe for an address the lists do not let in. */
+  /** True when the free plan has no place for this person: a listed address with no place counts as new. Null-safe for an
+   * address the lists do not let in. */
   refuses(email: string): boolean;
   /** Lets the person in and keeps their place, or refuses them; check and record happen in one step. */
   admit(email: string): "full" | null;
-  /** Before Settings saves the lists: a refusal when the change adds people past the free limit, else the step to run
-   * once they are saved (it ends the sessions of each address taken off and frees their places). */
+  /** Before Settings or the CLI saves the lists: a refusal when the change adds people past the free limit, else the step
+   * to run once they are saved (it gives each added address a place, ends the sessions of each address taken off and
+   * frees their places). */
   listsChanging(asked: ListsChange | undefined): { refusal: { limit: number } } | { saved(): void };
   /** Takes off someone who joined through an `@domain` entry: their sessions end and their place is free. */
   removeJoined(email: string): "removed" | "listed" | "unknown";
@@ -109,13 +118,20 @@ export interface PeopleLimit {
 
 export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const now = options.now ?? Date.now;
-  const kept = (): string[] => {
+  // An unreadable file could name anyone: everyone listed keeps a place while it stays unreadable.
+  const kept = (lists: SignInAllowList = options.lists()): string[] => {
     const read = readKept(options.dataDir);
-    return read.state === "ok" ? read.people : [];
+    return read.state === "ok" ? read.people : read.state === "unreadable" ? [...listed(lists)] : [];
   };
-  const keep = (people: Iterable<string>) => {
+  /** Changes the saved places; never writes over a file it could not read, so no place in it is lost. */
+  const keep = (change: (people: string[]) => string[]) => {
+    const read = readKept(options.dataDir);
+    if (read.state === "unreadable") return;
+    const was = read.state === "ok" ? read.people : [];
+    const next = [...new Set(change(was))];
+    if (read.state === "ok" && next.length === was.length && next.every((email) => was.includes(email))) return;
     try {
-      writeKept(options.dataDir, people);
+      writeKept(options.dataDir, next);
     } catch (error) {
       console.warn(`could not save who holds a place to sign in: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -123,12 +139,17 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const key = () => premiumKeyStatus(options, now());
   const enterprise = () => options.applies && options.enterpriseUnlimited();
   const limited = () => options.applies && !enterprise() && !premiumUnlimited(key());
-  const holding = () => peopleHolding(options.lists(), options.sessions(), kept());
+  const holding = (lists: SignInAllowList = options.lists()) => peopleHolding(lists, options.sessions(), kept(lists));
   const endSessions = (emails: ReadonlySet<string>) => {
     for (const session of options.sessions()) if (session.email && !session.token && emails.has(address(session.email))) options.revoke(session.id);
   };
 
-  if (options.applies && readKept(options.dataDir).state !== "ok") keep(peopleHolding(options.lists(), options.sessions(), []));
+  // The first start on this version: a data folder an earlier version used keeps everyone who could sign in there. A new
+  // data folder keeps only who has a live session, so a long list in the environment or config.json gets no places.
+  if (options.applies && readKept(options.dataDir).state === "missing") {
+    const lists = options.lists();
+    keep(() => [...peopleHolding(lists, options.sessions(), existsSync(join(options.dataDir, EARLIER_RUN_FILE)) ? [...listed(lists)] : [])]);
+  }
 
   const refuses = (email: string) => {
     const person = address(email);
@@ -142,10 +163,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
     admit(email) {
       if (refuses(email)) return "full";
       const person = address(email);
-      if (options.applies && allowedScopes(person, options.lists())) {
-        const people = kept();
-        if (!people.includes(person)) keep([...people, person]);
-      }
+      if (options.applies && allowedScopes(person, options.lists())) keep((people) => [...people, person]);
       return null;
     },
     listsChanging(asked) {
@@ -157,21 +175,20 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
         admins: asked.admins ? parseAllowList(asked.admins.join(",")) : pinned.admins ?? [],
         members: asked.members ? parseAllowList(asked.members.join(",")) : pinned.members ?? [],
       };
+      const beforeListed = listed(before);
       const nextListed = listed(after);
-      const removed = new Set([...listed(before)].filter((email) => !nextListed.has(email)));
-      const sessions = options.sessions();
-      const people = kept();
-      const current = peopleHolding(before, sessions, people);
-      const next = peopleHolding(after, sessions.filter((session) => !session.email || !removed.has(address(session.email))), people.filter((email) => !removed.has(email)));
-      const adds = [...next].some((email) => !current.has(email));
+      const removed = new Set([...beforeListed].filter((email) => !nextListed.has(email)));
+      const added = [...nextListed].filter((email) => !beforeListed.has(email));
+      const current = holding(before);
+      const next = new Set([...current].filter((email) => !removed.has(email) && allowedScopes(email, after)));
+      for (const email of added) next.add(email);
+      const adds = added.some((email) => !current.has(email));
       if (adds && next.size > FREE_PEOPLE_LIMIT && limited()) return { refusal: { limit: FREE_PEOPLE_LIMIT } };
       return {
         saved() {
           if (removed.size) endSessions(removed);
           const lists = options.lists();
-          const was = kept();
-          const stay = was.filter((email) => !removed.has(email) && allowedScopes(email, lists));
-          if (stay.length !== was.length) keep(stay);
+          keep((was) => [...was, ...added].filter((email) => !removed.has(email) && allowedScopes(email, lists)));
         },
       };
     },
@@ -182,7 +199,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       const hadSession = options.sessions().some((session) => session.email && !session.token && address(session.email) === person);
       if (!people.includes(person) && !hadSession) return "unknown";
       endSessions(new Set([person]));
-      if (people.includes(person)) keep(people.filter((entry) => entry !== person));
+      keep((was) => was.filter((entry) => entry !== person));
       return "removed";
     },
     saveKey(raw) {
@@ -196,7 +213,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       if (!options.applies) return { applies: false, plan, people: 0, limit: FREE_PEOPLE_LIMIT, full: false, joined: [], key: null, upgradeUrl: PREMIUM_UPGRADE_URL };
       const lists = options.lists();
       const sessions = options.sessions();
-      const people = peopleHolding(lists, sessions, kept());
+      const people = peopleHolding(lists, sessions, kept(lists));
       const byAddress = listed(lists);
       const joined = [...people].filter((email) => !byAddress.has(email)).sort().map((email): JoinedPerson => {
         const devices = sessions.filter((session) => session.email && !session.token && address(session.email) === email);
@@ -218,19 +235,25 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   };
 }
 
+/** The server's rule for whether it decides who comes in: not on a Cloud home or Team Cloud, not on a hosted workspace.
+ * Any other SEIRA_CLOUD_ROLE leaves the limit on: the server refuses to start with it. */
+export function peopleLimitApplies(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !hostedWorkspaceConfigured(env) && env.SEIRA_CLOUD_ROLE !== "home" && env.SEIRA_CLOUD_ROLE !== "team";
+}
+
 /** For `seira access add`, which edits config.json beside a running server or without one: why the new lists would pass
- * the free limit, or null. `before` and `after` are config.json's lists; a list the environment names stays in force. */
-export async function accessChangeRefusal(dataDir: string, before: SignInAllowList, after: SignInAllowList, env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+ * the free limit, else the step to run once config.json is saved (it gives each added address its place). `before` and
+ * `after` are config.json's lists; a list the environment names stays in force. */
+export async function accessChange(dataDir: string, before: SignInAllowList, after: SignInAllowList, env: NodeJS.ProcessEnv = process.env): Promise<string | { saved(): void }> {
   const pinned = signInFromEnv(env);
   const inForce = (lists: SignInAllowList): SignInAllowList => ({ admins: pinned.admins ?? lists.admins, members: pinned.members ?? lists.members });
   await loadEnterpriseLayer({ env });
+  let lists = inForce(before);
   const people = createPeopleLimit({
-    dataDir, env, lists: () => inForce(before), sessions: () => sessionsFromFile(dataDir), revoke() {},
-    applies: env.SEIRA_CLOUD_ROLE === undefined && !hostedWorkspaceConfigured(env),
-    enterpriseUnlimited: () => entitled("people-unlimited"),
+    dataDir, env, lists: () => lists, sessions: () => sessionsFromFile(dataDir), revoke() {},
+    applies: peopleLimitApplies(env), enterpriseUnlimited: () => entitled("people-unlimited"),
   });
   const change = people.listsChanging(inForce(after));
-  return "refusal" in change
-    ? `this server's free plan includes ${change.refusal.limit} people; add a Premium key in Settings → People (or set ${TEAM_KEY_ENV}) to add more`
-    : null;
+  if ("refusal" in change) return `this server's free plan includes ${change.refusal.limit} people; add a Premium key in Settings → People (or set ${TEAM_KEY_ENV}) to add more`;
+  return { saved() { lists = inForce(after); change.saved(); } };
 }

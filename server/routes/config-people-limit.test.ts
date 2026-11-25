@@ -26,6 +26,8 @@ async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sess
   const file = join(home, "config.json");
   writeFileSync(file, `${JSON.stringify({ signIn: current })}\n`);
   const before = readFileSync(file, "utf8");
+  // A data folder an earlier version used: everyone listed in config.json holds a place from the first start.
+  writeFileSync(join(home, "messages.db"), "");
   const state = { lists: current, sessions, revoked: [] as string[] };
   const people = createPeopleLimit({
     dataDir: home, env: {}, lists: () => state.lists, sessions: () => state.sessions,

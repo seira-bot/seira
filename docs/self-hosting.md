@@ -1293,8 +1293,12 @@ SEIRA_TEAM_KEY="seira-team.…"
   and an access token from `seira token create` do not count.
 - A person who signs in through an `@domain` entry counts from their first
   sign-in. To free that place, remove them on their row in Settings → People.
+- An address that only `SEIRA_SIGNIN_EMAILS`, `SEIRA_SIGNIN_MEMBER_EMAILS`, a
+  hand edit of `config.json` or `seira fleet users add` lists also counts from
+  its first sign-in. An address that Settings or `seira access add` adds counts
+  at once.
 - Settings and `seira access add` refuse an address that would go past the
-  limit. A new person who would go past it through an `@domain` entry sees
+  limit. A new person who would go past it when they sign in sees
   "This installation is full. Ask your admin to make room for you."
 - The limit never takes access away. A server that already has more than 5
   people when it updates keeps all of them. When a key ends, people stay

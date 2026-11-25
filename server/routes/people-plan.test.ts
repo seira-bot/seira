@@ -34,6 +34,7 @@ async function fixture(env: NodeJS.ProcessEnv = {}) {
     sessions: () => state.sessions, revoke: (id) => { state.revoked.push(id); state.sessions = state.sessions.filter((s) => s.id !== id); },
     applies: true, enterpriseUnlimited: () => false,
   });
+  people.admit("boss@corp.test");
   const audits: unknown[] = [];
   const route = createPeoplePlanRoutes({ people, audit: (_auth, _req, row) => audits.push(row) });
   const server = createServer((req, res) => {
