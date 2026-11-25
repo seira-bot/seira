@@ -206,6 +206,9 @@ posixOnly("a person limited to some departments", () => {
     };
 
     beforeAll(async () => {
+      for (const [kind, id] of [["bot", ids.sales], ["bot", ids.fin], ["department", "Finance"]]) {
+        expect((await api("POST", "/api/paused", { kind, id, paused: false }, BOSS)).status).toBe(200);
+      }
       const desk = await makeBot("Desk Heron", "Ops");
       const closed = await makeBot("Vault Crane", "Ops");
       Object.assign(extra, { desk: desk.id, deskThread: desk.threadId, closed: closed.id });
