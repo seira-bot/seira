@@ -1,10 +1,11 @@
 // Email sign-in through the Seira control plane, or through the server's own mail server when SEIRA_SIGNIN_SMTP_URL is
 // set: the code exchange is server-side, so a browser only talks to this server, and a server with an empty allow-list
 // does not expose the routes. The result is an ordinary local session.
-import { cloudOriginFor } from "../electron/cloud-signin.mjs";
+import { cloudOriginFor, cloudOriginOf } from "../electron/cloud-signin.mjs";
 import { resolveServerControlPlaneURL } from "../electron/companion-account-service.mjs";
 import { ControlPlaneError, createControlPlaneClient, normalizeAccountEmail, type ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
+import { SEIRA_HOSTS, seiraOrigin } from "../electron/seira-hosts.mjs";
 import type { Scope } from "./sessions.ts";
 import { createSignInMail, SignInMailError, type MailTransport, type SignInMail } from "./sign-in-mail.ts";
 import { userError, type UserError } from "./user-errors.ts";
@@ -79,14 +80,22 @@ export function createEmailSignIn(options: {
     if (options.client) return options.client;
     const baseURL = controlPlaneURL();
     if (!baseURL) throw new Error("this server has no account service for email sign-in");
+    // Security invariant: an address and a code go only to the service the operator chose. A service of the operator's
+    // that reports Seira's accounts must not move them to Seira's public Cloud; only Seira's own service, or a Cloud
+    // the operator names, takes part in the code exchange.
+    const seiraCloudChosen = baseURL === seiraOrigin(SEIRA_HOSTS.accounts) || cloudOriginOf(env.SEIRA_CLOUD_ORIGIN) !== null;
     return createControlPlaneClient({
       baseURL,
       fetchImpl: options.fetchImpl,
-      cloudSignIn: createSeiraCloudSignIn({
-        origin: cloudOriginFor(env),
-        identity: { deviceName: "Seira server", platform: process.platform, appVersion: options.version },
-        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-      }),
+      ...(seiraCloudChosen
+        ? {
+            cloudSignIn: createSeiraCloudSignIn({
+              origin: cloudOriginFor(env),
+              identity: { deviceName: "Seira server", platform: process.platform, appVersion: options.version },
+              ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            }),
+          }
+        : {}),
     });
   };
   const open = new Map<string, ControlPlaneClient>();
@@ -143,9 +152,11 @@ export function createEmailSignIn(options: {
       }
       open.delete(email);
       void client.signOut(verified.accountToken).catch(() => undefined);
-      const scopes = allowedScopes(verified.user.email, allow());
+      // Security invariant: the session belongs to the address that asked for the code, whatever address the service names.
+      if (normalizeAccountEmail(verified.user.email) !== email) return CODE_WRONG;
+      const scopes = allowedScopes(email, allow());
       if (!scopes) return NOT_WELCOME;
-      return { ok: true, email: verified.user.email, userId: verified.user.id, scopes };
+      return { ok: true, email, userId: verified.user.id, scopes };
     },
   };
 }

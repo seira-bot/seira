@@ -224,3 +224,71 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     expect(await signIn.verify("milind@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
   });
 });
+
+describe("the account service the operator chose", () => {
+  const allow = { admins: ["milind@example.test"], members: ["guest@example.test"] };
+  const operator = "https://accounts.operator.test";
+  const cloudToken = `omc_${"t".repeat(43)}`;
+
+  it("keeps the address and the code on that service when it reports Seira's accounts", async () => {
+    const asked: string[] = [];
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      asked.push(url);
+      if (url.endsWith("/healthz")) return Response.json({ ok: true, service: "seira-control-plane", accounts: "seira-cloud" });
+      return Response.json({ success: true });
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operator }, fetchImpl });
+    expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.startsWith(`${operator}/`))).toBe(true);
+    expect(asked).toContain(`${operator}/api/auth/email-otp/send-verification-otp`);
+  });
+
+  it("uses Seira's Cloud when the operator names it too", async () => {
+    const asked: string[] = [];
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      asked.push(url);
+      if (url.endsWith("/healthz")) return Response.json({ ok: true, service: "seira-control-plane", accounts: "seira-cloud" });
+      return Response.json({ cloudContractVersion: 1, attempt: "a".repeat(43), expiresIn: 600, resendAfter: 30, signupOpen: true });
+    }) as typeof fetch;
+    const cloud = "https://cloud.operator.test";
+    const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operator, SEIRA_CLOUD_ORIGIN: cloud }, fetchImpl });
+    expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
+    expect(asked).toEqual([`${operator}/healthz`, `${cloud}/api/cloud/app/sign-in/start`]);
+  });
+
+  const cloudAnswering = (verifiedEmail: string) =>
+    (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.endsWith("/healthz")) return Response.json({ ok: true, service: "seira-control-plane", accounts: "seira-cloud" });
+      if (url.endsWith("/sign-in/start")) return Response.json({ cloudContractVersion: 1, attempt: "a".repeat(43), expiresIn: 600, resendAfter: 30, signupOpen: true });
+      if (url.endsWith("/sign-in/verify")) return Response.json({ accessToken: cloudToken, expiresAt: Date.now() + 1000, device: { id: "device_test" }, account: { id: "acct_test", email: verifiedEmail } });
+      return Response.json({});
+    }) as typeof fetch;
+
+  it("gives no session when the verified address is not the one that asked for the code", async () => {
+    const signIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl: cloudAnswering("milind@example.test") });
+    expect(await signIn.start("guest@example.test")).toEqual({ ok: true });
+    expect(await signIn.verify("guest@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
+  });
+
+  it("gives a session for the address that asked, however the service writes its case", async () => {
+    const signIn = createEmailSignIn({ allow, env: {}, seiraAccount: () => true, fetchImpl: cloudAnswering("Guest@Example.test") });
+    expect(await signIn.start("guest@example.test")).toEqual({ ok: true });
+    expect(await signIn.verify("guest@example.test", "12345678")).toEqual({ ok: true, email: "guest@example.test", userId: "acct_test", scopes: ["client"] });
+  });
+
+  it("refuses an address that differs on a client of the operator's own too", async () => {
+    const client = {
+      accounts: async () => "better-auth",
+      requestOTP: async () => ({ email: "guest@example.test" }),
+      verifyOTP: async () => ({ accountToken: "token", user: { id: "user_other", email: "milind@example.test" } }),
+      signOut: async () => undefined,
+    } as unknown as ControlPlaneClient;
+    const signIn = createEmailSignIn({ allow, env: {}, client });
+    expect(await signIn.start("guest@example.test")).toEqual({ ok: true });
+    expect(await signIn.verify("guest@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
+  });
+});
