@@ -540,7 +540,7 @@ import {
 } from "./request-auth.ts";
 import { cookieMaxAgeSeconds, formatPairingCode, pairingRequest, SessionRegistry, type SessionRecord } from "./sessions.ts"; import type { PairingErrorCode } from "../shared/pairing-code.ts"; import { fromPairedDevice } from "./routes/paired-device.ts";
 import { ThreadStarters } from "./thread-starters.ts"; import { createConversationShares } from "./host/conversation-shares.ts"; import { createTeamMemorySaves } from "./host/team-memory-saves.ts"; import { createConversationSharing } from "./routes/conversation-share.ts";
-import { startPhoneRelay } from "./phone-relay.ts"; import { signedInToSeira } from "./tunnel.ts";
+import { startPhoneRelay } from "./phone-relay.ts";
 import {
   appendAdminAction,
   BOT_AUDIT_FIELDS,
@@ -789,7 +789,6 @@ const decider = createDecider({ config: () => cfg, dataDir: DATA_DIR }); const e
 const customDomainVerifier = createCustomDomainVerifier({ environmentId: ENVIRONMENT_ID });
 const emailSignIn = createEmailSignIn({
   allow: signInAllowList,
-  seiraAccount: () => signedInToSeira(DATA_DIR),
   version: reportableServerVersion(),
 });
 function savedCustomDomain(): string | null {

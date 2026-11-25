@@ -60,8 +60,6 @@ export function createEmailSignIn(options: {
   fetchImpl?: typeof fetch;
   client?: ControlPlaneClient;
   mailTransport?: MailTransport;
-  /** True while this server is signed in to a Seira account: Seira's account service then sends the codes. */
-  seiraAccount?: () => boolean;
   /** The server's release version, which Seira's sign-in names the device with. */
   version?: string;
 }): EmailSignIn {
@@ -72,9 +70,8 @@ export function createEmailSignIn(options: {
     return mailedSignIn(allow, createSignInMail({ url: smtpUrl, from: env.SEIRA_SIGNIN_SMTP_FROM,
       ...(options.mailTransport ? { transport: options.mailTransport } : {}) }));
   }
-  // An address reaches Seira's account service only when this server is signed in to a Seira account or the operator names a service.
-  const controlPlaneURL = (): string =>
-    Object.hasOwn(env, "SEIRA_CONTROL_PLANE_URL") || options.seiraAccount?.() === true ? resolveServerControlPlaneURL({ environment: env }) : "";
+  // An address reaches an account service only when the operator names one in SEIRA_CONTROL_PLANE_URL.
+  const controlPlaneURL = (): string => (Object.hasOwn(env, "SEIRA_CONTROL_PLANE_URL") ? resolveServerControlPlaneURL({ environment: env }) : "");
   const newClient = (): ControlPlaneClient => {
     if (options.client) return options.client;
     const baseURL = controlPlaneURL();
@@ -143,9 +140,11 @@ export function createEmailSignIn(options: {
       }
       open.delete(email);
       void client.signOut(verified.accountToken).catch(() => undefined);
-      const scopes = allowedScopes(verified.user.email, allow());
+      // A session goes only to the address that asked for the code.
+      if (normalizeAccountEmail(verified.user.email) !== email) return CODE_WRONG;
+      const scopes = allowedScopes(email, allow());
       if (!scopes) return NOT_WELCOME;
-      return { ok: true, email: verified.user.email, userId: verified.user.id, scopes };
+      return { ok: true, email, userId: verified.user.id, scopes };
     },
   };
 }
