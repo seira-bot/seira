@@ -483,15 +483,15 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
   }
   const without = (items: string[]) => items.filter((item) => item !== entry);
   if (options.accessAction === "remove") {
-    if (!admins.includes(entry) && !members.includes(entry)) {
-      io.error(`${entry} is not on the list`);
-      return 1;
-    }
+    if (!admins.includes(entry) && !members.includes(entry)) { io.error(`${entry} is not on the list`); return 1; }
     await write({ admins: without(admins), members: without(members) });
     io.log(`${entry} can no longer sign in (existing sessions stay until they expire or are revoked with ${cliCommand("devices revoke ID")})`);
     return 0;
   }
-  const next = options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) }; const refusal = await accessChangeRefusal(options.dataDir, { admins, members }, next); if (refusal) { io.error(refusal); return 1; } await write(next);
+  const next = options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) };
+  const refusal = await accessChangeRefusal(options.dataDir, { admins, members }, next);
+  if (refusal) { io.error(refusal); return 1; }
+  await write(next);
   io.log(`${entry} can sign in at /pair with an emailed code (${options.chatOnly ? "chat and approvals" : "full access"})`);
   if (overridden) io.log("note: SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
   return 0;

@@ -165,8 +165,8 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       // Saved, it would be overruled by the environment at once: say so instead of answering 200 with nothing changed.
       const signInPinned = signInEnvRefusal(patch.signIn);
       if (signInPinned) return json(res, 409, { error: signInPinned, code: "signin_env" });
-      const peopleChange = people.listsChanging(patch.signIn);
-      if ("refusal" in peopleChange) return json(res, 409, { ...userError("serverError.people.full", { limit: peopleChange.refusal.limit }), code: "people_full" });
+      const peopleChange = patch.signIn ? people.listsChanging(patch.signIn) : null;
+      if (peopleChange && "refusal" in peopleChange) return json(res, 409, { ...userError("serverError.people.full", { limit: peopleChange.refusal.limit }), code: "people_full" });
       if (patch.newBotDefaults) {
         if (patch.newBotDefaults.profile.modelSelection) {
           const checked = checkedModelSelection(patch.newBotDefaults.profile.modelSelection);
@@ -469,7 +469,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       }
       let browserReferenceCleanupError: unknown = null;
       if (patch.signIn !== undefined) {
-        if ("saved" in peopleChange) peopleChange.saved();
+        if (peopleChange && "saved" in peopleChange) peopleChange.saved();
         sessions.revalidateEmailSessions();
         resyncOpenCodeProviderKeys();
       }
