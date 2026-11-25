@@ -1253,6 +1253,39 @@ People shows, read-only, who has signed in and what they spent, with a
 access there lists signed-in devices and offers no pairing codes, since a
 hosted workspace refuses them.
 
+### How many people can sign in
+
+A self-hosted server is free for up to 5 people who sign in with an email.
+Settings → People shows the count next to **Invite**, for example "3 of 5
+people". At 5, **Invite** stops and links to Premium.
+
+To let more people sign in, get a Premium key at
+<https://cloud.seira.bot/premium> and paste it into **Premium key** in
+Settings → People. Settings keeps it in the data folder (`team-key`, readable
+only by the server's user). You can also set it where the server starts. It
+then wins over the key in Settings, and Settings shows it read-only:
+
+```sh
+SEIRA_TEAM_KEY="seira-team.…"
+```
+
+- Every feature is the same on every plan. Premium changes only how many
+  people can sign in.
+- The server checks the key on this machine. It sends no request to check it.
+  The key is not tied to one server.
+- A person counts once, on any number of devices. A device paired with a code
+  and an access token from `seira token create` do not count.
+- A person who signs in through an `@domain` entry counts from their first
+  sign-in. To free that place, remove them on their row in Settings → People.
+- Settings and `seira access add` refuse an address that would go past the
+  limit. A new person who would go past it through an `@domain` entry sees
+  "This workspace is full. Ask your admin."
+- The limit never takes access away. A server that already has more than 5
+  people when it updates keeps all of them. When a key ends, people stay
+  unlimited for 7 more days; after that, the limit applies to new people only.
+- A Team Cloud, My Cloud, and a hosted workspace whose members your
+  organization's Admin manages have no such limit.
+
 ### Who may answer a card
 
 Approval cards are the provider's own (see the approval modes); Seira

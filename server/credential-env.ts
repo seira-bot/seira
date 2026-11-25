@@ -45,7 +45,7 @@ export const WORKSPACE_CREDENTIAL_ENV = [
 ] as const;
 
 /** Operator secrets only this process reads, plus every `SEIRA_CLOUD_` var (the underscore leaves out SEIRA_CLOUDFLARED_PATH). */
-export const CONTROL_PLANE_ENV = ["SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_TOKEN"] as const;
+export const CONTROL_PLANE_ENV = ["SEIRA_LICENSE_KEY", "SEIRA_TEAM_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_TOKEN"] as const;
 export const CONTROL_PLANE_ENV_PREFIX = "SEIRA_CLOUD_";
 
 /** Names compare case-insensitively because Windows environments do. */
