@@ -8,15 +8,18 @@
 // - Publishing is one step. The holder text goes into a private temporary file first, and `link` puts the whole file in
 //   place. The lock file never exists without a full holder text, so a process that ends at any point leaves either no
 //   lock or a complete one.
-// - The file names its holder (process id, start time, token). A lock is stale only when it is older than `staleMs` AND
-//   its holder is gone. When this cannot be told (no start time, no right to signal the process) the holder counts as
-//   alive: the waiter times out instead of taking the lock.
-// - Giving a lock back and taking over a stale lock are the same step: `removeLock`. It claims the lock text with a
-//   hard link under a name made from that text, so only one process at a time can remove a lock with that text. It reads
-//   the text again through the claim and removes the lock only when it is the text that the caller named. A lock that
-//   changed in the meantime is never removed. A claim that a crashed process left is cleared after `staleMs`.
+// - The file names its holder (process id, start time, token). Every owner (a lock holder, or a process that is removing
+//   a lock) is `alive`, `dead` or `unknown`. Only `dead` lets another process recover what the owner held; `alive` and
+//   `unknown` (no valid holder text, no start time to compare, a process that cannot be judged) wait until the deadline
+//   and then stop with an error. A lock is taken over only when it is older than `staleMs` AND its holder is dead.
+// - Giving a lock back and taking over a stale lock are the same step: `removeLock`. A process that removes the lock with
+//   text X first publishes a claim file for X that names itself. Only the claim holder reads the lock again, and it
+//   removes the lock only while it still holds X. A claim is never removed while its owner is alive or unknown; a claim
+//   of a dead owner stays in its place and the next process uses the next claim slot, so no process ever removes a claim
+//   that another process may hold now. The claims of X are cleared once X is gone (X holds a unique token, so no
+//   process claims X again for good).
 // - Every wait has an end: each loop checks the deadline, and any error that is not "the file is not there" ends the
-//   wait with an error. A lock that cannot be judged is never taken.
+//   wait with an error.
 // The processes must share one process table: a holder in another container or host looks gone after `staleMs`.
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, linkSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
@@ -39,8 +42,9 @@ const sleep = (ms: number) => { Atomics.wait(new Int32Array(new SharedArrayBuffe
 const codeOf = (error: unknown) => Reflect.get(Object(error), "code");
 const hashOf = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
 
-/** The name that a process claims to remove the lock `file` that holds `text`. Exported for the tests. */
-export const claimOf = (file: string, text: string) => `${file}.${hashOf(text)}.claim`;
+const MAX_CLAIMS = 32;
+/** The name of claim slot `slot` for removing the lock `file` that holds `text`. Exported for the tests. */
+export const claimOf = (file: string, text: string, slot = 0) => `${file}.${hashOf(text)}.${slot}.claim`;
 
 /** The start time that Linux keeps for a process, so that a reused process id does not look like the old holder. */
 function startOf(pid: number): string {
@@ -60,15 +64,20 @@ function holderOf(text: string): Holder | null {
   return Number.isSafeInteger(id) && id > 0 && started && token ? { pid: id, started } : null;
 }
 
-/** False only when the holder is known to be gone. Anything that cannot be told counts as alive. */
-function alive(holder: Holder): boolean {
+type Owner = "alive" | "dead" | "unknown";
+
+/** `dead` only when the process is known to be gone, or when its id now belongs to another process. */
+function ownerState(text: string): Owner {
+  const holder = holderOf(text);
+  if (!holder) return "unknown";
   try {
     process.kill(holder.pid, 0);
   } catch (error) {
-    if (codeOf(error) === "ESRCH") return false;
+    if (codeOf(error) === "ESRCH") return "dead";
   }
   const now = startOf(holder.pid);
-  return holder.started === "-" || now === "-" || now === holder.started;
+  if (holder.started === "-" || now === "-") return "unknown";
+  return now === holder.started ? "alive" : "dead";
 }
 
 type Seen = { text: string; mtimeMs: number };
@@ -83,11 +92,9 @@ function look(file: string): Seen | null {
   }
 }
 
-/** A file that names no holder (written by something else) is judged by its age alone. */
+/** Old, and its holder is dead. A lock that names no valid holder is never stale: it is not proof that the lock is free. */
 function stale(seen: Seen, staleMs: number): boolean {
-  if (Date.now() - seen.mtimeMs <= staleMs) return false;
-  const holder = holderOf(seen.text);
-  return !holder || !alive(holder);
+  return Date.now() - seen.mtimeMs > staleMs && ownerState(seen.text) === "dead";
 }
 
 const holderText = () => `${process.pid} ${startOf(process.pid)} ${randomUUID()}\n`;
@@ -121,40 +128,39 @@ function publish(file: string, text: string): boolean {
 
 type Removal = "removed" | "kept" | "busy";
 
-/** Removes the lock `file` only while it holds `text`. "busy": another process is removing a lock with this text now. */
-function removeLock(file: string, text: string, staleMs: number): Removal {
-  const claim = claimOf(file, text);
-  try {
-    linkSync(file, claim);
-  } catch (error) {
-    const code = codeOf(error);
-    if (code === "ENOENT") return "kept";
-    if (code !== "EEXIST") throw error;
-    // A claim from a process that ended: after `staleMs` nobody is removing the lock with it.
-    const left = look(claim);
-    if (left && Date.now() - left.mtimeMs > staleMs) {
-      try {
-        unlinkSync(claim);
-      } catch {
-        // Cleared by another process.
-      }
+/** Removes the lock `file` only while it holds `text`. "busy": another process, or one that cannot be judged, is removing a lock with this text. */
+function removeLock(file: string, text: string): Removal {
+  const mine = holderText();
+  const dead: string[] = [];
+  let claim = "";
+  for (let slot = 0, tries = 0; !claim; tries += 1) {
+    if (slot >= MAX_CLAIMS || tries >= 2 * MAX_CLAIMS) return "busy";
+    const name = claimOf(file, text, slot);
+    if (publish(name, mine)) {
+      claim = name;
+      break;
     }
-    return "busy";
+    const other = look(name);
+    if (!other) continue; // Cleared since: try this slot again.
+    if (ownerState(other.text) !== "dead") return "busy";
+    dead.push(name);
+    slot += 1;
   }
   try {
-    // The claim is the lock file that was at the path when the link was made. Nobody removes that file while the claim
-    // exists, so what the claim holds is what the path holds.
-    if (readFileSync(claim, "utf8") !== text) return "kept";
+    // Only the holder of the claim removes a lock with this text, so the text that is read here is still there at the unlink.
+    if (look(file)?.text !== text) return "kept";
     unlinkSync(file);
     return "removed";
   } catch (error) {
     if (codeOf(error) === "ENOENT") return "kept";
     throw error;
   } finally {
-    try {
-      unlinkSync(claim);
-    } catch {
-      // Gone already.
+    for (const name of [...dead, claim]) {
+      try {
+        unlinkSync(name);
+      } catch {
+        // Gone already.
+      }
     }
   }
 }
@@ -171,8 +177,11 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): ()
     for (;;) {
       if (publish(file, text)) break;
       const seen = look(file);
-      if (seen && stale(seen, staleMs)) removeLock(file, seen.text, staleMs);
-      if (Date.now() >= deadline) throw new Error(`another process holds ${file}; try again`);
+      if (seen && stale(seen, staleMs)) removeLock(file, seen.text);
+      if (Date.now() >= deadline) {
+        const unknown = seen && ownerState(seen.text) === "unknown";
+        throw new Error(`another process holds ${file}; try again${unknown ? " (its holder cannot be judged; remove the file by hand only when no Seira process runs)" : ""}`);
+      }
       sleep(POLL_MS);
     }
   }
@@ -188,7 +197,7 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): ()
     }
     // A process that is removing a lock with this text now (it judged this process gone) makes this wait; the wait ends.
     const end = Date.now() + waitMs;
-    while (removeLock(file, text, staleMs) === "busy") {
+    while (removeLock(file, text) === "busy") {
       if (Date.now() >= end) throw new Error(`could not give back ${file}; another process is changing it`);
       sleep(POLL_MS);
     }

@@ -74,12 +74,12 @@ describe("a lock between processes", () => {
     expect(readFileSync(file, "utf8")).toContain("holder");
   });
 
-  it("takes over an old lock that names no holder", () => {
+  it.each(["", "garbage", "0 - x", "12 -\n"])("never takes an old lock that names no valid holder (%j), and says why", (text) => {
     const file = lockFile();
-    writeFileSync(file, "");
-    ageOf(file, 60_000);
-    acquireFileLock(file, { waitMs: 500, staleMs: 10_000 })();
-    expect(existsSync(file)).toBe(false);
+    writeFileSync(file, text);
+    ageOf(file, 3_600_000);
+    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds .*cannot be judged/);
+    expect(readFileSync(file, "utf8")).toBe(text);
   });
 
   it.skipIf(!existsSync("/proc/self/stat"))("treats a reused process id as a holder that is gone", () => {
@@ -98,7 +98,7 @@ describe("a lock between processes", () => {
     expect(readFileSync(file, "utf8")).toBe(`${process.ppid} - other\n`);
   });
 
-  it("does not remove a stale lock while another process is removing a lock with the same text", () => {
+  it("does not remove a stale lock while another process, alive, is removing a lock with the same text", () => {
     const file = lockFile();
     const text = `${gonePid()} - holder\n`;
     writeFileSync(file, text);
@@ -108,16 +108,40 @@ describe("a lock between processes", () => {
     expect(readFileSync(file, "utf8")).toBe(text);
   });
 
-  it("clears a claim that a crashed process left behind, then takes over the stale lock", () => {
+  it.each(["", "garbage", "0 - x"])("does not remove a stale lock while the claim names no valid owner (%j): the claim is never cleared", (claimText) => {
+    const file = lockFile();
+    const text = `${gonePid()} - holder\n`;
+    writeFileSync(file, text);
+    ageOf(file, 60_000);
+    writeFileSync(claimOf(file, text), claimText);
+    ageOf(claimOf(file, text), 3_600_000);
+    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10 })).toThrow(/another process holds/);
+    expect(readFileSync(file, "utf8")).toBe(text);
+    expect(readFileSync(claimOf(file, text), "utf8")).toBe(claimText);
+  });
+
+  it("takes over the stale lock when the owner of the claim is dead, with no wait for the claim to age, and leaves no claim", () => {
     const file = lockFile();
     const text = `${gonePid()} - holder\n`;
     writeFileSync(file, text);
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), `${gonePid()} - claim\n`);
-    ageOf(claimOf(file, text), 60_000);
-    acquireFileLock(file, { waitMs: 500, staleMs: 10_000 })();
-    expect(existsSync(file)).toBe(false);
-    expect(existsSync(claimOf(file, text))).toBe(false);
+    const release = acquireFileLock(file, { waitMs: 500, staleMs: 10_000 });
+    expect(readFileSync(file, "utf8")).toContain(`${process.pid} `);
+    release();
+    expect(readdirSync(dirname(file))).toEqual([]);
+  });
+
+  it("uses the next claim slot after the dead owners of the earlier slots, and never removes their claim files while it works", () => {
+    const file = lockFile();
+    const text = `${gonePid()} - holder\n`;
+    writeFileSync(file, text);
+    ageOf(file, 60_000);
+    for (const slot of [0, 1, 2]) writeFileSync(claimOf(file, text, slot), `${gonePid()} - claim\n`);
+    writeFileSync(claimOf(file, text, 3), `${process.ppid} - claim\n`);
+    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10_000 })).toThrow(/another process holds/);
+    expect(readFileSync(file, "utf8")).toBe(text);
+    for (const slot of [0, 1, 2, 3]) expect(existsSync(claimOf(file, text, slot))).toBe(true);
   });
 
   it("leaves no claim or temporary file after a take and a give back", () => {
@@ -205,15 +229,23 @@ describe("giving a lock back", () => {
     expect(existsSync(file)).toBe(false);
   });
 
-  it("removes the lock after the claim of a crashed process is old", () => {
+  it("removes the lock when the claim of a crashed process is in the way, and clears that claim", () => {
     const file = lockFile();
     const release = acquireFileLock(file, { waitMs: 500, staleMs: 50 });
     const claim = claimOf(file, readFileSync(file, "utf8"));
     writeFileSync(claim, `${gonePid()} - claim\n`);
-    ageOf(claim, 60_000);
     release();
-    expect(existsSync(file)).toBe(false);
-    expect(existsSync(claim)).toBe(false);
+    expect(readdirSync(dirname(file))).toEqual([]);
+  });
+
+  it("does not remove the lock while the claim names an owner that cannot be judged", () => {
+    const file = lockFile();
+    const release = acquireFileLock(file, { waitMs: 80, staleMs: 10 });
+    const text = readFileSync(file, "utf8");
+    writeFileSync(claimOf(file, text), "garbage");
+    ageOf(claimOf(file, text), 3_600_000);
+    expect(() => release()).toThrow(/could not give back/);
+    expect(readFileSync(file, "utf8")).toBe(text);
   });
 });
 
