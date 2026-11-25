@@ -167,11 +167,12 @@ export async function verifyWorkspaceBackup(report: (event: unknown) => void = (
     const pairing = await api(destination, "POST", "/api/auth/pairing", { scopes: ["client"] });
     const paired = await api(destination, "POST", "/api/auth/pair", { code: pairing.body.code, label: "Fixture client" });
     assert.equal((await api(destination, "POST", "/api/workspace-backup/export", { password: PASSWORD }, paired.body.token)).status, 403);
+    const destinationUrl = destination.info.url;
     const checked = async (sha256: string) => {
-      const started = await fetch(`${destination.info.url}/api/workspace-backup/upload/start`, {
+      const started = await fetch(`${destinationUrl}/api/workspace-backup/upload/start`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bytes: encrypted.length }),
       }).then((response) => response.json()) as { id: string };
-      const base = `${destination.info.url}/api/workspace-backup/upload/${started.id}`;
+      const base = `${destinationUrl}/api/workspace-backup/upload/${started.id}`;
       assert.equal((await fetch(`${base}/chunk?offset=0`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: encrypted })).status, 200);
       return (await fetch(`${base}/finish?sha256=${sha256}`, { method: "POST" })).status;
     };
