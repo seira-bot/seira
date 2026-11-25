@@ -7,7 +7,8 @@ import type { RuntimeEvent } from "./contracts.ts";
 import { OwnedFile } from "./atomic.ts"; import { saveSoon } from "./save-batch.ts"; import { RunProgressSave } from "./routine-progress-save.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { activeRunsOf, nextDueOf, schedulerDueOf, wakeHoldOf } from "./routine-due.ts";
-import { DUE_CLOCK_MS, startDueTimer, type DueTimer } from "./due-timer.ts";
+import { startDueTimer, type DueTimer } from "./due-timer.ts";
+import { clockWentBack, pullBackNextRuns } from "./routine-clock-back.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
@@ -313,8 +314,6 @@ const WAKE_HORIZON_MS = 60 * 60_000;
 
 export const ROUTINE_RESTARTED = "Seira restarted while this routine was running";
 const MAX_RUNS = 2_000;
-/** A wall clock that goes back by more than this between two looks is a clock that was set right, not a small correction. */
-const CLOCK_BACK_MS = 2 * DUE_CLOCK_MS;
 const earliest = (...times: Array<number | null>): number | null => times.reduce<number | null>((first, at) => at === null ? first : first === null ? at : Math.min(first, at), null);
 export class RoutineManager {
   private readonly file: string; private readonly disk: OwnedFile;
@@ -908,23 +907,12 @@ export class RoutineManager {
     return moved.length;
   }
 
-  /** The wall clock went back by more than the clock check's own gap (`DUE_CLOCK_MS`) since the last look: a bad clock was
-   * set right. A next run that was set while the clock was ahead stays far in the future, so a daily, cron or interval routine
-   * takes the first time that follows now. A one-time run and a limit-reset run keep their instant. Only a clock that went
-   * back moves a run earlier, so a next run that was moved later on purpose (a usage-limit wait) is not touched at any other time.
-   * Returns how many moved. */
+  /** The wall clock went back since the last look: a bad clock was set right (routine-clock-back.ts). Returns how many next runs moved. */
   followClock(): number {
     const now = this.now(), seen = this.clockSeenAt;
     this.clockSeenAt = now;
-    if (this.unreadable || now >= seen - CLOCK_BACK_MS) return 0;
-    const moved = this.routines.filter((routine) => {
-      const repeats = routine.schedule.type === "daily" || routine.schedule.type === "cron" || routine.schedule.type === "interval";
-      if (!routine.enabled || !repeats || routine.nextRunAt == null || routine.nextRunAt <= now) return false;
-      const next = nextOccurrence(routine.schedule, now);
-      if (next === null || next >= routine.nextRunAt) return false;
-      routine.nextRunAt = next;
-      return true;
-    });
+    if (this.unreadable || !clockWentBack(now, seen)) return 0;
+    const moved = pullBackNextRuns(this.routines, now);
     if (moved.length) this.saveLater();
     for (const routine of moved) this.emitRoutine(routine);
     return moved.length;
