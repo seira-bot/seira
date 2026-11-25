@@ -1221,21 +1221,42 @@ never on a command line.
 
 ### Inviting people
 
-**Settings → People** lists who may sign in, their role, when they were last
-seen, and what each person spent this month. **Invite** adds an address (or
-`@company.com` for everyone there) and shows a link like
-`https://your.host/pair?email=name%40company.com`: it opens the sign-in page
-with the address filled in, and the one-time code still goes to that address.
-Roles change with one click; removing someone stops new sign-ins.
+**Settings → People** lists who may sign in, their role, what they can reach,
+when they were last seen, and what each person spent this month. Roles change
+with one click. Removing someone stops new sign-ins.
 
-A user can be limited to chosen departments: pick **Chosen departments** when
-you invite them, or **Change access** on their row. They then see only the
-bots, rooms, workflows and conversations of those departments, and cannot see
-team files or restore a workspace backup. Admins always see the whole team.
-Bots in a department that is named in any user's list can reach only bots in
-their own department. A bot in a chosen department can still read files outside
-its folders unless the department uses **Only chosen folders**. If the list of
-departments cannot be read, users see nothing until it is fixed. Teams in
+To invite a person, choose **Invite**. The dialog asks for an address (or
+`@company.com` for everyone there), a role (**User** or **Admin**) and the
+access. When you save, the dialog shows a link like
+`https://your.host/pair?email=name%40company.com`. The link opens the sign-in
+page with the address filled in. The one-time code still goes to that address.
+
+Access has three choices:
+
+- **Whole team**: the person can use every bot that is shared with the team.
+- **Chosen departments**: the person sees only the bots, rooms, workflows and
+  conversations of the departments you tick. General is one of them.
+- **Chosen bots**: the person sees only the bots you tick.
+
+Each chosen department or bot has a level. **Can chat** lets the person chat
+with the bot. **Can view** lets the person read the bot and its conversations,
+but not send a message. Admins always see the whole team, so the dialog hides
+the choice for an admin.
+
+You can also start from the sidebar. Open the menu of a department and choose
+**Invite to this department**, or open the menu of a bot and choose **Invite to
+this bot**. The dialog opens with that department or bot already ticked. These
+two entries show only to an admin on a server that signs people in by email.
+
+To change what a person can reach, choose **Change access** on their row. If
+you choose a bot that is shared with only some people, inviting adds the person
+to those people.
+
+A person with chosen departments cannot see team files or restore a workspace
+backup. Bots in a department that is named in any user's list can reach only
+bots in their own department. A bot in a chosen department can still read files
+outside its folders unless the department uses **Only chosen folders**. If the
+saved choices cannot be read, users see nothing until it is fixed. Teams in
 Seira Cloud do not support this.
 
 On a hosted workspace whose members your organization's Admin manages

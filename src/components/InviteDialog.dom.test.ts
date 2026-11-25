@@ -1,0 +1,306 @@
+// @vitest-environment happy-dom
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AccessGrant } from "../../shared/department-access";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type Call = { path: string; init?: { method?: string; body?: string } };
+const fixture = vi.hoisted(() => ({
+  calls: [] as Call[],
+  people: {} as Record<string, unknown>,
+  members: [] as string[],
+  grantError: null as string | null,
+  bots: [] as Array<Record<string, unknown>>,
+}));
+vi.mock("@/state/store", () => ({
+  useStore: () => ({ state: { bots: fixture.bots, config: null }, dispatch: () => {} }),
+  api: async (path: string, init?: { method?: string; body?: string }) => {
+    fixture.calls.push({ path, init });
+    if (path === "/api/config" && init?.method === "PUT") {
+      fixture.members = (JSON.parse(init.body!) as { signIn: { members: string[] } }).signIn.members;
+      return {};
+    }
+    if (path === "/api/config") return { signIn: { admins: ["boss@acme.test"], members: fixture.members } };
+    if (path === "/api/department-access" && init?.method === "PUT") {
+      if (fixture.grantError) throw new Error(fixture.grantError);
+      const { entry, access } = JSON.parse(init.body!) as { entry: string; access: unknown };
+      if (access) fixture.people[entry] = access; else delete fixture.people[entry];
+      return {};
+    }
+    if (path === "/api/department-access") return { available: true, people: fixture.people, unreadable: false };
+    if (path === "/api/sidebar-sections") return { sections: ["Sales", "Finance"] };
+    if (path === "/api/department-folders") return { departments: { Finance: { limited: true, folders: [] } } };
+    if (path === "/api/settings/custom-domain") return { publicUrl: "https://team.acme.test" };
+    return null;
+  },
+}));
+const { InviteDialog } = await import("./InviteDialog");
+
+let host: HTMLDivElement;
+let root: Root;
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+const click = async (node: Element | null | undefined) => { await act(async () => { (node as HTMLElement).click(); }); await settle(); };
+const type = async (input: HTMLInputElement, value: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+const choose = async (select: HTMLSelectElement, value: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+};
+const dialog = () => document.body.querySelector<HTMLElement>("[data-invite-dialog]")!;
+const radio = (label: string) => [...dialog().querySelectorAll("label")].find((node) => node.textContent?.trim() === label)?.querySelector("input") as HTMLInputElement;
+const item = (key: string) => dialog().querySelector<HTMLElement>(`[data-invite-item="${key}"]`)!;
+const tick = (key: string) => click(item(key).querySelector("input"));
+const level = (key: string) => item(key).querySelector<HTMLSelectElement>("select");
+const button = (label: string) => [...dialog().querySelectorAll("button")].find((node) => node.textContent?.trim() === label)!;
+const summary = () => dialog().querySelector("[data-invite-summary]")!.textContent;
+const writes = () => fixture.calls.filter((call) => call.init?.method === "PUT").map((call) => call.path);
+const body = (path: string) => JSON.parse(fixture.calls.find((call) => call.path === path && call.init?.method === "PUT")!.init!.body!);
+const emailField = () => dialog().querySelector<HTMLInputElement>("input[dir=auto]")!;
+
+const onClose = vi.fn();
+const onDone = vi.fn();
+async function show(props: Partial<Parameters<typeof InviteDialog>[0]> = {}) {
+  await act(async () => { root.render(createElement(InviteDialog, { open: true, onClose, onDone, ...props })); });
+  await settle();
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", async () => ({ ok: false, json: async () => null }));
+  fixture.calls = [];
+  fixture.people = {};
+  fixture.members = [];
+  fixture.grantError = null;
+  fixture.bots = [
+    { id: "ani", name: "Ani", section: "Sales", onlyPeopleAdded: true },
+    { id: "sup", name: "Support", section: "Finance" },
+    { id: "gone", name: "Gone", hidden: true },
+  ];
+  onClose.mockClear();
+  onDone.mockClear();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("the invite dialog", () => {
+  it("AC-17 offers the whole team, chosen departments and chosen bots, with the whole team picked", async () => {
+    await show();
+    expect(dialog().querySelector("h2")!.textContent).toBe("Invite someone");
+    expect(dialog().querySelector("legend")!.textContent).toBe("Access");
+    expect([...dialog().querySelectorAll<HTMLInputElement>('fieldset input[type="radio"]')].map((node) => node.closest("label")!.textContent!.trim())).toEqual(["Whole team", "Chosen departments", "Chosen bots"]);
+    expect(radio("Whole team").checked).toBe(true);
+    expect(summary()).toBe("They can use every bot shared with the team.");
+    expect(document.activeElement).toBe(emailField());
+  });
+
+  it("AC-18 shows a level for each ticked department, Can chat first", async () => {
+    await show();
+    await click(radio("Chosen departments"));
+    expect([...dialog().querySelectorAll("[data-invite-item]")].map((node) => node.getAttribute("data-invite-item"))).toEqual(["general", "Sales", "Finance"]);
+    expect(level("Sales")).toBeNull();
+    await tick("Sales");
+    const select = level("Sales")!;
+    expect(select.getAttribute("aria-label")).toBe("Access level for Sales");
+    expect(select.value).toBe("chat");
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Can chat", "Can view"]);
+    expect(level("Finance")).toBeNull();
+  });
+
+  it("AC-18 shows a level for each ticked bot, and leaves out a hidden bot", async () => {
+    await show();
+    await click(radio("Chosen bots"));
+    expect(item("gone")).toBeNull();
+    expect(item("ani").textContent).toContain("Sales");
+    await tick("ani");
+    expect(level("ani")!.value).toBe("chat");
+    expect(level("sup")).toBeNull();
+    expect(dialog().querySelector("input[aria-label='Find a bot']")).toBeNull();
+  });
+
+  it("AC-18 offers a filter once there are more than eight bots", async () => {
+    fixture.bots = Array.from({ length: 9 }, (_, index) => ({ id: `b${index}`, name: index === 4 ? "Zed" : `Bot ${index}` }));
+    await show();
+    await click(radio("Chosen bots"));
+    await type(dialog().querySelector<HTMLInputElement>("input[aria-label='Find a bot']")!, "zed");
+    expect(dialog().querySelectorAll("[data-invite-item]")).toHaveLength(1);
+  });
+
+  it("AC-19 turns the access off for an admin and says why", async () => {
+    await show();
+    await click(radio("Chosen departments"));
+    await click(button("Admin"));
+    expect(button("Admin").getAttribute("aria-pressed")).toBe("true");
+    expect(dialog().querySelector("fieldset")!.disabled).toBe(true);
+    expect(summary()).toBe("Admins see the whole team.");
+    await click(button("User"));
+    expect(dialog().querySelector("fieldset")!.disabled).toBe(false);
+    expect(radio("Chosen departments").checked).toBe(true);
+  });
+
+  it("says what the person will see, and asks for a pick when nothing is ticked", async () => {
+    await show();
+    await click(radio("Chosen departments"));
+    expect(summary()).toBe("Pick at least one department.");
+    await tick("Sales");
+    await tick("Finance");
+    await choose(level("Finance")!, "view");
+    expect(summary()).toBe("They can chat with Sales. They can only read Finance.");
+    await click(radio("Chosen bots"));
+    expect(summary()).toBe("Pick at least one bot.");
+    await tick("ani");
+    expect(summary()).toBe("They can chat with Ani.");
+  });
+
+  it("warns about folders and General, and says a bot shared with some people adds this person to them", async () => {
+    await show();
+    await click(radio("Chosen departments"));
+    await tick("Sales");
+    await tick("Finance");
+    await tick("general");
+    expect(dialog().textContent).toContain("Bots in Sales can still read files outside their folders.");
+    expect(dialog().textContent).not.toContain("Bots in Finance");
+    expect(dialog().textContent).toContain("Bots in General, Chief of Staff too");
+    await click(radio("Chosen bots"));
+    await tick("sup");
+    expect(dialog().textContent).not.toContain("Inviting adds this person");
+    await tick("ani");
+    expect(dialog().textContent).toContain("Inviting adds this person to the people who can use Ani.");
+  });
+
+  it("AC-01 saves the access before it adds the person to the sign-in list, then shows the link", async () => {
+    await show();
+    await type(emailField(), "Ada@Acme.test");
+    await click(radio("Chosen bots"));
+    await tick("ani");
+    await choose(level("ani")!, "view");
+    await click(button("Invite"));
+    expect(writes()).toEqual(["/api/department-access", "/api/config"]);
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "view" }] } });
+    expect(body("/api/config")).toEqual({ signIn: { admins: ["boss@acme.test"], members: ["ada@acme.test"] } });
+    expect(dialog().querySelector("h2")!.textContent).toBe("Invite ready");
+    expect(dialog().querySelector("code")!.textContent).toBe("https://team.acme.test/pair?email=ada%40acme.test");
+    expect(onDone).not.toHaveBeenCalled();
+    await click(button("Done"));
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("AC-01 sends chosen departments with their levels, in the order of the list", async () => {
+    await show();
+    await type(emailField(), "ada@acme.test");
+    await click(radio("Chosen departments"));
+    await tick("Finance");
+    await tick("general");
+    await choose(level("Finance")!, "view");
+    await click(button("Invite"));
+    expect(body("/api/department-access").access).toEqual({ departments: [{ name: "", level: "chat" }, { name: "Finance", level: "view" }], bots: [] });
+  });
+
+  it("adds an admin or a whole-team user without any access change", async () => {
+    await show();
+    await type(emailField(), "boss2@acme.test");
+    await click(button("Admin"));
+    await click(button("Invite"));
+    expect(writes()).toEqual(["/api/config"]);
+    expect(body("/api/config")).toEqual({ signIn: { admins: ["boss@acme.test", "boss2@acme.test"], members: [] } });
+  });
+
+  it("AC-01 removes an older access of a person who is now invited to the whole team, before the sign-in list", async () => {
+    fixture.people = { "ada@acme.test": { departments: [{ name: "Sales", level: "chat" }], bots: [] } };
+    await show();
+    await type(emailField(), "ada@acme.test");
+    await click(button("Invite"));
+    expect(writes()).toEqual(["/api/department-access", "/api/config"]);
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: null });
+  });
+
+  it("starts with nothing saved when the address or the pick is missing, and says what to fix", async () => {
+    await show();
+    await click(button("Invite"));
+    expect(dialog().querySelector("[role=alert]")!.textContent).toBe("Enter an email address, or @domain for everyone at that domain.");
+    await type(emailField(), "ada@acme.test");
+    await click(radio("Chosen bots"));
+    await click(button("Invite"));
+    expect(dialog().querySelector("[role=alert]")!.textContent).toBe("Pick at least one bot.");
+    expect(writes()).toEqual([]);
+  });
+
+  it("does not add the person when the access cannot be saved, and shows the server's sentence", async () => {
+    fixture.grantError = "That bot does not exist.";
+    await show();
+    await type(emailField(), "ada@acme.test");
+    await click(radio("Chosen bots"));
+    await tick("ani");
+    await click(button("Invite"));
+    expect(dialog().querySelector("[role=alert]")!.textContent).toBe("That bot does not exist.");
+    expect(writes()).toEqual(["/api/department-access"]);
+    expect(dialog().querySelector("h2")!.textContent).toBe("Invite someone");
+  });
+
+  it("AC-20 opens with the department of the menu ticked", async () => {
+    await show({ preset: { departments: ["Sales"] } });
+    expect(radio("Chosen departments").checked).toBe(true);
+    expect(item("Sales").querySelector<HTMLInputElement>("input")!.checked).toBe(true);
+    expect(item("Finance").querySelector<HTMLInputElement>("input")!.checked).toBe(false);
+    expect(summary()).toBe("They can chat with Sales.");
+  });
+
+  it("AC-21 opens with the bot of the menu ticked", async () => {
+    await show({ preset: { bots: ["sup"] } });
+    expect(radio("Chosen bots").checked).toBe(true);
+    expect(item("sup").querySelector<HTMLInputElement>("input")!.checked).toBe(true);
+    expect(summary()).toBe("They can chat with Support.");
+  });
+
+  it("Escape closes it", async () => {
+    await show();
+    await act(async () => { dialog().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("changing a person's access", () => {
+  const grant: AccessGrant = { departments: [], bots: [{ id: "ani", level: "view" }] };
+
+  it("opens on the chosen kind with its levels, and saves only the access", async () => {
+    await show({ edit: { entry: "ada@acme.test", grant } });
+    expect(dialog().querySelector("h2")!.textContent).toBe("Change access");
+    expect(dialog().textContent).toContain("ada@acme.test");
+    expect(dialog().querySelector("[data-invite-role]")).toBeNull();
+    expect(radio("Chosen bots").checked).toBe(true);
+    expect(level("ani")!.value).toBe("view");
+    await choose(level("ani")!, "chat");
+    await click(button("Save"));
+    expect(writes()).toEqual(["/api/department-access"]);
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "chat" }] } });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the whole team back", async () => {
+    await show({ edit: { entry: "ada@acme.test", grant } });
+    await click(radio("Whole team"));
+    await click(button("Save"));
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: null });
+  });
+
+  it("opens on departments for a person who has both, and says what saving keeps", async () => {
+    await show({ edit: { entry: "@acme.test", grant: { departments: [{ name: "Sales", level: "chat" }], bots: [{ id: "ani", level: "view" }] } } });
+    expect(dialog().textContent).toContain("everyone at acme.test");
+    expect(radio("Chosen departments").checked).toBe(true);
+    expect(dialog().textContent).toContain("This person has both departments and bots.");
+  });
+});
