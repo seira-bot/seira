@@ -13,6 +13,8 @@ import { execFile, execFileSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { writeFileAtomic } from "./atomic.ts";
+
 export const ENGINE_TAG_ENV = "SEIRA_ENGINE_TAG";
 /** In the data folder; this machine's own, never backed up or moved. */
 export const ENGINE_RUNS_DIR = "engine-runs";
@@ -155,7 +157,7 @@ export async function startEngineRecords(dataDir: string, log: (line: string) =>
   const self = { pid: process.pid, tag, start: cutoff === undefined ? start : cutoff, boot: bootId(), ns: pidNamespace() };
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileSync(join(dir, "server.json"), JSON.stringify({ pid: self.pid, start, boot: self.boot, ns: self.ns }), { mode: 0o600 });
+    writeFileAtomic(join(dir, "server.json"), JSON.stringify({ pid: self.pid, start, boot: self.boot, ns: self.ns }), { mode: 0o600, durable: false });
   } catch (error) {
     log(`engine records: could not write ${dir} (${error instanceof Error ? error.message : String(error)}); engines left by this server are not stopped at the next start`);
     return;
@@ -237,7 +239,7 @@ export function recordEngine(child: ChildProcess, start: string | null): void {
   const pid = child.pid;
   if (!run || !pid) return;
   const file = join(run.dir, `${pid}.json`);
-  try { writeFileSync(file, JSON.stringify({ pid, start, at: Date.now() }), { mode: 0o600 }); } catch { return; }
+  try { writeFileAtomic(file, JSON.stringify({ pid, start, at: Date.now() }), { mode: 0o600, durable: false }); } catch { return; }
   child.once("exit", () => {
     // Its group can outlive it (an MCP server it started); then the record stays for the next start's sweep.
     try { process.kill(-pid, 0); } catch (error) {
