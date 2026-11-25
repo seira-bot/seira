@@ -355,6 +355,17 @@ describe("the wall around a bot grant", () => {
     expect(host.wallBetween(sees("s"), sees("f"))).toBeNull();
   });
 
+  it("walls a bot that some people of a domain grant may see from a bot that not all of them see", () => {
+    const { host, access } = fixture();
+    access.set("@acme.test", { departments: [], bots: [{ id: "s", level: "chat" }, { id: "f", level: "chat" }] });
+    host.changed();
+    const onlyAda = { ...sees("s"), visibility: { people: ["ada@acme.test"] } };
+    expect(host.wallBetween(onlyAda, sees("g"))).toBe("grant");
+    expect(host.wallBetween(onlyAda, { ...sees("f"), visibility: { people: ["ada@acme.test"] } })).toBe("grant");
+    expect(host.wallBetween(onlyAda, sees("f"))).toBeNull();
+    expect(host.wallBetween({ ...sees("s"), visibility: { people: ["@acme.test"] } }, sees("f"))).toBeNull();
+  });
+
   it("follows a change at once", () => {
     const { host } = fixture();
     host.change(asked([], [{ id: "s", level: "chat" }]));

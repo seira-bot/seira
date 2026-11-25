@@ -83,13 +83,25 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     return walls.has(section.trim());
   }
 
-  /** Whether this person's grant shows the bot: their audience admits them and the grant names its department or the bot. */
-  function sees(entry: string, grant: ResolvedGrant, bot: Wallable): boolean {
-    return audienceWithin({ people: [entry] }, bot.visibility) && (grant.departments.has(sectionKey(bot.section)) || grant.bots.has(bot.id));
+  const names = (grant: ResolvedGrant, bot: Wallable): boolean => grant.departments.has(sectionKey(bot.section)) || grant.bots.has(bot.id);
+
+  /** Whether at least one person under the entry may see the bot: an `@domain` entry counts each address of it. */
+  function someoneSees(entry: string, grant: ResolvedGrant, bot: Wallable): boolean {
+    if (!names(grant, bot)) return false;
+    const stored = storedVisibility(bot.visibility);
+    if (stored === "everyone") return true;
+    if (stored === "admins") return false;
+    return stored.people.some((person) => person === entry || entryMatches(person, entry) || entryMatches(entry, person));
   }
 
-  /** Security invariant: a bot that someone with a bot grant sees reaches only bots that same person sees too, so its
-   * words and results never carry to a bot they cannot read. Grants with no bot keep the department wall alone. */
+  /** Whether every person under the entry sees the bot. */
+  function everyoneSees(entry: string, grant: ResolvedGrant, bot: Wallable): boolean {
+    return names(grant, bot) && audienceWithin({ people: [entry] }, bot.visibility);
+  }
+
+  /** Security invariant: a bot that anyone with a bot grant may see reaches only bots that every person under that grant
+   * sees too, so its words and results never carry to a bot one of them cannot read. Grants with no bot keep the
+   * department wall alone. */
   function grantWalled(from: Wallable, target: Wallable): boolean {
     if (deps.elsewhere()) return false;
     if (deps.access.unreadable) return true;
@@ -100,7 +112,7 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
         return true;
       }
     }
-    return resolvedGrants.some((one) => one.named && sees(one.entry, one.grant, from) && !sees(one.entry, one.grant, target));
+    return resolvedGrants.some((one) => one.named && someoneSees(one.entry, one.grant, from) && !everyoneSees(one.entry, one.grant, target));
   }
 
   /** Why a hand-off from one bot to another is walled, if it is (peer-roster.ts). Unreadable grants wall everything. */
