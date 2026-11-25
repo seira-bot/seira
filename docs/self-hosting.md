@@ -1263,8 +1263,8 @@ When you remove that bot from their access, or remove the person, Seira removes
 them from those people again.
 An `@company.com` entry cannot get such a bot, so invite each person by address.
 
-A person with chosen departments cannot see team files or restore a workspace
-backup. Bots in a department that is named in any user's list can reach only
+A person with chosen departments or bots cannot see team files, restore a
+workspace backup, or approve a change to a bot's setup. An admin approves it. Bots in a department that is named in any user's list can reach only
 bots in their own department. A bot in a chosen department can still read files
 outside its folders unless the department uses **Only chosen folders**. If the
 saved choices cannot be read, users see nothing until it is fixed. Teams in
