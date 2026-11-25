@@ -38,6 +38,12 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 </div>
 
 <p align="center">
+  <img src="docs/screenshots/readme-demo.gif" alt="A 15-second demo: the person gives the bot Scout a job, an approval card asks to run a command, the person clicks Allow once, and Scout reports that all tests passed" width="900">
+  <br>
+  <sub>The main loop: give a bot a job, approve the step, get the result. <a href="docs/screenshots/readme-demo.mp4">Sharper MP4</a></sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/docs-model-picker.png" alt="The Seira app: the Bots list on the left, a chat with the bot Pepper in the middle, and the model picker open on the right" width="900">
 </p>
 

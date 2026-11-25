@@ -72,6 +72,7 @@ Use only mapped, tested commands:
 - [Waiting for an occupied desktop](computer-wait.md)
 - [One memory limit for all bot work on Linux](bot-memory-fence.md)
 - [Chat UI, driven headlessly](chat-ui.md)
+- [The README demo, recorded by a script](readme-demo.md)
 - [Computer panel focus hand-off](computer-panel-focus.md)
 - [Taking control of a bot's computer](take-control.md)
 - [Saved steps: repeating a computer task without AI](saved-steps.md)

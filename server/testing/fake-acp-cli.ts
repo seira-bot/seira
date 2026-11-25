@@ -29,6 +29,8 @@
 //   FAKE_ACP_GROK_NATIVE_MCP  _x.ai/mcp/list reports these comma-separated native servers after the session's accepted ones
 //   FAKE_ACP_MCP_TRANSPORTS  remote MCP transports advertised in initialize, e.g. "http,sse"
 //   FAKE_ACP_PERMISSION_OPTIONS  JSON options override in permission mode
+//   FAKE_ACP_PERMISSION_REPLY  the text permission mode answers with after the decision (default "handled the permission decision");
+//     when set, the turn also skips its usual first lines, so only the approval card shows before the reply
 //   FAKE_ACP_DUMP  path for {argv, env}; with FAKE_ACP_MODES or FAKE_ACP_MODELS also <dump>.prompts.jsonl
 //     and <dump>.initialize.json for the initialize params
 //   FAKE_ACP_LAUNCH_COUNT_FILE  process counter incremented at startup
@@ -1501,7 +1503,8 @@ function handle(msg: any) {
         });
       } else if (mode === "interleave") playInterleaveTurn();
       else if (mode === "reasoning-only") playReasoningTurn();
-      else if (mode !== "empty-reply") playTurn();
+      // A permission turn with its own reply (FAKE_ACP_PERMISSION_REPLY) shows only the approval card, then that reply.
+      else if (mode !== "empty-reply" && !(mode === "permission" && process.env.FAKE_ACP_PERMISSION_REPLY)) playTurn();
       if (mode === "safe-agent-reads" && agentsMcp) {
         const entry = agentsMcp;
         void (async () => {
@@ -1530,7 +1533,7 @@ function handle(msg: any) {
       if (mode === "permission") {
         pendingPermissionId = 9001;
         onPermissionAnswered = () => {
-          out({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { text: "handled the permission decision" } } } });
+          out({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { text: process.env.FAKE_ACP_PERMISSION_REPLY ?? "handled the permission decision" } } } });
           complete();
         };
         out({
