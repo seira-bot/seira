@@ -185,9 +185,9 @@ describe("an SSH tunnel to a server that treats local requests as a service", ()
 
 describe("a new person on a full workspace", () => {
   it("is told the workspace is full, at the code request and at the code check (AC-05)", async () => {
-    const refusal = { error: "This installation is full. Ask your admin.", errorKey: "serverError.email.workspaceFull", code: "workspace_full" };
+    const refusal = { error: "This installation is full. Ask your admin to make room for you.", errorKey: "serverError.email.workspaceFull", code: "workspace_full" };
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify(refusal), { status: 403, headers: { "content-type": "application/json" } }));
-    expect(await startEmailSignIn("sam@example.test", fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin." });
-    expect(await verifyEmailSignIn({ email: "sam@example.test", code: "12345678", label: "Laptop" }, fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin." });
+    expect(await startEmailSignIn("sam@example.test", fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin to make room for you." });
+    expect(await verifyEmailSignIn({ email: "sam@example.test", code: "12345678", label: "Laptop" }, fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin to make room for you." });
   });
 });

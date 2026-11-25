@@ -11,7 +11,7 @@ import { readSessionState, type SessionState } from "../lib/session";
 import { canPairDevices } from "./ServerPairingCard";
 import { normalizeAccessEntry, withEntry, withoutEntry, type SignInLists } from "./SignInAccessCard";
 import { Card } from "./SettingsPrimitives";
-import { PeoplePlan } from "./PeoplePlan";
+import { PeoplePlanFull, PeoplePlanKey, PeoplePlanSummary } from "./PeoplePlan";
 import type { JoinedPerson, PeoplePlanStatus } from "../../shared/people-plan";
 import { Select } from "./Select";
 import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
@@ -352,7 +352,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
   const content = (
     <>
       {emailOffered === false && (!simple || tried) && <p className="mb-3 rounded-lg border border-warning/25 bg-warning/5 px-3 py-2 text-[13px] text-ink-secondary">{t(membership?.pairingCodes === false ? "people.portalSignIn" : "people.notHosted")}</p>}
-      {plan && <PeoplePlan plan={plan} onChange={setPlan} />}
+      <PeoplePlanSummary plan={plan} />
       <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void invite(); }}>
         <input
           value={draft}
@@ -371,6 +371,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
         </button>
         <button type="button" onClick={() => void load()} disabled={loading || busy} aria-label={t("people.refresh")} title={t("people.refresh")} className="rounded-md p-1.5 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><RefreshCw size={13} className={cn(loading && "animate-spin")} /></button>
       </form>
+      <PeoplePlanFull plan={plan} />
       {choices && (
         <div className="mt-2">
           <DepartmentAccessChoice value={role === "member" ? chosen : null} onChange={setChosen} departments={choices.departments} limited={choices.limited} disabled={busy} adminReason={role === "admin"} />
@@ -378,6 +379,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
       )}
       <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{t("people.inviteHint")}</p>
       {choices?.access.unreadable && <p role="alert" className="mt-2 text-[12px] text-danger">{t("people.access.unreadable")}</p>}
+      <PeoplePlanKey plan={plan} onChange={setPlan} />
       {link && <CopyLink link={link} />}
       {error && <p role="alert" className="mt-2 text-[12px] text-danger">{error}</p>}
       <div className="mt-4">
