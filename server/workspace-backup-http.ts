@@ -77,6 +77,8 @@ export function createWorkspaceBackupRoutes(options: {
   /** Starts this server again so startup installs a committed restore. Given only where a launcher always starts it
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
+  /** Signs in a new server to read one export (server/workspace-backup-move-out.ts). */
+  moveOut?: { issue(exportId: string, expiresAt: number): { token: string }; revoke(exportId: string): number };
 }) {
   // The report skips the same paths as the export does: it calls the export's own rule.
   const sizesOnce = singleFlightSizes((root) => partSizesAsync(root, [], omittedFromWorkspaceBackup));
@@ -87,6 +89,8 @@ export function createWorkspaceBackupRoutes(options: {
     res.end(JSON.stringify(body));
   };
   const owner = (auth: RequestAuth) => auth.kind === "session" ? auth.session.id : "local-owner";
+  /** A move-out sign-in reads the one export it was made for, whoever made the export. */
+  const granted = (auth: RequestAuth, id: unknown) => auth.kind === "session" && typeof id === "string" && auth.session.moveOut === id;
   const check = (req: IncomingMessage, auth: RequestAuth) => {
     if (!options.authorized(req, auth)) throw failure("Your session changed. Reopen Backups and try again.", 403);
   };
@@ -94,6 +98,7 @@ export function createWorkspaceBackupRoutes(options: {
     if (artifact.path) { try { unlinkSync(artifact.path); } catch {} }
     if (artifact.kind === "download" || artifact.kind === "staged") { try { removeWorkspaceBackupJob(options.dataDir, id); } catch {} }
     artifacts.delete(id);
+    options.moveOut?.revoke(id);
   }
   // Reclaim only old app-named jobs, never safety copies or pending/committed recovery state.
   function reclaimAbandoned() {
@@ -126,7 +131,7 @@ export function createWorkspaceBackupRoutes(options: {
   const get = (id: unknown, auth: RequestAuth, kind: Artifact["kind"]) => {
     expire();
     const artifact = typeof id === "string" ? artifacts.get(id) : undefined;
-    if (!artifact || artifact.owner !== owner(auth) || artifact.kind !== kind) {
+    if (!artifact || !(artifact.owner === owner(auth) || granted(auth, id)) || artifact.kind !== kind) {
       throw failure("This backup has expired or belongs to another session. Select the file again.", 404);
     }
     return artifact;
@@ -193,6 +198,25 @@ export function createWorkspaceBackupRoutes(options: {
         artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });
         json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, summary: result.summary });
         return true;
+      }
+      const grant = /^\/api\/workspace-backup\/move-out(?:\/([\w-]+))?$/.exec(path);
+      if (grant) {
+        if (!options.moveOut) throw failure("This server cannot hand a backup to a new server.", 404);
+        // A move-out sign-in never makes another; the session check also refuses it before this point.
+        if (auth.kind === "session" && auth.session.moveOut) throw failure("This sign-in only reads one backup file.", 403);
+        if (method === "POST" && !grant[1]) {
+          const body = z.object({ id: z.string().uuid() }).strict().parse(await options.readBody(req));
+          const artifact = get(body.id, auth, "download");
+          options.moveOut.revoke(body.id);
+          const { token } = options.moveOut.issue(body.id, artifact.expires);
+          json(res, 200, { token, expiresAt: artifact.expires, path: `${PREFIX}/download/${body.id}` });
+          return true;
+        }
+        if (method === "DELETE" && grant[1]) {
+          get(grant[1], auth, "download");
+          json(res, 200, { ended: options.moveOut.revoke(grant[1]) });
+          return true;
+        }
       }
       const download = /^\/api\/workspace-backup\/download\/([\w-]+)$/.exec(path);
       if (method === "GET" && download) {

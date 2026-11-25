@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkspaceBackupSummary } from "../shared/workspace-backup.ts";
 import { resolveRequestAuth } from "./request-auth.ts";
 import { SessionRegistry } from "./sessions.ts";
+import { moveOutRefusal } from "./workspace-backup-move-out.ts";
 import { WorkspaceBackupMaintenance } from "./workspace-backup-maintenance.ts";
 import { userError, userErrorThrown } from "./user-errors.ts";
 
@@ -52,7 +53,7 @@ beforeEach(async () => {
 
 /** Serves the backup routes; `extra` adds options such as a launcher restart. */
 async function listen(extra: Partial<Parameters<typeof createWorkspaceBackupRoutes>[0]> = {}) {
-  const authenticate = (req: IncomingMessage) => resolveRequestAuth(req, { sessions, cookieName: "fixture", streamPath: "/api/events", url: new URL(req.url!, url) });
+  const authenticate = (req: IncomingMessage) => resolveRequestAuth(req, { sessions, cookieName: "fixture", streamPath: "/api/events", url: new URL(req.url!, url), restricted: (session, method, path) => moveOutRefusal(session, method, path) });
   const routes = createWorkspaceBackupRoutes({
     dataDir, appVersion: "0.1.71", restored: {},
     readBody: async (req, limit = 1_000_000) => {
@@ -72,6 +73,7 @@ async function listen(extra: Partial<Parameters<typeof createWorkspaceBackupRout
     },
     status: () => ({ busy: maintenance.active, pendingRestore: maintenance.pendingRestore }),
     exclusive: (work, keepLocked) => maintenance.run(work, { idle: () => true, pause: () => {}, resume: () => {}, flush: async () => {} }, keepLocked),
+    moveOut: { issue: (exportId, expiresAt) => sessions.issueMoveOut({ exportId, expiresAt }), revoke: (exportId) => sessions.revokeMoveOuts(exportId) },
     ...extra,
   });
   server = createServer(async (req, res) => {
@@ -462,4 +464,82 @@ it("keeps an empty list for a new restore with nothing to do, and null for an ol
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111" } });
   expect((await status()).needsAction).toBeNull();
+});
+
+async function exportBackup(token = admin.token) {
+  return await post("/api/workspace-backup/export", { password: PASSWORD }, token).then((response) => response.json()) as { id: string };
+}
+async function grantFor(id: string, token = admin.token) {
+  const response = await post("/api/workspace-backup/move-out", { id }, token);
+  return { response, body: await response.json() as { token: string; expiresAt: number; path: string } };
+}
+const read = (path: string, token: string, headers: Record<string, string> = {}) => fetch(`${url}${path}`, { headers: { authorization: `Bearer ${token}`, ...headers } });
+
+it("gives a new server a sign-in that reads one export, in whole or by range", async () => {
+  const { id } = await exportBackup();
+  const { response, body } = await grantFor(id);
+  expect(response.status).toBe(200);
+  expect(body.path).toBe(`/api/workspace-backup/download/${id}`);
+  expect(body.expiresAt).toBeGreaterThan(Date.now());
+  expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 60 * 60_000);
+  const whole = await read(body.path, body.token);
+  expect(whole.status).toBe(200);
+  expect(await whole.text()).toBe("fixture encrypted bytes");
+  const part = await read(body.path, body.token, { range: "bytes=0-6" });
+  expect(part.status).toBe(206);
+  expect(await part.text()).toBe("fixture");
+});
+
+it("keeps that sign-in to the one download and nothing else", async () => {
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  for (const path of ["/api/workspace-backup/status", "/api/workspace-backup/sizes", "/api/auth/sessions"]) {
+    const refused = await read(path, body.token);
+    expect(refused.status, path).toBe(403);
+    await refused.arrayBuffer();
+  }
+  const other = await read(`/api/workspace-backup/download/${randomUUID()}`, body.token);
+  expect(other.status).toBe(403);
+  await other.arrayBuffer();
+  expect((await post("/api/workspace-backup/export", { password: PASSWORD }, body.token)).status).toBe(403);
+  expect((await post("/api/workspace-backup/move-out", { id }, body.token)).status).toBe(403);
+  expect((await fetch(`${url}${body.path}`, { method: "DELETE", headers: { authorization: `Bearer ${body.token}` } })).status).toBe(403);
+});
+
+it("makes a sign-in only for an export the caller made", async () => {
+  const { id } = await exportBackup();
+  const stranger = sessions.issue({ label: "Fixture other admin", scopes: ["admin", "client"] });
+  expect((await grantFor(id, stranger.token)).response.status).toBe(404);
+  expect((await grantFor(randomUUID())).response.status).toBe(404);
+  expect((await post("/api/workspace-backup/move-out", { id, extra: true })).status).toBe(400);
+  expect((await post("/api/workspace-backup/move-out", { id }, sessions.issue({ label: "Fixture reader", scopes: ["client"] }).token)).status).toBeGreaterThanOrEqual(403);
+});
+
+it("ends the sign-in on request, and makes a new one replace the old", async () => {
+  const { id } = await exportBackup();
+  const first = (await grantFor(id)).body;
+  const second = (await grantFor(id)).body;
+  expect((await read(first.path, first.token)).status).toBe(401);
+  expect((await read(second.path, second.token)).status).toBe(200);
+  const ended = await fetch(`${url}/api/workspace-backup/move-out/${id}`, { method: "DELETE", headers: { authorization: `Bearer ${admin.token}` } });
+  expect(ended.status).toBe(200);
+  expect(await ended.json()).toEqual({ ended: 1 });
+  expect((await read(second.path, second.token)).status).toBe(401);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("ends the sign-in when its export goes", async () => {
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  await exportBackup();
+  expect((await read(body.path, body.token)).status).toBe(401);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("refuses to make the sign-in where the server has no support for it", async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ moveOut: undefined });
+  const { id } = await exportBackup();
+  expect((await grantFor(id)).response.status).toBe(404);
 });

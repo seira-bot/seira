@@ -93,6 +93,8 @@ const sessionSchema = z.object({
   token: z.literal(true).optional(),
   /** A paired device's sign-in (see PairingCode.device): the paired-device limits apply to it whatever headers it sends. */
   pairedDevice: z.literal(true).optional(),
+  /** A sign-in to download one finished backup export and nothing else (server/workspace-backup-move-out.ts); the value is the export's id. */
+  moveOut: z.string().regex(/^[\w-]{36}$/).optional(),
 });
 
 const fileSchema = z.object({ version: z.literal(1), sessions: z.array(sessionSchema) });
@@ -592,6 +594,33 @@ export class SessionRegistry {
     this.persist();
     for (const listener of this.onIssued) listener(record);
     return { token, session: publicSession(record) };
+  }
+
+  /** A sign-in for reading one finished backup export, so a new server can pull it. It ends at `expiresAt`, never renews,
+   * and `restricted` lets it reach that export's download route only. */
+  issueMoveOut(input: { exportId: string; expiresAt: number }): { token: string; session: PublicSession } {
+    this.prune();
+    const now = this.now();
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
+    const record: SessionRecord = {
+      id: randomUUID(), tokenHash: sha256(token), label: "Moving this server out", scopes: ["admin"],
+      createdAt: now, lastSeenAt: now, expiresAt: Math.min(input.expiresAt, now + SESSION_TTL_MS), token: true, moveOut: input.exportId,
+    };
+    this.sessions.push(record);
+    this.lastSeenWrites.set(record.id, now);
+    this.persist();
+    for (const listener of this.onIssued) listener(record);
+    return { token, session: publicSession(record) };
+  }
+
+  /** Ends every sign-in that reads backup export `exportId`. */
+  revokeMoveOuts(exportId: string): number {
+    const ended = this.sessions.filter((s) => s.moveOut === exportId);
+    if (!ended.length) return 0;
+    this.sessions = this.sessions.filter((s) => s.moveOut !== exportId);
+    for (const s of ended) this.forget(s.id);
+    this.persist();
+    return ended.length;
   }
 
   /** Ends every sign-in that moves `bot` in: the bot arrived. */
