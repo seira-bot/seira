@@ -4478,7 +4478,9 @@ store.onChange((change) => {
     case "groups.order": broadcast({ kind: "groups.order", groupIds: store.groups.map((group) => group.id) }); break;
     case "bot.deleted":
       sentThreads.delete(change.botId);
-      try { departmentAccess.botDeleted(change.botId); commandAllowlist.clear(change.botId); mcpServersHost.botDeleted(change.botId); logins.forgetBot(change.botId); }
+      try { departmentAccess.botDeleted(change.botId); }
+      catch { console.error("[department-access] Could not remove deleted bot's department access."); }
+      try { commandAllowlist.clear(change.botId); mcpServersHost.botDeleted(change.botId); logins.forgetBot(change.botId); }
       catch { console.error("[command-allowlist] Could not remove deleted bot's saved rules."); }
       broadcast({ kind: "bot.deleted", botId: change.botId });
       break;
