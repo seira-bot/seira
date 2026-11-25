@@ -106,9 +106,10 @@ export type OrganizationAddResult =
   | { outcome: "taken" | "unsupported" | "failed" }
   | { outcome: "blocked"; blocked: import("./cloud-list.mjs").OrganizationBlock };
 /** What opening a checkout did: `opened` in the browser; `signing-in` (signed
- * out, the browser signs in first); `conflict` (the account changed, now read
+ * out, the browser signs in first); `already-subscribed` (the account has a Cloud);
+ * `sold-out` (no Cloud is free); `conflict` (the account changed, now read
  * again); `rate-limited`; or `failed` (nothing was opened). */
-export type CloudCheckoutOutcome = "opened" | "signing-in" | "conflict" | "rate-limited" | "failed";
+export type CloudCheckoutOutcome = "opened" | "signing-in" | "conflict" | "already-subscribed" | "sold-out" | "rate-limited" | "failed";
 export interface CloudCheckoutResult { outcome: CloudCheckoutOutcome; state: CloudAccountState }
 /** What moving up to a bigger plan would cost now, from Dodo's own preview (US cents): `price` a month before tax, `chargeNow`
  * today with its `tax` (0 for a free trial, whose first charge becomes `price` on `nextBillingAt`). The confirmation stays in main. */

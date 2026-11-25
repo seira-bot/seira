@@ -311,7 +311,7 @@ export type CloudAddView =
   | { kind: "unreachable" }
   | { kind: "no-plans" }
   | { kind: "error"; reason: "failed" | "rate-limited" }
-  | { kind: "offer"; offer: CloudOffer; signedOut: boolean; notice: "code-expired" | "signin-ended" | "preparing" | "terms" | null }
+  | { kind: "offer"; offer: CloudOffer; signedOut: boolean; notice: "code-expired" | "signin-ended" | "preparing" | "already-subscribed" | "sold-out" | "terms" | null }
   | { kind: "sign-in"; phase: CloudSignInPhase }
   | { kind: "signing-in"; code: string | null; checkout: boolean }
   | { kind: "waiting"; plan: string; browser: "checkout" | "signin"; late: boolean; link: boolean; email: string | null }
@@ -338,7 +338,7 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
     sells?: boolean;
     /** The offer could not be read; with a null offer, Seira Cloud answered but lists no plan. */
     unreachable?: boolean;
-    error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
+    error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean | "already-subscribed" | "sold-out"; signIn?: CloudSignInPhase | null;
     /** Signed in here to an account whose own terms differ from those shown: Choose says so. */
     terms?: boolean;
     /** Signed in from this sheet just now: a ready Cloud is theirs to open, not a second one to ask for. */
@@ -379,7 +379,8 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
       }
       const notice = account?.status === "signed-out" && account.message === "enrollment-expired" ? "code-expired"
         : account?.status === "signed-out" && (account.message === "enrollment-ended" || account.message === "signin-failed") ? "signin-ended"
-          : conflict ? "preparing" : terms ? "terms" : null;
+          
+          : conflict === "already-subscribed" || conflict === "sold-out" ? conflict : conflict ? "preparing" : terms ? "terms" : null;
       return { kind: "offer", offer, signedOut: view.kind === "signed-out", notice };
     }
     default: return { kind: "settings" };

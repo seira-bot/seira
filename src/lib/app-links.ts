@@ -25,6 +25,7 @@ export function withSource(url: string, source: string): string {
   target.searchParams.set("src", source);
   return target.href;
 }
+export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=bot.seira.companion";
 export const LICENSE_URL = `${APP_REPOSITORY}/blob/main/LICENSE`;
 
 export function appVersion(): string {

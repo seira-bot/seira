@@ -441,7 +441,10 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       destination = checkoutDestination(result?.url, { fixture, staging, own });
       if (result?.cloudContractVersion !== 1 || !destination) return { outcome: "failed", state: state() };
     } catch (error) {
-      if (!error?.opaque && error?.status === 409) return { outcome: "conflict", state: await refresh() };
+      if (!error?.opaque && error?.status === 409) {
+        const outcome = error.code === "already_subscribed" ? "already-subscribed" : error.code === "out_of_stock" ? "sold-out" : "conflict";
+        return { outcome, state: await refresh() };
+      }
       if (!error?.opaque && error?.status === 429) return { outcome: "rate-limited", state: state() };
       if (signInEnded(error)) return { outcome: "failed", state: await refresh() };
       if (![404, 405, 501].includes(error?.status)) return { outcome: "failed", state: state() };

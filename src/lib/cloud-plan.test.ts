@@ -471,6 +471,8 @@ describe("why a step of the dialog ended without going on", () => {
     expect(cloudAddView({ status: "signed-out" }, OFFER, at)).toMatchObject({ kind: "offer", notice: null });
     const free: CloudAccountState = { status: "connected", account: { id: "a", email: "person@example.test" }, entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 1 } };
     expect(cloudAddView(free, OFFER, { ...at, conflict: true })).toMatchObject({ kind: "offer", notice: "preparing" });
+    expect(cloudAddView(free, OFFER, { ...at, conflict: "already-subscribed" })).toMatchObject({ kind: "offer", notice: "already-subscribed" });
+    expect(cloudAddView(free, OFFER, { ...at, conflict: "sold-out" })).toMatchObject({ kind: "offer", notice: "sold-out" });
   });
 });
 

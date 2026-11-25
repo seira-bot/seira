@@ -58,6 +58,11 @@ export interface CloudAddUi {
   counting: number | null; copied: boolean; payFailed: boolean; interest: "sent" | "failed" | null;
 }
 
+const OFFER_NOTICE = {
+  "code-expired": "cloudAdd.codeExpired", "signin-ended": "cloudAdd.signInEnded", terms: "cloudBuy.termsChanged", preparing: "cloudAdd.preparing",
+  "already-subscribed": "cloudAdd.alreadySubscribed", "sold-out": "cloudAdd.soldOut",
+} as const;
+
 export function CloudAddPanel({ view, ui, actions }: { view: CloudAddView; ui: CloudAddUi; actions: CloudAddActions }) {
   switch (view.kind) {
     case "checking": return <StatusScreen kind="checking" line={null} onClose={actions.close} />;
@@ -66,8 +71,7 @@ export function CloudAddPanel({ view, ui, actions }: { view: CloudAddView; ui: C
     case "error": return <StatusScreen kind={`error-${view.reason}`} line={t(view.reason === "rate-limited" ? "cloudAdd.rateLimited" : "cloudAdd.failed")}
       onRetry={actions.retry} onClose={actions.close} />;
     case "offer": return <ChooseScreen offer={view.offer} current={ui.current} now={ui.now} busy={ui.busy} signedOut={view.signedOut}
-      notice={view.notice ? t(view.notice === "code-expired" ? "cloudAdd.codeExpired" : view.notice === "signin-ended" ? "cloudAdd.signInEnded"
-        : view.notice === "terms" ? "cloudBuy.termsChanged" : "cloudAdd.preparing") : null}
+      notice={view.notice ? t(OFFER_NOTICE[view.notice]) : null}
       onStart={actions.start} onSignIn={actions.signIn} />;
     case "sign-in": return <SignInScreen phase={view.phase} email={ui.email} code={ui.code} profileEmail={ui.profileEmail} busy={ui.busy} now={ui.now}
       onBack={actions.back} onEmail={actions.email} onSend={actions.sendCode} onChangeEmail={actions.changeEmail} onCode={actions.code}
@@ -120,7 +124,7 @@ export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: (
   const [offerFailed, setOfferFailed] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
   const [error, setError] = useState<"failed" | "rate-limited" | null>(null);
-  const [conflict, setConflict] = useState(false);
+  const [conflict, setConflict] = useState<boolean | "already-subscribed" | "sold-out">(false);
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openFailed, setOpenFailed] = useState(false);
@@ -288,7 +292,7 @@ export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: (
     }
     else if (outcome === "rate-limited") setError("rate-limited");
     else if (outcome === "failed") setError("failed");
-    else setConflict(true);
+    else setConflict(outcome === "already-subscribed" || outcome === "sold-out" ? outcome : true);
   };
   const enterSignIn = (intent: boolean) => {
     setSignIn({ step: "email", intent, problem: null });
