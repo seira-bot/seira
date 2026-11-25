@@ -50,7 +50,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {};
 }
 
-/** `accounts: "seira-cloud"`: /healthz says so, and the stub also plays Seira Cloud's email-code sign-in (same origin). */
+/** `accounts: "seira-cloud"`: /healthz says so, and the stub also plays Seira Cloud's email-code sign-in (same origin). Better Auth's routes then answer 403, as accounts.seira.bot does. */
 export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string; accounts?: "seira-cloud" } = {}): Promise<ControlPlaneStub> {
   const otp = options.otp ?? "24681357";
   const endpointUrl = options.endpointUrl ?? "https://c-00000000000000000000000000000000.seira.run";
@@ -62,7 +62,7 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
   const calls: string[] = [];
   const cloudBodies: ControlPlaneStub["cloudBodies"] = [];
   const cloudAccountId = "acct_cloud_stub";
-  const cloudAttempt = randomBytes(32).toString("base64url");
+  const cloudAttempts = new Map<string, string>();
   const pushes: ControlPlaneStub["pushes"] = [];
   const pushAnswers: ControlPlaneStub["pushAnswers"] = [];
   const endpointAnswers: ControlPlaneStub["endpointAnswers"] = [];
@@ -105,14 +105,20 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
       if (method === "DELETE" && path === "/api/cloud/desktop/session") return send(204);
       const body = await readJson(req);
       cloudBodies.push({ path, body });
-      if (path === "/api/cloud/app/sign-in/start") return send(200, { cloudContractVersion: 1, attempt: cloudAttempt, expiresIn: 600, resendAfter: 30, signupOpen: true });
+      if (path === "/api/cloud/app/sign-in/start") {
+        const attempt = randomBytes(32).toString("base64url");
+        cloudAttempts.set(attempt, typeof body.email === "string" ? body.email : "milind@example.test");
+        return send(200, { cloudContractVersion: 1, attempt, expiresIn: 600, resendAfter: 30, signupOpen: true });
+      }
       if (path === "/api/cloud/app/sign-in/verify") {
-        if (body.attempt !== cloudAttempt || body.code !== otp) return send(400, { error: "invalid_code" });
+        const email = typeof body.attempt === "string" ? cloudAttempts.get(body.attempt) : undefined;
+        if (email === undefined || body.code !== otp) return send(400, { error: "invalid_code" });
         const token = `omc_${randomBytes(32).toString("base64url")}`;
         accountTokens.add(token);
-        return send(200, { accessToken: token, expiresAt: Date.now() + NINETY_DAYS, device: { id: "device_stub" }, account: { id: cloudAccountId, email: "milind@example.test" } });
+        return send(200, { accessToken: token, expiresAt: Date.now() + NINETY_DAYS, device: { id: "device_stub" }, account: { id: cloudAccountId, email } });
       }
     }
+    if (options.accounts === "seira-cloud" && path.startsWith("/api/auth/")) return send(403, { error: "origin_not_allowed" });
     if (method === "POST" && path === "/api/auth/email-otp/send-verification-otp") {
       await readJson(req);
       return send(200, { success: true });

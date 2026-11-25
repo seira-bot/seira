@@ -515,7 +515,7 @@ import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
 import { dataHome } from "./data-dir.ts";
 import { acquireDataDirLeaseOrExit, releaseOnceAtExit } from "./data-dir-lease.ts"; import { markEngineRunClean, startEngineRecords } from "./engine-records.ts";
 import { createWorkspaceAccess, describeEdition, editionForSettings, editionStatus, entitled, hostedWorkspaceConfiguration, hostedWorkspaceConfigured, licenseWarning, sharedWorkspaceFullAccessConfigured, loadEnterpriseLayer, workspaceMembership, type WorkspaceAccess } from "./enterprise.ts";
-import { environmentDescriptor, loadEnvironmentId, OWNER_LENDING, serverVersion } from "./environment.ts"; import { dataFormatAtStart } from "./data-format.ts"; import { doctorAtStart } from "./doctor/start.ts";
+import { environmentDescriptor, loadEnvironmentId, OWNER_LENDING, reportableServerVersion, serverVersion } from "./environment.ts"; import { dataFormatAtStart } from "./data-format.ts"; import { doctorAtStart } from "./doctor/start.ts";
 import { WorkspaceBackupMaintenance } from "./workspace-backup-maintenance.ts";
 import { createWorkspaceBackupRoutes, isWorkspaceBackupSessionControl } from "./workspace-backup-http.ts";
 import { applyPendingWorkspaceRestore, readLastWorkspaceRestore, type WorkspaceRestoreResult } from "./workspace-backup.ts";
@@ -540,7 +540,7 @@ import {
 } from "./request-auth.ts";
 import { cookieMaxAgeSeconds, formatPairingCode, pairingRequest, SessionRegistry, type SessionRecord } from "./sessions.ts"; import type { PairingErrorCode } from "../shared/pairing-code.ts"; import { fromPairedDevice } from "./routes/paired-device.ts";
 import { ThreadStarters } from "./thread-starters.ts"; import { createConversationShares } from "./host/conversation-shares.ts"; import { createTeamMemorySaves } from "./host/team-memory-saves.ts"; import { createConversationSharing } from "./routes/conversation-share.ts";
-import { startPhoneRelay } from "./phone-relay.ts";
+import { startPhoneRelay } from "./phone-relay.ts"; import { signedInToSeira } from "./tunnel.ts";
 import {
   appendAdminAction,
   BOT_AUDIT_FIELDS,
@@ -789,6 +789,8 @@ const decider = createDecider({ config: () => cfg, dataDir: DATA_DIR }); const e
 const customDomainVerifier = createCustomDomainVerifier({ environmentId: ENVIRONMENT_ID });
 const emailSignIn = createEmailSignIn({
   allow: signInAllowList,
+  seiraAccount: () => signedInToSeira(DATA_DIR),
+  version: reportableServerVersion(),
 });
 function savedCustomDomain(): string | null {
   if (DESKTOP_MANAGED || !cfg.customDomain) return null;

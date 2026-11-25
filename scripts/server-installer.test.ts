@@ -828,6 +828,13 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     ]);
   });
 
+  it("offers an emailed sign-in without a mail server, since Seira's account service sends the code", () => {
+    const result = tunnel(["--tunnel", "--email", "owner@example.com"], { signedIn: true });
+    expect(result.status, result.all).toBe(0);
+    expect(result.stdout).toContain("Or open https://c-0123456789abcdef0123456789abcdef.seira.run/pair and sign in with an emailed code as: owner@example.com");
+    expect(result.stdout).not.toContain("needs a mail server:");
+  });
+
   it("does not print the pairing link when output is not a terminal and --events is not given", () => {
     const result = tunnel(["--tunnel"], { signedIn: true });
     expect(result.status, result.all).toBe(0);
