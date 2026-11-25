@@ -556,7 +556,7 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/team\/people$/ },
   // the workspace's banner picture: everyone signed in here sees it; changing it (PUT, DELETE) is an admin's
   { methods: ["GET"], path: /^\/api\/workspace\/banner$/ },
-  // the project's announcement cards, the same public file for everyone (routes/announcements.ts)
+  // the announcement cards, the same public feeds for everyone (routes/announcements.ts)
   { methods: ["GET"], path: /^\/api\/announcements$/ },
   // a teammate's picture: the handler serves it to the team's own members only
   { methods: ["GET"], path: /^\/api\/team\/people\/p_[\w-]{22}\/picture$/ },

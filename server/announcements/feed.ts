@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import bundledFeedJson from "../../announcements/announcements.json" with { type: "json" };
-import { ANNOUNCEMENTS_URL, liveCards, parseAnnouncementFeed, type AnnouncementCard, type AnnouncementFeed } from "../../shared/announcements.ts";
+import { ANNOUNCEMENTS_URL, CLOUD_ANNOUNCEMENTS_URL, liveCards, MAX_CARDS, parseAnnouncementFeed, type AnnouncementCard, type AnnouncementFeed } from "../../shared/announcements.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { DATA_DIR } from "../config.ts";
 
@@ -27,9 +27,11 @@ if (!parsedBundle.ok) throw new Error(`The bundled announcements are invalid (${
 export const BUNDLED_ANNOUNCEMENTS: AnnouncementFeed = parsedBundle.feed;
 
 /** Under providers/, as the manifest's cache is, so backups and Move to Cloud leave it out. */
-export function announcementsCachePath(dataDir: string): string {
-  return join(dataDir, "providers", "announcements", "announcements.json");
+export function announcementsCachePath(dataDir: string, file = "announcements.json"): string {
+  return join(dataDir, "providers", "announcements", file);
 }
+
+export const EMPTY_ANNOUNCEMENTS: AnnouncementFeed = { version: 1, updatedAt: "1970-01-01T00:00:00Z", cards: [] };
 
 export interface AnnouncementStoreOptions {
   dataDir: string;
@@ -37,6 +39,12 @@ export interface AnnouncementStoreOptions {
   fetch?: typeof fetch;
   now?: () => number;
   bundled?: AnnouncementFeed;
+  /** Where to download from; the project file on GitHub by default. */
+  url?: string;
+  /** The cache's file name inside providers/announcements/. */
+  cacheFile?: string;
+  /** Tags this store's log lines. */
+  logName?: string;
   timeoutMs?: number;
   maxBytes?: number;
   log?: (message: string) => void;
@@ -56,7 +64,7 @@ export class AnnouncementStore {
   constructor(options: AnnouncementStoreOptions) {
     this.options = options;
     this.feed = options.bundled ?? BUNDLED_ANNOUNCEMENTS;
-    this.cachePath = announcementsCachePath(options.dataDir);
+    this.cachePath = announcementsCachePath(options.dataDir, options.cacheFile);
   }
 
   private get now(): number {
@@ -64,7 +72,7 @@ export class AnnouncementStore {
   }
 
   private log(text: string): void {
-    (this.options.log ?? ((line: string) => console.warn(line)))(`[announcements] ${text}`);
+    (this.options.log ?? ((line: string) => console.warn(line)))(`[${this.options.logName ?? "announcements"}] ${text}`);
   }
 
   get disabled(): boolean {
@@ -166,12 +174,12 @@ export class AnnouncementStore {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? ANNOUNCEMENTS_FETCH_TIMEOUT_MS);
     try {
-      const response = await (this.options.fetch ?? fetch)(ANNOUNCEMENTS_URL, {
+      const response = await (this.options.fetch ?? fetch)(this.options.url ?? ANNOUNCEMENTS_URL, {
         headers: { accept: "application/json", "user-agent": "Seira" },
         // Nothing of the person's goes with it.
         credentials: "omit",
         referrerPolicy: "no-referrer",
-        // raw.githubusercontent.com answers directly; anywhere else is not the file we meant to read.
+        // Both hosts answer directly; anywhere else is not the file we meant to read.
         redirect: "error",
         signal: controller.signal,
       });
@@ -224,6 +232,41 @@ function message(error: unknown): string {
 
 let store: AnnouncementStore | undefined;
 
+let cloudStore: AnnouncementStore | undefined;
+
 export function announcementStore(): AnnouncementStore {
   return store ??= new AnnouncementStore({ dataDir: DATA_DIR });
+}
+
+export function cloudAnnouncementStore(): AnnouncementStore {
+  return cloudStore ??= new AnnouncementStore({
+    dataDir: DATA_DIR,
+    url: CLOUD_ANNOUNCEMENTS_URL,
+    cacheFile: "cloud.json",
+    logName: "announcements:cloud",
+    bundled: EMPTY_ANNOUNCEMENTS,
+  });
+}
+
+/** Cloud cards first, then the project file's; a repeated id keeps its first card; at most MAX_CARDS. */
+export function mergeAnnouncementCards(cloud: AnnouncementCard[], project: AnnouncementCard[]): AnnouncementCard[] {
+  const seen = new Set<string>();
+  const merged: AnnouncementCard[] = [];
+  for (const entry of [...cloud, ...project]) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    merged.push(entry);
+  }
+  return merged.slice(0, MAX_CARDS);
+}
+
+export async function announcementCardsForPage(): Promise<AnnouncementCard[]> {
+  const [cloud, project] = await Promise.all([cloudAnnouncementStore().cardsForPage(), announcementStore().cardsForPage()]);
+  return mergeAnnouncementCards(cloud, project);
+}
+
+/** The later of the two current copies' dates. */
+export function announcementsUpdatedAt(): string {
+  const [cloud, project] = [cloudAnnouncementStore().current().updatedAt, announcementStore().current().updatedAt];
+  return Date.parse(cloud) > Date.parse(project) ? cloud : project;
 }
