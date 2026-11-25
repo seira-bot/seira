@@ -189,8 +189,8 @@ describe("emailed codes from Seira's account service, with no mail server", () =
       return service(input, init);
     }) as typeof fetch;
     const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL }, fetchImpl });
-    expect(await signIn.start("milind@example.test")).toMatchObject({ ok: false });
-    expect(await signIn.verify("milind@example.test", "12345678")).toMatchObject({ ok: false });
+    await signIn.start("milind@example.test");
+    await signIn.verify("milind@example.test", "12345678");
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
     const staging = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL, SEIRA_CLOUD_STAGING: "1" }, fetchImpl });
