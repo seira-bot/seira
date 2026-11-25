@@ -42,6 +42,14 @@ describe("Premium key check", () => {
     expect(checkPlanKey(valid, [other.publicKey])).toEqual({ ok: false, reason: "signature" });
   });
 
+  it("AC-10 refuses the Seira Cloud self-test sample, which the production key signs for another product", () => {
+    // Published by Seira Cloud for clients to check their verifier; it expired in 1970 and unlocks nothing.
+    const sample = "seira-team.eyJ2IjoxLCJwcm9kdWN0Ijoic2VpcmEtY2xvdWQtc2VsZnRlc3QiLCJjdXN0b21lciI6InNlbGZ0ZXN0IiwiaXNzdWVkQXQiOiIxOTcwLTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJleHBpcmVzQXQiOiIxOTcwLTAxLTAxVDAwOjAwOjAwLjAwMFoifQ.TnvwLJcL7IdTlh4dA2pZ8rh2pboZgZh6AvpUA6cw947BgWLe8l9UjRaqPfbUmXoyAqdhhOue2GpwwfBqWTELCw";
+    expect(checkPlanKey(sample)).toEqual({ ok: false, reason: "product" });
+    expect(checkPlanKey(sample, [planKeyPair().publicKey])).toEqual({ ok: false, reason: "signature" });
+    expect(savePlanKey({ dataDir: folder(), env: {} }, sample, NOW)).toEqual({ ok: false, reason: "product" });
+  });
+
   it("AC-12 reads active, ending soon, grace and ended states from a fixed clock", () => {
     const key = pair.mint({ issuedAt: NOW - 100 * DAY, expiresAt: NOW });
     const dir = folder();
