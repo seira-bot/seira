@@ -56,5 +56,9 @@ export function inviteAddsToBot(bot: { onlyPeopleAdded?: boolean; visibility?: B
   if (!audience || audience === "everyone") return false;
   if (audience === "admins") return true;
   const wanted = entry.trim().toLowerCase();
-  return !audience.people.some((person) => person.trim().toLowerCase() === wanted);
+  // A person under a domain that is already one of them needs nothing more, as on the server.
+  return !audience.people.some((person) => {
+    const one = person.trim().toLowerCase();
+    return one === wanted || (one.startsWith("@") && !wanted.startsWith("@") && wanted.endsWith(one));
+  });
 }

@@ -56,4 +56,11 @@ describe("which bots an invite adds the person to", () => {
     expect(inviteAddsToBot({ visibility: { people: ["ada@acme.test"] } }, " Ada@Acme.test ")).toBe(false);
     expect(inviteAddsToBot({ visibility: { people: ["Ada@Acme.test "] } }, "ada@acme.test")).toBe(false);
   });
+
+  it("needs no note for an address under a domain that is already one of the people, but does for another domain", () => {
+    expect(inviteAddsToBot({ visibility: { people: ["@acme.test"] } }, "ada@acme.test")).toBe(false);
+    expect(inviteAddsToBot({ visibility: { people: ["@acme.test"] } }, "@acme.test")).toBe(false);
+    expect(inviteAddsToBot({ visibility: { people: ["@acme.test"] } }, "ada@other.test")).toBe(true);
+    expect(inviteAddsToBot({ visibility: { people: ["@acme.test"] } }, "@sub.acme.test")).toBe(true);
+  });
 });
