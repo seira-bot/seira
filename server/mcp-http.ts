@@ -211,6 +211,7 @@ const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]
 const CROSS_ORIGIN_HEADERS: readonly string[] = ["accept", "content-type"];
 export const MAX_MCP_REDIRECTS = 5;
 export const ONE_BOT_REDIRECT_REFUSAL = "The server redirects to an app that serves one bot only.";
+export const ONE_BOT_ENDPOINT_REFUSAL = "The server names an app that serves one bot only as its endpoint.";
 
 export class RemoteMcpClient {
   private readonly target: RemoteMcpSpec;
@@ -430,12 +431,22 @@ export class RemoteMcpClient {
           await readSse(response, this.sseAbort.signal, (event) => {
             if (event.event === "endpoint") {
               if (!settled) {
-                settled = true;
+                let endpoint: string | null = null;
                 try {
-                  resolveEndpoint(new URL(event.data, this.target.url).toString());
-                  signal.removeEventListener("abort", abortOpening);
+                  endpoint = new URL(event.data, this.target.url).toString();
                 } catch {
+                  settled = true;
                   rejectEndpoint(new McpHttpError("protocol", "invalid endpoint event"));
+                }
+                if (endpoint !== null) {
+                  // The endpoint is a destination like each redirect hop: a one-bot address is refused, unless this
+                  // server is that address. The throw ends the stream and fails the opening.
+                  if (!isOneBotMcpServer(this.target) && isOneBotMcpServer({ type: "http", url: endpoint })) {
+                    throw new McpHttpError("protocol", ONE_BOT_ENDPOINT_REFUSAL);
+                  }
+                  settled = true;
+                  resolveEndpoint(endpoint);
+                  signal.removeEventListener("abort", abortOpening);
                 }
               }
               return undefined;
