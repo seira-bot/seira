@@ -3,6 +3,8 @@
 // A listed address holds a place once Settings or `seira access add` adds it, or once it signs in. An address that only
 // the environment, a hand edit of config.json or `seira fleet users` lists is checked when it first signs in. An address
 // that the lists no longer let in loses its place, so a list that names it again cannot bring it back unchecked.
+// A person that an admin removes in Settings → People stays out: an `@domain` entry no longer lets that address in, until an
+// admin lists the address itself (Settings or `seira access add`).
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -18,6 +20,9 @@ import { signInFromEnv } from "./sign-in-env.ts";
 /** Everyone who holds a place: each address that signed in with an email here or that Settings or the CLI added, and,
  * on a data folder from an earlier version, everyone who could sign in when this file was first written. */
 export const PEOPLE_FILE = "sign-in-people.json";
+
+/** Addresses that an admin removed in Settings → People. An `@domain` entry does not let them in again. */
+export const REMOVED_FILE = "sign-in-removed.json";
 
 /** Every earlier version wrote its messages here on its first start, and this version opens it only after the limit. */
 const EARLIER_RUN_FILE = "messages.db";
@@ -71,6 +76,21 @@ function writeKept(dataDir: string, people: Iterable<string>): void {
   writeFileAtomic(join(dataDir, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
 }
 
+function readRemoved(dataDir: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(dataDir, REMOVED_FILE), "utf8"));
+    const people: unknown = Reflect.get(Object(parsed), "people");
+    return Array.isArray(people) ? people.filter((entry): entry is string => typeof entry === "string").map(address) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRemoved(dataDir: string, people: Iterable<string>): void {
+  ensurePrivateDir(dataDir);
+  writeFileAtomic(join(dataDir, REMOVED_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
+}
+
 /** Live sessions as sessions.json holds them, for the CLI, which runs beside the server or without it. */
 export function sessionsFromFile(dataDir: string, now: number = Date.now()): PeopleSession[] {
   try {
@@ -107,13 +127,16 @@ export interface PeopleLimit {
   /** True when the free plan has no place for this person: a listed address with no place counts as new. Null-safe for an
    * address the lists do not let in. */
   refuses(email: string): boolean;
+  /** True when an admin removed this address and no list names it itself: an `@domain` entry does not let it in. */
+  wasRemoved(email: string): boolean;
   /** Lets the person in and keeps their place, or refuses them; check and record happen in one step. */
   admit(email: string): "full" | null;
   /** Before Settings or the CLI saves the lists: a refusal when the change adds people past the free limit, else the step
    * to run once they are saved (it gives each added address a place, ends the sessions of each address taken off and
    * frees their places). */
   listsChanging(asked: ListsChange | undefined): { refusal: { limit: number } } | { saved(): void };
-  /** Takes off someone who joined through an `@domain` entry: their sessions end and their place is free. */
+  /** Takes off someone who joined through an `@domain` entry: their sessions end, their place is free, and the `@domain`
+   * entry does not let them in again until an admin lists their address. */
   removeJoined(email: string): "removed" | "listed" | "unknown";
   /** Saves a Premium key from Settings; never over a key the environment sets. */
   saveKey(raw: string): { ok: true } | { ok: false; reason: PlanKeyRefusal | "environment" };
@@ -169,6 +192,22 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   }
   prune(options.lists());
 
+  // Only an address that no list names itself stays removed: listing it is how an admin lets it back in.
+  const wasRemoved = (email: string) => {
+    const person = address(email);
+    return options.applies && !listed(options.lists()).has(person) && readRemoved(options.dataDir).includes(person);
+  };
+  const bar = (change: (people: string[]) => string[]) => {
+    const was = readRemoved(options.dataDir);
+    const next = [...new Set(change(was))];
+    if (next.length === was.length && next.every((email) => was.includes(email))) return;
+    try {
+      writeRemoved(options.dataDir, next);
+    } catch (error) {
+      console.warn(`could not save who an admin removed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const refuses = (email: string) => {
     const person = address(email);
     if (!limited() || !allowedScopes(person, options.lists())) return false;
@@ -178,6 +217,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
 
   return {
     refuses,
+    wasRemoved,
     admit(email) {
       if (refuses(email)) return "full";
       const person = address(email);
@@ -210,6 +250,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
           if (removed.size) endSessions(removed);
           const lists = options.lists();
           keep((was) => [...was, ...added].filter((email) => !removed.has(email) && (options.partialLists || allowedScopes(email, lists))));
+          if (added.length) bar((was) => was.filter((email) => !added.includes(email)));
         },
       };
     },
@@ -219,6 +260,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       const people = kept();
       const hadSession = options.sessions().some((session) => session.email && !session.token && address(session.email) === person);
       if (!people.includes(person) && !hadSession) return "unknown";
+      bar((was) => [...was, person]);
       endSessions(new Set([person]));
       keep((was) => was.filter((entry) => entry !== person));
       return "removed";

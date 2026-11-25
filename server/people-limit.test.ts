@@ -219,6 +219,57 @@ describe("the free people limit", () => {
     expect(kept(dataDir)).toEqual(named(4));
   });
 
+  it("keeps a removed joined person out of an @domain entry, on the free plan and with a key", () => {
+    for (const enterprise of [false, true]) {
+      const { people } = setup(domain(), { enterprise });
+      for (const email of named(3)) people.admit(email);
+      expect(people.wasRemoved("p3@corp.test")).toBe(false);
+      expect(people.removeJoined("p3@corp.test")).toBe("removed");
+      expect(people.wasRemoved("p3@corp.test")).toBe(true);
+      expect(people.wasRemoved("  P3@Corp.test ")).toBe(true);
+      expect(people.wasRemoved("p2@corp.test")).toBe(false);
+      expect(people.status().joined.map((person) => person.email)).toEqual(["p1@corp.test", "p2@corp.test"]);
+    }
+  });
+
+  it("remembers a removed person after a restart of the server", () => {
+    const { people, state, dataDir } = setup(domain());
+    people.admit("p1@corp.test");
+    people.removeJoined("p1@corp.test");
+    const again = createPeopleLimit({ dataDir, env: {}, publicKeys: [pair.publicKey], lists: () => state.lists, sessions: () => [], revoke() {}, applies: true, enterpriseUnlimited: () => false, now: () => NOW });
+    expect(again.wasRemoved("p1@corp.test")).toBe(true);
+  });
+
+  it("lets a removed person in again once an admin lists the address itself", () => {
+    const { people, state } = setup(domain());
+    people.admit("p1@corp.test");
+    people.removeJoined("p1@corp.test");
+    const lists = domain("p1@corp.test");
+    const change = people.listsChanging(lists);
+    if (!("saved" in change)) throw new Error("room for one more");
+    state.lists = lists;
+    change.saved();
+    expect(people.wasRemoved("p1@corp.test")).toBe(false);
+    // Taken off the list again, the address is a plain @domain person with no bar.
+    state.lists = domain();
+    expect(people.wasRemoved("p1@corp.test")).toBe(false);
+  });
+
+  it("lets a removed person in again through `seira access add`", async () => {
+    const { people, dataDir } = setup(domain());
+    people.admit("p1@corp.test");
+    people.removeJoined("p1@corp.test");
+    const change = await accessChange(dataDir, domain(), domain("p1@corp.test"), {});
+    if (typeof change === "string") throw new Error(change);
+    change.saved();
+    expect(readFileSync(join(dataDir, "sign-in-removed.json"), "utf8")).not.toContain("p1@corp.test");
+  });
+
+  it("does not bar anybody where the server does not decide who comes in", () => {
+    const { people } = setup(domain(), { applies: false });
+    expect(people.wasRemoved("p1@corp.test")).toBe(false);
+  });
+
   it("AC-03 gives an address that Settings adds its place at once", () => {
     const { people, state, dataDir } = setup({ admins: named(1), members: [] });
     expect(people.admit("p1@corp.test")).toBeNull();

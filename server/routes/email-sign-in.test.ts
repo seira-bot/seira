@@ -13,7 +13,7 @@ import { emailSignInRoute } from "./email-sign-in.ts";
 
 const servers: Server[] = [];
 const dirs: string[] = [];
-const openPeople: PeopleLimit = { refuses: () => false, admit: () => null } as unknown as PeopleLimit;
+const openPeople: PeopleLimit = { refuses: () => false, admit: () => null, wasRemoved: () => false } as unknown as PeopleLimit;
 afterEach(async () => {
   for (const dir of dirs.splice(0)) await removeTempDir(dir);
   for (const server of servers.splice(0)) {
@@ -22,7 +22,7 @@ afterEach(async () => {
   }
 });
 
-async function fixture(verify: EmailSignIn["verify"], people: Pick<PeopleLimit, "refuses" | "admit"> = openPeople, path = "/api/auth/email/verify") {
+async function fixture(verify: EmailSignIn["verify"], people: Pick<PeopleLimit, "refuses" | "admit" | "wasRemoved"> = openPeople, path = "/api/auth/email/verify") {
   const noteFailure = vi.fn();
   const issue = vi.fn(() => { throw new Error("no session expected"); });
   const start = vi.fn(async () => ({ ok: true }) as const);
@@ -109,5 +109,44 @@ describe("email sign-in and the free people limit", () => {
     expect(reply.status).toBe(403);
     expect(await reply.json()).toMatchObject(refusal);
     expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe("email sign-in and a person that an admin removed", () => {
+  /** Two people joined through `@corp.test`; an admin removed `gone@corp.test` in Settings → People. */
+  function afterRemoval() {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-email-removed-"));
+    dirs.push(dataDir);
+    const lists = { admins: ["@corp.test"], members: [] };
+    const people = createPeopleLimit({ dataDir, env: {}, lists: () => lists, sessions: () => [], revoke() {}, applies: true, enterpriseUnlimited: () => false });
+    people.admit("gone@corp.test");
+    people.admit("stays@corp.test");
+    expect(people.removeJoined("gone@corp.test")).toBe("removed");
+    return people;
+  }
+  const verifiedAs = (email: string) => async () => ({ ok: true, email, userId: "u", scopes: ["admin"] }) as Awaited<ReturnType<EmailSignIn["verify"]>>;
+  const refusal = { errorKey: "serverError.email.notAllowed" };
+
+  it("refuses a code request from the removed address and sends no code", async () => {
+    const { post, start, noteFailure } = await fixture(verifiedAs("gone@corp.test"), afterRemoval(), "/api/auth/email/start");
+    const reply = await post("Gone@Corp.test");
+    expect(reply.status).toBe(403);
+    expect(await reply.json()).toMatchObject(refusal);
+    expect(start).not.toHaveBeenCalled();
+    expect(noteFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a code that the removed address verifies and issues no session", async () => {
+    const { post, issue } = await fixture(verifiedAs("gone@corp.test"), afterRemoval());
+    const reply = await post("gone@corp.test");
+    expect(reply.status).toBe(403);
+    expect(await reply.json()).toMatchObject(refusal);
+    expect(issue).not.toHaveBeenCalled();
+  });
+
+  it("still sends a code to another person at the same @domain entry", async () => {
+    const { post, start } = await fixture(verifiedAs("stays@corp.test"), afterRemoval(), "/api/auth/email/start");
+    expect((await post("stays@corp.test")).status).toBe(200);
+    expect(start).toHaveBeenCalledTimes(1);
   });
 });
