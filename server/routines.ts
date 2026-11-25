@@ -7,7 +7,7 @@ import type { RuntimeEvent } from "./contracts.ts";
 import { OwnedFile } from "./atomic.ts"; import { saveSoon } from "./save-batch.ts"; import { RunProgressSave } from "./routine-progress-save.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { activeRunsOf, nextDueOf, schedulerDueOf, wakeHoldOf } from "./routine-due.ts";
-import { startDueTimer, type DueTimer } from "./due-timer.ts";
+import { DUE_CLOCK_MS, startDueTimer, type DueTimer } from "./due-timer.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
@@ -313,6 +313,8 @@ const WAKE_HORIZON_MS = 60 * 60_000;
 
 export const ROUTINE_RESTARTED = "Seira restarted while this routine was running";
 const MAX_RUNS = 2_000;
+/** A wall clock that goes back by more than this between two looks is a clock that was set right, not a small correction. */
+const CLOCK_BACK_MS = 2 * DUE_CLOCK_MS;
 const earliest = (...times: Array<number | null>): number | null => times.reduce<number | null>((first, at) => at === null ? first : first === null ? at : Math.min(first, at), null);
 export class RoutineManager {
   private readonly file: string; private readonly disk: OwnedFile;
@@ -339,13 +341,13 @@ export class RoutineManager {
   private frozenPending = false;
   private readonly bootedAt: number;
   private readonly checking = new Set<string>(); private readonly progress = new RunProgressSave(() => this.file, () => this.save()); private readonly gate = createRunGate<RoutineRun>((run, signal) => this.options.prepareRun?.(cloneRun(run), signal) ?? null, () => this.tickInBackground());
-  private readonly ledger: Occurrences; private readonly watch: RunWatch; private passedAt = -Infinity;
+  private readonly ledger: Occurrences; private readonly watch: RunWatch; private passedAt = -Infinity; private clockSeenAt: number;
 
   constructor(options: RoutineManagerOptions) {
     this.options = withBoundedStops(options, this.slowStops);
     this.file = options.file ?? join(DATA_DIR, "routines.json"); this.disk = new OwnedFile(this.file, { mode: 0o600 });
     this.now = options.now ?? Date.now;
-    this.bootedAt = this.now(); this.ledger = new Occurrences(this.file, this.now, options.home?.machine); this.watch = new RunWatch(options.turnLive);
+    this.bootedAt = this.now(); this.clockSeenAt = this.bootedAt; this.ledger = new Occurrences(this.file, this.now, options.home?.machine); this.watch = new RunWatch(options.turnLive);
     this.load();
   }
 
@@ -906,6 +908,28 @@ export class RoutineManager {
     return moved.length;
   }
 
+  /** The wall clock went back by more than the clock check's own gap (`DUE_CLOCK_MS`) since the last look: a bad clock was
+   * set right. A next run that was set while the clock was ahead stays far in the future, so a daily, cron or interval routine
+   * takes the first time that follows now. A one-time run and a limit-reset run keep their instant. Only a clock that went
+   * back moves a run earlier, so a next run that was moved later on purpose (a usage-limit wait) is not touched at any other time.
+   * Returns how many moved. */
+  followClock(): number {
+    const now = this.now(), seen = this.clockSeenAt;
+    this.clockSeenAt = now;
+    if (this.unreadable || now >= seen - CLOCK_BACK_MS) return 0;
+    const moved = this.routines.filter((routine) => {
+      const repeats = routine.schedule.type === "daily" || routine.schedule.type === "cron" || routine.schedule.type === "interval";
+      if (!routine.enabled || !repeats || routine.nextRunAt == null || routine.nextRunAt <= now) return false;
+      const next = nextOccurrence(routine.schedule, now);
+      if (next === null || next >= routine.nextRunAt) return false;
+      routine.nextRunAt = next;
+      return true;
+    });
+    if (moved.length) this.saveLater();
+    for (const routine of moved) this.emitRoutine(routine);
+    return moved.length;
+  }
+
   /** The engines' reset times changed: each limit-reset routine that is on takes its engine's new time, once the run it owes a passed reset was made (limit-reset-owed.ts). */
   retimeLimitResets(): number {
     const moved = this.routines.filter((routine) => {
@@ -958,7 +982,7 @@ export class RoutineManager {
     if (this.closing || this.timer) return;
     if (!this.startupRunsQueued) this.startupRunsQueued = this.queueStartupRuns();
     this.timer = startDueTimer({ run: () => this.tick(), now: this.now, onError: (error) => console.error("routines: a scheduler pass failed", error),
-      next: () => this.unreadable ? this.now() + UNREADABLE_RETRY_MS : earliest(schedulerDueOf(this.routines, this.runs, this.now(), this.bootedAt + CHECK_BOOT_HOLD_MS, (routine) => this.targetState(routine) === "missing"), this.ledger.beatDueAt(), this.watch.dueAt(this.runs, this.now())) });
+      next: () => { this.followClock(); return this.unreadable ? this.now() + UNREADABLE_RETRY_MS : earliest(schedulerDueOf(this.routines, this.runs, this.now(), this.bootedAt + CHECK_BOOT_HOLD_MS, (routine) => this.targetState(routine) === "missing"), this.ledger.beatDueAt(), this.watch.dueAt(this.runs, this.now())); } });
   }
 
   stop() {
