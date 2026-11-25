@@ -44,7 +44,7 @@ const type = async (input: HTMLInputElement, value: string) => {
 };
 const button = (label: string, within: ParentNode = host) => [...within.querySelectorAll("button")].find((node) => node.textContent?.trim() === label || node.getAttribute("aria-label") === label)!;
 const dialog = () => document.body.querySelector<HTMLElement>("[data-invite-dialog]")!;
-const radio = (label: string) => [...dialog().querySelectorAll("label")].find((node) => node.textContent?.trim() === label)!.querySelector("input")!;
+const radio = (label: string) => [...dialog().querySelectorAll("label")].find((node) => node.querySelector("[data-invite-kind]")?.textContent?.trim() === label)!.querySelector("input")!;
 const writes = () => fixture.calls.filter((call) => call.init?.method === "PUT").map((call) => call.path);
 const access = () => [...host.querySelectorAll("[data-person-access]")].map((node) => node.textContent)[1];
 

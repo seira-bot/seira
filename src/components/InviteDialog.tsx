@@ -138,7 +138,13 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
   }, [editing]);
 
   const departments = useMemo(() => ["", ...(choices?.departments ?? [])], [choices]);
-  const bots = useMemo(() => state.bots.filter((bot) => !bot.hidden && !bot.defaultBot?.person), [state.bots]);
+  const bots = useMemo(() => {
+    const rank = (section: string | undefined) => {
+      const at = departments.indexOf(section ?? "");
+      return at < 0 ? departments.length : at;
+    };
+    return state.bots.filter((bot) => !bot.hidden && !bot.defaultBot?.person).sort((a, b) => rank(a.section) - rank(b.section));
+  }, [state.bots, departments]);
   const general = t("settings.section.general");
   const departmentName = (name: string) => name || general;
   const admin = role === "admin";
@@ -146,7 +152,9 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
   const mixed = Boolean(edit?.grant?.departments.length && edit.grant.bots.length);
   const chosenDepartments = departments.filter((name) => name in departmentLevels);
   const chosenBots = bots.filter((bot) => bot.id in botLevels);
-  const folderWarnings = choices ? openFolderDepartments(chosenDepartments, choices.limited) : [];
+  const chosenKindDepartments = effective === "departments" ? chosenDepartments : departments.filter((name) => chosenBots.some((bot) => (bot.section ?? "") === name));
+  const openFolders = choices && effective !== "whole" ? openFolderDepartments(chosenKindDepartments, choices.limited) : [];
+  const botsIn = (name: string) => bots.filter((bot) => (bot.section ?? "") === name).map((bot) => bot.name).join(", ");
   const shownBots = filter.trim() ? bots.filter((bot) => bot.name.toLowerCase().includes(filter.trim().toLowerCase())) : bots;
 
   const grant = (): AccessGrant => effective === "departments"
@@ -162,7 +170,11 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
     if (!items.length) return t(effective === "departments" ? "invite.pickDepartments" : "invite.pickBots");
     const chat = items.filter((item) => item.level === "chat").map((item) => item.name);
     const view = items.filter((item) => item.level === "view").map((item) => item.name);
-    return [chat.length ? t("invite.summary.chat", { names: listOf(chat) }) : "", view.length ? t("invite.summary.view", { names: listOf(view) }) : ""].filter(Boolean).join(" ");
+    const inDepartments = effective === "departments";
+    return [
+      chat.length ? t(inDepartments ? "invite.summary.chatDepartments" : "invite.summary.chat", { names: listOf(chat) }) : "",
+      view.length ? t(inDepartments ? "invite.summary.viewDepartments" : "invite.summary.view", { names: listOf(view) }) : "",
+    ].filter(Boolean).join(" ");
   })();
   const sharedWithSome = effective === "bots" ? chosenBots.filter((bot) => bot.onlyPeopleAdded === true).map((bot) => bot.name) : [];
 
@@ -204,23 +216,44 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
     }
   };
 
-  const title = link ? t("invite.ready") : edit ? t("people.access.change") : t("invite.title");
+  const presetDepartments = preset?.departments ?? [];
+  const presetBots = preset?.bots ?? [];
+  const presetName = presetDepartments.length === 1 && !presetBots.length
+    ? departmentName(presetDepartments[0]!)
+    : presetBots.length === 1 && !presetDepartments.length
+      ? state.bots.find((bot) => bot.id === presetBots[0])?.name
+      : undefined;
+  const title = link ? t("invite.ready") : edit ? t("people.access.change") : presetName ? t("invite.titleTo", { name: presetName }) : t("invite.title");
   const subtitle = edit && !link ? (edit.entry.startsWith("@") ? t("people.everyoneAt", { domain: edit.entry.slice(1) }) : edit.entry) : undefined;
   const optionsOff = !loaded || choices === null;
 
-  const radio = (value: Kind, label: string) => (
-    <label key={value} className="flex min-h-9 items-center gap-2 text-[13px] text-ink">
-      <input type="radio" name={groupId} value={value} checked={effective === value} disabled={admin || (value !== "whole" && optionsOff)} onChange={() => setKind(value)} />
-      {label}
+  const radio = (value: Kind, label: string, hint?: string) => (
+    <label key={value} className="flex min-h-9 items-center gap-2 py-1 text-[13px] text-ink">
+      <input type="radio" name={groupId} value={value} checked={effective === value} disabled={admin || (value !== "whole" && optionsOff)} onChange={() => setKind(value)} className="shrink-0" />
+      <span className="min-w-0">
+        <span data-invite-kind className="block">{label}</span>
+        {hint && <span className="block text-[12px] text-ink-secondary">{hint}</span>}
+      </span>
     </label>
   );
+
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!loaded || scrolled.current || !(presetDepartments.length || presetBots.length)) return;
+    scrolled.current = true;
+    const row = [...(dialogRef.current?.querySelectorAll<HTMLElement>("[data-invite-item]") ?? [])].find((node) => node.querySelector<HTMLInputElement>("input")?.checked);
+    if (typeof row?.scrollIntoView === "function") row.scrollIntoView({ block: "nearest" });
+  }, [loaded, presetDepartments.length, presetBots.length]);
 
   return createPortal(
     <SettingsLook.Provider value={false}>
       <Shell title={title} subtitle={subtitle} titleId={titleId} dialogRef={dialogRef}>
         {link ? (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4"><CopyLink link={link} /></div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+              <CopyLink link={link} hint={t("invite.sendHint")} />
+              <p role="status" data-invite-summary className="mt-3 text-[13px] leading-relaxed text-ink-secondary">{summary}</p>
+            </div>
             <footer className="flex flex-wrap items-center justify-end gap-2 px-5 pb-4">
               <button type="button" className="ui-button ui-button-primary" onClick={close}>{t("common.done")}</button>
             </footer>
@@ -257,18 +290,18 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
               <fieldset disabled={admin || busy} className="flex min-w-0 flex-col gap-1">
                 <legend className="mb-1 text-[13px] font-medium text-ink">{t("invite.access.legend")}</legend>
                 {radio("whole", t("people.access.whole"))}
-                {radio("departments", t("people.access.chosen"))}
+                {radio("departments", t("people.access.chosen"), t("invite.access.departmentsHint"))}
                 {effective === "departments" && (
                   <ul className="ms-6 flex flex-col">
                     {departments.map((name) => (
-                      <PickRow key={name || "general"} itemKey={name || "general"} checked={name in departmentLevels} label={departmentName(name)}
+                      <PickRow key={name || "general"} itemKey={name || "general"} checked={name in departmentLevels} label={departmentName(name)} sub={botsIn(name) || undefined}
                         onToggle={() => toggle(setDepartmentLevels, name)} level={departmentLevels[name] ?? "chat"}
                         onLevel={(level) => setDepartmentLevels((current) => ({ ...current, [name]: level }))}
                         levelLabel={t("invite.level.label", { name: departmentName(name) })} />
                     ))}
                   </ul>
                 )}
-                {radio("bots", t("invite.access.bots"))}
+                {radio("bots", t("invite.access.bots"), t("invite.access.botsHint"))}
                 {effective === "bots" && (
                   <div className="ms-6 flex flex-col gap-1">
                     {bots.length >= BOTS_FILTER_FROM && (
@@ -288,9 +321,7 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
               </fieldset>
               {loaded && choices === null && !admin && <p className="text-[12px] text-ink-secondary">{t("invite.access.unavailable")}</p>}
               {effective === "departments" && chosenDepartments.includes("") && <p role="note" className="text-[12px] leading-relaxed text-warning">{t("people.access.generalWarning")}</p>}
-              {folderWarnings.map((name) => (
-                <p key={name || "general"} role="note" className="text-[12px] leading-relaxed text-warning">{t("people.access.folderWarning", { department: departmentName(name) })}</p>
-              ))}
+              {openFolders.length > 0 && <p role="note" className="text-[12px] leading-relaxed text-warning">{t("invite.folderWarning", { departments: listOf(openFolders.map(departmentName)) })}</p>}
               {sharedWithSome.length > 0 && <p role="note" className="text-[12px] leading-relaxed text-ink-secondary">{t("invite.botNote", { bots: listOf(sharedWithSome) })}</p>}
               {mixed && <p role="note" className="text-[12px] leading-relaxed text-ink-secondary">{t("invite.mixed")}</p>}
               {choices?.access.unreadable && <p role="alert" className="text-[12px] text-danger">{t("people.access.unreadable")}</p>}

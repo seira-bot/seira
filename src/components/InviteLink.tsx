@@ -7,7 +7,7 @@ export function inviteLink(base: string, entry: string): string {
   return entry.startsWith("@") ? `${origin}/pair` : `${origin}/pair?email=${encodeURIComponent(entry)}`;
 }
 
-export function CopyLink({ link }: { link: string }) {
+export function CopyLink({ link, hint }: { link: string; hint?: string }) {
   const { state, copy } = useCopyFeedback(link);
   return (
     <div className="mt-3 rounded-lg border border-hairline/40 bg-inset p-3 text-[13px]">
@@ -19,7 +19,7 @@ export function CopyLink({ link }: { link: string }) {
           {t(state === "copied" ? "people.copied" : state === "failed" ? "common.copyFailed" : "people.copy")}
         </button>
       </div>
-      <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{t("people.linkHint")}</p>
+      <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{hint ?? t("people.linkHint")}</p>
     </div>
   );
 }
