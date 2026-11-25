@@ -445,3 +445,52 @@ describe("the wall around a bot grant", () => {
     expect(host.wallBetween(sees("s"), sees("f"))).toBeNull();
   });
 });
+
+describe("relaying a message for a limited person", () => {
+  const ADA = "ada@acme.test";
+  const sales = (visibility?: unknown) => ({ id: "s", name: "Sam", section: "Sales", ...(visibility !== undefined ? { visibility } : {}) }) as { id: string; name: string; section: string; visibility?: never };
+  const give = (entry: string, departments: Array<{ name: string; level: "view" | "chat" }>, bots: Array<{ id: string; level: "view" | "chat" }> = []) => ({ entry, access: { departments, bots }, admitBots: true });
+  const refusal = `${ADA} can't chat with Sam here.`;
+
+  it("passes when nobody is named, for an admin, and for a person with no grant", () => {
+    const { host } = fixture();
+    host.change(give("bob@acme.test", [], [{ id: "f", level: "view" }]));
+    expect(host.relayRefusal(sales(), undefined, false)).toBeNull();
+    expect(host.relayRefusal(sales(), "bob@acme.test", true)).toBeNull();
+    expect(host.relayRefusal(sales(), ADA, false)).toBeNull();
+  });
+
+  it("refuses a bot the grant gives as view, and passes one it gives as chat", () => {
+    const { host } = fixture();
+    host.change(give(ADA, [], [{ id: "s", level: "view" }]));
+    expect(host.relayRefusal(sales(), ADA, false)).toBe(refusal);
+    host.change(give(ADA, [], [{ id: "s", level: "chat" }]));
+    expect(host.relayRefusal(sales(), ADA, false)).toBeNull();
+  });
+
+  it("passes a bot whose department the grant gives as chat, and refuses a bot outside the grant", () => {
+    const { host } = fixture();
+    host.change(give(ADA, [{ name: "Sales", level: "chat" }]));
+    expect(host.relayRefusal(sales(), ADA, false)).toBeNull();
+    expect(host.relayRefusal({ id: "f", name: "Fin", section: "Finance" }, ADA, false)).toBe(`${ADA} can't chat with Fin here.`);
+  });
+
+  it("refuses when the bot's audience leaves the person out, even with a chat grant", () => {
+    const { host } = fixture();
+    host.change(give(ADA, [], [{ id: "s", level: "chat" }]));
+    expect(host.relayRefusal(sales({ people: ["cy@other.test"] }), ADA, false)).toBe(refusal);
+    expect(host.relayRefusal(sales({ people: [ADA] }), ADA, false)).toBeNull();
+  });
+
+  it("treats a grant for a @domain like a grant for the address", () => {
+    const { host } = fixture();
+    host.change(give("@acme.test", [], [{ id: "s", level: "chat" }]));
+    expect(host.relayRefusal(sales(), ADA, false)).toBeNull();
+    expect(host.relayRefusal({ id: "f", name: "Fin", section: "Finance" }, ADA, false)).toBe(`${ADA} can't chat with Fin here.`);
+  });
+
+  it("refuses when the grants cannot be read", () => {
+    const { host } = fixture({ content: "{ broken" });
+    expect(host.relayRefusal(sales(), ADA, false)).toBe(refusal);
+  });
+});

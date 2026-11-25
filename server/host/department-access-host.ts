@@ -4,7 +4,7 @@ import { entryMatches } from "../../shared/bot-access.ts";
 import type { AccessGrant, DepartmentAccessView, GrantLevel } from "../../shared/department-access.ts";
 import type { BotVisibility } from "../../shared/wire.ts";
 import { botChangeRows, type AdminActionRow } from "../admin-activity.ts";
-import { audienceWithin, MAX_VISIBILITY_PEOPLE, storedVisibility, type ResolvedGrant, type VisibleSet } from "../bot-visibility.ts";
+import { audienceWithin, MAX_VISIBILITY_PEOPLE, storedVisibility, viewerSees, type ResolvedGrant, type VisibleSet } from "../bot-visibility.ts";
 import { accessEntry, MAX_GRANTED_BOTS, MAX_GRANTED_DEPARTMENTS, type DepartmentAccess, type StoredGrant } from "../department-access.ts";
 import type { WallKind } from "../peer-roster.ts";
 import type { RequestAuth } from "../request-auth.ts";
@@ -284,7 +284,17 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     return deps.visible(auth).departmentAllowed(section) ? null : "You do not have access to that department.";
   }
 
-  return { grantFor, walled, wallBetween, view, change, refuses, sectionRefusal, departmentsChanged, botDeleted, changed };
+  /** Security: a message that another app relays for a person whose access is limited needs what Seira itself needs from
+   * that person: the bot in their access at "chat", and an audience that admits them. Admins and people without limits pass. */
+  function relayRefusal(bot: Wallable & { name: string }, email: string | undefined, admin: boolean): string | null {
+    if (!email || admin) return null;
+    const grant = grantFor(email);
+    if (!grant) return null;
+    const chats = grant.bots.get(bot.id) === "chat" || grant.departments.get(sectionKey(bot.section)) === "chat";
+    return chats && viewerSees({ kind: "member", email }, bot.visibility) ? null : `${email} can't chat with ${bot.name} here.`;
+  }
+
+  return { grantFor, walled, wallBetween, view, change, refuses, sectionRefusal, relayRefusal, departmentsChanged, botDeleted, changed };
 }
 
 export type DepartmentAccessHost = ReturnType<typeof createDepartmentAccessHost>;

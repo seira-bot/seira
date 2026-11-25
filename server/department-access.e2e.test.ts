@@ -353,6 +353,26 @@ posixOnly("a person limited to some departments", () => {
       expect(open.status, await open.text()).toBeLessThan(400);
     }, 60_000);
 
+    it("refuses a relayed message for a person who cannot chat with the bot (view), and sends it once they can", async () => {
+      const sendFor = async (n: string) => {
+        const sent = await api("POST", `/api/bots/${ids.sales}/messages/guarded`, {
+          threadId: extra.salesThread, sendId: `relay-access-test-${n}`, text: "Hello from a relay.", expectedActiveLeafId: null, onBehalfOf: { email: ADA, name: "Ada" },
+        }, BOSS);
+        return sent;
+      };
+      try {
+        await invite({ bots: [{ id: ids.sales, level: "view" }] });
+        const refused = await sendFor("view");
+        expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+        expect(refused.body.error).toContain(`${ADA} can't chat with`);
+        await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+        const allowed = await sendFor("chat");
+        expect(allowed.status, JSON.stringify(allowed.body)).not.toBe(403);
+      } finally {
+        await invite(null);
+      }
+    }, 60_000);
+
     it("removes a deleted bot from the grant and shows the member nothing more (AC-11)", async () => {
       const gone = await makeBot("Short Lived", "Ops");
       await invite({ bots: [{ id: gone.id, level: "chat" }, { id: extra.desk, level: "chat" }] });

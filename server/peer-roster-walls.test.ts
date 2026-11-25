@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PEER_ACCESS_HELP, canReach, reachablePeers, resolveTeammate, setAccessWalls, unreachableTeammate, walledOff, type RosterMember } from "./peer-roster.ts";
+import { PEER_ACCESS_HELP, canReach, reachablePeers, resolveTeammate, setAccessWalls, unreachableTeammate, walledApart, walledOff, type RosterMember } from "./peer-roster.ts";
 
 const bot = (id: string, section?: string): RosterMember => ({ id, name: `Bot ${id}`, ...(section !== undefined ? { section } : {}) });
 const sales = bot("sales", "Sales");
@@ -93,5 +93,22 @@ describe("the access help a bot reads", () => {
     expect(PEER_ACCESS_HELP).toContain("limited for an invited person can reach only bots in its own department");
     expect(PEER_ACCESS_HELP).not.toMatch(/Every bot can reach every other bot/);
     expect(PEER_ACCESS_HELP).not.toMatch(/grant|memoryKey|wall|scope|endpoint/i);
+  });
+});
+
+describe("walledApart", () => {
+  it("says whether a wall stands between two bots in that direction", () => {
+    departmentWall("Sales");
+    expect(walledApart(sales, fin)).toBe(true);
+    expect(walledApart(fin, sales)).toBe(false);
+    expect(walledApart(sales, sales2)).toBe(false);
+  });
+
+  it("is false for the same bot, and without a wall", () => {
+    setAccessWalls(() => "department");
+    expect(walledApart(sales, sales)).toBe(false);
+    expect(walledApart(sales, fin)).toBe(true);
+    setAccessWalls(() => null);
+    expect(walledApart(sales, fin)).toBe(false);
   });
 });

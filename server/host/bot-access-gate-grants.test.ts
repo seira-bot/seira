@@ -96,3 +96,23 @@ describe("the level check for a route that reads its bots itself", () => {
     expect(host.botsRefusal(auth, ["fin"], "edit")).toMatch(/view/);
   });
 });
+
+describe("the setup card check off a Team Cloud", () => {
+  const card = (extra: Record<string, unknown>) => ({ requestId: "r1", ...extra });
+  const host = (lines: Array<{ card: Record<string, unknown> }>) => createBotAccessHost({
+    visibleFor: () => visibleFor(grantOf({}, { sales: "chat" })),
+    store: () => ({ bot: (id: string) => bots.find((bot) => bot.id === id) && { id, name: "Sales bot" }, group: () => undefined, botByThread: (threadId: string) => (threadId === "t-sales" ? { id: "sales", name: "Sales bot" } : undefined), messagesFor: () => lines }) as never,
+    routines: () => null,
+    threadOwner: () => undefined,
+    routineWriter: () => undefined,
+  });
+
+  it("refuses a card that changes the bot for a member whose grant gives only chat", () => {
+    const refused = host([{ card: card({ profileRequest: { name: "Renamed" } }) }]).cardRefusal(auth, "t-sales", "r1");
+    expect(refused).toMatch(/^Only people who can edit Sales bot can change this\.$/);
+  });
+
+  it("lets a plain options card through", () => {
+    expect(host([{ card: card({ options: [{ label: "Yes" }] }) }]).cardRefusal(auth, "t-sales", "r1")).toBeNull();
+  });
+});

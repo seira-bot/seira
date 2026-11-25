@@ -1063,7 +1063,7 @@ function cardAnswerRefusal(auth: RequestAuth, threadId: string, requestId: strin
   if (reviewed) return reviewed.outsideWrite ? "Only a workspace admin can save what came in from outside." : "Only a workspace admin can review shared team memory.";
   // A Cloud guest may read along but never answer: its words would reach the owner's turn and a lent Mac.
   if (CLOUD_PERSONAL) return cloudCardRefusal(auth);
-  if (auth.scopes.includes("admin") || !sharedMembership()) return null; const setupRefused = CLOUD_TEAM ? botAccess.cardRefusal(auth, threadId, requestId) : null; if (setupRefused) return setupRefused;
+  if (auth.scopes.includes("admin") || !sharedMembership()) return null; const setupRefused = CLOUD_TEAM || visibleTo(viewerFor(auth)).limitedToDepartments ? botAccess.cardRefusal(auth, threadId, requestId) : null; if (setupRefused) return setupRefused;
   const known = [threadStarters.get(threadId), cardRequesterKey(threadId, requestId)].filter((person): person is string => Boolean(person));
   if (!known.length || known.includes(personKey(auth.session)) || (CLOUD_TEAM && teamOwners.routing.askedPerson(store.messagesFor(threadId).find((line) => line.card?.requestId === requestId)?.from?.botId ?? store.botByThread(threadId)?.id, threadId) === personKey(auth.session))) return null;
   return "Only the person who started this conversation or sent this request, or a workspace admin, can answer this card.";
@@ -11693,7 +11693,7 @@ ROUTES.push(createBotMessageRoutes({
   routines: () => routines,
   fromPhone: phones.fromPhone, notePhoneSend: phones.noteSend,
   desktopManaged: DESKTOP_MANAGED, cloudHome: Boolean(CLOUD_HOME), DirectSendRefused,
-  acceptDirectSend, directSendRefusal, startTurn, usageTriggerFor, messageSender, cloudGuestSendRefusal, cloudThreadRefusal, runOwners, runActor, resolveAccessRequest: (threadId, requestId, behavior, message) => lendingLifts?.resolve(threadId, requestId, behavior) ?? accessRequests.resolve(threadId, requestId, behavior, message), relayRefusal: CLOUD_TEAM ? (bot, email) => relayedSendRefusal(bot, email, Boolean(email && teamOwners.people?.list().some((one) => one.email === email && one.role !== "member"))) : undefined,
+  acceptDirectSend, directSendRefusal, startTurn, usageTriggerFor, messageSender, cloudGuestSendRefusal, cloudThreadRefusal, runOwners, runActor, resolveAccessRequest: (threadId, requestId, behavior, message) => lendingLifts?.resolve(threadId, requestId, behavior) ?? accessRequests.resolve(threadId, requestId, behavior, message), relayRefusal: CLOUD_TEAM ? (bot, email) => relayedSendRefusal(bot, email, Boolean(email && teamOwners.people?.list().some((one) => one.email === email && one.role !== "member"))) : (bot, email) => departmentAccess.relayRefusal(bot, email, Boolean(email && allowedScopes(email, signInAllowList())?.includes("admin"))),
   noAiRefusal: noAiNotice.refusal, cardAnswerRefusal, commandRememberRefusal, requestBehavior, requestedTaskBot, botForThread, threadBusy,
   botAtThreadCapacity, parksBehindCoordination, activeGroupTurnForBot, runningTurnInstance, engineSteersImages, resolveReplyTarget,
   turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendMcp,

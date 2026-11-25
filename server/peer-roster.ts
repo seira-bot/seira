@@ -139,6 +139,11 @@ function behindWall(from: Pick<RosterMember, "id" | "section" | "visibility">, t
   return from.id === target.id ? null : wallBetween(from, target);
 }
 
+/** Whether a department or grant wall stands between two bots, in that direction. */
+export function walledApart(from: Pick<RosterMember, "id" | "section" | "visibility">, target: Pick<RosterMember, "id" | "section" | "visibility">): boolean {
+  return behindWall(from, target) !== null;
+}
+
 /** The refusal a bot is told when a hand-off would cross a department wall, else undefined. */
 export function walledOff(from: RosterMember, target: RosterMember): string | undefined {
   const wall = behindWall(from, target);
