@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SignInAllowList } from "../account-signin.ts";
-import { createPeopleLimit, type PeopleSession } from "../people-limit.ts";
+import { createPeopleLimit, PEOPLE_FILE, type PeopleLimit, type PeopleSession } from "../people-limit.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { createConfigRoutes, type ConfigRouteDeps } from "./config.ts";
@@ -17,32 +17,48 @@ afterEach(async () => {
 
 const names = (count: number) => Array.from({ length: count }, (_, index) => `p${index + 1}@corp.test`);
 
-async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sessions: PeopleSession[] = []) {
+interface PutOptions {
+  /** The people sign-in-people.json names before the save. */
+  kept?: string[];
+  /** More of the same save, with the config it starts from. */
+  patch?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  /** Answers the per-bot Local VM count, an await between the first check and the save. */
+  perBotVms?: (people: PeopleLimit) => Promise<number>;
+}
+
+async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sessions: PeopleSession[] = [], options: PutOptions = {}) {
   const home = mkdtempSync(join(tmpdir(), "seira-config-people-"));
   dirs.push(home);
   vi.stubEnv("SEIRA_DATA_DIR", home);
   vi.stubEnv("SEIRA_SIGNIN_EMAILS", "");
   vi.stubEnv("SEIRA_SIGNIN_MEMBER_EMAILS", "");
   const file = join(home, "config.json");
-  writeFileSync(file, `${JSON.stringify({ signIn: current })}\n`);
+  writeFileSync(file, `${JSON.stringify({ ...options.config, signIn: current })}\n`);
   const before = readFileSync(file, "utf8");
   // A data folder an earlier version used: everyone listed in config.json holds a place from the first start.
   writeFileSync(join(home, "messages.db"), "");
-  const state = { lists: current, sessions, revoked: [] as string[] };
+  if (options.kept) writeFileSync(join(home, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: options.kept })}\n`, { mode: 0o600 });
+  const state = { sessions, revoked: [] as string[] };
+  // The lists in force are the saved ones, as the server reads them again after a save.
+  const lists = (): SignInAllowList => {
+    const saved = (JSON.parse(readFileSync(file, "utf8")) as { signIn?: Partial<SignInAllowList> }).signIn;
+    return { admins: saved?.admins ?? [], members: saved?.members ?? [] };
+  };
   const people = createPeopleLimit({
-    dataDir: home, env: {}, lists: () => state.lists, sessions: () => state.sessions,
+    dataDir: home, env: {}, lists, sessions: () => state.sessions,
     revoke: (id) => { state.revoked.push(id); }, applies: true, enterpriseUnlimited: () => false,
   });
   const revalidate = vi.fn();
   const route = createConfigRoutes({
-    sessions: { revalidateEmailSessions: revalidate }, people, cfg: { signIn: current },
+    sessions: { revalidateEmailSessions: revalidate }, people, cfg: { ...options.config, signIn: current },
     store: { bots: [], clearVoiceSelections() {} }, registry: { get: () => undefined, forgetSnapshots() {} },
     sharedComputers: { close() {} }, sharedComputerControl: { close() {} }, lendingEnabled: () => true,
     localVmIdles: new Map(), localVmIdleMs: () => 0, localVmActiveThreads: new Set(), localVmLifecycleBusy: new Set(),
     localVmImageBusy: { get: () => false }, localVmModeChangeBusy: { set() {} }, localVmModeChanging: () => () => {},
     configStatus: () => ({}), configForAccess: (status: unknown) => status, broadcast() {}, resyncOpenCodeProviderKeys() {},
     providerConfigBusy: { get: () => false, set() {} }, computerProviderConfigTransitions: new Map(), managedComputerOwners: new Map(),
-    providerOperationConflict: () => null, perBotLocalVmCountForModeChange: () => 0, providerConfigs: () => ({}), drainQueuedSends() {}, revokeEngineCapabilities() {}, reloadProviders() {},
+    providerOperationConflict: () => null, perBotLocalVmCountForModeChange: () => options.perBotVms?.(people) ?? 0, providerConfigs: () => ({}), drainQueuedSends() {}, revokeEngineCapabilities() {}, reloadProviders() {},
     browserCleanup: { hasPendingProfile: () => false, prepare: () => [], abort() {}, commit: async () => [], ensure: async () => {} },
     browserLive: { closeAll() {}, closeForSession() {} }, browserRuntime: { heldBy: () => [] }, usedBrowserSessions: new Map(), closeBrowser: async () => true, browserEngineSwitched() {}, browserEngine: () => "",
     cloudHome: false, cloudTeam: false, hostedModels: false, sharedMembership: () => false,
@@ -52,9 +68,9 @@ async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sess
   await route({
     req: {}, res: {}, url: new URL("http://host/api/config"), path: "/api/config", method: "PATCH", auth,
     json: (_res: unknown, status: number, body: Record<string, unknown>) => { replies.push({ status, body }); },
-    readBody: async () => ({ signIn }),
+    readBody: async () => ({ ...options.patch, signIn }),
   } as unknown as Parameters<typeof route>[0]);
-  return { replies, state, unchanged: readFileSync(file, "utf8") === before, revalidate };
+  return { replies, state, people, unchanged: readFileSync(file, "utf8") === before, revalidate };
 }
 
 describe("the people limit in /api/config", () => {
@@ -64,6 +80,35 @@ describe("the people limit in /api/config", () => {
     expect(result.replies[0]).toMatchObject({ status: 409, body: { code: "people_full", errorKey: "serverError.people.full", errorParams: { limit: 5 } } });
     expect(result.unchanged).toBe(true);
     expect(result.revalidate).not.toHaveBeenCalled();
+  });
+
+  it("AC-03 counts kept people that an @domain lets back in, and refuses the save past five", async () => {
+    // p2..p5 joined through @corp.test; a hand edit of config.json took the entry out and left their places.
+    const kept = names(5);
+    const current = { admins: ["p1@corp.test"], members: [] };
+    const back = await putSignIn({ admins: ["p1@corp.test", "@corp.test"], members: [] }, current, [], { kept });
+    expect(back.replies[0]?.status).toBe(200);
+    expect(back.people.status()).toMatchObject({ people: 5 });
+    const past = await putSignIn({ admins: ["p1@corp.test", "@corp.test", "p6@corp.test"], members: [] }, current, [], { kept });
+    expect(past.replies).toHaveLength(1);
+    expect(past.replies[0]).toMatchObject({ status: 409, body: { code: "people_full", errorParams: { limit: 5 } } });
+    expect(past.unchanged).toBe(true);
+  });
+
+  it("AC-03 checks again after the awaits, so a person who signs in meanwhile keeps the last place", async () => {
+    const current = { admins: [...names(4), "@corp.test"], members: [] };
+    const result = await putSignIn({ admins: [...names(5), "@corp.test"], members: [] }, current, [], {
+      config: { localVm: { mode: "per-bot" } },
+      patch: { localVm: { mode: "shared" } },
+      async perBotVms(people) {
+        expect(people.admit("late@corp.test")).toBeNull();
+        return 0;
+      },
+    });
+    expect(result.replies).toHaveLength(1);
+    expect(result.replies[0]).toMatchObject({ status: 409, body: { code: "people_full" } });
+    expect(result.unchanged).toBe(true);
+    expect(result.people.status()).toMatchObject({ people: 5 });
   });
 
   it("AC-06 ends the sessions of an address taken off the list through the config route", async () => {

@@ -165,8 +165,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       // Saved, it would be overruled by the environment at once: say so instead of answering 200 with nothing changed.
       const signInPinned = signInEnvRefusal(patch.signIn);
       if (signInPinned) return json(res, 409, { error: signInPinned, code: "signin_env" });
-      const peopleChange = patch.signIn ? people.listsChanging(patch.signIn) : null;
-      if (peopleChange && "refusal" in peopleChange) return json(res, 409, { ...userError("serverError.people.full", { limit: peopleChange.refusal.limit }), code: "people_full" });
+      const peopleFull = (limit: number) => json(res, 409, { ...userError("serverError.people.full", { limit }), code: "people_full" });
+      let peopleChange = patch.signIn ? people.listsChanging(patch.signIn) : null;
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       if (patch.newBotDefaults) {
         if (patch.newBotDefaults.profile.modelSelection) {
           const checked = checkedModelSelection(patch.newBotDefaults.profile.modelSelection);
@@ -369,6 +370,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         const conflict = providerOperationConflict(provider);
         if (conflict) return json(res, 409, { error: conflict });
       }
+      // Asked again after the awaits: someone who signed in meanwhile may now hold the last place.
+      if (patch.signIn) peopleChange = people.listsChanging(patch.signIn);
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       // Only the named keys change; merged with no await before the save.
       if (patch.opencodeGo?.providerKeys) {
         const merged = mergeOpenCodeProviderKeys(cfg, patch.opencodeGo.providerKeys);
