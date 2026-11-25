@@ -116,4 +116,14 @@ describe("people plan routes", () => {
     expect(await call("POST", "/api/people/plan/remove", { email: "boss@corp.test" })).toMatchObject({ status: 409, body: { code: "listed" } });
     expect(await call("POST", "/api/people/plan/remove", { email: "nobody@corp.test" })).toMatchObject({ status: 404, body: { code: "unknown" } });
   });
+
+  it("answers 500 and removes nobody when the removal cannot be saved", async () => {
+    const { call, people, state, dataDir } = await fixture();
+    people.admit("a@corp.test");
+    state.sessions = [{ id: "sa", email: "a@corp.test" }];
+    writeFileSync(join(dataDir, "sign-in-removed.json"), "{ not json");
+    expect(await call("POST", "/api/people/plan/remove", { email: "a@corp.test" })).toMatchObject({ status: 500, body: { code: "remove_failed" } });
+    expect(state.revoked).toEqual([]);
+    expect(people.status().joined.map((person) => person.email)).toContain("a@corp.test");
+  });
 });

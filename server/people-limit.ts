@@ -76,13 +76,23 @@ function writeKept(dataDir: string, people: Iterable<string>): void {
   writeFileAtomic(join(dataDir, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
 }
 
-function readRemoved(dataDir: string): string[] {
+type RemovedRead = { state: "ok"; people: string[] } | { state: "missing" } | { state: "unreadable" };
+
+/** Only a file that is not there is "missing": a file that cannot be read or understood is "unreadable", and stands for
+ * nobody being allowed back in. */
+function readRemoved(dataDir: string): RemovedRead {
+  let text: string;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(join(dataDir, REMOVED_FILE), "utf8"));
-    const people: unknown = Reflect.get(Object(parsed), "people");
-    return Array.isArray(people) ? people.filter((entry): entry is string => typeof entry === "string").map(address) : [];
+    text = readFileSync(join(dataDir, REMOVED_FILE), "utf8");
+  } catch (error) {
+    return Reflect.get(Object(error), "code") === "ENOENT" ? { state: "missing" } : { state: "unreadable" };
+  }
+  try {
+    const people: unknown = Reflect.get(Object(JSON.parse(text)), "people");
+    if (!Array.isArray(people) || !people.every((entry) => typeof entry === "string")) return { state: "unreadable" };
+    return { state: "ok", people: people.map(address) };
   } catch {
-    return [];
+    return { state: "unreadable" };
   }
 }
 
@@ -136,8 +146,9 @@ export interface PeopleLimit {
    * frees their places). */
   listsChanging(asked: ListsChange | undefined): { refusal: { limit: number } } | { saved(): void };
   /** Takes off someone who joined through an `@domain` entry: their sessions end, their place is free, and the `@domain`
-   * entry does not let them in again until an admin lists their address. */
-  removeJoined(email: string): "removed" | "listed" | "unknown";
+   * entry does not let them in again until an admin lists their address. "failed": the removal could not be recorded, so
+   * nothing changed. */
+  removeJoined(email: string): "removed" | "listed" | "unknown" | "failed";
   /** Saves a Premium key from Settings; never over a key the environment sets. */
   saveKey(raw: string): { ok: true } | { ok: false; reason: PlanKeyRefusal | "environment" };
   status(): PeoplePlanStatus;
@@ -192,19 +203,30 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   }
   prune(options.lists());
 
-  // Only an address that no list names itself stays removed: listing it is how an admin lets it back in.
+  // Only an address that no list names itself stays removed: listing it is how an admin lets it back in. A record that cannot
+  // be read counts as removing everybody that an `@domain` entry alone lets in: an uncertain record never admits.
   const wasRemoved = (email: string) => {
     const person = address(email);
-    return options.applies && !listed(options.lists()).has(person) && readRemoved(options.dataDir).includes(person);
+    if (!options.applies || listed(options.lists()).has(person)) return false;
+    const read = readRemoved(options.dataDir);
+    return read.state === "unreadable" || (read.state === "ok" && read.people.includes(person));
   };
-  const bar = (change: (people: string[]) => string[]) => {
-    const was = readRemoved(options.dataDir);
+  /** True when the record holds the change; a record that cannot be read is never written over. */
+  const bar = (change: (people: string[]) => string[]): boolean => {
+    const read = readRemoved(options.dataDir);
+    if (read.state === "unreadable") {
+      console.warn("could not read who an admin removed; fix or delete sign-in-removed.json");
+      return false;
+    }
+    const was = read.state === "ok" ? read.people : [];
     const next = [...new Set(change(was))];
-    if (next.length === was.length && next.every((email) => was.includes(email))) return;
+    if (next.length === was.length && next.every((email) => was.includes(email))) return true;
     try {
       writeRemoved(options.dataDir, next);
+      return true;
     } catch (error) {
       console.warn(`could not save who an admin removed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
   };
 
@@ -260,7 +282,8 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       const people = kept();
       const hadSession = options.sessions().some((session) => session.email && !session.token && address(session.email) === person);
       if (!people.includes(person) && !hadSession) return "unknown";
-      bar((was) => [...was, person]);
+      // Recorded first: when the record cannot be saved, nothing else changes and the caller says so.
+      if (!bar((was) => [...was, person])) return "failed";
       endSessions(new Set([person]));
       keep((was) => was.filter((entry) => entry !== person));
       return "removed";
