@@ -206,6 +206,9 @@ function drain(response: Response): void {
 }
 
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+/** The only headers that go to another origin after a redirect. Every other header is dropped, not listed: a saved
+ * header, a session id or a cookie belongs to the server the person added. */
+const CROSS_ORIGIN_HEADERS: readonly string[] = ["accept", "content-type"];
 export const MAX_MCP_REDIRECTS = 5;
 export const ONE_BOT_REDIRECT_REFUSAL = "The server redirects to an app that serves one bot only.";
 
@@ -309,7 +312,8 @@ export class RemoteMcpClient {
   /** Sends a request and follows a redirect here, not in `fetch`, so each hop is checked before it is sent. A hop to a
    * one-bot address is refused, unless this server is that address itself (shared/one-bot-mcp.ts). A hop with no usable
    * `Location`, or more than `MAX_MCP_REDIRECTS` hops, is refused too: when in doubt, the rule applies. A 301, 302 or 303
-   * answer to a POST becomes a GET with no body, as `fetch` does. */
+   * answer to a POST becomes a GET with no body, as `fetch` does. A hop to another origin keeps only `accept` and
+   * `content-type`: the saved headers (for example `authorization`) and the session never leave their origin. */
   private async send(url: string, init: RequestInit): Promise<Response> {
     const own = isOneBotMcpServer(this.target);
     let current = url;
@@ -318,15 +322,25 @@ export class RemoteMcpClient {
       const response = await this.fetchImpl(current, request);
       if (!REDIRECT_STATUSES.has(response.status)) return response;
       drain(response);
+      const location = response.headers.get("location");
       let next: URL;
       try {
-        next = new URL(response.headers.get("location") ?? "", current);
-        if (!response.headers.get("location")) throw new TypeError("no location");
+        if (!location) throw new TypeError("no location");
+        next = new URL(location, current);
       } catch {
         throw new McpHttpError("protocol", "redirect with no usable address");
       }
       if (hop >= MAX_MCP_REDIRECTS) throw new McpHttpError("protocol", "too many redirects");
       if (!own && isOneBotMcpServer({ type: "http", url: next.toString() })) throw new McpHttpError("protocol", ONE_BOT_REDIRECT_REFUSAL);
+      if (next.origin !== new URL(current).origin) {
+        const kept = new Headers();
+        const sent = new Headers(request.headers);
+        for (const name of CROSS_ORIGIN_HEADERS) {
+          const value = sent.get(name);
+          if (value !== null) kept.set(name, value);
+        }
+        request = { ...request, headers: kept };
+      }
       current = next.toString();
       const toGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
       if (toGet) {

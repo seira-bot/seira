@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_MCP_REDIRECTS, McpHttpError, ONE_BOT_REDIRECT_REFUSAL, RemoteMcpClient } from "./mcp-http.ts";
 import { WAPILOT_MCP_URL } from "../shared/one-bot-mcp.ts";
 
-interface Seen { url: string; method: string; body: string | undefined; redirect: RequestInit["redirect"]; contentType: string | null }
+interface Seen { url: string; method: string; body: string | undefined; redirect: RequestInit["redirect"]; contentType: string | null; headers: Record<string, string> }
 
 /** A fetch with a script: `moves` maps a request URL to the redirect it answers; any other URL answers a tools/list. */
 function scripted(moves: Record<string, { status: number; location?: string }>) {
@@ -11,7 +11,7 @@ function scripted(moves: Record<string, { status: number; location?: string }>) 
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input);
     const headers = new Headers(init?.headers);
-    seen.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : undefined, redirect: init?.redirect, contentType: headers.get("content-type") });
+    seen.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : undefined, redirect: init?.redirect, contentType: headers.get("content-type"), headers: Object.fromEntries(headers) });
     const move = moves[url];
     if (move) return new Response(null, { status: move.status, headers: move.location === undefined ? {} : { location: move.location } });
     const id = typeof init?.body === "string" ? (JSON.parse(init.body) as { id?: number }).id : undefined;
@@ -32,6 +32,32 @@ describe("a redirect from an MCP server", () => {
       expect(seen.every((entry) => entry.redirect === "manual" && entry.method === "POST")).toBe(true);
       expect(seen[1]?.body).toBe(seen[0]?.body);
     }
+  });
+
+  it("keeps the saved headers on a hop to the same origin, and drops them on a hop to another origin", async () => {
+    const saved = { authorization: "Bearer x", "x-api-key": "y", cookie: "a=b" };
+    const askWith = (url: string, fetchImpl: typeof fetch) =>
+      new RemoteMcpClient({ type: "http", url, headers: saved }, { fetch: fetchImpl }).request("tools/list", {}, AbortSignal.timeout(2_000));
+    const same = scripted({ "https://a.example.test/mcp": { status: 307, location: "https://a.example.test/mcp/" } });
+    await askWith("https://a.example.test/mcp", same.fetchImpl);
+    expect(same.seen[1]?.headers).toMatchObject(saved);
+
+    const cross = scripted({ "https://a.example.test/mcp": { status: 307, location: "https://b.example.test/mcp" } });
+    await expect(askWith("https://a.example.test/mcp", cross.fetchImpl)).resolves.toEqual({ tools: [] });
+    expect(cross.seen[0]?.headers).toMatchObject(saved);
+    expect(Object.keys(cross.seen[1]?.headers ?? {}).sort()).toEqual(["accept", "content-type"]);
+    expect(cross.seen[1]?.body).toBe(cross.seen[0]?.body);
+  });
+
+  it("does not send the saved headers again on a later hop back to the first origin", async () => {
+    const saved = { authorization: "Bearer x" };
+    const { seen, fetchImpl } = scripted({
+      "https://a.example.test/mcp": { status: 307, location: "https://b.example.test/mcp" },
+      "https://b.example.test/mcp": { status: 307, location: "https://a.example.test/final" },
+    });
+    await new RemoteMcpClient({ type: "http", url: "https://a.example.test/mcp", headers: saved }, { fetch: fetchImpl }).request("tools/list", {}, AbortSignal.timeout(2_000));
+    expect(seen.map((entry) => entry.url)).toEqual(["https://a.example.test/mcp", "https://b.example.test/mcp", "https://a.example.test/final"]);
+    expect(seen[2]?.headers.authorization).toBeUndefined();
   });
 
   it("turns a POST into a GET with no body for a 301, 302 or 303", async () => {
