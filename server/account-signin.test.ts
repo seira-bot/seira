@@ -81,7 +81,7 @@ describe("the exchange with the control plane", () => {
 
     const mailed = createEmailSignIn({
       allow: { admins: ["her@example.test"], members: [] },
-      env: { ...operatorEnv, SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
+      env: { SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
       mailTransport: { sendMail: async () => undefined },
     });
     await mailed.start("her@example.test");
