@@ -23,7 +23,7 @@ import { phonePairingLink } from "../shared/pairing-link.ts";
 import { parseAllowList } from "./account-signin.ts";
 import { appendAdminAction, flushAdminActivity, sharedSignIn } from "./admin-activity.ts";
 import { bindDecisionRetention, decisionRetentionDays } from "./decision-log.ts";
-import { hostedWorkspaceConfigured } from "./enterprise.ts";
+import { hostedWorkspaceConfigured } from "./enterprise.ts"; import { accessChangeRefusal } from "./people-limit.ts";
 import { reportableServerVersion, serverVersion } from "./environment.ts";
 import { resolveLoopbackTrust } from "./request-auth.ts";
 import { CRASH_EXIT_CODE, crashed, restartLine, restartPolicy } from "./restart.ts";
@@ -491,7 +491,7 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
     io.log(`${entry} can no longer sign in (existing sessions stay until they expire or are revoked with ${cliCommand("devices revoke ID")})`);
     return 0;
   }
-  await write(options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) });
+  const next = options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) }; const refusal = await accessChangeRefusal(options.dataDir, { admins, members }, next); if (refusal) { io.error(refusal); return 1; } await write(next);
   io.log(`${entry} can sign in at /pair with an emailed code (${options.chatOnly ? "chat and approvals" : "full access"})`);
   if (overridden) io.log("note: SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
   return 0;

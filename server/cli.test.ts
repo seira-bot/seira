@@ -902,3 +902,27 @@ describe("login --events", () => {
     expect(parseArgs(["login", "--events", "--email", "a@example.test"], {})).toMatchObject({ events: true, email: "a@example.test" });
   });
 });
+
+describe("seira access and the free people limit", () => {
+  it("AC-04 exits non-zero and leaves config.json unchanged when an add would pass 5 people", async () => {
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-limit-"));
+    const dataDir = join(home, "data");
+    const out: string[] = [];
+    const err: string[] = [];
+    const io = { log: (line: string) => out.push(line), error: (line: string) => err.push(line), ask: async () => "" };
+    const base = { command: "access" as const, port: 1, dataDir, tailscale: false, tunnel: false, client: false, pair: true, json: false };
+    const saved = { ...process.env };
+    for (const name of ["SEIRA_SIGNIN_EMAILS", "SEIRA_SIGNIN_MEMBER_EMAILS", "SEIRA_TEAM_KEY", "SEIRA_CLOUD_ROLE"]) delete process.env[name];
+    try {
+      for (const index of [1, 2, 3, 4, 5]) expect(await runAccess({ ...base, accessAction: "add", email: `p${index}@corp.test` }, io)).toBe(0);
+      const file = join(dataDir, "config.json");
+      const before = readFileSync(file, "utf8");
+      expect(await runAccess({ ...base, accessAction: "add", email: "p6@corp.test" }, io)).toBe(1);
+      expect(err.join("\n")).toMatch(/free plan includes 5 people/);
+      expect(readFileSync(file, "utf8")).toBe(before);
+    } finally {
+      Object.assign(process.env, saved);
+      await removeTempDir(home);
+    }
+  });
+});
