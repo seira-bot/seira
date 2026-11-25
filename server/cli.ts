@@ -23,7 +23,7 @@ import { phonePairingLink } from "../shared/pairing-link.ts";
 import { appendAdminAction, flushAdminActivity, sharedSignIn } from "./admin-activity.ts";
 import { bindDecisionRetention, decisionRetentionDays } from "./decision-log.ts";
 import { hostedWorkspaceConfigured } from "./enterprise.ts"; import { accessChange } from "./people-limit.ts";
-import { accessListsOf, readAccessConfig, saveAccessLists, unreadableAccessConfig, writeAccessConfig } from "./access-config.ts";
+import { accessListsOf, readAccessConfig, saveAccessLists, unreadableAccessConfig } from "./access-config.ts";
 import { reportableServerVersion, serverVersion } from "./environment.ts";
 import { resolveLoopbackTrust } from "./request-auth.ts";
 import { CRASH_EXIT_CODE, crashed, restartLine, restartPolicy } from "./restart.ts";
@@ -471,24 +471,22 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
     return 2;
   }
   const without = (items: string[]) => items.filter((item) => item !== entry);
-  if (options.accessAction === "remove") {
-    if (!admins.includes(entry) && !members.includes(entry)) { io.error(`${entry} is not on the list`); return 1; }
-    const left = { admins: without(admins), members: without(members) };
-    writeAccessConfig(options.dataDir, raw, left);
-    await audit(left);
-    io.log(`${entry} can no longer sign in (existing sessions stay until they expire or are revoked with ${cliCommand("devices revoke ID")})`);
-    return 0;
-  }
-  const next = options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) };
-  // One step under the lock that the server takes to admit a person: no other process can fill a place between the check and the save.
+  const removing = options.accessAction === "remove";
+  if (removing && !admins.includes(entry) && !members.includes(entry)) { io.error(`${entry} is not on the list`); return 1; }
+  const next = removing ? { admins: without(admins), members: without(members) } : options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) };
+  // One step under the lock that the server takes to admit a person and to save config.json: no other process can fill a place or write config.json between the check and the save.
   const change = await accessChange(options.dataDir, { admins, members }, next, undefined, () => {
-    const saved = saveAccessLists(options.dataDir, { admins, members }, next, cliCommand("access add"));
+    const saved = saveAccessLists(options.dataDir, { admins, members }, next, cliCommand(removing ? "access remove" : "access add"));
     if (typeof saved === "string") return saved;
     raw = saved.config;
     return null;
   });
   if (typeof change === "string") { io.error(change); return 1; }
   await audit(next);
+  if (removing) {
+    io.log(`${entry} can no longer sign in (existing sessions stay until they expire or are revoked with ${cliCommand("devices revoke ID")})`);
+    return 0;
+  }
   io.log(`${entry} can sign in at /pair with an emailed code (${options.chatOnly ? "chat and approvals" : "full access"})`);
   if (overridden) io.log("note: SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
   return 0;

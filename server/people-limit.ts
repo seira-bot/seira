@@ -13,6 +13,7 @@ import { PREMIUM_UPGRADE_URL } from "../shared/plan-keys.ts";
 import { allowedScopes, parseAllowList, type SignInAllowList } from "./account-signin.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { ensurePrivateDir } from "./data-dir.ts";
+import { PEOPLE_LOCK_FILE, withDataLock } from "./data-lock.ts";
 import { entitled, hostedWorkspaceConfigured, loadEnterpriseLayer } from "./enterprise.ts";
 import { acquireFileLock, type FileLockOptions } from "./file-lock.ts";
 import { premiumKeyStatus, premiumUnlimited, savePlanKey, TEAM_KEY_ENV, type PlanKeyOptions, type PlanKeyRefusal } from "./plan-key.ts";
@@ -22,9 +23,9 @@ import { signInFromEnv } from "./sign-in-env.ts";
  * on a data folder from an earlier version, everyone who could sign in when this file was first written. */
 export const PEOPLE_FILE = "sign-in-people.json";
 
-/** Held by whatever checks the places and then changes them, in the server and in `seira access add`: two processes must
+/** Held by every writer of the places, the removal record and config.json, in the server and in `seira access`: two processes must
  * not both pass the free limit, and one must not write over the other's change. */
-export const PEOPLE_LOCK_FILE = "sign-in-people.lock";
+export { PEOPLE_LOCK_FILE };
 
 /** Addresses that an admin removed in Settings → People. An `@domain` entry does not let them in again. */
 export const REMOVED_FILE = "sign-in-removed.json";
@@ -222,9 +223,13 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
 
   // The first start on this version: a data folder an earlier version used keeps everyone who could sign in there. A new
   // data folder keeps only who has a live session, so a long list in the environment or config.json gets no places.
+  // Checked again under the lock: another process may have written the file, and its places must not be replaced.
   if (options.applies && readKept(options.dataDir).state === "missing") {
-    const lists = options.lists();
-    keep(() => [...peopleHolding(lists, options.sessions(), existsSync(join(options.dataDir, EARLIER_RUN_FILE)) ? [...listed(lists)] : [])]);
+    locked(() => {
+      if (readKept(options.dataDir).state !== "missing") return;
+      const lists = options.lists();
+      keep(() => [...peopleHolding(lists, options.sessions(), existsSync(join(options.dataDir, EARLIER_RUN_FILE)) ? [...listed(lists)] : [])]);
+    });
   }
   prune(options.lists());
 
@@ -376,18 +381,20 @@ export async function accessChange(dataDir: string, before: SignInAllowList, aft
   const pinned = signInFromEnv(env);
   const inForce = (lists: SignInAllowList): SignInAllowList => ({ admins: pinned.admins ?? lists.admins, members: pinned.members ?? lists.members });
   await loadEnterpriseLayer({ env });
-  let lists = inForce(before);
-  const people = createPeopleLimit({
-    dataDir, env, lists: () => lists, sessions: () => sessionsFromFile(dataDir), revoke() {}, partialLists: true,
-    applies: peopleLimitApplies(env), enterpriseUnlimited: () => entitled("people-unlimited"),
+  // The lock covers the check, `commit` and the places, with or without the free limit: the other writers of config.json take it too.
+  return withDataLock(dataDir, () => {
+    let lists = inForce(before);
+    const people = createPeopleLimit({
+      dataDir, env, lists: () => lists, sessions: () => sessionsFromFile(dataDir), revoke() {}, partialLists: true,
+      applies: peopleLimitApplies(env), enterpriseUnlimited: () => entitled("people-unlimited"),
+    });
+    const change = people.listsChanging(inForce(after));
+    if ("refusal" in change) return `this server's free plan includes ${change.refusal.limit} people; add a Premium key in Settings → People (or set ${TEAM_KEY_ENV}) to add more`;
+    const saved = () => { lists = inForce(after); change.saved(); };
+    if (!commit) return { saved };
+    const refused = commit();
+    if (refused) return refused;
+    saved();
+    return { saved() {} };
   });
-  // No await from here: the lock that the check takes lasts until this run ends, so it covers `commit` and `saved`.
-  const change = people.listsChanging(inForce(after));
-  if ("refusal" in change) return `this server's free plan includes ${change.refusal.limit} people; add a Premium key in Settings → People (or set ${TEAM_KEY_ENV}) to add more`;
-  const saved = () => { lists = inForce(after); change.saved(); };
-  if (!commit) return { saved };
-  const refused = commit();
-  if (refused) return refused;
-  saved();
-  return { saved() {} };
 }

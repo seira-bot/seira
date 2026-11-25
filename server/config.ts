@@ -1,6 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, existsSync, renameSync } from "node:fs";
 import { dataHome, ensurePrivateDir } from "./data-dir.ts";
+import { withDataLock } from "./data-lock.ts";
 import { useBotMemorySetting } from "./bot-memory-budget.ts";
 import "../electron/legacy-env-boot.mjs"; import { isHarnessEnvName } from "../electron/legacy-env.mjs"; import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
@@ -888,14 +889,12 @@ export function onConfigSaved(listener: (before: JsonObject, after: JsonObject) 
 const RETIRED_CONFIG_SECTIONS = ["postiz"] as const;
 
 /** Secrets are never echoed back; callers report configured-or-not only. */
-export function saveConfig(
-  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & {
-    threads?: z.output<typeof threadsPatchSchema>;
-    newBots?: z.output<typeof newBotsPatchSchema>;
-    imageGen?: z.output<typeof imageGenPatchSchema>;
-  },
-  options: { replaceInstances?: boolean } = {},
-): void {
+export const saveConfig = (...args: Parameters<typeof saveConfigNow>): void => withDataLock(DATA_DIR, () => saveConfigNow(...args));
+
+/** Read, change and write happen under the lock that `seira access` and the people limit share: no other process writes between the read and the write. */
+function saveConfigNow(
+  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { threads?: z.output<typeof threadsPatchSchema>; newBots?: z.output<typeof newBotsPatchSchema>; imageGen?: z.output<typeof imageGenPatchSchema> },
+  options: { replaceInstances?: boolean } = {}): void {
   const p = join(DATA_DIR, "config.json");
   const read = readConfigFile(p);
   if (read.state === "unreadable" || read.state === "invalid") throw configSaveRefusal(read, p);
@@ -1003,7 +1002,6 @@ export function saveConfig(
       (disk.instances as JsonObject).openaiCompat = { ...entry.data, config: nextConfig };
     }
   }
-  ensurePrivateDir(DATA_DIR);
   if (read.state === "ok" && !writeConfigBackup(p, read.text)) throw configBackupRefusal(p);
   writeFileAtomic(p, JSON.stringify(disk, null, 2), { mode: 0o600 });
   storedConfig.forget();

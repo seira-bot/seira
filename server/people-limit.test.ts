@@ -339,7 +339,7 @@ describe("the free people limit", () => {
   });
 
   describe("when another process holds the sign-in lock", () => {
-    const held = (dataDir: string) => writeFileSync(join(dataDir, PEOPLE_LOCK_FILE), "99999\n");
+    const held = (dataDir: string) => writeFileSync(join(dataDir, PEOPLE_LOCK_FILE), `${process.ppid} - other\n`);
 
     it("does not admit, remove or change places until the other process lets go", () => {
       const { people, dataDir } = setup(domain(), { lock: { waitMs: 60 } });
@@ -352,6 +352,18 @@ describe("the free people limit", () => {
       rmSync(join(dataDir, PEOPLE_LOCK_FILE));
       expect(people.admit("p2@corp.test")).toBeNull();
       expect(kept(dataDir)).toEqual(["p1@corp.test", "p2@corp.test"]);
+    });
+
+    it("does not write the first set of places while the other process holds the lock", () => {
+      const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
+      dirs.push(dataDir);
+      held(dataDir);
+      const open = () => createPeopleLimit({ dataDir, env: {}, lists: () => domain(), sessions: () => [], revoke() {}, applies: true, enterpriseUnlimited: () => false, lock: { waitMs: 60 } });
+      expect(open).toThrow(/another process holds/);
+      expect(existsSync(join(dataDir, PEOPLE_FILE))).toBe(false);
+      rmSync(join(dataDir, PEOPLE_LOCK_FILE));
+      expect(open().status().people).toBe(0);
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
     });
 
     it("leaves no lock behind after an admit, a refusal or a save", () => {
@@ -388,6 +400,15 @@ describe("the free people limit", () => {
       expect(typeof change).toBe("object");
       expect(order).toEqual(["config written, lock held: true"]);
       expect(kept(dataDir)).toEqual(["a@corp.test"]);
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+    });
+
+    it("holds the lock for the save of config.json when the free limit does not apply, and leaves none", async () => {
+      const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
+      dirs.push(dataDir);
+      let held = false;
+      await accessChange(dataDir, { admins: [], members: [] }, { admins: ["a@corp.test"], members: [] }, { SEIRA_CLOUD_ROLE: "home" }, () => { held = existsSync(join(dataDir, PEOPLE_LOCK_FILE)); return null; });
+      expect(held).toBe(true);
       expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
     });
 
