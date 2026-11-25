@@ -74,6 +74,7 @@ const rowFor = (state: CompanionState) => {
     act: vi.fn(async (call: (bridge: typeof companion) => Promise<unknown>) => { await call(companion); return true; }),
     accountAct: vi.fn(async (call: (bridge: typeof remote) => Promise<unknown>) => { await call(remote); }) };
   flushSync(() => root.render(createElement(RouteRow, { c: controller as unknown as PhoneSetupController, state, route: "relay", blocked: null })));
+  if (!host.querySelector('[data-route-row="relay"]')) throw new Error("DBG " + host.innerHTML.slice(0, 600));
   const toggle = host.querySelector<HTMLElement>('[data-route-row="relay"] [role="switch"], [data-route-row="relay"] button')!;
   return { calls, toggle };
 };
