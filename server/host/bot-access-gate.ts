@@ -2,7 +2,7 @@
 // writes, editing changes its setup. Seeing at all is the visibility gate's (404 for a bot they cannot see); this is the
 // second check every member request passes, on the bot its path names, the bot of the conversation it names, and every
 // bot of a room. Admins pass: they can edit every bot. Off a Team Cloud only a grant that says "view"
-// (department-access.ts) limits a member, and members never edit there.
+// (department-access.ts) limits a member, and a needed "edit" counts as "chat" there, as it did before levels.
 import type { IncomingMessage } from "node:http";
 
 import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";

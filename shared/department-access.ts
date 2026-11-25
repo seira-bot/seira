@@ -26,4 +26,6 @@ export interface DepartmentAccessView {
 export interface DepartmentAccessChange {
   entry: string;
   access: AccessGrant | null;
+  /** The admin confirms that the entry joins the people of each chosen bot that is not shared with them yet. */
+  admitBots?: boolean;
 }

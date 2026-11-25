@@ -222,6 +222,32 @@ describe("the invite dialog", () => {
     expect(note("can open files")[0]!.textContent).toContain("Bots in Sales can open files");
   });
 
+  it("shows the note for a self-hosted bot shared with some people, and confirms it in the request", async () => {
+    fixture.bots = [{ id: "ani", name: "Ani", section: "Sales", visibility: { people: ["ana@acme.test"] } }, { id: "sup", name: "Support", section: "Finance", visibility: "everyone" }];
+    await show();
+    await type(emailField(), "Ada@Acme.test");
+    await click(radio("Chosen bots"));
+    await tick("sup");
+    expect(dialog().textContent).not.toContain("Inviting adds this person");
+    await tick("ani");
+    expect(note("Inviting adds this person to the people who can use Ani.")).toHaveLength(1);
+    await click(button("Invite"));
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "chat" }, { id: "sup", level: "chat" }] }, admitBots: true });
+  });
+
+  it("asks for each address when a domain meets a bot shared with some people, and sends nothing", async () => {
+    fixture.bots = [{ id: "ani", name: "Ani", section: "Sales", visibility: { people: ["ana@acme.test"] } }];
+    await show();
+    await type(emailField(), "@acme.test");
+    await click(radio("Chosen bots"));
+    await tick("ani");
+    expect(note("To give access to Ani, invite each person by their own address.")).toHaveLength(1);
+    expect(dialog().textContent).not.toContain("Inviting adds this person");
+    await click(button("Invite"));
+    expect(writes()).toEqual([]);
+    expect(dialog().querySelector("[role=alert]")!.textContent).toBe("To give access to Ani, invite each person by their own address.");
+  });
+
   it("AC-01 saves the access before it adds the person to the sign-in list, then shows the link", async () => {
     await show();
     await type(emailField(), "Ada@Acme.test");
@@ -230,7 +256,7 @@ describe("the invite dialog", () => {
     await choose(level("ani")!, "view");
     await click(button("Invite"));
     expect(writes()).toEqual(["/api/department-access", "/api/config"]);
-    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "view" }] } });
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "view" }] }, admitBots: true });
     expect(body("/api/config")).toEqual({ signIn: { admins: ["boss@acme.test"], members: ["ada@acme.test"] } });
     expect(dialog().querySelector("h2")!.textContent).toBe("Invite ready");
     expect(dialog().querySelector("code")!.textContent).toBe("https://team.acme.test/pair?email=ada%40acme.test");
@@ -376,7 +402,7 @@ describe("changing a person's access", () => {
     await choose(level("ani")!, "chat");
     await click(button("Save"));
     expect(writes()).toEqual(["/api/department-access"]);
-    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "chat" }] } });
+    expect(body("/api/department-access")).toEqual({ entry: "ada@acme.test", access: { departments: [], bots: [{ id: "ani", level: "chat" }] }, admitBots: true });
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

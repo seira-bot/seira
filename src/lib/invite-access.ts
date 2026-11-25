@@ -3,6 +3,7 @@ import { useStore } from "@/state/store";
 import { useOwnerOrAdmin } from "./use-owner-or-admin";
 import { readMembership } from "./membership";
 import { teamOfConfig } from "@/state/team-chats";
+import type { BotVisibility } from "../../shared/wire";
 
 export interface InviteEnvironment {
   emailSignIn: boolean;
@@ -46,4 +47,14 @@ export function useMayInvite(): boolean {
     return () => { alive = false; };
   }, []);
   return mayInviteHere({ admin, desktop: typeof window !== "undefined" && Boolean(window.ogb), config: state.config, environment: env });
+}
+
+/** Whether a bot is shared with only some people, so that inviting this entry has to add it to them. */
+export function inviteAddsToBot(bot: { onlyPeopleAdded?: boolean; visibility?: BotVisibility | null }, entry: string): boolean {
+  if (bot.onlyPeopleAdded === true) return true;
+  const audience = bot.visibility;
+  if (!audience || audience === "everyone") return false;
+  if (audience === "admins") return true;
+  const wanted = entry.trim().toLowerCase();
+  return !audience.people.some((person) => person.trim().toLowerCase() === wanted);
 }

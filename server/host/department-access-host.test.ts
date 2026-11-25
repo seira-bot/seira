@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
+import type { AdminActionRow } from "../admin-activity.ts";
 import { VisibleSet, type Viewer } from "../bot-visibility.ts";
 import type { BotVisibility } from "../../shared/wire.ts";
 import { DepartmentAccess } from "../department-access.ts";
@@ -21,7 +22,8 @@ function fixture(options: { elsewhere?: boolean; content?: string } = {}) {
   const forget = vi.fn();
   const closed: string[][] = [];
   const emails = ["ada@acme.test", "bob@acme.test", "cy@other.test"];
-  const bots: Array<{ id: string; threadId: string; section?: string; visibility?: unknown }> = [{ id: "s", threadId: "t-s", section: "Sales" }, { id: "f", threadId: "t-f", section: "Finance" }, { id: "g", threadId: "t-g" }];
+  const bots: Array<{ id: string; name: string; threadId: string; section?: string; visibility?: unknown }> = [{ id: "s", name: "Sam", threadId: "t-s", section: "Sales" }, { id: "f", name: "Fin", threadId: "t-f", section: "Finance" }, { id: "g", name: "Gus", threadId: "t-g" }];
+  const rows: Array<Omit<AdminActionRow, "at" | "actor">> = [];
   const admitted: Array<{ id: string; visibility: BotVisibility }> = [];
   const host = createDepartmentAccessHost({
     access,
@@ -33,9 +35,10 @@ function fixture(options: { elsewhere?: boolean; content?: string } = {}) {
     forgetVisibility: forget,
     closeStreams: (matches) => closed.push(emails.filter(matches)),
     bots: () => bots,
-    admit: (id, visibility) => { admitted.push({ id, visibility }); const bot = bots.find((one) => one.id === id); if (bot) bot.visibility = visibility; },
+    record: (written) => { rows.push(...written); },
+    setAudience: (id, visibility) => { admitted.push({ id, visibility }); const bot = bots.find((one) => one.id === id); if (bot) bot.visibility = visibility; },
   });
-  return { host, access, state, forget, closed, path, bots, admitted };
+  return { host, access, state, forget, closed, path, bots, admitted, rows };
 }
 const names = (host: ReturnType<typeof fixture>["host"], email: string | undefined) => { const grant = host.grantFor(email); return grant && [...grant.departments.keys()].sort(); };
 const member = (email: string) => ({ kind: "session", scopes: ["client"], session: { email } }) as unknown as RequestAuth;
@@ -251,28 +254,96 @@ describe("the grant body", () => {
   });
 });
 
+const admitting = (bots: Array<{ id: string; level: "view" | "chat" }>, extra: Record<string, unknown> = {}) => ({ ...asked([], bots), ...extra });
+const ADA = "ada@acme.test";
+
 describe("inviting a person to a bot", () => {
-  it("adds the address to a bot that is not shared with everyone (AC-06)", () => {
-    const { host, bots, admitted } = fixture();
+  it("answers 400 and stores nothing when a bot needs the address and the admin did not confirm (AC-06)", () => {
+    const { host, bots, access, admitted, rows } = fixture();
     bots[0]!.visibility = "admins";
     bots[1]!.visibility = { people: ["bob@acme.test"] };
-    expect(host.change(asked([], [{ id: "s", level: "chat" }, { id: "f", level: "view" }]))).toEqual({ ok: true });
-    expect(admitted).toEqual([{ id: "s", visibility: { people: ["ada@acme.test"] } }, { id: "f", visibility: { people: ["bob@acme.test", "ada@acme.test"] } }]);
+    const result = host.change(admitting([{ id: "s", level: "chat" }, { id: "f", level: "view" }]));
+    expect(result).toEqual({ ok: false, status: 400, error: "Inviting adds this person to the people who can use Sam, Fin. Confirm to continue." });
+    expect(access.all()).toEqual({});
+    expect(admitted).toEqual([]);
+    expect(rows).toEqual([]);
   });
 
-  it("leaves a bot for everyone, and a bot that already admits the address, as it is (AC-06)", () => {
+  it("adds the address to a confirmed bot, remembers it, and logs the audience and the person (AC-06)", () => {
+    const { host, bots, access, admitted, rows } = fixture();
+    bots[0]!.visibility = "admins";
+    bots[1]!.visibility = { people: ["bob@acme.test"] };
+    expect(host.change(admitting([{ id: "s", level: "chat" }, { id: "f", level: "view" }], { admitBots: true }))).toEqual({ ok: true });
+    expect(admitted).toEqual([{ id: "s", visibility: { people: [ADA] } }, { id: "f", visibility: { people: ["bob@acme.test", ADA] } }]);
+    expect(access.all()[ADA]?.admitted).toEqual(["s", "f"]);
+    expect(rows.map((row) => row.action)).toEqual(["visibility.update", "visibility.update", "people.update"]);
+    expect(rows[0]).toMatchObject({ target: { kind: "bot", id: "s", name: "Sam" }, before: { visibility: "admins" }, after: { visibility: { people: [ADA] } } });
+    expect(rows[2]).toEqual({
+      category: "people", action: "people.update", target: { kind: "person", name: ADA }, changed: ["access"],
+      before: { access: "whole team" },
+      after: { access: { departments: [], bots: [{ id: "s", level: "chat" }, { id: "f", level: "view" }] } },
+    });
+  });
+
+  it("takes the address out of the bot again when the grant is removed (AC-06)", () => {
+    const { host, bots, access, admitted, rows } = fixture();
+    bots[0]!.visibility = "admins";
+    bots[1]!.visibility = { people: ["bob@acme.test"] };
+    host.change(admitting([{ id: "s", level: "chat" }, { id: "f", level: "chat" }], { admitBots: true }));
+    admitted.length = 0;
+    rows.length = 0;
+    expect(host.change({ entry: ADA, access: null })).toEqual({ ok: true });
+    expect(bots[0]!.visibility).toBe("admins");
+    expect(bots[1]!.visibility).toEqual({ people: ["bob@acme.test"] });
+    expect(admitted).toEqual([{ id: "s", visibility: "admins" }, { id: "f", visibility: { people: ["bob@acme.test"] } }]);
+    expect(access.all()).toEqual({});
+    expect(rows.at(-1)).toMatchObject({ action: "people.update", before: { access: { bots: [{ id: "s" }, { id: "f" }] } }, after: { access: "whole team" } });
+  });
+
+  it("releases only the bots a change drops, and keeps the bots it keeps", () => {
+    const { host, bots, access, admitted } = fixture();
+    bots[0]!.visibility = "admins";
+    bots[1]!.visibility = "admins";
+    host.change(admitting([{ id: "s", level: "chat" }, { id: "f", level: "chat" }], { admitBots: true }));
+    admitted.length = 0;
+    expect(host.change(admitting([{ id: "s", level: "view" }]))).toEqual({ ok: true });
+    expect(admitted).toEqual([{ id: "f", visibility: "admins" }]);
+    expect(bots[0]!.visibility).toEqual({ people: [ADA] });
+    expect(access.all()[ADA]?.admitted).toEqual(["s"]);
+  });
+
+  it("never releases a bot that already had the address before the invite", () => {
+    const { host, bots, access, admitted } = fixture();
+    bots[0]!.visibility = { people: [ADA] };
+    expect(host.change(admitting([{ id: "s", level: "chat" }]))).toEqual({ ok: true });
+    expect(access.all()[ADA]?.admitted).toBeUndefined();
+    expect(host.change({ entry: ADA, access: null })).toEqual({ ok: true });
+    expect(admitted).toEqual([]);
+    expect(bots[0]!.visibility).toEqual({ people: [ADA] });
+  });
+
+  it("leaves a bot for everyone as it is, with no confirmation (AC-06)", () => {
     const { host, bots, admitted } = fixture();
-    bots[0]!.visibility = { people: ["ada@acme.test"] };
+    bots[0]!.visibility = { people: [ADA] };
     bots[1]!.visibility = { people: ["@acme.test"] };
-    expect(host.change(asked([], [{ id: "s", level: "chat" }, { id: "f", level: "chat" }, { id: "g", level: "chat" }]))).toEqual({ ok: true });
+    expect(host.change(admitting([{ id: "s", level: "chat" }, { id: "f", level: "chat" }, { id: "g", level: "chat" }]))).toEqual({ ok: true });
     expect(admitted).toEqual([]);
   });
 
-  it("adds a domain entry to the bot", () => {
-    const { host, bots, admitted } = fixture();
+  it("answers 400 and stores nothing for a domain entry and a bot that is not shared with everyone", () => {
+    const { host, bots, access, admitted } = fixture();
     bots[2]!.visibility = "admins";
+    const body = { entry: "@acme.test", admitBots: true, access: { departments: [], bots: [{ id: "g", level: "chat" }] } };
+    expect(host.change(body)).toEqual({ ok: false, status: 400, error: "To give access to Gus, invite each person by their own address." });
+    expect(access.all()).toEqual({});
+    expect(admitted).toEqual([]);
+  });
+
+  it("gives a domain entry a bot that is shared with everyone, with no admission", () => {
+    const { host, access, admitted } = fixture();
     expect(host.change({ entry: "@acme.test", access: { departments: [], bots: [{ id: "g", level: "chat" }] } })).toEqual({ ok: true });
-    expect(admitted).toEqual([{ id: "g", visibility: { people: ["@acme.test"] } }]);
+    expect(admitted).toEqual([]);
+    expect(access.all()["@acme.test"]?.admitted).toBeUndefined();
   });
 
   it("stores nothing when a bot cannot take one more person", () => {

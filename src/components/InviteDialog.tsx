@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { api, useStore } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { useModalDialog } from "@/hooks/use-modal-dialog";
+import { inviteAddsToBot } from "@/lib/invite-access";
 import { loadDepartmentChoices, openFolderDepartments, saveDepartmentAccess, type DepartmentChoices } from "@/lib/department-access";
 import { GRANT_LEVELS, type AccessGrant, type GrantLevel } from "../../shared/department-access";
 import { Segmented } from "./bot-panel/rows";
@@ -176,7 +177,9 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
       view.length ? t(inDepartments ? "invite.summary.viewDepartments" : "invite.summary.view", { names: listOf(view) }) : "",
     ].filter(Boolean).join(" ");
   })();
-  const sharedWithSome = effective === "bots" ? chosenBots.filter((bot) => bot.onlyPeopleAdded === true).map((bot) => bot.name) : [];
+  const typedEntry = edit ? edit.entry : email.trim().toLowerCase();
+  const sharedWithSome = effective === "bots" ? chosenBots.filter((bot) => inviteAddsToBot(bot, typedEntry)).map((bot) => bot.name) : [];
+  const byDomain = typedEntry.startsWith("@");
 
   const toggle = (setter: typeof setDepartmentLevels, key: string) => setter((current) => {
     const next = { ...current };
@@ -198,9 +201,13 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
       setError(t(effective === "departments" ? "invite.pickDepartments" : "invite.pickBots"));
       return;
     }
+    if (wanted && sharedWithSome.length > 0 && entry.startsWith("@")) {
+      setError(t("invite.domainBot", { bots: listOf(sharedWithSome) }));
+      return;
+    }
     setBusy(true);
     try {
-      if (wanted) await saveDepartmentAccess(entry, wanted);
+      if (wanted) await saveDepartmentAccess(entry, wanted, sharedWithSome.length > 0);
       else if (edit ? edit.grant : choices?.access.people[entry]) await saveDepartmentAccess(entry, null);
       if (edit) {
         onDone?.();
@@ -322,7 +329,7 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
               {loaded && choices === null && !admin && <p className="text-[12px] text-ink-secondary">{t("invite.access.unavailable")}</p>}
               {effective === "departments" && chosenDepartments.includes("") && <p role="note" className="text-[12px] leading-relaxed text-warning">{t("people.access.generalWarning")}</p>}
               {openFolders.length > 0 && <p role="note" className="text-[12px] leading-relaxed text-warning">{t("invite.folderWarning", { departments: listOf(openFolders.map(departmentName)) })}</p>}
-              {sharedWithSome.length > 0 && <p role="note" className="text-[12px] leading-relaxed text-ink-secondary">{t("invite.botNote", { bots: listOf(sharedWithSome) })}</p>}
+              {sharedWithSome.length > 0 && <p role="note" className="text-[12px] leading-relaxed text-ink-secondary">{t(byDomain ? "invite.domainBot" : "invite.botNote", { bots: listOf(sharedWithSome) })}</p>}
               {mixed && <p role="note" className="text-[12px] leading-relaxed text-ink-secondary">{t("invite.mixed")}</p>}
               {choices?.access.unreadable && <p role="alert" className="text-[12px] text-danger">{t("people.access.unreadable")}</p>}
               <p role="status" data-invite-summary className="text-[13px] leading-relaxed text-ink-secondary">{summary}</p>

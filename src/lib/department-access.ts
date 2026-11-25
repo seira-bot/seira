@@ -28,8 +28,9 @@ export async function loadDepartmentChoices(): Promise<DepartmentChoices | null>
   }
 }
 
-export async function saveDepartmentAccess(entry: string, access: AccessGrant | null): Promise<void> {
-  await api("/api/department-access", { method: "PUT", body: JSON.stringify({ entry, access }) });
+/** `admitBots` confirms that the entry joins the people of each chosen bot that is not shared with them yet. */
+export async function saveDepartmentAccess(entry: string, access: AccessGrant | null, admitBots = false): Promise<void> {
+  await api("/api/department-access", { method: "PUT", body: JSON.stringify({ entry, access, ...(admitBots ? { admitBots: true } : {}) }) });
 }
 
 /** The chosen departments whose bots are not held to chosen folders: they can still read files outside them. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mayInviteHere, type InviteEnvironment } from "./invite-access";
+import { inviteAddsToBot, mayInviteHere, type InviteEnvironment } from "./invite-access";
 
 const selfHosted: InviteEnvironment = { emailSignIn: true, cloudTeam: false };
 const ready = { admin: true as boolean | null, desktop: false, config: {} as unknown, environment: selfHosted as InviteEnvironment | null };
@@ -36,5 +36,24 @@ describe("where an admin may invite people", () => {
     expect(mayInviteHere({ ...ready, environment: { emailSignIn: false, cloudTeam: false } })).toBe(false);
     expect(mayInviteHere({ ...ready, environment: null })).toBe(false);
     expect(mayInviteHere({ ...ready, config: null })).toBe(false);
+  });
+});
+
+describe("which bots an invite adds the person to", () => {
+  it("needs no note for a bot shared with everyone", () => {
+    expect(inviteAddsToBot({}, "ada@acme.test")).toBe(false);
+    expect(inviteAddsToBot({ visibility: null }, "ada@acme.test")).toBe(false);
+    expect(inviteAddsToBot({ visibility: "everyone" }, "ada@acme.test")).toBe(false);
+  });
+
+  it("needs the note for a bot shared with admins or with other people", () => {
+    expect(inviteAddsToBot({ visibility: "admins" }, "ada@acme.test")).toBe(true);
+    expect(inviteAddsToBot({ visibility: { people: ["ana@acme.test"] } }, "ada@acme.test")).toBe(true);
+    expect(inviteAddsToBot({ onlyPeopleAdded: true }, "ada@acme.test")).toBe(true);
+  });
+
+  it("needs no note when the entry is already one of the people, ignoring case and spaces", () => {
+    expect(inviteAddsToBot({ visibility: { people: ["ada@acme.test"] } }, " Ada@Acme.test ")).toBe(false);
+    expect(inviteAddsToBot({ visibility: { people: ["Ada@Acme.test "] } }, "ada@acme.test")).toBe(false);
   });
 });

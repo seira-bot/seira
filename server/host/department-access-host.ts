@@ -3,6 +3,7 @@
 import { entryMatches } from "../../shared/bot-access.ts";
 import type { AccessGrant, DepartmentAccessView, GrantLevel } from "../../shared/department-access.ts";
 import type { BotVisibility } from "../../shared/wire.ts";
+import { botChangeRows, type AdminActionRow } from "../admin-activity.ts";
 import { audienceWithin, MAX_VISIBILITY_PEOPLE, storedVisibility, type ResolvedGrant, type VisibleSet } from "../bot-visibility.ts";
 import { accessEntry, MAX_GRANTED_BOTS, MAX_GRANTED_DEPARTMENTS, type DepartmentAccess, type StoredGrant } from "../department-access.ts";
 import type { WallKind } from "../peer-roster.ts";
@@ -21,9 +22,11 @@ export interface DepartmentAccessHostDeps {
   forgetVisibility(): void;
   closeStreams(matches: (email: string) => boolean): void;
   /** Every bot of the server, with its department and who may see it. */
-  bots(): readonly { id: string; section?: string; visibility?: unknown }[];
+  bots(): readonly { id: string; name?: string; section?: string; visibility?: unknown }[];
   /** Sets a bot's audience the way an admin's change does: saved, announced, and applied to every open stream. */
-  admit(botId: string, visibility: BotVisibility): void;
+  setAudience(botId: string, visibility: BotVisibility): void;
+  /** Writes admin activity rows for the change that is running. */
+  record(rows: Array<Omit<AdminActionRow, "at" | "actor">>): void;
 }
 
 export type DepartmentAccessResult = { ok: true } | { ok: false; status: number; error: string };
@@ -33,6 +36,7 @@ type Wallable = { id: string; section?: string; visibility?: unknown };
 const NOT_AVAILABLE = "This is not available with limited access.";
 const BLOCKED_PATHS = /^\/api\/(?:team-files(?:\/|$)|workspace-backup\/restore$)/;
 const CHOOSE = "Choose at least one department or bot.";
+const WHOLE_TEAM = "whole team";
 const sectionKey = (section?: string): string => section?.trim() || "";
 const refuse = (error: string): DepartmentAccessResult => ({ ok: false, status: 400, error });
 const isLevel = (value: unknown): value is GrantLevel => value === "view" || value === "chat";
@@ -147,18 +151,20 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     deps.closeStreams((email) => affected.some((entry) => entryMatches(entry, email)));
   }
 
+  function grantView(stored: StoredGrant): AccessGrant {
+    let departments: AccessGrant["departments"] = [];
+    try {
+      departments = [...resolve(stored).departments].map(([name, level]) => ({ name, level }));
+    } catch {
+      // The department file cannot be read: the grant lists no department, which only narrows access.
+    }
+    return { departments, bots: stored.bots.map((one) => ({ id: one.id, level: one.level })) };
+  }
+
   function view(): DepartmentAccessView {
     const people: Record<string, AccessGrant> = {};
     if (!deps.elsewhere() && !deps.access.unreadable) {
-      for (const [entry, stored] of Object.entries(deps.access.all())) {
-        let departments: AccessGrant["departments"] = [];
-        try {
-          departments = [...resolve(stored).departments].map(([name, level]) => ({ name, level }));
-        } catch {
-          // The department file cannot be read: the grant lists no department, which only narrows access.
-        }
-        people[entry] = { departments, bots: stored.bots.map((one) => ({ id: one.id, level: one.level })) };
-      }
+      for (const [entry, stored] of Object.entries(deps.access.all())) people[entry] = grantView(stored);
     }
     return { available: !deps.elsewhere(), people, unreadable: deps.access.unreadable };
   }
@@ -189,6 +195,14 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     return people.length >= MAX_VISIBILITY_PEOPLE ? "full" : { people: [...people, entry] };
   }
 
+  /** The audience a bot has without this entry, or null when the entry is not exactly one of its people. */
+  function withoutEntry(entry: string, bot: { visibility?: unknown }): BotVisibility | null {
+    const own = storedVisibility(bot.visibility);
+    if (typeof own === "string" || !own.people.includes(entry)) return null;
+    const people = own.people.filter((person) => person !== entry);
+    return people.length ? { people } : "admins";
+  }
+
   function change(body: unknown): DepartmentAccessResult {
     if (deps.elsewhere()) return { ok: false, status: 409, error: NOT_AVAILABLE };
     const record = isObject(body) ? body : {};
@@ -196,36 +210,67 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     if (!entry) return refuse("Enter an email address or @domain.");
     const access = parseBody(record);
     if (typeof access === "string") return refuse(access);
-    const admits: Array<{ id: string; visibility: BotVisibility }> = [];
+    const live = new Map(deps.bots().map((bot) => [bot.id, bot]));
+    const audience: Array<{ id: string; visibility: BotVisibility }> = [];
+    let previous: StoredGrant | undefined;
+    let stored: StoredGrant | null = null;
     try {
-      let stored: StoredGrant | null = null;
+      previous = deps.access.all()[entry];
+      const kept = new Set(access ? access.bots.map((one) => one.id) : []);
+      const admitted = new Set((previous?.admitted ?? []).filter((id) => kept.has(id)));
       if (access) {
         const names = new Set(access.departments.map((one) => one.name));
-        const ids = new Set(access.bots.map((one) => one.id));
-        if (names.size === 0 && ids.size === 0) return refuse(CHOOSE);
+        if (names.size === 0 && kept.size === 0) return refuse(CHOOSE);
         if (names.size > MAX_GRANTED_DEPARTMENTS) return refuse("Choose fewer departments.");
-        if (ids.size > MAX_GRANTED_BOTS) return refuse("Choose fewer bots.");
+        if (kept.size > MAX_GRANTED_BOTS) return refuse("Choose fewer bots.");
         const known = new Set(deps.sections());
         if ([...names].some((name) => name !== "" && !known.has(name))) return refuse("No such department.");
-        const live = new Map(deps.bots().map((bot) => [bot.id, bot]));
-        if ([...ids].some((id) => !live.has(id))) return refuse("No such bot.");
-        for (const id of ids) {
+        if ([...kept].some((id) => !live.has(id))) return refuse("No such bot.");
+        const joins: Array<{ id: string; visibility: BotVisibility }> = [];
+        for (const id of kept) {
           const next = admission(entry, live.get(id)!);
           if (next === "full") return refuse("That bot is shared with too many people already.");
-          if (next) admits.push({ id, visibility: next });
+          if (next) joins.push({ id, visibility: next });
         }
+        if (joins.length) {
+          const list = joins.map((one) => live.get(one.id)?.name ?? one.id).join(", ");
+          if (entry.startsWith("@")) return refuse(`To give access to ${list}, invite each person by their own address.`);
+          if (record.admitBots !== true) return refuse(`Inviting adds this person to the people who can use ${list}. Confirm to continue.`);
+        }
+        for (const one of joins) admitted.add(one.id);
+        audience.push(...joins);
         stored = {
           departments: access.departments.map((one) => ({ id: one.name === "" ? "" : deps.ensureKey(one.name), level: one.level })),
           bots: access.bots.map((one) => ({ id: one.id, level: one.level })),
+          ...(admitted.size ? { admitted: [...admitted] } : {}),
         };
+      }
+      for (const id of previous?.admitted ?? []) {
+        const bot = live.get(id);
+        const next = !kept.has(id) && bot ? withoutEntry(entry, bot) : null;
+        if (next) audience.push({ id, visibility: next });
       }
       deps.access.set(entry, stored);
     } catch {
       return { ok: false, status: 409, error: "Department access cannot be changed right now." };
     }
-    for (const one of admits) deps.admit(one.id, one.visibility);
+    const rows: Array<Omit<AdminActionRow, "at" | "actor">> = [];
+    for (const one of audience) {
+      const bot = live.get(one.id)!;
+      deps.setAudience(one.id, one.visibility);
+      rows.push(...botChangeRows({ id: one.id, name: bot.name }, { visibility: bot.visibility }, { visibility: one.visibility }, ["visibility"]));
+    }
+    rows.push({
+      category: "people", action: "people.update", target: { kind: "person", name: entry }, changed: ["access"],
+      before: { access: previous ? grantView(previous) : WHOLE_TEAM }, after: { access: stored ? grantView(stored) : WHOLE_TEAM },
+    });
     changed();
     deps.closeStreams((email) => entryMatches(entry, email));
+    try {
+      deps.record(rows);
+    } catch {
+      // The change is saved; a failed log write must not undo it.
+    }
     return { ok: true };
   }
 

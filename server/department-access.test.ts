@@ -70,6 +70,31 @@ describe("DepartmentAccess", () => {
     expect(new DepartmentAccess(path).forPerson("bob@acme.test")).toEqual(grant([]));
   });
 
+  it("keeps the bots an invite admitted through the file, and reads a file without them", () => {
+    const path = file();
+    const access = new DepartmentAccess(path);
+    access.set("ada@acme.test", { ...grant([], ["b1", "b2"]), admitted: ["b1", "b1", "b2"] });
+    access.set("bob@acme.test", { ...grant([], ["b1"]), admitted: [] });
+    const people = JSON.parse(readFileSync(path, "utf8")).people;
+    expect(people["ada@acme.test"].admitted).toEqual(["b1", "b2"]);
+    expect("admitted" in people["bob@acme.test"]).toBe(false);
+    expect(new DepartmentAccess(path).forPerson("ada@acme.test")).toEqual({ ...grant([], ["b1", "b2"]), admitted: ["b1", "b2"] });
+    writeFileSync(path, JSON.stringify({ version: 2, people: { "cy@acme.test": grant([], ["b1"]) } }));
+    const older = new DepartmentAccess(path);
+    expect(older.unreadable).toBe(false);
+    expect(older.forPerson("cy@acme.test")).toEqual(grant([], ["b1"]));
+  });
+
+  it("removes a deleted bot from the admitted list too", () => {
+    const path = file();
+    const access = new DepartmentAccess(path);
+    access.set("ada@acme.test", { ...grant([], ["b1", "b2"]), admitted: ["b1", "b2"] });
+    expect(access.dropBot("b1")).toBe(true);
+    expect(access.forPerson("ada@acme.test")).toEqual({ ...grant([], ["b2"]), admitted: ["b2"] });
+    access.dropBot("b2");
+    expect("admitted" in JSON.parse(readFileSync(path, "utf8")).people["ada@acme.test"]).toBe(false);
+  });
+
   it("matches the exact address before its @domain", () => {
     const access = new DepartmentAccess(file());
     access.set("@acme.test", grant(["team:domain"]));

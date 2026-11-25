@@ -190,7 +190,7 @@ posixOnly("a person limited to some departments", () => {
       { desk: "", closed: "", salesThread: "", deskThread: "", finThread: "", room: "", roomThread: "", routine: "", avatar: "" };
     const later = () => Date.now() + 86_400_000;
     const invite = async (access: { departments?: Array<{ name: string; level: "view" | "chat" }>; bots?: Array<{ id: string; level: "view" | "chat" }> } | null) => {
-      const res = await api("PUT", "/api/department-access", { entry: ADA, access: access && { departments: access.departments ?? [], bots: access.bots ?? [] } }, BOSS);
+      const res = await api("PUT", "/api/department-access", { entry: ADA, admitBots: true, access: access && { departments: access.departments ?? [], bots: access.bots ?? [] } }, BOSS);
       expect(res.status, JSON.stringify(res.body)).toBe(200);
       return res;
     };
@@ -262,6 +262,9 @@ posixOnly("a person limited to some departments", () => {
       expect(await botIds()).toEqual([]);
       await invite({ bots: [{ id: extra.closed, level: "chat" }] });
       expect(await botIds()).toEqual([extra.closed]);
+      await invite(null);
+      expect((await listed(BOSS)).bots.find((bot: any) => bot.id === extra.closed).visibility).toBe("admins");
+      expect(await botIds()).not.toContain(extra.closed);
       expect((await api("PATCH", `/api/bots/${extra.closed}`, { visibility: "admins" }, BOSS)).status).toBe(200);
     }, 60_000);
 

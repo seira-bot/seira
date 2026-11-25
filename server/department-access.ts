@@ -11,13 +11,18 @@ const ENTRY = /^(?:[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+|@[^\s@,;<>"]+\.[^\s@,
 
 const level = z.enum(["view", "chat"]);
 const item = z.object({ id: z.string().max(200), level }).strict();
+const person = z.object({
+  departments: z.array(item).max(MAX_GRANTED_DEPARTMENTS),
+  bots: z.array(item).max(MAX_GRANTED_BOTS),
+  admitted: z.array(z.string().max(200)).max(MAX_GRANTED_BOTS).optional(),
+}).strict();
 const legacyFile = z.object({
   version: z.literal(1),
   people: z.record(z.string(), z.object({ departments: z.array(z.string().max(200)).max(MAX_GRANTED_DEPARTMENTS) }).strict()),
 }).strict();
 const currentFile = z.object({
   version: z.literal(2),
-  people: z.record(z.string(), z.object({ departments: z.array(item).max(MAX_GRANTED_DEPARTMENTS), bots: z.array(item).max(MAX_GRANTED_BOTS) }).strict()),
+  people: z.record(z.string(), person),
 }).strict();
 
 /** One item of a grant: a department by its stable id ("" is General) or a bot by its id. */
@@ -30,6 +35,8 @@ export interface GrantedItem {
 export interface StoredGrant {
   departments: GrantedItem[];
   bots: GrantedItem[];
+  /** The bots whose audience an invite of this entry widened, so a later change can undo it. */
+  admitted?: string[];
 }
 
 /** An address or `@domain`, lower case; null when it is neither. */
@@ -45,8 +52,12 @@ function collapse(items: readonly GrantedItem[]): GrantedItem[] {
   return [...byId].map(([id, own]) => ({ id, level: own }));
 }
 
-const normal = (grant: StoredGrant): StoredGrant => ({ departments: collapse(grant.departments), bots: collapse(grant.bots) });
-const copy = (grant: StoredGrant): StoredGrant => ({ departments: grant.departments.map((one) => ({ ...one })), bots: grant.bots.map((one) => ({ ...one })) });
+const admittedOf = (list: readonly string[] | undefined): Pick<StoredGrant, "admitted"> => {
+  const ids = [...new Set(list ?? [])];
+  return ids.length ? { admitted: ids } : {};
+};
+const normal = (grant: StoredGrant): StoredGrant => ({ departments: collapse(grant.departments), bots: collapse(grant.bots), ...admittedOf(grant.admitted) });
+const copy = (grant: StoredGrant): StoredGrant => ({ departments: grant.departments.map((one) => ({ ...one })), bots: grant.bots.map((one) => ({ ...one })), ...admittedOf(grant.admitted) });
 
 function parseFile(text: string): Record<string, StoredGrant> {
   const raw: unknown = JSON.parse(text);
@@ -113,7 +124,7 @@ export class DepartmentAccess {
     for (const [entry, grant] of Object.entries(this.people)) {
       const kept = grant.departments.filter((one) => live(one.id));
       if (kept.length !== grant.departments.length) changed = true;
-      next[entry] = { departments: kept, bots: grant.bots };
+      next[entry] = { ...grant, departments: kept };
     }
     if (changed) this.save(next);
     return changed;
@@ -127,7 +138,9 @@ export class DepartmentAccess {
     for (const [entry, grant] of Object.entries(this.people)) {
       const kept = grant.bots.filter((one) => one.id !== botId);
       if (kept.length !== grant.bots.length) changed = true;
-      next[entry] = { departments: grant.departments, bots: kept };
+      const admitted = (grant.admitted ?? []).filter((id) => id !== botId);
+      if (admitted.length !== (grant.admitted ?? []).length) changed = true;
+      next[entry] = { departments: grant.departments, bots: kept, ...admittedOf(admitted) };
     }
     if (changed) this.save(next);
     return changed;

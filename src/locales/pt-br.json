@@ -4428,6 +4428,7 @@
   "invite.level.label": "Nível de acesso para {name}",
   "invite.findBot": "Buscar um bot",
   "invite.botNote": "Ao convidar, esta pessoa é adicionada a quem pode usar {bots}.",
+  "invite.domainBot": "Para dar acesso a {bots}, convide cada pessoa pelo próprio endereço.",
   "invite.mixed": "Esta pessoa tem departamentos e bots. Ao salvar, fica só a escolha feita aqui.",
   "invite.summary.whole": "Ela pode usar todos os bots compartilhados com a equipe.",
   "invite.summary.chat": "Ela pode conversar com {names}.",

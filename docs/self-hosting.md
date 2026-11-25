@@ -1256,9 +1256,12 @@ You can also start from the sidebar. Open the menu of a department and choose
 this bot**. The dialog opens with that department or bot already ticked. These
 two entries show only to an admin on a server that signs people in by email.
 
-To change what a person can reach, choose **Change access** on their row. If
-you choose a bot that is shared with only some people, inviting adds the person
-to those people.
+To change what a person can reach, choose **Change access** on their row.
+If you invite a person by address to a bot that is shared with only some people,
+Seira adds the person to those people, after you confirm.
+When you remove that bot from their access, or remove the person, Seira removes
+them from those people again.
+An `@company.com` entry cannot get such a bot, so invite each person by address.
 
 A person with chosen departments cannot see team files or restore a workspace
 backup. Bots in a department that is named in any user's list can reach only
