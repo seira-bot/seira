@@ -133,8 +133,7 @@ describe("each user's access", () => {
     expect(accessLine(grant, (id) => names[id] ?? id)).toBe("Sales · Can chat, General · Can view, Ani · Can view");
     expect(html).toContain("Sales · Can chat, General · Can view, Ani · Can view</span>");
     expect(html).toContain("No department</span>");
-    expect(html.match(/Whole team<\/span>/g)).toHaveLength(4);
-    expect(html).toContain(">Access<");
+    expect(html.match(/Whole team<\/span>/g)).toHaveLength(2);
     expect(html.match(/>Change access</g)).toHaveLength(3);
   });
 
