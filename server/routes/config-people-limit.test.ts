@@ -40,7 +40,9 @@ async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sess
     localVmImageBusy: { get: () => false }, localVmModeChangeBusy: { set() {} }, localVmModeChanging: () => () => {},
     configStatus: () => ({}), configForAccess: (status: unknown) => status, broadcast() {}, resyncOpenCodeProviderKeys() {},
     providerConfigBusy: { get: () => false, set() {} }, computerProviderConfigTransitions: new Map(), managedComputerOwners: new Map(),
-    providerOperationConflict: () => null, perBotLocalVmCountForModeChange: () => 0, providerConfigs: () => ({}), drainQueuedSends() {},
+    providerOperationConflict: () => null, perBotLocalVmCountForModeChange: () => 0, providerConfigs: () => ({}), drainQueuedSends() {}, revokeEngineCapabilities() {}, reloadProviders() {},
+    browserCleanup: { hasPendingProfile: () => false, prepare: () => [], abort() {}, commit: async () => [], ensure: async () => {} },
+    browserLive: { closeAll() {}, closeForSession() {} }, browserRuntime: { heldBy: () => [] }, usedBrowserSessions: new Map(), closeBrowser: async () => true, browserEngineSwitched() {}, browserEngine: () => "",
     cloudHome: false, cloudTeam: false, hostedModels: false, sharedMembership: () => false,
   } as unknown as ConfigRouteDeps);
   const replies: Array<{ status: number; body: Record<string, unknown> }> = [];
