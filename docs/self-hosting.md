@@ -1279,7 +1279,7 @@ SEIRA_TEAM_KEY="seira-team.…"
   sign-in. To free that place, remove them on their row in Settings → People.
 - Settings and `seira access add` refuse an address that would go past the
   limit. A new person who would go past it through an `@domain` entry sees
-  "This workspace is full. Ask your admin."
+  "This installation is full. Ask your admin."
 - The limit never takes access away. A server that already has more than 5
   people when it updates keeps all of them. When a key ends, people stay
   unlimited for 7 more days; after that, the limit applies to new people only.
