@@ -1800,6 +1800,10 @@ body {
   background-color: transparent;
   border-color: var(--settings-edge);
 }
+/* The hairline above outranks a field's own `border-danger`; a field that reports an error keeps its red edge. */
+:root:is([data-skin="midnight"], [data-skin="daylight"]) [data-settings-look] .bg-inset[aria-invalid="true"] {
+  border-color: color-mix(in srgb, var(--color-danger) 60%, transparent);
+}
 :root[data-skin="midnight"] [data-settings-look] > .glass-scrim {
   background: rgb(0 0 0 / 0.55);
 }
