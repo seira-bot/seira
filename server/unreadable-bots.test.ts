@@ -24,6 +24,13 @@ const FAULTS: Array<{ name: string; unreadable?: boolean; damage: (whole: string
   { name: "empty file", damage: () => "" },
   { name: "text that is not JSON", damage: () => "not json at all, only text from outside" },
   { name: "valid JSON that is not a list", damage: () => "{\"bots\":[]}" },
+  { name: "list with an element that has no id (null)", damage: () => "[{\"id\":null,\"name\":\"x\"}]" },
+  { name: "list with an element that is a number", damage: () => "[7]" },
+  { name: "list with an element that is null", damage: () => "[null]" },
+  { name: "list with an element that is a list", damage: () => "[[]]" },
+  { name: "list with an empty id", damage: () => "[{\"id\":\"\",\"name\":\"x\"}]" },
+  { name: "list with an id that is a number", damage: () => "[{\"id\":3,\"name\":\"x\"}]" },
+  { name: "list with one good element and one bad element", damage: (whole) => whole.replace(/\]\s*$/, ",7]") },
   { name: "mode 000", unreadable: true, damage: (whole) => whole },
 ];
 
