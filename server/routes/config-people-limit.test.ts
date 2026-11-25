@@ -39,6 +39,8 @@ async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sess
     localVmIdles: new Map(), localVmIdleMs: () => 0, localVmActiveThreads: new Set(), localVmLifecycleBusy: new Set(),
     localVmImageBusy: { get: () => false }, localVmModeChangeBusy: { set() {} }, localVmModeChanging: () => () => {},
     configStatus: () => ({}), configForAccess: (status: unknown) => status, broadcast() {}, resyncOpenCodeProviderKeys() {},
+    providerConfigBusy: { get: () => false, set() {} }, computerProviderConfigTransitions: new Map(), managedComputerOwners: new Map(),
+    providerOperationConflict: () => null, perBotLocalVmCountForModeChange: () => 0, providerConfigs: () => ({}), drainQueuedSends() {},
     cloudHome: false, cloudTeam: false, hostedModels: false, sharedMembership: () => false,
   } as unknown as ConfigRouteDeps);
   const replies: Array<{ status: number; body: Record<string, unknown> }> = [];
