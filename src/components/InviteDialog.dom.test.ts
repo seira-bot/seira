@@ -300,7 +300,7 @@ describe("the invite dialog", () => {
     expect(radio("Chosen departments").checked).toBe(true);
     expect(item("Sales").querySelector<HTMLInputElement>("input")!.checked).toBe(true);
     expect(item("Finance").querySelector<HTMLInputElement>("input")!.checked).toBe(false);
-    expect(summary()).toBe("They can chat with Sales.");
+    expect(summary()).toBe("They can chat with the bots in Sales.");
   });
 
   it("AC-21 opens with the bot of the menu ticked", async () => {
