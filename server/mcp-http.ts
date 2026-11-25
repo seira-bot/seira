@@ -4,6 +4,7 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP } from "node:net";
 import { Readable } from "node:stream";
 
+import { isOneBotMcpServer } from "../shared/one-bot-mcp.ts";
 import type { RemoteMcpSpec } from "./contracts.ts";
 
 export type McpHttpFailure = "network" | "status" | "protocol";
@@ -204,6 +205,10 @@ function drain(response: Response): void {
   void response.body?.cancel().catch(() => {});
 }
 
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+export const MAX_MCP_REDIRECTS = 5;
+export const ONE_BOT_REDIRECT_REFUSAL = "The server redirects to an app that serves one bot only.";
+
 export class RemoteMcpClient {
   private readonly target: RemoteMcpSpec;
   private readonly fetchImpl: typeof fetch;
@@ -285,7 +290,7 @@ export class RemoteMcpClient {
       try {
         const headers = this.headers();
         headers.set("mcp-session-id", this.sessionId);
-        const response = await this.fetchImpl(this.target.url, { method: "DELETE", headers, signal: AbortSignal.timeout(2_000) });
+        const response = await this.send(this.target.url, { method: "DELETE", headers, signal: AbortSignal.timeout(2_000) });
         drain(response);
       } catch {
       }
@@ -301,14 +306,46 @@ export class RemoteMcpClient {
     return headers;
   }
 
+  /** Sends a request and follows a redirect here, not in `fetch`, so each hop is checked before it is sent. A hop to a
+   * one-bot address is refused, unless this server is that address itself (shared/one-bot-mcp.ts). A hop with no usable
+   * `Location`, or more than `MAX_MCP_REDIRECTS` hops, is refused too: when in doubt, the rule applies. A 301, 302 or 303
+   * answer to a POST becomes a GET with no body, as `fetch` does. */
+  private async send(url: string, init: RequestInit): Promise<Response> {
+    const own = isOneBotMcpServer(this.target);
+    let current = url;
+    let request: RequestInit = { ...init, redirect: "manual" };
+    for (let hop = 0; ; hop++) {
+      const response = await this.fetchImpl(current, request);
+      if (!REDIRECT_STATUSES.has(response.status)) return response;
+      drain(response);
+      let next: URL;
+      try {
+        next = new URL(response.headers.get("location") ?? "", current);
+        if (!response.headers.get("location")) throw new TypeError("no location");
+      } catch {
+        throw new McpHttpError("protocol", "redirect with no usable address");
+      }
+      if (hop >= MAX_MCP_REDIRECTS) throw new McpHttpError("protocol", "too many redirects");
+      if (!own && isOneBotMcpServer({ type: "http", url: next.toString() })) throw new McpHttpError("protocol", ONE_BOT_REDIRECT_REFUSAL);
+      current = next.toString();
+      const toGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
+      if (toGet) {
+        const { body: _body, ...rest } = request;
+        const headers = new Headers(request.headers);
+        headers.delete("content-type");
+        request = { ...rest, method: "GET", headers };
+      }
+    }
+  }
+
   private async post(url: string, frame: unknown, signal: AbortSignal): Promise<Response> {
     const headers = this.headers();
     headers.set("content-type", "application/json");
     let response: Response;
     try {
-      response = await this.fetchImpl(url, { method: "POST", headers, body: JSON.stringify(frame), signal });
+      response = await this.send(url, { method: "POST", headers, body: JSON.stringify(frame), signal });
     } catch (error) {
-      if (signal.aborted) throw error;
+      if (signal.aborted || error instanceof McpHttpError) throw error;
       throw new McpHttpError("network", "request failed");
     }
     if (!response.ok) {
@@ -370,7 +407,7 @@ export class RemoteMcpClient {
       signal.addEventListener("abort", abortOpening, { once: true });
       if (signal.aborted) abortOpening();
       const streamSignal = AbortSignal.any([opening.signal, this.sseAbort.signal]);
-      this.fetchImpl(this.target.url, { method: "GET", headers, signal: streamSignal })
+      this.send(this.target.url, { method: "GET", headers, signal: streamSignal })
         .then(async (response) => {
           if (!response.ok) {
             drain(response);

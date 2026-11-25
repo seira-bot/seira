@@ -86,7 +86,7 @@ bot's own: no other bot can use it. Connect again to give it to another bot.
 
 The server holds this rule itself. It refuses to save, replace, import, switch on or sign in a WAPilot address that has
 no bot, or a bot that does not exist, and it matches the address, not the name. The match ignores a trailing dot on the host, the letter case of the path, and percent-encoding of letters, digits and `-._~` in the path. An older entry with no bot, or with a
-bot that is gone, serves no bot until you choose one. Redirects are not checked yet: the rule sees the saved address only.
+bot that is gone, serves no bot until you choose one. A redirect is followed by Seira itself, up to 5 hops, and each hop is checked first: a hop to a WAPilot address is refused unless the saved server is that address. A redirect with no usable address is refused too. A server that sends a client to another address in its SSE `endpoint` event is not checked yet.
 
 ### Servers that ask you to sign in
 
