@@ -41,6 +41,7 @@ export function createPeoplePlanRoutes({ people, audit }: PeoplePlanRouteDeps): 
       const removed = people.removeJoined(email);
       if (removed === "listed") return json(res, 409, { error: "remove this address from the sign-in list instead", code: "listed" });
       if (removed === "unknown") return json(res, 404, { error: "nobody with that address holds a place", code: "unknown" });
+      if (removed === "failed") return json(res, 500, { error: "the removal could not be saved, so nobody was removed; try again", code: "remove_failed" });
       audit?.(auth, req, { category: "people", action: "people.remove", target: { kind: "person", id: email.trim().toLowerCase() } });
       return json(res, 200, people.status());
     }

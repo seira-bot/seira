@@ -1293,6 +1293,11 @@ SEIRA_TEAM_KEY="seira-team.…"
   and an access token from `seira token create` do not count.
 - A person who signs in through an `@domain` entry counts from their first
   sign-in. To free that place, remove them on their row in Settings → People.
+  The `@domain` entry then no longer lets that address in. To let the person in
+  again, add their address itself in Settings or with `seira access add`.
+  If the server cannot save this removal, it says so and removes nobody. If it
+  cannot read `sign-in-removed.json` in the data folder, an `@domain` entry
+  alone lets nobody in until you fix or delete that file.
 - An address that only `SEIRA_SIGNIN_EMAILS`, `SEIRA_SIGNIN_MEMBER_EMAILS`, a
   hand edit of `config.json` or `seira fleet users add` lists also counts from
   its first sign-in. An address that Settings or `seira access add` adds counts

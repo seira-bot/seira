@@ -3,6 +3,8 @@
 // A listed address holds a place once Settings or `seira access add` adds it, or once it signs in. An address that only
 // the environment, a hand edit of config.json or `seira fleet users` lists is checked when it first signs in. An address
 // that the lists no longer let in loses its place, so a list that names it again cannot bring it back unchecked.
+// A person that an admin removes in Settings → People stays out: an `@domain` entry no longer lets that address in, until an
+// admin lists the address itself (Settings or `seira access add`).
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -23,6 +25,9 @@ export const PEOPLE_FILE = "sign-in-people.json";
 /** Held by whatever checks the places and then changes them, in the server and in `seira access add`: two processes must
  * not both pass the free limit, and one must not write over the other's change. */
 export const PEOPLE_LOCK_FILE = "sign-in-people.lock";
+
+/** Addresses that an admin removed in Settings → People. An `@domain` entry does not let them in again. */
+export const REMOVED_FILE = "sign-in-removed.json";
 
 /** Every earlier version wrote its messages here on its first start, and this version opens it only after the limit. */
 const EARLIER_RUN_FILE = "messages.db";
@@ -76,6 +81,31 @@ function writeKept(dataDir: string, people: Iterable<string>): void {
   writeFileAtomic(join(dataDir, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
 }
 
+type RemovedRead = { state: "ok"; people: string[] } | { state: "missing" } | { state: "unreadable" };
+
+/** Only a file that is not there is "missing": a file that cannot be read or understood is "unreadable", and stands for
+ * nobody being allowed back in. */
+function readRemoved(dataDir: string): RemovedRead {
+  let text: string;
+  try {
+    text = readFileSync(join(dataDir, REMOVED_FILE), "utf8");
+  } catch (error) {
+    return Reflect.get(Object(error), "code") === "ENOENT" ? { state: "missing" } : { state: "unreadable" };
+  }
+  try {
+    const people: unknown = Reflect.get(Object(JSON.parse(text)), "people");
+    if (!Array.isArray(people) || !people.every((entry) => typeof entry === "string")) return { state: "unreadable" };
+    return { state: "ok", people: people.map(address) };
+  } catch {
+    return { state: "unreadable" };
+  }
+}
+
+function writeRemoved(dataDir: string, people: Iterable<string>): void {
+  ensurePrivateDir(dataDir);
+  writeFileAtomic(join(dataDir, REMOVED_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
+}
+
 /** Live sessions as sessions.json holds them, for the CLI, which runs beside the server or without it. */
 export function sessionsFromFile(dataDir: string, now: number = Date.now()): PeopleSession[] {
   try {
@@ -114,14 +144,18 @@ export interface PeopleLimit {
   /** True when the free plan has no place for this person: a listed address with no place counts as new. Null-safe for an
    * address the lists do not let in. */
   refuses(email: string): boolean;
+  /** True when an admin removed this address and no list names it itself: an `@domain` entry does not let it in. */
+  wasRemoved(email: string): boolean;
   /** Lets the person in and keeps their place, or refuses them; check and record happen in one step. */
   admit(email: string): "full" | null;
   /** Before Settings or the CLI saves the lists: a refusal when the change adds people past the free limit, else the step
    * to run once they are saved (it gives each added address a place, ends the sessions of each address taken off and
    * frees their places). */
   listsChanging(asked: ListsChange | undefined): { refusal: { limit: number } } | { saved(): void };
-  /** Takes off someone who joined through an `@domain` entry: their sessions end and their place is free. */
-  removeJoined(email: string): "removed" | "listed" | "unknown";
+  /** Takes off someone who joined through an `@domain` entry: their sessions end, their place is free, and the `@domain`
+   * entry does not let them in again until an admin lists their address. "failed": the removal could not be recorded, so
+   * nothing changed. */
+  removeJoined(email: string): "removed" | "listed" | "unknown" | "failed";
   /** Saves a Premium key from Settings; never over a key the environment sets. */
   saveKey(raw: string): { ok: true } | { ok: false; reason: PlanKeyRefusal | "environment" };
   status(): PeoplePlanStatus;
@@ -194,6 +228,33 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   }
   prune(options.lists());
 
+  // Only an address that no list names itself stays removed: listing it is how an admin lets it back in. A record that cannot
+  // be read counts as removing everybody that an `@domain` entry alone lets in: an uncertain record never admits.
+  const wasRemoved = (email: string) => {
+    const person = address(email);
+    if (!options.applies || listed(options.lists()).has(person)) return false;
+    const read = readRemoved(options.dataDir);
+    return read.state === "unreadable" || (read.state === "ok" && read.people.includes(person));
+  };
+  /** True when the record holds the change; a record that cannot be read is never written over. */
+  const bar = (change: (people: string[]) => string[]): boolean => {
+    const read = readRemoved(options.dataDir);
+    if (read.state === "unreadable") {
+      console.warn("could not read who an admin removed; fix or delete sign-in-removed.json");
+      return false;
+    }
+    const was = read.state === "ok" ? read.people : [];
+    const next = [...new Set(change(was))];
+    if (next.length === was.length && next.every((email) => was.includes(email))) return true;
+    try {
+      writeRemoved(options.dataDir, next);
+      return true;
+    } catch (error) {
+      console.warn(`could not save who an admin removed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  };
+
   const refuses = (email: string) => {
     const person = address(email);
     if (!limited() || !allowedScopes(person, options.lists())) return false;
@@ -203,6 +264,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
 
   return {
     refuses,
+    wasRemoved,
     admit(email) {
       return locked(() => {
         if (refuses(email)) return "full";
@@ -244,6 +306,7 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
             if (removed.size) endSessions(removed);
             const lists = options.lists();
             keep((was) => [...was, ...added].filter((email) => !removed.has(email) && (options.partialLists || allowedScopes(email, lists))));
+            if (added.length) bar((was) => was.filter((email) => !added.includes(email)));
           } finally {
             release();
           }
@@ -257,6 +320,8 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
         const people = kept();
         const hadSession = options.sessions().some((session) => session.email && !session.token && address(session.email) === person);
         if (!people.includes(person) && !hadSession) return "unknown";
+        // Recorded first: when the record cannot be saved, nothing else changes and the caller says so.
+        if (!bar((was) => [...was, person])) return "failed";
         endSessions(new Set([person]));
         keep((was) => was.filter((entry) => entry !== person));
         return "removed";

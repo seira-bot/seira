@@ -11,13 +11,15 @@ export interface EmailSignInRouteDeps {
   cloudHome: boolean;
   emailSignIn: EmailSignIn;
   sessions: Pick<SessionRegistry, "attemptAllowed" | "noteFailure" | "clearFailures" | "issue">;
-  people: Pick<PeopleLimit, "refuses" | "admit">;
+  people: Pick<PeopleLimit, "refuses" | "admit" | "wasRemoved">;
   cookieName: string;
   environment(): unknown;
   /** The host a sign-in code from here is for: never one a request merely claims on the open internet. */
   target(req: IncomingMessage): string | null;
 }
 
+/** An admin removed this address; the `@domain` entry no longer lets it in. The reply is the one for an address no list admits. */
+const notAllowed = () => refusalBody(userError("serverError.email.notAllowed"));
 const workspaceFull = () => ({ ...userError("serverError.email.workspaceFull"), code: "workspace_full" });
 
 export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: IncomingMessage, res: ServerResponse, path: string, method: string): Promise<boolean> {
@@ -45,6 +47,11 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   const body = await readBody(req);
   const email = typeof body?.email === "string" ? body.email : "";
   if (path === "/api/auth/email/start") {
+    if (deps.people.wasRemoved(email)) {
+      sessions.noteFailure(source);
+      json(res, 403, notAllowed());
+      return true;
+    }
     if (deps.people.refuses(email)) {
       json(res, 403, workspaceFull());
       return true;
@@ -65,6 +72,11 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
     if (verified.status === 401 || verified.status === 403 || verified.status === 429) sessions.noteFailure(source);
     console.warn(`email sign-in refused from ${source}: ${verified.error}`);
     json(res, verified.status, refusalBody(verified));
+    return true;
+  }
+  if (deps.people.wasRemoved(verified.email)) {
+    sessions.noteFailure(source);
+    json(res, 403, notAllowed());
     return true;
   }
   if (deps.people.admit(verified.email) === "full") {
