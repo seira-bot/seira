@@ -1,13 +1,14 @@
 // Security: a Premium key is checked here and only here, offline, against the public keys in shared/plan-keys.ts. The
 // server never asks a Seira service about a key. A key that fails any check grants nothing.
 import { createPublicKey, verify } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
 import { PLAN_PUBLIC_KEYS } from "../shared/plan-keys.ts";
 import type { PremiumKeyStatus } from "../shared/people-plan.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { LICENSE_GRACE_DAYS, LICENSE_WARN_DAYS } from "./enterprise.ts";
 
 export const TEAM_KEY_ENV = "SEIRA_TEAM_KEY";
@@ -119,7 +120,7 @@ export function savePlanKey(options: PlanKeyOptions, raw: string, now: number = 
   if (!checked.ok) return checked;
   const status = keyStatus(checked.key, "settings", now);
   if (status.state === "ended") return { ok: false, reason: "ended" };
-  mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(options.dataDir);
   writeFileAtomic(join(options.dataDir, TEAM_KEY_FILE), `${checked.text}\n`, { mode: 0o600 });
   return { ok: true, status };
 }

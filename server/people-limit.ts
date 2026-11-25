@@ -1,12 +1,13 @@
 // Security: the free limit only ever refuses a new person. Nobody who holds a place loses it to the limit: not when a
 // Premium key ends, not when the saved key cannot be read, not on the first start of a server that already has more.
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { FREE_PEOPLE_LIMIT, type JoinedPerson, type PeoplePlanStatus } from "../shared/people-plan.ts";
 import { PREMIUM_UPGRADE_URL } from "../shared/plan-keys.ts";
 import { allowedScopes, parseAllowList, type SignInAllowList } from "./account-signin.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { entitled, hostedWorkspaceConfigured, loadEnterpriseLayer } from "./enterprise.ts";
 import { premiumKeyStatus, premiumUnlimited, savePlanKey, TEAM_KEY_ENV, type PlanKeyOptions, type PlanKeyRefusal } from "./plan-key.ts";
 import { signInFromEnv } from "./sign-in-env.ts";
@@ -59,7 +60,7 @@ function readKept(dataDir: string): KeptRead {
 }
 
 function writeKept(dataDir: string, people: Iterable<string>): void {
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(dataDir);
   writeFileAtomic(join(dataDir, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: [...new Set(people)].sort() }, null, 2)}\n`, { mode: 0o600 });
 }
 
