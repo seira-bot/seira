@@ -93,11 +93,10 @@ jobs:
         run: |
           set -uo pipefail
           if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA"
+            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA" && status=0 || status=$?
           else
-            node scripts/release-gate.mjs --sha "$SHA"
+            node scripts/release-gate.mjs --sha "$SHA" && status=0 || status=$?
           fi
-          status=$?
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
             1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
