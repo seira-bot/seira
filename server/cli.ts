@@ -435,25 +435,31 @@ export async function runStatus(options: CliOptions, io: CliIo = defaultIo()): P
 /** Edits the sign-in allow-list in config.json, server live or stopped (read per request); SEIRA_SIGNIN_EMAILS wins when it names someone. */
 export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
   const file = join(options.dataDir, "config.json");
-  let raw: Record<string, unknown> = {};
-  if (existsSync(file)) {
-    try {
-      const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
-      raw = Object.fromEntries(Object.entries(parsed));
-    } catch (error) {
-      io.error(`${file} could not be read (${message(error)}); fix it before changing who can sign in`);
-      return 1;
-    }
-  }
-  const current = typeof raw.signIn === "object" && raw.signIn !== null ? Object(raw.signIn) : {};
+  const readConfig = (): Record<string, unknown> => {
+    if (!existsSync(file)) return {};
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
+    return Object.fromEntries(Object.entries(parsed));
+  };
   const list = (value: unknown) => parseAllowList(Array.isArray(value) ? value.map(String).join(",") : "");
-  const admins = list(Reflect.get(current, "admins"));
-  const members = list(Reflect.get(current, "members"));
+  const listsOf = (config: Record<string, unknown>) => {
+    const current = typeof config.signIn === "object" && config.signIn !== null ? Object(config.signIn) : {};
+    return { admins: list(Reflect.get(current, "admins")), members: list(Reflect.get(current, "members")) };
+  };
+  let raw: Record<string, unknown>;
+  try {
+    raw = readConfig();
+  } catch (error) {
+    io.error(`${file} could not be read (${message(error)}); fix it before changing who can sign in`);
+    return 1;
+  }
+  const { admins, members } = listsOf(raw);
   const overridden = Object.keys(signInFromEnv()).length > 0; // a variable that names nobody leaves the list to this file
-  const write = async (next: { admins: string[]; members: string[] }) => {
+  const writeConfig = (next: { admins: string[]; members: string[] }) => {
     mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
     writeFileAtomic(file, `${JSON.stringify({ ...raw, signIn: next }, null, 2)}\n`, { mode: 0o600 });
+  };
+  const audit = async (next: { admins: string[]; members: string[] }) => {
     if (!sharedSignIn({ admins, members }) && !sharedSignIn(next) && !hostedWorkspaceConfigured()) return;
     const decisions = raw.decisions && typeof raw.decisions === "object" ? (raw.decisions as { retentionDays?: unknown }).retentionDays : undefined;
     bindDecisionRetention(() => decisionRetentionDays(typeof decisions === "number" ? decisions : undefined));
@@ -484,14 +490,27 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
   const without = (items: string[]) => items.filter((item) => item !== entry);
   if (options.accessAction === "remove") {
     if (!admins.includes(entry) && !members.includes(entry)) { io.error(`${entry} is not on the list`); return 1; }
-    await write({ admins: without(admins), members: without(members) });
+    const left = { admins: without(admins), members: without(members) };
+    writeConfig(left);
+    await audit(left);
     io.log(`${entry} can no longer sign in (existing sessions stay until they expire or are revoked with ${cliCommand("devices revoke ID")})`);
     return 0;
   }
   const next = options.chatOnly ? { admins: without(admins), members: [...without(members), entry] } : { admins: [...without(admins), entry], members: without(members) };
-  const change = await accessChange(options.dataDir, { admins, members }, next);
+  // One step under the lock that the server takes to admit a person: no other process can fill a place between the check and the save.
+  const change = await accessChange(options.dataDir, { admins, members }, next, undefined, () => {
+    try {
+      raw = readConfig();
+    } catch (error) {
+      return `${file} could not be read (${message(error)}); fix it before changing who can sign in`;
+    }
+    const now = listsOf(raw);
+    if (now.admins.join(",") !== admins.join(",") || now.members.join(",") !== members.join(",")) return `the sign-in list changed while this command ran; run ${cliCommand("access add")} again`;
+    writeConfig(next);
+    return null;
+  });
   if (typeof change === "string") { io.error(change); return 1; }
-  await write(next); change.saved();
+  await audit(next);
   io.log(`${entry} can sign in at /pair with an emailed code (${options.chatOnly ? "chat and approvals" : "full access"})`);
   if (overridden) io.log("note: SEIRA_SIGNIN_EMAILS / SEIRA_SIGNIN_MEMBER_EMAILS are set in the environment and win over this list while the server runs");
   return 0;

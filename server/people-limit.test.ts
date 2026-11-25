@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SignInAllowList } from "./account-signin.ts";
 import { applySignIn } from "./fleet.ts";
-import { accessChange, createPeopleLimit, PEOPLE_FILE, peopleLimitApplies, type PeopleSession } from "./people-limit.ts";
+import { accessChange, createPeopleLimit, PEOPLE_FILE, PEOPLE_LOCK_FILE, peopleLimitApplies, type PeopleSession } from "./people-limit.ts";
 import { TEAM_KEY_ENV, TEAM_KEY_FILE } from "./plan-key.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { DAY, planKeyPair } from "./testing/plan-keys.ts";
@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 /** `earlier`: a data folder an earlier version used, which has its messages database. */
-function setup(initial: SignInAllowList, extra: { applies?: boolean; enterprise?: boolean; env?: NodeJS.ProcessEnv; sessions?: PeopleSession[]; earlier?: boolean } = {}) {
+function setup(initial: SignInAllowList, extra: { lock?: { waitMs: number }; applies?: boolean; enterprise?: boolean; env?: NodeJS.ProcessEnv; sessions?: PeopleSession[]; earlier?: boolean } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
   dirs.push(dataDir);
   if (extra.earlier) writeFileSync(join(dataDir, "messages.db"), "");
@@ -29,6 +29,7 @@ function setup(initial: SignInAllowList, extra: { applies?: boolean; enterprise?
     lists: () => state.lists, sessions: () => state.sessions,
     revoke: (id) => { state.revoked.push(id); state.sessions = state.sessions.filter((session) => session.id !== id); },
     applies: extra.applies ?? true, enterpriseUnlimited: () => extra.enterprise ?? false, now: () => state.clock,
+    ...(extra.lock ? { lock: extra.lock } : {}),
   });
   return { dataDir, state, people };
 }
@@ -284,6 +285,72 @@ describe("the free people limit", () => {
     if (typeof fifth === "string") throw new Error(fifth);
     fifth.saved();
     expect(await add(["p1@corp.test", "p2@corp.test", "p3@corp.test"], "p4@corp.test")).toMatch(/free plan includes 5 people/);
+  });
+
+  describe("when another process holds the sign-in lock", () => {
+    const held = (dataDir: string) => writeFileSync(join(dataDir, PEOPLE_LOCK_FILE), "99999\n");
+
+    it("does not admit, remove or change places until the other process lets go", () => {
+      const { people, dataDir } = setup(domain(), { lock: { waitMs: 60 } });
+      people.admit("p1@corp.test");
+      held(dataDir);
+      expect(() => people.admit("p2@corp.test")).toThrow(/another process holds/);
+      expect(() => people.removeJoined("p1@corp.test")).toThrow(/another process holds/);
+      expect(() => people.listsChanging({ admins: ["p2@corp.test"], members: [] })).toThrow(/another process holds/);
+      expect(kept(dataDir)).toEqual(["p1@corp.test"]);
+      rmSync(join(dataDir, PEOPLE_LOCK_FILE));
+      expect(people.admit("p2@corp.test")).toBeNull();
+      expect(kept(dataDir)).toEqual(["p1@corp.test", "p2@corp.test"]);
+    });
+
+    it("leaves no lock behind after an admit, a refusal or a save", () => {
+      const { people, state, dataDir } = setup(domain());
+      for (const email of named(5)) people.admit(email);
+      expect(people.admit("p6@corp.test")).toBe("full");
+      const refused = people.listsChanging({ admins: [...named(5), "p6@corp.test"], members: [] });
+      expect("refusal" in refused).toBe(true);
+      const change = people.listsChanging({ admins: named(4), members: [] });
+      if (!("saved" in change)) throw new Error("a removal is never refused");
+      state.lists = { admins: named(4), members: [] };
+      change.saved();
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+    });
+
+    it("holds the lock from the check of a Settings save until the same run of code has saved", async () => {
+      const { people, dataDir } = setup(domain());
+      const change = people.listsChanging({ admins: ["p1@corp.test"], members: [] });
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(true);
+      await Promise.resolve();
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+      if ("saved" in change) change.saved();
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+    });
+  });
+
+  describe("seira access add", () => {
+    it("checks, saves config.json and gives the place in one step, and leaves no lock", async () => {
+      const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
+      dirs.push(dataDir);
+      writeFileSync(join(dataDir, PEOPLE_FILE), `${JSON.stringify({ version: 1, people: [] })}\n`); // the server has started on this version
+      const order: string[] = [];
+      const change = await accessChange(dataDir, { admins: [], members: [] }, { admins: ["a@corp.test"], members: [] }, {}, () => { order.push(`config written, lock held: ${existsSync(join(dataDir, PEOPLE_LOCK_FILE))}`); return null; });
+      expect(typeof change).toBe("object");
+      expect(order).toEqual(["config written, lock held: true"]);
+      expect(kept(dataDir)).toEqual(["a@corp.test"]);
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+    });
+
+    it("gives no place and leaves no lock when the save is refused, or when the free limit is reached", async () => {
+      const dataDir = mkdtempSync(join(tmpdir(), "seira-people-"));
+      dirs.push(dataDir);
+      expect(await accessChange(dataDir, { admins: [], members: [] }, { admins: ["a@corp.test"], members: [] }, {}, () => "the list changed")).toBe("the list changed");
+      expect(existsSync(join(dataDir, PEOPLE_FILE))).toBe(false);
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+      let wrote = false;
+      expect(await accessChange(dataDir, { admins: named(5), members: [] }, { admins: named(6), members: [] }, {}, () => { wrote = true; return null; })).toMatch(/free plan includes 5 people/);
+      expect(wrote).toBe(false);
+      expect(existsSync(join(dataDir, PEOPLE_LOCK_FILE))).toBe(false);
+    });
   });
 
   it("AC-18 never calls the network for a check, a save or a status", () => {
