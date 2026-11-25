@@ -44,6 +44,7 @@ function KeyField({ onSaved }: { onSaved: (plan: PeoplePlanStatus) => void }) {
       onSaved(next);
     } catch (cause) {
       setError(cause instanceof Error && cause.message ? cause.message : t("people.plan.keyFailed"));
+    } finally {
       setSaving(false);
     }
   };
@@ -99,12 +100,19 @@ export function PeoplePlanFull({ plan }: { plan: PeoplePlanStatus | null }) {
   );
 }
 
+/** The key field starts open when the plan is full or the saved key needs a new one. */
+function wantsKey(plan: PeoplePlanStatus | null): boolean {
+  if (!plan?.applies) return false;
+  if (plan.plan === "free" && plan.full) return true;
+  return !!plan.key && ["endingSoon", "grace", "ended", "invalid", "unreadable"].includes(plan.key.state);
+}
+
 /** Renewal notices, key problems and the Premium key field. Nothing where the server does not set the limit. */
 export function PeoplePlanKey({ plan, onChange }: { plan: PeoplePlanStatus | null; onChange: (plan: PeoplePlanStatus) => void }) {
   const shown = plan?.applies === true ? plan : null;
   const key = shown?.key ?? null;
   const locked = key?.source === "environment";
-  const needsKey = !!shown && ((shown.plan === "free" && shown.full) || (!!key && ["endingSoon", "grace", "ended", "invalid", "unreadable"].includes(key.state)));
+  const needsKey = wantsKey(shown);
   const [open, setOpen] = useState(needsKey);
   const [status, setStatus] = useState("");
   const focusNext = useRef(false);
@@ -146,7 +154,7 @@ export function PeoplePlanKey({ plan, onChange }: { plan: PeoplePlanStatus | nul
           )}
           {open && (
             <div id="people-plan-key-area">
-              <KeyField onSaved={(next) => { setStatus(t("people.plan.keySaved")); setOpen(false); onChange(next); }} />
+              <KeyField onSaved={(next) => { setStatus(t("people.plan.keySaved")); setOpen(wantsKey(next)); onChange(next); }} />
             </div>
           )}
           <p role="status" className="text-[12px] text-ink-secondary">{status}</p>
