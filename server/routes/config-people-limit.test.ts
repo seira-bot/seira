@@ -1,18 +1,18 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SignInAllowList } from "../account-signin.ts";
+import { DATA_DIR } from "../config.ts";
 import { createPeopleLimit, PEOPLE_FILE, type PeopleLimit, type PeopleSession } from "../people-limit.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import { removeTempDir } from "../testing/cleanup.ts";
 import { createConfigRoutes, type ConfigRouteDeps } from "./config.ts";
 
-const dirs: string[] = [];
-afterEach(async () => {
+// saveConfig writes to DATA_DIR, the throwaway home of this test file; each test starts it again.
+const FILES = ["config.json", "messages.db", PEOPLE_FILE];
+afterEach(() => {
   vi.unstubAllEnvs();
-  for (const dir of dirs.splice(0)) await removeTempDir(dir);
+  for (const name of FILES) rmSync(join(DATA_DIR, name), { force: true });
 });
 
 const names = (count: number) => Array.from({ length: count }, (_, index) => `p${index + 1}@corp.test`);
@@ -28,9 +28,8 @@ interface PutOptions {
 }
 
 async function putSignIn(signIn: SignInAllowList, current: SignInAllowList, sessions: PeopleSession[] = [], options: PutOptions = {}) {
-  const home = mkdtempSync(join(tmpdir(), "seira-config-people-"));
-  dirs.push(home);
-  vi.stubEnv("SEIRA_DATA_DIR", home);
+  const home = DATA_DIR;
+  mkdirSync(home, { recursive: true });
   vi.stubEnv("SEIRA_SIGNIN_EMAILS", "");
   vi.stubEnv("SEIRA_SIGNIN_MEMBER_EMAILS", "");
   const file = join(home, "config.json");
