@@ -102,8 +102,8 @@
     "f5c1ac957d3123d3"
   ],
   "connector/src/customer-run.ts": [
+    "203e283634624a31",
     "3eafd1db812d325a",
-    "4c52ea54402096d5",
     "97013e42b6092b0d",
     "d5896fa68b7af3c0"
   ],
@@ -134,7 +134,8 @@
     "341d92eb194021c1",
     "5711e191bb986e7a",
     "68ff2dfddd1cddf6",
-    "73cbb7e997c38c35",
+    "6b00ae3f3d797e67",
+    "7810ca8bf65ebb95",
     "a1bfcdf69fd3c3db",
     "ba43d67b66719b07",
     "e2d79e40821a1b6b",
@@ -149,12 +150,10 @@
     "d72d8064c5e67390"
   ],
   "connector/test/host.test.ts": [
-    "5ce5180eb41e5614",
     "a5de405bf719e2d5"
   ],
   "connector/test/install-script.test.ts": [
     "3de6f484494db6ae",
-    "a9ac431026aafcc8",
     "d48101fd9e244823"
   ],
   "connector/test/jobs.test.ts": [
@@ -168,11 +167,6 @@
     "b5daf609ab5fde11",
     "b5fbf290d1d3d900",
     "cbd3c66e6dd9615c"
-  ],
-  "connector/test/self-update.test.ts": [
-    "09368298bdc9e197",
-    "3c69fb72d081b48b",
-    "5f5374454ef5a00c"
   ],
   "connector/test/update-runner.test.ts": [
     "02ade7b3e1d8a588",
