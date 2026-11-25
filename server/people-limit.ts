@@ -139,7 +139,10 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const key = () => premiumKeyStatus(options, now());
   const enterprise = () => options.applies && options.enterpriseUnlimited();
   const limited = () => options.applies && !enterprise() && !premiumUnlimited(key());
-  const holding = (lists: SignInAllowList = options.lists()) => peopleHolding(lists, options.sessions(), kept(lists));
+  const holding = () => {
+    const lists = options.lists();
+    return peopleHolding(lists, options.sessions(), kept(lists));
+  };
   const endSessions = (emails: ReadonlySet<string>) => {
     for (const session of options.sessions()) if (session.email && !session.token && emails.has(address(session.email))) options.revoke(session.id);
   };
@@ -179,10 +182,12 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
       const nextListed = listed(after);
       const removed = new Set([...beforeListed].filter((email) => !nextListed.has(email)));
       const added = [...nextListed].filter((email) => !beforeListed.has(email));
-      const current = holding(before);
-      const next = new Set([...current].filter((email) => !removed.has(email) && allowedScopes(email, after)));
+      const sessions = options.sessions();
+      const people = kept(before);
+      const current = peopleHolding(before, sessions, people);
+      const next = peopleHolding(after, sessions.filter((session) => !session.email || !removed.has(address(session.email))), people.filter((email) => !removed.has(email)));
       for (const email of added) next.add(email);
-      const adds = added.some((email) => !current.has(email));
+      const adds = [...next].some((email) => !current.has(email));
       if (adds && next.size > FREE_PEOPLE_LIMIT && limited()) return { refusal: { limit: FREE_PEOPLE_LIMIT } };
       return {
         saved() {
