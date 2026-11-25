@@ -120,7 +120,7 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     }
   };
 
-  const operatorEnv = { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" };
+  const operatorEnv = { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test", SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" };
   const startBody = { cloudContractVersion: 1, attempt: "a".repeat(43), expiresIn: 600, resendAfter: 30, signupOpen: true };
   const serviceAnswering = (start: { status: number; body: unknown }, verify: { status: number; body: unknown }) =>
     (async (input: Parameters<typeof fetch>[0]) => {
@@ -177,9 +177,26 @@ describe("emailed codes from Seira's account service, with no mail server", () =
     const named = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
     expect(named.enabled()).toBe(true);
     expect(await named.start("milind@example.test")).toEqual({ ok: true });
-    expect(asked[0]).toBe("https://accounts.example.test/healthz");
-    expect(asked.every((url) => !url.includes("accounts.seira.bot"))).toBe(true);
+    expect(asked).toEqual(["https://accounts.example.test/healthz", "https://cloud.example.test/api/cloud/app/sign-in/start"]);
     expect(createEmailSignIn({ allow: { admins: [], members: [] }, env: operatorEnv }).enabled()).toBe(false);
+  });
+
+  it("does not send an address to Seira's own Cloud unless the operator names its origin", async () => {
+    const asked: string[] = [];
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 200, body: {} });
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL }, fetchImpl });
+    expect(await signIn.start("milind@example.test")).toMatchObject({ ok: false });
+    expect(await signIn.verify("milind@example.test", "12345678")).toMatchObject({ ok: false });
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
+    const staging = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL, SEIRA_CLOUD_STAGING: "1" }, fetchImpl });
+    asked.length = 0;
+    await staging.start("milind@example.test");
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
   });
 
   it("gives a session only to the address that asked for the code", async () => {

@@ -1,7 +1,7 @@
 // Email sign-in through the Seira control plane, or through the server's own mail server when SEIRA_SIGNIN_SMTP_URL is
 // set: the code exchange is server-side, so a browser only talks to this server, and a server with an empty allow-list
 // does not expose the routes. The result is an ordinary local session.
-import { cloudOriginFor } from "../electron/cloud-signin.mjs";
+import { cloudOriginOf } from "../electron/cloud-signin.mjs";
 import { resolveServerControlPlaneURL } from "../electron/companion-account-service.mjs";
 import { ControlPlaneError, createControlPlaneClient, normalizeAccountEmail, type ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
@@ -70,20 +70,26 @@ export function createEmailSignIn(options: {
     return mailedSignIn(allow, createSignInMail({ url: smtpUrl, from: env.SEIRA_SIGNIN_SMTP_FROM,
       ...(options.mailTransport ? { transport: options.mailTransport } : {}) }));
   }
-  // An address reaches an account service only when the operator names one in SEIRA_CONTROL_PLANE_URL.
+  // An address reaches an account service only when the operator names one in SEIRA_CONTROL_PLANE_URL, and Seira Cloud's
+  // sign-in only when the operator also names its origin in SEIRA_CLOUD_ORIGIN. Otherwise the request fails closed.
   const controlPlaneURL = (): string => (Object.hasOwn(env, "SEIRA_CONTROL_PLANE_URL") ? resolveServerControlPlaneURL({ environment: env }) : "");
   const newClient = (): ControlPlaneClient => {
     if (options.client) return options.client;
     const baseURL = controlPlaneURL();
     if (!baseURL) throw new Error("this server has no account service for email sign-in");
+    const cloudOrigin = cloudOriginOf(env.SEIRA_CLOUD_ORIGIN);
     return createControlPlaneClient({
       baseURL,
       fetchImpl: options.fetchImpl,
-      cloudSignIn: createSeiraCloudSignIn({
-        origin: cloudOriginFor(env),
-        identity: { deviceName: "Seira server", platform: process.platform, appVersion: options.version },
-        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-      }),
+      ...(cloudOrigin
+        ? {
+            cloudSignIn: createSeiraCloudSignIn({
+              origin: cloudOrigin,
+              identity: { deviceName: "Seira server", platform: process.platform, appVersion: options.version },
+              ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            }),
+          }
+        : {}),
     });
   };
   const open = new Map<string, ControlPlaneClient>();
