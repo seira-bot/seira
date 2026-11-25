@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PeoplePlanStatus } from "../../shared/people-plan";
@@ -43,7 +43,7 @@ let root: Root;
 const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 const render = async (node: ReturnType<typeof createElement>) => { await act(async () => { root.render(node); }); await settle(); };
 const showPlan = (plan: PeoplePlanStatus | null, onChange = vi.fn()) =>
-  render(createElement("div", null, createElement(PeoplePlanSummary, { plan }), createElement(PeoplePlanFull, { plan }), createElement(PeoplePlanKey, { plan, onChange })));
+  render(createElement(Fragment, null, createElement(PeoplePlanSummary, { plan }), createElement(PeoplePlanFull, { plan }), createElement(PeoplePlanKey, { plan, onChange })));
 const type = async (input: HTMLInputElement, value: string) => {
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
