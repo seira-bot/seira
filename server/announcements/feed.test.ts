@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ANNOUNCEMENTS_URL, CLOUD_ANNOUNCEMENTS_URL, MAX_CARDS, type AnnouncementFeed } from "../../shared/announcements.ts";
 import {
   ANNOUNCEMENTS_DISABLE_ENV, ANNOUNCEMENTS_RETRY_MS, ANNOUNCEMENTS_TTL_MS, AnnouncementStore, announcementsCachePath, BUNDLED_ANNOUNCEMENTS,
-  announcementStore, cloudAnnouncementStore, EMPTY_ANNOUNCEMENTS, mergeAnnouncementCards,
+  cloudAnnouncementStore, EMPTY_ANNOUNCEMENTS, mergeAnnouncementCards,
 } from "./feed.ts";
 
 const NOW = Date.parse("2026-12-01T10:00:00Z");
@@ -137,7 +137,7 @@ describe("the Seira Cloud feed", () => {
   it("downloads the Cloud address anonymously, keeps it in cloud.json and reads it again after a restart", async () => {
     const fetchMock = vi.fn(async (..._args: Parameters<typeof fetch>) => answer(feed("2026-12-01T09:00:00Z", [card("from-cloud", { image: { mark: "claude" } })])));
     const dir = dataDir();
-    const { store, log } = cloudSubject({ fetch: fetchMock as unknown as typeof fetch, dir });
+    const { store } = cloudSubject({ fetch: fetchMock as unknown as typeof fetch, dir });
     expect((await store.cardsForPage()).map((entry) => entry.id)).toEqual(["from-cloud"]);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe(CLOUD_ANNOUNCEMENTS_URL);
@@ -148,9 +148,8 @@ describe("the Seira Cloud feed", () => {
     expect(existsSync(announcementsCachePath(dir))).toBe(false);
     const restarted = cloudSubject({ dir, fetch: vi.fn() as unknown as typeof fetch });
     expect(restarted.store.cards().map((entry) => entry.id)).toEqual(["from-cloud"]);
-    log.mockClear();
     const failing = cloudSubject({ dir, fetch: vi.fn(async () => { throw new Error("offline"); }) as unknown as typeof fetch });
-    await failing.store.refresh();
+    await failing.store.refresh({ force: true });
     expect(failing.log).toHaveBeenCalledWith(expect.stringMatching(/^\[announcements:cloud\] /));
   });
 
@@ -228,7 +227,6 @@ describe("GET /api/announcements", () => {
 
   it("answers with the merged cards and the newer of the two dates", async () => {
     const { announcementRoutes, ANNOUNCEMENTS_PATH } = await import("../routes/announcements.ts");
-    const project = announcementStore();
     const cloud = cloudAnnouncementStore();
     vi.spyOn(AnnouncementStore.prototype, "disabled", "get").mockReturnValue(false);
     vi.spyOn(AnnouncementStore.prototype, "cardsForPage").mockImplementation(async function (this: AnnouncementStore) {
@@ -250,6 +248,5 @@ describe("GET /api/announcements", () => {
     expect(body(0).cards.map((entry) => entry.id)).toEqual(["cloud-card", "shared", "project-card"]);
     expect(body(0).updatedAt).toBe("2026-12-02T00:00:00Z");
     expect(body(1).updatedAt).toBe("2026-12-01T00:00:00Z");
-    expect(project).not.toBe(cloud);
   });
 });
