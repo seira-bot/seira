@@ -11096,7 +11096,7 @@
   "phone.push.short": "Approvals, questions, sign-ins and finished replies reach your phone even when the app is closed.",
   "phone.push.title": "Alerts when the phone app is closed",
   "phone.reach.anywhereLine": "Works away from home too. End-to-end encrypted.",
-  "phone.reach.anywhereAddressLine": "Works away from home, over a secure Seira address.",
+  "phone.reach.anywhereAddressLine": "Works away from home, over a secure {app} address.",
   "phone.reach.awakeLine": "So your phone and scheduled work can still reach it.",
   "phone.reach.foot": "Pair a phone turns these on for you. Change them here later.",
   "phone.reach.title": "How your phone reaches this computer",

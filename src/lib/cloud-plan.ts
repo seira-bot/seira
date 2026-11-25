@@ -379,7 +379,6 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
       }
       const notice = account?.status === "signed-out" && account.message === "enrollment-expired" ? "code-expired"
         : account?.status === "signed-out" && (account.message === "enrollment-ended" || account.message === "signin-failed") ? "signin-ended"
-          
           : conflict === "already-subscribed" || conflict === "sold-out" ? conflict : conflict ? "preparing" : terms ? "terms" : null;
       return { kind: "offer", offer, signedOut: view.kind === "signed-out", notice };
     }

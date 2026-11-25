@@ -3270,7 +3270,7 @@
   "phone.pair.withPlaceLine": "{place} est toujours allumé, donc votre téléphone atteint vos bots partout.",
   "phone.push.title": "Alertes quand l’app du téléphone est fermée",
   "phone.reach.anywhereLine": "Fonctionne aussi hors de chez vous. Chiffré de bout en bout.",
-  "phone.reach.anywhereAddressLine": "Fonctionne aussi loin de chez vous, via une adresse Seira sécurisée.",
+  "phone.reach.anywhereAddressLine": "Fonctionne aussi loin de chez vous, via une adresse {app} sécurisée.",
   "phone.reach.awakeLine": "Pour que votre téléphone et le travail programmé puissent toujours l'atteindre.",
   "phone.reach.foot": "« Associer un téléphone » les active pour vous. Vous pourrez les changer ici plus tard.",
   "phone.reach.title": "Comment votre téléphone atteint cet ordinateur",

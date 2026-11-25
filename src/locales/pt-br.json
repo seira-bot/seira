@@ -11045,7 +11045,7 @@
   "phone.pair.withPlace": "Parear com {place}",
   "phone.pair.withPlaceLine": "{place} fica sempre ligado, então seu celular alcança seus bots de qualquer lugar.",
   "phone.reach.anywhereLine": "Funciona fora de casa também. Criptografado de ponta a ponta.",
-  "phone.reach.anywhereAddressLine": "Funciona fora de casa, por um endereço seguro da Seira.",
+  "phone.reach.anywhereAddressLine": "Funciona fora de casa, por um endereço seguro da {app}.",
   "phone.reach.awakeLine": "Para que seu celular e o trabalho agendado ainda consigam chegar a ele.",
   "phone.push.detail": "O {app} envia o alerta pela Apple ou pelo Google. Ele traz o nome do bot e da sala e o tipo de alerta, nunca a mensagem em si. Um toque abre o app, que então busca a mensagem neste computador.",
   "phone.push.short": "Aprovações, perguntas, logins e respostas concluídas chegam ao seu celular mesmo com o app fechado.",

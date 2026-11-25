@@ -6581,7 +6581,7 @@
   "phone.pair.withPlaceLine": "{place} jest zawsze włączona, więc telefon dotrze do Twoich botów z każdego miejsca.",
   "phone.push.title": "Powiadomienia przy zamkniętej aplikacji telefonu",
   "phone.reach.anywhereLine": "Działa też poza domem. Szyfrowanie end-to-end.",
-  "phone.reach.anywhereAddressLine": "Działa także poza domem, przez bezpieczny adres Seira.",
+  "phone.reach.anywhereAddressLine": "Działa także poza domem, przez bezpieczny adres {app}.",
   "phone.reach.awakeLine": "Aby telefon i zaplanowana praca nadal mogły do niego dotrzeć.",
   "phone.reach.foot": "„Połącz telefon” włączy to za Ciebie. Zmienisz to tu później.",
   "phone.reach.title": "Jak telefon łączy się z tym komputerem",

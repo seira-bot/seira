@@ -196,6 +196,7 @@ export function shouldPrepareSecureAddress(
 export type RelayPairingSnapshot = PhoneSetupCompanionSnapshot & CompanionPairingRouteSource & {
   routes?: CompanionPairingRouteSource["routes"] & { relay?: { on: boolean } };
   e2e?: { enabled: boolean };
+  anywhere?: "relay" | "https";
 };
 
 /** Automatic pairing goes through Seira Relay instead of waiting on an HTTPS address only when the relay can carry
@@ -209,6 +210,7 @@ export function relayServesPairing(account: CompanionAccountState | null, compan
     && companion?.enabled === true
     && companion.routes?.relay?.on === true
     && companion.e2e?.enabled === true
+    && companion.anywhere !== "https"
     && companionPairingRoute(companion, "local") !== null;
 }
 
