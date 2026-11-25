@@ -112,6 +112,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["departmentAccess"],
   },
   {
+    id: "premium-key",
+    name: "Premium key",
+    place: "Settings → People",
+    does: "A self-hosted server lets up to 5 people sign in by email for free. An admin adds a Premium key there for unlimited people. Every feature is the same on every plan.",
+  },
+  {
     id: "handoffs",
     name: "Threads and handoffs",
     place: "Bot threads in the sidebar",

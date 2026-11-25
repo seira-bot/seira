@@ -11,6 +11,8 @@ import { readSessionState, type SessionState } from "../lib/session";
 import { canPairDevices } from "./ServerPairingCard";
 import { normalizeAccessEntry, withEntry, withoutEntry, type SignInLists } from "./SignInAccessCard";
 import { Card } from "./SettingsPrimitives";
+import { PeoplePlan } from "./PeoplePlan";
+import type { JoinedPerson, PeoplePlanStatus } from "../../shared/people-plan";
 import { Select } from "./Select";
 import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
 import { grantFor, loadDepartmentChoices, saveDepartmentAccess, type DepartmentChoices } from "@/lib/department-access";
@@ -27,6 +29,8 @@ export interface Person {
   turns: number;
   costUsd: number | null;
   estimated?: boolean;
+  /** The `@domain` entry that let this person in; set for people who joined without being listed. */
+  via?: string;
 }
 
 export function inviteLink(base: string, entry: string): string {
@@ -38,6 +42,7 @@ export function mergePeople(
   lists: SignInLists,
   sessions: Array<{ email?: string; lastSeenAt: number }>,
   usage: Array<{ key: string; turns: number; costUsd: number | null; estimatedUsd?: number | null }>,
+  joined: readonly JoinedPerson[] = [],
 ): Person[] {
   const people: Person[] = [];
   const seen = new Set<string>();
@@ -60,6 +65,23 @@ export function mergePeople(
   };
   for (const entry of lists.admins) add(entry, "admin");
   for (const entry of lists.members) add(entry, "member");
+  for (const person of joined) {
+    const key = person.email.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const month = usage.find((group) => group.key === `user:${key}`);
+    people.push({
+      entry: key,
+      role: person.role,
+      isDomain: false,
+      lastSeenAt: person.lastSeenAt,
+      devices: person.devices,
+      turns: month?.turns ?? 0,
+      costUsd: month?.costUsd ?? null,
+      ...(hasFiniteCost(month?.estimatedUsd) && month.estimatedUsd > 0 ? { estimated: true } : {}),
+      via: person.via,
+    });
+  }
   return people;
 }
 
@@ -123,6 +145,7 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
         <div key={person.entry} className={cn(columns, "border-b border-hairline/20 py-2 text-[13px]")}>
           <span className="min-w-0">
             <span className="block truncate text-ink">{person.isDomain ? t("people.everyoneAt", { domain: person.entry.slice(1) }) : person.entry}</span>
+            {person.via && <span data-person-via className="block truncate text-[12px] text-ink-secondary">{t("people.plan.joinedVia", { domain: person.via })}</span>}
             {person.devices > 0 && <span className="block text-[12px] text-ink-secondary">{t("people.devices", { count: String(person.devices) })}</span>}
             {access && person.role === "member" && <span data-person-access className="block truncate text-[12px] text-ink-secondary">{accessLine(grantFor(access, person.entry))}</span>}
           </span>
@@ -134,11 +157,11 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
             {hasFiniteCost(person.costUsd) ? `${person.estimated ? "~" : ""}${formatUsd(person.costUsd)}` : "—"}
           </span>
           {readOnly ? <span /> : <span className="flex items-center justify-end gap-2 text-[12px]">
-            <button type="button" disabled={busy} onClick={() => onLink(person)} aria-label={t("people.link")} title={t("people.link")} className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><Link2 size={13} /></button>
-            {access && onAccess && person.role === "member" && <button type="button" disabled={busy} onClick={() => onAccess(person)} className="text-ink-secondary hover:text-ink disabled:opacity-50">{t("people.access.change")}</button>}
-            <button type="button" disabled={busy} onClick={() => onRole(person, person.role === "admin" ? "member" : "admin")} className="text-ink-secondary hover:text-ink disabled:opacity-50">
+            {!person.via && <button type="button" disabled={busy} onClick={() => onLink(person)} aria-label={t("people.link")} title={t("people.link")} className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><Link2 size={13} /></button>}
+            {access && onAccess && person.role === "member" && !person.via && <button type="button" disabled={busy} onClick={() => onAccess(person)} className="text-ink-secondary hover:text-ink disabled:opacity-50">{t("people.access.change")}</button>}
+            {!person.via && <button type="button" disabled={busy} onClick={() => onRole(person, person.role === "admin" ? "member" : "admin")} className="text-ink-secondary hover:text-ink disabled:opacity-50">
               {person.role === "admin" ? t("people.makeMember") : t("people.makeAdmin")}
-            </button>
+            </button>}
             <button type="button" disabled={busy} onClick={() => onRemove(person)} className="text-danger hover:underline disabled:opacity-50">{t("people.remove")}</button>
           </span>}
         </div>
@@ -206,19 +229,23 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<DepartmentChoices | null>(null);
   const [chosen, setChosen] = useState<string[] | null>(null);
+  const [plan, setPlan] = useState<PeoplePlanStatus | null>(null);
   const [editing, setEditing] = useState<{ entry: string; value: string[] | null } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [config, sessions, usage, domain, environment] = await Promise.all([
+      const [config, sessions, usage, domain, environment, planStatus] = await Promise.all([
         api("/api/config"),
         api("/api/auth/sessions").catch(() => ({ sessions: [] })),
         api("/api/usage?groupBy=user").catch(() => ({ groups: [] })),
         api("/api/settings/custom-domain").catch(() => null),
         fetch("/.well-known/seira/environment").then((res) => (res.ok ? res.json() : null)).catch(() => null),
+        api("/api/people/plan").catch(() => null),
       ]);
+      const status: PeoplePlanStatus | null = planStatus && typeof planStatus === "object" && typeof planStatus.applies === "boolean" ? planStatus : null;
+      setPlan(status);
       const current: SignInLists = {
         admins: Array.isArray(config?.signIn?.admins) ? config.signIn.admins : [],
         members: Array.isArray(config?.signIn?.members) ? config.signIn.members : [],
@@ -228,7 +255,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
       setLists(current);
       const signedIn = Array.isArray(sessions?.sessions) ? sessions.sessions : [];
       const spent = Array.isArray(usage?.groups) ? usage.groups : [];
-      setPeople(authority.authority === "portal" ? peopleFromSessions(signedIn, spent) : mergePeople(current, signedIn, spent));
+      setPeople(authority.authority === "portal" ? peopleFromSessions(signedIn, spent) : mergePeople(current, signedIn, spent, status?.applies && Array.isArray(status.joined) ? status.joined : []));
       if (typeof domain?.publicUrl === "string" && domain.publicUrl) setBase(domain.publicUrl);
       setEmailOffered(environment?.capabilities?.emailSignIn === true ? true : environment ? false : null);
       setChoices(authority.authority === "portal" ? null : await loadDepartmentChoices());
@@ -301,16 +328,31 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
     setLink(inviteLink(base, entry));
   };
 
+  const removeJoined = async (email: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/api/people/plan/remove", { method: "POST", body: JSON.stringify({ email }) });
+      await load();
+    } catch {
+      setError(t("people.plan.removeFailed", { email }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = (entry: string) => {
     if (!lists) return;
     void save(withoutEntry(lists, entry), undefined, choices?.access.people[entry] ? () => saveDepartmentAccess(entry, null).catch(() => undefined) : undefined);
   };
 
   if (!canPairDevices(session)) return null;
+  const full = plan?.applies === true && plan.full;
   const portal = membership?.authority === "portal" ? <PortalPeople peopleUrl={membership.peopleUrl} people={people} /> : null;
   const content = (
     <>
       {emailOffered === false && (!simple || tried) && <p className="mb-3 rounded-lg border border-warning/25 bg-warning/5 px-3 py-2 text-[13px] text-ink-secondary">{t(membership?.pairingCodes === false ? "people.portalSignIn" : "people.notHosted")}</p>}
+      {plan && <PeoplePlan plan={plan} onChange={setPlan} />}
       <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void invite(); }}>
         <input
           value={draft}
@@ -324,7 +366,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
           <option value="member">{t("people.roleMember")}</option>
           <option value="admin">{t("people.roleAdmin")}</option>
         </Select>
-        <button type="submit" disabled={busy || !draft.trim()} className="ui-button ui-button-primary">
+        <button type="submit" disabled={busy || !draft.trim() || full} aria-describedby={full ? "people-plan-full" : undefined} className="ui-button ui-button-primary">
           {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}{t("people.invite")}
         </button>
         <button type="button" onClick={() => void load()} disabled={loading || busy} aria-label={t("people.refresh")} title={t("people.refresh")} className="rounded-md p-1.5 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><RefreshCw size={13} className={cn(loading && "animate-spin")} /></button>
@@ -343,7 +385,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
           people={people}
           busy={busy}
           onRole={(person, next) => { if (lists) void save(withEntry(lists, person.entry, next)); }}
-          onRemove={(person) => remove(person.entry)}
+          onRemove={(person) => (person.via ? void removeJoined(person.entry) : remove(person.entry))}
           onLink={(person) => setLink(inviteLink(base, person.entry))}
           access={choices && !choices.access.unreadable ? choices.access.people : null}
           onAccess={(person) => setEditing({ entry: person.entry, value: choices ? grantFor(choices.access.people, person.entry) ?? null : null })}
