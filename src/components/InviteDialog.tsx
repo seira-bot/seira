@@ -141,7 +141,6 @@ function InviteBody({ onClose, onDone, preset, edit }: Omit<InviteDialogProps, "
   const bots = useMemo(() => state.bots.filter((bot) => !bot.hidden && !bot.defaultBot?.person), [state.bots]);
   const general = t("settings.section.general");
   const departmentName = (name: string) => name || general;
-  const botName = (id: string) => bots.find((bot) => bot.id === id)?.name ?? id;
   const admin = role === "admin";
   const effective: Kind = admin ? "whole" : kind;
   const mixed = Boolean(edit?.grant?.departments.length && edit.grant.bots.length);
