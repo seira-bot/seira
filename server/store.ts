@@ -1,8 +1,7 @@
 import { existsSync, rmSync, unlinkSync } from "node:fs"; import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
-import { removeDeadTempFiles, writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
-import { refuseUnreadableBots } from "./unreadable-bots.ts";
+import { removeDeadTempFiles, writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts"; import { refuseUnreadableBots } from "./unreadable-bots.ts";
 import { commitRegistryChange, deferrablePatch, keptRevocation, saveRegistryFor, touchesPermissions } from "./registry-save.ts";
 import { parseToolScope, toolScopeWidens } from "../shared/tool-scope.ts"; import { grantScopedApps } from "../shared/connector-scopes.ts"; import { dropRetiredApps } from "./retired-apps.ts";
 import { reorderInPlace } from "../shared/bot-order.ts"; import { trimOutboundPolicy } from "../shared/outbound.ts";
@@ -293,8 +292,7 @@ export class Store {
     // An unreadable bots.json must never read as "every member was deleted", and no save may replace it.
     let botsLoaded = false;
     try {
-      const loaded = this.registry.loadBots();
-      if (!Array.isArray(loaded)) throw new TypeError("bots.json is not a list");
+      const loaded = this.registry.loadBots(); if (!Array.isArray(loaded)) throw new TypeError("bots.json is not a list");
       this.bots = loaded; botsLoaded = true;
     } catch (error) {
       this.bots = [];
