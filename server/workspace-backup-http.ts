@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync, statSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
@@ -191,7 +191,7 @@ export function createWorkspaceBackupRoutes(options: {
         }));
         try { check(req, auth); } catch (error) { removeWorkspaceBackupJob(options.dataDir, result.id); throw error; }
         artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });
-        json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, summary: result.summary });
+        json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, sha256: result.sha256, summary: result.summary });
         return true;
       }
       const download = /^\/api\/workspace-backup\/download\/([\w-]+)$/.exec(path);
@@ -272,6 +272,19 @@ export function createWorkspaceBackupRoutes(options: {
           if (!done) {
             if (artifact.writing) throw failure("This upload is still receiving data. Try again in a moment.", 409);
             if (artifact.received !== artifact.total || statSync(artifact.path!).size !== artifact.total) throw failure("The upload was incomplete. Select the file again.");
+            const expected = new URL(req.url ?? "", "http://localhost").searchParams.get("sha256");
+            if (expected !== null) {
+              if (!/^[0-9a-f]{64}$/.test(expected)) throw failure("The checksum must be 64 lowercase hexadecimal characters.");
+              artifact.writing = true;
+              try {
+                const actual = createHash("sha256");
+                for await (const block of createReadStream(artifact.path!)) actual.update(block);
+                if (actual.digest("hex") !== expected) {
+                  remove(id, artifact);
+                  throw failure("The uploaded file does not match its checksum. Select the file again.", 422);
+                }
+              } finally { artifact.writing = false; }
+            }
             artifact.kind = "upload";
             artifact.expires = Date.now() + EXPIRES_MS;
           }

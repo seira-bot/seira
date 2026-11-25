@@ -1,5 +1,5 @@
 // Archive work is mocked so revocation can be held at a deterministic boundary.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -306,6 +306,26 @@ it("stores ordered parts and hands the joined file to validation", async () => {
   expect(preview.status).toBe(200);
   expect(archive.stage).toHaveBeenCalledWith(dataDir, uploadFile(started.id), expect.anything());
   expect(joined).toBe("abcdefghij");
+});
+
+it("checks the checksum a caller sends at finish, and drops the file when it differs", async () => {
+  const good = "0".repeat(64);
+  const started = await startUpload(4);
+  await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
+  expect((await send(`${BASE}/${started.id}/finish?sha256=not-hex`)).status).toBe(400);
+  expect((await send(`${BASE}/${started.id}/finish?sha256=${good}`)).status).toBe(422);
+  expect(existsSync(uploadFile(started.id))).toBe(false);
+  expect((await send(`${BASE}/${started.id}/finish`)).status).toBe(404);
+  const again = await startUpload(4);
+  await send(`${BASE}/${again.id}/chunk?offset=0`, { body: "abcd" });
+  const sha256 = createHash("sha256").update("abcd").digest("hex");
+  expect((await send(`${BASE}/${again.id}/finish?sha256=${sha256}`)).status).toBe(200);
+});
+
+it("returns the checksum of the exported file in the export reply", async () => {
+  archive.create.mockImplementationOnce(async () => ({ ...fakeArchive(), sha256: "a".repeat(64) }));
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { sha256?: string };
+  expect(exported.sha256).toBe("a".repeat(64));
 });
 
 it("refuses a part whose offset is not the stored byte count", async () => {

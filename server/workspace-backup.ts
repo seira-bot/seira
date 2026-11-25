@@ -7,7 +7,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
 import { readBackupMagic, withCurrentSummary } from "./workspace-backup-legacy.ts";
@@ -93,7 +93,8 @@ export interface CreateWorkspaceBackupOptions {
   /** Parts of the data folder to leave out. Only "work-folders" is allowed. Absent or empty: nothing is left out. */
   leaveOut?: readonly string[];
 }
-type CreatedWorkspaceBackup = { id: string; path: string; summary: WorkspaceBackupSummary };
+/** `sha256` is the hash of the whole encrypted file as written, for a check after a copy or an upload. */
+type CreatedWorkspaceBackup = { id: string; path: string; summary: WorkspaceBackupSummary; sha256: string };
 export interface WorkspaceRestoreResult {
   restored: boolean;
   rolledBack?: boolean;
@@ -433,12 +434,15 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     const cipher = createCipheriv("aes-256-gcm", key, iv);
     cipher.setAAD(header);
     writeFileSync(path, header, { mode: 0o600, flag: "wx" });
+    const fileHash = createHash("sha256").update(header);
+    const tap = new Transform({ transform(chunk, _encoding, callback) { fileHash.update(chunk); callback(null, chunk); } });
     deps.betweenReads?.();
-    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES, "manifest.json", { root: snapshot }), entries, streams)), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES, "manifest.json", { root: snapshot }), entries, streams)), cipher, tap, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    const tag = cipher.getAuthTag();
     const fd = openSync(path, "a");
-    try { writeSync(fd, cipher.getAuthTag()); fsyncSync(fd); } finally { closeSync(fd); }
+    try { writeSync(fd, tag); fsyncSync(fd); } finally { closeSync(fd); }
     rmSync(snapshot, { recursive: true, force: true });
-    return { id: job.id, path, summary };
+    return { id: job.id, path, summary, sha256: fileHash.update(tag).digest("hex") };
   } catch (error) {
     rmSync(job.directory, { recursive: true, force: true });
     throw error;
