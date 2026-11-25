@@ -16,7 +16,7 @@ export interface BurstRoutesDeps {
   /** Whether this person may see the chat this burst belongs to. */
   sees(auth: RequestAuth, threadId: string): boolean;
   /** Why this person may not press the card's buttons; the same rule as answering any card in that chat. */
-  refusal(auth: RequestAuth, threadId: string, burstId: string): string | null;
+  refusal(auth: RequestAuth, threadId: string, burstId: string, botId: string): string | null;
   view(id: string): unknown;
   run(id: string): BurstCardData | BurstRefusal;
   cancel(id: string): BurstCardData | BurstRefusal;
@@ -37,7 +37,7 @@ export function createBurstRoutes(deps: BurstRoutesDeps): RouteHandler {
       return json(res, 200, deps.view(id!));
     }
     if (method !== "POST") return json(res, 405, { error: "method not allowed" });
-    const refused = deps.refusal(auth, owner.threadId, id!);
+    const refused = deps.refusal(auth, owner.threadId, id!, owner.botId);
     if (refused) return json(res, 403, refusalText(refused));
     let result: BurstCardData | BurstRefusal;
     if (action === "edit") {

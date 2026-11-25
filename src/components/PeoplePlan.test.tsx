@@ -17,6 +17,7 @@ const fixture = vi.hoisted(() => ({
   keyError: null as Error | null,
 }));
 vi.mock("@/state/store", () => ({
+  useStore: () => ({ state: { bots: [], config: null }, dispatch: () => {} }),
   api: async (path: string, init?: { method?: string; body?: string }) => {
     fixture.calls.push({ path, init });
     if (path === "/api/people/plan/key") {
@@ -79,7 +80,6 @@ describe("PeoplePlan", () => {
   it("AC-20: at 5 of 5 the Invite button is disabled, says why, and links to the upgrade page", async () => {
     fixture.plan = { ...base, people: 5, full: true };
     await render(createElement(PeopleSection, { startOpen: true }));
-    await type(host.querySelector<HTMLInputElement>('input[aria-label="Email or @domain"]')!, "new@acme.test");
     const invite = button("Invite") as HTMLButtonElement;
     expect(invite.disabled).toBe(true);
     expect(invite.getAttribute("aria-describedby")).toBe("people-plan-full");
@@ -89,7 +89,7 @@ describe("PeoplePlan", () => {
     const link = reason.querySelector("a")!;
     expect(link.getAttribute("href")).toBe(UPGRADE);
     expect(link.textContent).toContain("Get Premium");
-    expect(host.querySelector("form")!.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(host.querySelector("[data-people-actions]")!.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(keyInput()).not.toBeNull();
   });
 

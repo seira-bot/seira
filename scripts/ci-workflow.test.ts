@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { VITEST_SHARDS, VITEST_WORKERS } from "./ci-scope.mjs";
 
@@ -8,6 +10,7 @@ interface Step {
   id?: string;
   name?: string;
   uses?: string;
+  shell?: string;
   run?: string;
   if?: string;
   with?: Record<string, unknown>;
@@ -1059,5 +1062,72 @@ describe("Release job conditions", () => {
       const condition = workflows.get(flow.file)!.jobs.approval!.if!;
       expect(evaluate(condition, { needs: { gate: { outputs: { pass } } }, github: {}, inputs: {} }), flow.file).toBe(asks);
     }
+  });
+});
+
+describe("Release gate step", () => {
+  const SHA = "0123456789abcdef0123456789abcdef01234567";
+  const GATE_FLOWS: { file: string; cases: { name: string; env: Record<string, string> }[] }[] = [
+    { file: IMAGE, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }, { name: "commit", env: { TAG: "" } }] },
+    { file: NPM, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
+    { file: MACOS, cases: [{ name: "tag", env: { REF: "v0.1.1" } }, { name: "branch", env: { REF: "main" } }] },
+  ];
+  const folders: string[] = [];
+  afterEach(() => {
+    for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
+  });
+
+  // GitHub starts a `shell: bash` step as `bash --noprofile --norc -eo pipefail`, so the step must survive a non-zero gate exit status.
+  const run = (file: string, env: Record<string, string>, gateStatus: number) => {
+    const folder = mkdtempSync(join(tmpdir(), "gate-step-"));
+    folders.push(folder);
+    const bin = join(folder, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "node"), `#!/bin/sh\nexit ${gateStatus}\n`, { mode: 0o755 });
+    writeFileSync(join(bin, "gh"), `#!/bin/sh\necho ${SHA}\n`, { mode: 0o755 });
+    const output = join(folder, "output");
+    writeFileSync(output, "");
+    const step = stepsOf(workflows.get(file)!.jobs.gate!).find((each) => each.id === "gate")!;
+    expect(step.shell, file).toBe("bash");
+    const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", step.run!], {
+      env: { PATH: `${bin}:${process.env.PATH}`, GITHUB_OUTPUT: output, GH_TOKEN: "token", REPOSITORY: "owner/repo", SHA, TAG: "", REF: "", ...env },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    return { status: result.status, lines: readFileSync(output, "utf8").split("\n").filter(Boolean) };
+  };
+
+  for (const { file, cases } of GATE_FLOWS) {
+    describe(file, () => {
+      it.each(cases)("writes pass=true when the gate passes ($name run)", ({ env }) => {
+        const result = run(file, env, 0);
+        expect(result.status).toBe(0);
+        expect(result.lines).toContain("pass=true");
+        expect(result.lines).not.toContain("pass=false");
+      });
+
+      it.each(cases)("writes pass=false and succeeds when the gate flags the run, so the approval job can ask ($name run)", ({ env }) => {
+        const result = run(file, env, 1);
+        expect(result.status).toBe(0);
+        expect(result.lines).toContain("pass=false");
+        expect(result.lines).not.toContain("pass=true");
+      });
+
+      it.each(cases)("fails and writes no pass when the gate refuses the run or fails ($name run)", ({ env }) => {
+        for (const gateStatus of [2, 127]) {
+          const result = run(file, env, gateStatus);
+          expect(result.status, `exit ${gateStatus}`).toBe(1);
+          expect(result.lines.filter((line) => line.startsWith("pass=")), `exit ${gateStatus}`).toEqual([]);
+        }
+      });
+    });
+  }
+
+  it("covers every workflow that runs the release gate", () => {
+    const gated = [...workflows]
+      .filter(([, flow]) => Object.values(flow.jobs).some((job) => runs(job).some((line) => line.includes(`node scripts/${GATE_SCRIPT}`))))
+      .map(([file]) => file)
+      .sort();
+    expect(gated).toEqual(GATE_FLOWS.map((flow) => flow.file).sort());
   });
 });

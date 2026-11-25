@@ -1170,8 +1170,8 @@ second user for engines, a separate change.
 
 A pairing code is fine for the owner's own devices. For a workspace other
 people use every day, let them sign in with an emailed code instead: set an
-allow-list and a way to send the code (below), and `/pair` on your server
-offers "Sign in with your email" first.
+allow-list and a mail server (below), and `/pair` on your server offers
+"Sign in with your email" first.
 
 ```sh
 SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
@@ -1199,16 +1199,8 @@ is bootstrapped; while it does, Settings refuses to change that list and says
 which variable to change instead. One that is empty, as `.env.example` and the
 Compose files leave them, leaves the list to Settings.
 
-Emailed sign-in needs a way to send the code. A server that is signed in to a
-Seira account needs nothing more: that is any server set up with
-`npx @seira-bot/seira login` or with the installer's `--tunnel --account-email`
-(the [quick start without a domain](deploy-vps.md#quick-start-without-a-domain)).
-Seira's account service then sends the code, and your server checks it. This
-sends the address of each person who signs in to Seira. If that address has no
-Seira account, Seira may create one for it. To keep the addresses on your own
-mail server, give the server an SMTP address as below; it then sends every
-code itself. `SEIRA_CONTROL_PLANE_URL`, the address of an account service that
-you run, takes the place of Seira's.
+Emailed sign-in needs a mail server, so that your server can send the code.
+Give the server an SMTP address:
 
 ```sh
 SEIRA_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"
@@ -1229,21 +1221,45 @@ never on a command line.
 
 ### Inviting people
 
-**Settings → People** lists who may sign in, their role, when they were last
-seen, and what each person spent this month. **Invite** adds an address (or
-`@company.com` for everyone there) and shows a link like
-`https://your.host/pair?email=name%40company.com`: it opens the sign-in page
-with the address filled in, and the one-time code still goes to that address.
-Roles change with one click; removing someone stops new sign-ins.
+**Settings → People** lists who may sign in, their role, what they can reach,
+when they were last seen, and what each person spent this month. Roles change
+with one click. Removing someone stops new sign-ins.
 
-A user can be limited to chosen departments: pick **Chosen departments** when
-you invite them, or **Change access** on their row. They then see only the
-bots, rooms, workflows and conversations of those departments, and cannot see
-team files or restore a workspace backup. Admins always see the whole team.
-Bots in a department that is named in any user's list can reach only bots in
-their own department. A bot in a chosen department can still read files outside
-its folders unless the department uses **Only chosen folders**. If the list of
-departments cannot be read, users see nothing until it is fixed. Teams in
+To invite a person, choose **Invite**. The dialog asks for an address (or
+`@company.com` for everyone there), a role (**User** or **Admin**) and the
+access. When you save, the dialog shows a link like
+`https://your.host/pair?email=name%40company.com`. The link opens the sign-in
+page with the address filled in. The one-time code still goes to that address.
+
+Access has three choices:
+
+- **Whole team**: the person can use every bot that is shared with the team.
+- **Chosen departments**: the person sees only the bots, rooms, workflows and
+  conversations of the departments you tick. General is one of them.
+- **Chosen bots**: the person sees only the bots you tick.
+
+Each chosen department or bot has a level. **Can chat** lets the person chat
+with the bot. **Can view** lets the person read the bot and its conversations,
+but not send a message. Admins always see the whole team, so the dialog hides
+the choice for an admin.
+
+You can also start from the sidebar. Open the menu of a department and choose
+**Invite to this department**, or open the menu of a bot and choose **Invite to
+this bot**. The dialog opens with that department or bot already ticked. These
+two entries show only to an admin on a server that signs people in by email.
+
+To change what a person can reach, choose **Change access** on their row.
+If you invite a person by address to a bot that is shared with only some people,
+Seira adds the person to those people, after you confirm.
+When you remove that bot from their access, or remove the person, Seira removes
+them from those people again.
+An `@company.com` entry cannot get such a bot, so invite each person by address.
+
+A person with chosen departments or bots cannot see team files, restore a
+workspace backup, or approve a change to a bot's setup. An admin approves it. Bots in a department that is named in any user's list can reach only
+bots in their own department. A bot in a chosen department can still read files
+outside its folders unless the department uses **Only chosen folders**. If the
+saved choices cannot be read, users see nothing until it is fixed. Teams in
 Seira Cloud do not support this.
 
 On a hosted workspace whose members your organization's Admin manages

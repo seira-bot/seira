@@ -8,6 +8,7 @@ import { z } from "zod";
 import { accessFromVisibility, entryMatches, higherLevel, sharedLevel, type BotAccess, type BotAccessLevel } from "../shared/bot-access.ts";
 import { botOwner, type OwnedBot } from "../shared/bot-owner.ts";
 import { defaultBotPerson } from "../shared/default-bot.ts";
+import type { GrantLevel } from "../shared/department-access.ts";
 import type { BotVisibility } from "../shared/wire.ts";
 import { audienceIncludes, type Audience } from "./audience.ts";
 import { SHARED_CHAT_TITLE } from "../shared/wire.ts";
@@ -33,6 +34,12 @@ export type RoutineRef = { botId?: unknown; groupId?: unknown; name?: unknown; s
 export type Viewer = { kind: "all"; email?: string } | { kind: "member"; email?: string };
 
 export const SEES_EVERYTHING: Viewer = { kind: "all" };
+
+/** What a limited member's invite names, by the departments' current names ("" is General) and by bot id. */
+export interface ResolvedGrant {
+  departments: ReadonlyMap<string, GrantLevel>;
+  bots: ReadonlyMap<string, GrantLevel>;
+}
 
 const departmentName = (section?: string): string => section?.trim() || "";
 
@@ -197,9 +204,10 @@ export class VisibleSet {
   private readonly audiences: ThreadAudiences | null;
   private threads: Map<string, ThreadOwner> | null = null;
   private readonly botMemo = new Map<string, boolean>();
-  /** Security invariant: a member with a department grant sees only these departments (by their current names, General as
-   * ""), and an unreadable grant file arrives here as the empty set, which shows nothing. */
-  private readonly departments: ReadonlySet<string> | null;
+  /** Security invariant: a member with a grant sees only the departments and bots it names, and an unreadable grant file
+   * arrives here as an empty grant, which shows nothing. */
+  private readonly grant: ResolvedGrant | null;
+  private grantedDepartments: Set<string> | null = null;
 
   constructor(
     bots: readonly VisibilityBot[],
@@ -207,13 +215,13 @@ export class VisibleSet {
     viewer: Viewer,
     ownerOf?: (threadId: string) => ThreadOwner | undefined,
     audiences?: ThreadAudiences,
-    departments?: ReadonlySet<string> | null,
+    grant?: ResolvedGrant | null,
   ) {
     this.viewer = viewer;
     this.audiences = audiences ?? null;
-    this.departments = viewer.kind === "member" ? departments ?? null : null;
+    this.grant = viewer.kind === "member" ? grant ?? null : null;
     // On a Team Cloud nobody's view is everything, an admin's included: each conversation has its own audience.
-    this.everything = this.audiences === null && this.departments === null && (viewer.kind === "all" ||
+    this.everything = this.audiences === null && this.grant === null && (viewer.kind === "all" ||
       (!bots.some((bot) => isRestricted(bot.visibility)) && !groups.some((group) => isRestricted(group.audienceFloor))));
     this.ownerOf = ownerOf ?? ((threadId) => this.indexedOwner(threadId));
     if (this.everything) return;
@@ -221,14 +229,30 @@ export class VisibleSet {
     for (const group of groups) this.groups.set(group.id, group);
   }
 
-  /** A member limited to some departments. */
+  /** A member limited to some departments or bots. */
   get limitedToDepartments(): boolean {
-    return this.departments !== null;
+    return this.grant !== null;
   }
 
-  /** Whether this viewer may put a room in that department: always, unless a department grant limits them. */
+  /** The departments a limited member's grant names, and the departments of the bots they see. */
+  private departmentsShown(): ReadonlySet<string> {
+    if (!this.grantedDepartments) {
+      const shown = new Set(this.grant?.departments.keys());
+      for (const bot of this.bots.values()) if (this.bot(bot.id)) shown.add(departmentName(bot.section));
+      this.grantedDepartments = shown;
+    }
+    return this.grantedDepartments;
+  }
+
+  /** Whether this viewer may put a room in that department: always, unless a grant limits them. */
   departmentAllowed(section: unknown): boolean {
-    return this.departments === null || this.departments.has(departmentName(typeof section === "string" ? section : undefined));
+    return this.grant === null || this.departmentsShown().has(departmentName(typeof section === "string" ? section : undefined));
+  }
+
+  /** Whether levels apply to this member: on a Team Cloud always, else when their grant gives some item the level "view". */
+  get leveled(): boolean {
+    if (this.audiences !== null) return true;
+    return this.grant !== null && [...this.grant.departments.values(), ...this.grant.bots.values()].includes("view");
   }
 
   /** A non-admin session, even one that can see every bot: what only an admin reads still stays off its copy. */
@@ -242,7 +266,15 @@ export class VisibleSet {
     if (!this.bot(id)) return "none";
     if (this.viewer.kind === "all") return "edit";
     const bot = this.audiences ? this.bots.get(id) : undefined;
-    return bot ? memberLevel(bot, this.viewer.email) : "chat";
+    if (bot) return memberLevel(bot, this.viewer.email);
+    return this.grant ? this.grantLevel(id) : "chat";
+  }
+
+  /** The higher level of the bot's department and of the bot itself; a bot the grant does not name gets the lowest. */
+  private grantLevel(id: string): BotAccessLevel {
+    const own = this.grant!.bots.get(id);
+    const department = this.grant!.departments.get(departmentName(this.bots.get(id)?.section));
+    return own && department ? higherLevel(own, department) : own ?? department ?? "view";
   }
 
   bot(id: string): boolean {
@@ -251,7 +283,7 @@ export class VisibleSet {
     if (seen === undefined) {
       const bot = this.bots.get(id);
       seen = bot && this.someoneElsesOwn(bot) ? false : this.viewer.kind === "all" || Boolean(bot && viewerSees(this.viewer, bot.visibility));
-      if (seen && this.departments && !this.departments.has(departmentName(bot?.section))) seen = false;
+      if (seen && this.grant && !this.grant.departments.has(departmentName(bot?.section)) && !this.grant.bots.has(id)) seen = false;
       this.botMemo.set(id, seen);
     }
     return seen;
@@ -270,7 +302,7 @@ export class VisibleSet {
     const group = this.groups.get(id);
     if (!group) return false;
     const members = group.memberIds.filter((member) => this.bots.has(member));
-    const inDepartment = this.departments === null || group.dm === true || this.departments.has(departmentName(group.section));
+    const inDepartment = this.grant === null || group.dm === true || this.grant.departments.has(departmentName(group.section)) || members.every((member) => this.grant!.bots.has(member));
     return members.length > 0 && members.every((member) => this.bot(member)) && inDepartment && viewerSees(this.viewer, group.audienceFloor);
   }
 
@@ -327,7 +359,7 @@ export class VisibleSet {
 
   sections(all: readonly string[]): string[] {
     if (this.everything || this.viewer.kind === "all") return [...all];
-    if (this.departments) return all.filter((section) => this.departments!.has(departmentName(section)));
+    if (this.grant) return all.filter((section) => this.departmentsShown().has(departmentName(section)));
     const key = (value?: string) => value?.trim() || "";
     const shown = new Set<string>();
     for (const bot of this.bots.values()) if (this.bot(bot.id)) shown.add(key(bot.section));
@@ -444,7 +476,7 @@ export interface FrameContext {
  * On a Team Cloud an admin gets the bot whole but, like a member, only the conversations they may read. */
 export function memberBot<T extends object>(bot: T, visible: VisibleSet): T {
   if (visible.everything) return visible.member ? withoutServerAlias(bot) : bot;
-  const shown = visible.filtersThreads ? withLevel(shownConversations(bot, visible), visible) : bot;
+  const shown = visible.filtersThreads ? withLevel(shownConversations(bot, visible), visible, true) : visible.leveled ? withLevel(bot, visible, false) : bot;
   if (!visible.member) return shown;
   const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown };
   const managed = (rest as { managedSections?: unknown }).managedSections;
@@ -468,12 +500,12 @@ export function narrowedHolds(key: string, value: unknown, visible: VisibleSet):
 
 /** On a Team Cloud each person's copy says what they may do with the bot; whoever can edit it also gets its sharing
  * (an older bot's as its visibility meant it), and nobody else does. */
-function withLevel<T extends object>(bot: T, visible: VisibleSet): T {
+function withLevel<T extends object>(bot: T, visible: VisibleSet, teamCloud: boolean): T {
   const record = bot as T & AccessBot & { id?: unknown };
   if (typeof record.id !== "string") return bot;
   const yourAccess = visible.level(record.id);
   const { access: _access, ...rest } = record;
-  const audience = isRestricted(record.visibility) ? { onlyPeopleAdded: true as const } : {};
+  const audience = teamCloud && isRestricted(record.visibility) ? { onlyPeopleAdded: true as const } : {};
   return (yourAccess === "edit" ? { ...rest, access: accessOf(record), yourAccess, ...audience } : { ...rest, yourAccess, ...audience }) as T;
 }
 

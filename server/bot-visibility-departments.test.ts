@@ -17,7 +17,8 @@ const groups = [
   { id: "room-general", threadId: "t-room-general", memberIds: ["sales"] },
   { id: "dm-sales", threadId: "t-dm-sales", memberIds: ["sales"], dm: true },
 ];
-const sales = new Set(["Sales"]);
+const grantOf = (departments: string[], botIds: string[] = []) => ({ departments: new Map(departments.map((name) => [name, "chat" as const])), bots: new Map(botIds.map((id) => [id, "chat" as const])) });
+const sales = grantOf(["Sales"]);
 const limited = new VisibleSet(bots, groups, ADA, undefined, undefined, sales);
 
 describe("a member limited to some departments", () => {
@@ -28,7 +29,7 @@ describe("a member limited to some departments", () => {
   });
 
   it("sees General only when General is granted", () => {
-    const withGeneral = new VisibleSet(bots, groups, ADA, undefined, undefined, new Set(["Sales", ""]));
+    const withGeneral = new VisibleSet(bots, groups, ADA, undefined, undefined, grantOf(["Sales", ""]));
     expect(bots.filter((bot) => withGeneral.bot(bot.id)).map((bot) => bot.id)).toEqual(["sales", "chief"]);
   });
 
@@ -68,7 +69,7 @@ describe("a member limited to some departments", () => {
   });
 
   it("sees nothing at all when the granted set is empty", () => {
-    const none = new VisibleSet(bots, groups, ADA, undefined, undefined, new Set());
+    const none = new VisibleSet(bots, groups, ADA, undefined, undefined, grantOf([]));
     expect(bots.some((bot) => none.bot(bot.id))).toBe(false);
     expect(groups.some((group) => none.group(group.id))).toBe(false);
     expect(none.sections(["Sales"])).toEqual([]);
@@ -134,7 +135,7 @@ describe("live frames for a member limited to some departments", () => {
 
   it("withdraws a bot once when its department leaves the grant", () => {
     const state = seen();
-    const before = new VisibleSet(bots, groups, ADA, undefined, undefined, new Set(["Sales", "Finance"]));
+    const before = new VisibleSet(bots, groups, ADA, undefined, undefined, grantOf(["Sales", "Finance"]));
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(before), state)).toMatchObject({ kind: "bot" });
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(limited), state)).toEqual({ kind: "bot.deleted", botId: "fin" });
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(limited), state)).toBeUndefined();
@@ -166,7 +167,7 @@ describe("names outside the grant", () => {
   it("cuts a Chief's departments to the granted ones, and only for a limited person", () => {
     const chief = { id: "sales", section: "Sales", chiefOfStaff: true, managedSections: ["Sales", "Finance", ""] };
     expect(memberBot(chief, limited).managedSections).toEqual(["Sales"]);
-    expect(memberBot(chief, new VisibleSet(bots, groups, ADA, undefined, undefined, new Set(["Sales", ""]))).managedSections).toEqual(["Sales", ""]);
+    expect(memberBot(chief, new VisibleSet(bots, groups, ADA, undefined, undefined, grantOf(["Sales", ""]))).managedSections).toEqual(["Sales", ""]);
     expect(memberBot(chief, new VisibleSet(bots, groups, ADA)).managedSections).toEqual(["Sales", "Finance", ""]);
   });
 });

@@ -64,7 +64,7 @@ It runs the newest release, pinned by its version; once a `stable` channel is pu
 cd /opt/seira && sudo docker compose exec seira seira pair --label "First admin"
 ```
 
-Open the link it prints, or paste it into the desktop app under **＋ → Connect to a server**. To sign in with an emailed code instead, run the installer with `--email you@example.com`. Emailed sign-in needs a way to send the code: set `SEIRA_SIGNIN_SMTP_URL` in `/opt/seira/.env`, or sign the server in to a Seira account, as in the quick start without a domain below, and Seira's account service sends it.
+Open the link it prints, or paste it into the desktop app under **＋ → Connect to a server**. To sign in with an emailed code instead, run the installer with `--email you@example.com`. Emailed sign-in needs a mail server: set `SEIRA_SIGNIN_SMTP_URL` in `/opt/seira/.env`.
 
 - **Update:** `sudo /opt/seira/update.sh`, which backs the data up, checks the new version's health and puts the old one back if it fails. The installer places it once this repository has it and prints the command when it finishes; until then, running the install command again moves to the newest release. `update.sh` pins the version by digest in `.env`, and a later run of the installer keeps that pin.
 - **Repair:** run the install command again. It checks the server, rewrites its own files and leaves `.env` and `data/` alone. That also moves an install made before Caddy got its own container: Caddy then shared the server's network, and HTTPS went down whenever the server restarted without it.
