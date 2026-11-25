@@ -10,8 +10,9 @@
 //   lock or a complete one.
 // - The file names its holder (process id, start time, token). Every owner (a lock holder, or a process that is removing
 //   a lock) is `alive`, `dead` or `unknown`. Only `dead` lets another process recover what the owner held; `alive` and
-//   `unknown` (no valid holder text, no start time to compare, a process that cannot be judged) wait until the deadline
-//   and then stop with an error. A lock is taken over only when it is older than `staleMs` AND its holder is dead.
+//   `unknown` (a holder text that is not the whole identity, no start time to compare, a process that cannot be judged)
+//   wait until the deadline and then stop with an error. The identity is checked field by field before anything else:
+//   a text that is short, long, or has a field in the wrong form is `unknown`, never `dead`. A lock is taken over only when it is older than `staleMs` AND its holder is dead.
 // - Giving a lock back and taking over a stale lock are the same step: `removeLock`. A process that removes the lock with
 //   text X first publishes a claim file for X that names itself. Only the claim holder reads the lock again, and it
 //   removes the lock only while it still holds X. A claim is never removed while its owner is alive or unknown; a claim
@@ -19,10 +20,11 @@
 //   that another process may hold now. The claims of X are cleared once X is gone (X holds a unique token, so no
 //   process claims X again for good).
 // - Every wait has an end: each loop checks the deadline, and any error that is not "the file is not there" ends the
-//   wait with an error.
+//   wait with an error. The deadlines use a monotonic clock, so a change of the wall clock does not lengthen or cut a wait.
 // The processes must share one process table: a holder in another container or host looks gone after `staleMs`.
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, linkSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { performance } from "node:perf_hooks";
 
 export interface FileLockOptions {
   /** A lock file older than this, whose holder is gone, is a crashed process's. Default 10 seconds. */
@@ -38,6 +40,8 @@ const POLL_MS = 5;
 /** The locks this process holds, with how many times each was taken: one code path may take a lock it already holds. */
 const holding = new Map<string, { depth: number; text: string }>();
 
+/** Milliseconds on a clock that never goes back and does not follow changes of the wall clock. Used for every wait. */
+const tick = () => performance.now();
 const sleep = (ms: number) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
 const codeOf = (error: unknown) => Reflect.get(Object(error), "code");
 const hashOf = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16);
@@ -50,7 +54,8 @@ export const claimOf = (file: string, text: string, slot = 0) => `${file}.${hash
 function startOf(pid: number): string {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    return stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19] ?? "-";
+    const started = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19];
+    return started !== undefined && /^[0-9]+$/.test(started) ? started : "-";
   } catch {
     return "-";
   }
@@ -58,10 +63,15 @@ function startOf(pid: number): string {
 
 interface Holder { pid: number; started: string }
 
+/** The whole identity of a holder, and nothing else: `<pid> <start time or -> <token>` and one line end. */
+const IDENTITY = /^([1-9][0-9]{0,9}) (-|[0-9]{1,20}) ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\n$/;
+const MAX_PID = 2_147_483_647;
+
+/** The identity in `text`, or null when `text` is not exactly one complete identity (a short, long or changed text is not judged). */
 function holderOf(text: string): Holder | null {
-  const [pid, started, token] = text.trim().split(" ");
-  const id = Number(pid);
-  return Number.isSafeInteger(id) && id > 0 && started && token ? { pid: id, started } : null;
+  const found = IDENTITY.exec(text);
+  const pid = found ? Number(found[1]) : 0;
+  return found && pid <= MAX_PID ? { pid, started: found[2]! } : null;
 }
 
 type Owner = "alive" | "dead" | "unknown";
@@ -92,7 +102,8 @@ function look(file: string): Seen | null {
   }
 }
 
-/** Old, and its holder is dead. A lock that names no valid holder is never stale: it is not proof that the lock is free. */
+/** Old, and its holder is dead. A lock that names no valid holder is never stale: it is not proof that the lock is free.
+ * The age is a file time (wall clock) by nature; it only adds to the check, the owner must be known to be dead as well. */
 function stale(seen: Seen, staleMs: number): boolean {
   return Date.now() - seen.mtimeMs > staleMs && ownerState(seen.text) === "dead";
 }
@@ -169,7 +180,7 @@ function removeLock(file: string, text: string): Removal {
 export function acquireFileLock(file: string, options: FileLockOptions = {}): () => void {
   const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
   const waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
-  const deadline = Date.now() + waitMs;
+  const deadline = tick() + waitMs;
   const own = holding.get(file);
   let text = own?.text ?? "";
   if (!own) {
@@ -178,7 +189,7 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): ()
       if (publish(file, text)) break;
       const seen = look(file);
       if (seen && stale(seen, staleMs)) removeLock(file, seen.text);
-      if (Date.now() >= deadline) {
+      if (tick() >= deadline) {
         const unknown = seen && ownerState(seen.text) === "unknown";
         throw new Error(`another process holds ${file}; try again${unknown ? " (its holder cannot be judged; remove the file by hand only when no Seira process runs)" : ""}`);
       }
@@ -196,9 +207,9 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): ()
       return;
     }
     // A process that is removing a lock with this text now (it judged this process gone) makes this wait; the wait ends.
-    const end = Date.now() + waitMs;
+    const end = tick() + waitMs;
     while (removeLock(file, text) === "busy") {
-      if (Date.now() >= end) throw new Error(`could not give back ${file}; another process is changing it`);
+      if (tick() >= end) throw new Error(`could not give back ${file}; another process is changing it`);
       sleep(POLL_MS);
     }
     given = true;
