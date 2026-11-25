@@ -7,6 +7,7 @@ import type { AppConfig } from "../config.ts";
 import type { ChatAppsMcp } from "../chat-apps-mcp.ts";
 import type { CloudHomeConfig } from "../cloud-home.ts";
 import type { BusyFlag } from "../routes/config.ts";
+import { oneBotMcpProblem } from "../../shared/one-bot-mcp.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { McpKeys } from "../vault/mcp-keys.ts";
 import type { TeamConnectionsHost } from "./team-connections-host.ts";
@@ -37,6 +38,8 @@ export interface McpConfigDeps {
   probeAs?(server: { bot?: string }): NonNullable<McpProbeOptions["asBot"]>;
   /** Test for a server that runs on another computer: on that computer, through lending, for whoever tests (`lender`). */
   testElsewhere?(name: string, server: StoredMcpServer & { runsOn: McpRunsOn }, lender: string | null, signal: AbortSignal): Promise<McpConfigResult>;
+  /** Whether a bot of this workspace has this id now: a one-bot endpoint needs one (shared/one-bot-mcp.ts). Absent: any id. */
+  botExists?(id: string): boolean;
   /** A server's `vault:<id>` keys, read when it is tested and given only to the server a move or a redeemed ref names. */
   keys?: McpKeys;
 }
@@ -131,7 +134,13 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
     const existing = parseStoredMcpServer(name, current[name]);
     return existing.ok ? { current, existing: existing.server } : { result: { status: 400, error: existing.error } as McpConfigResult };
   };
+  const oneBotRefusal = (server: StoredMcpServer): McpConfigResult | null => {
+    const problem = oneBotMcpProblem(server, (id) => deps.botExists?.(id) ?? true);
+    return problem ? { status: 400, error: problem } : null;
+  };
   const refused = (name: string, server: StoredMcpServer): McpConfigResult | null => {
+    const oneBot = oneBotRefusal(server);
+    if (oneBot) return oneBot;
     const personalRefusal = personalHeaderRefusal(name, server);
     if (personalRefusal) return { status: 400, ...personalRefusal };
     const refusal = mcpPolicyRefusal(name, server);
@@ -166,6 +175,8 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
       }
       const limit = mcpServerLimitError(current, Object.values(servers));
       if (limit) return { status: 400, error: limit };
+      const oneBot = names.map((name) => oneBotRefusal(servers[name]!)).find(Boolean);
+      if (oneBot) return oneBot;
       const personalRefusal = names.map((name) => personalHeaderRefusal(name, servers[name]!)).find(Boolean);
       if (personalRefusal) return { status: 400, ...personalRefusal };
       const blocked = names.filter((name) => mcpPolicyRefusal(name, servers[name] as object));
@@ -203,6 +214,8 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
       const found = stored(name);
       if (!found.existing) return found.result!;
       if (enabled) {
+        const oneBot = oneBotRefusal(found.existing);
+        if (oneBot) return oneBot;
         const refusal = mcpPolicyRefusal(name, found.existing);
         if (refusal) return { status: 403, error: refusal, code: "managed_policy" };
       }
@@ -243,6 +256,9 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
       if (raw === undefined) return { status: 404, error: mcpServerNotFound(name) };
       const parsed = parseStoredMcpServer(name, raw);
       if (!parsed.ok) return { status: 400, error: parsed.error };
+      // A saved entry that predates the one-bot rule stays blocked on every remote-call path until a bot owns it: no key is read and nothing is sent.
+      const oneBot = oneBotRefusal(parsed.server);
+      if (oneBot) return oneBot;
       const { runsOn } = parsed.server;
       if (runsOn) return deps.testElsewhere ? deps.testElsewhere(name, { ...parsed.server, runsOn }, lender ?? null, signal) : { status: 409, error: runsElsewhere(runsOn) };
       if (mcpProbesInFlight >= MAX_CONCURRENT_MCP_PROBES) {
@@ -275,6 +291,9 @@ export function createMcpConfig(deps: McpConfigDeps & { changed(): void }): McpC
             sentSignIn = true;
           }
         }
+        // The destination that is about to be called, after any key or sign-in change, meets the same rule as the saved entry.
+        const effective = oneBotRefusal({ ...target, ...(parsed.server.bot ? { bot: parsed.server.bot } : {}) } as StoredMcpServer);
+        if (effective) return effective;
         const options = { tryReadOnlyTool: true, ...(personal ? {} : appCatalog?.probeOptions(name, cataloged) ?? {}), ...(asBot ? { asBot } : isRemoteMcpServer(target) ? {} : { asBot: deps.probeAs?.(target) ?? {} }) };
         const viaBots = isRemoteMcpServer(target) ? deps.botsPath?.() ?? null : null;
         const result = viaBots && isRemoteMcpServer(target)

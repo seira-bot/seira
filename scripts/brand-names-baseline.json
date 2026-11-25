@@ -287,7 +287,7 @@
     "8c0b6dc53f5fd315"
   ],
   "electron/cloud-account.mjs": [
-    "6911afd189008d9e"
+    "50fe06cfc17dcb3f"
   ],
   "electron/cloud-account.node-test.mjs": [
     "7d3d0fa8857990c1"
@@ -1040,8 +1040,11 @@
   "server/pages/access.ts": [
     "0adac75a9513384d",
     "2811f167f9bee383",
-    "c7e455efbabb06c5",
+    "738ce02566dfcc24",
     "f57e8945d4d86cdf"
+  ],
+  "server/pages/published-pages.test.ts": [
+    "72d02558fe2bc731"
   ],
   "server/parallel-threads.e2e.test.ts": [
     "65d6797a350ed6fd",

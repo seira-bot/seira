@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isHarnessEnvName } from "../electron/legacy-env.mjs";
 
 import { RESERVED_MCP_NAMES, slugMcpName } from "../shared/mcp-name.ts";
+import { isOneBotMcpServer } from "../shared/one-bot-mcp.ts";
 import type { McpServerSpec, RemoteMcpSpec, StdioMcpSpec } from "./contracts.ts";
 import { MCP_RESTART_ENV } from "./mcp-app-catalog.ts";
 
@@ -78,8 +79,10 @@ export function isRemoteMcpServer(server: McpServerSpec): server is RemoteMcpSpe
   return "url" in server;
 }
 
-/** Whether `botId` may start this server: every bot may start one that is no bot's own. */
-export function mcpServerServes(server: object & { bot?: string }, botId: string | undefined): boolean {
+/** Whether `botId` may start this server: every bot may start one that is no bot's own, except a one-bot endpoint with
+ * no bot: that one serves nobody until the owner chooses a bot for it. */
+export function mcpServerServes(server: object & { bot?: string; type?: string; url?: string }, botId: string | undefined, endpoints?: readonly string[]): boolean {
+  if (!server.bot && isOneBotMcpServer(server, endpoints)) return false;
   return !server.bot || server.bot === botId;
 }
 
@@ -87,7 +90,8 @@ export function mcpServerServes(server: object & { bot?: string }, botId: string
 export function mcpServerProblemFor(servers: Record<string, unknown> | undefined, name: string, botId: string): string | null {
   const server = servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
   if (!server || typeof server !== "object") return "no such server";
-  return mcpServerServes(server, botId) ? null : "that server belongs to another bot";
+  if (mcpServerServes(server, botId)) return null;
+  return (server as { bot?: string }).bot ? "that server belongs to another bot" : "that server needs one bot first";
 }
 
 /** How many MCP servers one bot can use: the shared ones plus its own. */

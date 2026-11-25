@@ -665,6 +665,7 @@ describe("agents-proxy MCP surface", () => {
       "list_threads",
       "close_thread",
       "rename_thread",
+      "suggest_replies",
       "start_thread",
       "burst",
       "list_models",

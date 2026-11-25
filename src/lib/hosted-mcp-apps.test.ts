@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { isOneBotMcpServer } from "../../shared/one-bot-mcp";
 import { HOSTED_MCP_APPS, hostedConnections, hostedMcpApp, hostedServerName, type HostedApp } from "./hosted-mcp-apps";
 
 describe("hosted MCP apps", () => {
+  it("asks the server to keep each one-bot app to one bot, and only those", () => {
+    for (const app of HOSTED_MCP_APPS) {
+      expect(isOneBotMcpServer({ type: "http", url: app.url }), app.id).toBe("perBot" in app && app.perBot === true);
+    }
+  });
+
   it("has unique ids that are valid server names and unique https endpoints", () => {
     const ids = HOSTED_MCP_APPS.map((app) => app.id);
     expect(new Set(ids).size).toBe(ids.length);

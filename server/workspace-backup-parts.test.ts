@@ -99,7 +99,7 @@ it("counts only the chosen parts in the space check", async () => {
   write(root, "task-workspaces/bot/thread/video.mp4", 8 * 1024 ** 2);
   write(root, "notes.md", 10);
   const free = () => ({ bavail: (70 * 1024 ** 2) / 4096, bsize: 4096 });
-  await expect(createWorkspaceBackupSnapshot(root, { password: PASSWORD }, undefined, { statfs: free })).rejects.toThrow(/needs about 80 MB of free disk space, and 70 MB is free/);
+  await expect(createWorkspaceBackupSnapshot(root, { password: PASSWORD }, undefined, { statfs: free })).rejects.toThrow(/needs about 72 MB of free disk space, and 70 MB is free/);
   const exported = await createWorkspaceBackupSnapshot(root, { password: PASSWORD, leaveOut: ["work-folders"] }, undefined, { statfs: free });
   expect(exported.summary.leftOut).toEqual(["work-folders"]);
 });

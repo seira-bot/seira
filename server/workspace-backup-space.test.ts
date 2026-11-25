@@ -21,7 +21,7 @@ it("stops before the copy and names the needed and free size when the disk is to
   const root = directory();
   writeFileSync(join(root, "big.bin"), Buffer.alloc(8 * 1024 ** 2));
   const failure = createWorkspaceBackupSnapshot(root, { password: PASSWORD }, undefined, { statfs: free(10 * 1024 ** 2) });
-  await expect(failure).rejects.toThrow(/needs about 80 MB of free disk space, and 10 MB is free\. Free some space and try again\./);
+  await expect(failure).rejects.toThrow(/needs about 72 MB of free disk space, and 10 MB is free\. Free some space and try again\./);
   expect(readdirSync(join(root, ".backups"))).toEqual([]);
 });
 

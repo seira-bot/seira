@@ -6,6 +6,7 @@ import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
 import { SeiraWelcome } from "@/components/SeiraWelcome";
 import { NewBotNameHost } from "@/components/NewBotName";
+import { PlaceLookHost } from "@/components/PlaceLookHost";
 import { MemberApps } from "@/components/MemberApps";
 import { CloudTimeZoneSync } from "@/components/CloudTimeZone";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
@@ -513,6 +514,7 @@ function Application() {
         <WelcomeGate viewer={viewer} />
         <SeiraWelcome viewer={viewer} />
         <NewBotNameHost />
+        <PlaceLookHost />
         <CloudTimeZoneSync viewer={viewer} />
         <GuidedTour />
         <LiveCallHost />

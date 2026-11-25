@@ -115,7 +115,7 @@ export type SecretRequestCardData = Omit<import("../../shared/wire").SecretReque
 
 export type ComputerControlState = { held: boolean; helpReason: string | null; help?: import("../../shared/wire").ComputerHelpRef | null };
 
-export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "settingsCard" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy" | "teamAsk" | "teamRequest" | "teamSuggestion" | "teamIntro" | "handoff"> {
+export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "settingsCard" | "uiPlace" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy" | "teamAsk" | "teamRequest" | "teamSuggestion" | "teamIntro" | "handoff"> {
   id: string;
   role: "bot" | "user";
   kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
@@ -407,6 +407,7 @@ import type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicyS
 export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary };
 
 import { configStatusFromFrame, type ConfigStatusFrame } from "@/lib/config-status-frame";
+import type { PlaceAnchor, PlaceLook } from "@/lib/ui-place-open";
 export { configStatusFromFrame, type ConfigStatusFrame };
 
 export type { EngineInstall } from "./engine-install";
@@ -559,6 +560,8 @@ export interface AppState {
   error: string | null;
   notice: { kind: "thread-gone" | "bot-gone" | "steer-images" | "note" | "no-ai"; botName: string | null; text?: string } | null;
   revealThread: { threadId: string; nonce: number } | null;
+  /** The place card's request. The host in App reads it, so the page change that the card asks for cannot unmount it. */
+  placeLook: PlaceLook | null;
   mascotMotion: {
     botId: string;
     nonce: number;
@@ -731,6 +734,7 @@ export type Action =
   | { type: "error"; message: string | null }
   | { type: "notice"; notice: AppState["notice"] }
   | { type: "revealThread"; threadId: string }
+  | { type: "lookForPlace"; id: string } | { type: "placeLookResult"; nonce: number; phase: "spot" | "missing"; anchor?: PlaceAnchor } | { type: "closePlaceLook" }
   | { type: "toggleSettings"; open?: boolean; section?: BotSettingsSection; botId?: string }
   | { type: "togglePlugins"; open?: boolean; surface?: "apps" | "mcp" }
   | { type: "toggleComputer"; open?: boolean; botId?: string }
@@ -1394,6 +1398,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, botCreationPending: action.on };
     case "notice":
       return { ...state, notice: action.notice };
+    case "lookForPlace":
+      return { ...state, placeLook: { id: action.id, nonce: (state.placeLook?.nonce ?? 0) + 1, phase: "looking" } };
+    case "placeLookResult":
+      return state.placeLook?.nonce === action.nonce && state.placeLook.phase === "looking" ? { ...state, placeLook: { ...state.placeLook, phase: action.phase, anchor: action.anchor } } : state;
+    case "closePlaceLook":
+      return state.placeLook ? { ...state, placeLook: null } : state;
     case "revealThread":
       return { ...state, appSettingsOpen: false, shortcutsOpen: false, pluginsOpen: false, revealThread: { threadId: action.threadId, nonce: (state.revealThread?.nonce ?? 0) + 1 } };
     case "focusMessage":
@@ -1845,6 +1855,7 @@ export const initialState: AppState = {
   error: null,
   notice: null,
   revealThread: null,
+  placeLook: null,
   mascotMotion: null,
   pendingQueued: {},
   consumedQueueIds: {},
