@@ -5442,6 +5442,7 @@
   "phone.pair.withPlaceLine": "{place} luôn bật, nên điện thoại của bạn kết nối tới bot ở bất cứ đâu.",
   "phone.push.title": "Cảnh báo khi ứng dụng trên điện thoại đang đóng",
   "phone.reach.anywhereLine": "Dùng được cả khi ra ngoài. Mã hóa đầu cuối.",
+  "phone.reach.anywhereAddressLine": "Dùng được cả khi ở xa nhà, qua một địa chỉ Seira bảo mật.",
   "phone.reach.awakeLine": "Để điện thoại và các việc đã lên lịch vẫn kết nối được tới nó.",
   "phone.reach.foot": "Ghép nối điện thoại sẽ bật các mục này cho bạn. Bạn có thể đổi ở đây sau.",
   "phone.reach.title": "Cách điện thoại kết nối tới máy tính này",

@@ -6452,6 +6452,7 @@
   "phone.pair.withPlaceLine": "{place} è sempre acceso, così il telefono raggiunge i tuoi bot ovunque.",
   "phone.push.title": "Avvisi con l'app del telefono chiusa",
   "phone.reach.anywhereLine": "Funziona anche fuori casa. Cifrato end-to-end.",
+  "phone.reach.anywhereAddressLine": "Funziona anche fuori casa, tramite un indirizzo Seira sicuro.",
   "phone.reach.awakeLine": "Così il telefono e il lavoro programmato possono ancora raggiungerlo.",
   "phone.reach.foot": "«Collega un telefono» li attiva per te. Puoi cambiarli qui più tardi.",
   "phone.reach.title": "Come il telefono raggiunge questo computer",

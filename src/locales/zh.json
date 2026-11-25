@@ -7949,6 +7949,7 @@
   "phone.pair.withPlaceLine": "{place} 一直在线，所以你的手机在任何地方都能连到你的机器人。",
   "phone.push.title": "手机应用关闭时的提醒",
   "phone.reach.anywhereLine": "在外面也能用。端到端加密。",
+  "phone.reach.anywhereAddressLine": "离开家也能用，通过 Seira 的安全地址连接。",
   "phone.reach.awakeLine": "让你的手机和定时任务仍能连接到它。",
   "phone.reach.foot": "「配对手机」会为你开启这些。之后可以在这里更改。",
   "phone.reach.title": "你的手机如何连接到这台电脑",

@@ -9656,6 +9656,7 @@
   "phone.pair.withPlaceLine": "{place} 一直在線，所以你的手機在任何地方都能連到你的機器人。",
   "phone.push.title": "手機 App 關閉時的提醒",
   "phone.reach.anywhereLine": "在外面也能用。端對端加密。",
+  "phone.reach.anywhereAddressLine": "離開家也能使用，透過 Seira 的安全位址連線。",
   "phone.reach.awakeLine": "讓你的手機和排程工作仍能連到它。",
   "phone.reach.foot": "「配對手機」會幫你開啟這些。之後可以在這裡變更。",
   "phone.reach.title": "你的手機如何連到這台電腦",

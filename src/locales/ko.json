@@ -7145,6 +7145,7 @@
   "phone.pair.withPlaceLine": "{place}은(는) 항상 켜져 있어서 휴대폰으로 어디서나 봇에 연결할 수 있어요.",
   "phone.push.title": "휴대폰 앱이 닫혀 있을 때 알림",
   "phone.reach.anywhereLine": "밖에서도 쓸 수 있어요. 종단 간 암호화돼요.",
+  "phone.reach.anywhereAddressLine": "집 밖에서도 쓸 수 있어요. 안전한 Seira 주소를 통해 연결돼요.",
   "phone.reach.awakeLine": "휴대폰과 예약된 작업이 계속 연결될 수 있게 해요.",
   "phone.reach.foot": "휴대폰 연결을 누르면 이 설정이 켜져요. 나중에 여기서 바꿀 수 있어요.",
   "phone.reach.title": "휴대폰이 이 컴퓨터에 연결되는 방법",

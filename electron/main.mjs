@@ -573,7 +573,7 @@ function publicManagedCompanionState() {
 
 function decorateDesktopCompanionState(state) {
   syncCompanionKeepAwake(reachableForKeepAwake(state, tailnetShare.state()), state.keepAwake === true);
-  return { ...state, managedConnection: publicManagedCompanionState(), tailnetShare: tailnetShare.state(), relayToken: companionE2E?.relayToken ?? null };
+  return { ...state, managedConnection: publicManagedCompanionState(), tailnetShare: tailnetShare.state(), relayToken: companionE2E?.relayToken ?? null, anywhere: companionE2E?.configured ? "relay" : "https" };
 }
 
 async function desktopCompanionState() {

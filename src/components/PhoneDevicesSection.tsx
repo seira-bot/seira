@@ -73,9 +73,13 @@ export function deriveTailscalePairingStatus(
     : { kind: "waiting", title, detail: t("remote.tailscale.linkOff") };
 }
 
+/** A build with no relay serves Anywhere through the managed secure address: Anywhere is then that one route, not a second row. */
+export const anywhereIsAddress = (state: Pick<CompanionState, "anywhere">) => state.anywhere === "https";
+
 /** The control plane gives a build with the encrypted connection no free web address (`relay_capable`): there the row
  * shows only while the route is on or the account still holds an address. `renewPairing` is what such a build's bridge adds. */
-export function showHttpsAddressRow(state: Pick<CompanionState, "routes">, account: Pick<CompanionAccountState, "endpoint"> | null, bridge: Pick<CompanionBridge, "renewPairing"> | null): boolean {
+export function showHttpsAddressRow(state: Pick<CompanionState, "routes" | "anywhere">, account: Pick<CompanionAccountState, "endpoint"> | null, bridge: Pick<CompanionBridge, "renewPairing"> | null): boolean {
+  if (anywhereIsAddress(state)) return false;
   return state.routes?.https?.on === true || Boolean(account?.endpoint) || typeof bridge?.renewPairing !== "function";
 }
 
@@ -196,15 +200,17 @@ function setRoute(companion: CompanionBridge, route: CompanionRoute, on: boolean
 
 const TAILSCALE_HELP = "https://tailscale.com/kb/1017/install";
 
-const ROUTE_LINE = { wifi: "phone.reach.wifiLine", relay: "phone.reach.anywhereLine" } as const;
+const routeLine = (route: PairRoute, address: boolean) =>
+  route === "wifi" ? "phone.reach.wifiLine" : address ? "phone.reach.anywhereAddressLine" : "phone.reach.anywhereLine";
 
 function RouteRow({ c, state, route, blocked, onSignIn }: { c: PhoneSetupController; state: CompanionState; route: "wifi" | "relay"; blocked: string | null; onSignIn?: () => void }) {
-  const current = state.routes?.[route];
+  const address = route === "relay" && anywhereIsAddress(state);
+  const current = state.routes?.[address ? "https" : route];
   // Anywhere needs a free Seira sign-in: signed out, it stays in place, inert, with the way to sign in under it.
   const needsSignIn = route === "relay" && c.account?.available !== false && c.account?.status !== "ready";
   if (needsSignIn && !current?.on && !blocked) {
     return (
-      <SettingRow title={t(ROUTE_TEXT[route].name, { app: productName() })} subtitle={t(ROUTE_LINE[route])} inertText={t("phone.pair.needsSignInLine", { app: productName() })}
+      <SettingRow title={t(ROUTE_TEXT[route].name, { app: productName() })} subtitle={t(routeLine(route, address))} inertText={t("phone.pair.needsSignInLine", { app: productName() })}
         inert={<>{t("phone.pair.needsSignInLine", { app: productName() })}{onSignIn && <>{" "}<button type="button" className="pointer-events-auto cursor-pointer text-accent-text hover:underline" data-relay-sign-in="" onClick={onSignIn}>{t("phone.pair.signIn")}</button></>}</>}>
         <span data-route-row={route} className="contents"><Switch checked={false} aria-label={t(ROUTE_TEXT[route].name, { app: productName() })} tabIndex={-1} /></span>
       </SettingRow>
@@ -212,11 +218,14 @@ function RouteRow({ c, state, route, blocked, onSignIn }: { c: PhoneSetupControl
   }
   const inert = Boolean(blocked) && !current?.on;
   return (
-    <SettingRow title={t(ROUTE_TEXT[route].name, { app: productName() })} subtitle={t(ROUTE_LINE[route])}
+    <SettingRow title={t(ROUTE_TEXT[route].name, { app: productName() })} subtitle={t(routeLine(route, address))}
       message={current?.on && state.devices.length === 0 ? routeStateText(current, 0) : inert ? blocked : undefined}>
       <span data-route-row={route} className="contents">
         <Switch checked={current?.on === true} aria-label={t(ROUTE_TEXT[route].name, { app: productName() })} disabled={c.busy || inert} title={blocked ?? undefined}
-          onClick={() => void c.act((companion) => setRoute(companion, route, !current?.on))} />
+          onClick={() => {
+            if (address && !current?.on) void c.accountAct((remote) => remote.prepare?.() ?? remote.state());
+            else void c.act((companion) => setRoute(companion, address ? "https" : route, !current?.on));
+          }} />
       </span>
     </SettingRow>
   );
@@ -231,8 +240,8 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), selec
 const keepWhole = (text: string) => text.replace(/(\p{L})-(?=\p{L})/gu, "$1\u2011");
 
 /** One route to choose, as a radio card: the name, a line, and what it still needs. A selected card has a 1 px ink edge. */
-function RouteCard({ route, chosen, disabled, onChoose, needs, action, hint }: {
-  route: PairRoute; chosen: boolean; disabled?: boolean; onChoose: () => void; needs?: ReactNode;
+function RouteCard({ route, address = false, chosen, disabled, onChoose, needs, action, hint }: {
+  route: PairRoute; address?: boolean; chosen: boolean; disabled?: boolean; onChoose: () => void; needs?: ReactNode;
   /** under the needs line, at the text's edge: Sign in */
   action?: ReactNode;
   /** a note for this way only, under its line (the local network permission) */
@@ -247,7 +256,7 @@ function RouteCard({ route, chosen, disabled, onChoose, needs, action, hint }: {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className={cn("text-[14px] leading-5", disabled ? "text-ink-secondary" : "text-ink")}>{t(ROUTE_TEXT[route].name, { app: productName() })}</span>
           {/* One measure for the card's text: the line wraps like the hint under it (no early "pretty" wrap). */}
-          <span className="text-[13px] leading-[18px] text-ink-secondary [text-wrap-style:auto]">{keepWhole(t(ROUTE_LINE[route]))}</span>
+          <span className="text-[13px] leading-[18px] text-ink-secondary [text-wrap-style:auto]">{keepWhole(t(routeLine(route, address)))}</span>
           {needs && <span className="text-[12px] leading-4 text-ink-secondary">{needs}</span>}
           {hint && <span className="mt-1 text-[12px] leading-4 text-ink-secondary">{hint}</span>}
         </span>
@@ -269,7 +278,8 @@ export function PairDeviceDialog({ c, state, onClose, secureAddress = false, pla
   const signedIn = c.account?.status === "ready";
   const relayAvailable = c.account?.available !== false;
   const [picked, setPicked] = useState<PairRoute>(signedIn && relayAvailable ? "relay" : "wifi");
-  const anyOn = (["wifi", "relay"] as const).some((route) => state.routes?.[route]?.on) || state.routes?.tailscale?.on === true;
+  const address = anywhereIsAddress(state);
+  const anyOn = (["wifi", "relay", "https"] as const).some((route) => state.routes?.[route]?.on) || state.routes?.tailscale?.on === true;
   const [step, setStep] = useState<PairStep>(anyOn || secureAddress ? "pairing" : "consent");
   const { start } = c;
   useEffect(() => {
@@ -282,6 +292,11 @@ export function PairDeviceDialog({ c, state, onClose, secureAddress = false, pla
     if (c.phase !== "sign-in") setStep("consent");
   }, [step, signedIn, c.phase]);
   const begin = async () => {
+    if (picked === "relay" && address) {
+      setStep("pairing");
+      start();
+      return;
+    }
     if (!await c.act((bridge) => setRoute(bridge, picked, true))) return;
     setStep("pairing");
     c.useLocal();
@@ -325,7 +340,7 @@ export function PairDeviceDialog({ c, state, onClose, secureAddress = false, pla
               <RouteCard route="wifi" chosen={picked === "wifi"} onChoose={() => setPicked("wifi")}
                 hint={localHint ? <span data-local-network-hint="">{t("phone.pair.localNetworkHint", { app: productName() })}</span> : undefined} />
               {relayAvailable && (
-                <RouteCard route="relay" chosen={picked === "relay"} disabled={!signedIn} onChoose={() => setPicked("relay")}
+                <RouteCard route="relay" address={address} chosen={picked === "relay"} disabled={!signedIn} onChoose={() => setPicked("relay")}
                   needs={signedIn ? undefined : t("phone.pair.needsSignIn", { app: productName() })}
                   action={!signedIn && (
                     <button type="button" className="ui-button ui-button-md mt-1 rounded-full" data-pair-sign-in=""
@@ -440,8 +455,9 @@ export function PhoneDevicesSection({ profileEmail = "", focusRequest = 0, simpl
   const hosted = state.endpoints?.find((endpoint) => endpoint.kind === "hosted");
   const anyRoute = companionRoutesOn(state);
   const reachOpen = showRoutes || pairedCount > 0 || anyRoute;
-  const moreWays = !simple || tailscaleOn || httpsOn;
-  const moreOpen = moreOpenAsked ?? (tailscaleOn || httpsOn);
+  const httpsListed = httpsOn && !anywhereIsAddress(state);
+  const moreWays = !simple || tailscaleOn || httpsListed;
+  const moreOpen = moreOpenAsked ?? (tailscaleOn || httpsListed);
   const pairAgain = c.busy || remoteBlocked ? undefined : () => setPairing("device");
   const pairButton = (
     <button type="button" aria-disabled={c.busy || Boolean(remoteBlocked) || undefined} disabled={c.busy} title={managedBy ?? undefined}
