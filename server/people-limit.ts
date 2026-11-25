@@ -185,7 +185,14 @@ export function createPeopleLimit(options: PeopleLimitOptions): PeopleLimit {
   const lockedThisRun = (): (() => void) => {
     ensurePrivateDir(options.dataDir);
     const release = acquireFileLock(lockFile, options.lock);
-    queueMicrotask(release);
+    // A release that fails must not end the process: the lock stays with this process and the next release tries again.
+    queueMicrotask(() => {
+      try {
+        release();
+      } catch (error) {
+        console.error(`people lock not given back: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
     return release;
   };
   /** Changes the saved places; never writes over a file it could not read, so no place in it is lost. */

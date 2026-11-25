@@ -1,9 +1,10 @@
 // The sign-in lists in config.json, as `seira access` reads and writes them.
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { parseAllowList, type SignInAllowList } from "./account-signin.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import { ensurePrivateDir } from "./data-dir.ts";
 
 type Config = Record<string, unknown>;
 
@@ -27,7 +28,7 @@ export function accessListsOf(config: Config): SignInAllowList {
 }
 
 export function writeAccessConfig(dataDir: string, config: Config, lists: SignInAllowList): void {
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(dataDir);
   writeFileAtomic(configFile(dataDir), `${JSON.stringify({ ...config, signIn: lists }, null, 2)}\n`, { mode: 0o600 });
 }
 
