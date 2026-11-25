@@ -210,7 +210,7 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     if (!entry) return refuse("Enter an email address or @domain.");
     const access = parseBody(record);
     if (typeof access === "string") return refuse(access);
-    const live = new Map(deps.bots().map((bot) => [bot.id, bot]));
+    const live = new Map(deps.bots().map((bot) => [bot.id, { ...bot }]));
     const audience: Array<{ id: string; visibility: BotVisibility }> = [];
     let previous: StoredGrant | undefined;
     let stored: StoredGrant | null = null;
