@@ -85,8 +85,8 @@ it, with no bot chosen at first, and only then opens sign-in. The server is that
 bot's own: no other bot can use it. Connect again to give it to another bot.
 
 The server holds this rule itself. It refuses to save, replace, import, switch on or sign in a WAPilot address that has
-no bot, or a bot that does not exist, and it matches the address, not the name. An older entry with no bot, or with a
-bot that is gone, serves no bot until you choose one. Redirects are not checked yet.
+no bot, or a bot that does not exist, and it matches the address, not the name. The match ignores a trailing dot on the host, the letter case of the path, and percent-encoding of letters, digits and `-._~` in the path. An older entry with no bot, or with a
+bot that is gone, serves no bot until you choose one. Redirects are not checked yet: the rule sees the saved address only.
 
 ### Servers that ask you to sign in
 
