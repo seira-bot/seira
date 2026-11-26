@@ -37,7 +37,7 @@ import { movesThreadToTop, nextOpenThread } from "../shared/wire.ts";
 import { parseConnectorTools } from "./connector-tools.ts"; import { retireBoatFromBotsAtBoot } from "./boat-retirement.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
 import { sameModelSelection } from "../shared/thread-model.ts";
 import { initialGreetingMessage } from "./initial-greeting.ts"; import { createDefaultBot, defaultBotRefusal, type DefaultBotIntro } from "./default-bot.ts";
-import { appsFromCreator } from "./inherited-apps.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
+import { appsFromCreator } from "./inherited-apps.ts"; import type { NewBotApproval } from "./new-bot-defaults.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
 import { ThreadCache, type ThreadState } from "./thread-cache.ts";
 import { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 import { buildTask, threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
@@ -1271,7 +1271,7 @@ export class Store {
         BotRecord,
         "name" | "title" | "description" | "soul" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "mascotAccessories" | "modelSelection" | "section" | "cwd" | "visibility" | "toolScope" | "createdBy" | "reportsTo"
       >
-    > = {},
+    > & { approvalMode?: NewBotApproval } = {},
     opts: {
       seedMessages?: boolean; id?: string; threadId?: string; beforeShown?: (bot: BotRecord) => void;
     } = {},
@@ -1295,6 +1295,7 @@ export class Store {
       ...(profile.mascotBody ? { mascotBody: profile.mascotBody } : {}),
       ...this.newBotSharing(profile.visibility, newBotOwner(profile)),
       ...(toolScope.scope ? { toolScope: toolScope.scope } : {}),
+      ...(profile.approvalMode ? { approvalMode: profile.approvalMode, autoApprove: profile.approvalMode === "auto" } : {}),
       unread: false,
       modelSelection: this.newBotSelection(profile.modelSelection),
       resumeCursors: {},
@@ -1330,7 +1331,7 @@ export class Store {
     return bot;
   }
 
-  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: "ask" | "auto" | "full"): TeamSetupResult {
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: NewBotApproval): TeamSetupResult {
     const chief = this.own(request.botId);
     if (!chief) throw new Error("The requesting Chief no longer exists");
     if (chief.lastTeamSetupReceipt?.requestId === request.requestId) return chief.lastTeamSetupReceipt.result;

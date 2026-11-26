@@ -7,6 +7,7 @@ import { validateBotCwd } from "../bot-cwd.ts";
 import { isBotPackage, parsePackageDocument, type PackageDocument } from "../bot-package.ts";
 import { parseVisibility } from "../bot-visibility.ts";
 import { teamCreator } from "../new-bot-sharing.ts";
+import type { NewBotApproval } from "../new-bot-defaults.ts";
 import type { ModelSelection } from "../contracts.ts";
 import type { OrgLibrary } from "../org-library.ts";
 import {
@@ -38,6 +39,8 @@ export interface TeamRouteDeps {
   groupWithThread(group: GroupRecord): WireGroup;
   defaultSelection(): Promise<ModelSelection>;
   packageImportDeps(selection: ModelSelection): PackageImportDeps;
+  /** The saved New bot level each restored bot starts at; undefined keeps the workspace default. */
+  newBotApproval?(): NewBotApproval | undefined;
   /** On a Team Cloud: false for someone else's private chat, which a team backup never carries. */
   threadShown?(auth: RequestAuth): (threadId: string) => boolean;
   /** On a Team Cloud: false for someone else's own Seira, which no export carries. */
@@ -205,7 +208,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if (currentFormat(body?.format) === "seira.backup") {
         if (importMode !== "add") return json(res, 400, { error: "Import backups alongside your existing bots; project mode is only for templates" });
         try {
-          const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth) });
+          const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth), newBotApproval: deps.newBotApproval?.() });
           // A restore writes transcripts without store events: these frames carry the restored pages to other clients.
           const bots = imported.bots.map((bot) => publicBot(bot));
           const groups = imported.groups.map((group) => groupWithThread(group));

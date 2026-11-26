@@ -130,9 +130,11 @@ function settingsError(error: z.ZodError): Error {
   return new Error(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
 }
 
+export type NewBotApproval = "ask" | "auto" | "full";
+
 /** The level a bot made without the New bot dialog starts at, or undefined for the workspace default.
  * Custom needs the desktop permission flow, so it starts at Ask. Full on a hosted workspace keeps the workspace default. */
-export function newBotApproval(saved: NewBotDefaults | undefined, hosted: boolean): "ask" | "auto" | "full" | undefined {
+export function newBotApproval(saved: NewBotDefaults | undefined, hosted: boolean): NewBotApproval | undefined {
   const mode = saved?.profile.approvalMode;
   if (mode === "custom") return "ask";
   if (mode === "full" && hosted) return undefined;

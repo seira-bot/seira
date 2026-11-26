@@ -4,6 +4,7 @@ import { mascotAccessories } from "../shared/mascot-accessories.ts";
 import { takeImportName } from "../shared/import-name.ts";
 import { MAX_TEAM_BACKUP_BYTES, parseTeamBackup, type BackupTask, type TeamBackup } from "../shared/team-backup.ts";
 import { helperModelAllowed, type BotVisibility } from "../shared/wire.ts";
+import type { NewBotApproval } from "./new-bot-defaults.ts";
 import type { BotRecord, GroupRecord, Message, Store, TaskRecord } from "./store.ts";
 import type { Routine, RoutineManager } from "./routines.ts";
 import { redactSecretsInText } from "./redact.ts";
@@ -142,8 +143,10 @@ export function createTeamBackup(store: Store, routines: Routine[], name: string
   return document;
 }
 
-/** Always additive: rollback owns only the fresh records and cannot touch an existing bot or chat. */
-export function importTeamBackup(store: Store, routines: RoutineManager, input: unknown, selection: ModelSelection, options: { visibility?: BotVisibility; createdBy?: string } = {}) {
+/** Always additive: rollback owns only the fresh records and cannot touch an existing bot or chat.
+ * `newBotApproval`: the saved New bot level each restored bot starts at; undefined keeps the workspace default. */
+export function importTeamBackup(store: Store, routines: RoutineManager, input: unknown, selection: ModelSelection,
+  options: { visibility?: BotVisibility; createdBy?: string; newBotApproval?: NewBotApproval } = {}) {
   const backup = parseTeamBackup(input);
   const bots: BotRecord[] = [];
   const groups: GroupRecord[] = [];
@@ -193,10 +196,11 @@ export function importTeamBackup(store: Store, routines: RoutineManager, input: 
         // who may see the imported team is the importing admin's choice
         ...(options.visibility ? { visibility: options.visibility } : {}),
         ...(options.createdBy ? { createdBy: options.createdBy } : {}),
+        ...(options.newBotApproval ? { approvalMode: options.newBotApproval } : {}),
       }, { seedMessages: false });
       bots.push(bot);
       botIds.set(source.key, bot.id);
-      store.patchBot(bot.id, { composio: false, computer: "off", browser: false, autoApprove: false,
+      store.patchBot(bot.id, { composio: false, computer: "off", browser: false, autoApprove: options.newBotApproval === "auto",
         connectorTools: {}, toolScope: source.toolScope, hidden: source.hidden, chiefOfStaff: source.chiefOfStaff, playbooks: source.playbooks,
         ...(source.helperModel === false ? { helperModel: false } : {}) });
       if (source.memory) restoreMemory(bot.id, source.memory);

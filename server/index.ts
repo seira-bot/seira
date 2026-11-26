@@ -2683,6 +2683,10 @@ function healThreadModel(botId: string, threadId: string): void {
   } });
 }
 
+function savedNewBotApproval() {
+  return newBotApproval(cfg.newBotDefaults, HOSTED_WORKSPACE);
+}
+
 function packageImportDeps(selection: ModelSelection): PackageImportDeps {
   return {
     store,
@@ -2700,6 +2704,7 @@ function packageImportDeps(selection: ModelSelection): PackageImportDeps {
     },
     defaultSelection: () => selection, maxBots: MAX_WORKSPACE_BOTS,
     presets: presetStore,
+    newBotApproval: savedNewBotApproval,
   };
 }
 
@@ -8867,7 +8872,7 @@ const modelRequests = new ModelRequestService({
 const teamSetupTeams = () => [...new Set(["", ...readSections(), ...store.bots.map((bot) => sectionKey(bot.section)), ...store.groups.map((group) => sectionKey(group.section))])];
 const teamSetupRequests = new TeamSetupRequestService({
   store, teams: teamSetupTeams, hasTeamAuthority, canPersist: proposalPersistence, maxBots: MAX_WORKSPACE_BOTS,
-  newBotApproval: () => newBotApproval(cfg.newBotDefaults, HOSTED_WORKSPACE),
+  newBotApproval: savedNewBotApproval,
   autoApply: appliesDirectly,
   validateChange: (before, fields) => assertComputerChangeIdle(before, { ...before, ...fields }),
   mcpServerProblem: (name, botId) => mcpServerProblemFor(cfg.mcpServers, name, botId), ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
@@ -11923,6 +11928,7 @@ ROUTES.push(createTeamRoutes({
   groupWithThread,
   defaultSelection,
   packageImportDeps,
+  newBotApproval: savedNewBotApproval,
   threadShown, botShown: (auth) => (botId) => visibleTo(viewerFor(auth)).bot(botId), routineShown: (auth) => (routine) => routineVisible(routine, visibleTo(viewerFor(auth))),
 }));
 const share = createShareWiring({ dataDir: DATA_DIR, bots: () => store.bots, groups: () => store.groups, routines: () => routines?.listRoutines() ?? [], brief: (section) => readSectionContext(section)?.text, botFolder: workspaceDir, collectTeamSkills: skillExport(skillsHost).collectTeamSkills, skillFiles: skillsHost.readBotSkillFiles, access: () => pagesAccess(CLOUD_HOME), notOffered: () => pagesNotOffered(CLOUD_HOME), selfHosted: !CLOUD_HOME && !HOSTED_WORKSPACE && utilityParentPort === undefined, localFolders: !CLOUD_HOME && !HOSTED_WORKSPACE,
@@ -12009,7 +12015,7 @@ ROUTES.push(createMcpServerRoutes({
   fallbackPublicUrl: FALLBACK_PUBLIC_URL,
   mcpServerResponse, savedCustomDomain, appCatalog: chatAppsMcp, config: mcpConfig, lender: sessionLendingPrincipal, connectionHealth, ownsVault: () => !CLOUD_TEAM && !HOSTED_WORKSPACE, place: (server, auth) => lentMcp.place(server, { principal: sessionLendingPrincipal(auth), ...(auth.kind === "session" ? { session: auth.session.id } : {}), newest: true }) }));
 ROUTES.push(createSetupImportRoutes({ local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }), cfg, mcpPolicyRefusal, persistMcpServers: persistAnnouncedMcpServers,
-  mcpConfigBusy: mcpConfig.busy })); const aiImports = createAiImportHost({ dataDir: DATA_DIR, store, mcp: { servers: () => cfg.mcpServers ?? {}, refusal: (name, server) => mcpPolicyRefusal(name, server) ?? null, persist: persistAnnouncedMcpServers }, routines: () => routines, broadcast, local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }) }); ROUTES.push(aiImports.routes);
+  mcpConfigBusy: mcpConfig.busy })); const aiImports = createAiImportHost({ dataDir: DATA_DIR, store, newBotApproval: savedNewBotApproval, mcp: { servers: () => cfg.mcpServers ?? {}, refusal: (name, server) => mcpPolicyRefusal(name, server) ?? null, persist: persistAnnouncedMcpServers }, routines: () => routines, broadcast, local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }) }); ROUTES.push(aiImports.routes);
 ROUTES.push(createComputerRoutes({
   store, cfg, computerControl,
   controlLeaseIdSchema, computerLifecycleBusyBots, computerProviderConfigTransitions, localVmActiveThreads,
