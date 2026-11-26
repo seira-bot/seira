@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -962,5 +962,180 @@ describe("settings changes judged on the turn's own request", () => {
     expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "expired" } })).toContain("closed before the user applied it");
     expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "stale" } })).toContain("changed after the card was shown");
     expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "failed" } })).toBe("Applying the change to Room turn timeout failed. Nothing changed.");
+  });
+});
+
+describe("review gaps in settings confirm cards", () => {
+  const DECIDER_KEY = "decider-key-7f3a91";
+  const DECIDER_TOKEN = "workers-token-52bc10";
+  const IMAGE_KEY = "image-key-c04d68";
+  const GEMINI_KEY = "gemini-key-e9a217";
+  const SECRETS = [DECIDER_KEY, DECIDER_TOKEN, IMAGE_KEY, GEMINI_KEY];
+  const withKeys = (fx: ReturnType<typeof fixture>) => {
+    Object.assign(fx.cfg, {
+      decider: { provider: "jev", key: DECIDER_KEY, workersAiToken: DECIDER_TOKEN },
+      imageGen: { primary: { provider: "openai" }, key: IMAGE_KEY, geminiKey: GEMINI_KEY },
+    });
+  };
+  const hasKeyField = (value: unknown): boolean => /"[^"]*(key|token|secret|password)[^"]*":/i.test(JSON.stringify(value));
+  const restarted = (fx: ReturnType<typeof fixture>) => fx.build();
+
+  it.each(["baseUrl", "openrouterBaseUrl", "workersAiBaseUrl"])("AC-07 refuses %s on ai.routing as an invalid value and leaves the config as it was", async (field) => {
+    const fx = fixture();
+    withKeys(fx);
+    const before = JSON.stringify(fx.cfg.decider);
+    const refused = await fx.set("ai.routing", { enabled: true, [field]: "https://collector.example/v1" });
+    expect(refused.status).toBe(400);
+    expect(fx.saved).toEqual([]);
+    expect(fx.cards()).toEqual([]);
+    expect(JSON.stringify(fx.cfg.decider)).toBe(before);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", rule: "settings:invalid-value" });
+  });
+
+  it("AC-07 keeps every key out of the undo file after a bot changes ai.routing or ai.images", async () => {
+    const fx = fixture();
+    withKeys(fx);
+    expect((await fx.set("ai.routing", { enabled: true })).status).toBe(200);
+    expect((await fx.set("ai.images", { maxPerTurn: 3 })).status).toBe(200);
+    const file = readFileSync(join(fx.dataDir, "app-settings-undo.json"), "utf8");
+    for (const secret of SECRETS) expect(file).not.toContain(secret);
+    expect(file).toContain("ai.routing");
+    expect(file).toContain("ai.images");
+  });
+
+  it("AC-07 writes back only fields that are no key when Undo restores ai.routing and ai.images", async () => {
+    const fx = fixture();
+    withKeys(fx);
+    await fx.set("ai.routing", { enabled: true });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ decider: { provider: "jev" } });
+    await fx.set("ai.images", { maxPerTurn: 3 });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ imageGen: { primary: { provider: "openai" } } });
+    expect(hasKeyField(fx.saved)).toBe(false);
+    for (const secret of SECRETS) expect(JSON.stringify(fx.saved)).not.toContain(secret);
+  });
+
+  it("AC-07 shows a section on get without any key", async () => {
+    const fx = fixture();
+    withKeys(fx);
+    const got = JSON.stringify(await fx.host.handle({ action: "get", id: "ai.routing" }, fx.turn));
+    for (const secret of SECRETS) expect(got).not.toContain(secret);
+  });
+
+  it("AC-05 refuses Apply when the bot's field changed although the setting's text did not", async () => {
+    const fx = fixture({ resumes: true });
+    expect((await fx.set("bots.settings", { botId: "clive", soul: "Be brief" })).body.text).toContain("Nothing has changed yet");
+    const card = fx.waiting()[0]!.card;
+    (fx.bots[1] as { soul?: string }).soul = "Changed in the bot's own panel";
+    const stale = await fx.resolve(String(card.requestId), "allow");
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe("This setting changed after the card was shown. Nothing changed.");
+    expect(fx.botPatches).toEqual([]);
+    expect(fx.cards()[0]!.card.appSettingRequest).toMatchObject({ result: "stale" });
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "user-denied", rule: "settings:stale", requestId: card.requestId });
+  });
+
+  it("AC-05 still applies a bots.settings card when the bot's field did not change", async () => {
+    const fx = fixture();
+    const { applied } = await fx.setAndApply("bots.settings", { botId: "clive", soul: "Be brief" });
+    expect(applied.status).toBe(200);
+    expect(fx.botPatches).toEqual([{ botId: "clive", body: { soul: "Be brief" } }]);
+  });
+
+  it("AC-05 refuses Undo of a bots.settings change when the bot's field changed after the apply", async () => {
+    const fx = fixture();
+    expect((await fx.set("bots.settings", { botId: "clive", notifications: false })).status).toBe(200);
+    (fx.bots[1] as { notifications?: boolean }).notifications = true;
+    expect(await fx.undo()).toMatchObject({ claimed: true, state: "invalid", error: UNDO_STALE, stale: true });
+    expect(fx.botPatches).toEqual([{ botId: "clive", body: { notifications: false } }]);
+  });
+
+  it("AC-05 undoes a bots.settings change while the bot's field is still the applied one", async () => {
+    const fx = fixture();
+    await fx.set("bots.settings", { botId: "clive", notifications: false });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.botPatches.at(-1)).toEqual({ botId: "clive", body: { notifications: true } });
+  });
+
+  it("AC-05 closes a card left from before a restart as expired when the owner taps Apply, and resumes the turn", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const row = fx.cards()[0]!;
+    const requestId = String(row.card.requestId);
+    const late = await restarted(fx).resolve({ threadId: fx.turn.threadId, requestId, behavior: "allow", ownerReview: true });
+    expect(late).toMatchObject({ status: 409, body: { error: "This card has closed. Nothing changed." } });
+    expect(row.card).toMatchObject({ expired: true, options: [], appSettingRequest: { result: "expired" } });
+    expect(fx.saved).toEqual([]);
+    expect(fx.resumed).toHaveLength(1);
+    expect(fx.resumed[0]).toMatchObject({ threadId: fx.turn.threadId, messageId: row.id });
+    expect(fx.resumed[0]!.text).toContain("closed before the user applied it");
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", source: "app-settings", rule: "settings:expired", requestId });
+  });
+
+  it("AC-19 expireOrphan closes a card from before a restart as expired and does not resume the turn", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const row = fx.cards()[0]!;
+    const closed = restarted(fx).expireOrphan(fx.turn.threadId, row.id);
+    expect(closed).toMatchObject({ expired: true, options: [], appSettingRequest: { result: "expired" } });
+    expect(row.card).toMatchObject({ expired: true, appSettingRequest: { result: "expired" } });
+    expect(fx.resumed).toEqual([]);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", rule: "settings:expired", requestId: row.card.requestId });
+  });
+
+  it("AC-19 expireOrphan returns null for a card that is applied, still held, already closed, or no settings card", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    const after = restarted(fx);
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const held = fx.cards()[0]!;
+    expect(fx.host.expireOrphan(fx.turn.threadId, held.id)).toBeNull();
+    expect(held.card.expired).toBeUndefined();
+    const { requestId } = await fx.setAndApply("rooms.turnTimeoutMinutes", 50);
+    const appliedRow = fx.cards().find((row) => row.card.requestId === requestId)!;
+    expect(after.expireOrphan(fx.turn.threadId, appliedRow.id)).toBeNull();
+    expect(fx.host.expireOrphan(fx.turn.threadId, appliedRow.id)).toBeNull();
+    fx.messages.push({ id: "m-plain", threadId: fx.turn.threadId, role: "bot", kind: "options", card: { title: "Pick one", options: ["A", "B"], requestId: "plain" } });
+    expect(after.expireOrphan(fx.turn.threadId, "m-plain")).toBeNull();
+    expect(after.expireOrphan(fx.turn.threadId, "no-such-message")).toBeNull();
+    expect(after.expireOrphan(fx.turn.threadId, held.id)).toMatchObject({ expired: true });
+    expect(after.expireOrphan(fx.turn.threadId, held.id)).toBeNull();
+  });
+
+  it("AC-19 reports a failed Apply to the bot with the route's refusal, and to the owner with fixed words only", async () => {
+    const fx = fixture({ patchRefusal: "the route said no: /api/bots/clive", resumes: true });
+    await fx.set("bots.approvalModes", UP);
+    const row = fx.cards()[0]!;
+    const failed = await fx.resolve(String(row.card.requestId), "allow");
+    expect(failed.status).toBe(409);
+    expect(failed.body.error).toBe("The change could not be applied. Nothing changed.");
+    expect(row.card).not.toHaveProperty("held");
+    expect(row.card.appSettingRequest).toMatchObject({ result: "failed" });
+    expect(JSON.stringify(row.card)).not.toContain("the route said no");
+    expect(fx.resumed).toHaveLength(1);
+    expect(fx.resumed[0]!.text).toContain("the route said no: /api/bots/clive");
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "user-denied", rule: "settings:failed" });
+  });
+
+  it("AC-09 logs a direct set whose write fails as auto-denied with rule settings:failed", async () => {
+    const fx = fixture({ patchRefusal: "the route said no" });
+    const refused = await fx.set("bots.name", { botId: "clive", name: "Clover" });
+    expect(refused).toMatchObject({ status: 409, body: { error: "the route said no" } });
+    expect(fx.cards()).toEqual([]);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", source: "app-settings", rule: "settings:failed", botId: "kiwi" });
+  });
+
+  it("AC-09 logs a card that expires by its timer as auto-denied with rule settings:expired", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let fx!: ReturnType<typeof fixture>;
+    try {
+      fx = fixture({ verdict: CONFIRM_HISTORY });
+      await fx.set("rooms.turnTimeoutMinutes", 45);
+      vi.advanceTimersByTime(CONFIRM_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(fx.cards()[0]!.card).toMatchObject({ expired: true, appSettingRequest: { result: "expired" } });
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", source: "app-settings", rule: "settings:expired", requestId: fx.cards()[0]!.card.requestId });
   });
 });

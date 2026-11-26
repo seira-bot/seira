@@ -11,6 +11,7 @@ import { createSettingsRegistry, findSettings, type RegistryDeps, type SettingEn
 const bots = [
   { id: "kiwi", name: "Kiwi", approvalMode: "ask" },
   { id: "max", name: "Max", approvalMode: "full", computer: "local" },
+  { id: "edie", name: "Edie", approvalMode: "edits" },
 ] as unknown as BotRecord[];
 
 function registry(cfg: Record<string, unknown> = {}) {
@@ -48,7 +49,14 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("bots.approvalModes", { botId: "kiwi", mode: "edits" })).toEqual({ code: "autonomyUp", params: { bot: "Kiwi" } });
     expect(confirm("bots.approvalModes", { botId: "kiwi", mode: "ask" })).toBeNull();
     expect(confirm("bots.approvalModes", { botId: "max", mode: "ask" })).toBeNull();
-    expect(confirm("bots.approvalModes", { botId: "max", mode: "full" })).toBeNull();
+  });
+
+  it("AC-08 the mode a bot already has waits when it is above ask, because a thread can sit below it", () => {
+    expect(confirm("bots.approvalModes", { botId: "edie", mode: "edits" })).toEqual({ code: "autonomyUp", params: { bot: "Edie" } });
+    expect(confirm("bots.approvalModes", { botId: "max", mode: "full" })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
+    expect(confirm("bots.approvalModes", { botId: "kiwi", mode: "ask" })).toBeNull();
+    expect(confirm("bots.approvalModes", { botId: "max", mode: "edits" })).toBeNull();
+    expect(confirm("bots.approvalModes", { botId: "edie", mode: "ask" })).toBeNull();
   });
 
   it("a shorter log retention waits, and a longer one or none does not", () => {
@@ -62,6 +70,16 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("threads.eventLogMaxBytes", MIN_THREAD_EVENT_LOG_BYTES * 2)).toEqual({ code: "deletesLogs" });
     expect(confirm("threads.eventLogMaxBytes", MIN_THREAD_EVENT_LOG_BYTES * 8)).toBeNull();
     expect(confirm("threads.eventLogMaxBytes", null)).toBeNull();
+  });
+
+  it("AC-03 a log limit that goes down from the default ceiling or from a saved limit waits, and one that goes up or stays does not", () => {
+    const GIB = 1024 ** 3;
+    const MIB = 1024 ** 2;
+    const limit = (saved: number | null | undefined) => registry({ threads: saved === undefined ? {} : { eventLogMaxBytes: saved } });
+    expect(limit(2 * GIB).confirm("threads.eventLogMaxBytes", null)).toEqual({ code: "deletesLogs" });
+    expect(limit(undefined).confirm("threads.eventLogMaxBytes", 100 * MIB)).toEqual({ code: "deletesLogs" });
+    expect(limit(undefined).confirm("threads.eventLogMaxBytes", 512 * MIB)).toBeNull();
+    expect(limit(100 * MIB).confirm("threads.eventLogMaxBytes", null)).toBeNull();
   });
 
   it("a new decision provider sends conversation text there, and the same one or off does not wait", () => {
