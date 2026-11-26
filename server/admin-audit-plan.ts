@@ -32,7 +32,7 @@ export function adminAuditPlan(method: string, path: string, sharedComputers: bo
   m = /^\/api\/webhooks\/([\w-]+)(\/rotate)?$/.exec(path);
   if (m && ((m[2] && method === "POST") || (!m[2] && (method === "PATCH" || method === "DELETE")))) plan.webhookId = m[1];
   m = /^\/api\/auth\/sessions\/([\w-]+)$/.exec(path);
-  if (m && method === "DELETE") plan.sessionId = m[1];
+  if (m && (method === "DELETE" || method === "PATCH")) plan.sessionId = m[1];
   m = /^\/api\/groups\/([\w-]+)$/.exec(path);
   if (m && method === "PATCH") plan.roomId = m[1];
   m = /^\/api\/instances\/([\w.-]+)\/(install|auth\/complete|auth\/sign-out|claude-update|leftover-files\/remove)$/.exec(path);

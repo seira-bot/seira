@@ -1333,6 +1333,11 @@ function adminAuditRows(
     rows.push({ category: "session", action: "session.revoke", target: { kind: "session", id: session.id, name: session.email ?? session.label },
       before: { label: session.label, ...(session.email ? { email: session.email } : {}), scopes: session.scopes } });
   }
+  const renamed = before.session ? sessions.list().find((session) => session.id === before.session!.id) : undefined;
+  if (before.session && renamed && renamed.label !== before.session.label) {
+    rows.push({ category: "session", action: "session.rename", target: { kind: "session", id: renamed.id, name: renamed.label },
+      before: { label: before.session.label }, after: { label: renamed.label } });
+  }
   if (plan.pairing) {
     const pairing = sessions.openPairings().find((candidate) => candidate.id === reply.id);
     if (pairing) rows.push({ category: "session", action: "pairing.create", target: { kind: "pairing", name: pairing.label }, after: { label: pairing.label, scopes: pairing.scopes } });
@@ -12404,6 +12409,13 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const revoked = sessions.revoke(m[1]);
       if (auth.kind === "session" && auth.session.id === m[1]) res.setHeader("set-cookie", clearSessionCookies(SESSION_COOKIE));
       return json(res, revoked ? 200 : 404, revoked ? { ok: true } : { error: "no such session" });
+    }
+    if (m && method === "PATCH") {
+      const parsed = z.object({ label: z.string().max(1000) }).strict().safeParse(await readBody(req, 1024));
+      const renamed = parsed.success ? sessions.rename(m[1], parsed.data.label) : "invalid";
+      if (renamed === "invalid") return json(res, 400, { error: "Invalid device name" });
+      if (renamed === "missing") return json(res, 404, { error: "no such session" });
+      return json(res, 200, { ok: true, session: sessions.list(sessionPersonName).find((session) => session.id === m[1]) });
     }
     // Test-only routes exist only when the launcher sets a high-entropy test key, which production builds never set.
     if (method === "POST" && path === "/api/testing/org-library") {
