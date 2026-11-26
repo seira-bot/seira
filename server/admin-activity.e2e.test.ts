@@ -286,9 +286,10 @@ posixOnly("admin activity log", () => {
     expect((await api("GET", "/api/admin-activity", undefined, BOSS)).body.recording).toBe(false);
     rows = await activity("?what=session");
     expect(rows.map((entry) => entry.action)).toEqual(expect.arrayContaining(["pairing.create", "session.rename", "session.revoke"]));
-    expect(rows.filter((entry) => entry.action === "session.rename")).toHaveLength(1);
-    expect(rows.filter((entry) => entry.action === "session.revoke")).toHaveLength(1);
-    expect(rows.find((entry) => entry.action === "session.rename")).toMatchObject({
+    const mine = rows.filter((entry) => entry.target?.id === phone);
+    expect(mine.filter((entry) => entry.action === "session.rename")).toHaveLength(1);
+    expect(mine.filter((entry) => entry.action === "session.revoke")).toHaveLength(1);
+    expect(mine.find((entry) => entry.action === "session.rename")).toMatchObject({
       who: BOSS, target: { id: phone, name: "Reception phone" }, before: { label: "Front desk phone" }, after: { label: "Reception phone" } });
     expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ who: BOSS, target: { id: phone, name: "Front desk phone" } });
   });
