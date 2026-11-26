@@ -618,3 +618,58 @@ describe("PATCH /api/bots/:id takes the paired-device limits from the pairing re
     expect(store.bot(bot.id)?.vpsAlias).toBe("gamma-vps");
   });
 });
+
+describe("PATCH /api/bots/:id github_app grants", () => {
+  const scopes = { apps: { github_app: "read" } };
+
+  it("refuses a change from someone who does not own the GitHub connection and stores nothing", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
+
+    const refused = await patch(bot.id, { connectorScopes: scopes });
+
+    expect(refused.status).toBe(403);
+    expect(store.bot(bot.id)?.connectorScopes).toBeUndefined();
+  });
+
+  it("refuses a change when no owner check is wired", async () => {
+    const { store, bot, patch } = fixture();
+
+    expect((await patch(bot.id, { connectorScopes: scopes })).status).toBe(403);
+    expect(store.bot(bot.id)?.connectorScopes).toBeUndefined();
+  });
+
+  it("refuses a Team Cloud editor's per-tool grant for github_app", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
+
+    const refused = await patch(bot.id, { connectorTools: { github_app: { tools: "*" } } });
+
+    expect(refused.status).toBe(403);
+    expect(store.bot(bot.id)?.connectorTools).toBeUndefined();
+  });
+
+  it("lets the owner change the grant", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => true });
+
+    const allowed = await patch(bot.id, { connectorScopes: scopes });
+
+    expect(allowed.status).toBe(200);
+    expect(store.bot(bot.id)?.connectorScopes).toEqual(scopes);
+  });
+
+  it("does not stop a change to another app, or a patch that leaves github_app as it is", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
+
+    expect((await patch(bot.id, { connectorScopes: { apps: { gmail: "read" } } })).status).toBe(200);
+    expect(store.bot(bot.id)?.connectorScopes).toEqual({ apps: { gmail: "read" } });
+  });
+
+  it("stops the owner-less clearing of a github_app scope too", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
+    store.patchBot(bot.id, { connectorScopes: scopes as ConnectorScopes });
+
+    const refused = await patch(bot.id, { connectorScopes: null });
+
+    expect(refused.status).toBe(403);
+    expect(store.bot(bot.id)?.connectorScopes).toEqual(scopes);
+  });
+});

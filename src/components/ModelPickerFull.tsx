@@ -219,3 +219,22 @@ export function ClaudeAccountSelect({ accounts, selectedId, onSelect }: {
     </label>
   );
 }
+
+export function ScopeToggle({ scope, onChange }: { scope: "bot" | "thread"; onChange: (scope: "bot" | "thread") => void }) {
+  return (
+    <div className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2">
+      <div role="group" aria-label={t("model.scope.label")} className="flex gap-1">
+        {(["thread", "bot"] as const).map((value) => (
+          <button key={value} type="button" aria-pressed={scope === value} onClick={() => onChange(value)}
+            className={cn("h-6 rounded-full px-2.5 text-[12px] leading-4",
+              scope === value ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
+            {value === "bot" ? t("model.scope.bot") : t("model.scope.thread")}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[12px] leading-4 text-ink-tertiary">
+        {scope === "bot" ? t("model.scope.botHelp") : t("model.scope.threadHelp")}
+      </p>
+    </div>
+  );
+}

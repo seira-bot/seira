@@ -89,6 +89,16 @@ describe("createOutboundHold", () => {
     expect(rows[0]).toMatchObject({ threadId: "t1", botId: "b1", botName: "Scout", tool: "GMAIL_SEND_EMAIL" });
   });
 
+  it("always opens the card, at Full access and under an allow rule too", async () => {
+    for (const rule of [undefined, { policy: "allow" as const }]) {
+      const held = setup(bot(rule));
+      const pending = held.hold.hold({ ...held.input, fullAccess: true, always: true, active: () => true });
+      expect(held.appended).toHaveLength(1);
+      held.outboundRequests.resolve({ threadId: "t1", requestId: held.appended[0].message.card!.requestId as string, behavior: "deny" });
+      await expect(pending).resolves.toMatchObject({ ok: false });
+    }
+  });
+
   it("ignores a daily cap an older app stored on the rule", async () => {
     const held = setup(bot({ policy: "allow", dailyCap: 2 } as HoldBot["outbound"]));
     for (let sent = 0; sent < 5; sent++) await expect(send(held)).resolves.toEqual({ ok: true, approved: false });

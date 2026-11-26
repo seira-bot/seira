@@ -7,6 +7,7 @@ import type { EffortLevel } from "../../shared/wire";
 import type { MenuGroup, SimpleMenu } from "@/lib/simple-model-menu";
 import type { SimpleThinking } from "./SimpleModelMenu";
 import { Select } from "./Select";
+import { ScopeToggle } from "./ModelPickerFull";
 
 // Hook-by-call-order harness: the picker's own state survives between renders, effects never run, and handlers are read
 // off the element tree.
@@ -16,6 +17,7 @@ const fixture = vi.hoisted(() => {
   return {
     advanced: false,
     cloudHome: false,
+    aiPool: undefined as unknown,
     ownerOrAdmin: true as boolean | null,
     values: [] as unknown[],
     index: 0,
@@ -44,7 +46,7 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.owne
 vi.mock("@/state/store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/state/store")>()),
   useStore: () => ({
-    state: { instances: fixture.instances, bots: fixture.bots, modelVariantSessions: {}, config: { cloudHome: fixture.cloudHome } },
+    state: { instances: fixture.instances, bots: fixture.bots, modelVariantSessions: {}, config: { cloudHome: fixture.cloudHome, aiPool: fixture.aiPool } },
     dispatch: fixture.dispatch,
     refreshInstances: fixture.refreshInstances,
     refreshModels: fixture.refreshModels,
@@ -63,6 +65,7 @@ function nodes(value: ReactNode): Node[] {
   return Children.toArray(value).flatMap((child) => {
     if (!isValidElement(child)) return [];
     const node = child as Node;
+    if (node.type === ScopeToggle) return [node, ...nodes(ScopeToggle(node.props as ComponentProps<typeof ScopeToggle>))];
     return [node, ...nodes(node.props.children)];
   });
 }
@@ -154,6 +157,7 @@ const click = (node: Node | undefined) => (node!.props.onClick as (event: { deta
 beforeEach(() => {
   fixture.advanced = false;
   fixture.cloudHome = false;
+  fixture.aiPool = undefined;
   fixture.ownerOrAdmin = true;
   fixture.values = [];
   fixture.index = 0;
@@ -184,6 +188,68 @@ describe("the model picker in Simple mode", () => {
     expect(bottom).toContain("Manage AI accounts");
     expect(html).not.toContain(">Quick</button>");
     expect(html).not.toContain("new chats too");
+  });
+
+  describe("with an AI pool", () => {
+    const pooled = (mark?: "auto" | "pinned") => {
+      fixture.instances = [claude(), codex];
+      fixture.aiPool = { enabled: true, mode: "even", members: [{ instanceId: "claude", model: "claude-opus-5-5" }, { instanceId: "codex", model: "gpt-5.6" }] };
+      const forBot = { ...bot(), tasks: [{ threadId: "thread-scout", ...(mark ? { aiPool: mark } : {}) }] } as unknown as Bot;
+      fixture.bots = [forBot];
+      return forBot;
+    };
+
+    it("shows no pool row or mark when there is no pool", () => {
+      const forBot = { ...bot(), tasks: [{ threadId: "thread-scout" }] } as unknown as Bot;
+      fixture.bots = [forBot];
+      const opened = open(forBot);
+      expect(pane(opened)!.props.pool).toBeNull();
+      expect(opened.html).not.toContain("data-ai-pool-mark");
+    });
+
+    it("marks the AI button and checks the pool row when the conversation runs on the pool", () => {
+      const opened = open(pooled("auto"));
+      const row = pane(opened)!.props.pool!;
+      expect(row.runs).toBe(true);
+      expect(row.meta).toBe("Now on Opus 5.5");
+      expect(opened.html).toContain("data-ai-pool-mark");
+      expect(opened.html).toContain("AI pool · Opus 5.5");
+    });
+
+    it("offers the row unchecked for a pinned conversation, and picking it marks the conversation auto", () => {
+      const opened = open(pooled("pinned"));
+      const row = pane(opened)!.props.pool!;
+      expect(row.runs).toBe(false);
+      expect(row.meta).toBe("Shares usage across 2 AIs");
+      expect(opened.html).not.toContain("data-ai-pool-mark");
+      row.onPick();
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: true }));
+    });
+
+    it("pins the conversation when a person picks a model by hand", () => {
+      const opened = open(pooled("auto"));
+      pane(opened)!.props.onPick(instance("claude"), "claude-sonnet-5-5");
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false }));
+    });
+
+    it("keeps the current AI unchecked while the pool runs it, and pressing it pins the conversation there", () => {
+      const opened = open(pooled("auto"));
+      const props = pane(opened)!.props;
+      const currentRow = nodes(SimpleModelMenu(props)).find((node) => node.props["data-current-model"] !== undefined)!;
+      expect(currentRow.props["aria-pressed"]).toBe(false);
+      click(currentRow);
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false,
+        selection: expect.objectContaining({ instanceId: "claude", model: "claude-opus-5-5" }) }));
+    });
+
+    it("pins a conversation the pool ran before, after the pool is off", () => {
+      const forBot = pooled("auto");
+      fixture.aiPool = { enabled: false, mode: "even", members: [] };
+      const off = open(forBot);
+      expect(pane(off)!.props.pool).toBeNull();
+      pane(off)!.props.onPick(instance("claude"), "claude-sonnet-5-5");
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false }));
+    });
   });
 
   it("is a 324px menu on the shared menu surface, and the full picker keeps its own 420px", () => {

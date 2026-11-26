@@ -162,6 +162,11 @@ included calls with the month's use, the person's own treg key (saved, tested,
 removed, used first) and a used-up month, against loopback stand-ins for treg
 and the relay.
 
+The [GitHub native connection fixture](github-app.md) checks the Apps page's
+GitHub tile, the bot's repositories and levels, the read-only view for a person
+who is not the owner, and the server's refusal of their changes, against a
+loopback stand-in for the broker.
+
 The [Connected Apps OAuth fixture](connected-apps-oauth.md) checks blocked-popup
 recovery, safe authorization links and abandoned-account retries through real
 renderer components and isolated HTTP routes.

@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, Search, Server, TriangleAlert, X } from "lucide-react";
 import { api, useStore, type Bot, type InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -30,6 +31,9 @@ import { isRemoteMcpListing, type McpServerListing } from "./mcp-draft";
 import { useSuggestedApps } from "@/lib/app-suggestions";
 import { matchesCatalogSearch } from "../../shared/app-suggestions";
 import { EmailCard } from "./EmailCard";
+import { GithubCard } from "./GithubCard";
+import { GITHUB_CARD_SEARCH, useGithubApp } from "@/lib/github-app";
+import { GITHUB_APP_SLUG } from "../../shared/github-app";
 import { X_CARD_SEARCH, XCard } from "./XCard";
 import { mergeCompleteConnectorStatus, mergeCurrentConnectorStatus, onlyLatestConnectorResponses } from "@/lib/connector-status-merge";
 import { openBotSettings } from "./bot-panel/panel-link";
@@ -117,6 +121,7 @@ export function PluginsPanel() {
   // Appended after the older state so tests that seed state by call order keep their indices.
   const [xConnected, setXConnected] = useState<boolean | null>(null);
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
+  const github = useGithubApp().status;
   const [mcpServers, setMcpServers] = useState<McpServerListing[]>([]);
 
   const disconnectingRef = useRef<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null);
@@ -283,6 +288,7 @@ export function PluginsPanel() {
   const { suggestions, picking, pick } = useSuggestedApps(cards !== null && configured && inventoryPhase === "ready", `${cardsRefresh}:${Object.keys(status).filter((slug) => status[slug]?.connected).sort().join()}`);
   const [disconnecting, setDisconnecting] = useState<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null); disconnectingRef.current = disconnecting;
   const [featuredSlot, setFeaturedSlot] = useState<HTMLElement | null>(null);
+  const [githubDialog, setGithubDialog] = useReducer((_open: boolean, next: boolean) => next, false);
   const usage = useAppUsage(cards !== null, cardsRefresh);
 
   const openConnectUrl = async (url: string) => {
@@ -388,6 +394,8 @@ export function PluginsPanel() {
   const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected, listing)).map((app) => app.id));
   const searchMatches = (text: string) => !search || text.toLowerCase().includes(search.toLowerCase().trim());
   const showEmail = emailConnected === true && searchMatches(`email mail imap smtp mailbox ${t("email.description")}`);
+  const githubConnected = github?.connected === true;
+  const showGithub = github !== null && (listing !== "connected" || githubConnected) && searchMatches(`${GITHUB_CARD_SEARCH} ${t("github.description")}`);
   const showX = xConnected === true && searchMatches(`${X_CARD_SEARCH} ${t("apps.x.description")}`);
   const visible = (listing === "connected" ? matching.filter((card) => isConnected(card.slug)) : matching)
     .map((card, index) => ({ card, index }))
@@ -396,7 +404,7 @@ export function PluginsPanel() {
   const connectedHosted = HOSTED_MCP_APPS.filter((app) => hostedConnected?.[app.id]);
   const ownServers = mcpServers.filter((server) => ownMcpServer(server));
   const ownServerShown = (server: McpServerListing) => matchesCatalogSearch(`${server.name} ${isRemoteMcpListing(server) ? server.url : [server.command, ...server.args].join(" ")}`, search);
-  const connectedCount = Object.values(status).filter(hasActiveConnection).length + connectedHosted.length + ownServers.filter(mcpServerConnected).length + Number(emailConnected === true) + Number(xConnected === true);
+  const connectedCount = Object.values(status).filter(hasActiveConnection).length + connectedHosted.length + ownServers.filter(mcpServerConnected).length + Number(emailConnected === true) + Number(xConnected === true) + Number(githubConnected);
   const connectedEmptyCopy = connectedInventoryCopy(inventoryPhase);
   const close = () => dispatch({ type: "togglePlugins", open: false });
   const setupNotice = connectorSetupNotice({ configured, stale, setup, remoteClient });
@@ -414,7 +422,7 @@ export function PluginsPanel() {
   const moreCategories = ranked.more;
   const categoryInMore = category !== null && moreCategories.includes(category);
   const inCategoryView = filter === "all" && category !== null && !searching;
-  const nativeCardsShown = (!inCategoryView && (shownHosted.size > 0 || showEmail || showX)) || (filter === "connected" && ownServers.some((server) => server.enabled && ownServerShown(server)));
+  const nativeCardsShown = (!inCategoryView && (shownHosted.size > 0 || showEmail || showX || showGithub)) || (filter === "connected" && ownServers.some((server) => server.enabled && ownServerShown(server)));
   const categoryCards = inCategoryView ? visible.filter((card) => inCategory(card, category)) : visible;
   const sectioned = filter === "all" && !searching && category === null;
   const sections = sectioned ? catalogSections(visible, isConnected, ranked.inline, popularSlugs(usage, visible)) : [];
@@ -710,6 +718,10 @@ export function PluginsPanel() {
                   </>
                 )}
               >
+                {(() => {
+                  const githubTile = <div data-native-card="github" className={showGithub && !inCategoryView ? "contents" : "hidden"}><GithubCard onChange={() => setGithubDialog(true)} /></div>;
+                  return featuredSlot?.nodeType === 1 && sectioned && !githubConnected ? createPortal(githubTile, featuredSlot) : githubTile;
+                })()}
                 <McpServersPanel hostedCards={{ shown: (id) => !inCategoryView && shownHosted.has(id), featured: sectioned ? featuredSlot : null, onConnections: setHostedConnected, onServers: setMcpServers, ...(filter === "connected" ? { ownServers: { shown: ownServerShown, manage: () => chooseFilter("mcp") } } : {}) }} refreshKey={cardsRefresh} />
                 <div data-native-card="x" className={showX && !inCategoryView ? "contents" : "hidden"}><XCard refreshKey={cardsRefresh} onConnection={setXConnected} /></div>
                 <div data-native-card="email" className={showEmail && !inCategoryView ? "contents" : "hidden"}><EmailCard refreshKey={cardsRefresh} onConnection={setEmailConnected} /></div>
@@ -730,6 +742,9 @@ export function PluginsPanel() {
         <ConfirmDialog open={disconnecting !== null} layer="z-[60]" tone="danger" title={t("connectors.disconnect")} confirmLabel={t("connectors.disconnect")}
           body={disconnecting ? disconnectAccountConfirmation(disconnecting.label, disconnecting.account, disconnecting.name) : ""} onCancel={() => setDisconnecting(null)}
           onConfirm={() => { if (disconnecting) disconnectAccount(disconnecting.slug, disconnecting.account.id); setDisconnecting(null); }} />
+        {githubDialog && github && (
+          <AppGrantPrompt app="GitHub" slug={GITHUB_APP_SLUG} bots={appGrants.bots} onDone={() => setGithubDialog(false)} onDismiss={() => setGithubDialog(false)} />
+        )}
         {appGrants.changing && (
           <AppGrantPrompt
             key={appGrants.changing}
