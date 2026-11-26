@@ -92,10 +92,16 @@ export function boundRetentionDays(): number {
   return retentionDays();
 }
 
-export function decisionRetentionDays(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+/** The days the server's environment sets, which win over the saved value; null when it sets none or an invalid number. */
+export function decisionRetentionPinned(env: NodeJS.ProcessEnv = process.env): number | null {
   const fromEnv = env.SEIRA_DECISION_RETENTION_DAYS?.trim();
   const parsed = fromEnv ? Number(fromEnv) : NaN;
-  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_DECISION_RETENTION_DAYS) return parsed;
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_DECISION_RETENTION_DAYS ? parsed : null;
+}
+
+export function decisionRetentionDays(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const pinned = decisionRetentionPinned(env);
+  if (pinned !== null) return pinned;
   if (typeof configured === "number" && Number.isInteger(configured) && configured >= 1 && configured <= MAX_DECISION_RETENTION_DAYS) return configured;
   return DEFAULT_DECISION_RETENTION_DAYS;
 }
