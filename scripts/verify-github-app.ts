@@ -113,6 +113,7 @@ async function open(who: Who, viewport = { width: 900, height: 900 }) {
   await page.goto(ui.previewUrl);
   assert.equal(await page.evaluate(async (code: string) => (await fetch("/api/auth/pair", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code, cookie: true, label: "GitHub fixture" }) })).status, pairing.code), 200);
+  await page.evaluate(() => localStorage.setItem("seira-advanced-mode", "0"));
   await page.reload();
   await page.locator('[data-app-tile="github"]').waitFor();
   const tile = page.locator('[data-app-tile="github"]');
