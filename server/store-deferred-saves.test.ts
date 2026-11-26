@@ -128,7 +128,7 @@ describe("what bots.json holds, and when", () => {
       store.markTaskDispatched(bot.id, threadId, "claude");
     });
     expect(written(), "the pass returns before the write").toBe(before);
-    expect(onDisk(bot.id).tasks![0]!.resumeCursors).toBeUndefined();
+    expect(onDisk(bot.id).tasks![0]!.resumeCursors).not.toHaveProperty("claude");
     await writesBehindSettled();
     expect(onDisk(bot.id).tasks![0]).toMatchObject({ resumeCursors: { claude: { sessionId: "s-1" } }, lastInstanceId: "claude" });
   });

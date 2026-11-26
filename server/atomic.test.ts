@@ -384,6 +384,8 @@ describe("OwnedFile writes behind", () => {
     behind(file, "c");
     file.write("d");
     expect(readFileSync(p, "utf8")).toBe("d");
+    flushWritesBehind(p);
+    expect(readFileSync(p, "utf8"), "an exit or a load does not bring the older text back").toBe("d");
     await writesBehindSettled();
     expect(readFileSync(p, "utf8")).toBe("d");
     expect(readdirSync(dir)).toEqual(["x.json"]);

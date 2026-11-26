@@ -240,7 +240,7 @@ export class OwnedFile {
   private readonly options: AtomicWriteOptions;
   /** The newest text asked for behind that no write has started on yet. */
   private wanted: string | undefined;
-  private writing: { text: string; done: Promise<void> } | undefined;
+  private writing: { text: string; generation: number; done: Promise<void> } | undefined;
   /** Every synchronous write moves this on: a write behind that started before one finds it changed and never lands. */
   private generation = 0;
   private deferring = false;
@@ -287,15 +287,20 @@ export class OwnedFile {
 
   /** Writes the newest text asked for behind now, synchronously; see flushWritesBehind. */
   flush(): void {
-    const text = this.wanted ?? this.writing?.text;
+    const text = this.newest();
     this.dropBehind();
     if (text === undefined || text === this.last) return;
     writeFileAtomic(this.path, text, this.options);
     this.last = text;
   }
 
+  /** The newest text asked for behind that a synchronous write has not superseded. */
+  private newest(): string | undefined {
+    return this.wanted ?? (this.writing?.generation === this.generation ? this.writing.text : undefined);
+  }
+
   private writeBehind(text: string): boolean {
-    if (text === (this.wanted ?? this.writing?.text ?? this.last)) return false;
+    if (text === (this.newest() ?? this.last)) return false;
     this.wanted = text;
     behind.add(this);
     if (!flushesBehindAtExit) {
@@ -327,7 +332,7 @@ export class OwnedFile {
       (tmp) => this.landed(tmp, text, generation),
       (error: unknown) => this.failed(error, text, generation),
     );
-    this.writing = { text, done };
+    this.writing = { text, generation, done };
   }
 
   private landed(tmp: string, text: string, generation: number): void {
