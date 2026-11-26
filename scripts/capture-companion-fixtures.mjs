@@ -370,10 +370,8 @@ async function main() {
 }
 
 // Ids and times differ per run: each distinct value maps to a stable stand-in in first-seen order.
-const TIME_KEYS = new Set(["at", "createdAt", "updatedAt", "changedAt", "ts", "time", "sentAt", "editedAt"]);
-const ID_KEYS = new Set([
-  "id", "messageId", "threadId", "botId", "startedMessageId", "turnId", "runId", "authorId", "senderId", "cursor",
-]);
+const TIME_KEYS = new Set(["at", "changedAt"]);
+const ID_KEYS = new Set(["id", "messageId", "threadId", "startedMessageId", "parentId", "activeLeafId"]);
 const pinRun = () => {
   const ids = new Map();
   const times = new Map();
@@ -382,9 +380,10 @@ const pinRun = () => {
     if (value && typeof value === "object") {
       return Object.fromEntries(Object.entries(value).map(([k, entry]) => [k, walk(entry, k)]));
     }
-    if (typeof value === "number" && TIME_KEYS.has(key)) {
+    if ((typeof value === "number" || typeof value === "string") && TIME_KEYS.has(key)) {
       if (!times.has(value)) times.set(value, 1_700_000_000_000 + times.size * 1000);
-      return times.get(value);
+      const pinned = times.get(value);
+      return typeof value === "string" ? new Date(pinned).toISOString() : pinned;
     }
     if (typeof value === "string" && ID_KEYS.has(key) && !/^s[1-5]$/.test(value)) {
       if (!ids.has(value)) ids.set(value, `fixture-${key.replace(/Id$/, "") || "id"}-${ids.size + 1}`);
@@ -434,7 +433,7 @@ async function captureTaskSuggestions() {
   await sleep(500);
 
   let hide, show, start;
-  const frames = await captureFrames(8, async () => {
+  const frames = await captureFrames(14, async () => {
     hide = await answer(card.id, "s1", "hide");
     show = await answer(card.id, "s1", "show");
     start = await answer(card.id, "s1", "start");
@@ -442,14 +441,20 @@ async function captureTaskSuggestions() {
   const startAgain = await answer(card.id, "s1", "start");
   const unknown = await answer(card.id, "s9", "hide");
   await waitUntil("the Start turn", async () => (await page()).messages?.some((m) => m.fromTaskSuggestion));
-  const pageAfter = { status: 200, body: await page() };
+  const pageAfter = { body: await page() };
 
+  // Only the lines this card touches: the rest of a turn carries run-bound ids and timings.
+  const startedId = start.body.sent?.id;
+  const ours = (message) => message?.id === card.id || message?.id === startedId;
+  const cardFrames = frames
+    .filter((frame) => (frame.kind === "message.patch" && frame.message?.id === card.id) || (frame.kind === "message" && frame.message?.id === startedId))
+    .map(({ seq: _seq, ...frame }) => frame);
   const pin = pinRun();
   const fixture = pin({
     card,
     hide, show, start, startAgain, unknown,
-    frames: { status: 200, body: frames },
-    page: pageAfter,
+    frames: { status: 200, body: cardFrames },
+    page: { status: 200, body: { ...pageAfter.body, messages: pageAfter.body.messages.filter(ours) } },
   });
   write("task-suggestions", fixture);
 }
