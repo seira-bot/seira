@@ -89,7 +89,7 @@ describe("app, role and key lists", () => {
       openaiImageApiKey: "openai_image",
       onePasswordToken: "onepassword", composioApiKey: "composio", openaiApiKey: "openai", anthropicApiKey: "anthropic",
       openrouterApiKey: "openrouter", mistralApiKey: "mistral", cerebrasApiKey: "cerebras", groqApiKey: "groq", greenferenceApiKey: "greenference", modelgoApiKey: "modelgo", metaApiKey: "meta",
-      deepseekApiKey: "deepseek",
+      deepseekApiKey: "deepseek", tregApiKey: "treg",
     };
     expect(Object.keys(expected).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).sort());
     for (const [target, provider] of Object.entries(expected)) expect(credentialProvider(target)).toBe(provider);
