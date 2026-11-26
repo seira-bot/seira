@@ -81,6 +81,10 @@ export interface ConfigStatus {
   heldBots?: string[];
   /** The server cannot read its saved routines, so none runs until it can. */
   routinesUnreadable?: true;
+  /** How long the record of what bots were allowed or refused is kept; `fixed` when the server's environment sets it. */
+  decisions?: { retentionDays: number; fixed?: boolean };
+  /** Memory upkeep timing: quiet milliseconds before bots note new facts from a chat, and the hour of the nightly tidy (0-23). */
+  memory?: { captureQuietMs: number; tidyHour: number };
   threads?: { maxConcurrentPerBot: number; eventLogMaxBytes?: number; eventLogRetentionDays?: number };
   automaticRecovery?: { enabled: boolean; backup?: ModelSelection };
   /** Different AIs that share usage: a conversation on a member may move to another member at the start of a turn. */
