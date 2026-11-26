@@ -49,9 +49,15 @@ describe("workspace backup data boundary", () => {
     "chrome-profile/Default/Cookies", ".agent-browser/auth/site.json",
     "vm-home/.browser-profiles/chrome/Cookies", "vm-homes/abc123/.browser-profiles/chromium/Local State",
     "config.json.123.tmp", "config.json.123.05a7b3e0-1234.tmp", "sessions.json.456.tmp",
+    "sessions.json.damaged-1700000000000", "sessions.json.damaged-1700000000000.4242.05a7b3e0-1234-4abc-8def-0123456789ab.tmp",
     "webhooks.json.123.05a7b3e0-1234.tmp", "browser-engine-key.12.05a7b3e0-1234.tmp",
   ])("excludes known owned authentication path %s", (path) => {
     expect(excludedWorkspaceAuthPath(path)).toBe(true);
+  });
+
+  it("keeps the copy of a damaged sessions file on the computer it was taken on, and only that name", () => {
+    for (const path of ["sessions.json.damaged-1700000000000", "sessions.json.damaged-1.77.05a7b3e0-1234.tmp"]) expect(excludedWorkspaceAuthPath(path)).toBe(true);
+    for (const path of ["sessions.json.damaged-", "sessions.json.damaged-abc", "sessions.json.damaged-1.md", "workspaces/bot/sessions.json.damaged-1"]) expect(excludedWorkspaceAuthPath(path)).toBe(false);
   });
 
   it("never exports or restores saved website logins or their key, or the key sealing webhook secrets", () => {

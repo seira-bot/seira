@@ -60,6 +60,7 @@ it("leaves credential fixtures out of the archive", async () => {
   const root = folder();
   put(root, "notes.md", "synthetic");
   put(root, "sessions.json", "{}");
+  put(root, "sessions.json.damaged-1700000000000", "{ not json");
   put(root, "tunnel-account.json", "{}");
   put(root, "engine-homes/x/token.txt", "fixture-token-not-real");
   const made = await createWorkspaceBackupSnapshot(root, { password: PASSWORD });
@@ -67,7 +68,7 @@ it("leaves credential fixtures out of the archive", async () => {
   const staged = await stageWorkspaceBackup(target, made.path, { password: PASSWORD });
   const { data } = stagedWorkspaceData(target, staged.id);
   expect(existsSync(join(data, "notes.md"))).toBe(true);
-  for (const path of ["sessions.json", "tunnel-account.json", "engine-homes"]) expect(existsSync(join(data, path))).toBe(false);
+  for (const path of ["sessions.json", "sessions.json.damaged-1700000000000", "tunnel-account.json", "engine-homes"]) expect(existsSync(join(data, path))).toBe(false);
 });
 
 it("counts the archive and the database copies in the space rule", () => {
