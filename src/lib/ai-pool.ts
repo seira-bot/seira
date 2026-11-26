@@ -76,10 +76,18 @@ export function suggestPaidMembers(instances: readonly InstanceInfo[], members: 
     });
 }
 
-export function isPaidMember(member: ModelSelection, instances: readonly InstanceInfo[]): boolean {
+export type MemberBilling = "plan" | "paid" | "unknown";
+
+/** How a member bills, from the AI as it is now. "unknown" when the AI is gone or says nothing about its billing:
+ * only an AI that reports a subscription is a plan, so an AI that may cost money is never taken for one. */
+export function memberBilling(member: ModelSelection, instances: readonly InstanceInfo[]): MemberBilling {
   const instance = instances.find((candidate) => candidate.instanceId === member.instanceId);
-  return instance !== undefined && billsEachUse(instance);
+  if (!instance) return "unknown";
+  if (billsEachUse(instance)) return "paid";
+  return instance.access === "subscription" || instance.snapshot.billing === "subscription" ? "plan" : "unknown";
 }
+
+export const isPaidMember = (member: ModelSelection, instances: readonly InstanceInfo[]): boolean => memberBilling(member, instances) === "paid";
 
 export function memberStatus(instance: InstanceInfo | undefined, limit: EngineLimit | undefined, reserve: number, now: number): PoolStatus {
   if (!instance || instance.snapshot.state !== "available" || instance.policy) return { state: "out", left: null, resetsAt: null };

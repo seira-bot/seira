@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InstanceInfo } from "@/state/store";
 import type { EngineLimit } from "@/lib/limit-resets";
 import {
-  activePool, levelsFor, memberStatus, nextPoolMember, planConflict, poolPick, poolReady, poolRuns, stepsOf, suggestPaidMembers, suggestPoolMembers, isPaidMember, type AiPool,
+  activePool, levelsFor, memberStatus, nextPoolMember, planConflict, poolPick, poolReady, poolRuns, stepsOf, suggestPaidMembers, suggestPoolMembers, isPaidMember, memberBilling, type AiPool,
 } from "./ai-pool";
 
 const NOW = 1_000_000;
@@ -87,6 +87,16 @@ describe("suggestPaidMembers", () => {
     expect(isPaidMember({ instanceId: "key", model: "m" }, [key])).toBe(true);
     expect(isPaidMember({ instanceId: "a", model: "m" }, [engine("a", "codex")])).toBe(false);
     expect(isPaidMember({ instanceId: "gone", model: "m" }, [])).toBe(false);
+  });
+  it("calls an AI a plan only when it says so, and never guesses from silence", () => {
+    const member = (instanceId: string) => ({ instanceId, model: "m" });
+    const silent = engine("silent", "codex", { access: undefined });
+    const custom = engine("custom", "codex", { access: "custom" });
+    const planBySnapshot = engine("snap", "codex", { access: undefined, snapshot: { state: "available", authenticated: true, billing: "subscription" } as InstanceInfo["snapshot"] });
+    const instances = [key, engine("plan", "codex"), silent, custom, planBySnapshot];
+    expect(["key", "plan", "silent", "custom", "snap", "gone"].map((id) => memberBilling(member(id), instances)))
+      .toEqual(["paid", "plan", "unknown", "unknown", "plan", "unknown"]);
+    expect(memberBilling(member("both"), [engine("both", "codex", { access: "api", snapshot: { state: "available", authenticated: true, billing: "subscription" } as InstanceInfo["snapshot"] })])).toBe("paid");
   });
 });
 
