@@ -88,24 +88,27 @@ describe("the card request from a bot", () => {
 
   it("answers 400 with words the model can read when no task is kept, and stores nothing", () => {
     const { store, bot } = make();
+    const lines = store.messagesFor(bot.threadId).length;
     expect(offerTaskSuggestions(deps(store), bot.threadId, "g1", { tasks: [{ title: "see http://x.example" }] })).toEqual({ status: 400, body: { error: TASK_SUGGESTIONS_NONE } });
-    expect(store.messagesFor(bot.threadId)).toHaveLength(0);
+    expect(store.messagesFor(bot.threadId)).toHaveLength(lines);
   });
 
   it("refuses a room with 409 and stores nothing", () => {
     const { store, bot } = make();
+    const lines = store.messagesFor(bot.threadId).length;
     expect(offerTaskSuggestions(deps(store, true), bot.threadId, "g1", { tasks }).status).toBe(409);
-    expect(store.messagesFor(bot.threadId)).toHaveLength(0);
+    expect(store.messagesFor(bot.threadId)).toHaveLength(lines);
   });
 
   it("refuses a second card in the same turn with 409 and allows one in the next turn", () => {
     const { store, bot } = make();
+    const lines = store.messagesFor(bot.threadId).length;
     const shared = deps(store);
     expect(offerTaskSuggestions(shared, bot.threadId, "g1", { tasks }).status).toBe(201);
     expect(offerTaskSuggestions(shared, bot.threadId, "g1", { tasks }).status).toBe(409);
     expect(offerTaskSuggestions(shared, bot.threadId, "g2", { tasks }).status).toBe(201);
     shared.turns.clear(bot.threadId);
     expect(offerTaskSuggestions(shared, bot.threadId, "g2", { tasks }).status).toBe(201);
-    expect(store.messagesFor(bot.threadId)).toHaveLength(3);
+    expect(store.messagesFor(bot.threadId)).toHaveLength(lines + 3);
   });
 });
