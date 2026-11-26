@@ -168,7 +168,7 @@ const utcClock = (at: number) => `${new Date(at).toISOString().slice(11, 16)} UT
 
 const LABEL_MAX = 80;
 /** Controls, direction marks and invisible fillers. Joiners (U+200C, U+200D) and variation selectors stay: scripts and emoji need them. */
-const HIDDEN_IN_LABEL = /[\p{Cc}\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b\u200e\u200f\u2028-\u202e\u2060-\u206f\u3164\ufeff\uffa0\ufff9-\ufffb\u{e0000}-\u{e007f}\u{e0100}-\u{e01ef}]/gu;
+const HIDDEN_IN_LABEL = /[\p{Cc}\u00ad\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b\u200e\u200f\u2028-\u202e\u2060-\u206f\u3164\ufeff\uffa0\ufff9-\ufffb\u{e0000}-\u{e007f}]|\u034f|[\u{e0100}-\u{e01ef}]/gu;
 const SHOWN_IN_LABEL = /[\p{L}\p{N}\p{P}\p{S}]/u;
 
 /** A device label for display only: who the device belongs to comes from the session's email and id, never from this text.
