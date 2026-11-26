@@ -260,7 +260,10 @@ Measured with Seira 0.1.194 on a VPS with 2 vCPU and Ubuntu 26.04, on 2026-11-26
 | At idle | less than 400 MB of memory, 0.7% of one CPU core |
 | Time Seira adds to each chat turn | about 0.4 s |
 | HTTP API | 2,600 to 2,900 requests per second; p99 under 4 ms at 100 requests per second |
+| Memory for each bot that works, with a real model | about 0.2 to 0.45 GB: the engine and its tool helpers |
+| 12 Claude bots that work at the same time | 3.6 GB at the peak; from 4 bots the 2 vCPU are full and replies take longer |
 
+The last two rows come from a test with Claude, Codex and OpenCode models on a second 2 vCPU VPS (Docker, Ubuntu 24.04).
 [docs/benchmarks.md](docs/benchmarks.md) has the method, the raw data, the standard agent benchmarks, and the script to measure your own server.
 
 ## Privacy

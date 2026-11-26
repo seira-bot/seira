@@ -626,6 +626,8 @@ and the small helper programs that give it its tools:
 | Each bot that is working | 6 or more | about 45, more while it runs commands | about 700 MB |
 | Each open browser | about 13 | about 165 | about 400 MB |
 
+These memory values are budgets. On a 2 vCPU server with small tasks, the
+measured memory was lower: see [Benchmarks](benchmarks.md#results-real-models-on-a-small-vps).
 An engine stays loaded for ten minutes after its bot's last turn, so count
 the bots that work within the same ten minutes, not only in the same second.
 Leave room for the commands bots run: budget about 80 per working bot.
