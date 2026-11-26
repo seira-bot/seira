@@ -869,6 +869,23 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.waiting()).toHaveLength(2);
   });
 
+  it("turning the built-in browser off applies at once, and turning it back on waits on a card that says what follows", async () => {
+    const fx = fixture();
+    expect((await fx.set("bots.settings", { botId: "kiwi", browser: false })).body.text).toContain("Done:");
+    expect(fx.waiting()).toEqual([]);
+    expect((await fx.set("bots.settings", { botId: "kiwi", browser: true })).body.text).toContain("Nothing has changed yet");
+    expect(fx.waiting()[0]!.card.appSettingRequest.consequence).toBe("Kiwi can then use the built-in browser, with the logins saved in it.");
+    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { browser: false } }]);
+  });
+
+  it("turning a tool group back on waits and names it, and turning one off applies at once", async () => {
+    const fx = fixture();
+    (fx.bots[0] as { toolsOff?: string[] }).toolsOff = ["email"];
+    expect((await fx.set("bots.tools", { botId: "kiwi", turnOff: ["images"] })).body.text).toContain("Done:");
+    expect((await fx.set("bots.tools", { botId: "kiwi", turnOn: ["email"] })).body.text).toContain("Nothing has changed yet");
+    expect(fx.waiting()[0]!.card.appSettingRequest.consequence).toBe("Kiwi gets these tools back: Email.");
+  });
+
   it("AC-04 refuses Apply without the owner's review and leaves the setting and the card as they were", async () => {
     const fx = fixture();
     await fx.set("bots.approvalModes", UP);

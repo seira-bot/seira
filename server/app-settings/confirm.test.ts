@@ -12,12 +12,13 @@ const bots = [
   { id: "kiwi", name: "Kiwi", approvalMode: "ask" },
   { id: "max", name: "Max", approvalMode: "full", computer: "local" },
   { id: "edie", name: "Edie", approvalMode: "edits", soul: "Keep it short" },
+  { id: "nora", name: "Nora", approvalMode: "ask", browser: false, composio: false, toolsOff: ["email", "images"] },
 ] as unknown as BotRecord[];
 
 function registry(cfg: Record<string, unknown> = {}, threads: Record<string, Record<string, string>> = {}) {
   const config = {
     anthropic: { url: "https://api.anthropic.com" }, threads: { eventLogRetentionDays: 30, eventLogMaxBytes: MIN_THREAD_EVENT_LOG_BYTES * 4 },
-    decider: { provider: "jev" }, imageGen: { primary: { provider: "openai" }, customUrl: "https://img.example/v1" }, ...cfg,
+    decider: { provider: "jev" }, browserProfiles: [{ id: "work", name: "Work" }, { id: "mine", name: "Mine", browser: "chrome" }], imageGen: { primary: { provider: "openai" }, customUrl: "https://img.example/v1" }, ...cfg,
   } as unknown as AppConfig;
   const entries = createSettingsRegistry({
     cfg: () => config, saveConfig: async () => null, bots: () => bots, sections: () => [], reorderBots: async () => null, groupBots: async () => null,
@@ -143,6 +144,32 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("bots.settings", { botId: "edie", soul: "Keep it short" })).toBeNull();
     expect(confirm("bots.settings", { botId: "kiwi", memoryEnabled: false })).toBeNull();
     expect(confirm("bots.settings", { botId: "ghost", computer: "local" })).toBeNull();
+  });
+
+  it("turning the built-in browser or connected apps back on waits, and turning them off or leaving them on does not", () => {
+    expect(confirm("bots.settings", { botId: "nora", browser: true })).toEqual({ code: "browserOn", params: { bot: "Nora" } });
+    expect(confirm("bots.settings", { botId: "nora", composio: true })).toEqual({ code: "appsOn", params: { bot: "Nora" } });
+    expect(confirm("bots.settings", { botId: "nora", browser: true, composio: true })).toEqual({ code: "browserOn", params: { bot: "Nora" } });
+    expect(confirm("bots.settings", { botId: "nora", computer: "local", browser: true })).toEqual({ code: "thisComputer", params: { bot: "Nora" } });
+    expect(confirm("bots.settings", { botId: "nora", browser: false, composio: false })).toBeNull();
+    expect(confirm("bots.settings", { botId: "kiwi", browser: true, composio: true })).toBeNull();
+    expect(confirm("bots.settings", { botId: "kiwi", browser: false, composio: false })).toBeNull();
+  });
+
+  it("turning tool groups back on waits and names them, and turning groups off or on again that are on does not", () => {
+    expect(confirm("bots.tools", { botId: "nora", turnOn: ["email", "data"] })).toEqual({ code: "toolsOn", params: { bot: "Nora", groups: "Email" } });
+    expect(confirm("bots.tools", { botId: "nora", turnOn: ["email", "images"] })).toEqual({ code: "toolsOn", params: { bot: "Nora", groups: "Images, Email" } });
+    expect(confirm("bots.tools", { botId: "nora", turnOn: ["data"] })).toBeNull();
+    expect(confirm("bots.tools", { botId: "nora", turnOff: ["data", "meetings"] })).toBeNull();
+    expect(confirm("bots.tools", { botId: "kiwi", turnOn: ["email"] })).toBeNull();
+  });
+
+  it("a profile on the person's own Chrome waits when it is added or moved there, and not when it is renamed or moved off", () => {
+    expect(confirm("desktops.browserProfiles", [{ id: "work", name: "Work" }, { id: "mine", name: "Mine", browser: "chrome" }, { name: "New", browser: "chrome" }])).toEqual({ code: "ownChrome" });
+    expect(confirm("desktops.browserProfiles", [{ id: "work", name: "Work", browser: "chrome" }, { id: "mine", name: "Mine", browser: "chrome" }])).toEqual({ code: "ownChrome" });
+    expect(confirm("desktops.browserProfiles", [{ id: "work", name: "Work" }, { id: "mine", name: "Mine", browser: "chrome" }, { name: "Plain" }])).toBeNull();
+    expect(confirm("desktops.browserProfiles", [{ id: "work", name: "Desk" }, { id: "mine", name: "Mine", browser: "chrome" }])).toBeNull();
+    expect(confirm("desktops.browserProfiles", [{ id: "work", name: "Work" }, { id: "mine", name: "Mine" }])).toBeNull();
   });
 
   it("a low-risk setting has no hook", () => {

@@ -219,6 +219,10 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
         });
         return lines.length ? { change: `Browser profiles: ${lines.join("; ")}` } : { refusal: "That list is the same as the current one." };
       },
+      confirm: (next: BrowserProfileChange[]) => {
+        const current = cfg().browserProfiles ?? [];
+        return next.some((wanted) => wanted.browser === "chrome" && !current.find((profile) => profile.id === wanted.id)?.browser) ? { code: "ownChrome" } : null;
+      },
       write: (next: BrowserProfileChange[]) => {
         const current = (cfg().browserProfiles ?? []).map(({ id, name, browser }) => ({ id, name, ...(browser ? { browser } : {}) }));
         const browserProfiles = next.map((profile) => ({ ...profile, id: profile.id ?? `profile-${randomUUID().replaceAll("-", "")}` }));

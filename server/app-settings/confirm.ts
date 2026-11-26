@@ -17,6 +17,10 @@ const CONSEQUENCE_KEYS = {
   wayIn: "server.appSettings.confirm.wayIn",
   usageData: "server.appSettings.confirm.usageData",
   emailOut: "server.appSettings.confirm.emailOut",
+  browserOn: "server.appSettings.confirm.browserOn",
+  appsOn: "server.appSettings.confirm.appsOn",
+  toolsOn: "server.appSettings.confirm.toolsOn",
+  ownChrome: "server.appSettings.confirm.ownChrome",
 } as const satisfies Record<string, ServerLineKey>;
 export type ConsequenceCode = keyof typeof CONSEQUENCE_KEYS;
 export const CONSEQUENCES = Object.keys(CONSEQUENCE_KEYS) as ConsequenceCode[];

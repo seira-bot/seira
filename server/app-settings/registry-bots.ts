@@ -164,6 +164,11 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
       read: everyBot((one) => (offNow(one).length ? `off: ${groupNames(offNow(one))}` : "all on")),
       effect: (one, { turnOff = [], turnOn = [] }) => ({ change: `${one.name}: ${[turnOff.length ? `turn off ${groupNames(turnOff)}` : "", turnOn.length ? `turn on ${groupNames(turnOn)}` : ""].filter(Boolean).join("; ")}` }),
       was: (one, { botId }) => ({ botId, turnOff: offNow(one), turnOn: TOOL_GROUPS.filter((group) => !offNow(one).includes(group)) }),
+      confirm: ({ botId, turnOn = [] }) => {
+        const one = bot(botId);
+        const back = one ? turnOn.filter((group) => offNow(one).includes(group)) : [];
+        return one && back.length ? { code: "toolsOn", params: { bot: one.name, groups: groupNames(back) } } : null;
+      },
       patch: (one, { turnOff = [], turnOn = [] }) => ({ toolsOff: TOOL_GROUPS.filter((group) => turnOff.includes(group) || (offNow(one).includes(group) && !turnOn.includes(group))) }),
     }),
     perBot({
@@ -176,7 +181,15 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
       effect: (one, value) => ({ change: changeLine(one, value, false) }),
       review: (one, value) => (value.soul === undefined ? null : { before: one.soul ?? "", after: changeLine(one, value, true) }),
       was: (one, value) => ({ botId: one.id, ...Object.fromEntries(Object.keys(value).filter((field) => field !== "botId").map((field) => [field, OTHER[field as OtherField].was(one)])) }),
-      confirm: ({ botId, computer, soul }) => { const one = bot(botId); return !one ? null : computer === "local" && one.computer !== "local" ? { code: "thisComputer", params: { bot: one.name } } : soul !== undefined && soul !== (one.soul ?? "") ? { code: "botRule", params: { bot: one.name } } : null; },
+      confirm: ({ botId, computer, soul, browser, composio }) => {
+        const one = bot(botId);
+        if (!one) return null;
+        const params = { bot: one.name };
+        if (computer === "local" && one.computer !== "local") return { code: "thisComputer", params };
+        if (browser === true && one.browser === false) return { code: "browserOn", params };
+        if (composio === true && one.composio === false) return { code: "appsOn", params };
+        return soul !== undefined && soul !== (one.soul ?? "") ? { code: "botRule", params } : null;
+      },
       patch: (_one, { botId: _id, computer, ...rest }) => ({ ...rest, ...(computer ? { computer: computer === "auto" ? null : computer } : {}) }),
     }),
   ];
