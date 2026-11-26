@@ -66,11 +66,11 @@ describe("a bot a team package import creates starts at the saved New bot level"
 
   it("never takes the level from the package, which stays a suggestion", () => {
     const raw = fullTeam();
-    for (const agent of raw.package.agents) agent.approval = "full";
+    for (const agent of raw.package.agents) agent.approval = "auto";
     for (const bot of importFullTeam(() => "ask", raw)) {
       expect(approvalModeFor(bot)).toBe("ask");
       expect(bot.autoApprove).toBe(false);
-      expect(bot.installedPackage?.suggestedApproval).toBe("full");
+      expect(bot.installedPackage?.suggestedApproval).toBe("auto");
     }
   });
 });
