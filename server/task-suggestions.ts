@@ -8,6 +8,7 @@ import {
   type TaskSuggestionsCard,
 } from "../packages/phone-protocol/src/task-suggestions.ts";
 import { redactSecretsInText } from "./redact.ts";
+import { conversationLanguage, serverLine } from "./server-lines.ts";
 import type { Message, Store } from "./store.ts";
 
 type CardStore = Pick<Store, "patchMessage" | "messagesFor">;
@@ -27,7 +28,7 @@ export function taskSuggestionsFromInput(body: { intro?: unknown; tasks?: unknow
 }
 
 export function postTaskSuggestions(store: Pick<Store, "appendMessage">, threadId: string, card: TaskSuggestionsCard): Message {
-  return store.appendMessage(threadId, { role: "bot", kind: "text", text: taskSuggestionsText(card), taskSuggestions: card });
+  return store.appendMessage(threadId, { role: "bot", kind: "text", text: taskSuggestionsText(card, serverLine(conversationLanguage(threadId), "server.taskSuggestions.heading")), taskSuggestions: card });
 }
 
 /** The card line `messageId` in `threadId`, and the index of suggestion `suggestionId` on it. */

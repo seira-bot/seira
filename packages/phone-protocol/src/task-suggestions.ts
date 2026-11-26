@@ -82,10 +82,10 @@ export function taskSuggestionIcon(value: unknown): TaskSuggestionIcon {
   return typeof value === "string" && (TASK_SUGGESTION_ICONS as readonly string[]).includes(value) ? (value as TaskSuggestionIcon) : DEFAULT_TASK_SUGGESTION_ICON;
 }
 
-/** The line's readable text: the intro, then one bullet per task. */
-export function taskSuggestionsText(card: TaskSuggestionsCard): string {
+/** The line's readable text: the intro (else `heading`, in the person's language), then one bullet per task. */
+export function taskSuggestionsText(card: TaskSuggestionsCard, heading: string): string {
   const lines = card.suggestions.map((suggestion) => `- ${suggestion.title}${suggestion.description ? `: ${suggestion.description}` : ""}`);
-  return [card.intro ?? "Tasks I could help with:", ...lines].join("\n");
+  return [card.intro ?? heading, ...lines].join("\n");
 }
 
 /** What an action does to a suggestion in `current` state. `same`: nothing changes and the answer is still a success.
