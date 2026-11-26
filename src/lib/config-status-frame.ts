@@ -1,48 +1,9 @@
 import type { ConfigStatus } from "@/state/config-status";
 
-// A section left out here is wiped from state.config whenever a config frame lands.
-export type ConfigStatusFrame = Pick<
-  ConfigStatus,
-  "awakeLimit" | "pausedBots" | "pausedByPerson" | "heldBots" | "xai" | "mistral" | "cerebras" | "groq" | "greenference" | "modelgo" | "meta" | "deepseek" | "xResearch" | "treg" | "anthropic" | "openai" | "openrouter" | "openaiCompat" | "fleet" | "composio" | "vps" | "rooms" | "mcp" | "threads" | "automaticRecovery" | "cacheKeepWarm" | "localVm" | "opencodeGo" | "tts" | "decider" | "helpers" | "imageGen" | "live" | "savedKeys" | "profile" | "everyBotRules" | "language" | "features" | "onboarding" | "browserEngine" | "browserProfiles" | "edition" | "budgets" | "billing" | "managedPolicy" | "cloudHome" | "team" | "workspaceBanner" | "toolGroups" | "aiPool"
->;
+/** A live `config` frame: the GET /api/config body inside the stream's `kind` and `seq`. */
+export type ConfigStatusFrame = ConfigStatus & { kind?: "config"; seq?: number };
 
 export function configStatusFromFrame(frame: ConfigStatusFrame): ConfigStatus {
-  return {
-    xai: frame.xai,
-    mistral: frame.mistral,
-    cerebras: frame.cerebras,
-    groq: frame.groq, greenference: frame.greenference, modelgo: frame.modelgo, deepseek: frame.deepseek,
-    meta: frame.meta, xResearch: frame.xResearch, treg: frame.treg,
-    anthropic: frame.anthropic,
-    openai: frame.openai,
-    openrouter: frame.openrouter,
-    openaiCompat: frame.openaiCompat,
-    fleet: frame.fleet, toolGroups: frame.toolGroups,
-    composio: frame.composio,
-    vps: frame.vps,
-    rooms: frame.rooms,
-    mcp: frame.mcp,
-    threads: frame.threads,
-    automaticRecovery: frame.automaticRecovery,
-    ...(frame.aiPool ? { aiPool: frame.aiPool } : {}),
-    cacheKeepWarm: frame.cacheKeepWarm,
-    localVm: frame.localVm,
-    opencodeGo: frame.opencodeGo,
-    tts: frame.tts,
-    decider: frame.decider, helpers: frame.helpers,
-    imageGen: frame.imageGen,
-    live: frame.live, savedKeys: frame.savedKeys,
-    profile: frame.profile, everyBotRules: frame.everyBotRules,
-    language: frame.language,
-    features: frame.features,
-    onboarding: frame.onboarding,
-    browserEngine: frame.browserEngine,
-    browserProfiles: frame.browserProfiles,
-    edition: frame.edition,
-    budgets: frame.budgets,
-    billing: frame.billing,
-    managedPolicy: frame.managedPolicy,
-    ...(frame.pausedByPerson ? { pausedByPerson: frame.pausedByPerson } : {}), ...(frame.heldBots ? { heldBots: frame.heldBots } : {}),
-    ...(frame.cloudHome ? { cloudHome: true } : {}), ...(frame.team ? { team: frame.team } : {}), ...(frame.awakeLimit !== undefined ? { awakeLimit: frame.awakeLimit } : {}), ...(frame.pausedBots ? { pausedBots: frame.pausedBots } : {}), ...(frame.workspaceBanner ? { workspaceBanner: frame.workspaceBanner } : {}),
-  };
+  const { kind: _kind, seq: _seq, ...status } = frame;
+  return status;
 }

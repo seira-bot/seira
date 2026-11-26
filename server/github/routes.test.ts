@@ -35,6 +35,8 @@ let store: GithubStore;
 let server: Server;
 let base: string;
 let enabled = true;
+let busy = false;
+let desktopManaged = false;
 const bots = new Set(["ada", "bo"]);
 const hiddenFrom = new Map<RequestAuth, Set<string>>();
 
@@ -45,6 +47,8 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "seira-gh-routes-"));
   store = createGithubStore(join(dir, "data"));
   enabled = true;
+  busy = false;
+  desktopManaged = false;
   hiddenFrom.clear();
   const handler = createGithubRoutes({
     cfg: () => ({ features: { githubApp: enabled }, profile: { name: "Rama" } }),
@@ -53,6 +57,8 @@ beforeEach(async () => {
     broker: createGithubBrokerClient({ access: () => ({ url: fake.url, token: fake.token }) }),
     botExists: (id) => bots.has(id),
     botVisible: (auth, id) => !hiddenFrom.get(auth)?.has(id),
+    get desktopManaged() { return desktopManaged; },
+    anyBotBusy: () => busy,
   });
   server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
@@ -294,5 +300,63 @@ describe("github routes", () => {
     const out = await call("POST", "/api/github-app/refresh", "desktop");
     expect(out.status).toBe(502);
     expect(out.body.error).toBe("GitHub is not reachable right now.");
+  });
+});
+
+describe("github bot access from a local shell", () => {
+  const site = { installationId: 1, repositoryId: 10, fullName: "shop/site" };
+  const docs = { installationId: 1, repositoryId: 11, fullName: "shop/docs" };
+
+  it("refuses wider access from an originless loopback caller while a bot is busy, and stores nothing", async () => {
+    await connectAs("desktop");
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy())).status).toBe(200);
+    busy = true;
+    for (const wider of [
+      policy({ repos: [{ ...site, level: "write" }] }),
+      policy({ repos: [{ ...site, level: "read" }, { ...docs, level: "read" }] }),
+      policy({ askBeforeBigChanges: false }),
+      policy({ ownBranchesOnly: false }),
+    ]) {
+      expect(await call("PUT", "/api/github-app/bots/ada", "desktop", wider)).toEqual({
+        status: 409,
+        body: { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." },
+      });
+    }
+    expect((await call("PUT", "/api/github-app/bots/bo", "desktop", policy({ repos: [] }))).status).toBe(409);
+    expect(store.read().bots).toEqual({ ada: policy() });
+  });
+
+  it("lets the same caller narrow or remove access while a bot is busy", async () => {
+    await connectAs("desktop");
+    await call("PUT", "/api/github-app/bots/ada", "desktop", policy({ repos: [{ ...site, level: "write" }, { ...docs, level: "read" }], askBeforeBigChanges: false }));
+    busy = true;
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy())).status).toBe(200);
+    expect(store.read().bots.ada).toEqual(policy());
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", null)).status).toBe(200);
+    expect(store.read().bots).toEqual({});
+  });
+
+  it("does not take an Origin header as proof of a browser", async () => {
+    await connectAs("desktop");
+    busy = true;
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy(), { origin: "http://localhost:5173" })).status).toBe(409);
+    expect(store.read().bots).toEqual({});
+  });
+
+  it("lets wider access through in the packaged desktop, or while every bot is idle", async () => {
+    await connectAs("desktop");
+    busy = true;
+    desktopManaged = true;
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy({ repos: [{ ...site, level: "pull_requests" }] }))).status).toBe(200);
+    desktopManaged = false;
+    busy = false;
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy({ repos: [{ ...site, level: "write" }] }))).status).toBe(200);
+    expect(store.read().bots.ada?.repos[0]?.level).toBe("write");
+  });
+
+  it("does not hold back the owner on a paired session while a bot is busy", async () => {
+    await connectAs("ana");
+    busy = true;
+    expect((await call("PUT", "/api/github-app/bots/ada", "ana", policy({ askBeforeBigChanges: false }))).status).toBe(200);
   });
 });

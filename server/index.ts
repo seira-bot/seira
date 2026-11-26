@@ -82,7 +82,7 @@ import { RoomTurnDeadline, RoomTurnStallRegistry, effectiveRoomTurnTimeoutMinute
 import { roomTurnEnd, type RoomClaimEnd } from "./room-turn-end.ts";
 import { applyHoldDirective, classifyHoldDirective, heldMemberLine, rememberHeldMessage, stopWordPlacement } from "./room-holds.ts";
 import { refusalBody, refusalText, USER_ERROR, userError, userErrorFields, userErrorThrown } from "./user-errors.ts";
-import { publicErrorMessage } from "./public-error.ts";
+import { publicErrorMessage, publicErrorText, PUBLIC_ERROR_MARK, PublicError, unstatused } from "./public-error.ts";
 import { chatNotice, failedNoticeTool, noticeTool, runtimeNoticeTool } from "./chat-notices.ts";
 import type { ServerErrorBody } from "../shared/server-text.ts";
 import { emailSignInRoute } from "./routes/email-sign-in.ts";
@@ -2106,7 +2106,7 @@ function holderOfTurn({ threadId }: TurnOwner): { holder?: ComputerHolder; threa
 async function bindTurnComputer(owner: TurnOwner, resource: string, exclusive = false): Promise<void> {
   // Every computer claim passes here, so a disallowed kind is refused whichever path selected it.
   const kind = computerKindForResource(resource), refusal = kind && computerPlaceRefusal(kind);
-  if (refusal) throw Object.assign(new Error(refusal.message), { code: refusal.code });
+  if (refusal) throw Object.assign(unstatused(new PublicError(refusal.message)), { code: refusal.code });
   const active = () => activeInternalGenerationByThread.get(owner.threadId) === owner.generation &&
     turnResourceOwners.get(owner.threadId)?.generation === owner.generation;
   let waitingMessage: Message | undefined;
@@ -2223,13 +2223,13 @@ function unattendedDispatchState(botId: string): "ready" | "busy" | "missing" {
 
 function requestedTaskBot(botId: string, rawThreadId: unknown): BotRecord {
   const profile = store.bot(botId);
-  if (!profile) throw Object.assign(new Error("no such bot"), { status: 404 });
+  if (!profile) throw new PublicError("no such bot", 404);
   if (rawThreadId !== undefined && (typeof rawThreadId !== "string" || !/^[\w-]+$/.test(rawThreadId))) {
-    throw Object.assign(new Error("threadId must be a task id"), { status: 400 });
+    throw new PublicError("threadId must be a task id", 400);
   }
   const threadId = typeof rawThreadId === "string" ? rawThreadId : profile.threadId;
   const task = store.projectBotForTask(botId, threadId);
-  if (!task) throw Object.assign(new Error("no such task"), { status: 404 });
+  if (!task) throw new PublicError("no such task", 404);
   return task;
 }
 
@@ -2876,9 +2876,9 @@ const wireBot = (bot: BotRecord, onlyThreadId?: string): WireBot => {
 
 function toolScopeForTurn(botId: string) {
   const bot = store.bot(botId);
-  if (!bot) throw Object.assign(new Error("no such bot"), { status: 404 });
+  if (!bot) throw new PublicError("no such bot", 404);
   const parsed = parseToolScope(bot.toolScope);
-  if (!parsed.ok) throw Object.assign(new Error("This bot's tool selection is invalid. Open Access settings and save a valid selection before starting a turn."), { status: 409, code: "tool_scope" });
+  if (!parsed.ok) throw Object.assign(new PublicError("This bot's tool selection is invalid. Open Access settings and save a valid selection before starting a turn.", 409), { code: "tool_scope" });
   return parsed.scope;
 }
 
@@ -3522,27 +3522,27 @@ function groupIsWorking(group: GroupRecord): boolean {
 // Shared by the public and Chief room tools: authorization stays at each ingress.
 function createChannel(value: unknown): GroupRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw Object.assign(new Error("channel must be a JSON object"), { status: 400 });
+    throw new PublicError("channel must be a JSON object", 400);
   }
   const body = value as Record<string, unknown>;
 
   const roster = checkedMemberIds(body.memberIds);
-  if (!roster.ok) throw Object.assign(new Error(roster.error), { status: 400 });
+  if (!roster.ok) throw new PublicError(roster.error, 400);
   const { memberIds } = roster;
   const audienceConflict = roomAudienceConflict(memberIds);
-  if (audienceConflict) throw Object.assign(new Error(audienceConflict), { status: 400 });
+  if (audienceConflict) throw new PublicError(audienceConflict, 400);
   if (body.name !== undefined && typeof body.name !== "string") {
-    throw Object.assign(new Error("channel name must be a string"), { status: 400 });
+    throw new PublicError("channel name must be a string", 400);
   }
   const name = body.name?.trim() || `${store.bot(memberIds[0])!.name} & co.`;
-  if (name.length > 100) throw Object.assign(new Error("channel name must be at most 100 characters"), { status: 400 });
-  if (!fitsOnOneLine(name)) throw Object.assign(Object.assign(new Error("room name must fit on one line"), userErrorFields(userError("serverError.room.nameOneLine"))), { status: 400 });
+  if (name.length > 100) throw new PublicError("channel name must be at most 100 characters", 400);
+  if (!fitsOnOneLine(name)) throw Object.assign(new PublicError("room name must fit on one line", 400), userErrorFields(userError("serverError.room.nameOneLine")));
   let section: string | undefined;
   if (body.section !== undefined && body.section !== null) {
-    if (typeof body.section !== "string") throw Object.assign(new Error("context must be a string"), { status: 400 });
+    if (typeof body.section !== "string") throw new PublicError("context must be a string", 400);
     section = body.section.trim() || undefined;
     if (section && section.length > 60) {
-      throw Object.assign(new Error("context must be at most 60 characters"), { status: 400 });
+      throw new PublicError("context must be at most 60 characters", 400);
     }
   }
   let setup:
@@ -3550,17 +3550,17 @@ function createChannel(value: unknown): GroupRecord {
     | undefined;
   if (body.setup !== undefined) {
     if (!body.setup || typeof body.setup !== "object" || Array.isArray(body.setup)) {
-      throw Object.assign(new Error("setup must be an object"), { status: 400 });
+      throw new PublicError("setup must be an object", 400);
     }
     const requested = body.setup as { bulletin?: unknown; defaultResponder?: unknown };
     if (typeof requested.bulletin !== "string") {
-      throw Object.assign(new Error("setup.bulletin must be a string"), { status: 400 });
+      throw new PublicError("setup.bulletin must be a string", 400);
     }
     if (requested.bulletin.length > 12_000) {
-      throw Object.assign(new Error("setup.bulletin must be at most 12000 characters"), { status: 400 });
+      throw new PublicError("setup.bulletin must be at most 12000 characters", 400);
     }
     const responder = checkedGroupResponder(requested.defaultResponder, memberIds);
-    if (!responder) throw Object.assign(new Error("invalid setup.defaultResponder"), { status: 400 });
+    if (!responder) throw new PublicError("invalid setup.defaultResponder", 400);
     setup = { bulletin: requested.bulletin, defaultResponder: responder, completed: true };
   }
   return store.createGroup(name, memberIds, false, section, setup ?? (deciderReady(cfg, "roomRouting") ? { defaultResponder: { kind: "auto" } } : undefined));
@@ -3568,55 +3568,55 @@ function createChannel(value: unknown): GroupRecord {
 
 function updateChannel(groupId: string, value: unknown): GroupRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw Object.assign(new Error("body must be a JSON object"), { status: 400 });
+    throw new PublicError("body must be a JSON object", 400);
   }
   const body = value as Record<string, unknown>;
 
   const existing = store.group(groupId);
-  if (!existing) throw Object.assign(new Error("no such room"), { status: 404 });
+  if (!existing) throw new PublicError("no such room", 404);
   if (body.memberIds !== undefined && phoneSecretSubmissions.hasGroup(existing.id)) {
-    throw Object.assign(new Error("this channel is securely saving a credential — try again when it finishes"), { status: 409 });
+    throw new PublicError("this channel is securely saving a credential — try again when it finishes", 409);
   }
   if (
     channelTaskBlocked(existing) &&
     (body.memberIds !== undefined || body.defaultResponder !== undefined || body.bulletin !== undefined)
   ) {
-    throw Object.assign(new Error("this channel is working or waiting on you — finish that turn first"), { status: 409 });
+    throw new PublicError("this channel is working or waiting on you — finish that turn first", 409);
   }
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) {
-    if (typeof body.name !== "string") throw Object.assign(new Error("room name must be a string"), { status: 400 });
+    if (typeof body.name !== "string") throw new PublicError("room name must be a string", 400);
     const name = body.name.trim();
-    if (!name) throw Object.assign(new Error("room name must not be empty"), { status: 400 });
-    if (name.length > 100) throw Object.assign(new Error("room name must be at most 100 characters"), { status: 400 });
-    if (!fitsOnOneLine(name)) throw Object.assign(Object.assign(new Error("room name must fit on one line"), userErrorFields(userError("serverError.room.nameOneLine"))), { status: 400 });
+    if (!name) throw new PublicError("room name must not be empty", 400);
+    if (name.length > 100) throw new PublicError("room name must be at most 100 characters", 400);
+    if (!fitsOnOneLine(name)) throw Object.assign(new PublicError("room name must fit on one line", 400), userErrorFields(userError("serverError.room.nameOneLine")));
     patch.name = name;
   }
   if (body.bulletin !== undefined) {
-    if (typeof body.bulletin !== "string") throw Object.assign(new Error("bulletin must be a string"), { status: 400 });
+    if (typeof body.bulletin !== "string") throw new PublicError("bulletin must be a string", 400);
     if (body.bulletin.length > 12_000) {
-      throw Object.assign(new Error("bulletin must be at most 12000 characters"), { status: 400 });
+      throw new PublicError("bulletin must be at most 12000 characters", 400);
     }
     patch.bulletin = body.bulletin;
   }
   if (body.description !== undefined) {
-    if (typeof body.description !== "string") throw Object.assign(new Error("description must be a string"), { status: 400 });
+    if (typeof body.description !== "string") throw new PublicError("description must be a string", 400);
     const trimmed = body.description.trim();
     if (!trimmed) patch.description = undefined;
-    else if (/[\n\r]/.test(trimmed)) throw Object.assign(new Error("description must be a single line"), { status: 400 });
-    else if (trimmed.length > 120) throw Object.assign(new Error("description must be at most 120 characters"), { status: 400 });
+    else if (/[\n\r]/.test(trimmed)) throw new PublicError("description must be a single line", 400);
+    else if (trimmed.length > 120) throw new PublicError("description must be at most 120 characters", 400);
     else patch.description = trimmed;
   }
   if (body.unread !== undefined) {
-    if (typeof body.unread !== "boolean") throw Object.assign(new Error("unread must be true or false"), { status: 400 });
+    if (typeof body.unread !== "boolean") throw new PublicError("unread must be true or false", 400);
     patch.unread = body.unread;
   }
   if (body.memberIds !== undefined) {
-    if (existing.dm) throw Object.assign(new Error("direct-message channels cannot change members"), { status: 400 });
+    if (existing.dm) throw new PublicError("direct-message channels cannot change members", 400);
     const roster = checkedMemberIds(body.memberIds);
-    if (!roster.ok) throw Object.assign(new Error(roster.error.replace("channel", "room")), { status: 400 });
+    if (!roster.ok) throw new PublicError(roster.error.replace("channel", "room"), 400);
     const audienceConflict = roomAudienceConflict(roster.memberIds, existing.memberIds);
-    if (audienceConflict) throw Object.assign(new Error(audienceConflict), { status: 400 });
+    if (audienceConflict) throw new PublicError(audienceConflict, 400);
     const removedGoalLead = routines!.listRoutines().some(
       (routine) =>
         routine.enabled &&
@@ -3631,58 +3631,58 @@ function updateChannel(groupId: string, value: unknown): GroupRecord {
         !roster.memberIds.includes(run.botId),
     );
     if (removedGoalLead) {
-      throw Object.assign(new Error("pause or reassign this room's team-goal routine before removing its lead"), { status: 409 });
+      throw new PublicError("pause or reassign this room's team-goal routine before removing its lead", 409);
     }
     patch.memberIds = roster.memberIds;
   }
   if (body.defaultResponder !== undefined) {
     const memberIds = (patch.memberIds as string[] | undefined) ?? existing.memberIds;
     const responder = checkedGroupResponder(body.defaultResponder, memberIds);
-    if (!responder) throw Object.assign(new Error("invalid default responder"), { status: 400 });
+    if (!responder) throw new PublicError("invalid default responder", 400);
     patch.defaultResponder = responder;
   } Object.assign(patch, turnsPerMemberPatch(body, existing), roomPicturePatch(body, existing));
   if (Object.prototype.hasOwnProperty.call(body, "turnTimeoutMinutes")) {
     if (!existing.dm) {
-      throw Object.assign(new Error("set the turn limit on that conversation"), { status: 400 });
+      throw new PublicError("set the turn limit on that conversation", 400);
     }
     const parsed = parseConversationTurnTimeout(body.turnTimeoutMinutes);
-    if (!parsed.ok) throw Object.assign(new Error(parsed.error), { status: 400 });
+    if (!parsed.ok) throw new PublicError(parsed.error, 400);
     patch.turnTimeoutMinutes = parsed.minutes;
   }
   if (body.cwd !== undefined) {
-    if (existing.dm) throw Object.assign(new Error("direct-message channels cannot have a working folder"), { status: 400 });
+    if (existing.dm) throw new PublicError("direct-message channels cannot have a working folder", 400);
     if (existing.pinnedCwd !== undefined) {
-      throw Object.assign(new Error("the room's working folder is fixed after its first turn"), { status: 409 });
+      throw new PublicError("the room's working folder is fixed after its first turn", 409);
     }
     const checked = validateBotCwd(body.cwd);
-    if (!checked.ok) throw Object.assign(new Error(checked.error), { status: 400 });
+    if (!checked.ok) throw new PublicError(checked.error, 400);
     patch.cwd = checked.cwd ?? undefined;
   }
   if (body.pinnedMessageId !== undefined) {
     if (body.pinnedMessageId === null || body.pinnedMessageId === "") patch.pinnedMessageId = undefined;
     else if (typeof body.pinnedMessageId === "string" && /^[\w-]+$/.test(body.pinnedMessageId)) {
       patch.pinnedMessageId = body.pinnedMessageId;
-    } else throw Object.assign(new Error("pinnedMessageId must be a message id"), { status: 400 });
+    } else throw new PublicError("pinnedMessageId must be a message id", 400);
   }
   if (body.section !== undefined) {
     if (body.section === null) patch.section = undefined;
-    else if (typeof body.section !== "string") throw Object.assign(new Error("section must be a string"), { status: 400 });
+    else if (typeof body.section !== "string") throw new PublicError("section must be a string", 400);
     else {
       const trimmed = body.section.trim();
       if (!trimmed) patch.section = undefined;
-      else if (trimmed.length > 60) throw Object.assign(new Error("section must be at most 60 characters"), { status: 400 });
+      else if (trimmed.length > 60) throw new PublicError("section must be at most 60 characters", 400);
       else patch.section = trimmed;
     }
   }
   // Admin-only, and the only way a room's floor widens; a Chief's PATCH never has it.
   const resetAudience = body.resetAudience !== undefined;
   if (resetAudience) {
-    if (body.resetAudience !== true) throw Object.assign(new Error("resetAudience must be true"), { status: 400 });
+    if (body.resetAudience !== true) throw new PublicError("resetAudience must be true", 400);
     patch.audienceFloor = undefined;
   }
   const group = store.patchGroup(groupId, patch);
   if (resetAudience) audienceChanged();
-  if (!group) throw Object.assign(new Error("no such room"), { status: 404 });
+  if (!group) throw new PublicError("no such room", 404);
   return group;
 }
 
@@ -4541,7 +4541,7 @@ function guardedRequestSnapshot(botId: string, threadId: string, sendId: string)
     messages: messages.map(slimMessage),
   };
   if (Buffer.byteLength(JSON.stringify(snapshot), "utf8") > 1024 * 1024) {
-    throw Object.assign(new Error("Open this request in the workspace; its transcript exceeds the response limit"), { status: 413 });
+    throw new PublicError("Open this request in the workspace; its transcript exceeds the response limit", 413);
   }
   return snapshot;
 }
@@ -4601,7 +4601,7 @@ const desktopViewer = createDesktopViewer({
       if (store.bot(botId)?.cloudBackend !== "vps") return;
       return { key: id, resolve: async () => {
         const connection = vps.vpsDesktopConnection(botId);
-        if (!connection) throw Object.assign(new Error("VPS viewer is not open"), { status: 409 });
+        if (!connection) throw new PublicError("VPS viewer is not open", 409);
         return connection;
       } };
     }
@@ -5658,7 +5658,7 @@ async function computerCallGate(internalCapability: InternalCapability, signal?:
 }
 
 function assertComputerChangeIdle(before: BotRecord, after: BotRecord): void {
-  if (sharedVm.keyMovesWhileHeld(before, after)) throw Object.assign(new Error("Hand back control of this bot's computer before changing where it works"), { status: 409 });
+  if (sharedVm.keyMovesWhileHeld(before, after)) throw new PublicError("Hand back control of this bot's computer before changing where it works", 409);
 }
 
 function cloudEngine(instance: ReturnType<typeof registry.get>, model?: string): CloudEngine & { name: string } {
@@ -5781,7 +5781,7 @@ function computerPreviewBot(botId: string, url: URL): BotRecord | null {
   const threadId = url.searchParams.get("threadId");
   if (!threadId) return store.bot(botId);
   const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
+  if (!bot) throw new PublicError("no such task", 404);
   return directTurnBots.get(threadId) ?? bot;
 }
 
@@ -5926,10 +5926,10 @@ function providerTransitionForTurn(
 /** One synchronous lane: whichever lifecycle operation starts first excludes the other. */
 function claimBotComputerLifecycle(botId: string, allowPreview = false): () => void {
   if (computerLifecycleBusyBots.has(botId)) {
-    throw Object.assign(new Error("this bot's cloud computer is being changed — wait for it to finish"), { status: 409 });
+    throw new PublicError("this bot's cloud computer is being changed — wait for it to finish", 409);
   }
   if (!allowPreview && computerPreviews.has(botId)) {
-    throw Object.assign(new Error("a screen preview is still refreshing — wait before changing this computer"), { status: 409 });
+    throw new PublicError("a screen preview is still refreshing — wait before changing this computer", 409);
   }
   computerLifecycleBusyBots.add(botId);
   return () => computerLifecycleBusyBots.delete(botId);
@@ -5940,7 +5940,7 @@ function claimManagedVpsMutation(containerName: string): () => void {
   if (!owner) return () => {};
   const ownerState = managedComputerOwners().find((candidate) => candidate.botId === owner.id);
   if (ownerState?.inUse) {
-    throw Object.assign(new Error("this VPS computer is in use — stop its bot's work first"), { status: 409 });
+    throw new PublicError("this VPS computer is in use — stop its bot's work first", 409);
   }
   return claimBotComputerLifecycle(owner.id);
 }
@@ -6937,6 +6937,7 @@ async function startOrQueueDirectMessage(botId: string, threadId: string, text: 
 }
 
 class DirectSendRefused extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly body: Record<string, unknown>;
   constructor(status: number, body: Record<string, unknown>) {
@@ -6971,11 +6972,11 @@ async function acceptDirectSend(
     async (): Promise<DirectSendReceipt> => {
       if (sendId) {
         if (cancelledChatFollowup("bot", botId, threadId, sendId)) {
-          throw Object.assign(new Error("this queued sendId was cancelled; send a new message to try again"), { status: 409 });
+          throw new PublicError("this queued sendId was cancelled; send a new message to try again", 409);
         }
         const accepted = acceptedSendMatch(store.messagesFor(threadId), sendId, text, replyTo?.id);
         if (accepted.kind === "conflict") {
-          throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
+          throw new PublicError("sendId already belongs to another message", 409);
         }
         if (accepted.kind === "match") {
           const canonical = {
@@ -6990,7 +6991,7 @@ async function acceptDirectSend(
         const queued = queuedSteeredMessage(botId, threadId, sendId);
         if (queued) {
           if (queued.text !== text || queued.replyToId !== replyTo?.id) {
-            throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
+            throw new PublicError("sendId already belongs to another message", 409);
           }
           return { ok: true as const, queued: true as const, queueId: queued.id, threadId, reason: queued.reason, why: waitWords.queued(threadId, queued.reason) };
         }
@@ -7006,9 +7007,9 @@ async function acceptDirectSend(
         registry.forgetSnapshots(); await refreshUnsetModelSelections();
       }
       const currentAtStart = store.projectBotForTask(botId, threadId);
-      if (!currentAtStart) throw Object.assign(new Error("no such bot"), { status: 404 });
+      if (!currentAtStart) throw new PublicError("no such bot", 404);
       if (!store.taskByThread(currentAtStart.id, threadId)) {
-        throw Object.assign(new Error("the target task no longer exists"), { status: 409 });
+        throw new PublicError("the target task no longer exists", 409);
       }
 
       if (guardedStart) return guardedStart(currentAtStart);
@@ -7040,17 +7041,14 @@ async function acceptDirectSend(
         }
         // steer() awaits the adapter: re-check ownership before appending, or a late acknowledgement writes into a task the bot no longer owns.
         const current = store.projectBotForTask(botId, threadId);
-        if (!current) throw Object.assign(new Error("no such bot"), { status: 404 });
+        if (!current) throw new PublicError("no such bot", 404);
         if (!store.taskByThread(botId, threadId)) {
-          throw Object.assign(new Error("the target task no longer exists"), { status: 409 });
+          throw new PublicError("the target task no longer exists", 409);
         }
         const delivered = steered !== "refused";
         if (delivered) {
           if (steered === "steered" && !current.busy) {
-            throw Object.assign(
-              new Error("the running turn ended before the steered message could be recorded"),
-              { status: 409 },
-            );
+            throw new PublicError("the running turn ended before the steered message could be recorded", 409);
           }
           // "indeterminate" is recorded too: the words may already be in a turn, and a resend could run them twice.
           if (personPresent) clearUnattended(threadId);
@@ -7303,8 +7301,8 @@ async function beginTurn(
 ) {
   workspaceMaintenance.assertAvailable(); moveFreeze.assertTurns();
   const profile = store.bot(botId); assertBotHere(profile);
-  if (!profile) throw Object.assign(new Error("no such bot"), { status: 404 });
-  const threadId = opts?.threadId ?? profile.threadId, paused = botHolds.text(botId, threadLanguage(threadId)) ?? starterCaps.pausedText(botId, threadLanguage(threadId)); if (paused) throw Object.assign(new Error(paused), { status: 409, code: botHolds.held(botId) ? BOT_HELD_CODE : BOT_PAUSED_CODE });
+  if (!profile) throw new PublicError("no such bot", 404);
+  const threadId = opts?.threadId ?? profile.threadId, paused = botHolds.text(botId, threadLanguage(threadId)) ?? starterCaps.pausedText(botId, threadLanguage(threadId)); if (paused) throw Object.assign(new PublicError(paused, 409), { code: botHolds.held(botId) ? BOT_HELD_CODE : BOT_PAUSED_CODE });
   const continuingRoutine = opts?.cardContinuation ? activeRoutineRunForThread(threadId) : null;
   if (continuingRoutine) {
     const onDispatchError = opts?.onDispatchError;
@@ -7324,44 +7322,44 @@ async function beginTurn(
   assertWithinBudget(cfg, DATA_DIR); if (!opts?.continuesRun) usageCapGate.assertTurn(botId, personWaiting({ ...opts, peerAsk: opts?.peerAsk ?? opts?.userMessage?.peerAsk }, threadStanding(botId, threadId)) || activeRoutineRunForThread(threadId)?.byPerson === true, threadLanguage(threadId));
   if (computerLifecycleBusyBots.has(botId)) {
     const changing = "this bot's cloud computer is being changed — wait for it to finish";
-    if (!answer.incident) throw Object.assign(new Error(changing), { status: 409, code: "settling" });
+    if (!answer.incident) throw Object.assign(new PublicError(changing, 409), { code: "settling" });
     computerSkipped ??= changing;
   }
-  if (threadBusy(botId, threadId)) throw Object.assign(new Error("this thread is already working — interrupt it first"), { status: 409, code: "thread_busy" });
+  if (threadBusy(botId, threadId)) throw Object.assign(new PublicError("this thread is already working — interrupt it first", 409), { code: "thread_busy" });
   if (roomTurnHolds(activeGroupTurnForBot(botId), threadId, opts?.allowRoomTurnElsewhere === true)) {
-    throw Object.assign(new Error("the bot is already working in a channel — wait for it to finish"), { status: 409, code: "thread_busy" });
+    throw Object.assign(new PublicError("the bot is already working in a channel — wait for it to finish", 409), { code: "thread_busy" });
   }
   if (botAtThreadCapacity(botId, threadId, Boolean(opts?.coordination || opts?.peerAsk || opts?.commsDepth || opts?.cardContinuation || opts?.computerSelectionContinuation))) {
-    throw Object.assign(new Error(botThreadLimitText(cfg, botThreadsHost(cloudPlanTier.starter()))), { status: 409, code: "thread_limit" });
+    throw Object.assign(new PublicError(botThreadLimitText(cfg, botThreadsHost(cloudPlanTier.starter())), 409), { code: "thread_limit" });
   }
   if (!limitFailovers.restore(botId, threadId) && !limitFailovers.holds(threadId) && !(opts?.continuesRun || opts?.compactOnly || opts?.cardContinuation || opts?.peerLimitResent || opts?.automaticRecoveryAttempted)) aiPool.place(botId, threadId);
   const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
-  if (bot.approvalGrant) throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });
+  if (!bot) throw new PublicError("no such task", 404);
+  if (bot.approvalGrant) throw Object.assign(new PublicError("this bot's approval level is still being confirmed — try again", 409), { code: "settling" });
   const transitionError = providerTransitionForTurn(bot, opts?.runOn, threadId);
-  if (transitionError && !answer.incident) throw Object.assign(new Error(transitionError), { status: 409 });
+  if (transitionError && !answer.incident) throw new PublicError(transitionError, 409);
   if (transitionError) computerSkipped = transitionError;
-  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) throw Object.assign(new Error("this provider account is being updated — try again shortly"), { status: 409, code: "settling" });
+  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) throw Object.assign(new PublicError("this provider account is being updated — try again shortly", 409), { code: "settling" });
   // Revoke what a previous turn left behind before minting this turn's integrations.
   revokeEarlierTurnCapabilities(threadId);
   if (opts?.automationSource === "webhook" || opts?.unattended) markUnattended(bot.id, threadId);
   else if (opts?.automationSource === undefined && !opts?.commsDepth && !opts?.cardContinuation) clearUnattended(threadId);
   const task = store.taskByThread(bot.id, threadId);
-  if (!task) throw Object.assign(new Error("no such task"), { status: 404 });
-  if (hostedModels && !hostedModels.allows(bot.modelSelection)) throw Object.assign(new Error(hostedModels.error()), { status: 409 });
+  if (!task) throw new PublicError("no such task", 404);
+  if (hostedModels && !hostedModels.allows(bot.modelSelection)) throw new PublicError(hostedModels.error(), 409);
   const plan = turnSurfacePlan(bot, opts?.runOn, threadId);
   const instance = registry.get(bot.modelSelection.instanceId);
   if (!instance) {
     if (removedComputerInstanceIds(cfg.instances).has(bot.modelSelection.instanceId)) void retryComputerEngineMove();
-    throw noAiNotice.refusal(threadId, opts?.sender, bot.modelSelection.instanceId) ?? Object.assign(new Error(`provider instance "${bot.modelSelection.instanceId}" is unavailable — pick another model in settings`), { status: 409 });
+    throw noAiNotice.refusal(threadId, opts?.sender, bot.modelSelection.instanceId) ?? new PublicError(`provider instance "${bot.modelSelection.instanceId}" is unavailable — pick another model in settings`, 409);
   }
   const policyRefusal = policyModelRefusal(instance);
-  if (policyRefusal) throw Object.assign(new Error(policyRefusal), { status: 409, code: "managed_policy" });
+  if (policyRefusal) throw Object.assign(new PublicError(policyRefusal, 409), { code: "managed_policy" });
   const toolScope = toolScopeForTurn(bot.id);
   guestDrivenTurns.delete(threadId);
   const guestConfined = cloudGuestDriven(threadId) || cloudGuestDrivenHandoff(opts?.coordination?.id) || botApiThread(threadId);
   if (guestConfined && instance.adapter.capabilities.guestTurns !== "confined") {
-    throw Object.assign(new Error(botApiThread(threadId) ? serverLine(threadLanguage(threadId), "server.botApi.engineRefusal") : guestEngineRefusal(threadId)), { status: 409, code: "guest_engine" });
+    throw Object.assign(new PublicError(botApiThread(threadId) ? serverLine(threadLanguage(threadId), "server.botApi.engineRefusal") : guestEngineRefusal(threadId), 409), { code: "guest_engine" });
   }
   const resolvedImages = extractTurnImages(text);
   const usesNativeImageInput = instance.adapter.capabilities.nativeImageInput === true;
@@ -7398,16 +7396,13 @@ async function beginTurn(
   const { model, effort, variant } = route;
   assertModelVariantSupported({ variant, effort }, instance.adapter.capabilities);
   if (effort && !instance.adapter.capabilities.effortLevels?.includes(effort)) {
-    throw Object.assign(
-      new Error(`effort "${effort}" is not offered by this bot's engine — choose another level in settings`),
-      { status: 409 },
-    );
+    throw new PublicError(`effort "${effort}" is not offered by this bot's engine — choose another level in settings`, 409);
   }
 
   let userMessage = opts?.userMessage;
   if (opts?.editedMessageId) {
     const edited = store.branchMessage(threadId, opts.editedMessageId, text, opts.sendId, opts.sender, opts.dataContext);
-    if (!edited) throw Object.assign(new Error("only a user text message can be edited"), { status: 400 });
+    if (!edited) throw new PublicError("only a user text message can be edited", 400);
     store.patchTask(bot.id, threadId, { rewound: true });
     userMessage = edited;
   }
@@ -7689,7 +7684,7 @@ async function beginTurn(
       const wantedKind = wants === "local" ? "thisComputer" : wants === "vm" ? "localVm"
         : wants === "cloud" && cloudBackend === "vps" ? "vps" : undefined;
       const placeRefusal = wantedKind && computerPlaceRefusal(wantedKind);
-      if (placeRefusal) skipComputer(Object.assign(new Error(placeRefusal.message), { status: 409, code: placeRefusal.code }));
+      if (placeRefusal) skipComputer(Object.assign(new PublicError(placeRefusal.message, 409), { code: placeRefusal.code }));
       const namedPlace = wants === undefined || wants === "off" ? undefined : wants;
       const placeSource: PlaceSource | undefined = !namedPlace ? undefined
         : plan.pinned ? pinSource(plan.pinned, dispatchTask, bot.computer)
@@ -9127,7 +9122,7 @@ async function undoAppliedChange(res: ServerResponse, threadId: string, requestI
 const webhooks = new WebhookManager({
   emit: broadcast,
   botState: unattendedDispatchState,
-  enqueue: (input) => { const capped = usageCapGate.refusal(input.botId, input.byPerson === true, threadLanguage(store.bot(input.botId)?.threadId ?? "")); if (capped) throw Object.assign(new Error(capped), { status: 429, code: USAGE_CAP_CODE }); return routines!.enqueueWebhook(input); },
+  enqueue: (input) => { const capped = usageCapGate.refusal(input.botId, input.byPerson === true, threadLanguage(store.bot(input.botId)?.threadId ?? "")); if (capped) throw Object.assign(new PublicError(capped, 429), { code: USAGE_CAP_CODE }); return routines!.enqueueWebhook(input); },
   findRun: (webhookId, deliveryId) => routines!.webhookRunReceipt(webhookId, deliveryId),
   cancelQueued: (webhookId, message) => routines!.cancelQueuedWebhook(webhookId, message),
   pendingRuns: (webhookId) => routines!.activeWebhookRunCount(webhookId),
@@ -9600,7 +9595,7 @@ async function runClaimedGroupMemberTurn(
   const roomKind = roomPlan.computer === "local" ? "thisComputer" : readyBot.computer === "vm" ? "localVm"
     : roomPlan.computer === "cloud" && roomVps ? "vps" : undefined;
   const roomPlaceRefusal = roomKind && !roomWithoutCloud && computerPlaceRefusal(roomKind);
-  if (roomPlaceRefusal) throw Object.assign(new Error(roomPlaceRefusal.message), { code: roomPlaceRefusal.code });
+  if (roomPlaceRefusal) throw Object.assign(unstatused(new PublicError(roomPlaceRefusal.message)), { code: roomPlaceRefusal.code });
   if (!roomWithoutCloud && roomPlan.computer === "cloud") {
     const unsupported = cloudPlaceRefusal(cloudEngine(instance, readyBot.modelSelection.model), "room", readyBot.name)
       ?? computerToolsRefusal(readyBot.toolScope, "room", readyBot.name);
@@ -10370,16 +10365,16 @@ function startGroupTurn(
   options: StartGroupTurnOptions = {},
 ) {
   const group = store.group(groupId);
-  if (!group) throw Object.assign(new Error("no such group"), { status: 404 });
+  if (!group) throw new PublicError("no such group", 404);
   if (roomSetupPending(group)) {
-    throw Object.assign(new Error("finish room setup before sending the first message"), { status: 409 });
+    throw new PublicError("finish room setup before sending the first message", 409);
   }
   const threadId = options.threadId ?? group.threadId;
   const ownsThread = group.dm
     ? group.threadId === threadId
     : Boolean(store.groupTaskByThread(group.id, threadId));
   if (!ownsThread) {
-    throw Object.assign(new Error("no such room task"), { status: 404 });
+    throw new PublicError("no such room task", 404);
   }
   const members = group.memberIds
     .map((id) => store.bot(id))
@@ -10390,7 +10385,7 @@ function startGroupTurn(
     ? availableMembers.find((member) => member.id === options.goalCoordinatorBotId)
     : undefined;
   if (options.goalCoordinatorBotId && (channelMode !== "goal" || !requestedGoalCoordinator)) {
-    throw Object.assign(new Error("the selected goal coordinator is not an active room member"), { status: 409 });
+    throw new PublicError("the selected goal coordinator is not an active room member", 409);
   }
   // Read the room before this message is appended just below.
   const replyBot = !group.dm && channelMode === "chat" && group.defaultResponder.kind === "auto" && replyTo?.role === "bot" ? routableMembers.find((member) => member.id === replyTo.from?.botId) : undefined;
@@ -10670,7 +10665,7 @@ function ensureCalendarCallRoom(call: CalendarCall): GroupRecord {
     ? linked
     : undefined;
   const conflict = group ? null : roomAudienceConflict(call.botIds);
-  if (conflict) throw Object.assign(new Error(conflict), { status: 400 });
+  if (conflict) throw new PublicError(conflict, 400);
   group ??= store.createGroup(call.name, call.botIds, false, undefined, {
     bulletin: "",
     defaultResponder: { kind: "everyone" },
@@ -10749,10 +10744,10 @@ async function attachmentVmForTurn(capability: InternalCapability): Promise<Loca
   if (!localVmThreadTargets.has(capability.threadId) &&
       !(slot?.localVm && slot.owner.generation === capability.generation)) return undefined;
   const gate = await computerCallGate(capability);
-  if (gate.held) throw Object.assign(new Error(controlRefusal(gate)), { status: 409 });
+  if (gate.held) throw new PublicError(controlRefusal(gate), 409);
   const vm = localVmThreadTargets.get(capability.threadId);
   if (!vm || !internalCapabilityIsActive({ ...capability, localVmTarget: vm })) {
-    throw Object.assign(new Error("This turn no longer owns the Local VM."), { status: 409 });
+    throw new PublicError("This turn no longer owns the Local VM.", 409);
   }
   return vm;
 }
@@ -11783,7 +11778,7 @@ const botOrderRoutes = createBotOrderRoutes({ store, visibleFor: (auth) => visib
 const githubStore = createGithubStore(DATA_DIR); const githubBroker = createGithubBrokerClient();
 const githubHost = createGithubHost({ store: githubStore, broker: githubBroker, dataDir: DATA_DIR, cfg: () => cfg, bot: (id) => store.bot(id), markOutside: (threadId) => outsideLineage.mark(threadId), appAllowed: () => managedPolicy.appAllowed("github_app"),
   ask: ({ botId, threadId, tool, arguments: args, active }) => { const bot = store.bot(botId); return bot ? outboundHold.hold({ bot, threadId, tool, calls: [{ slug: tool, arguments: args }], opaque: false, fullAccess: false, always: true, active }) : Promise.resolve({ ok: false, text: "This bot no longer exists." }); } });
-const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => isGithubConnectionOwner(auth, githubStore.read()), turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
+const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => isGithubConnectionOwner(auth, githubStore.read()), githubGrantedTo: (botId) => Object.hasOwn(githubStore.read().bots, botId), turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
   store, cfg, registry, sessions, browserRuntime, browserLive, memoryUpkeep, cacheKeepWarm, hostedModels, supportsApprovalMode,
   routines: () => routines, callSpeedChanged: (botId, speed) => liveCalls.speedChanged(botId, speed), activeVpsThreads,
   hostedWorkspace: HOSTED_WORKSPACE, cloudHome: CLOUD_HOME !== null, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
@@ -11791,7 +11786,7 @@ const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => is
   checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
   revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser, levelOf, team: Boolean(CLOUD_TEAM), mainThreadTasks, chiefChanged: (changed) => chiefRooms.moved(changed), ...(personRooms.personMarkThread ? { personMarkThread: personRooms.personMarkThread, shownThread: (auth: RequestAuth, bot: BotRecord) => memberBot(wireBot(bot), visibleTo(viewerFor(auth))).threadId } : {}),
 }); ROUTES.push(botPatchRoutes);
-ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null, botVisible: (auth, id) => visibleTo(viewerFor(auth)).bot(id) }));
+ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null, botVisible: (auth, id) => visibleTo(viewerFor(auth)).bot(id), desktopManaged: DESKTOP_MANAGED, anyBotBusy: () => store.bots.some((bot) => bot.busy) }));
 ROUTES.push(createBotLifecycleRoutes({
   store, routines: () => routines, interruptAllDirectThreads, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
   activeGroupTurnForBot, cancelGroupTurnOperations, runningTurnInstance, closeOpenApprovals, deleteBotWithLifecycle, deleteRefusal: (auth, botId) => memberDeleteRefusal(auth, store.bot(botId), Boolean(CLOUD_TEAM)),
@@ -12174,7 +12169,7 @@ ROUTES.push(createLiveRoutes({
   settings: () => liveSettingsFor(cfg, { codexAvailable: codexInstalled() }),
   fishRelay: liveWiring.fishRelay,
   saveSettings: async (patch) => {
-    if (providerConfigBusy) throw Object.assign(new Error("Settings are already being updated. Try again in a moment."), { status: 409 });
+    if (providerConfigBusy) throw new PublicError("Settings are already being updated. Try again in a moment.", 409);
     saveLiveSettings(cfg, patch);
     Object.assign(cfg, loadConfig());
     broadcast({ kind: "config", ...configStatus() });
@@ -12576,15 +12571,15 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const body = await readBody(req);
         // Authorization at header time is not a lease: if the owning turn settled meanwhile, die before any side effect.
         if (!internalCapabilityIsActive(internalCapability)) {
-          throw Object.assign(new Error(TURN_ENDED_REFUSAL), { status: 401 });
+          throw new PublicError(TURN_ENDED_REFUSAL, 401);
         }
         const refused = internalBodyRefusal(body, internalSender.id, internalCapability.threadId);
-        if (refused) throw Object.assign(new Error(refused.error), { status: refused.status });
+        if (refused) throw new PublicError(refused.error, refused.status);
         return body;
       };
       const requireActiveInternalCapability = () => {
         if (!internalCapabilityIsActive(internalCapability)) {
-          throw Object.assign(new Error(TURN_ENDED_REFUSAL), { status: 401 });
+          throw new PublicError(TURN_ENDED_REFUSAL, 401);
         }
       };
       const botFolders = async () => ({ roots: messageFileRootsForThread(internalSender.id, internalCapability.threadId).filter((root) => root !== ATTACHMENTS_DIR), readOnlyRoots: botFolderAccess.forTurn(internalSender.id)?.grants.filter((grant) => !grant.write).map((grant) => grant.path), vmWorkspace: (await attachmentVmForTurn(internalCapability))?.workspaceDir ?? null }); if (await lentMcp.route({ method, path, req, res, json, turn: internalCapability, readBody: readInternalBody }) !== PASS || await internalToolRoutes({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, folders: botFolders }) !== PASS || await waitRoutes({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, ...waitTurnChecks(internalCapability, internalSender) }) !== PASS || await teamMessages.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody }) !== PASS || await devsReports.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody }) !== PASS || (computerAsks && await computerAsks.internal({ method, path, res, json, turn: internalCapability, readBody: readInternalBody }) !== PASS) || await meetingsHost.internal({ method, path, res, json, readBody: readInternalBody, bot: internalSender, threadId: internalCapability.threadId, active: () => internalCapabilityIsActive(internalCapability) }) !== PASS || await imageTools.internal({ method, path, res, json, readBody: readInternalBody, folders: botFolders, threadId: internalCapability.threadId, requireActive: requireActiveInternalCapability, personTurn: turnOrigin(internalCapability).kind === "user" || (Boolean(roomRun(internalCapability.generation)?.requestMessageId) && guestDrivenTurns.get(internalCapability.threadId) !== internalCapability.generation) }) !== PASS || await share.tool({ method, path, res, json, readBody: readInternalBody, bot: internalSender, threadId: internalCapability.threadId, roots: messageFileRootsForThread(internalSender.id, internalCapability.threadId).filter((root) => root !== ATTACHMENTS_DIR), actsForAdmin: teamConnections.actsForAdmin(internalCapability.threadId, internalCapability.generation), githubPerson: teamConnections.turnPerson(internalCapability.threadId, internalCapability.generation), actingName: CLOUD_TEAM ? teamHost.personName(actingPeople.requester(internalCapability.threadId, internalCapability.generation)) : undefined, personMessage: turnOrigin(internalCapability).kind === "user" ? store.messagesFor(internalCapability.threadId).find((line) => line.role === "user" && line.id === (directRequestOwners.get(internalCapability.threadId)?.messageId ?? roomRun(internalCapability.generation)?.requestMessageId))?.text ?? null : null, post: (text, template) => { const source = connectorThread(internalSender.id, internalCapability.threadId); return source ? store.appendMessage(internalCapability.threadId, { role: "bot", kind: "text", text, template, ...(source.group ? { from: { botId: internalSender.id, name: internalSender.name, color: internalSender.color } } : {}) }).id : null; } }) !== PASS) return; const callSignal = turnCallSignals.signal(internalCapability, res); if (await publishedPages.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, requireActive: requireActiveInternalCapability, signal: callSignal, folders: botFolders, post: (text, publishedPage, bundle) => { const source = connectorThread(internalSender.id, internalCapability.threadId); return !source ? null : (bundle && publishedPages.show({ threadId: internalCapability.threadId, card: publishedPage, bundle, bot: internalSender })) || store.appendMessage(internalCapability.threadId, { role: "bot", kind: "text", text, publishedPage, ...(source.group ? { from: { botId: internalSender.id, name: internalSender.name, color: internalSender.color } } : {}) }).id; } }) !== PASS) return;
@@ -12740,10 +12735,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           const current = store.bot(bot.id);
           if (!current || current.browser === false || current.computer === "off" || !builtInBrowserEnabled(cfg) ||
               currentBrowserSession(current.id, current.browserProfile, teamHost.browserAudience(internalCapability.threadId)) !== browser.session) {
-            throw Object.assign(new Error("Browser access changed while connecting."), { status: 409 });
+            throw new PublicError("Browser access changed while connecting.", 409);
           }
           if (body.method === "tools/call" && !claimTurnResource(internalCapability, `browser:${browser.session}`)) {
-            throw Object.assign(new Error("another thread is using this browser — pause browser work until that thread finishes"), { status: 409 });
+            throw new PublicError("another thread is using this browser — pause browser work until that thread finishes", 409);
           }
         }, stepContext(bot, internalCapability, () => liveTurnByThread.get(internalCapability.threadId) ?? null));
         requireActiveInternalCapability(); if (body.method === "tools/call") browserSeats.used(internalCapability, browser.session);
@@ -12948,7 +12943,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           try {
             applied = webhookRequests.submit({ botId: from.id, threadId: fromThreadId, operation: { ...request.operation, forBot }, from: sender, canCommit: () => internalCapabilityIsActive(internalCapability) });
           } catch (error) {
-            return json(res, error instanceof WebhookRequestError ? error.status : (error as { status?: number }).status ?? 400, { error: error instanceof Error ? error.message : String(error) });
+            return json(res, error instanceof WebhookRequestError ? error.status : (error as { status?: number }).status ?? 400, { error: publicErrorText(error, "POST internal trigger request (webhook)") });
           }
           appendDecision(DATA_DIR, { threadId: fromThreadId, requestId: applied.requestId, botId: from.id, botName: from.name,
             tool: applied.action === "create" ? "create_trigger" : "manage_trigger", summary: applied.summary, decision: "auto-approved", source: "routine" });
@@ -13022,7 +13017,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           const submitted = teamMemoryRequests.submit(from, body.fromThreadId, Boolean(owner.group), input, appliesDirectly(from.id, body.fromThreadId));
           return json(res, submitted.status, submitted.body);
         } catch (error) {
-          return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+          return json(res, 400, { error: publicErrorText(error, "POST internal team memory request") });
         }
       }
       if (method === "POST" && path === "/api/internal/profile-requests") {
@@ -13535,7 +13530,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         try {
           await retryThread({ chief: from, bot: target, threadId, note, unattended: isUnattended(from.id, fromThreadId) });
         } catch (error) {
-          return json(res, 409, { error: error instanceof Error ? error.message : String(error) });
+          return json(res, 409, { error: publicErrorText(error, "POST internal thread retry") });
         }
         store.appendMessage(fromThreadId, {
           role: "bot",
@@ -14580,7 +14575,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       try {
         return json(res, 200, { configured: true, services: { ...await composio.listConnectorTools(cfg), ...nativeTools } });
       } catch (e) {
-        return json(res, 502, { configured: true, services: {}, error: e instanceof Error ? e.message : String(e) });
+        return json(res, 502, { configured: true, services: {}, error: publicErrorText(e, "GET connector tools", "The connected apps could not be listed.") });
       }
     }
     if (method === "GET" && path === "/api/connectors") {
@@ -14808,7 +14803,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     const candidateCode = (e as { code?: unknown })?.code;
     const code = typeof candidateCode === "string" && ["guarded_busy", "guarded_branch", "guarded_permissions", "guarded_request_changed", "guarded_request_untracked", "outside_workspace", "file_too_large", "no_ai", BOT_PAUSED_CODE, BOT_HELD_CODE].includes(candidateCode)
       ? candidateCode : undefined;
-    return json(res, status, { error: publicErrorMessage(e), ...(code ? { code } : {}), ...userErrorFields(e) });
+    return json(res, status, { error: publicErrorText(e, `${method} request`), ...(code ? { code } : {}), ...userErrorFields(e) });
   } finally {
     releaseWorkspaceRequest?.();
   }

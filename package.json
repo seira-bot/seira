@@ -56,6 +56,7 @@
     "bench:browser-stream": "node --experimental-strip-types scripts/bench-browser-stream.ts",
     "bench:desktop": "node --experimental-strip-types scripts/bench-desktop.ts",
     "bench:startup": "node --experimental-strip-types scripts/bench-startup.ts",
+    "bench:server": "node --experimental-strip-types scripts/bench-server.ts",
     "test:watch": "vitest",
     "test:cua": "pnpm build:cua && node scripts/smoke-cua.mjs",
     "test:cua-container": "node scripts/smoke-cua-container.mjs",

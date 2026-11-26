@@ -7,6 +7,7 @@ import type { Message, Store } from "../store.ts";
 import { answerTaskSuggestion, findTaskSuggestion } from "../task-suggestions.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { userError } from "../user-errors.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface TaskSuggestionRouteDeps {
   store: Pick<Store, "bot" | "taskByThread" | "messagesFor" | "patchMessage">;
@@ -62,7 +63,7 @@ export function createTaskSuggestionRoutes(deps: TaskSuggestionRouteDeps): Route
     } catch (error) {
       const status = (error as { status?: unknown } | null)?.status;
       if (typeof status !== "number") throw error;
-      return json(res, status, { error: error instanceof Error ? error.message : String(error) });
+      return json(res, status, { error: publicErrorText(error, "POST task suggestion") });
     } finally {
       starting.delete(key);
     }

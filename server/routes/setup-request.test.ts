@@ -9,6 +9,7 @@ import { openSetupOffer, setupTurnText, takeSetupRequest } from "../setup-reques
 import { Store } from "../store.ts";
 import { createSetupRequestRoutes } from "./setup-request.ts";
 import { PASS } from "./table.ts";
+import { PublicError } from "../public-error.ts";
 
 const person: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
 const member = { kind: "session", scopes: ["client"], via: "bearer", session: { id: "s1" } } as unknown as RequestAuth;
@@ -22,7 +23,7 @@ function setup(refusal: string | null = null, options: { canSetUp?: boolean; sen
   const sent: string[] = [];
   // As the messages route does: the person's line is stored, then its turn reads it as setup or as typed.
   const send = async (_auth: RequestAuth, botId: string, threadId: string, text: string) => {
-    if (options.sendFails) throw Object.assign(new Error("Ava is busy."), { status: 409 });
+    if (options.sendFails) throw new PublicError("Ava is busy.", 409);
     sent.push(text);
     await options.hold;
     const line = store.appendMessage(threadId, { role: "user", kind: "text", text });

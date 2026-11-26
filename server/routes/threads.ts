@@ -27,6 +27,7 @@ import type { BotRecord, GroupRecord, Message, Store } from "../store.ts";
 import { answerAsleep, backgroundWhileAsleep } from "../cloud-power.ts";
 import { createJobRoutes } from "./jobs.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
+import { PublicError } from "../public-error.ts";
 
 const UPLOADED_NAME = /^[A-Za-z0-9-]+\.[A-Za-z0-9]{1,10}$/;
 
@@ -375,7 +376,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         const fail = (status: number, msg: string) => {
           if (settled) return;
           settled = true;
-          reject(Object.assign(new Error(msg), { status }));
+          reject(new PublicError(msg, status));
         };
         req.on("data", (chunk: Buffer) => {
           if (settled) return;

@@ -35,6 +35,7 @@ import { prepareVpsSsh } from "./vps-ssh.ts";
 import { loadEnvironmentId } from "./environment.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { dockerCliMissing, dockerCliMissingProblem } from "./vps-hints.ts";
+import { PublicError } from "./public-error.ts";
 
 export const VPS_IMAGE = IMAGE;
 export { VPS_CONTAINER_LABEL, VPS_CONTAINER_PREFIX, VPS_ENVIRONMENT_LABEL, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL, isVpsContainerOf, vpsContainerName };
@@ -774,9 +775,7 @@ function assertUsableContainer(status: VpsComputerStatus) {
     status.mounts !== "none" ||
     status.security !== "hardened"
   ) {
-    throw Object.assign(new Error(status.problem ?? "The existing VPS container is unsafe or incompatible"), {
-      status: 409,
-    });
+    throw new PublicError(status.problem ?? "The existing VPS container is unsafe or incompatible", 409);
   }
 }
 
@@ -875,7 +874,7 @@ async function withVpsLifecycleLock<T>(key: string, operation: () => Promise<T>,
         release();
         if (lifecycleLocks.get(key) === current) lifecycleLocks.delete(key);
       });
-      throw Object.assign(new Error("the VPS is being prepared — try again shortly"), { status: 409 });
+      throw new PublicError("the VPS is being prepared — try again shortly", 409);
     }
   }
   try {
@@ -901,10 +900,10 @@ export async function removeManagedVpsComputer(
   cfg = snapshotVpsConfig(cfg);
   const alias = vpsSshAlias(cfg);
   if (!alias) {
-    throw Object.assign(new Error("VPS is not configured — add an SSH config alias in Settings → AI → Other services"), { status: 409 });
+    throw new PublicError("VPS is not configured — add an SSH config alias in Settings → AI → Other services", 409);
   }
   if (!MANAGED_VPS_CONTAINER_NAME.test(containerName)) {
-    throw Object.assign(new Error("invalid managed VPS computer name"), { status: 400 });
+    throw new PublicError("invalid managed VPS computer name", 400);
   }
   const key = `${alias}:${containerName}`;
   return withVpsLifecycleLock(key, async () => {
@@ -914,17 +913,17 @@ export async function removeManagedVpsComputer(
       throw Object.assign(new Error(scan.problem ?? "VPS computer inventory is unavailable"), { status: 503 });
     }
     const instance = scan.instances.find((candidate) => candidate.name === containerName);
-    if (!instance) throw Object.assign(new Error("managed VPS computer not found"), { status: 404 });
+    if (!instance) throw new PublicError("managed VPS computer not found", 404);
     if (instance.inUse) {
-      throw Object.assign(new Error("this VPS computer is in use — stop its bot's work first"), { status: 409 });
+      throw new PublicError("this VPS computer is in use — stop its bot's work first", 409);
     }
     if (confirmName !== instance.name) {
-      throw Object.assign(new Error("confirmation no longer matches this VPS computer — refresh and try again"), { status: 400 });
+      throw new PublicError("confirmation no longer matches this VPS computer — refresh and try again", 400);
     }
 
     const containerId = scan.containerIds.get(instance.name);
     if (!containerId || !FULL_CONTAINER_ID.test(containerId)) {
-      throw Object.assign(new Error("the VPS computer identity could not be revalidated"), { status: 409 });
+      throw new PublicError("the VPS computer identity could not be revalidated", 409);
     }
     try {
       // The immutable ID, not the name: a same-name replacement must not receive this removal.
@@ -955,7 +954,7 @@ export async function vpsComputerAction(
 ): Promise<VpsComputerStatus> {
   cfg = snapshotVpsConfig(cfg);
   const alias = vpsSshAlias(cfg);
-  if (!alias) throw Object.assign(new Error("VPS is not configured — add an SSH config alias in Settings → AI → Other services"), { status: 409 });
+  if (!alias) throw new PublicError("VPS is not configured — add an SSH config alias in Settings → AI → Other services", 409);
   const key = `${alias}:${vpsContainerName(botId)}`;
   const pending = action === "provision" ? pendingProvisions.get(key) : undefined;
   if (pending) return pending;
@@ -963,7 +962,7 @@ export async function vpsComputerAction(
     invalidateVpsStatus(key);
     try {
       const before = await computeVpsComputerStatus(cfg, botId, runner);
-      if (!before.daemonUp) throw Object.assign(new Error(before.problem ?? "Docker over SSH is not reachable"), { status: 409 });
+      if (!before.daemonUp) throw new PublicError(before.problem ?? "Docker over SSH is not reachable", 409);
       if (action === "provision" && before.ready) return before;
       if (action !== "provision" || before.container !== "running") stopDesktopTunnel(botId);
       const run = (args: string[], timeoutMs = 2 * 60_000) => runner(vpsDockerArgs(alias, args), { timeoutMs });
@@ -976,30 +975,27 @@ export async function vpsComputerAction(
             await prepareVpsImage(alias, runner);
             imageRef = (await computeVpsComputerStatus(cfg, botId, runner)).image_id;
           }
-          if (!imageRef) throw Object.assign(new Error("The prepared VPS image could not be identified"), { status: 409 });
+          if (!imageRef) throw new PublicError("The prepared VPS image could not be identified", 409);
           await run(vpsContainerRunArgs(before.container_name, imageRef));
         } else {
           assertUsableContainer(before);
           if (before.container === "stopped") await run(["start", containerRef]);
         }
       } else if (action === "start") {
-        if (before.container === "missing") throw Object.assign(new Error("No VPS container exists for this bot"), { status: 409 });
-        if (before.container === "running") throw Object.assign(new Error("The VPS container is already running"), { status: 409 });
+        if (before.container === "missing") throw new PublicError("No VPS container exists for this bot", 409);
+        if (before.container === "running") throw new PublicError("The VPS container is already running", 409);
         assertUsableContainer(before);
         await run(["start", containerRef]);
       } else if (action === "remove") {
         // Skips the usability check (remove escapes a broken container); the ownership labels are the only gate.
         if (before.container === "missing") return before;
         if (!before.managed) {
-          throw Object.assign(
-            new Error("The VPS container name is occupied by a container Seira did not create — remove it on the VPS yourself"),
-            { status: 409 },
-          );
+          throw new PublicError("The VPS container name is occupied by a container Seira did not create — remove it on the VPS yourself", 409);
         }
         await run(["rm", "-f", containerRef]);
         return await computeVpsComputerStatus(cfg, botId, runner);
       } else {
-        if (before.container !== "running") throw Object.assign(new Error("The VPS container is not running"), { status: 409 });
+        if (before.container !== "running") throw new PublicError("The VPS container is not running", 409);
         assertUsableContainer(before);
         await run(["stop", containerRef]);
       }
@@ -1053,7 +1049,7 @@ export async function vpsComputerJoin(
 ): Promise<{ joinUrl: string; state: "running" }> {
   cfg = snapshotVpsConfig(cfg);
   const alias = vpsSshAlias(cfg);
-  if (!alias) throw Object.assign(new Error("VPS is not configured"), { status: 409 });
+  if (!alias) throw new PublicError("VPS is not configured", 409);
 
   let tunnel = desktopTunnels.get(botId);
   if (tunnel && (tunnel.child.exitCode !== null || tunnel.child.killed)) {
@@ -1086,14 +1082,11 @@ async function startDesktopTunnel(cfg: AppConfig, botId: string, alias: string, 
   const status = await computeVpsComputerStatus(cfg, botId, runner);
   assertOpen();
   if (!status.ready) {
-    throw Object.assign(new Error(status.problem ?? "The VPS computer is not ready"), { status: 409 });
+    throw new PublicError(status.problem ?? "The VPS computer is not ready", 409);
   }
   const connection = viewerConnections.get(`${alias}:${status.container_name}`);
   if (!connection) {
-    throw Object.assign(
-      new Error("This VPS computer predates secure live desktop access — replace its managed container once"),
-      { status: 409 },
-    );
+    throw new PublicError("This VPS computer predates secure live desktop access — replace its managed container once", 409);
   }
 
   const localPort = await unusedLoopbackPort();
@@ -1178,7 +1171,7 @@ export async function vpsComputerScreenshot(
 ): Promise<VpsScreenshot> {
   cfg = snapshotVpsConfig(cfg);
   const alias = vpsSshAlias(cfg);
-  if (!alias) throw Object.assign(new Error("VPS is not configured"), { status: 409 });
+  if (!alias) throw new PublicError("VPS is not configured", 409);
   const key = `${alias}:${vpsContainerName(botId)}`;
   const pending = pendingScreenshots.get(key);
   if (pending) return pending;
@@ -1186,7 +1179,7 @@ export async function vpsComputerScreenshot(
   const deadline = Date.now() + SCREENSHOT_BUDGET_MS;
   const workDeadline = deadline - SCREENSHOT_CLEANUP_BUDGET_MS;
   let budgetExpired = false;
-  const timeoutError = () => Object.assign(new Error("The VPS screen preview timed out. Retry the preview when the connection recovers."), { status: 504 });
+  const timeoutError = () => new PublicError("The VPS screen preview timed out. Retry the preview when the connection recovers.", 504);
   // Await the runner's termination grace: racing it would release the lock before cleanup.
   const boundedRunner: VpsCommandRunner = async (args, options = {}) => {
     const remaining = workDeadline - Date.now() - COMMAND_TIMEOUT_KILL_GRACE_MS;
@@ -1225,12 +1218,12 @@ export async function vpsComputerScreenshot(
     }
     if (!status.ready) {
       if (cacheable) statusCache.delete(key);
-      throw Object.assign(new Error(status.problem ?? "The VPS computer is not ready"), { status: 409 });
+      throw new PublicError(status.problem ?? "The VPS computer is not ready", 409);
     }
     const containerRef = status.container_id ?? status.container_name;
     // The ref goes straight into docker argv: revalidate it.
     if (!CONTAINER_ID.test(containerRef) && !CONTAINER_NAME.test(containerRef)) {
-      throw Object.assign(new Error("the VPS container reference is malformed"), { status: 409 });
+      throw new PublicError("the VPS container reference is malformed", 409);
     }
     let frame: VpsScreenshot;
     try {
@@ -1258,7 +1251,7 @@ export async function vpsComputerScreenshot(
         SCREENSHOT_PATH,
       ]), { timeoutMs: 30_000 })).stdout.trim();
       const checked = wholeScreenshot(Buffer.from(encoded, "base64"));
-      if (!checked.ok) throw Object.assign(new Error("Cua Driver returned an incomplete VPS screenshot"), { status: 502 });
+      if (!checked.ok) throw new PublicError("Cua Driver returned an incomplete VPS screenshot", 502);
       frame = { png: encoded, format: checked.mime === "image/jpeg" ? "jpeg" : "png" };
     } catch (error) {
       if (cacheable) statusCache.delete(key);

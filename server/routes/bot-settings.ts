@@ -22,6 +22,7 @@ import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import { sawThread } from "../thread-presence.ts";
 import { refusalBody, refusalText, userError } from "../user-errors.ts";
 import { readThreadNotifications, type NotificationListed } from "./notifications.ts";
+import { PublicError } from "../public-error.ts";
 
 export interface BotSettingsRouteDeps {
   store: Store;
@@ -87,7 +88,7 @@ export function createBotSettingsRoutes(deps: BotSettingsRouteDeps): RouteHandle
       }
       const saved = saveImage(generated.bytes, generated.mime);
       const avatarUrl = botAvatarUrlFromStoredPath(saved.path);
-      if (!avatarUrl) throw Object.assign(new Error("Could not store the generated avatar"), { status: 500 });
+      if (!avatarUrl) throw new PublicError("Could not store the generated avatar", 500);
       const avatarCrop = initialAvatar.avatarCrop && initialAvatar.avatarCrop !== "mascot"
         ? initialAvatar.avatarCrop
         : "circle";
