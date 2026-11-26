@@ -56,6 +56,9 @@ const formatsDevice = (word: string): boolean => {
   return path.startsWith("/dev/") && path.length > 5 && !path.includes(HOME) && !path.includes(DYNAMIC) && !SCRATCH_DEVICE.test(path);
 };
 
+/** PowerShell cmdlets that erase a volume or a whole disk. */
+const POWERSHELL_DISK_WIPES = new Set(["format-volume", "clear-disk"]);
+
 // A function that pipes itself into itself in the background, then runs; the name is bounded to keep the regex cheap.
 const BOMB_BODY = String.raw`\s*\{\s*\1\s*\|\s*\1\s*&\s*\}\s*;?\s*\1(?![\w:.-])`;
 const BOMB_NAME = String.raw`([A-Za-z_:.][\w:.-]{0,63})`;
@@ -630,6 +633,7 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   }
 
   if (mode === "powershell") {
+    if (POWERSHELL_DISK_WIPES.has(program)) return FORMAT_DISK;
     // Remove-Item's aliases off Windows, where `rm` and `rmdir` are the real programs the POSIX reading judges.
     if (!["remove-item", "ri", "rd", "del", "erase"].includes(program)) return null;
     const isSwitch = (arg: string) => /^-./.test(arg);
@@ -660,7 +664,7 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
     return null;
   }
   if (program === "format") return args.some((arg) => /^[A-Za-z]:\\?$/.test(arg)) ? FORMAT_DISK : null;
-  return null;
+  return POWERSHELL_DISK_WIPES.has(program) ? FORMAT_DISK : null;
 }
 
 function scan(source: string, pass: Pass, mode: Mode, depth: number): FloorVerdict | null {
