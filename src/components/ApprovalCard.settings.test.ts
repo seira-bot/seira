@@ -58,6 +58,22 @@ describe("a bot's settings card that waits for a tap", () => {
     expect(html).not.toContain(">Cancel<");
   });
 
+  it("shows a proposed text of 2,000 characters in full, and the text it replaces", () => {
+    const proposed = `proposed ${"z".repeat(1991)}`;
+    const earlier = `earlier ${"q".repeat(900)}`;
+    const long: Message = {
+      ...waiting, id: "long",
+      card: { ...waiting.card!, title: "Change Rules for every bot?", subtitle: `${earlier}\n→\n${proposed}\nEvery bot will read this from now on.`,
+        appSettingRequest: { ...request, settingId: "bots.everyBotRules", label: "Rules for every bot", before: earlier, after: proposed, consequence: "Every bot will read this from now on." } },
+    };
+    expect(proposed).toHaveLength(2000);
+    const card = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: long, threadId: "thread-1" }));
+    expect(card).toContain(proposed);
+    expect(card).toContain(earlier);
+    const [pending] = pendingApprovals([long]);
+    expect(renderToStaticMarkup(createElement(PendingApprovalPanel, { pending: pending!, count: 1, index: 0 }))).toContain(proposed);
+  });
+
   it("shows Undo once it is applied", () => {
     const html = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: applied, threadId: "thread-1" }));
     expect(html).toContain(">Undo<");

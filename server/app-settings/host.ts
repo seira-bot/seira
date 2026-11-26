@@ -268,15 +268,18 @@ export function createAppSettings(deps: AppSettingsDeps) {
     const was = entry.read();
     const shown: Shown = change === undefined ? { before: was, after: display(value) } : { after: change };
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
+    const reviewed = entry.review?.(value) ?? null;
+    const cardShown: Shown = reviewed ?? shown;
+    const cardLine = reviewed ? `${notSet(reviewed.before)}\n→\n${notSet(reviewed.after)}` : shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}`;
     const what = consequence ? serverLine(language, consequenceKey(consequence.code), consequence.params) : undefined;
     const requestId = randomUUID();
     const expiresAt = now() + CONFIRM_MS;
     const message = store.appendMessage(turn.threadId, {
       role: "bot", kind: "options", ...from(bot, turn.threadId),
       card: { title: serverLine(language, "server.appSettings.confirmTitle", { label: entry.label }),
-        subtitle: [shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}`, what].filter(Boolean).join("\n"),
+        subtitle: [cardLine, what].filter(Boolean).join("\n"),
         options: [serverLine(language, "server.appSettings.apply"), serverLine(language, "server.appSettings.notNow")], requestId, tool: TOOL, fixedOptions: true,
-        appSettingRequest: { ...requestOf(entry, shown), ...(what ? { consequence: what } : {}), expiresAt } },
+        appSettingRequest: { ...requestOf(entry, cardShown), ...(what ? { consequence: what } : {}), expiresAt } },
     });
     const timer = setTimeout(() => expire(requestId), CONFIRM_MS);
     timer.unref?.();

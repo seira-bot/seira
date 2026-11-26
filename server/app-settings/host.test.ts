@@ -794,6 +794,48 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.botPatches).toEqual([]);
   });
 
+  it("a rule of 4,000 characters waits on a card that holds the whole text, before and after", async () => {
+    const fx = fixture();
+    const earlier = `earlier ${"a".repeat(3000)}`;
+    const proposed = `proposed ${"b".repeat(3991)}`;
+    (fx.cfg as { everyBotRules?: string }).everyBotRules = earlier;
+    await fx.set("bots.everyBotRules", proposed);
+    const card = fx.waiting()[0]!.card;
+    expect(proposed).toHaveLength(4000);
+    expect(card.appSettingRequest).toMatchObject({ before: earlier, after: proposed });
+    expect(card.subtitle).toContain(`${earlier}\n→\n${proposed}`);
+    expect(fx.saved).toEqual([]);
+    await fx.resolve(String(card.requestId), "allow");
+    expect(fx.saved).toEqual([{ everyBotRules: proposed }]);
+  });
+
+  it("clearing rules waits, and clearing rules that are already empty changes nothing", async () => {
+    const fx = fixture();
+    (fx.cfg as { everyBotRules?: string }).everyBotRules = "Be kind";
+    (fx.cfg as { profile?: { aboutMe?: string } }).profile = { aboutMe: "I run a shop" };
+    for (const id of ["bots.everyBotRules", "profile.aboutMe"]) {
+      expect((await fx.set(id, "")).body.text, id).toContain("Nothing has changed yet");
+    }
+    expect(fx.waiting().map((one) => one.card.appSettingRequest.after)).toEqual(["", ""]);
+    expect(fx.waiting()[0]!.card.subtitle).toBe("Be kind\n→\nnot set\nEvery bot will read this from now on.");
+    const empty = fixture();
+    const result = await empty.set("bots.everyBotRules", "");
+    expect(result.body.text).toContain("already is");
+    expect(empty.cards()).toEqual([]);
+  });
+
+  it("new instructions for one bot wait on a card with the old and the new text in full, and clearing them waits too", async () => {
+    const fx = fixture();
+    (fx.bots[1] as { soul?: string }).soul = `old ${"x".repeat(500)}`;
+    const next = `new ${"y".repeat(500)}`;
+    await fx.set("bots.settings", { botId: "clive", soul: next });
+    const request = fx.waiting()[0]!.card.appSettingRequest;
+    expect(request.before).toBe(`old ${"x".repeat(500)}`);
+    expect(request.after).toBe(`Clive: instructions "${next}"`);
+    await fx.set("bots.settings", { botId: "clive", soul: "" });
+    expect(fx.waiting()).toHaveLength(2);
+  });
+
   it("AC-04 refuses Apply without the owner's review and leaves the setting and the card as they were", async () => {
     const fx = fixture();
     await fx.set("bots.approvalModes", UP);

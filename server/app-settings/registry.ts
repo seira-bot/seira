@@ -57,6 +57,8 @@ interface Writable {
   describe?(value: unknown): { change: string } | { refusal: string };
   /** Non-null when this value only applies after the owner taps Apply on a card naming what follows. */
   confirm?(value: unknown): Consequence | null;
+  /** The complete current and proposed text for the card that waits for the owner's Apply, so the owner reads all of what they approve. */
+  review?(value: unknown): { before: string; after: string } | null;
 }
 interface Secret {
   tier: "secret";
@@ -120,9 +122,9 @@ const KEY_WHERE: Partial<Record<CredentialTargetId, Where>> = {
   onePasswordToken: "vault",
 };
 
-export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm"> & {
+export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review"> & {
   read?(): string; current(value: never): unknown; write(value: never): Promise<string | null>; describe?(value: never): { change: string } | { refusal: string };
-  confirm?(value: never): Consequence | null;
+  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null;
 };
 /** `line` says what the new value does on the applied card; `refusal` names a value only the person sets, in Settings. */
 export type WindowPref = (id: WindowPrefId, label: string, help: string, where: Where, synonyms: string[], allowed: string,
@@ -170,6 +172,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
     ...spec, tier: "safe", read: spec.read ?? (() => display((spec.current as () => unknown)())), current: spec.current as Writable["current"],
     write: spec.write as Writable["write"], ...(spec.describe ? { describe: spec.describe as Writable["describe"] } : {}),
     ...(spec.confirm ? { confirm: spec.confirm as Writable["confirm"] } : {}),
+    ...(spec.review ? { review: spec.review as Writable["review"] } : {}),
   });
   const config = <V,>(patch: (value: V) => Record<string, unknown>) => (value: V) => deps.saveConfig(patch(value));
   const windowPref: WindowPref = (id, label, help, where, synonyms, allowed, line) => writable({

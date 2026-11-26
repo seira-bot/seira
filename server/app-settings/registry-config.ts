@@ -34,13 +34,14 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
   /** A setting saved with PUT /api/config; `says` is the applied card's line, else it shows before → after. */
   const section = <V,>(spec: { id: string; label: string; help: string; where: Where; synonyms: string[]; value: z.ZodType<V>; allowed: string;
     current(): unknown; patch(value: V): Record<string, unknown>; says?(value: V): string; read?(): string; confirm?(value: V): Consequence | null;
-    refuse?(value: V): string | null; more?(): Record<string, unknown> }) => writable({
+    refuse?(value: V): string | null; more?(): Record<string, unknown>; review?(value: V): { before: string; after: string } }) => writable({
     id: spec.id, label: spec.label, help: spec.help, where: spec.where, synonyms: spec.synonyms, value: spec.value, allowed: spec.allowed,
     // Security: Undo writes back what `current` gives and keeps it on disk; a section saves merged, so its keys stay as they are.
     current: () => visible(spec.current()), read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
     ...(spec.says ? { describe: (value: V) => { const refusal = spec.refuse?.(value); return refusal ? { refusal } : { change: spec.says!(value) }; } } : {}),
     ...(spec.more ? { more: spec.more } : {}),
     ...(spec.confirm ? { confirm: spec.confirm } : {}),
+    ...(spec.review ? { review: spec.review } : {}),
   });
   /** `onConfirm`: turning it on waits for the owner's tap, naming this. */
   const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => section({
@@ -105,13 +106,15 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       id: "profile.aboutMe", label: "About you", help: "What every bot knows about you.", where: "about-you", synonyms: ["about me", "about you", "profile", "bio"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().profile?.aboutMe ?? "", read: () => cfg().profile?.aboutMe ?? "",
       patch: (aboutMe) => ({ profile: { aboutMe } }), says: (text) => (text ? `Tell every bot this about you: ${quoted(text)}` : "Clear what every bot knows about you"),
-      confirm: (text) => (text ? { code: "standingRule" } : null),
+      confirm: (text) => (text !== (cfg().profile?.aboutMe ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().profile?.aboutMe ?? "", after: text }),
     }),
     section({
       id: "bots.everyBotRules", label: "Rules for every bot", help: "Instructions every bot follows, ahead of its own.", where: "about-you", synonyms: ["rules", "rules for every bot", "instructions", "every bot"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().everyBotRules ?? "", read: () => cfg().everyBotRules ?? "",
       patch: (everyBotRules) => ({ everyBotRules }), says: (text) => (text ? `Make every bot follow: ${quoted(text)}` : "Clear the rules every bot follows"),
-      confirm: (text) => (text ? { code: "standingRule" } : null),
+      confirm: (text) => (text !== (cfg().everyBotRules ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().everyBotRules ?? "", after: text }),
     }),
     section({
       id: "bots.newBotEffort", label: "Effort for new bots", help: "The reasoning effort a new bot starts with when its model names none; null uses the engine's own.", where: "new-bots",
@@ -124,6 +127,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       current: () => cfg().newBotDefaults, patch: (newBotDefaults) => ({ newBotDefaults }),
       says: (template) => `Replace the template every new bot starts from with: ${display(visible(template)).slice(0, 400)}`,
       confirm: () => ({ code: "newBots" }),
+      review: (template) => ({ before: cfg().newBotDefaults ? JSON.stringify(visible(cfg().newBotDefaults), null, 2) : "", after: JSON.stringify(visible(template), null, 2) }),
     }),
     section({
       id: "bots.keepWarm", label: "Keep caches warm", help: "After a turn, keep each bot's prompt cache warm so its next reply is faster and cheaper; it costs a few tokens.", where: "limits",

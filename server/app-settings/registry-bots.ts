@@ -60,17 +60,23 @@ const toolGroups = z.array(z.enum(TOOL_GROUPS)).max(TOOL_GROUPS.length).optional
 const offNow = (one: BotRecord): ToolGroup[] => TOOL_GROUPS.filter((group) => one.toolsOff?.includes(group));
 const groupNames = (groups: readonly ToolGroup[]) => groups.map((group) => TOOL_GROUP_LABELS[group]).join(", ");
 
+/** `full`: the instructions in whole, for the card the owner reads before Apply. */
+const changeLine = (one: BotRecord, value: Record<string, unknown>, full: boolean) => `${one.name}: ${Object.keys(value).filter((field) => field !== "botId")
+  .map((field) => `${OTHER[field as OtherField].label} ${field === "soul" && full ? `"${String(value.soul)}"` : OTHER[field as OtherField].shown(value[field] as never)}`).join("; ")}`;
+
 export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot" | "threadModes" | "setThreadModes">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const bot = (id: string) => deps.bots().find((candidate) => candidate.id === id);
   const missing = (id: string) => ({ refusal: `No bot has the id ${id}. Use list_bots for the ids.` });
   const everyBot = (line: (one: BotRecord) => string) => () => deps.bots().map((one) => `${one.name}: ${line(one)}`).join("; ");
   /** A per-bot entry: `effect` names the change for the card, or refuses it, once the bot is known to exist; `was` is the
    * same bot's value before it, for Undo. */
-  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm"> & {
+  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm" | "review"> & {
     value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V; patch(one: BotRecord, value: V): Record<string, unknown>;
     confirm?(value: V): Consequence | null; write?(one: BotRecord, value: V): Promise<string | null>;
+    review?(one: BotRecord, value: V): { before: string; after: string } | null;
   }) => writable({
-    ...spec, current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
+    ...spec,
+    ...(spec.review ? { review: (value: V) => { const one = bot(value.botId); return one ? spec.review!(one, value) : null; } } : {}), current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
     write: (value: V) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value)); },
   });
@@ -164,10 +170,10 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
         .refine((value) => Object.keys(value).length > 1, "name at least one setting besides botId"),
       allowed: `{"botId", ...one or more of ${(Object.keys(OTHER) as OtherField[]).join(", ")}}`,
       read: () => "use get on a bot's own fields through list_bots",
-      effect: (one, value) => ({ change: `${one.name}: ${(Object.keys(value) as Array<OtherField | "botId">).filter((field) => field !== "botId")
-        .map((field) => `${OTHER[field as OtherField].label} ${OTHER[field as OtherField].shown(value[field as OtherField] as never)}`).join("; ")}` }),
+      effect: (one, value) => ({ change: changeLine(one, value, false) }),
+      review: (one, value) => (value.soul === undefined ? null : { before: one.soul ?? "", after: changeLine(one, value, true) }),
       was: (one, value) => ({ botId: one.id, ...Object.fromEntries(Object.keys(value).filter((field) => field !== "botId").map((field) => [field, OTHER[field as OtherField].was(one)])) }),
-      confirm: ({ botId, computer, soul }) => { const one = bot(botId); return !one ? null : computer === "local" && one.computer !== "local" ? { code: "thisComputer", params: { bot: one.name } } : soul ? { code: "botRule", params: { bot: one.name } } : null; },
+      confirm: ({ botId, computer, soul }) => { const one = bot(botId); return !one ? null : computer === "local" && one.computer !== "local" ? { code: "thisComputer", params: { bot: one.name } } : soul !== undefined && soul !== (one.soul ?? "") ? { code: "botRule", params: { bot: one.name } } : null; },
       patch: (_one, { botId: _id, computer, ...rest }) => ({ ...rest, ...(computer ? { computer: computer === "auto" ? null : computer } : {}) }),
     }),
   ];

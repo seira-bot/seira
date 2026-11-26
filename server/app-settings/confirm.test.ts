@@ -11,7 +11,7 @@ import { createSettingsRegistry, findSettings, type RegistryDeps, type SettingEn
 const bots = [
   { id: "kiwi", name: "Kiwi", approvalMode: "ask" },
   { id: "max", name: "Max", approvalMode: "full", computer: "local" },
-  { id: "edie", name: "Edie", approvalMode: "edits" },
+  { id: "edie", name: "Edie", approvalMode: "edits", soul: "Keep it short" },
 ] as unknown as BotRecord[];
 
 function registry(cfg: Record<string, unknown> = {}, threads: Record<string, Record<string, string>> = {}) {
@@ -107,8 +107,12 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("ai.images", { fallback: null })).toBeNull();
   });
 
-  it("a standing rule for every bot waits when it has words, and clearing it does not", () => {
-    for (const id of ["profile.aboutMe", "bots.everyBotRules"]) {
+  it("a standing rule for every bot waits when it changes, clearing included, and not when it stays", () => {
+    const held = registry({ everyBotRules: "Be kind", profile: { aboutMe: "A shop owner" } });
+    for (const [id, same] of [["profile.aboutMe", "A shop owner"], ["bots.everyBotRules", "Be kind"]] as const) {
+      expect(held.confirm(id, "Always reply in French"), id).toEqual({ code: "standingRule" });
+      expect(held.confirm(id, ""), id).toEqual({ code: "standingRule" });
+      expect(held.confirm(id, same), id).toBeNull();
       expect(confirm(id, "Always reply in French"), id).toEqual({ code: "standingRule" });
       expect(confirm(id, ""), id).toBeNull();
     }
@@ -139,6 +143,10 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("bots.settings", { botId: "kiwi", computer: "local" })).toEqual({ code: "thisComputer", params: { bot: "Kiwi" } });
     expect(confirm("bots.settings", { botId: "max", computer: "local" })).toBeNull();
     expect(confirm("bots.settings", { botId: "kiwi", soul: "Be brief" })).toEqual({ code: "botRule", params: { bot: "Kiwi" } });
+    expect(confirm("bots.settings", { botId: "kiwi", soul: "" })).toBeNull();
+    expect(confirm("bots.settings", { botId: "edie", soul: "" })).toEqual({ code: "botRule", params: { bot: "Edie" } });
+    expect(confirm("bots.settings", { botId: "edie", soul: "Keep it long" })).toEqual({ code: "botRule", params: { bot: "Edie" } });
+    expect(confirm("bots.settings", { botId: "edie", soul: "Keep it short" })).toBeNull();
     expect(confirm("bots.settings", { botId: "kiwi", memoryEnabled: false })).toBeNull();
     expect(confirm("bots.settings", { botId: "ghost", computer: "local" })).toBeNull();
   });
