@@ -187,7 +187,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The person can spread work across several AIs. Each Claude account keeps its own approvals. The Flatpak app finds engines the host installs.",
+    does: "The AIs that bots use, by plan or by key. The AI pool spreads work across several AIs: balance usage, take turns, or go in order. The AI menu has an AI pool choice. Each Claude account keeps its own approvals.",
     releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
   },
   {

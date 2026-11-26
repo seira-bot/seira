@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronRight, ChevronUp, Download, Lightbulb, Loader2, LogIn, RefreshCw, Search, Settings, Star, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, Download, Layers, Lightbulb, Loader2, LogIn, RefreshCw, Search, Settings, Star, X } from "lucide-react";
 import type { Bot, InstanceInfo } from "@/state/store";
 import type { EffortLevel } from "../../shared/wire";
 import type { MenuGroup, MenuModelRow, SimpleMenu } from "@/lib/simple-model-menu";
@@ -12,6 +12,7 @@ import { InstanceProviderMark } from "./ProviderIcons";
 import { MENU_GUTTER, MENU_ICON, MENU_LABEL, MENU_LINE, MENU_NOTE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING, SIMPLE_MENU_META, SIMPLE_MENU_ROW } from "./menu-recipe";
 import { effortLabel } from "./ModelPicker";
 import { ProviderMenu, ProviderOffStatus } from "./ProviderMenu";
+import type { PoolMenuRow } from "./ModelPickerPool";
 
 export type SimpleThinking =
   | { levels: readonly EffortLevel[]; current?: EffortLevel; onPick: (level: EffortLevel) => void; onReset: () => void }
@@ -36,6 +37,7 @@ export interface SimpleModelMenuProps extends SimpleMenuActions {
   bot: Pick<Bot, "name" | "color" | "avatarUrl" | "avatarCrop" | "avatarZoom" | "avatarFocusX" | "avatarFocusY" | "mascotBody">;
   botModel: { label: string; title: string };
   thinking?: SimpleThinking | null;
+  pool?: PoolMenuRow | null;
   idPrefix: string;
 }
 
@@ -235,7 +237,8 @@ function Thinking({ thinking, labelId }: { thinking: SimpleThinking; labelId: st
 export function SimpleModelMenu(props: SimpleModelMenuProps) {
   const { menu, query, idPrefix } = props;
   const current = menu.current;
-  const top = Boolean(current || menu.follow);
+  const shownCurrent = current && (!props.pool?.runs || current.warning) ? current : null;
+  const top = Boolean(shownCurrent || props.pool || menu.follow);
   return (
     <div data-simple-model-menu className="flex min-h-0 flex-1 flex-col">
       {menu.search && (
@@ -262,30 +265,39 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
       <div data-simple-models className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain",
         menu.groups.some((group) => group.body.kind === "models" && group.body.toggle === "less") && "scroll-pt-8 scroll-pb-12")}>
         <div className="flex flex-col gap-0.5 p-1.5">
-          {current && (
+          {shownCurrent && (
             <button
               type="button"
               data-menu-row
               data-current-model
               aria-pressed="true"
-              title={current.title}
+              title={shownCurrent.title}
               onClick={(event) => {
-                const setUp = current.warning && current.instance && !current.instance.policy && !current.blocked ? current.instance : undefined;
+                const setUp = shownCurrent.warning && shownCurrent.instance && !shownCurrent.instance.policy && !shownCurrent.blocked ? shownCurrent.instance : undefined;
                 if (setUp) props.onSetUp(setUp, event.detail === 0);
                 else props.onPickCurrent();
               }}
               className={SIMPLE_MENU_ROW}
             >
               <Gutter>
-                {current.instance
-                  ? <InstanceProviderMark instance={current.instance} size={14} subtle />
+                {shownCurrent.instance
+                  ? <InstanceProviderMark instance={shownCurrent.instance} size={14} subtle />
                   : <span className="size-3.5 rounded-full bg-ink/[0.08]" aria-hidden="true" />}
               </Gutter>
-              <RowLines label={current.label}>
-                {current.meta && <span className={cn(SIMPLE_MENU_META, current.warning && "text-warning")}>{current.meta}</span>}
+              <RowLines label={shownCurrent.label}>
+                {shownCurrent.meta && <span className={cn(SIMPLE_MENU_META, shownCurrent.warning && "text-warning")}>{shownCurrent.meta}</span>}
               </RowLines>
-              {current.pending && <Loader2 size={14} className="shrink-0 animate-spin text-ink-tertiary" aria-hidden="true" />}
+              {shownCurrent.pending && <Loader2 size={14} className="shrink-0 animate-spin text-ink-tertiary" aria-hidden="true" />}
               <Check size={14} className="shrink-0 text-ink" aria-hidden="true" />
+            </button>
+          )}
+          {props.pool && (
+            <button type="button" data-menu-row data-ai-pool-row aria-pressed={props.pool.runs} tabIndex={-1} onClick={props.pool.onPick} className={SIMPLE_MENU_ROW}>
+              <Gutter><Layers size={16} strokeWidth={MENU_STROKE} className={MENU_ICON} aria-hidden="true" /></Gutter>
+              <RowLines label={t("model.pool.row")}>
+                <span className={SIMPLE_MENU_META}>{props.pool.meta}</span>
+              </RowLines>
+              {props.pool.runs && <Check size={14} className="shrink-0 text-ink" aria-hidden="true" />}
             </button>
           )}
           {menu.follow && (

@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { activePool, MODE_LABEL_KEY } from "@/lib/ai-pool";
+import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import {
   limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, shownUsageLimit, sameAccountAs, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
@@ -179,6 +181,20 @@ export function UsageRows({ limit, twin }: { limit: EngineLimit; /** Another AI 
   );
 }
 
+/** Owners and admins: the way from the usage rows to the settings that share usage across AIs. */
+function PoolLink({ reporting }: { reporting: number }) {
+  const { state, dispatch } = useStore();
+  const ownerOrAdmin = useOwnerOrAdmin();
+  const pool = activePool(state.config);
+  if (ownerOrAdmin !== true || (!pool && reporting < 2)) return null;
+  return (
+    <button type="button" data-usage-pool onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "aiPool" })}
+      className="self-start text-[12px] font-medium leading-4 text-ink underline underline-offset-2 hover:text-ink-secondary">
+      {pool ? t("limits.pool.on", { mode: t(MODE_LABEL_KEY[pool.mode]) }) : t("limits.pool.share")}
+    </button>
+  );
+}
+
 /** One AI's rows, the bot's own to begin with. When another connected AI reports usage too, a ring for each sits above
  * the rows, and pressing a ring shows that AI's rows. */
 function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?: (engine: string) => void }) {
@@ -202,6 +218,7 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
         </div>
       )}
       {shown && <UsageRows limit={shown} twin={sameAccountAs(shown, limits)} />}
+      <PoolLink reporting={limits.length} />
     </div>
   );
 }
