@@ -695,6 +695,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         ) : iconOnly ? (
           <span
             ref={triggerRef}
+            data-ui={ui("sidebar.account")}
             className={cn(
               "relative flex items-center justify-center rounded-xl transition-colors",
               rail ? "size-10" : "size-[46px]",
@@ -708,6 +709,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         ) : (
           <span
             ref={triggerRef}
+            data-ui={ui("sidebar.account")}
             className={cn(
               "flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
               open ? "bg-raised" : "hover:bg-raised/50",

@@ -16,6 +16,7 @@ import { killCliTree, spawnCli } from "../procs.ts";
 import { AGENTS_TOOL_ALIASES } from "../../shared/agents-tool-names.ts";
 import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import { bridgedCallTarget, unbridgedServer } from "./agents-bridge.ts";
+import { inProcessServer, type InProcessServer } from "./chat-mcp-in-process.ts";
 import { chatImage, type ChatImagePart } from "./chat-images.ts";
 import { CALL_TOOL, DESCRIBE_TOOL, SEARCH_TOOL, ToolDirectory, directoryCallTarget, isDirectoryTool, type CatalogTool, type DirectoryResult } from "../mcp-directory.ts";
 import { AppObserver, modelVisible, withUiExtension } from "../mcp-app-observer.ts";
@@ -87,6 +88,9 @@ const STDERR_TAIL_CHARS = 4_000, STDERR_LINE_CHARS = 300;
 /** Built-ins a turn can go on without, saying so. A turn can't run without the agents server, nor without a Local VM it
  * was given (mountChatTools `mustHave`). */
 const OPTIONAL_BUILT_INS: ReadonlySet<string> = new Set(["computer", "browser", "composio", OWN_APPS_SERVER, "data", "email", "device", GITHUB_APP_MCP_SERVER]);
+/** With `background`, how long setup also waits for the servers a turn can start without, so one that starts quickly has
+ * its tools in the first model request. */
+const BACKGROUND_GRACE_MS = 500;
 
 /** How long a server that runs a command gets to start here: one of the app's own (`builtIn`) or one the person configured. */
 export function mcpStartupMs(env: Record<string, string | undefined> = process.env, platform: NodeJS.Platform = process.platform, builtIn = true): number {
@@ -95,8 +99,9 @@ export function mcpStartupMs(env: Record<string, string | undefined> = process.e
 
 /** `startupMs` replaces both mcpStartupMs budgets, `hostComputerMs` hostComputerStartupMs. `notice` hears, for the person,
  * that this computer's tools did not start, worded once per `conversation`. With `background` and the agents server, setup
- * waits only for the built-ins a turn acts through (agents, a computer, the browser); the rest are listed by `join` once
- * started. `onSettled` hears each server's name once it has listed its tools or failed. */
+ * waits for the built-ins a turn acts through (agents, a computer, the browser), and for the rest only until
+ * BACKGROUND_GRACE_MS after it began; those still starting are listed by `join` once started. `onSettled` hears each
+ * server's name once it has listed its tools or failed. */
 export interface ChatToolMountOptions {
   startupMs?: number;
   hostComputerMs?: number;
@@ -142,7 +147,8 @@ export function chatMcpEnvironment(serverEnv: Record<string, string>, source: No
 
 export class ChatMcpClient {
   private readonly frameBytes: number;
-  private child: ReturnType<typeof spawnCli>;
+  private child!: ReturnType<typeof spawnCli>;
+  private readonly local?: InProcessServer;
   private buffer = "";
   private nextId = 1;
   private frames = 0;
@@ -157,6 +163,8 @@ export class ChatMcpClient {
   constructor(server: Server, computerUse = false, configured = false) {
     this.frameBytes = computerUse ? 32 * 1024 * 1024 : FRAME_BYTES;
     this.configured = Object.values(server.env).filter((value) => value.length >= 6);
+    this.local = configured ? undefined : inProcessServer(server, (message) => queueMicrotask(() => this.onData(`${JSON.stringify(message)}\n`)));
+    if (this.local) return;
     try {
       // The desktop shell inherits Finder's bare PATH, where `npx`-style servers cannot find `node`.
       this.child = spawnCli(server.command, server.args, {
@@ -203,6 +211,11 @@ export class ChatMcpClient {
     for (const entry of this.pending.values()) entry.reject(new Error("MCP session closed"));
     this.pending.clear();
     this.buffer = "";
+    if (this.local) {
+      this.local.stop.abort();
+      this.closing = Promise.resolve();
+      return this.closing;
+    }
     // Windows reaps the tree via taskkill /T, which can exceed shorter budgets on a loaded machine;
     // elsewhere the budget is the TERM grace before KILL, not a verdict race, so it stays short.
     this.closing = killCliTree(this.child, process.platform === "win32" ? 15_000 : 5_000).then((stopped) => {
@@ -217,10 +230,11 @@ export class ChatMcpClient {
   }
 
   private write(frame: unknown): void {
-    if (this.closed || !this.child.stdin.writable || this.child.stdin.destroyed) throw new Error("MCP session closed");
+    if (this.closed || (!this.local && (!this.child.stdin.writable || this.child.stdin.destroyed))) throw new Error("MCP session closed");
     const encoded = JSON.stringify(frame) + "\n";
     if (Buffer.byteLength(encoded) > this.frameBytes) throw new Error("MCP request exceeds the frame limit");
-    this.child.stdin.write(encoded);
+    if (this.local) this.local.read(encoded.slice(0, -1));
+    else this.child.stdin.write(encoded);
   }
 
   private onData(chunk: string): void {
@@ -759,6 +773,7 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
   };
   try {
     if (signal.aborted) throw aborted();
+    const graceEnds = Date.now() + BACKGROUND_GRACE_MS;
     // Concurrent starts, consumed in config order so names and collision suffixes stay stable.
     const mounts = servers.map(async ([name, descriptor], index): Promise<Mounted> => {
       if (signal.aborted || closed) throw aborted();
@@ -795,6 +810,12 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
     };
     const waitAll = !options.background || !servers.some(([, descriptor]) => descriptor === agentsServer);
     await Promise.all(settled.filter((_, index) => waitAll || waited(index)));
+    const rest = waitAll ? [] : settled.filter((_, index) => !waited(index));
+    if (rest.length) {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([Promise.all(rest), new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(0, graceEnds - Date.now())); })]);
+      clearTimeout(timer);
+    }
     await absorb();
     await layout(toolLimit);
     if (signal.aborted || closed) throw aborted();

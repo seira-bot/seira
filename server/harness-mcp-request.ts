@@ -9,6 +9,7 @@ import { capToolListResult } from "./tool-count-limit.ts";
 
 export const MAX_INPUT_BYTES = 1_048_576;
 export const MAX_OUTPUT_BYTES = 16_777_216;
+export const HARNESS_MCP_MAX_PENDING = 16;
 export type RpcId = string | number | null;
 export type HarnessMcpKind = "browser" | "computer" | "data" | "email" | "device" | "github";
 
@@ -63,9 +64,13 @@ async function boundedJson(response: Response, name: string): Promise<unknown> {
   } finally { await reader.cancel().catch(() => {}); }
 }
 
+const withStop = (timeout: AbortSignal, stop?: AbortSignal) => stop ? AbortSignal.any([timeout, stop]) : timeout;
+
+/** `stop` ends the request, as the end of the proxy's process does. */
 export async function harnessMcpRequest(
   frame: unknown,
   connection: { url: string; token: string; kind: HarnessMcpKind; toolLimit?: number },
+  stop?: AbortSignal,
 ): Promise<unknown | undefined> {
   if (!frame || typeof frame !== "object" || Array.isArray(frame)) return failure(null, null, "Invalid request.", -32600);
   const message = frame as { id?: RpcId; jsonrpc?: unknown; method?: unknown; params?: unknown };
@@ -92,7 +97,7 @@ export async function harnessMcpRequest(
     const response = await fetch(new URL(`/api/internal/${connection.kind}/mcp`, url), {
       method: "POST", redirect: "error",
       headers: { "content-type": "application/json", authorization: `Bearer ${connection.token}` },
-      body, signal: AbortSignal.timeout(HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS),
+      body, signal: withStop(AbortSignal.timeout(HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS), stop),
     });
     const payload = await boundedJson(response, name) as { result?: unknown; error?: unknown };
     if (!response.ok || !payload || typeof payload !== "object" || !Object.hasOwn(payload, "result")) {

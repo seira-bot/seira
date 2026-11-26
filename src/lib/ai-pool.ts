@@ -59,12 +59,35 @@ export function suggestPoolMembers(instances: readonly InstanceInfo[], limits: r
   for (const { instance } of plans) {
     if (!kept.some((other) => otherSignInOfSameSubscription(other, instance))) kept.push(instance);
   }
-  const keys = ready.filter(billsEachUse);
-  return [...kept, ...keys].slice(0, MAX_POOL_MEMBERS).flatMap((instance) => {
+  return kept.slice(0, MAX_POOL_MEMBERS).flatMap((instance) => {
     const model = defaultModel(instance);
     return model ? [{ instanceId: instance.instanceId, model }] : [];
   });
 }
+
+/** Pay-per-use AIs that are ready and not yet in the list. The owner must opt in to each use of this list. */
+export function suggestPaidMembers(instances: readonly InstanceInfo[], members: readonly ModelSelection[]): ModelSelection[] {
+  const taken = new Set(members.map((member) => member.instanceId));
+  return instances.filter((instance) => poolReady(instance) && billsEachUse(instance) && !taken.has(instance.instanceId))
+    .slice(0, Math.max(0, MAX_POOL_MEMBERS - members.length))
+    .flatMap((instance) => {
+      const model = defaultModel(instance);
+      return model ? [{ instanceId: instance.instanceId, model }] : [];
+    });
+}
+
+export type MemberBilling = "plan" | "paid" | "unknown";
+
+/** How a member bills, from the AI as it is now. "unknown" when the AI is gone or says nothing about its billing:
+ * only an AI that reports a subscription is a plan, so an AI that may cost money is never taken for one. */
+export function memberBilling(member: ModelSelection, instances: readonly InstanceInfo[]): MemberBilling {
+  const instance = instances.find((candidate) => candidate.instanceId === member.instanceId);
+  if (!instance) return "unknown";
+  if (billsEachUse(instance)) return "paid";
+  return instance.access === "subscription" || instance.snapshot.billing === "subscription" ? "plan" : "unknown";
+}
+
+export const isPaidMember = (member: ModelSelection, instances: readonly InstanceInfo[]): boolean => memberBilling(member, instances) === "paid";
 
 export function memberStatus(instance: InstanceInfo | undefined, limit: EngineLimit | undefined, reserve: number, now: number): PoolStatus {
   if (!instance || instance.snapshot.state !== "available" || instance.policy) return { state: "out", left: null, resetsAt: null };

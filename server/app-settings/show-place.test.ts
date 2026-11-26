@@ -10,7 +10,8 @@ import { transcriptText } from "../replies.ts";
 import type { BotRecord, Message } from "../store.ts";
 import { PROFILE_PROMPT } from "../system-prompt.ts";
 import { createAppSettings, WRITE_BUDGET } from "./host.ts";
-import { findUiPlaces, uiPlaceText } from "./places.ts";
+import { findUiPlaces, settingsPlaceById, settingsPlaceText, uiPlaceText } from "./places.ts";
+import { SETTINGS_PLACES } from "../../shared/settings-places.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -72,6 +73,44 @@ describe("app_settings show_place", () => {
       expect((await show(place.id)).status, place.id).toBe(200);
       expect(messages[0], place.id).toMatchObject({ uiPlace: { id: place.id }, text: uiPlaceText(place) });
     }
+  });
+
+  it("the id of a Settings place with a page adds one row with the place's own path and the id only", async () => {
+    const { show, messages } = fixture();
+    const answer = await show("ai-pool");
+    expect(answer.status).toBe(200);
+    expect(messages).toEqual([{ id: "m1", threadId: "t-kiwi", role: "bot", kind: "text", text: "Settings → AI → AI pool → Share usage across AIs.", uiPlace: { id: "ai-pool" } }]);
+    expect(String(answer.body.text)).toContain("Place card shown: Settings → AI → AI pool → Share usage across AIs.");
+  });
+
+  it("every Settings place with a page can be shown, and a place without one cannot", async () => {
+    for (const place of SETTINGS_PLACES) {
+      const known = settingsPlaceById(place.id);
+      const { show, messages } = fixture();
+      const answer = await show(place.id);
+      expect(answer.status, place.id).toBe(known ? 200 : 404);
+      if (known) expect(messages[0], place.id).toMatchObject({ uiPlace: { id: place.id }, text: settingsPlaceText(known) });
+      else expect(messages, place.id).toEqual([]);
+    }
+  });
+
+  it("a card for a Settings place changes no setting and writes no decision", async () => {
+    const { show, messages } = fixture();
+    await show("ai-pool");
+    expect(messages.every((row) => !("card" in row))).toBe(true);
+  });
+
+  it("no Settings place id is also an id of the UI map", () => {
+    const ui = new Set<string>(UI_PLACES.map((place) => place.id));
+    expect(SETTINGS_PLACES.filter((place) => ui.has(place.id))).toEqual([]);
+  });
+
+  it("an unknown id near a Settings place names it, with its id, beside the UI map's matches", async () => {
+    const { show, messages } = fixture();
+    const near = await show("ai-poo");
+    expect(near.status).toBe(404);
+    expect(String(near.body.error)).toContain("ai-pool (Settings → AI → AI pool → Share usage across AIs)");
+    expect(messages).toEqual([]);
   });
 
   it("an unknown id adds no row, and the refusal names near matches with their ids", async () => {
