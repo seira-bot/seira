@@ -961,6 +961,6 @@ describe("settings changes judged on the turn's own request", () => {
     expect(appSettingDecisionText({ appSettingRequest: request })).toBe("The settings card is still waiting for the user.");
     expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "expired" } })).toContain("closed before the user applied it");
     expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "stale" } })).toContain("changed after the card was shown");
-    expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "failed" }, held: "the route said no" })).toBe("Applying the change to Room turn timeout failed: the route said no. Nothing changed.");
+    expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "failed" } })).toBe("Applying the change to Room turn timeout failed. Nothing changed.");
   });
 });

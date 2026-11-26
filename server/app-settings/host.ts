@@ -467,12 +467,13 @@ export function createAppSettings(deps: AppSettingsDeps) {
     async resolve(args: { threadId: string; requestId: string; behavior: string; ownerReview: boolean }): Promise<{ status: number; body: Record<string, unknown> } | null> {
       const message = store.messagesFor(args.threadId).find((candidate) => candidate.card?.requestId === args.requestId && candidate.card.appSettingRequest);
       const card = message?.card;
-      if (!message || !card) return null;
+      const request = card?.appSettingRequest;
+      if (!message || !card || !request) return null;
       if (card.answered || card.dismissed || card.expired) return reply(200, { ok: true, outcome: card.answered === "allow" ? "allowed-once" : "rejected", alreadySettled: true });
       const change = waiting.get(args.requestId);
       if (args.behavior === "allow" && !args.ownerReview) return refuse(403, "Only the owner applies this change, from the desktop app or a device paired with full access.");
       if (change?.applying) return reply(200, { ok: true, outcome: "allowed-once", alreadySettled: true });
-      const summary = change ? `${change.entry.id}: ${change.change ?? `${text(change.was)} → ${display(change.value)}`}` : `${card.appSettingRequest.settingId}: ${card.appSettingRequest.after}`;
+      const summary = change ? `${change.entry.id}: ${change.change ?? `${text(change.was)} → ${display(change.value)}`}` : `${request.settingId}: ${request.after}`;
       const log = (decision: "user-approved" | "user-denied" | "auto-denied", rule?: string) =>
         appendDecision(deps.dataDir, { threadId: args.threadId, requestId: args.requestId, ...(change ? { botId: change.botId, botName: change.botName } : {}), tool: TOOL, summary, decision, source: "app-settings", ...(rule ? { rule } : {}) });
       if (!change || now() >= change.expiresAt) {
