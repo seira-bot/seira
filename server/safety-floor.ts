@@ -111,9 +111,10 @@ function cimClass(args: string[], positional: boolean): string | null {
  * objects it takes. */
 function cimTargetUnresolved(args: string[], needClass: boolean): boolean {
   if (args.some((word) => STORAGE_CLASS.test(word) || STORAGE_NAMESPACE.test(word))) return true;
-  if (args.some((arg) => parameter(arg, "query", 1) || parameter(arg, "path", 2) || parameter(arg, "resourceuri", 2))) return true;
-  // A namespace that is computed, or whose value was cut off, can be the storage one.
-  const space = args.findIndex((arg) => parameter(arg, "namespace", 5));
+  if (args.some((arg) => parameter(arg, "query", 1) || parameter(arg, "path", 1) || parameter(arg, "resourceuri", 1))) return true;
+  // A namespace that is computed, or whose value was cut off, can be the storage one. PowerShell accepts any start of
+  // a parameter name, so `-N` counts, and so does `-Name`: a WMI method name that is computed is held too.
+  const space = args.findIndex((arg) => parameter(arg, "namespace", 1));
   if (space >= 0) {
     const value = args[space].includes(":") ? args[space] : args[space + 1];
     if (value === undefined || value.includes(DYNAMIC)) return true;

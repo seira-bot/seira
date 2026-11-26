@@ -672,6 +672,8 @@ const NOT_CLEAR: Array<[command: string, on: Platform | "posix" | "all", outcome
   ["Get-CimInstance -ClassName Win32_ComputerSystem | Get-CimAssociatedInstance | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
   ["Get-CimInstance -ClassName Win32_Process | ForEach-Object { $_ } | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
   ["Get-CimInstance -Namespace $ns -ClassName Foo | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
+  ["Get-CimInstance -N $ns -ClassName Foo | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
+  ["Invoke-CimMethod -Nam $ns -ClassName Foo -MethodName X", "win32", "unreadable"],
   ["Get-CimInstance -Namespace (Get-X) -ClassName Foo | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
   ["Get-CimInstance -Query \"SELECT * FROM Win32_Process\" | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
   ["Get-WmiObject -Path \"Win32_Process.Handle=4\" | Invoke-WmiMethod -Name Terminate", "win32", "unreadable"],
