@@ -22,3 +22,9 @@ it("leaves older servers' missing pause fields absent and keeps plan pauses sepa
   expect(config).not.toHaveProperty("heldBots");
   expect(config).toMatchObject({ awakeLimit: 3, pausedBots: ["plan-limited"] });
 });
+
+it("keeps the AI pool through a config broadcast, so a pool a bot turned on does not show as off", () => {
+  const aiPool = { enabled: true, mode: "turns" as const, members: [{ instanceId: "claude", model: "claude-sonnet-5" }, { instanceId: "codex", model: "gpt-5" }] };
+  expect(configStatusFromFrame({ ...baseFrame, aiPool }).aiPool).toEqual(aiPool);
+  expect(configStatusFromFrame(baseFrame)).not.toHaveProperty("aiPool");
+});

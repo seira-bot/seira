@@ -1,6 +1,7 @@
 // What the place card in chat (app_settings show_place) does for an id of the UI map. The card shows only places of this
 // fixed list; the person clicks the button, and the app never clicks the control it points at.
 import { UI_PLACES, type UiPlace } from "../../shared/ui-places";
+import { isSettingsPage, SETTINGS_INDEX, type SettingsPageId } from "@/components/settings/settings-index";
 import type { Action } from "@/state/store";
 
 const PLACES: readonly UiPlace[] = UI_PLACES;
@@ -9,6 +10,30 @@ const PLACES: readonly UiPlace[] = UI_PLACES;
 export function uiPlaceById(id: unknown): UiPlace | undefined {
   return typeof id === "string" ? PLACES.find((place) => place.id === id) : undefined;
 }
+
+/** A place in Settings that a card opens: its page and the block on it. */
+export interface SettingsPlaceTarget {
+  id: string;
+  page: SettingsPageId;
+  anchor?: string;
+}
+
+const PAGE_PREFIX = "page:";
+
+/** The Settings place with this id that has a page, or undefined for an id this client does not know. A row that jumps out of
+ * Settings has no page, so it is not one. */
+export function settingsPlaceTarget(id: unknown): SettingsPlaceTarget | undefined {
+  if (typeof id !== "string") return undefined;
+  if (id.startsWith(PAGE_PREFIX)) {
+    const page = id.slice(PAGE_PREFIX.length);
+    return isSettingsPage(page) ? { id, page } : undefined;
+  }
+  const entry = SETTINGS_INDEX.find((one) => one.id === id);
+  return entry && !entry.jump ? { id, page: entry.page, ...(entry.anchor ? { anchor: entry.anchor } : {}) } : undefined;
+}
+
+/** The action that opens Settings on the place's page, scrolled to its block. */
+export const settingsOpenAction = (target: SettingsPlaceTarget): Action => ({ type: "toggleAppSettings", open: true, section: target.page, ...(target.anchor ? { anchor: target.anchor } : {}) });
 
 /** How a client finds an element: the map's `data-ui` value, or the existing `data-tour` anchor the entry names. */
 export interface PlaceAnchor {
