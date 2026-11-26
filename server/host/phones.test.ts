@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { CloudLendingTurn } from "../cloud-lending.ts";
+import { personKey } from "../person-key.ts";
 import { PHONE_PLACE_PROMPT } from "../phones/instructions.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { SessionRecord } from "../sessions.ts";
@@ -142,5 +143,52 @@ describe("whose phones", () => {
     refusal = "someone-else";
     expect(phones.turnOwner(TURN)).toBeNull();
     expect(phones.integration(chief, TURN)).toBeNull();
+  });
+});
+
+describe("settingsAsker", () => {
+  const ADMIN_SESSION = { id: "admin-session", label: "Laptop", scopes: ["admin", "client"] } as SessionRecord;
+  const adminSessions = { list: () => [ADMIN_SESSION], isLive: () => true, onSessionRevoked: () => () => {} };
+
+  it("AC-17 is clean for the owner's own request on a server one person uses", () => {
+    const { phones, send } = world();
+    send(phones.sendIdFor(loopback));
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "clean" });
+  });
+
+  it("AC-17 asks for a tap when several people sign in, though an admin's own request is clean", () => {
+    const { phones, send } = world({ sharedMembership: () => true, sessions: adminSessions });
+    send("desk-send-000000000010", { origin: { kind: "user" } }, personKey(ADMIN_SESSION));
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "confirm", why: "shared" });
+  });
+
+  it("AC-17 asks for a tap when this machine's requests are a service's, with an admin's own request", () => {
+    const { phones, send } = world({ loopbackTrust: "service", sessions: adminSessions });
+    send("desk-send-000000000011", { origin: { kind: "user" } }, personKey(ADMIN_SESSION));
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "confirm", why: "shared" });
+  });
+
+  it("AC-17 does not count a request from this machine as the owner's when it is a service's", () => {
+    const { phones, send } = world({ loopbackTrust: "service" });
+    send(phones.sendIdFor(loopback));
+    expect(phones.settingsAsker(TURN).kind).not.toBe("clean");
+  });
+
+  it("AC-17 refuses with the shared code on a Team Cloud or hosted workspace", () => {
+    const { phones, send } = world({ shared: true });
+    send(phones.sendIdFor(loopback));
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "refused", code: "shared" });
+  });
+
+  it("AC-17 reads the lent Mac's test on a Cloud home: clean, a tap for someone else's history, a refusal otherwise", () => {
+    let refusal: string | null = null;
+    const { phones } = world({ cloudHome: true, cloudOwnerKey: "owner", cloudLendingRefusal: () => refusal });
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "clean" });
+    refusal = "someone-else";
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "confirm", why: "history" });
+    refusal = "unproven";
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "refused", code: "unproven" });
+    refusal = "not-owner";
+    expect(phones.settingsAsker(TURN)).toEqual({ kind: "refused", code: "not-owner" });
   });
 });

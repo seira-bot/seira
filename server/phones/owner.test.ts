@@ -105,6 +105,27 @@ describe("whose turn may use the desktop owner's phones", () => {
   });
 });
 
+describe("a request from this machine that is a service's", () => {
+  const service = { ...deps(), loopbackIsOwner: false };
+
+  it("AC-17 is not the owner's when the line has no person, though an admin session's line is", () => {
+    expect(owners(base(), service)).toBe(false);
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } })] }), service)).toBe(true);
+    expect(owners(base({ thread: [said("m1", { sender: { id: MEMBER } })] }), service)).toBe(false);
+  });
+
+  it("AC-17 does not take a loopback card answer as the owner's, but takes an admin session's", () => {
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } }), card({ kind: "loopback" })] }), service)).toBe(false);
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } }), card({ kind: "session", name: "Me", person: ADMIN })] }), service)).toBe(true);
+  });
+
+  it("AC-17 keeps the loopback line as the owner's when the flag is true or absent", () => {
+    expect(owners(base(), { ...deps(), loopbackIsOwner: true })).toBe(true);
+    expect(owners(base(), deps())).toBe(true);
+    expect(owners(base({ thread: [said("m1"), card({ kind: "loopback" })] }), { ...deps(), loopbackIsOwner: true })).toBe(true);
+  });
+});
+
 describe("where the desktop owner's phones are offered", () => {
   it("only where one person uses the server and a local request is the owner", () => {
     expect(desktopPhonesOffered({ sharedMembership: false, loopbackTrust: "owner" })).toBe(true);

@@ -20,6 +20,13 @@ describe("liveCardKind", () => {
     expect(liveDecisionRefusal(card({ requestId: "r1", tool: "update_model", modelRequest: {} as OptionCardData["modelRequest"] })))
       .toBe("This request is reviewed on screen.");
   });
+  it("AC-04 sends an open settings change to the screen, so a spoken or reacted yes never applies it", () => {
+    const waiting = card({ requestId: "r1", tool: "app_settings", options: ["Apply", "Not now"], fixedOptions: true, appSettingRequest: { settingId: "rooms.turnTimeoutMinutes", label: "Room turn timeout", after: "45", tier: "safe" } });
+    expect(liveCardKind(waiting)).toBe("review");
+    expect(liveDecisionRefusal(waiting)).toBe("This request is reviewed on screen.");
+    expect(liveCardKind({ ...waiting, answered: "allow" })).toBeNull();
+    expect(liveCardKind({ ...waiting, expired: true })).toBeNull();
+  });
   it("sends a quota-switch offer to the screen, though it looks like a question", () => {
     // A spoken answer to a question becomes a message to the bot once its
     // asker is gone; an engine's name must never be sent that way.

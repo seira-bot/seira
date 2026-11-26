@@ -1,16 +1,18 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { APP_FEATURES } from "../../shared/app-features.ts";
 import type { AppConfig } from "../config.ts";
 import { flushDecisionLog, readDecisions } from "../decision-log.ts";
 import { UNDO_STALE } from "../direct-apply.ts";
+import { closedByStop } from "../host/resumable-cards.ts";
 import type { BotRecord } from "../store.ts";
-import { createAppSettings, WRITE_BUDGET } from "./host.ts";
+import { appSettingDecisionText, CONFIRM_MS, createAppSettings, OPEN_CARD_LIMIT, WRITE_BUDGET } from "./host.ts";
 import { createSettingsRegistry } from "./registry.ts";
+import type { SettingsVerdict } from "./verdict.ts";
 
 const OPENAI_KEY = "sk-live-9f8e7d6c5b4a3210";
 const GATEWAY_KEY = "sk-gateway-0a1b2c3d";
@@ -19,7 +21,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
-function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean } = {}) {
+function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean; resumes?: boolean } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "app-settings-"));
   dirs.push(dataDir);
   const bots: BotRecord[] = [
@@ -82,10 +84,16 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; w
       return null;
     },
     removeEngine: async (instanceId) => { engineCalls.push({ remove: instanceId }); engines.splice(engines.findIndex((engine) => engine.instanceId === instanceId), 1); return null; },
+    imageReady: (provider) => provider === "openai",
   });
-  const host = createAppSettings({
+  const clock = { at: 1_700_000_000_000 };
+  const resumed: Array<{ threadId: string; messageId: string; text: string }> = [];
+  const verdict = { current: options.verdict ?? (options.owner === false ? { kind: "refused", code: "not-owner" } as SettingsVerdict : { kind: "clean" } as SettingsVerdict) };
+  const build = () => createAppSettings({
     store: store as never, dataDir, entries,
-    turnOwner: () => (options.owner === false ? null : "owner"),
+    asker: () => verdict.current,
+    now: () => clock.at,
+    resume: (threadId, messageId, text) => { resumed.push({ threadId, messageId, text }); return options.resumes === true; },
     guestDriven: () => options.guest === true,
     automated: () => options.automated === true,
     requestCredential: async (_bot, _threadId, body) => { credentialCards.push(body); return { status: 201, body: { messageId: "secret-1", label: "OpenAI API key" } }; },
@@ -99,12 +107,22 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; w
       discard: (avatarUrl) => { pictureFiles.discarded.push(avatarUrl); },
     },
   });
+  const host = build();
   const turn = { botId: "kiwi", threadId: "t-kiwi", generation: "gen-1" };
   const set = (id: string, value?: unknown, generation = turn.generation) => host.handle({ action: "set", id, ...(value === undefined ? {} : { value }) }, { ...turn, generation });
   const cards = () => messages.filter((message) => message.card?.appSettingRequest);
   /** Undo on the newest applied card. */
   const undo = () => host.undo({ threadId: turn.threadId, requestId: String(cards().at(-1)!.card.requestId) });
-  return { host, cfg, saved, messages, cards, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
+  const waiting = () => cards().filter((message) => !message.card.autoApplied && !message.card.answered && !message.card.dismissed && !message.card.expired);
+  const resolve = (requestId: string, behavior: "allow" | "deny", ownerReview = true) => host.resolve({ threadId: turn.threadId, requestId, behavior, ownerReview });
+  /** Sets the value and taps Apply on the card it posts. */
+  const setAndApply = async (id: string, value?: unknown) => {
+    const posted = await set(id, value);
+    const card = cards().at(-1)!.card;
+    return { posted, applied: await resolve(String(card.requestId), "allow"), requestId: String(card.requestId) };
+  };
+  const decisions = async () => { await flushDecisionLog(dataDir); return readDecisions(dataDir, 100); };
+  return { host, build, cfg, saved, messages, cards, waiting, resolve, setAndApply, decisions, clock, resumed, verdict, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
 }
 
 describe("reads", () => {
@@ -171,7 +189,7 @@ describe("reads", () => {
     expect((await host.handle({ action: "get", id: "general.language" }, turn)).status).toBe(200);
     const refused = await set("general.language", "de");
     expect(refused.status).toBe(403);
-    expect(refused.body.error).toContain("owner's own conversation");
+    expect(refused.body.error).toContain("did not come from the owner");
     expect(saved).toEqual([]);
   });
 
@@ -340,7 +358,9 @@ describe("AI engines", () => {
     }
     expect(fx.cards()).toEqual([]);
     const result = await fx.set("engines", JSON.stringify({ kind: "openai-compat", name: "Proxy", url: "https://proxy.example/v1", keyFrom: "openaiApiKey" }));
-    expect(fx.cards()[0]!.card.subtitle).toBe("Add the engine \"Proxy\" (OpenAI-compatible) at https://proxy.example/v1, sending it your saved OpenAI API key");
+    expect(fx.cards()[0]!.card.subtitle).toMatch(/^Add the engine "Proxy" \(OpenAI-compatible\) at https:\/\/proxy\.example\/v1, sending it your saved OpenAI API key\n.*proxy\.example/);
+    expect(fx.engineCalls).toEqual([]);
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
     expect(fx.engineCalls).toEqual([{ add: "openai-compat", body: { displayName: "Proxy", url: "https://proxy.example/v1", key: OPENAI_KEY } }]);
     await flushDecisionLog(fx.dataDir);
     expect(JSON.stringify([missing, result, fx.messages, readDecisions(fx.dataDir, 20)])).not.toContain(OPENAI_KEY);
@@ -387,11 +407,13 @@ describe("owner-only tier", () => {
     expect([cards(), saved, routeCalls]).toEqual([[], [], []]);
   });
 
-  it("turns a way in to this computer on with Undo, but leaves turning one off to the person", async () => {
+  it("turns a way in to this computer on after the owner's tap, with Undo, but leaves turning one off to the person", async () => {
     const fx = fixture();
     fx.windowValues.set("remote.relay", false);
     const on = await fx.set("remote.relay", "true");
-    expect(on.body.text).toMatch(/^Done: Let your paired phones reach this computer from anywhere, through Seira's relay\./);
+    expect(on.body.text).toContain("Nothing has changed yet");
+    expect(fx.windowValues.get("remote.relay")).toBe(false);
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
     expect(fx.windowValues.get("remote.relay")).toBe(true);
     const off = await fx.set("remote.relay", false);
     expect(off).toMatchObject({ status: 409, body: { error: "Turning off Reach from anywhere is changed only by the person, in Settings → Phone & devices → How your phone reaches this computer → Anywhere, through Seira (only in the desktop app, on this computer's own page). Tell them where in one line; do not try another way." } });
@@ -467,8 +489,8 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     ["a bot's own setting", "bots.name", { botId: "clive", name: "Clover" }, "Rename Clive to \"Clover\"",
       (fx: ReturnType<typeof fixture>) => expect(fx.botPatches).toEqual([{ botId: "clive", body: { name: "Clover" } }, { botId: "clive", body: { name: "Clive" } }])],
     ["a server setting", "profile.name", "Ada", "not set → Ada", (fx: ReturnType<typeof fixture>) => expect(fx.saved).toEqual([{ profile: { name: "Ada" } }, { profile: { name: "" } }])],
-    ["a provider address", "providers.anthropic.url", "https://proxy.example/v1", "https://api.anthropic.com → https://proxy.example/v1",
-      (fx: ReturnType<typeof fixture>) => expect(fx.saved).toEqual([{ anthropic: { url: "https://proxy.example/v1" } }, { anthropic: { url: "https://api.anthropic.com" } }])],
+    ["a provider model name", "providers.openaiCompat.model", "gpt-x", "not set → gpt-x",
+      (fx: ReturnType<typeof fixture>) => expect(fx.saved).toEqual([{ openaiCompat: { model: "gpt-x" } }, { openaiCompat: { model: "" } }])],
     ["a library skill", "skills.library", { name: "notes", enabled: true }, "Turn on the library skill notes",
       (fx: ReturnType<typeof fixture>) => expect(fx.routeCalls).toEqual([{ route: "skills", method: "PATCH", path: "/api/skills-library/notes", body: { enabled: true } }, { route: "skills", method: "PATCH", path: "/api/skills-library/notes", body: { enabled: false } }])],
     ["a window preference", "general.openAtLogin", true, "Open Seira when you log in", (fx: ReturnType<typeof fixture>) => expect(fx.windowValues.get("general.openAtLogin")).toBe(false)],
@@ -487,14 +509,14 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     expect(readDecisions(fx.dataDir, 10)).toMatchObject([{ decision: "auto-approved", source: "app-settings", tool: "app_settings", summary: expect.stringMatching(new RegExp(`^${id.replaceAll(".", "\\.")}: `)) }]);
   });
 
-  it("an approval mode change says what it allows and applies at once; Undo restores the earlier mode", async () => {
+  it("a lower approval mode says what it allows and applies at once; Undo restores the earlier mode", async () => {
     const fx = fixture();
     const got = JSON.parse(String((await fx.host.handle({ action: "get", id: "bots.approvalModes" }, fx.turn)).body.text));
     expect(got).toMatchObject({ tier: "safe", value: "Kiwi: Full access; Clive: Ask for approval" });
-    expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "clive", mode: "full" }))).status).toBe(200);
-    expect(fx.cards()[0]!.card.subtitle).toBe("Let Clive act without asking (Full access)");
+    expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }))).status).toBe(200);
+    expect(fx.cards()[0]!.card.subtitle).toBe("Make Kiwi ask you before each command or file change (Ask for approval)");
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
-    expect(fx.botPatches).toEqual([{ botId: "clive", body: { approvalMode: "full", applyToAllThreads: true } }, { botId: "clive", body: { approvalMode: "ask", applyToAllThreads: true } }]);
+    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { approvalMode: "ask", applyToAllThreads: true } }, { botId: "kiwi", body: { approvalMode: "full", applyToAllThreads: true } }]);
   });
 
   it("refuses an unknown bot, an invalid mode, Custom, and Approve for me on this computer's own desktop", async () => {
@@ -522,8 +544,8 @@ describe("every other setting applies at once with Undo, Full access or not", ()
 
   it("picks a custom decision endpoint with Undo, but never sets its address", async () => {
     const { set, saved } = fixture();
-    expect((await set("ai.routing", JSON.stringify({ provider: "custom", customModel: "m-1", customApi: "decisions" }))).status).toBe(200);
-    expect(saved).toEqual([{ decider: { provider: "custom", customModel: "m-1", customApi: "decisions" } }]);
+    expect((await set("ai.routing", JSON.stringify({ customModel: "m-1", customApi: "decisions" }))).status).toBe(200);
+    expect(saved).toEqual([{ decider: { customModel: "m-1", customApi: "decisions" } }]);
     expect((await set("ai.routing", JSON.stringify({ customBaseUrl: "https://elsewhere.example.com" }))).status).toBe(400);
     expect(saved).toHaveLength(1);
   });
@@ -549,23 +571,22 @@ describe("every other setting applies at once with Undo, Full access or not", ()
 
   it("other bot settings name each change, and Undo restores each field as the bot ran on it", async () => {
     const fx = fixture();
-    await fx.set("bots.settings", JSON.stringify({ botId: "kiwi", memoryEnabled: false, computer: "local" }));
-    expect(fx.cards()[0]!.card.subtitle).toBe("Kiwi: memory off; computer use this computer's own desktop, as you");
+    await fx.set("bots.settings", JSON.stringify({ botId: "kiwi", memoryEnabled: false, computer: "vm" }));
+    expect(fx.cards()[0]!.card.subtitle).toBe("Kiwi: memory off; computer use a private desktop on this computer");
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
-    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { memoryEnabled: false, computer: "local" } }, { botId: "kiwi", body: { memoryEnabled: true, computer: null } }]);
+    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { memoryEnabled: false, computer: "vm" } }, { botId: "kiwi", body: { memoryEnabled: true, computer: null } }]);
   });
 
-  it("never keeps a bot on this computer from a routine or other automation, the owner's own included", async () => {
+  it("changes no setting from a routine or other automation, the owner's own included", async () => {
     const fx = fixture({ automated: true });
-    const refused = await fx.set("bots.settings", JSON.stringify({ botId: "kiwi", computer: "local" }));
-    expect(refused.status).toBe(403);
-    expect(String(refused.body.error)).toContain("A routine or automation can't keep a bot on this computer. Nothing changed");
-    expect(String(refused.body.error)).toContain("This computer under “Where Kiwi works” in Bot's screen");
+    for (const [id, value] of [["bots.settings", { botId: "kiwi", computer: "vm" }], ["rooms.turnTimeoutMinutes", 45]] as const) {
+      const refused = await fx.set(id, JSON.stringify(value));
+      expect(refused.status, id).toBe(403);
+      expect(String(refused.body.error), id).toContain("A routine, webhook or other automation can't change settings. Nothing changed");
+    }
     expect(fx.botPatches).toEqual([]);
+    expect(fx.saved).toEqual([]);
     expect(fx.cards()).toEqual([]);
-    // Other settings, and another place, still change from an automation as before.
-    expect((await fx.set("bots.settings", JSON.stringify({ botId: "kiwi", computer: "vm" }))).status).toBe(200);
-    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { computer: "vm" } }]);
   });
 
   it("turns one bot's tool groups off and on by name, keeps the rest as they were, and Undo puts the list back", async () => {
@@ -589,7 +610,9 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     const fx = fixture();
     expect((await fx.set("desktops.browserProxy", "http://proxy.example:8080")).status).toBe(400);
     const result = await fx.set("desktops.browserProxy", "socks5://proxy.example:1080");
-    expect(result.body.text).toMatch(/^Done: Send bots' browsers to public sites through the SOCKS5 proxy you named\. Browser proxy now: set\./);
+    expect(result.body.text).toContain("Nothing has changed yet");
+    expect(fx.saved).toEqual([]);
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
     expect(JSON.stringify(fx.messages)).not.toContain("proxy.example");
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
     expect(fx.saved).toEqual([{ browserEngine: { egress: { proxy: "socks5://proxy.example:1080" } } }, { browserEngine: { egress: { proxy: "" } } }]);
@@ -603,5 +626,341 @@ describe("every other setting applies at once with Undo, Full access or not", ()
       { route: "skills", method: "PUT", path: "/api/bots/clive/skills-library", body: { skills: [] } },
       { route: "skills", method: "PUT", path: "/api/bots/clive/skills-library", body: { skills: ["notes"] } },
     ]);
+  });
+});
+
+const REFUSALS = [
+  ["guest", { guest: true }],
+  ["automation", { automated: true }],
+  ["shared", { verdict: { kind: "refused", code: "shared" } }],
+  ["unproven", { verdict: { kind: "refused", code: "unproven" } }],
+  ["not-owner", { verdict: { kind: "refused", code: "not-owner" } }],
+] as const;
+const UP = JSON.stringify({ botId: "clive", mode: "full" });
+const CONFIRM_HISTORY: SettingsVerdict = { kind: "confirm", why: "history" };
+
+describe("settings changes judged on the turn's own request", () => {
+  it("AC-01 applies a safe value at once for a clean request, with Undo on the card", async () => {
+    const fx = fixture();
+    const result = await fx.set("rooms.turnTimeoutMinutes", 45);
+    expect(result.status).toBe(200);
+    expect(result.body.text).toContain("Changed Room turn timeout from 30 to 45");
+    expect(fx.saved).toEqual([{ rooms: { turnTimeoutMinutes: 45 } }]);
+    expect(fx.cards()[0]!.card).toMatchObject({ autoApplied: true, answered: "allow", options: [] });
+    expect(fx.waiting()).toEqual([]);
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ rooms: { turnTimeoutMinutes: 30 } });
+  });
+
+  it.each([CONFIRM_HISTORY, { kind: "confirm", why: "shared" } as SettingsVerdict])("AC-02 posts a waiting card, not the change, when the verdict is confirm (%j)", async (verdict) => {
+    const fx = fixture({ verdict });
+    const result = await fx.set("rooms.turnTimeoutMinutes", 45);
+    expect(result.status).toBe(200);
+    expect(result.body.text).toContain("Nothing has changed yet");
+    expect(fx.saved).toEqual([]);
+    expect(fx.cfg.rooms).toEqual({ turnTimeoutMinutes: 30 });
+    const card = fx.waiting()[0]!.card;
+    expect(card).toMatchObject({ options: ["Apply", "Not now"], subtitle: "30 → 45", tool: "app_settings", fixedOptions: true, appSettingRequest: { settingId: "rooms.turnTimeoutMinutes", before: "30", after: "45", expiresAt: fx.clock.at + CONFIRM_MS } });
+    expect(card).not.toHaveProperty("autoApplied");
+    expect(card.appSettingRequest).not.toHaveProperty("consequence");
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "card-shown", source: "app-settings", requestId: card.requestId });
+  });
+
+  it("AC-02 changes the setting after Apply with the owner's review, and Undo is then on the card", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    const answered = await fx.resolve(requestId, "allow");
+    expect(answered).toEqual({ status: 200, body: { ok: true, outcome: "allowed-once" } });
+    expect(fx.saved).toEqual([{ rooms: { turnTimeoutMinutes: 45 } }]);
+    expect(fx.cards()[0]!.card).toMatchObject({ autoApplied: true, answered: "allow", dismissed: true, options: [], appSettingRequest: { result: "applied", after: "45" } });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ rooms: { turnTimeoutMinutes: 30 } });
+  });
+
+  it("AC-03 waits for a tap on more autonomy, naming the change and what follows from it", async () => {
+    const fx = fixture();
+    const result = await fx.set("bots.approvalModes", UP);
+    expect(result.body.text).toContain("Nothing has changed yet");
+    expect(fx.botPatches).toEqual([]);
+    expect(fx.waiting()[0]!.card).toMatchObject({
+      subtitle: "Let Clive act without asking (Full access)\nClive will do more without asking you first.",
+      appSettingRequest: { after: "Let Clive act without asking (Full access)", consequence: "Clive will do more without asking you first." },
+    });
+    await fx.resolve(String(fx.cards()[0]!.card.requestId), "allow");
+    expect(fx.botPatches).toEqual([{ botId: "clive", body: { approvalMode: "full", applyToAllThreads: true } }]);
+  });
+
+  it("AC-03 waits for a tap on a shorter log retention, showing before, after and what is deleted, and applies a longer one at once", async () => {
+    const fx = fixture();
+    await fx.set("threads.eventLogRetentionDays", 30);
+    expect(fx.saved).toEqual([]);
+    expect(fx.waiting()[0]!.card.appSettingRequest).toMatchObject({ before: "forever", after: "30", consequence: "Older conversation logs will be deleted. Undo can't bring them back." });
+    await fx.resolve(String(fx.cards()[0]!.card.requestId), "allow");
+    expect(fx.saved).toEqual([{ threads: { eventLogRetentionDays: 30 } }]);
+    const longer = await fx.set("threads.eventLogRetentionDays", 60);
+    expect(longer.body.text).toContain("Changed Thread log retention from 30 to 60");
+    expect(fx.cards().at(-1)!.card).toMatchObject({ autoApplied: true, answered: "allow" });
+  });
+
+  it("AC-03 applies a lower approval mode at once", async () => {
+    const fx = fixture();
+    expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "edits" }))).body.text).toContain("Done:");
+    expect(fx.waiting()).toEqual([]);
+  });
+
+  it("AC-04 refuses Apply without the owner's review and leaves the setting and the card as they were", async () => {
+    const fx = fixture();
+    await fx.set("bots.approvalModes", UP);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    const refused = await fx.resolve(requestId, "allow", false);
+    expect(refused.status).toBe(403);
+    expect(fx.botPatches).toEqual([]);
+    expect(fx.waiting()).toHaveLength(1);
+  });
+
+  it("AC-04 lets Not now through without the owner's review", async () => {
+    const fx = fixture();
+    await fx.set("bots.approvalModes", UP);
+    const answered = await fx.resolve(String(fx.cards()[0]!.card.requestId), "deny", false);
+    expect(answered).toEqual({ status: 200, body: { ok: true, outcome: "rejected" } });
+    expect(fx.cards()[0]!.card).toMatchObject({ answered: "deny", options: [], appSettingRequest: { result: "declined" } });
+    expect(fx.botPatches).toEqual([]);
+  });
+
+  it("AC-05 closes a card after fifteen minutes: Apply is refused, the card is expired and nothing changes", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    fx.clock.at += CONFIRM_MS + 1;
+    const late = await fx.resolve(requestId, "allow");
+    expect(late.status).toBe(409);
+    expect(late.body.error).toBe("This card has closed. Nothing changed.");
+    expect(fx.cards()[0]!.card).toMatchObject({ expired: true, options: [], appSettingRequest: { result: "expired" } });
+    expect(fx.saved).toEqual([]);
+    expect(await fx.resolve(requestId, "allow")).toMatchObject({ status: 200, body: { alreadySettled: true } });
+  });
+
+  it("AC-05 expires a card by its own timer after fifteen minutes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+      await fx.set("rooms.turnTimeoutMinutes", 45);
+      vi.advanceTimersByTime(CONFIRM_MS);
+      expect(fx.cards()[0]!.card).toMatchObject({ expired: true, options: [], appSettingRequest: { result: "expired", resumed: true } });
+      expect(fx.resumed[0]!.text).toContain("closed before the user applied it");
+      expect(fx.saved).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("AC-05 answers a second tap on a settled card as already settled, without a second change", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    await fx.resolve(requestId, "allow");
+    expect(await fx.resolve(requestId, "allow")).toEqual({ status: 200, body: { ok: true, outcome: "allowed-once", alreadySettled: true } });
+    expect(await fx.resolve(requestId, "deny")).toMatchObject({ status: 200, body: { alreadySettled: true } });
+    expect(fx.saved).toHaveLength(1);
+    const declined = fixture({ verdict: CONFIRM_HISTORY });
+    await declined.set("rooms.turnTimeoutMinutes", 45);
+    const declinedId = String(declined.cards()[0]!.card.requestId);
+    await declined.resolve(declinedId, "deny");
+    expect(await declined.resolve(declinedId, "allow")).toEqual({ status: 200, body: { ok: true, outcome: "rejected", alreadySettled: true } });
+    expect(declined.saved).toEqual([]);
+  });
+
+  it("AC-05 refuses Apply with 409 when the setting changed after the card was shown, and says stale", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    fx.cfg.rooms = { turnTimeoutMinutes: 60 };
+    const stale = await fx.resolve(String(fx.cards()[0]!.card.requestId), "allow");
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe("This setting changed after the card was shown. Nothing changed.");
+    expect(fx.saved).toEqual([]);
+    expect(fx.cards()[0]!.card.appSettingRequest).toMatchObject({ result: "stale" });
+    expect(fx.resumed[0]!.text).toContain("changed after the card was shown");
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "user-denied", rule: "settings:stale" });
+  });
+
+  it("AC-05 returns null for a card that is no settings card", async () => {
+    const fx = fixture();
+    expect(await fx.host.resolve({ threadId: fx.turn.threadId, requestId: "nothing", behavior: "allow", ownerReview: true })).toBeNull();
+  });
+
+  it.each(REFUSALS)("AC-06 refuses a %s turn with 403 and posts no card, for a safe and a risky value", async (_code, options) => {
+    const fx = fixture(options as Parameters<typeof fixture>[0]);
+    for (const [id, value] of [["rooms.turnTimeoutMinutes", 45], ["bots.approvalModes", UP]] as const) {
+      const refused = await fx.set(id, value);
+      expect(refused.status, id).toBe(403);
+      expect(refused.body.error, id).toMatch(/othing changed|only by hand/i);
+    }
+    expect([fx.cards(), fx.saved, fx.botPatches]).toEqual([[], [], []]);
+  });
+
+  it("AC-06 refuses a guest's turn even when the verdict would wait for a tap", async () => {
+    const fx = fixture({ guest: true, verdict: CONFIRM_HISTORY });
+    expect((await fx.set("rooms.turnTimeoutMinutes", 45)).status).toBe(403);
+    expect(fx.cards()).toEqual([]);
+  });
+
+  it.each(REFUSALS)("AC-09 writes a decision log row with rule settings:%s for a refused turn", async (code, options) => {
+    const fx = fixture(options as Parameters<typeof fixture>[0]);
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", source: "app-settings", tool: "app_settings", botId: "kiwi", rule: `settings:${code}` });
+  });
+
+  it("AC-09 writes a decision log row for every other refusal, with its code", async () => {
+    const fx = fixture();
+    const last = async () => (await fx.decisions()).at(-1);
+    await fx.set("nope.nothing", 1);
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:unknown" });
+    await fx.set("cloud.account", "on");
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:owner-only" });
+    await fx.set("keys.openaiApiKey", OPENAI_KEY);
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:secret-value" });
+    await fx.set("rooms.turnTimeoutMinutes", 100_000);
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:invalid-value" });
+    await fx.set("engines", JSON.stringify({ kind: "remove", instanceId: "openai-compat-gw" }));
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:not-allowed" });
+    for (let index = 0; index < WRITE_BUDGET; index += 1) await fx.set("rooms.turnTimeoutMinutes", 10 + index);
+    await fx.set("rooms.turnTimeoutMinutes", 99);
+    expect(await last()).toMatchObject({ decision: "auto-denied", rule: "settings:budget" });
+    expect(JSON.stringify(await fx.decisions())).not.toContain(OPENAI_KEY);
+  });
+
+  it("AC-09 writes a decision log row when a picture file is refused, and when the card limit is reached", async () => {
+    const picture = fixture({ pictureRefusal: "a.png is not a PNG, JPEG, GIF or WebP picture." });
+    await picture.set("bots.picture", { botId: "kiwi", path: "a.png" });
+    expect((await picture.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", rule: "settings:picture" });
+    const limit = fixture({ verdict: CONFIRM_HISTORY });
+    for (let index = 0; index <= OPEN_CARD_LIMIT; index += 1) await limit.set("rooms.turnTimeoutMinutes", 40 + index);
+    expect((await limit.decisions()).at(-1)).toMatchObject({ decision: "auto-denied", rule: "settings:card-limit" });
+  });
+
+  it("AC-11 get ai.images lists the models per provider and which providers are ready, and never a key", async () => {
+    const fx = fixture();
+    const got = await fx.host.handle({ action: "get", id: "ai.images" }, fx.turn);
+    const body = JSON.parse(String(got.body.text));
+    expect(body.models.openai).toContain("gpt-image-2");
+    expect(body.models).not.toHaveProperty("custom");
+    expect(body.ready).toEqual({ openai: true, codex: false, xai: false, gemini: false, openrouter: false, custom: false });
+    expect(body.readyHelp).toContain("keys.* opens a secure card");
+    expect(JSON.stringify(got)).not.toContain(OPENAI_KEY);
+    expect(JSON.stringify(got)).not.toContain(GATEWAY_KEY);
+    expect(Object.keys(body).filter((field) => /key|token|secret|password/i.test(field))).toEqual([]);
+  });
+
+  it("AC-12 refuses an image model that the provider does not offer and lists the models that it does", async () => {
+    const fx = fixture();
+    const refused = await fx.set("ai.images", { primary: { provider: "openai", model: "gpt-banana" } });
+    expect(refused.status).toBe(409);
+    expect(String(refused.body.error)).toContain("gpt-banana is not a openai image model. Use one of: gpt-image-2.6-sunburst (GPT Image 2.6 Sunburst)");
+    expect((await fx.set("ai.images", { fallback: { provider: "xai", model: "nope" } })).status).toBe(409);
+    expect((await fx.set("ai.images", { primary: { provider: "openrouter", model: "gpt-banana" } })).status).toBe(409);
+    expect([fx.cards(), fx.saved]).toEqual([[], []]);
+  });
+
+  it("AC-12 accepts an OpenRouter vendor/model id, a listed model and any model of a custom endpoint", async () => {
+    const fx = fixture();
+    const routed = await fx.setAndApply("ai.images", { primary: { provider: "openrouter", model: "anthropic/claude-image-x" } });
+    expect(routed.applied.status).toBe(200);
+    expect(fx.saved).toEqual([{ imageGen: { primary: { provider: "openrouter", model: "anthropic/claude-image-x" } } }]);
+    expect((await fx.set("ai.images", { primary: { provider: "openai", model: "gpt-image-1" } })).status).toBe(200);
+    expect((await fx.set("ai.images", { fallback: { provider: "custom", model: "any-model" } })).status).toBe(200);
+  });
+
+  it("AC-14 undoes a change after the server restarts, from a file only the owner reads", async () => {
+    const fx = fixture();
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    expect(statSync(join(fx.dataDir, "app-settings-undo.json")).mode & 0o777).toBe(0o600);
+    const reopened = fx.build();
+    expect(await reopened.undo({ threadId: fx.turn.threadId, requestId })).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ rooms: { turnTimeoutMinutes: 30 } });
+  });
+
+  it("AC-14 undoes a change that the owner applied from a card after the server restarts", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    const { requestId } = await fx.setAndApply("rooms.turnTimeoutMinutes", 45);
+    const reopened = fx.build();
+    expect(await reopened.undo({ threadId: fx.turn.threadId, requestId })).toEqual({ claimed: true, state: "undone" });
+    expect(fx.saved.at(-1)).toEqual({ rooms: { turnTimeoutMinutes: 30 } });
+  });
+
+  it("AC-14 refuses Undo after a restart when the setting changed since", async () => {
+    const fx = fixture();
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.cards()[0]!.card.requestId);
+    fx.cfg.rooms = { turnTimeoutMinutes: 60 };
+    expect(await fx.build().undo({ threadId: fx.turn.threadId, requestId })).toMatchObject({ claimed: true, state: "invalid", error: UNDO_STALE, stale: true });
+  });
+
+  it(`AC-18 refuses the ${OPEN_CARD_LIMIT + 1}th waiting card in a thread with 429`, async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    for (let index = 0; index < OPEN_CARD_LIMIT; index += 1) expect((await fx.set("rooms.turnTimeoutMinutes", 41 + index)).status).toBe(200);
+    const over = await fx.set("rooms.turnTimeoutMinutes", 50);
+    expect(over.status).toBe(429);
+    expect(String(over.body.error)).toContain(`${OPEN_CARD_LIMIT} settings cards already wait`);
+    expect(fx.waiting()).toHaveLength(OPEN_CARD_LIMIT);
+  });
+
+  it("AC-18 does not count a card that Stop closed", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    for (let index = 0; index < OPEN_CARD_LIMIT; index += 1) await fx.set("rooms.turnTimeoutMinutes", 41 + index);
+    expect((await fx.set("rooms.turnTimeoutMinutes", 50)).status).toBe(429);
+    const row = fx.waiting()[0]!;
+    const closed = closedByStop(row.card as never);
+    expect(closed).toMatchObject({ answered: "unavailable", dismissed: true });
+    row.card = closed;
+    expect((await fx.set("rooms.turnTimeoutMinutes", 50)).status).toBe(200);
+    expect(fx.waiting()).toHaveLength(OPEN_CARD_LIMIT);
+  });
+
+  it("AC-18 counts cards per thread and frees the place of an answered card", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    for (let index = 0; index < OPEN_CARD_LIMIT; index += 1) await fx.set("rooms.turnTimeoutMinutes", 41 + index);
+    await fx.resolve(String(fx.waiting()[0]!.card.requestId), "deny");
+    expect((await fx.set("rooms.turnTimeoutMinutes", 50)).status).toBe(200);
+  });
+
+  it("AC-19 logs Apply as user-approved and gives the bot the applied text, marking the card resumed", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const row = fx.cards()[0]!;
+    await fx.resolve(String(row.card.requestId), "allow");
+    expect(fx.resumed).toEqual([{ threadId: "t-kiwi", messageId: row.id, text: appSettingDecisionText(row.card) }]);
+    expect(fx.resumed[0]!.text).toBe("The user applied the change: Room turn timeout is now 45. They can undo it from the card.");
+    expect(row.card.appSettingRequest.resumed).toBe(true);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "user-approved", source: "app-settings", requestId: row.card.requestId, summary: "rooms.turnTimeoutMinutes: 30 → 45" });
+  });
+
+  it("AC-19 logs Not now as user-denied and gives the bot the declined text", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: true });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const row = fx.cards()[0]!;
+    await fx.resolve(String(row.card.requestId), "deny");
+    expect(fx.resumed).toEqual([{ threadId: "t-kiwi", messageId: row.id, text: appSettingDecisionText(row.card) }]);
+    expect(fx.resumed[0]!.text).toBe("The user declined the change to Room turn timeout. Nothing changed.");
+    expect(row.card.appSettingRequest.resumed).toBe(true);
+    expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "user-denied", source: "app-settings", requestId: row.card.requestId });
+  });
+
+  it("AC-19 leaves the card not resumed when no turn waits on it yet", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY, resumes: false });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    await fx.resolve(String(fx.cards()[0]!.card.requestId), "allow");
+    expect(fx.resumed).toHaveLength(1);
+    expect(fx.cards()[0]!.card.appSettingRequest).not.toHaveProperty("resumed");
+    expect(fx.cards()[0]!.card.appSettingRequest.result).toBe("applied");
+  });
+
+  it("AC-19 words each end of a card for the bot", () => {
+    const request = { settingId: "x", label: "Room turn timeout", after: "45", tier: "safe" as const };
+    expect(appSettingDecisionText({ appSettingRequest: request })).toBe("The settings card is still waiting for the user.");
+    expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "expired" } })).toContain("closed before the user applied it");
+    expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "stale" } })).toContain("changed after the card was shown");
+    expect(appSettingDecisionText({ appSettingRequest: { ...request, result: "failed" }, held: "the route said no" })).toBe("Applying the change to Room turn timeout failed: the route said no. Nothing changed.");
   });
 });
