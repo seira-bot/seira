@@ -216,7 +216,7 @@ describe("release gate", () => {
 
   it("flags an approval of an older commit, and accepts an approval of the head commit", async () => {
     const world = (commit_id: string): World => ({
-      files: { 1: [{ filename: ".github/x" }] },
+      pulls: { [sha(1)]: [pull(1, sha(1), { user: OUTSIDER })] },
       reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED", commit_id }] },
     });
     expect((await run(world(sha(1)), { reviewers: '["boss"]' })).code).toBe(1);
