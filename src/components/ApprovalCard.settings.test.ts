@@ -109,7 +109,10 @@ describe("a waiting card in a conversation that others can read", () => {
       { status: 200, body: { before: "", after: "https://example.test/v1" } },
       { status: 403, body: { error: "Only the owner sees this." } },
     ];
-    const fetchMock = vi.fn(async () => { const next = answers.shift()!; return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } }); });
+    const fetchMock = vi.fn(async (input: string) => {
+      const next = input.endsWith("/review") ? answers.shift()! : { status: 200, body: {} };
+      return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const host = document.createElement("div");
     document.body.append(host);
@@ -117,7 +120,7 @@ describe("a waiting card in a conversation that others can read", () => {
     const click = async () => { await act(async () => { host.querySelector<HTMLButtonElement>("[data-setting-review] button")!.click(); }); await act(async () => {}); };
     await act(async () => { root.render(createElement(ApprovalCard, { bot: { name: "Luna" }, message: shared, threadId: "thread-1" })); });
     await click();
-    expect(fetchMock.mock.calls[0]![0]).toBe("/api/threads/thread-1/app-settings/request-1/review");
+    expect(fetchMock.mock.calls.map(([input]) => input).filter((input) => input.endsWith("/review"))).toEqual(["/api/threads/thread-1/app-settings/request-1/review"]);
     expect(host.querySelector("[data-setting-review] pre")!.textContent).toBe("not set\n→\nhttps://example.test/v1");
     await act(async () => { root.unmount(); });
     const second = createRoot(host);
