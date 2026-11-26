@@ -144,6 +144,11 @@ function wmicUnresolved(args: string[]): boolean {
   if (!args.some((arg) => WMIC_CHANGE_VERB.test(arg))) return false;
   if (args.some((arg) => STORAGE_CLASS.test(arg) || STORAGE_NAMESPACE.test(arg))) return true;
   const switches = args.findIndex((arg) => !arg.startsWith("/"));
+  // The lexer expands no `%NAME%` outside a path, so a `%` in a switch is a value that is computed.
+  const global = args.slice(0, switches < 0 ? args.length : switches);
+  if (global.some((arg) => arg.includes(DYNAMIC) || arg.includes("%"))) return true;
+  // `/namespace` and `/role` name where the call goes: without a value it is not confirmed.
+  if (global.some((arg) => /^\/(?:namespace|role)(?::\s*)?$/i.test(arg))) return true;
   const first = args[switches < 0 ? args.length : switches];
   const target = first?.toLowerCase() === "path" ? args[switches + 1] : first;
   if (target === undefined || !CLASS_NAME.test(target) || WMIC_KEYWORDS.has(target.toLowerCase())) return true;
