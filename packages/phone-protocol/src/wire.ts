@@ -159,6 +159,10 @@ export interface WireTask extends InboxTask {
   /** true: the thread runs on its bot's model and moves with it; false: a
    * person picked this thread's model. Derived at projection, never stored. */
   followsBotModel?: boolean;
+  /** "auto": the AI pool picks this conversation's AI at each turn. "pinned": a
+   * person picked one AI here while the pool was on, so the pool leaves it.
+   * Absent: the pool runs it only while it follows its bot's AI and that AI is in the pool. */
+  aiPool?: "auto" | "pinned";
   approvalMode?: ApprovalMode;
   autoApprove?: boolean;
   alwaysAllow?: string[];
