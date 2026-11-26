@@ -28,7 +28,7 @@ export function settingsPlaceById(id: unknown): SettingsPlace | undefined {
 }
 
 /** The words a Settings place card carries for a client that does not draw it: the place's own path. */
-export const settingsPlaceText = (place: SettingsPlace): string => `${described(place)}.`;
+export const settingsPlaceText = (place: SettingsPlace): string => `${place.path}.`;
 
 const withId = (place: SettingsPlace) => (onAPage(place) ? `${described(place)}. Id for show_place: ${place.id}.` : described(place));
 
