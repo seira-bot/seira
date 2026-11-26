@@ -91,7 +91,7 @@ interface SetupStore {
   messagesFor(threadId: string): Array<{ id: string; role?: string; card?: OptionCardData }>;
   appendMessage(threadId: string, message: { role: "bot"; kind: "options"; card: OptionCardData; from?: { botId: string; name: string; color: string } }): { id: string };
   patchMessage(threadId: string, messageId: string, patch: { card: OptionCardData }): unknown;
-  applyTeamSetup(request: TeamSetupRequest): TeamSetupResult;
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: "ask" | "auto" | "full"): TeamSetupResult;
   patchBot(id: string, patch: Partial<BotRecord>): unknown;
 }
 
@@ -109,6 +109,8 @@ interface Options {
   /** Why this MCP server cannot be given to this bot (unknown, or another bot's own); null when it can. */
   mcpServerProblem?(name: string, botId: string): string | null;
   maxBots: number;
+  /** The saved New bot level for a bot this setup creates; undefined keeps the workspace default. */
+  newBotApproval?(): "ask" | "auto" | "full" | undefined;
   ownsThread(botId: string, threadId: string): boolean;
   /** `request` only for a reviewed deletion; Undo of a creation deletes without one. */
   deleteBot(botId: string, revalidate: () => void, request?: TeamSetupRequest): Promise<void>;
@@ -370,7 +372,7 @@ export class TeamSetupRequestService {
       const bot = operation.action === "update" ? this.options.store.bot(operation.botId) : undefined;
       return bot ? [{ id: bot.id, profile: profileSnapshot(bot) }] : [];
     });
-    const result = this.options.store.applyTeamSetup(request);
+    const result = this.options.store.applyTeamSetup(request, this.options.newBotApproval?.());
     for (const { id, profile } of before) {
       const bot = this.options.store.bot(id);
       if (bot) recordProfileChange(id, actor, via, profile, profileSnapshot(bot));
