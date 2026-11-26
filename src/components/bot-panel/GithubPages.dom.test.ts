@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot } from "@/state/store";
 import type { GithubAppStatus, GithubBotPolicy } from "../../../shared/github-app";
 
-const fixture = vi.hoisted(() => ({ dispatch: vi.fn(), api: vi.fn() }));
+const fixture = vi.hoisted(() => ({ dispatch: vi.fn(), api: vi.fn(), open: vi.fn(async (_url: string) => true) }));
 
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: {}, dispatch: fixture.dispatch }), api: fixture.api }));
-vi.mock("@/lib/connector-oauth", () => ({ reserveConnectionPage: () => ({ open: async () => true, cancel: () => {} }) }));
+vi.mock("@/lib/connector-oauth", () => ({ reserveConnectionPage: () => ({ open: fixture.open, cancel: () => {} }) }));
 
 import { resetGithubApp } from "@/lib/github-app";
 import { GithubBotFlow, GithubRepositoriesBlock, GithubRepositoriesRow } from "./GithubPages";
@@ -44,6 +44,8 @@ beforeEach(() => {
   fixture.dispatch.mockReset();
   fixture.api.mockReset();
   fixture.api.mockResolvedValue(status());
+  fixture.open.mockReset();
+  fixture.open.mockResolvedValue(true);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -68,6 +70,31 @@ describe("a bot's GitHub pages", () => {
     await click(host.querySelector("[data-panel-choice=pull_requests]"));
     expect(puts()[0]![0]).toBe("/api/github-app/bots/scout");
     expect((puts()[0]![1] as GithubBotPolicy).repos[0]!.level).toBe("pull_requests");
+  });
+
+  describe("when the person cannot find a repository", () => {
+    const openAdd = async () => {
+      await flow();
+      await click(host.querySelector("[data-panel-link=add-repos]"));
+    };
+    const missing = () => host.querySelector("[data-panel-link=missing-repo]");
+
+    it("shows the error when GitHub cannot be reached", async () => {
+      await openAdd();
+      fixture.api.mockRejectedValueOnce(new Error("down"));
+      await click(missing());
+      expect(host.querySelector("[data-github-page=add] [role=alert]")?.textContent).toBe("Something went wrong with GitHub. Try again.");
+    });
+
+    it("offers the link when the browser blocked the page", async () => {
+      await openAdd();
+      fixture.open.mockResolvedValueOnce(false);
+      fixture.api.mockResolvedValueOnce({ url: "https://github.com/apps/seira/installations/new", codeEntry: false });
+      await click(missing());
+      const link = byText("a", "Open GitHub to continue");
+      expect(link?.getAttribute("href")).toBe("https://github.com/apps/seira/installations/new");
+      expect(host.querySelector("[data-github-page=add] [role=alert]")).toBeNull();
+    });
   });
 
   it("adds a repository at Read and marks the ones already added", async () => {

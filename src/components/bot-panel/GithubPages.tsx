@@ -215,6 +215,8 @@ function GithubAddRepos({ status, policy, busy, errorNote, onBack, onAdd }: {
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
   const [opening, setOpening] = useState(false);
+  const [openFailed, setOpenFailed] = useState(false);
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const { waiting } = useGithubApp();
   const added = new Set(policy.repos.map((grant) => `${grant.installationId}:${grant.repositoryId}`));
   const needle = query.trim().toLowerCase();
@@ -230,7 +232,16 @@ function GithubAddRepos({ status, policy, busy, errorNote, onBack, onAdd }: {
   const openGithub = async () => {
     if (opening) return;
     setOpening(true);
-    try { await openGithubConnect(); } catch { /* the card in Apps reports a failed connect */ } finally { setOpening(false); }
+    setOpenFailed(false);
+    setBlockedUrl(null);
+    try {
+      const start = await openGithubConnect();
+      if (!start.opened) setBlockedUrl(start.url);
+    } catch {
+      setOpenFailed(true);
+    } finally {
+      setOpening(false);
+    }
   };
 
   return (
@@ -276,6 +287,12 @@ function GithubAddRepos({ status, policy, busy, errorNote, onBack, onAdd }: {
         <LinkRow data-panel-link="missing-repo" icon={opening ? Loader2 : ExternalLink} onClick={() => void openGithub()}>{t("github.missing")}</LinkRow>
         {waiting?.codeEntry && <div className={rowCls}><GithubCodeForm className="w-full" /></div>}
       </Card>
+      {openFailed && <p role="alert" className="mx-1 text-[12px] text-danger">{t("github.error")}</p>}
+      {blockedUrl && (
+        <a href={blockedUrl} target="_blank" rel="noopener noreferrer" className="mx-1 text-[12px] text-accent-text underline underline-offset-2">
+          {t("github.openLink")}
+        </a>
+      )}
       <div className="flex justify-end">
         <button
           type="button"
