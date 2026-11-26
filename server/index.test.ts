@@ -1,5 +1,6 @@
 // The config pins one deliberately unknown driver, so the suite is deterministic with or without agent CLIs installed.
 import { EMAIL_TOOLS } from "./email/tools.ts";
+import { GITHUB_TOOLS } from "./github/tools.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -11185,6 +11186,7 @@ describe("harness HTTP API", () => {
         slack: [{ name: "SLACK_POST_MESSAGE", description: "a".repeat(240) }],
         // Email's tools are listed wherever a mailbox can be connected here, so grants can be set before connecting.
         email: EMAIL_TOOLS.map(({ name, description }) => ({ name, description })),
+        github_app: GITHUB_TOOLS.map(({ name, description }) => ({ name, description })),
       },
     });
   });

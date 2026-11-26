@@ -140,7 +140,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Chats",
     place: "a conversation with a bot",
     does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat"],
+    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat", "taskSuggestions"],
   },
   {
     id: "skills",
@@ -190,7 +190,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
   },
   {
     id: "models",
@@ -226,6 +226,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Settings → Phone & devices → Alerts when the phone app is closed",
     does: "Wakes the closed phone app for approvals, questions, sign-ins and finished replies. Off until the person turns it on. The alert holds names and the kind of alert, never the message.",
     releaseNotes: ["phonePush"],
+  },
+  {
+    id: "paired-devices",
+    name: "Paired devices",
+    place: "Settings → Phone & devices → Paired",
+    does: "The phones and computers paired with this server. Rename gives a device its own name, so two of the same model are easy to tell apart. Revoke ends its access.",
+    releaseNotes: ["renameDevices"],
   },
   {
     id: "computers",
@@ -389,6 +396,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Apps → GitHub, then Connect; each bot's repositories are under its Apps page",
     does: "Sign in with GitHub and choose repositories, with no key to paste. Each bot gets its own repositories and a level in each: Read, Pull requests or Write. Merging and deleting branches can wait for your answer.",
     tools: GITHUB_APP_TOOL_NAMES,
+    releaseNotes: ["githubNative"],
   },
 ];
 
