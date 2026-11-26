@@ -1,8 +1,7 @@
 // What server/index.ts needs from the native GitHub connection, in one object: the per-turn mount, the prompt line and the
 // internal MCP handler. The tools run here, in the server: the box gets a turn's capability, never a GitHub token.
 import { GITHUB_APP_MCP_SERVER, GITHUB_APP_SLUG, GITHUB_APP_TOOL_RULES, githubBotBranchPrefix, githubLevelAtLeast, type GithubAppToolName, type GithubBotPolicy, type GithubRepoGrant } from "../../shared/github-app.ts";
-import { connectorAccessDecision, type ConnectorScopes } from "../../shared/connector-scopes.ts";
-import type { ConnectorToolGrant } from "../../shared/wire.ts";
+import { connectorAccessDecision } from "../../shared/connector-scopes.ts";
 import type { AppConfig } from "../config.ts";
 import { connectorRefusalText, connectorScopeRefusalText, evaluateConnectorTools } from "../connector-verdict.ts";
 import { appendDecision } from "../decision-log.ts";
@@ -11,18 +10,15 @@ import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { OutboundHoldAnswer } from "../outbound-hold.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE, GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";
 import { githubAppEnabled } from "./flag.ts";
-import { decideGithubCall } from "./policy.ts";
+import { decideGithubCall, githubAllowedFor, type GithubBotSwitches } from "./policy.ts";
 import type { GithubStore, GithubStoreData } from "./store.ts";
 import { GITHUB_INSTRUCTIONS, GITHUB_NOT_FOUND_MESSAGE, GITHUB_TOOLS, githubError, githubText, githubToolCallProblem, isGithubToolName, runGithubTool, type GithubTool, type GithubToolResult } from "./tools.ts";
 
 export const GITHUB_INTERNAL_MCP_PATH = "/api/internal/github/mcp";
 
-export interface GithubBot {
+export interface GithubBot extends GithubBotSwitches {
   id: string;
   name: string;
-  composio?: boolean;
-  connectorTools?: Record<string, ConnectorToolGrant>;
-  connectorScopes?: ConnectorScopes;
 }
 
 export interface GithubHostDeps {
@@ -39,13 +35,6 @@ export interface GithubHostDeps {
   appAllowed?(): boolean;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
-}
-
-export function githubAllowedFor(bot: Pick<GithubBot, "composio" | "connectorScopes" | "connectorTools">): boolean {
-  if (bot.composio === false) return false;
-  if (bot.connectorScopes && !Object.hasOwn(bot.connectorScopes.apps, GITHUB_APP_SLUG)) return false;
-  if (bot.connectorTools !== undefined && !Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG)) return false;
-  return true;
 }
 
 const action = (name: string) => { const words = name.replace(/^GITHUB_APP_/u, "").replace(/_+/gu, " ").toLowerCase(); return words ? words[0]!.toUpperCase() + words.slice(1) : name; };

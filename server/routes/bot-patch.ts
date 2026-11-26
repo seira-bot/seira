@@ -45,6 +45,7 @@ import { refusalBody, userError } from "../user-errors.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import type { ModelSelectionCheck } from "./bots-create.ts";
 import { GITHUB_APP_SLUG } from "../../shared/github-app.ts";
+import { githubAllowedFor, type GithubBotSwitches } from "../github/policy.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotPatchRouteDeps {
@@ -61,6 +62,8 @@ export interface BotPatchRouteDeps {
   routines(): RoutineManager | null;
   /** Whether the requester owns the GitHub connection. Without it nobody may change a bot's github_app grants. */
   ownsGithubConnection?(auth: RequestAuth): boolean;
+  /** Whether the GitHub connection has a policy for this bot. */
+  githubGrantedTo?(botId: string): boolean;
   /** Called after a bot's saved call speed changed, so a call that is live can use it. */
   callSpeedChanged?(botId: string, speed: number | undefined): void;
   activeVpsThreads: { has(botId: string): boolean };
@@ -639,7 +642,9 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           JSON.stringify(existingBot?.connectorTools?.[GITHUB_APP_SLUG] ?? null) !== JSON.stringify((patch as Pick<Partial<BotRecord>, "connectorTools">).connectorTools?.[GITHUB_APP_SLUG] ?? null)) ||
         (body.connectorScopes !== undefined &&
           (existingBot?.connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null) !== ((patch as Pick<Partial<BotRecord>, "connectorScopes">).connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null));
-      if (githubGrantChanged && deps.ownsGithubConnection?.(auth) !== true) {
+      const githubReopened = !!existingBot && deps.githubGrantedTo?.(existingBot.id) === true &&
+        !githubAllowedFor(existingBot) && githubAllowedFor({ ...existingBot, ...(patch as GithubBotSwitches) });
+      if ((githubGrantChanged || githubReopened) && deps.ownsGithubConnection?.(auth) !== true) {
         return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
       }
       // Known gap: outside the packaged desktop, loopback is the owner, so these loosenings are one curl from
@@ -647,6 +652,12 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       const loosened: string[] = [];
       const trustPatch = patch as Pick<Partial<BotRecord>, "outbound" | "connectorScopes" | "fallback">;
       if (body.outbound !== undefined && trustPatch.outbound?.policy === "allow" && existingBot?.outbound?.policy !== "allow") loosened.push("outbound");
+      if (githubReopened) {
+        if (auth.kind === "loopback" && !DESKTOP_MANAGED && store.bots.some((candidate) => candidate.busy)) {
+          return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
+        }
+        loosened.push("github");
+      }
       if (body.connectorScopes !== undefined && widensConnectorScopes(existingBot?.connectorScopes, trustPatch.connectorScopes)) loosened.push("connectorScopes");
       if (body.phoneApps !== undefined && existingBot) {
         // Compare effective grants: clearing falls back to every app.

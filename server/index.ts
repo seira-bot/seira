@@ -11763,7 +11763,7 @@ const botOrderRoutes = createBotOrderRoutes({ store, visibleFor: (auth) => visib
 const githubStore = createGithubStore(DATA_DIR); const githubBroker = createGithubBrokerClient();
 const githubHost = createGithubHost({ store: githubStore, broker: githubBroker, dataDir: DATA_DIR, cfg: () => cfg, bot: (id) => store.bot(id), markOutside: (threadId) => outsideLineage.mark(threadId), appAllowed: () => managedPolicy.appAllowed("github_app"),
   ask: ({ botId, threadId, tool, arguments: args, active }) => { const bot = store.bot(botId); return bot ? outboundHold.hold({ bot, threadId, tool, calls: [{ slug: tool, arguments: args }], opaque: false, fullAccess: false, always: true, active }) : Promise.resolve({ ok: false, text: "This bot no longer exists." }); } });
-const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => isGithubConnectionOwner(auth, githubStore.read()), turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
+const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => isGithubConnectionOwner(auth, githubStore.read()), githubGrantedTo: (botId) => Object.hasOwn(githubStore.read().bots, botId), turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
   store, cfg, registry, sessions, browserRuntime, browserLive, memoryUpkeep, cacheKeepWarm, hostedModels, supportsApprovalMode,
   routines: () => routines, callSpeedChanged: (botId, speed) => liveCalls.speedChanged(botId, speed), activeVpsThreads,
   hostedWorkspace: HOSTED_WORKSPACE, cloudHome: CLOUD_HOME !== null, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
@@ -11771,7 +11771,7 @@ const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => is
   checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
   revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser, levelOf, team: Boolean(CLOUD_TEAM), mainThreadTasks, chiefChanged: (changed) => chiefRooms.moved(changed), ...(personRooms.personMarkThread ? { personMarkThread: personRooms.personMarkThread, shownThread: (auth: RequestAuth, bot: BotRecord) => memberBot(wireBot(bot), visibleTo(viewerFor(auth))).threadId } : {}),
 }); ROUTES.push(botPatchRoutes);
-ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null, botVisible: (auth, id) => visibleTo(viewerFor(auth)).bot(id) }));
+ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null, botVisible: (auth, id) => visibleTo(viewerFor(auth)).bot(id), desktopManaged: DESKTOP_MANAGED, anyBotBusy: () => store.bots.some((bot) => bot.busy) }));
 ROUTES.push(createBotLifecycleRoutes({
   store, routines: () => routines, interruptAllDirectThreads, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
   activeGroupTurnForBot, cancelGroupTurnOperations, runningTurnInstance, closeOpenApprovals, deleteBotWithLifecycle, deleteRefusal: (auth, botId) => memberDeleteRefusal(auth, store.bot(botId), Boolean(CLOUD_TEAM)),
