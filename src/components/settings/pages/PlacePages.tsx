@@ -147,7 +147,7 @@ export function AiPage() {
         </SettingsGroup>
       )}
       <AdvancedSection anchor="backup-model"><SettingsGroup label={t("settings.ai.backupModel")} block="backup-model"><AutomaticRecoverySettings /></SettingsGroup></AdvancedSection>
-      <AdvancedSection anchor="ai-pool"><SettingsGroup label={t("settings.ai.pool")} block="ai-pool"><AiPoolSettings /></SettingsGroup></AdvancedSection>
+      <SettingsGroup label={t("settings.ai.pool")} block="ai-pool"><AiPoolSettings /></SettingsGroup>
       <AdvancedSection anchor="routing"><DecisionModelSettings /></AdvancedSection>
       <AdvancedSection anchor="images"><ImageGenerationSettings /></AdvancedSection>
     </AdminOnly>

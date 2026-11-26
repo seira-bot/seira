@@ -147,3 +147,11 @@ export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, bo
   if (!resolved.data.name?.trim()) delete resolved.data.name;
   return { ...template, profile: resolved.data };
 }
+
+/** The level a bot made by team setup starts at, under bot creation's rules for the saved New bot level: no Custom, no Full in a hosted
+ * workspace, and no Auto, which needs a warning only a person confirms. A level creation refuses becomes Ask; undefined is the workspace default. */
+export function newBotApprovalLevel(saved: NewBotDefaults | undefined, hostedWorkspace: boolean): "ask" | "full" | undefined {
+  const level = saved?.profile.approvalMode;
+  if (level === undefined) return undefined;
+  return level === "full" && !hostedWorkspace ? "full" : "ask";
+}

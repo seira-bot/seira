@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { SETTINGS_PLACES, type SettingsPlace } from "../../shared/settings-places.ts";
-import { findPlaces, findUiPlaces, placePath, placesList } from "./places.ts";
+import { findPlaceEntries, findPlaces, findUiPlaces, placePath, placesList, settingsPlaceById } from "./places.ts";
 import { UI_PLACES } from "../../shared/ui-places.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -20,10 +20,29 @@ describe("places", () => {
   });
 
   it("find a place by the person's words", () => {
-    expect(findPlaces("api key")[0]).toBe("Settings → AI → Other services");
+    expect(findPlaces("api key")[0]).toBe("Settings → AI → Other services. Id for show_place: keys.");
     expect(findPlaces("pair my phone")[0]).toMatch(/^Settings → Phone & devices/);
     expect(findPlaces("connect gmail")[0]).toMatch(/^the Apps panel/);
     expect(findPlaces("zz")).toEqual([]);
+  });
+
+  it("give the id for show_place beside each place that has a Settings page, and none beside the rest", () => {
+    expect(findPlaces("ai pool")[0]).toBe("Settings → AI → AI pool → Share usage across AIs. Id for show_place: ai-pool.");
+    expect(findPlaces("connect gmail")[0]).not.toContain("Id for show_place");
+    const lines = placesList().split("\n");
+    expect(lines).toContain("Settings → AI → AI pool → Share usage across AIs. Id for show_place: ai-pool.");
+    expect(lines.filter((line) => line.includes("Id for show_place")).length).toBe(SETTINGS_PLACES.filter((place) => settingsPlaceById(place.id)).length);
+    for (const id of ["advanced-mode", "sidebar", "apps", "automations", "bot", "shortcuts", "wake-automations"]) expect(settingsPlaceById(id), id).toBeUndefined();
+  });
+
+  it("match a place by its id too", () => {
+    expect(findPlaceEntries("ai-pool").map((place) => place.id)).toContain("ai-pool");
+  });
+
+  it("name an id for show_place only for an exact own id", () => {
+    expect(settingsPlaceById("ai-pool")?.id).toBe("ai-pool");
+    expect(settingsPlaceById("page:ai")?.id).toBe("page:ai");
+    for (const id of ["AI-pool", "__proto__", "constructor", "", 7, undefined, null, "ai-pool "]) expect(settingsPlaceById(id), String(id)).toBeUndefined();
   });
 
   it("list every place after how Settings opens", () => {

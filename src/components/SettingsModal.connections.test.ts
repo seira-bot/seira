@@ -8,7 +8,7 @@ vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({ capab
 vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: vi.fn(),
-  useStore: () => ({ state: { appSettingsSection: "connections", instances: [], config: fixture.config }, dispatch: vi.fn() }),
+  useStore: () => ({ state: { appSettingsSection: "connections", instances: [], bots: [], config: fixture.config }, dispatch: vi.fn() }),
 }));
 vi.mock("@/lib/analytics", () => ({ analyticsEnabled: () => false, setAnalyticsEnabled: vi.fn() }));
 

@@ -210,4 +210,37 @@ describe("a place card in chat", () => {
     show(row("__proto__", "Fixed text."));
     expect(host.textContent).toBe("Fixed text.");
   });
+
+  it("shows the row's fixed text for a Settings place id this client does not know", () => {
+    for (const id of ["page:from-a-newer-settings", "ai-pool-from-a-newer-settings", "advanced-mode", "apps"]) {
+      show(row(id, "Settings → Somewhere new."));
+      expect(host.textContent, id).toBe("Settings → Somewhere new.");
+      expect(host.querySelector("button"), id).toBeNull();
+    }
+  });
+
+  it("draws a Settings place as the row's path with one button that opens Settings on its page and block, and spotlights nothing", () => {
+    show(row("ai-pool", "Settings → AI → AI pool → Share usage across AIs."));
+    const card = host.querySelector("[data-ui-place-card='ai-pool']")!;
+    expect(card.textContent).toContain("Settings → AI → AI pool → Share usage across AIs.");
+    expect(richRowKind(row("ai-pool"))).toBe("widget");
+    flushSync(() => openButton()!.click());
+    expect(actions).toEqual([{ type: "toggleAppSettings", open: true, section: "ai", anchor: "ai-pool" }]);
+    expect(spot()).toBeNull();
+  });
+
+  it("opens Settings at the block in the real store", () => {
+    const opened = reducer(initialState, { type: "toggleAppSettings", open: true, section: "ai", anchor: "ai-pool" });
+    expect(opened).toMatchObject({ appSettingsOpen: true, appSettingsSection: "ai", appSettingsAnchor: "ai-pool" });
+  });
+
+  it("puts the spotlight on the account button for the Settings card when that button is on the screen", async () => {
+    draw("ui", "sidebar.account");
+    show(row("sidebar.settings"));
+    flushSync(() => openButton()!.click());
+    await vi.waitFor(() => expect(spot()).not.toBeNull());
+    expect(spot()!.getAttribute("data-spot")).toBe("sidebar.account");
+    expect(host.querySelector("[data-ui-place-missing]")).toBeNull();
+    expect(host.textContent).not.toContain("not on this screen");
+  });
 });

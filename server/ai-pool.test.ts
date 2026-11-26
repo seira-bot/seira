@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aiPoolSchema, pickPoolMember, poolReading, samePlanPair, type AiPoolMode, type PoolMemberState } from "./ai-pool.ts";
+import { aiPoolSchema, markAfterPick, pickPoolMember, poolReading, samePlanPair, type AiPoolMode, type PoolMemberState } from "./ai-pool.ts";
 
 const NAMES = "ABCDE";
 const LEVELS = [90, 80, 70, 50];
@@ -185,6 +185,10 @@ describe("aiPoolSchema", () => {
     const parsed = aiPoolSchema.parse({ enabled: true, members: [member("a"), member("b")] });
     expect(parsed.mode).toBe("even");
   });
+  it("accepts the turns mode and refuses an unknown mode", () => {
+    expect(aiPoolSchema.parse({ enabled: true, mode: "turns", members: [member("a"), member("b")] }).mode).toBe("turns");
+    expect(message({ enabled: true, mode: "random", members: [member("a"), member("b")] })).not.toBeNull();
+  });
   it("refuses fewer than two members when on", () => {
     expect(message({ enabled: true, members: [member("a")] })).toBe("Choose at least two AIs before you turn on the AI pool.");
     expect(message({ enabled: false, members: [member("a")] })).toBeNull();
@@ -217,5 +221,26 @@ describe("samePlanPair", () => {
   });
   it("allows different AIs", () => {
     expect(samePlanPair([plan("a"), plan("b", "codex")])).toBeNull();
+  });
+});
+
+describe("markAfterPick", () => {
+  const a = { instanceId: "a", model: "m" }, b = { instanceId: "b", model: "m" };
+
+  it("follows the client when it sends aiPool", () => {
+    expect(markAfterPick("auto", false, a, b)).toBe("pinned");
+    expect(markAfterPick(undefined, true, a, b)).toBe("auto");
+    expect(markAfterPick("pinned", true, a, b)).toBe("auto");
+  });
+
+  it("pins an auto conversation whose model a client changed without aiPool", () => {
+    expect(markAfterPick("auto", undefined, a, b)).toBe("pinned");
+    expect(markAfterPick("auto", undefined, a, { ...a, model: "other" })).toBe("pinned");
+  });
+
+  it("leaves the mark alone when the model did not change or the conversation is not auto", () => {
+    expect(markAfterPick("auto", undefined, a, { ...a })).toBeUndefined();
+    expect(markAfterPick("pinned", undefined, a, b)).toBeUndefined();
+    expect(markAfterPick(undefined, undefined, a, b)).toBeUndefined();
   });
 });

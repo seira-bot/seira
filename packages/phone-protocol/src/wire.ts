@@ -11,7 +11,7 @@ import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
 import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
 import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts"; import type { FolderAccessField, WireFolderAccess, WireFolderGrant } from "./folder-access.ts"; export type { WireFolderAccess, WireFolderGrant }; import type { UiPlaceField } from "./ui-place.ts";
-import type { SuggestedRepliesField } from "./suggested-replies.ts"; import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
+import type { SuggestedRepliesField } from "./suggested-replies.ts"; import type { TaskSuggestionsField } from "./task-suggestions.ts"; import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
 import type { AppEventAttempt, AppTrigger, AppTriggerRequestCardData, AppTriggerService } from "./app-triggers.ts";
@@ -144,8 +144,7 @@ export interface WireTask extends InboxTask {
   archivedAt?: number;
   /** Only true is stored; absent means unpinned. */
   pinned?: boolean;
-  link?: string;
-  linkAuto?: boolean;
+  link?: string; linkAuto?: boolean;
   /** Epoch ms of the newest message, or createdAt when the thread has none.
    * Server-derived. Clients must not write it. */
   updatedAt?: number;
@@ -159,6 +158,7 @@ export interface WireTask extends InboxTask {
   /** true: the thread runs on its bot's model and moves with it; false: a
    * person picked this thread's model. Derived at projection, never stored. */
   followsBotModel?: boolean;
+  /** "auto": the AI pool picks this conversation's AI at each turn. "pinned": a person picked one AI here while the pool was on, so the pool leaves it. Absent: the pool runs it only while it follows its bot's AI and that AI is in the pool. */ aiPool?: "auto" | "pinned";
   approvalMode?: ApprovalMode;
   autoApprove?: boolean;
   alwaysAllow?: string[];
@@ -436,7 +436,7 @@ export type CardAnswerer = (
 export const EXCERPT_SUMMARY_HEADER = "Historical excerpts in chronological order; newer corrections override older requests. These excerpts may omit earlier details.";
 
 /** One transcript line, serialized as stored. */
-export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, TeamSuggestionFields, WaitLineField, BugReportField, SuggestedRepliesField, UiPlaceField {
+export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, TeamSuggestionFields, WaitLineField, BugReportField, SuggestedRepliesField, TaskSuggestionsField, UiPlaceField {
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";

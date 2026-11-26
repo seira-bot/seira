@@ -12,7 +12,7 @@ import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { ThemeTool } from "../themes/tool.ts";
 import { cardElsewhere, cardNotInRoom, cardShownStatus, SETTINGS_CARDS } from "./cards.ts";
 import type { TakenPicture } from "./picture-file.ts";
-import { findPlaces, findUiPlaceEntries, findUiPlaces, placePath, placesList, uiPlaceById, uiPlaceText } from "./places.ts";
+import { findPlaceEntries, findPlaces, findUiPlaceEntries, findUiPlaces, placePath, placesList, settingsPlaceById, settingsPlaceText, uiPlaceById, uiPlaceText } from "./places.ts";
 import { findSettings, personOnly, type SettingEntry, type WritableEntry } from "./registry.ts";
 
 export const TOOL = "app_settings";
@@ -108,6 +108,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
     const refusal = await entry.write(value);
     if (refusal) return refuse(409, refusal);
     const after = entry.read();
+    if (change === undefined && after === was) return reply(200, { text: `${entry.label} already is ${text(after)}. Nothing changed, so no card was shown.` });
     const shown: Shown = change === undefined ? { before: was, after } : { after: change };
     const requestId = randomUUID();
     const language = deps.language(turn.threadId);
@@ -207,14 +208,20 @@ export function createAppSettings(deps: AppSettingsDeps) {
     if (deps.guestDriven(turn.threadId) || deps.turnOwner(turn) === null) return refuse(403, "A place card shows only in the owner's own conversation, when they asked. This turn was not started by the owner here, so nothing was shown.");
     if (deps.connectorThread(bot.id, turn.threadId)?.group) return refuse(403, "No place card shown: a place card is not drawn in a room. Tell the user in one line where it is, from action places, or ask them to ask you in your own chat, where you can show it.");
     const place = uiPlaceById(body.place);
-    if (!place) {
-      const near = typeof body.place === "string" ? findUiPlaceEntries(body.place.slice(0, 200), 3) : [];
-      return refuse(404, `No place with id ${JSON.stringify(typeof body.place === "string" ? body.place.slice(0, 80) : null)}. ${near.length ? `Near matches: ${near.map((one) => `${one.id} (${one.label})`).join("; ")}.` : "No near match."} Use action places to find the id; do not guess one.`);
+    const settingsPlace = place ? undefined : settingsPlaceById(body.place);
+    if (!place && !settingsPlace) {
+      const query = typeof body.place === "string" ? body.place.slice(0, 200) : "";
+      const near = [
+        ...findUiPlaceEntries(query, 3).map((one) => `${one.id} (${one.label})`),
+        ...findPlaceEntries(query, 3).flatMap((one) => (settingsPlaceById(one.id) ? [`${one.id} (${one.path})`] : [])),
+      ];
+      return refuse(404, `No place with id ${JSON.stringify(typeof body.place === "string" ? body.place.slice(0, 80) : null)}. ${near.length ? `Near matches: ${near.join("; ")}.` : "No near match."} Use action places to find the id; do not guess one.`);
     }
     const budget = spendWrite(turn);
     if (budget) return refuse(429, budget);
-    store.appendMessage(turn.threadId, { role: "bot", kind: "text", text: uiPlaceText(place), uiPlace: { id: place.id } });
-    return reply(200, { text: `Place card shown: ${place.label}. The person clicks the card to be taken there; you cannot click it and you never see what they do. Tell the user in one plain line that the card is in the chat.` });
+    const shown = place ? { id: place.id, text: uiPlaceText(place), label: place.label } : { id: settingsPlace!.id, text: settingsPlaceText(settingsPlace!), label: settingsPlace!.path };
+    store.appendMessage(turn.threadId, { role: "bot", kind: "text", text: shown.text, uiPlace: { id: shown.id } });
+    return reply(200, { text: `Place card shown: ${shown.label}. The person clicks the card to be taken there; you cannot click it and you never see what they do. Tell the user in one plain line that the card is in the chat.` });
   }
 
   return {

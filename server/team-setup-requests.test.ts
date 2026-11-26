@@ -23,7 +23,7 @@ function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean 
   };
   const chief = bot("Clive", { chiefOfStaff: true, managedSections: ["Engineering"] });
   const peer = bot("Ada");
-  const apply = vi.fn((request: TeamSetupRequest): TeamSetupResult => {
+  const apply = vi.fn((request: TeamSetupRequest, _newBotApproval?: "ask" | "auto" | "full" | "edits"): TeamSetupResult => {
     const result: TeamSetupResult = { state: "applied", newTeams: request.newTeams, bots: request.operations.map((op) => {
       const target = bots.find((item) => item.id === op.botId) ?? bot(op.botId);
       Object.assign(target, op.fields);
@@ -51,9 +51,10 @@ function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean 
   const autoApply = vi.fn((): DirectApply | null => null);
   const targetBusy = vi.fn((id: string, _sourceThreadId?: string) => Boolean(store.bot(id)?.busy));
   const validateChange = vi.fn();
+  const newBotApproval = vi.fn((): "ask" | "full" | undefined => undefined);
   const canPersist = vi.fn((): { ok: true } | { ok: false; status: number; error: string } => ({ ok: true }));
   const service = new TeamSetupRequestService({ store, teams: () => teams, maxBots: 100, hasTeamAuthority,
-    canPersist, ownsThread: () => sourceExists, targetBusy, deleteBot, deletionRefusal, autoApply, validateChange,
+    canPersist, ownsThread: () => sourceExists, targetBusy, deleteBot, deletionRefusal, autoApply, validateChange, newBotApproval,
     mcpServerProblem: (name, botId) => {
       const servers: Record<string, { bot?: string }> = { hindsight: {}, linear: {}, "clive-notes": { bot: "Clive" } };
       if (!servers[name]) return "no such server";
@@ -68,7 +69,7 @@ function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean 
   const propose = (operations: unknown[], newTeams: string[] = []) => service.propose({ botId: chief.id, threadId: chief.threadId, plan: { reason: "Requested specialist setup", operations, newTeams } });
   const submit = (operations: unknown[], newTeams: string[] = []) => service.submit({ botId: chief.id, threadId: chief.threadId, plan: { reason: "Requested specialist setup", operations, newTeams } });
   const resolve = (requestId: string, behavior = "allow") => service.resolve({ botId: chief.id, threadId: chief.threadId, requestId, behavior });
-  return { service, store, chief, peer, bot, teams, propose, submit, resolve, apply, deleteBot, deletionRefusal, messages, autoApply, targetBusy, validateChange, canPersist, removeSource: () => { sourceExists = false; } };
+  return { service, store, chief, peer, bot, teams, propose, submit, resolve, apply, deleteBot, deletionRefusal, messages, autoApply, targetBusy, validateChange, newBotApproval, canPersist, removeSource: () => { sourceExists = false; } };
 }
 const specialist = (key: string, section: string, modelSelection = { instanceId: "claude", model: "sonnet" }) => ({ action: "create", key,
   fields: { name: key, title: "Specialist", soul: "Finish the assigned work.", section, modelSelection } });
@@ -156,6 +157,25 @@ describe("reviewed Chief team setup", () => {
     const update = h.propose([{ action: "update", botId: h.peer.id, fields: { title: "Research lead" } }]);
     expect(update.detail).not.toContain("owner-owned");
     expect(update.detail).toContain("Existing execution permissions are unchanged.");
+  });
+  it("starts a new bot at the level bot creation resolves, applied directly", async () => {
+    const h = harness(); h.autoApply.mockReturnValue("full-access"); h.newBotApproval.mockReturnValue("ask");
+    await h.submit([specialist("Mira", "Work")]);
+    expect(h.apply).toHaveBeenCalledTimes(1);
+    expect(h.apply.mock.calls[0]![1]).toBe("ask");
+  });
+  it("starts a new bot at the level bot creation resolves, after the person confirms the card", async () => {
+    const h = harness(); h.newBotApproval.mockReturnValue("ask");
+    const proposed = h.propose([specialist("Mira", "Work")]);
+    expect(h.apply).not.toHaveBeenCalled();
+    await h.resolve(proposed.requestId);
+    expect(h.apply).toHaveBeenCalledTimes(1);
+    expect(h.apply.mock.calls[0]![1]).toBe("ask");
+  });
+  it("leaves the level to the workspace default when New bot defaults name none", async () => {
+    const h = harness(); h.autoApply.mockReturnValue("full-access");
+    await h.submit([specialist("Mira", "Work")]);
+    expect(h.apply.mock.calls[0]![1]).toBeUndefined();
   });
   it("accepts a working folder on create only, with the profile path's exact validation copy", () => {
     const h = harness();

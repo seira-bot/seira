@@ -2,6 +2,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import { posix } from "node:path";
+import { FREE_PEOPLE_LIMIT } from "../shared/people-plan.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { unstableInstallWarning } from "./service-unit.ts";
 import {
@@ -376,8 +377,11 @@ export function planFleetAction(input: FleetInput, deps: FleetDeps): FleetStep[]
       assertManagedWorkspace(registry.workspaces[input.slug]!);
       const file = posix.join(workspaceDataDir(layout, input.slug), "config.json");
       const next = applySignIn(deps.readText(file, fleetUser(input.slug)) ?? "{}", input.userAction, input.email, Boolean(input.chatOnly));
+      // This gives no place: without a portal, the workspace's server checks its free people limit at the first sign-in.
+      const portal = /^SEIRA_ADMIN_URL=/m.test(deps.readText(posix.join(layout.instancesDir, `${input.slug}.env`)) ?? "");
       return [
         { kind: "write", path: file, content: next.config, mode: 0o600, owner: fleetUser(input.slug) },
+        ...(input.userAction === "add" && !portal ? [{ kind: "note" as const, text: `on the free plan this person gets a place when they first sign in, while fewer than ${FREE_PEOPLE_LIMIT} people hold one; a Premium key in Settings → People lifts the limit` }] : []),
         { kind: "note", text: next.summary },
       ];
     }

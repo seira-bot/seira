@@ -633,6 +633,9 @@ beforeAll(async () => {
   writeFileSync(linkedVideo, "0123456789".repeat(100));
   writeFileSync(generatedImage, "generated image bytes");
   writeFileSync(userAttachment, "%PDF shared from the phone\n", { mode: 0o600 });
+  // The video a teammate returned to a group chat, copied into the attachment store as attach_file does.
+  const handoffVideo = join(privateAttachments, "7c1e2b9a-3d44-4f0e-8a51-2f6b9d0c4e18.mp4");
+  writeFileSync(handoffVideo, "teammate video bytes");
   // A picture a bot saved outside the room's folders, and the copy attach_file made of it.
   const outsideImage = join(home, "Downloads", "sideboard.png");
   const deliveredImage = join(privateAttachments, "5e1dbd0a-7c3a-4f1e-9b2d-6a0c4f8e2b71.png");
@@ -724,6 +727,15 @@ beforeAll(async () => {
           text: `[Clip](<${pathToFileURL(linkedVideo).href}>) and [notes](<${pathToFileURL(linkedFile).href}>)`,
           from: { botId: "test-bot-a", name: "Test bot A", color: "purple" },
         },
+        // A teammate's result row: stored as an activity row, with the files it returned.
+        {
+          id: "handoff-result-video-message", at: 14, parentId: "linked-video-message", role: "bot", kind: "activity",
+          roomRequest: { id: "handoff-result-request", phase: "result" },
+          tool: { name: "Test bot A finished", ok: true },
+          attachments: [{ kind: "file", path: handoffVideo, mime: "video/mp4", name: "demo.mp4" }],
+        },
+        { id: "handoff-result-plain-message", at: 15, parentId: "handoff-result-video-message", role: "bot", kind: "activity",
+          roomRequest: { id: "handoff-result-request", phase: "result" }, tool: { name: "Test bot A finished", ok: true } },
       ],
     }),
   );
@@ -6265,6 +6277,26 @@ describe("harness HTTP API", () => {
       expect(confirmed.status).toBe(200);
       expect(confirmed.body.bot.tasks.every((task: { approvalMode?: string }) => (task.approvalMode ?? "auto") === "auto")).toBe(true);
       expect((await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "auto", applyToAllThreads: true })).status).toBe(200);
+    } finally {
+      await api("DELETE", `/api/bots/${bot.id}`);
+    }
+  });
+
+  it("marks a conversation for the AI pool or pins it, with the model pick", async () => {
+    const claude = (model: string) => ({ instanceId: "claude", model });
+    const bot = (await api("POST", "/api/bots", { modelSelection: claude("pool-start") })).body.bot;
+    try {
+      const path = `/api/bots/${bot.id}/tasks/${bot.threadId}`;
+      const auto = await api("PATCH", path, { modelSelection: claude("pool-a"), aiPool: true });
+      expect(auto.status).toBe(200);
+      expect(auto.body.task.aiPool).toBe("auto");
+      const pinned = await api("PATCH", path, { modelSelection: claude("pool-b"), aiPool: false });
+      expect(pinned.status).toBe(200);
+      expect(pinned.body.task.aiPool).toBe("pinned");
+      expect((await api("PATCH", path, { aiPool: true })).status).toBe(400);
+      expect((await api("PATCH", path, { modelSelection: claude("pool-c"), aiPool: "yes" })).status).toBe(400);
+      const plain = await api("PATCH", path, { modelSelection: claude("pool-d") });
+      expect(plain.body.task.aiPool).toBe("pinned");
     } finally {
       await api("DELETE", `/api/bots/${bot.id}`);
     }
@@ -12767,6 +12799,30 @@ describe("message pages", () => {
     });
     expect(saved.status).toBe(200);
     expect(await saved.text()).toBe("delivered photo bytes");
+  });
+
+  it("serves a file a teammate's result row carries, and only that file, only from its own conversation", async () => {
+    const threadId = "test-linked-file-room-thread";
+    const route = `/api/threads/${threadId}/messages/handoff-result-video-message/file`;
+    const video = join(home, ".seira", "attachments", "7c1e2b9a-3d44-4f0e-8a51-2f6b9d0c4e18.mp4");
+    const served = await fetch(`${BASE}${route}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: video }),
+    });
+    expect(served.status).toBe(200);
+    expect(await served.text()).toBe("teammate video bytes");
+    const link = await fetch(`${BASE}${route}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: video, media: true }),
+    });
+    expect(link.status).toBe(200);
+    expect(link.headers.get("x-seira-media")).toBe("1");
+
+    // The row grants only the files it carries: not a sibling file, not another message's file.
+    expect((await api("POST", route, { path: join(home, ".seira", "attachments", "shared-notes.pdf") })).status).toBe(403);
+    expect((await api("POST", route, { path: pathToFileURL(join(home, ".seira", "workspaces", "test-bot-a", "clip.mp4")).href })).status).toBe(403);
+    // An activity row that carries no file grants nothing.
+    expect((await api("POST", `/api/threads/${threadId}/messages/handoff-result-plain-message/file`, { path: video })).status).toBe(403);
+    // Another conversation cannot ask for this row.
+    expect((await api("POST", "/api/threads/test-bot-seed-thread/messages/handoff-result-video-message/file", { path: video })).status).toBe(404);
   });
 
   it("downloads an exact user attachment only from the private attachment store", async () => {
