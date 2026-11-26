@@ -225,6 +225,7 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     childEnv.SEIRA_COMPOSIO_BROKER_URL = brokerUrl;
     childEnv.SEIRA_COMPOSIO_BROKER_TOKEN = parentEnv.SEIRA_COMPOSIO_BROKER_TOKEN;
   }
+  if (parentEnv.SEIRA_GITHUB_APP === "1" || parentEnv.SEIRA_GITHUB_APP === "0") childEnv.SEIRA_GITHUB_APP = parentEnv.SEIRA_GITHUB_APP;
   // Research against loopback stubs only (server/x-research.e2e.test.ts): the relay token crosses only with its stub,
   // and a treg stand-in replaces treg.to, so no test reaches a real relay or treg.
   const xUrl = parentEnv.SEIRA_CLOUD_X_URL?.trim() ?? "";

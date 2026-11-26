@@ -34,6 +34,15 @@ export const SETTINGS_CARDS: Record<SettingsCardId, SettingsCard> = {
     action: true,
     path: "Settings → AI → Providers",
   },
+  "ai-pool": {
+    label: "AI pool",
+    where: "Settings → AI",
+    when: "when the person wants to see or change the AI pool themselves, or a pay-per-use AI must join it",
+    text: "AI pool: the person sees and changes the AI pool in Settings → AI → AI pool.",
+    guide: "Tell the user in one plain sentence that the AI pool is in the card: they can turn it on, choose how it shares, and add the AIs. A pay-per-use AI joins only when they add it in the card.",
+    action: true,
+    path: "Settings → AI → AI pool",
+  },
 };
 
 /** Fixed words only, never the address. `on`: true when the setting is known to be on; null when the server cannot

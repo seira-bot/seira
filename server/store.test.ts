@@ -21,8 +21,10 @@ import * as mdb from "./message-db.ts";
 import { hasTeamAuthority } from "./peer-roster.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import { Store, toWireTask, type BotRecord } from "./store.ts";
+import { UnreadableBotsError } from "./unreadable-bots.ts";
 import { STARTER_CHARACTERS } from "./bot-look.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
+import { DEFAULT_APPROVAL_MODE, approvalModeFor, setDefaultApprovalMode } from "../shared/approval-mode.ts";
 import { SECTION_CONTEXTS_FILE, readSectionContext, writeSectionContext } from "./section-context.ts";
 import { allowsTool } from "../shared/tool-scope.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
@@ -189,14 +191,13 @@ describe("Store", () => {
   it("never empties rooms when the bot list cannot be read", () => {
     const store = new Store(selection);
     const [ada, cleo] = [store.createBot({}), store.createBot({})];
-    const room = store.createGroup("Launch team", [ada.id, cleo.id], false);
+    store.createGroup("Launch team", [ada.id, cleo.id], false);
     const groupsFile = join(DATA_DIR, "groups.json");
     const before = readFileSync(groupsFile, "utf8");
     writeFileSync(join(DATA_DIR, "bots.json"), "{ not json");
 
-    expect(new Store(selection).group(room.id)?.memberIds).toEqual([ada.id, cleo.id]);
-    expect(JSON.parse(readFileSync(groupsFile, "utf8")).find((g: { id: string }) => g.id === room.id).memberIds)
-      .toEqual(JSON.parse(before).find((g: { id: string }) => g.id === room.id).memberIds);
+    expect(() => new Store(selection)).toThrow(UnreadableBotsError);
+    expect(readFileSync(groupsFile, "utf8")).toBe(before);
   });
 
   it("a stand-in is read-only: no write method finds it, so naming one changes nothing of this place's own", () => {
@@ -1805,13 +1806,13 @@ describe("Store", () => {
     expect(reloaded.activePath(bot.threadId).map((m) => m.text)).not.toContain("v1");
   });
 
-  it("tolerates a corrupt bots.json by starting empty", () => {
+  it("refuses a corrupt bots.json and leaves it as it is", () => {
     const store = new Store(selection);
     store.createBot();
     writeFileSync(join(DATA_DIR, "bots.json"), "{not json");
 
-    const reloaded = new Store(selection);
-    expect(reloaded.bots).toEqual([]);
+    expect(() => new Store(selection)).toThrow(UnreadableBotsError);
+    expect(readFileSync(join(DATA_DIR, "bots.json"), "utf8")).toBe("{not json");
   });
 
   it("busy is wiped even when bots.json says otherwise", () => {
@@ -2696,6 +2697,36 @@ describe("soul", () => {
       ] });
     return store.bot(botId)!;
   };
+  it("starts a bot made by team setup at the level it is given, on the bot and its first conversation", () => {
+    const store = new Store(selection);
+    const chief = store.createBot({ name: "Chief", section: "Ops" });
+    store.patchBot(chief.id, { chiefOfStaff: true });
+    const made = createdBy(store, chief, "helper-default", "setup-helper-default");
+    expect(made).toMatchObject({ approvalMode: "full", autoApprove: false });
+    expect(made.tasks?.[0]).toMatchObject({ approvalMode: "full", autoApprove: false });
+    store.applyTeamSetup({ version: 1, requestId: "setup-level-ask", botId: chief.id, threadId: chief.threadId, reason: "Requested", createdAt: 1,
+      requesterRevision: "fixture", newTeams: [], operations: [
+        { action: "create", botId: "asked", threadId: "asked-thread", fields: { name: "Asked", section: chief.section, modelSelection: selection() } },
+      ] }, "ask");
+    expect(new Store(selection).bot("asked")).toMatchObject({ approvalMode: "ask", autoApprove: false });
+    expect(new Store(selection).bot("asked")?.tasks?.[0]).toMatchObject({ approvalMode: "ask", autoApprove: false });
+  });
+
+  it("starts a bot made by team setup at Ask when the workspace default is Ask", () => {
+    setDefaultApprovalMode("ask");
+    try {
+      const store = new Store(selection);
+      const chief = store.createBot({ name: "Chief", section: "Ops" });
+      store.patchBot(chief.id, { chiefOfStaff: true });
+      const made = createdBy(store, chief, "helper-default-ask", "setup-helper-default-ask");
+      expect(approvalModeFor(made)).toBe("ask");
+      expect(made).toMatchObject({ approvalMode: "ask" });
+      expect(made.tasks?.[0]).toMatchObject({ approvalMode: "ask" });
+    } finally {
+      setDefaultApprovalMode(DEFAULT_APPROVAL_MODE);
+    }
+  });
+
   const grantsOf = (bot: BotRecord) => ({ composio: bot.composio, connectorTools: bot.connectorTools, connectorScopes: bot.connectorScopes, mcpServers: bot.mcpServers });
 
   it("starts a bot a Chief creates with the Chief's own connected apps and levels, copied, never more", () => {

@@ -83,7 +83,7 @@ export function MemberRows({ pool, instances, limits, now, saving, next, onMembe
   </>;
 }
 
-const textButton = "h-7 shrink-0 cursor-pointer rounded-lg px-2.5 text-[13px] leading-5 text-ink shadow-[inset_0_0_0_0.5px_var(--settings-edge)] hover:bg-ink/[0.06] disabled:cursor-default disabled:opacity-40";
+export const textButton = "h-7 shrink-0 cursor-pointer rounded-lg px-2.5 text-[13px] leading-5 text-ink shadow-[inset_0_0_0_0.5px_var(--settings-edge)] hover:bg-ink/[0.06] disabled:cursor-default disabled:opacity-40";
 
 export function AddRows({ pool, instances, limits, now, saving, onMembers, onSignIn }: PoolListProps) {
   const taken = new Set(pool.members.map((member) => member.instanceId));

@@ -202,7 +202,9 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
 
       const message = store.messagesFor(threadId).find((candidate) => candidate.id === m![2]);
       if (!message) return json(res, 404, { error: "no such message" });
-      if (message.kind !== "text" || (!message.text && !message.attachments?.length)) {
+      // A teammate's result row in a group chat is stored as an activity row; the files it returned are its attachments.
+      const carriesFiles = message.kind === "activity" && message.role === "bot" && Boolean(message.attachments?.length);
+      if ((message.kind !== "text" && !carriesFiles) || (!message.text && !message.attachments?.length)) {
         return json(res, 403, { error: "that message does not share this file" });
       }
       const messageText = message.text ?? "";
@@ -237,7 +239,8 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         downloadName = botAttachment.kind === "file" ? botAttachment.name : undefined;
         roots = [ATTACHMENTS_DIR];
       } else {
-        if (!messageReferencesFile(messageText, href)) {
+        // An activity row grants only the files it carries, never a path found in other text.
+        if (message.kind !== "text" || !messageReferencesFile(messageText, href)) {
           return json(res, 403, { error: "that bot message does not link to this file" });
         }
         const senderId = directBot?.id ?? message.from?.botId;

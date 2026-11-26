@@ -9,6 +9,7 @@ import { BOT_PROFILE_PATCH_FIELDS } from "./bot-profile.ts";
 import type { Scope, SessionRecord, SessionRegistry } from "./sessions.ts";
 import { denyReason as companionDenial, isCompanionNotice } from "../companion/src/routes.ts";
 import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
+import { moveOutRefusal } from "./workspace-backup-move-out.ts";
 
 /** `owner`: the machine's owner. `service`: a shared server where every bot's shell is a loopback caller too,
  * so loopback without a session may reach only SERVICE_ALLOW. */
@@ -581,6 +582,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   // alone, on a personal Cloud its owner alone (routes/team-slack.ts); off a Cloud they answer 404
   { methods: ["GET"], path: /^\/api\/slack\/team\/bots$/ },
   { methods: ["POST"], path: /^\/api\/slack\/team\/messages(?:\/[0-9a-f-]{36}\/stop)?$/ },
+  // the GitHub connection: the handler shows each person only the bots they see, and every change checks for its owner
+  { methods: ["GET"], path: /^\/api\/github-app$/ },
+  { methods: ["POST"], path: /^\/api\/github-app\/refresh$/ },
 ];
 
 export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {
@@ -752,7 +756,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
       !provesSameOrigin(req)) {
       return deny(403, "forbidden: this browser's session makes changes only from its own page");
     }
-    const narrowed = options.restricted?.(session, method, path, options.url) ?? null;
+    const narrowed = moveOutRefusal(session, method, path) ?? options.restricted?.(session, method, path, options.url) ?? null;
     if (narrowed) return deny(403, narrowed);
     const needed = requiredScope(method, path, options.features ?? {});
     if (!session.scopes.includes(needed)) {

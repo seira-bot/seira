@@ -18,10 +18,10 @@ export function agentsToolList(env: NodeJS.ProcessEnv) {
   return { available, bridge, listed: bridge ? bridge.listed : env[DEFER_TOOLS_ENV] === "1" ? withDeferMarks(available, profile.chief) : available };
 }
 
-export function agentsMcp(env: NodeJS.ProcessEnv): (msg: Json) => Promise<Json | undefined> {
+export function agentsMcp(env: NodeJS.ProcessEnv, stop?: AbortSignal): (msg: Json) => Promise<Json | undefined> {
   const { available, bridge, listed } = agentsToolList(env);
   const limit = toolLimitFromEnv(env);
-  const context = toolCallContextFromEnv(env);
+  const context = toolCallContextFromEnv(env, stop);
   const ok = (id: unknown, result: unknown): Json => ({ jsonrpc: "2.0", id, result } as Json);
   const rpcErr = (id: unknown, code: number, message: string): Json => ({ jsonrpc: "2.0", id, error: { code, message } } as Json);
   const textResult = (id: unknown, text: string, isError = false) => ok(id, { content: [{ type: "text", text }], isError });

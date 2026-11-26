@@ -58,7 +58,7 @@ esac`);
     env: {
       PATH: `${bin}:/usr/bin:/bin`, SEIRA_ETC_DIR: etc, SEIRA_APPARMOR_DIR: apparmor, SEIRA_AUDIT_DIR: audit,
       SEIRA_INSTALL_DIR: install, SEIRA_UPDATE_DIR: update, SEIRA_SBIN_DIR: sbin, SEIRA_SYSTEMD_DIR: systemd,
-      SEIRA_ADMIN_URL: "https://cloud.example.test", SEIRA_CONNECTOR_IMAGE: `ghcr.io/milind-soni/mausbot-connector@sha256:${"1".repeat(64)}`,
+      SEIRA_ADMIN_URL: "https://cloud.example.test", SEIRA_CONNECTOR_IMAGE: `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(64)}`,
       ...options.env,
     },
     timeout: 30_000,

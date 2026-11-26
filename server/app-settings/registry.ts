@@ -7,7 +7,8 @@ import { defaultBotThreads, MAX_CONCURRENT_BOT_THREADS } from "../bot-thread-lim
 import { isClaudeBedrock } from "../claude-bedrock.ts";
 import { isClaudeEndpoint } from "../claude-endpoints.ts";
 import { isCodexEndpoint } from "../codex-endpoints.ts";
-import { MAX_MCP_CALL_TIMEOUT_MINUTES, MAX_ROOM_TURN_TIMEOUT_MINUTES, mcpCallTimeoutMinutes, MIN_MCP_CALL_TIMEOUT_MINUTES, MIN_ROOM_TURN_TIMEOUT_MINUTES, persistableInstanceConfigs, roomTurnTimeoutMinutes, type AppConfig } from "../config.ts";
+import { billsEachUse } from "../limit-failover.ts";
+import { instanceConfigs, MAX_MCP_CALL_TIMEOUT_MINUTES, MAX_ROOM_TURN_TIMEOUT_MINUTES, mcpCallTimeoutMinutes, MIN_MCP_CALL_TIMEOUT_MINUTES, MIN_ROOM_TURN_TIMEOUT_MINUTES, persistableInstanceConfigs, roomTurnTimeoutMinutes, type AppConfig } from "../config.ts";
 import type { InstanceConfig } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import type { ProviderRegistry } from "../harness/registry.ts";
@@ -19,6 +20,7 @@ import type { BotRecord, Store } from "../store.ts";
 import type { SettingsPlaceId } from "../../shared/settings-places.ts";
 import { placePath } from "./places.ts";
 import { botEntries } from "./registry-bots.ts";
+import { aiPoolEntries } from "./registry-ai-pool.ts";
 import { configEntries } from "./registry-config.ts";
 import { pictureEntries } from "./registry-pictures.ts";
 import { windowEntries } from "./registry-window.ts";
@@ -87,6 +89,14 @@ export interface RegistryDeps {
   /** POST /api/instances/<path> and DELETE /api/instances/<id>, as Settings does; a refusal comes back as its text. */
   addEngine(path: "openai-compat" | "claude-bedrock", body: Record<string, unknown>): Promise<string | null>;
   removeEngine(instanceId: string): Promise<string | null>;
+  /** The signed-in AIs the AI pool can use, with the model each would run; never a key. `billing` is "unknown" when the AI does not say. */
+  poolEngines?(): PoolEngine[];
+}
+export interface PoolEngine {
+  instanceId: string;
+  name: string;
+  model: string;
+  billing: "plan" | "pay per use" | "unknown";
 }
 
 /** A setting's value for a person or bot; empty when unset, so each edge can say "not set" in its own words. */
@@ -338,7 +348,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       ["https", "public address"], () => "managed in Settings"),
   ];
 
-  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
+  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...aiPoolEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
 }
 
 export function findSettings(entries: readonly SettingEntry[], query: string, limit = 8): SettingEntry[] {
@@ -361,7 +371,7 @@ export function routeBackedRegistry(deps: {
   cfg(): AppConfig;
   store: Pick<Store, "bots" | "sections">;
   routes: { config: RouteHandler; botOrder: RouteHandler; botPatch: RouteHandler; sections: RouteHandler; instances: RouteHandler } & Record<AppRoute, RouteHandler>;
-  providers: Pick<ProviderRegistry, "instances" | "lastSnapshot">;
+  providers: Pick<ProviderRegistry, "instances" | "lastSnapshot" | "access">;
   credentials(): CredentialConfig;
   window: RegistryDeps["window"];
   paused(): string[];
@@ -392,6 +402,16 @@ export function routeBackedRegistry(deps: {
       instanceId: instance.instanceId, working: deps.providers.lastSnapshot(instance.instanceId)?.state === "available",
       name: instance.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === instance.driverKind)?.metadata.displayName ?? instance.instanceId,
     })),
+    poolEngines: () => deps.providers.instances().flatMap((instance) => {
+      const snapshot = deps.providers.lastSnapshot(instance.instanceId);
+      if (!instance.enabled || snapshot?.state !== "available" || snapshot.authenticated === false) return [];
+      const usable = instance.models.options.filter((model) => !model.orgBlocked && !model.needsCliUpdate);
+      const model = usable.find((option) => option.id === instance.models.default) ?? usable[0];
+      if (!model) return [];
+      const perUse = deps.providers.access(instance.instanceId) === "api" || snapshot.billing === "metered" || billsEachUse(instanceConfigs(deps.cfg())[instance.instanceId]);
+      return [{ instanceId: instance.instanceId, name: instance.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === instance.driverKind)?.metadata.displayName ?? instance.instanceId,
+        model: model.id, billing: perUse ? "pay per use" as const : snapshot.billing === "subscription" ? "plan" as const : "unknown" as const }];
+    }),
     addEngine: (path, body) => refusal(callRoute(deps.routes.instances, { method: "POST", path: `/api/instances/${path}`, body, auth })),
     removeEngine: (instanceId) => refusal(callRoute(deps.routes.instances, { method: "DELETE", path: `/api/instances/${encodeURIComponent(instanceId)}`, auth })),
   });

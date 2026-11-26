@@ -49,14 +49,14 @@ export interface ToolCallResult {
   passthrough?: Json;
 }
 
-export function toolCallContextFromEnv(env: NodeJS.ProcessEnv): ToolCallContext {
+export function toolCallContextFromEnv(env: NodeJS.ProcessEnv, stop?: AbortSignal): ToolCallContext {
   const profile = catalogProfileFromEnv(env);
   return {
     botId: profile.botId,
     threadId: env.SEIRA_THREAD_ID ?? "",
     externalRuntime: env.SEIRA_EXTERNAL_RUNTIME === "1",
     sharedComputers: profile.sharedComputers,
-    client: harnessClientFromEnv(env),
+    client: harnessClientFromEnv(env, stop),
   };
 }
 

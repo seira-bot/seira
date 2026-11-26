@@ -4,12 +4,18 @@ import { modelContextWindow } from "./model-context-window.ts";
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
 const positive = (n: number | null | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 
-export function contextWindowFor(model: string | undefined, catalog?: ModelCatalog, reported?: number): number {
-  if (positive(reported)) return reported;
+export type ContextWindowSource = "reported" | "catalog" | "name" | "default";
+
+export function contextWindowSource(model: string | undefined, catalog?: ModelCatalog, reported?: number): { tokens: number; source: ContextWindowSource } {
+  if (positive(reported)) return { tokens: reported, source: "reported" };
   const declared = catalog?.options.find((option) => option.id === model)?.contextWindow;
-  if (positive(declared)) return declared;
+  if (positive(declared)) return { tokens: declared, source: "catalog" };
   const inferred = model ? modelContextWindow(model) : undefined;
-  return positive(inferred) ? inferred : DEFAULT_CONTEXT_WINDOW;
+  return positive(inferred) ? { tokens: inferred, source: "name" } : { tokens: DEFAULT_CONTEXT_WINDOW, source: "default" };
+}
+
+export function contextWindowFor(model: string | undefined, catalog?: ModelCatalog, reported?: number): number {
+  return contextWindowSource(model, catalog, reported).tokens;
 }
 
 /** A "meter" reading (an ACP agent's own usage_update) is shown only; it never times Seira's compaction. */

@@ -3,6 +3,7 @@
 // must hold even against a model that garbles the protocol.
 import { CONNECTOR_TOOL_NAME_PATTERN, type ConnectorToolGrant } from "../shared/wire.ts";
 import { EMAIL_SLUG } from "../shared/email.ts";
+import { GITHUB_APP_SLUG } from "../shared/github-app.ts";
 
 /** The connected apps' sandbox: Composio's code tools. Code run there can reach any connected app, past a bot's per-app
  * grants and scopes, so a bot with per-app grants runs it only at Full access, only by a direct call, and never while its
@@ -194,8 +195,8 @@ export function connectorScopeRefusalText(call: ConnectorCall, reason: "app" | "
     : `Seira did not run this: ${app} is read-only for ${bot}, and ${tool} would write to it. Ask the user before trying again.`;
 }
 
-/** Connected-app services a connectorTools grant names. The built-in Email app is never in the connected-apps inventory or
+/** Connected-app services a connectorTools grant names. The built-in Email and GitHub apps are never in the connected-apps inventory or
  * catalog; its own tools check its grant when called. */
 export function connectedAppGrantSlugs(grants: Record<string, ConnectorToolGrant>): string[] {
-  return Object.keys(grants).filter((slug) => slug !== EMAIL_SLUG);
+  return Object.keys(grants).filter((slug) => slug !== EMAIL_SLUG && slug !== GITHUB_APP_SLUG);
 }

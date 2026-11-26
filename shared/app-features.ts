@@ -1,3 +1,5 @@
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
+
 /** One thing the app offers, in the words the person sees. A bot reads this catalog (app_settings action=features)
  * to answer where something is and what it does, so a page, tab, agent tool, slash command or release note with
  * no entry is a gap the drift test reports. */
@@ -138,7 +140,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Chats",
     place: "a conversation with a bot",
     does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat"],
+    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat", "taskSuggestions"],
   },
   {
     id: "skills",
@@ -187,8 +189,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The AI pool spreads work across several AIs: balance usage, take turns, or go in order. The AI menu has an AI pool choice. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
   },
   {
     id: "models",
@@ -224,6 +226,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Settings → Phone & devices → Alerts when the phone app is closed",
     does: "Wakes the closed phone app for approvals, questions, sign-ins and finished replies. Off until the person turns it on. The alert holds names and the kind of alert, never the message.",
     releaseNotes: ["phonePush"],
+  },
+  {
+    id: "paired-devices",
+    name: "Paired devices",
+    place: "Settings → Phone & devices → Paired",
+    does: "The phones and computers paired with this server. Rename gives a device its own name, so two of the same model are easy to tell apart. Revoke ends its access.",
+    releaseNotes: ["renameDevices"],
   },
   {
     id: "computers",
@@ -380,6 +389,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "The top centre of the screen while a bot works (a tray icon only when Linux has no X11 support); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
     releaseNotes: ["glance", "glanceWayland"],
+  },
+  {
+    id: "github-app",
+    name: "GitHub",
+    place: "Apps → GitHub, then Connect; each bot's repositories are under its Apps page",
+    does: "Sign in with GitHub and choose repositories, with no key to paste. Each bot gets its own repositories and a level in each: Read, Pull requests or Write. Merging and deleting branches can wait for your answer.",
+    tools: GITHUB_APP_TOOL_NAMES,
+    releaseNotes: ["githubNative"],
   },
 ];
 

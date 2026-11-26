@@ -107,6 +107,26 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; w
   return { host, cfg, saved, messages, cards, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
 }
 
+describe("a set to the value the setting already has", () => {
+  it("says so, and posts no change card, no Undo and no decision-log line", async () => {
+    const { set, cards, messages, windowValues, dataDir } = fixture();
+    const answer = await set("appearance.skin", "daylight");
+    expect(answer.status).toBe(200);
+    expect(String(answer.body.text)).toBe("Skin already is daylight. Nothing changed, so no card was shown.");
+    expect(windowValues.get("appearance.skin")).toBe("daylight");
+    expect(cards()).toEqual([]);
+    expect(messages).toEqual([]);
+    await flushDecisionLog(dataDir);
+    expect(readDecisions(dataDir, 10)).toEqual([]);
+  });
+
+  it("still posts the card and the log line when the value changes", async () => {
+    const { set, cards } = fixture();
+    expect((await set("appearance.skin", "midnight")).status).toBe(200);
+    expect(cards()).toHaveLength(1);
+  });
+});
+
 describe("reads", () => {
   it("find lists matches with tier, value and where; get adds help and allowed values", async () => {
     const { host, turn } = fixture();
@@ -126,7 +146,7 @@ describe("reads", () => {
     expect((await host.handle({ action: "places", query: "spending" }, turn)).body.text).toMatch(/^Settings → Spending \(shown in Advanced mode only/);
     const every = String((await host.handle({ action: "places" }, turn)).body.text).split("\n");
     expect(every[0]).toMatch(/^Settings opens from/);
-    expect(every).toContain("Settings → AI → Other services");
+    expect(every).toContain("Settings → AI → Other services. Id for show_place: keys.");
     expect(every.join("\n")).not.toMatch(/API keys|Computers\b/);
   });
 
