@@ -36,9 +36,12 @@ const KEY_PREFIXES: RegExp[] = [
   /\bwhsec_[A-Za-z0-9_-]{20,}/g, // webhook secrets, alone or in an automation's address
   /\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, // sendgrid api keys
   /\bbak_[A-Za-z0-9_-]{20,}/g, // Bot API keys
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, // jwt
 ];
-const KEY_PREFIX_TESTS = KEY_PREFIXES.map((re) => new RegExp(re.source));
+/** A jwt is found from its first dot, never from its `eyJ` start. A pattern that starts at `eyJ` and then runs over the
+ * header re-scans the same unbroken run from each `eyJ` in it (`eyJ-eyJ-eyJ-…`), which costs quadratic time. The cheap
+ * `(?=\.)` test comes first, so the look-behind runs only at a dot, and a dot ends the run it reads back over. */
+const JWT_TAIL = /(?=\.)(?<=\beyJ[A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+const KEY_PREFIX_TESTS = [...KEY_PREFIXES.map((re) => new RegExp(re.source)), new RegExp(JWT_TAIL.source)];
 const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 
 /** Only shapes that are unmistakably a credential (a provider's key prefix, a private key block), never a name or a
@@ -50,21 +53,28 @@ const BEARER = /(\bBearer\s+)([A-Za-z0-9._~+/=-]{12,})/g;
 /** `Authorization: Basic dXNlcjpwYXNz`: the base64 is `user:password` in the clear. Only after an
  * Authorization header, so prose like "Basic configuration" stays. */
 const BASIC_AUTH = /(\bAuthorization["']?\s*[:=]\s*["']?Basic\s+)([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9._~+/=-])/gi;
-const PEM_BLOCK = /(-----BEGIN [A-Z ]*PRIVATE KEY-----)([\s\S]*?)(-----END [A-Z ]*PRIVATE KEY-----)/g;
+const PEM_OPEN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const PEM_CLOSE = /-----END [A-Z ]*PRIVATE KEY-----/g;
 /** key=value / key: value / key="value" where the key is secret-shaped.
  * The value must be a single token of some length; prose after a colon
- * ("password: leave blank…") has spaces and does not match. */
+ * ("password: leave blank…") has spaces and does not match.
+ * Cost: the key starts at a word boundary or after an underscore. A pattern that first reads a free-length name prefix
+ * re-reads the same run from each boundary in it (`a-a-a-…`), which costs quadratic time. The text before the key word
+ * stays in place either way, because the replacement writes the key back unchanged. */
 const KEY_VALUE =
-  /\b((?:[A-Za-z0-9_-]*_)?(?:api[_-]?key|apikey|secret|token|password|passwd|authorization|auth[_-]?token|access[_-]?key|private[_-]?key)s?)(["']?\s*[=:]\s*)(["']?)([A-Za-z0-9._~+/=-]{8,})\3/gi;
+  /((?:\b|(?<=_))(?:api[_-]?key|apikey|secret|token|password|passwd|authorization|auth[_-]?token|access[_-]?key|private[_-]?key)s?)(["']?\s*[=:]\s*)(["']?)([A-Za-z0-9._~+/=-]{8,})\3/gi;
 /** `X_KEY=value`, `xai-key=value`: an assignment to a name that ENDS in key
  * is a credential whatever the value looks like, so no length floor. The
- * separator before `key` is what keeps `hotkey=` and `keyboard=` out. */
-const KEY_SUFFIX_ASSIGNMENT = /\b([A-Za-z][A-Za-z0-9_-]*[_-]key)s?(=)(["']?)([A-Za-z0-9._~+/=-]+)\3/gi;
+ * separator before `key` is what keeps `hotkey=` and `keyboard=` out.
+ * Cost: the name is read backwards, and only where an `=` follows. A `=` ends the run it reads back over, so each
+ * character is read at most one time. */
+const KEY_SUFFIX_ASSIGNMENT = /(?=s?=)(?<=\b[A-Za-z][A-Za-z0-9_-]*[_-]key)s?(=)(["']?)([A-Za-z0-9._~+/=-]+)\2/gi;
 /** `--token abc`, `--password=abc`: the flag names a secret; the value is
  * whatever single token follows, never another flag. */
 const SECRET_FLAG = /(--(?:token|password|passwd|api-key|apikey|secret|access-key|auth-token)(?:=|\s+))(["']?)(?!-)([A-Za-z0-9._~+/=-]+)\2/gi;
-/** `scheme://user:secret@host` — the password in a URL's userinfo. */
-const URL_USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@'"]+:)([^\s/@'"«»]+)(@)/gi;
+/** `scheme://user:secret@host` — the password in a URL's userinfo. The scheme is read backwards from `://`, so a long
+ * `a.a.a.…` run is never re-read from each of its boundaries. */
+const URL_USERINFO = /(?<=\b[a-z][a-z0-9+.-]*:\/\/)([^\s/:@'"]+:)([^\s/@'"«»]+)(@)/gi;
 
 // A saved website password has no shape: it is known by value. The server
 // registers a scrubber for the values it holds, and every redaction below
@@ -88,21 +98,94 @@ export function scrubHeldSecrets(text: string): string {
   return out;
 }
 
+/** Private key blocks, found by scanning forward once. An END that no BEGIN has used is searched from where the last
+ * search stopped, so a text with many BEGIN lines and no END costs linear time, not one scan to the end per BEGIN.
+ * A block with no END at all is left as it is, like before. */
+function maskPemBlocks(text: string): string {
+  if (!text.includes("-----BEGIN ")) return text;
+  const open = new RegExp(PEM_OPEN.source, "g");
+  const close = new RegExp(PEM_CLOSE.source, "g");
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    open.lastIndex = pos;
+    const start = open.exec(text);
+    if (!start) break;
+    const bodyStart = start.index + start[0].length;
+    close.lastIndex = bodyStart;
+    const end = close.exec(text);
+    if (!end) break; // no END after this BEGIN, so none after a later BEGIN
+    out += `${text.slice(pos, start.index)}${start[0]}\n${mask(text.slice(bodyStart, end.index).trim())}\n${end[0]}`;
+    pos = end.index + end[0].length;
+  }
+  return pos === 0 ? text : out + text.slice(pos);
+}
+
+const isWordCode = (code: number) => (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || code === 95 || (code >= 97 && code <= 122);
+const isTokenCode = (code: number) => isWordCode(code) || code === 45;
+
+/** Jwt tokens: `JWT_TAIL` finds the two last segments, then the start of the header is the first `eyJ` in the
+ * unbroken run before the dot that sits on a word boundary and leaves at least 8 header characters. */
+function maskJwts(text: string): string {
+  if (!text.includes("eyJ")) return text;
+  const tail = new RegExp(JWT_TAIL.source, "g");
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(tail)) {
+    const dot = m.index;
+    let runStart = dot;
+    while (runStart > last && isTokenCode(text.charCodeAt(runStart - 1))) runStart--;
+    let head = -1;
+    for (let i = text.indexOf("eyJ", runStart); i !== -1 && i + 3 + 8 <= dot; i = text.indexOf("eyJ", i + 1)) {
+      if (i === 0 || !isWordCode(text.charCodeAt(i - 1))) { head = i; break; }
+    }
+    if (head < 0) continue;
+    const end = dot + m[0].length;
+    out += text.slice(last, head) + mask(text.slice(head, end));
+    last = end;
+  }
+  return last === 0 ? text : out + text.slice(last);
+}
+
+/** The most text the matchers read in one call. Every matcher above reads its input in time linear in its length. This
+ * limit is a second guard on the total work: text over it is not skipped. The part inside the head budget is
+ * redacted as usual, and everything after it is masked as one piece. */
+export const REDACT_SCAN_LIMIT = 2 * 1024 * 1024;
+/** The head budget is a quarter of the limit, so masking small secrets (a marker is longer than a short value) never
+ * grows redacted text back over the limit, and a second pass leaves the result byte-for-byte the same. */
+const REDACT_HEAD_BUDGET = REDACT_SCAN_LIMIT / 4;
+
+function redactWithinLimit(text: string): string {
+  let out = maskPemBlocks(text);
+  for (const re of KEY_PREFIXES) out = out.replace(re, (m) => mask(m));
+  out = maskJwts(out);
+  out = out.replace(BEARER, (_m, lead: string, tok: string) => `${lead}${mask(tok)}`);
+  out = out.replace(BASIC_AUTH, (_m, lead: string, creds: string) => `${lead}${mask(creds)}`);
+  out = out.replace(KEY_VALUE, (_m, key: string, sep: string, quote: string, value: string) => `${key}${sep}${quote}${mask(value)}${quote}`);
+  out = out.replace(KEY_SUFFIX_ASSIGNMENT, (_m, sep: string, quote: string, value: string) => `${sep}${quote}${mask(value)}${quote}`);
+  out = out.replace(SECRET_FLAG, (_m, flag: string, quote: string, value: string) => `${flag}${quote}${mask(value)}${quote}`);
+  out = out.replace(URL_USERINFO, (_m, user: string, secret: string, at: string) => `${user}${mask(secret)}${at}`);
+  return out;
+}
+
+/** Where the head of an oversize text ends. Never inside a token and never inside a private key block that has no
+ * END yet, because the tail is masked whole and a cut there would leave half a secret in the head. */
+function headEnd(text: string): number {
+  let cut = REDACT_HEAD_BUDGET;
+  while (cut > 0 && !/\s/.test(text[cut - 1] ?? "")) cut--;
+  const begin = text.lastIndexOf("-----BEGIN ", cut);
+  if (begin !== -1 && begin > text.lastIndexOf("-----END ", cut)) cut = begin;
+  return cut;
+}
+
 export function redactSecretsInText(text: string): string {
   if (!text) return text;
   // Held values first: a short one-time code is still a secret.
   const held = scrubHeldSecrets(text);
   if (held.length < 8) return held;
-  let out = held;
-  out = out.replace(PEM_BLOCK, (_m, open: string, body: string, close: string) => `${open}\n${mask(body.trim())}\n${close}`);
-  for (const re of KEY_PREFIXES) out = out.replace(re, (m) => mask(m));
-  out = out.replace(BEARER, (_m, lead: string, tok: string) => `${lead}${mask(tok)}`);
-  out = out.replace(BASIC_AUTH, (_m, lead: string, creds: string) => `${lead}${mask(creds)}`);
-  out = out.replace(KEY_VALUE, (_m, key: string, sep: string, quote: string, value: string) => `${key}${sep}${quote}${mask(value)}${quote}`);
-  out = out.replace(KEY_SUFFIX_ASSIGNMENT, (_m, key: string, sep: string, quote: string, value: string) => `${key}${sep}${quote}${mask(value)}${quote}`);
-  out = out.replace(SECRET_FLAG, (_m, flag: string, quote: string, value: string) => `${flag}${quote}${mask(value)}${quote}`);
-  out = out.replace(URL_USERINFO, (_m, lead: string, secret: string, at: string) => `${lead}${mask(secret)}${at}`);
-  return out;
+  if (held.length <= REDACT_SCAN_LIMIT) return redactWithinLimit(held);
+  const cut = headEnd(held);
+  return redactWithinLimit(held.slice(0, cut)) + mask(held.slice(cut));
 }
 
 /** Security invariant: a sentence's params are scrubbed like the English they fill, so a secret survives in neither. */
