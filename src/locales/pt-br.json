@@ -272,6 +272,7 @@
   "server.appSettings.confirm.usageData": "Dados de uso anônimos deste app serão enviados ao Seira.",
   "server.appSettings.confirm.emailOut": "Seu endereço de e-mail será enviado ao Seira.",
   "server.appSettings.confirm.browserOn": "{bot} poderá usar o navegador integrado, com os logins salvos nele.",
+  "server.appSettings.confirm.browserOnAll": "Todo bot com o próprio interruptor de navegador ligado poderá usar o navegador integrado, com os logins salvos nele.",
   "server.appSettings.confirm.appsOn": "{bot} poderá agir nos seus apps conectados.",
   "server.appSettings.confirm.toolsOn": "{bot} recupera estas ferramentas: {groups}.",
   "server.appSettings.confirm.ownChrome": "Os bots poderão usar o seu próprio Chrome, com os logins que ele tem.",

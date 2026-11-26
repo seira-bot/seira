@@ -164,6 +164,7 @@
   "server.appSettings.confirm.usageData": "Anonyme Nutzungsdaten dieser App gehen an Seira.",
   "server.appSettings.confirm.emailOut": "Deine E-Mail-Adresse wird an Seira gesendet.",
   "server.appSettings.confirm.browserOn": "{bot} kann dann den integrierten Browser nutzen, mit den darin gespeicherten Anmeldungen.",
+  "server.appSettings.confirm.browserOnAll": "Jeder Bot, dessen eigener Browser-Schalter an ist, kann dann den integrierten Browser nutzen, mit den darin gespeicherten Anmeldungen.",
   "server.appSettings.confirm.appsOn": "{bot} kann dann in deinen verbundenen Apps handeln.",
   "server.appSettings.confirm.toolsOn": "{bot} bekommt diese Werkzeuge zurück: {groups}.",
   "server.appSettings.confirm.ownChrome": "Bots können dann dein eigenes Chrome nutzen, mit den darin gespeicherten Anmeldungen.",

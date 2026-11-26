@@ -3110,6 +3110,7 @@
   "server.appSettings.confirm.usageData": "Des données d'utilisation anonymes de cette app seront envoyées à Seira.",
   "server.appSettings.confirm.emailOut": "Votre adresse e-mail sera envoyée à Seira.",
   "server.appSettings.confirm.browserOn": "{bot} pourra alors utiliser le navigateur intégré, avec les connexions qui y sont enregistrées.",
+  "server.appSettings.confirm.browserOnAll": "Chaque bot dont le propre interrupteur de navigateur est activé pourra alors utiliser le navigateur intégré, avec les connexions qui y sont enregistrées.",
   "server.appSettings.confirm.appsOn": "{bot} pourra alors agir dans tes applis connectées.",
   "server.appSettings.confirm.toolsOn": "{bot} retrouve ces outils : {groups}.",
   "server.appSettings.confirm.ownChrome": "Les bots pourront alors utiliser ton propre Chrome, avec les connexions qu'il contient.",

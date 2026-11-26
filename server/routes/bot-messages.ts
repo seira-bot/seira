@@ -102,6 +102,8 @@ export interface BotMessageRouteDeps {
   resolveAndSendTeamSetup(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
   /** A settings card's Apply or Not now; false when the card is no settings card. */
   resolveAndSendAppSetting(res: ServerResponse, args: { threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
+  /** The full current and new value of a waiting settings card, for the owner; null when the card is no settings card. */
+  reviewAppSetting(args: { threadId: string; requestId: string }, ownerReview: boolean): { status: number; body: Record<string, unknown> } | null;
   resolveAndSendMcp(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
   resolveAndSendRoutine(res: ServerResponse, args: CardAnswer): boolean;
   resolveAndSendProfile(res: ServerResponse, args: CardAnswer): boolean;
@@ -176,7 +178,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     acceptDirectSend, directSendRefusal, startTurn, usageTriggerFor, messageSender, cloudGuestSendRefusal, cloudThreadRefusal,
     cardAnswerRefusal, commandRememberRefusal, requestBehavior, requestedTaskBot, botForThread, threadBusy,
     botAtThreadCapacity, parksBehindCoordination, activeGroupTurnForBot, runningTurnInstance, engineSteersImages, resolveReplyTarget,
-    turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, resolveAndSendMcp,
+    turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, reviewAppSetting, resolveAndSendMcp,
     resolveAndSendRoutine, resolveAndSendProfile, resolveAndSendModel, resolveSkillRequest, sendSkillResolution, answerRequest,
     deliverLateQuestionAnswer, stopThreadForPerson, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
     cancelGroupTurnOperations, closeOpenApprovals, harnessCardOutcome, pressRecords, serverPress, relayedReaction, answeredIn, fromPhone, notePhoneSend, goals,
@@ -654,6 +656,13 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         }
         return json(res, 200, { ok: true, outcome });
       });
+    }
+    m = path.match(/^\/api\/threads\/([\w-]+)\/app-settings\/([\w-]+)\/review$/);
+    if (m && method === "GET") {
+      const refusal = cardAnswerRefusal(auth, m[1], m[2], "allow");
+      if (refusal) return json(res, 403, refusalText(refusal));
+      const review = reviewAppSetting({ threadId: m[1], requestId: m[2] }, ownerReview(auth, req));
+      return review ? json(res, review.status, review.body) : json(res, 404, { error: "No settings card with that id." });
     }
     m = path.match(/^\/api\/threads\/([\w-]+)\/respond$/);
     if (m && method === "POST") {

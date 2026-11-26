@@ -18,6 +18,7 @@ const CONSEQUENCE_KEYS = {
   usageData: "server.appSettings.confirm.usageData",
   emailOut: "server.appSettings.confirm.emailOut",
   browserOn: "server.appSettings.confirm.browserOn",
+  browserOnAll: "server.appSettings.confirm.browserOnAll",
   appsOn: "server.appSettings.confirm.appsOn",
   toolsOn: "server.appSettings.confirm.toolsOn",
   ownChrome: "server.appSettings.confirm.ownChrome",

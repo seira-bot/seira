@@ -40,7 +40,10 @@ client scope only. Nothing touches live app data.
   header, or one from a browser while a bot works, gets 403 on Undo too.
 - **A conversation someone else wrote into.** After a second paired device writes
   a line in the bot's thread, a safe setting (`rooms.turnTimeoutMinutes`) waits
-  on a card with no consequence line. Apply applies it, and Undo restores it.
+  on a card with no consequence line. The card leaves out the current value. The
+  owner opens both values through the review route (`GET
+  /api/threads/:id/app-settings/:requestId/review`) with an admin session. A
+  client-scope device gets 403. Apply applies it, and Undo restores it.
 - **Secret.** `set keys.xaiApiKey` with a value is refused. Without a value it
   posts the secure key card. The key is in no tool result, message, decision
   row or saved config.
@@ -73,7 +76,10 @@ client scope only. Nothing touches live app data.
   text that is not empty waits. Clearing a text that is already empty changes
   nothing.
 - **More access waits.** Turning the built-in browser, connected apps or a tool
-  group back on waits on a card that says what the bot can then do. So does moving
+  group back on waits on a card that says what the bot can then do. The
+  installation-wide built-in browser switch waits when it goes from off to on, and
+  does not wait when it is already on. The local-network switch waits when it goes
+  from off to on. So does moving
   a browser profile to the person's own Chrome. Turning each one off applies at
   once.
 - **Image generation.** `get ai.images` returns the models of each provider and

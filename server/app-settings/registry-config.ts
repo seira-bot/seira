@@ -44,12 +44,15 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
     ...(spec.review ? { review: spec.review } : {}),
   });
   /** `onConfirm`: turning it on waits for the owner's tap, naming this. */
-  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => section({
-    id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
-    current: () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; },
-    patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
-    ...(onConfirm ? { confirm: (on: boolean) => (on ? { code: onConfirm } : null) } : {}),
-  });
+  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => {
+    const isOn = () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; };
+    return section({
+      id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
+      current: isOn,
+      patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
+      ...(onConfirm ? { confirm: (on: boolean) => (on && !isOn() ? { code: onConfirm } : null) } : {}),
+    });
+  };
   /** A provider other than the one in use now sends conversation text to a new place. */
   const newProvider = (now: string | undefined, next: string | undefined): Consequence | null =>
     (next && next !== "off" && next !== now ? { code: "dataTo", params: { provider: next } } : null);
@@ -165,13 +168,13 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       patch: (on: boolean) => ({ features: { showToolCalls: on } }), says: (on: boolean) => (on ? "Show each tool a bot runs in its conversation" : "Hide tool runs from conversations"),
     }),
     feature("desktops.browser", "Built-in browser", "Bots may use the built-in browser; each bot also has its own switch.", "browser", ["browser", "built-in browser"], "browser", true,
-      "Let bots use the built-in browser", "Turn off the built-in browser for every bot"),
+      "Let bots use the built-in browser", "Turn off the built-in browser for every bot", "browserOnAll"),
     section({
       id: "desktops.browserLocalNetwork", label: "Browser on your local network", help: "Whether bots' browsers may open sites on this computer's local network.", where: "browser",
       synonyms: ["local network", "lan", "browser sites", "intranet"], value: z.boolean(), allowed: "true or false",
       current: () => cfg().browserEngine?.egress?.localNetwork === true, patch: (localNetwork) => ({ browserEngine: { egress: { localNetwork } } }),
       says: (on) => (on ? "Let bots' browsers open sites on your local network" : "Keep bots' browsers off your local network"),
-      confirm: (on) => (on ? { code: "browserLan" } : null),
+      confirm: (on) => (on && cfg().browserEngine?.egress?.localNetwork !== true ? { code: "browserLan" } : null),
     }),
     section({
       id: "desktops.browserProxy", label: "Browser proxy", help: "An unauthenticated SOCKS5 proxy bots' browsers reach public sites through; empty sends them direct. Its address is never shown, only whether one is set.",
@@ -180,7 +183,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       allowed: 'an unauthenticated "socks5://host:port", or "" for no proxy', current: () => cfg().browserEngine?.egress?.proxy ?? "",
       read: () => (cfg().browserEngine?.egress?.proxy ? "set" : ""), patch: (proxy) => ({ browserEngine: { egress: { proxy } } }),
       says: (proxy) => (proxy ? "Send bots' browsers to public sites through the SOCKS5 proxy you named" : "Send bots' browsers to public sites directly, with no proxy"),
-      confirm: (proxy) => (proxy ? { code: "browserProxy" } : null),
+      confirm: (proxy) => (proxy && proxy !== (cfg().browserEngine?.egress?.proxy ?? "") ? { code: "browserProxy" } : null),
     }),
     section({
       id: "desktops.browserEngine", label: "Browser engine", help: "What runs bots' browsers: Seira's own Chrome driver (the default where this computer has a Chrome for it) or agent-browser.", where: "browser",

@@ -103,6 +103,7 @@ interface Waiting {
   expiresAt: number;
   stored?: string;
   own: boolean;
+  review: { before: string; after: string };
   timer: ReturnType<typeof setTimeout>;
   applying?: true;
 }
@@ -273,6 +274,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
     const shown: Shown = change === undefined ? { before: was, after: display(value) } : { after: change };
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
     const reviewed = entry.review?.(value) ?? null;
+    const review = reviewed ?? { before: was, after: display(value) };
     const cardShown = forAudience(reviewed ?? shown, own);
     const cardLine = cardShown.before === undefined ? cardShown.after : `${notSet(cardShown.before)}${reviewed ? "\n→\n" : " → "}${notSet(cardShown.after)}`;
     const what = consequence ? serverLine(language, consequenceKey(consequence.code), consequence.params) : undefined;
@@ -283,11 +285,11 @@ export function createAppSettings(deps: AppSettingsDeps) {
       card: { title: serverLine(language, "server.appSettings.confirmTitle", { label: entry.label }),
         subtitle: [cardLine, what].filter(Boolean).join("\n"),
         options: [serverLine(language, "server.appSettings.apply"), serverLine(language, "server.appSettings.notNow")], requestId, tool: TOOL, fixedOptions: true,
-        appSettingRequest: { ...requestOf(entry, cardShown), ...(what ? { consequence: what } : {}), expiresAt } },
+        appSettingRequest: { ...requestOf(entry, cardShown), ...(what ? { consequence: what } : {}), ...(own ? {} : { privateReview: true as const }), expiresAt } },
     });
     const timer = setTimeout(() => expire(requestId), CONFIRM_MS);
     timer.unref?.();
-    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, state, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), own, timer });
+    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, state, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), own, review, timer });
     appendDecision(deps.dataDir, { threadId: turn.threadId, requestId, botId: bot.id, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${said(shown)}`, decision: "card-shown", source: "app-settings", ...(consequence ? { rule: `settings:${consequence.code}` } : {}) });
     return reply(200, { text: `A card asking the user to apply this is in the conversation: ${said(shown)}. Nothing has changed yet. End this turn now and say in one line that the change waits for their tap on Apply; Seira resumes you with the result.` });
   }
@@ -520,6 +522,18 @@ export function createAppSettings(deps: AppSettingsDeps) {
       log("user-approved");
       end(change, "applied", { ...appliedCard(change.threadId, change.entry, forAudience(shown, change.own)), answered: "allow", dismissed: true, autoApplied: true, appSettingRequest: { ...requestOf(change.entry, forAudience(shown, change.own)) } });
       return reply(200, { ok: true, outcome: "allowed-once" });
+    },
+
+    /** The full current and new value of a waiting card, for the owner only. Security invariant: the full old value goes only
+     * to the owner, never into the conversation, and the stored values hold no key. */
+    review(args: { threadId: string; requestId: string; ownerReview: boolean }): { status: number; body: Record<string, unknown> } | null {
+      const message = store.messagesFor(args.threadId).find((candidate) => candidate.card?.requestId === args.requestId && candidate.card.appSettingRequest);
+      const card = message?.card;
+      if (!message || !card?.appSettingRequest) return null;
+      if (!args.ownerReview) return refuse(403, "Only the owner sees this, from the desktop app or a device paired with full access.");
+      const change = waiting.get(args.requestId);
+      if (card.answered || card.dismissed || card.expired || !change || now() >= change.expiresAt) return refuse(409, "This card has closed.");
+      return reply(200, { before: change.review.before, after: change.review.after });
     },
 
     /** Undo on an applied card: restores the value read before the change, unless it changed since. */

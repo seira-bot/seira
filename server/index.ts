@@ -8904,6 +8904,10 @@ async function resolveAndSendAppSetting(res: ServerResponse, args: { threadId: s
   return true;
 }
 
+function reviewAppSetting(args: { threadId: string; requestId: string }, ownerReview: boolean) {
+  return appSettings.review({ ...args, ownerReview });
+}
+
 async function resolveAndSendTeamSetup(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean> {
   const card = store.messagesFor(args.threadId).find((item) => item.card?.requestId === args.requestId && item.card.teamSetupRequest)?.card;
   if (!card) return false;
@@ -11726,7 +11730,7 @@ ROUTES.push(createBotMessageRoutes({
   acceptDirectSend, directSendRefusal, startTurn, usageTriggerFor, messageSender, cloudGuestSendRefusal, cloudThreadRefusal, runOwners, runActor, resolveAccessRequest: (threadId, requestId, behavior, message) => lendingLifts?.resolve(threadId, requestId, behavior) ?? accessRequests.resolve(threadId, requestId, behavior, message), relayRefusal: CLOUD_TEAM ? (bot, email) => relayedSendRefusal(bot, email, Boolean(email && teamOwners.people?.list().some((one) => one.email === email && one.role !== "member"))) : (bot, email) => departmentAccess.relayRefusal(bot, email, Boolean(email && allowedScopes(email, signInAllowList())?.includes("admin"))),
   noAiRefusal: noAiNotice.refusal, cardAnswerRefusal, commandRememberRefusal, requestBehavior, requestedTaskBot, botForThread, threadBusy,
   botAtThreadCapacity, parksBehindCoordination, activeGroupTurnForBot, runningTurnInstance, engineSteersImages, resolveReplyTarget,
-  turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, resolveAndSendMcp,
+  turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, reviewAppSetting, resolveAndSendMcp,
   resolveAndSendRoutine, resolveAndSendProfile, resolveAndSendModel, resolveSkillRequest, sendSkillResolution, answerRequest,
   deliverLateQuestionAnswer, stopThreadForPerson, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
   cancelGroupTurnOperations, closeOpenApprovals, harnessCardOutcome, answeredIn: (threadId, requestId) => automationReports.answeredIn(teamMessages.inbox.answeredIn(threadId, requestId), requestId), pressRecords: proactive.brief.pressRecords, serverPress: (bot, threadId, messageId, action, auth) => meetingsHost.serverPress(bot, threadId, messageId, action, auth) ?? proactive.brief.serverPress(bot, threadId, messageId, action, auth),

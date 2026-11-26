@@ -2989,6 +2989,7 @@
   "server.appSettings.confirm.usageData": "इस ऐप का गुमनाम उपयोग डेटा Seira को भेजा जाएगा।",
   "server.appSettings.confirm.emailOut": "आपका ईमेल पता Seira को भेजा जाएगा।",
   "server.appSettings.confirm.browserOn": "{bot} तब अंतर्निहित ब्राउज़र का उपयोग कर सकेगा, उसमें सहेजे गए लॉगिन के साथ।",
+  "server.appSettings.confirm.browserOnAll": "जिस भी बॉट का अपना ब्राउज़र स्विच चालू है, वह तब अंतर्निहित ब्राउज़र का उपयोग कर सकेगा, उसमें सहेजे गए लॉगिन के साथ।",
   "server.appSettings.confirm.appsOn": "{bot} तब आपके जुड़े हुए ऐप्स में काम कर सकेगा।",
   "server.appSettings.confirm.toolsOn": "{bot} को ये टूल वापस मिलते हैं: {groups}।",
   "server.appSettings.confirm.ownChrome": "बॉट तब आपके अपने Chrome का उपयोग कर सकेंगे, उसमें मौजूद लॉगिन के साथ।",

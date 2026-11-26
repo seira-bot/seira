@@ -5284,6 +5284,7 @@
   "server.appSettings.confirm.usageData": "Bu uygulamanın anonim kullanım verileri Seira'ya gönderilecek.",
   "server.appSettings.confirm.emailOut": "E-posta adresiniz Seira'ya gönderilecek.",
   "server.appSettings.confirm.browserOn": "{bot} yerleşik tarayıcıyı, içinde kayıtlı oturumlarla birlikte kullanabilir.",
+  "server.appSettings.confirm.browserOnAll": "Kendi tarayıcı anahtarı açık olan her bot, yerleşik tarayıcıyı içinde kayıtlı oturumlarla birlikte kullanabilir.",
   "server.appSettings.confirm.appsOn": "{bot} bağlı uygulamalarınızda işlem yapabilir.",
   "server.appSettings.confirm.toolsOn": "{bot} şu araçları geri alır: {groups}.",
   "server.appSettings.confirm.ownChrome": "Botlar kendi Chrome'unuzu, içindeki oturumlarla birlikte kullanabilir.",

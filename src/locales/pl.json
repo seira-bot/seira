@@ -6432,6 +6432,7 @@
   "server.appSettings.confirm.usageData": "Anonimowe dane o użyciu tej aplikacji trafią do Seira.",
   "server.appSettings.confirm.emailOut": "Twój adres e-mail zostanie wysłany do Seira.",
   "server.appSettings.confirm.browserOn": "{bot} będzie mógł używać wbudowanej przeglądarki z zapisanymi w niej logowaniami.",
+  "server.appSettings.confirm.browserOnAll": "Każdy bot z włączonym własnym przełącznikiem przeglądarki będzie mógł używać wbudowanej przeglądarki z zapisanymi w niej logowaniami.",
   "server.appSettings.confirm.appsOn": "{bot} będzie mógł działać w Twoich połączonych aplikacjach.",
   "server.appSettings.confirm.toolsOn": "{bot} odzyska te narzędzia: {groups}.",
   "server.appSettings.confirm.ownChrome": "Boty będą mogły używać Twojej własnej przeglądarki Chrome z zapisanymi w niej logowaniami.",

@@ -9946,6 +9946,7 @@
   "server.appSettings.confirm.usageData": "此应用的匿名使用数据将发送给 Seira。",
   "server.appSettings.confirm.emailOut": "你的电子邮件地址将发送给 Seira。",
   "server.appSettings.confirm.browserOn": "{bot} 将可以使用内置浏览器及其中保存的登录信息。",
+  "server.appSettings.confirm.browserOnAll": "所有自己的浏览器开关已打开的机器人都将可以使用内置浏览器及其中保存的登录信息。",
   "server.appSettings.confirm.appsOn": "{bot} 将可以在你已连接的应用中操作。",
   "server.appSettings.confirm.toolsOn": "{bot} 将恢复这些工具：{groups}。",
   "server.appSettings.confirm.ownChrome": "机器人将可以使用你自己的 Chrome 及其中的登录信息。",

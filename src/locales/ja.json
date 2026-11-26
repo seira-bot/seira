@@ -7319,6 +7319,7 @@
   "server.appSettings.confirm.usageData": "このアプリの匿名の利用データが Seira に送信されます。",
   "server.appSettings.confirm.emailOut": "あなたのメールアドレスが Seira に送信されます。",
   "server.appSettings.confirm.browserOn": "{bot} が内蔵ブラウザーを使えるようになります。保存されたログイン情報も使われます。",
+  "server.appSettings.confirm.browserOnAll": "自分のブラウザースイッチがオンのボットはすべて、内蔵ブラウザーを使えるようになります。保存されたログイン情報も使われます。",
   "server.appSettings.confirm.appsOn": "{bot} が接続済みのアプリで操作できるようになります。",
   "server.appSettings.confirm.toolsOn": "{bot} にこれらのツールが戻ります: {groups}。",
   "server.appSettings.confirm.ownChrome": "ボットがあなた自身の Chrome を使えるようになります。中のログイン情報も使われます。",

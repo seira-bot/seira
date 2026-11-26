@@ -867,6 +867,43 @@ describe("settings changes judged on the turn's own request", () => {
     }
   });
 
+  it("a card that leaves out the old value says so, and only the owner reads the full old and new text before Apply", async () => {
+    const earlier = `earlier ${"e".repeat(592)}`;
+    const proposed = `proposed ${"p".repeat(591)}`;
+    expect(earlier).toHaveLength(600);
+    for (const options of [{ verdict: CONFIRM_HISTORY }, { group: true, verdict: CONFIRM_HISTORY }, { group: true }]) {
+      const fx = fixture(options);
+      (fx.cfg as { everyBotRules?: string }).everyBotRules = earlier;
+      await fx.set("bots.everyBotRules", proposed);
+      const request = fx.waiting()[0]!.card;
+      expect(request.appSettingRequest).toMatchObject({ privateReview: true, after: proposed });
+      expect(request.appSettingRequest).not.toHaveProperty("before");
+      expect(JSON.stringify(request).includes(earlier)).toBe(false);
+      const read = (ownerReview: boolean) => fx.host.review({ threadId: fx.turn.threadId, requestId: String(request.requestId), ownerReview });
+      expect(read(true)).toEqual({ status: 200, body: { before: earlier, after: proposed } });
+      expect(read(false)).toEqual({ status: 403, body: { error: "Only the owner sees this, from the desktop app or a device paired with full access." } });
+      expect(fx.host.review({ threadId: fx.turn.threadId, requestId: "unknown", ownerReview: true })).toBeNull();
+      await fx.resolve(String(request.requestId), "deny");
+      expect(read(true)).toEqual({ status: 409, body: { error: "This card has closed." } });
+    }
+  });
+
+  it("reads the old and new value of a setting without a full-text review, and closes the review when the card expires", async () => {
+    const fx = fixture({ verdict: CONFIRM_HISTORY });
+    await fx.set("rooms.turnTimeoutMinutes", 45);
+    const requestId = String(fx.waiting()[0]!.card.requestId);
+    expect(fx.host.review({ threadId: fx.turn.threadId, requestId, ownerReview: true })).toEqual({ status: 200, body: { before: "30", after: "45" } });
+    fx.clock.at += CONFIRM_MS;
+    expect(fx.host.review({ threadId: fx.turn.threadId, requestId, ownerReview: true })?.status).toBe(409);
+  });
+
+  it("a card in the owner's own conversation has no private review", async () => {
+    const fx = fixture({ verdict: { kind: "confirm", why: "history" } as SettingsVerdict });
+    fx.verdict.current = { kind: "clean" } as SettingsVerdict;
+    await fx.set("providers.xai.url", "https://example.test/v1");
+    expect(fx.waiting()[0]!.card.appSettingRequest).not.toHaveProperty("privateReview");
+  });
+
   it("a setting without a full-text review shows its old value only in the owner's own conversation, on a waiting card and on an applied one", async () => {
     const earlier = "old.address@example.com";
     for (const { name, options, shows } of [

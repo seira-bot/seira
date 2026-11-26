@@ -127,6 +127,26 @@ describe("risky values wait for the owner's tap", () => {
     for (const id of ["remote.wifi", "remote.relay", "remote.tailscale"]) expect(confirm(id, true), id).toEqual({ code: "wayIn" });
   });
 
+  it("the built-in browser for every bot waits only when it goes from off to on", () => {
+    const off = registry({ features: { browser: false } });
+    expect(off.confirm("desktops.browser", true)).toEqual({ code: "browserOnAll" });
+    expect(off.confirm("desktops.browser", false)).toBeNull();
+    for (const features of [{}, { browser: true }]) {
+      const on = registry({ features });
+      expect(on.confirm("desktops.browser", true), JSON.stringify(features)).toBeNull();
+      expect(on.confirm("desktops.browser", false), JSON.stringify(features)).toBeNull();
+    }
+    expect(registry({ features: { sharedComputers: true } }).confirm("computer.sharing", true)).toBeNull();
+  });
+
+  it("the local network and the proxy wait only when they open something that was closed or change the proxy", () => {
+    expect(registry({ browserEngine: { egress: { localNetwork: true } } }).confirm("desktops.browserLocalNetwork", true)).toBeNull();
+    expect(registry({ browserEngine: { egress: { localNetwork: false } } }).confirm("desktops.browserLocalNetwork", true)).toEqual({ code: "browserLan" });
+    const proxy = registry({ browserEngine: { egress: { proxy: "socks5://proxy.example:1080" } } });
+    expect(proxy.confirm("desktops.browserProxy", "socks5://proxy.example:1080")).toBeNull();
+    expect(proxy.confirm("desktops.browserProxy", "socks5://other.example:1080")).toEqual({ code: "browserProxy" });
+  });
+
   it("sending data to Seira waits when it is turned on, and turning it off does not", () => {
     expect(confirm("general.analytics", true)).toEqual({ code: "usageData" });
     expect(confirm("general.analytics", false)).toBeNull();

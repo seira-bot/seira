@@ -86,4 +86,3 @@ describe("settings change cards", () => {
     expect(closedByStop(settingsCard({ expired: true, options: [] }))).toBeNull();
   });
 });
-

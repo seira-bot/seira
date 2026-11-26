@@ -489,6 +489,14 @@ it("a conversation another person wrote into waits on a card even for a safe set
   expect(waiting).toMatchObject({ options: ["Apply", "Not now"], appSettingRequest: { tier: "safe", after: "33" } });
   expect(waiting.autoApplied).toBeUndefined();
   expect(waiting.appSettingRequest.consequence).toBeUndefined();
+  expect(waiting.appSettingRequest.privateReview).toBe(true);
+  expect(waiting.appSettingRequest).not.toHaveProperty("before");
+  const reviewPath = `/api/threads/${bot.threadId}/app-settings/${waiting.requestId}/review`;
+  const review = await api("GET", reviewPath, undefined, 200, ownerDevice);
+  expect(review.after).toBe("33");
+  if (earlier === undefined) expect(review.before).toMatch(/^\d+$/);
+  else expect(review.before).toBe(String(earlier));
+  expect((await api("GET", reviewPath, undefined, 403, clientDevice)).error).toBeTruthy();
   await respond(waiting.requestId, "allow");
   await finished("HISTORY-HEARD");
   expect(config().rooms.turnTimeoutMinutes).toBe(33);
