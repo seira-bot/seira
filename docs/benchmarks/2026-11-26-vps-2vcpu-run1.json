@@ -1,0 +1,295 @@
+{
+  "benchmark": "seira-server",
+  "date": "2026-11-26T10:29:20.049Z",
+  "host": {
+    "os": "Ubuntu 26.04.1 LTS",
+    "kernel": "7.0.0-44-generic",
+    "arch": "x64",
+    "cpu": "Intel(R) Xeon(R) Silver 4216 CPU @ 2.10GHz",
+    "vcpus": 2,
+    "memoryBytes": 7785316352,
+    "node": "v24.22.3"
+  },
+  "install": {
+    "spec": "@seira-bot/seira@latest",
+    "version": "0.1.194",
+    "installMs": 10671,
+    "installedBytes": 174206372,
+    "packageBytes": 83860109,
+    "downloadCacheBytes": 58032511,
+    "packages": 5
+  },
+  "seiraVersion": "0.1.194",
+  "start": {
+    "coldStartMs": {
+      "p50": 2915,
+      "p95": 3177,
+      "p99": 3177,
+      "min": 2800,
+      "max": 3177,
+      "n": 5
+    },
+    "warmStartMs": {
+      "p50": 2692,
+      "p95": 2969,
+      "p99": 2969,
+      "min": 2551,
+      "max": 2969,
+      "n": 5
+    }
+  },
+  "idle": {
+    "idleSeconds": 180,
+    "rssAtHealthyBytes": 374571008,
+    "rssPeakBytes": 456376320,
+    "rssSteadyBytes": 408509099,
+    "cpuPercentFirst60s": 12.9,
+    "cpuPercentSteady": 0.6,
+    "processes": [
+      {
+        "command": "node .bin/seira",
+        "rssBytes": 128053248
+      },
+      {
+        "command": "bin/node dist-server/index.js",
+        "rssBytes": 280993792
+      }
+    ],
+    "timeline": [
+      {
+        "second": 10,
+        "rssBytes": 455692288,
+        "cpuPercent": 68.8
+      },
+      {
+        "second": 20,
+        "rssBytes": 455884800,
+        "cpuPercent": 5.6
+      },
+      {
+        "second": 30,
+        "rssBytes": 455884800,
+        "cpuPercent": 0.7
+      },
+      {
+        "second": 40,
+        "rssBytes": 455884800,
+        "cpuPercent": 0.6
+      },
+      {
+        "second": 50,
+        "rssBytes": 455884800,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 60,
+        "rssBytes": 456376320,
+        "cpuPercent": 1.2
+      },
+      {
+        "second": 70,
+        "rssBytes": 456376320,
+        "cpuPercent": 0.7
+      },
+      {
+        "second": 80,
+        "rssBytes": 456376320,
+        "cpuPercent": 0.7
+      },
+      {
+        "second": 90,
+        "rssBytes": 456376320,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 100,
+        "rssBytes": 456376320,
+        "cpuPercent": 0.7
+      },
+      {
+        "second": 110,
+        "rssBytes": 447496192,
+        "cpuPercent": 1.5
+      },
+      {
+        "second": 120,
+        "rssBytes": 408293376,
+        "cpuPercent": 3.3
+      },
+      {
+        "second": 130,
+        "rssBytes": 408326144,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 140,
+        "rssBytes": 408371200,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 150,
+        "rssBytes": 408403968,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 160,
+        "rssBytes": 408436736,
+        "cpuPercent": 0.5
+      },
+      {
+        "second": 170,
+        "rssBytes": 408469504,
+        "cpuPercent": 0.4
+      },
+      {
+        "second": 180,
+        "rssBytes": 409047040,
+        "cpuPercent": 1
+      }
+    ]
+  },
+  "turns": {
+    "sequential": {
+      "turns": 50,
+      "failed": 0,
+      "sendToStartMs": {
+        "p50": 109.3,
+        "p95": 128.9,
+        "p99": 133.5,
+        "min": 86.3,
+        "max": 133.5,
+        "n": 50
+      },
+      "sendToModelRequestMs": {
+        "p50": 371.4,
+        "p95": 400.1,
+        "p99": 441.8,
+        "min": 311.4,
+        "max": 441.8,
+        "n": 50
+      },
+      "modelDoneToTurnDoneMs": {
+        "p50": 25.7,
+        "p95": 32.7,
+        "p99": 41.6,
+        "min": 20.4,
+        "max": 41.6,
+        "n": 50
+      },
+      "sendToTurnDoneMs": {
+        "p50": 397.2,
+        "p95": 429.6,
+        "p99": 471,
+        "min": 336.3,
+        "max": 471,
+        "n": 50
+      }
+    },
+    "parallel": {
+      "bots": 10,
+      "rounds": [
+        {
+          "round": 1,
+          "completed": 10,
+          "roundMs": 4657,
+          "sendToTurnDoneMs": {
+            "p50": 4353.7,
+            "p95": 4655.2,
+            "p99": 4655.2,
+            "min": 4060.7,
+            "max": 4655.2,
+            "n": 10
+          }
+        },
+        {
+          "round": 2,
+          "completed": 10,
+          "roundMs": 4184,
+          "sendToTurnDoneMs": {
+            "p50": 4033.5,
+            "p95": 4179.2,
+            "p99": 4179.2,
+            "min": 3700.3,
+            "max": 4179.2,
+            "n": 10
+          }
+        },
+        {
+          "round": 3,
+          "completed": 10,
+          "roundMs": 3917,
+          "sendToTurnDoneMs": {
+            "p50": 3726.2,
+            "p95": 3913.7,
+            "p99": 3913.7,
+            "min": 3684.5,
+            "max": 3913.7,
+            "n": 10
+          }
+        }
+      ]
+    },
+    "modelRequests": {
+      "/api/version": 2,
+      "/v1/models": 1,
+      "/v1/chat/completions": 97
+    }
+  },
+  "rssAfterTurnsBytes": 559931392,
+  "http": {
+    "tool": "oha 1.17.0",
+    "durationS": 20,
+    "health": {
+      "path": "/api/health",
+      "max": {
+        "connections": 50,
+        "requestsPerSec": 2586,
+        "successRate": 1,
+        "p50Ms": 18.431,
+        "p95Ms": 24.157,
+        "p99Ms": 36.763,
+        "status": {
+          "200": 51692
+        }
+      },
+      "fixedRate": {
+        "rate": 100,
+        "connections": 10,
+        "requestsPerSec": 100,
+        "successRate": 1,
+        "p50Ms": 1.523,
+        "p95Ms": 2.471,
+        "p99Ms": 3.737,
+        "status": {
+          "200": 2000
+        }
+      }
+    },
+    "botList": {
+      "path": "/api/bots?messages=0",
+      "max": {
+        "connections": 50,
+        "requestsPerSec": 638,
+        "successRate": 1,
+        "p50Ms": 70.743,
+        "p95Ms": 109.294,
+        "p99Ms": 139.147,
+        "status": {
+          "200": 12710
+        }
+      },
+      "fixedRate": {
+        "rate": 100,
+        "connections": 10,
+        "requestsPerSec": 100,
+        "successRate": 1,
+        "p50Ms": 3.32,
+        "p95Ms": 6.252,
+        "p99Ms": 11.978,
+        "status": {
+          "200": 2000
+        }
+      }
+    }
+  }
+}
