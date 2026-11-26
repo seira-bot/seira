@@ -1295,6 +1295,8 @@
   "approval.aria.reviewRoutine": "Detalhes da rotina para revisar",
   "approval.aria.reviewProfile": "Alteração de perfil para revisar",
   "approval.aria.reviewDetails": "Detalhes da aprovação para revisar",
+  "approval.review.show": "Mostrar o que muda",
+  "approval.review.failed": "Não foi possível mostrar a mudança. Tente novamente.",
   "approval.action.cancelTurn": "Cancelar sessão",
   "approval.action.cancel": "Cancelar",
   "approval.action.deny": "Negar",

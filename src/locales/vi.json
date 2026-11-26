@@ -569,6 +569,8 @@
   "approval.aria.reviewRoutine": "Chi tiết tác vụ định kỳ cần xem lại",
   "approval.aria.reviewProfile": "Thay đổi hồ sơ cần xem lại",
   "approval.aria.reviewDetails": "Chi tiết phê duyệt cần xem lại",
+  "approval.review.show": "Xem những gì thay đổi",
+  "approval.review.failed": "Không thể hiển thị thay đổi. Hãy thử lại.",
   "approval.action.cancelTurn": "Hủy lượt",
   "approval.action.cancel": "Hủy",
   "approval.action.deny": "Từ chối",

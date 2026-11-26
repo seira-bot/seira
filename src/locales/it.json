@@ -839,6 +839,8 @@
   "approval.aria.reviewRoutine": "Dettagli della routine da controllare",
   "approval.aria.reviewProfile": "Modifica del profilo da controllare",
   "approval.aria.reviewDetails": "Dettagli dell'approvazione da controllare",
+  "approval.review.show": "Mostra cosa cambia",
+  "approval.review.failed": "Impossibile mostrare la modifica. Riprova.",
   "approval.action.cancelTurn": "Annulla il turno",
   "approval.action.cancel": "Annulla",
   "approval.action.deny": "Rifiuta",

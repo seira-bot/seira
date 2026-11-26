@@ -544,6 +544,8 @@
   "approval.aria.reviewRoutine": "Details zur Routine prüfen",
   "approval.aria.reviewProfile": "Profiländerung prüfen",
   "approval.aria.reviewDetails": "Details zur Freigabe prüfen",
+  "approval.review.show": "Änderung anzeigen",
+  "approval.review.failed": "Die Änderung konnte nicht angezeigt werden. Versuch es noch einmal.",
   "approval.action.cancelTurn": "Ausführung abbrechen",
   "approval.action.cancel": "Abbrechen",
   "approval.action.deny": "Ablehnen",

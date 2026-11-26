@@ -1163,6 +1163,8 @@
   "approval.aria.reviewRoutine": "待查看的例行任务详情",
   "approval.aria.reviewProfile": "待查看的资料变更",
   "approval.aria.reviewDetails": "待查看的批准详情",
+  "approval.review.show": "查看更改内容",
+  "approval.review.failed": "无法显示更改内容。请重试。",
   "approval.action.cancelTurn": "取消本轮",
   "approval.action.cancel": "取消",
   "approval.action.deny": "拒绝",

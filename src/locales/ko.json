@@ -901,6 +901,8 @@
   "approval.aria.reviewRoutine": "검토할 루틴 세부 정보",
   "approval.aria.reviewProfile": "검토할 프로필 변경",
   "approval.aria.reviewDetails": "검토할 승인 세부 정보",
+  "approval.review.show": "바뀌는 내용 보기",
+  "approval.review.failed": "바뀌는 내용을 보여 줄 수 없어요. 다시 시도하세요.",
   "approval.action.cancelTurn": "턴 취소",
   "approval.action.cancel": "취소",
   "approval.action.deny": "거부",

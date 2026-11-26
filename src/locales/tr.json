@@ -569,6 +569,8 @@
   "approval.aria.reviewRoutine": "İncelenecek rutin ayrıntıları",
   "approval.aria.reviewProfile": "İncelenecek profil değişikliği",
   "approval.aria.reviewDetails": "İncelenecek onay ayrıntıları",
+  "approval.review.show": "Neyin değiştiğini göster",
+  "approval.review.failed": "Değişiklik gösterilemedi. Tekrar deneyin.",
   "approval.action.cancelTurn": "Turu iptal et",
   "approval.action.cancel": "İptal",
   "approval.action.deny": "Reddet",

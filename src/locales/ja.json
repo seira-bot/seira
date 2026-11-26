@@ -958,6 +958,8 @@
   "approval.aria.reviewRoutine": "確認するルーティンの詳細",
   "approval.aria.reviewProfile": "確認するプロフィールの変更",
   "approval.aria.reviewDetails": "確認する承認の詳細",
+  "approval.review.show": "変更内容を表示",
+  "approval.review.failed": "変更内容を表示できませんでした。もう一度お試しください。",
   "approval.action.cancelTurn": "ターンをキャンセル",
   "approval.action.cancel": "キャンセル",
   "approval.action.deny": "拒否",

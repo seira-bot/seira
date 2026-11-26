@@ -1048,6 +1048,8 @@
   "approval.aria.reviewRoutine": "例行工作詳細資訊",
   "approval.aria.reviewProfile": "角色資料變更",
   "approval.aria.reviewDetails": "核准詳細資訊",
+  "approval.review.show": "查看變更內容",
+  "approval.review.failed": "無法顯示變更內容。請再試一次。",
   "approval.action.cancelTurn": "取消本回合",
   "approval.action.cancel": "取消",
   "approval.action.deny": "拒絕",

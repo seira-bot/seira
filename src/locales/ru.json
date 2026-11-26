@@ -851,6 +851,8 @@
   "approval.aria.reviewRoutine": "Детали процедуры для проверки",
   "approval.aria.reviewProfile": "Изменение профиля для проверки",
   "approval.aria.reviewDetails": "Детали одобрения для проверки",
+  "approval.review.show": "Показать, что изменится",
+  "approval.review.failed": "Не удалось показать изменение. Попробуйте ещё раз.",
   "approval.action.cancelTurn": "Отменить ход",
   "approval.action.cancel": "Отменить",
   "approval.action.deny": "Отклонить",

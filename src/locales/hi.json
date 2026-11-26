@@ -1230,6 +1230,8 @@
   "approval.aria.reviewRoutine": "देखने के लिए रूटीन का विवरण",
   "approval.aria.reviewProfile": "देखने के लिए प्रोफ़ाइल का बदलाव",
   "approval.aria.reviewDetails": "देखने के लिए मंज़ूरी का विवरण",
+  "approval.review.show": "देखें क्या बदलेगा",
+  "approval.review.failed": "बदलाव नहीं दिखाया जा सका। फिर से कोशिश करें।",
   "approval.action.cancelTurn": "बारी रद्द करें",
   "approval.action.cancel": "रद्द करें",
   "approval.action.deny": "अस्वीकार करें",

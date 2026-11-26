@@ -845,6 +845,8 @@
   "approval.aria.reviewRoutine": "Szczegóły rutyny do przejrzenia",
   "approval.aria.reviewProfile": "Zmiana profilu do przejrzenia",
   "approval.aria.reviewDetails": "Szczegóły zatwierdzenia do przejrzenia",
+  "approval.review.show": "Pokaż, co się zmieni",
+  "approval.review.failed": "Nie udało się pokazać zmiany. Spróbuj ponownie.",
   "approval.action.cancelTurn": "Anuluj turę",
   "approval.action.cancel": "Anuluj",
   "approval.action.deny": "Odrzuć",

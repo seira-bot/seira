@@ -1230,6 +1230,8 @@
   "approval.aria.reviewRoutine": "Détails de la routine à examiner",
   "approval.aria.reviewProfile": "Modification de profil à examiner",
   "approval.aria.reviewDetails": "Détails de l'autorisation à examiner",
+  "approval.review.show": "Voir ce qui change",
+  "approval.review.failed": "Impossible d'afficher la modification. Réessayez.",
   "approval.action.cancelTurn": "Annuler le tour",
   "approval.action.cancel": "Annuler",
   "approval.action.deny": "Refuser",

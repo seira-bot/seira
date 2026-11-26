@@ -788,6 +788,8 @@
   "approval.aria.reviewRoutine": "Detalles de la rutina para revisar",
   "approval.aria.reviewProfile": "Cambio de perfil para revisar",
   "approval.aria.reviewDetails": "Detalles de la aprobación para revisar",
+  "approval.review.show": "Ver qué cambia",
+  "approval.review.failed": "No se pudo mostrar el cambio. Inténtalo de nuevo.",
   "approval.action.cancelTurn": "Cancelar el turno",
   "approval.action.cancel": "Cancelar",
   "approval.action.deny": "Denegar",

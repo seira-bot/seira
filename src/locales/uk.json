@@ -427,6 +427,8 @@
   "approval.aria.reviewRoutine": "Деталі рутини для перегляду",
   "approval.aria.reviewProfile": "Зміна профілю для перегляду",
   "approval.aria.reviewDetails": "Деталі погодження для перегляду",
+  "approval.review.show": "Показати, що зміниться",
+  "approval.review.failed": "Не вдалося показати зміну. Спробуйте ще раз.",
   "approval.action.cancelTurn": "Скасувати запит",
   "approval.action.cancel": "Скасувати",
   "approval.action.deny": "Відмовити",
