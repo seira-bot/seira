@@ -154,6 +154,9 @@ export interface AcpSupport extends AcpDriverHooks {
   /** The approval mode is applied per turn by configureSession, which must throw unless the runtime
    * confirms it; an approval change never respawns the process. */
   sessionScopedApproval?: boolean;
+  /** An `allow_always` option of this agent ends with the native session. Without it, "allow for this session" sends
+   * `allow_once` and the driver keeps the grant in its own session memory. */
+  nativeSessionGrant?: boolean;
   /** False when this engine cannot run memory upkeep's one-shot text call cleanly; oneShotFolder holds a one-shot's folder. */
   backgroundText?: false; oneShotFolder?(): Promise<string>;
   /** Mutate the child env in place. `instanceEnvironment` tells a key put there on purpose from one
@@ -469,7 +472,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         session.idleTimer = armIdleClose(`${instanceId}\0${threadId}`, engineIdleMs(threadId, sessionIdle), { close: () => closeSession(threadId, "idle"), threadId, policy: sessionIdle, // per-chat
           idle: () => sessions.get(threadId) === session && !session.closing && !session.current });
       };
-    // Session allows the driver keeps when the agent offered no `allow_always`: exact operations per
+    // Session allows the driver keeps for an agent without a session-bound `allow_always` (`nativeSessionGrant`): exact operations per
     // thread, for the native session's life. A generic title with no input is never remembered.
       const sessionAllows = new Map<string, Set<string>>();
 
@@ -681,11 +684,14 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           const params = support.permissionRequest ? support.permissionRequest(msg.params ?? {}) : msg.params ?? {};
           current.flushAssistantText();
           const options: Array<{ optionId?: string; kind?: string; name?: string }> = Array.isArray(params.options) ? params.options : [];
+          // An approval never takes a wider option than the one the person gave: allow picks only `allow_once`.
           const optionFor = (want: "allow" | "reject") =>
             options.find((o) => o.kind === `${want}_once` && typeof o.optionId === "string")?.optionId
-              ?? options.find((o) => String(o.kind ?? "").startsWith(want) && typeof o.optionId === "string")?.optionId
+              ?? (want === "reject" ? options.find((o) => String(o.kind ?? "").startsWith("reject") && typeof o.optionId === "string")?.optionId : undefined)
               ?? null;
-          const optionAlways = options.find((o) => o.kind === "allow_always" && typeof o.optionId === "string")?.optionId ?? null;
+          const optionAlways = support.nativeSessionGrant
+            ? options.find((o) => o.kind === "allow_always" && typeof o.optionId === "string")?.optionId ?? null
+            : null;
           const cancelled = { outcome: { outcome: "cancelled" } };
           const missing = (want: string) =>
             emit({
