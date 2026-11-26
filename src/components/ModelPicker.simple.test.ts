@@ -243,13 +243,12 @@ describe("the model picker in Simple mode", () => {
     });
 
     it("pins a conversation the pool ran before, after the pool is off", () => {
-      const opened = open(pooled("auto"));
+      const forBot = pooled("auto");
       fixture.aiPool = { enabled: false, mode: "even", members: [] };
-      const off = open(fixture.bots[0]!);
+      const off = open(forBot);
       expect(pane(off)!.props.pool).toBeNull();
       pane(off)!.props.onPick(instance("claude"), "claude-sonnet-5-5");
       expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false }));
-      expect(pane(opened)).toBeDefined();
     });
   });
 
