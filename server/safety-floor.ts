@@ -56,8 +56,18 @@ const formatsDevice = (word: string): boolean => {
   return path.startsWith("/dev/") && path.length > 5 && !path.includes(HOME) && !path.includes(DYNAMIC) && !SCRATCH_DEVICE.test(path);
 };
 
-/** PowerShell cmdlets that erase a volume or a whole disk. */
-const POWERSHELL_DISK_WIPES = new Set(["format-volume", "clear-disk"]);
+/** Windows storage commands that erase a volume or a disk, remove or reshape partitions or pools, or run a disk script
+ * the floor cannot read (`diskpart` takes its script from the keyboard or from `/s FILE`). Any call is blocked. */
+const WINDOWS_STORAGE_COMMANDS = new Set([
+  "format-volume", "clear-disk", "initialize-disk", "set-disk", "remove-partition",
+  "remove-physicaldisk", "reset-physicaldisk", "remove-virtualdisk", "remove-storagepool", "diskpart",
+]);
+
+/** The rule a Windows storage command meets, or null. `cipher /w` overwrites the free space of a volume. */
+function windowsStorage(program: string, args: string[]): FloorVerdict | null {
+  if (WINDOWS_STORAGE_COMMANDS.has(program)) return FORMAT_DISK;
+  return program === "cipher" && args.some((arg) => /^\/w(?::|$)/i.test(arg)) ? OVERWRITE_DISK : null;
+}
 
 // A function that pipes itself into itself in the background, then runs; the name is bounded to keep the regex cheap.
 const BOMB_BODY = String.raw`\s*\{\s*\1\s*\|\s*\1\s*&\s*\}\s*;?\s*\1(?![\w:.-])`;
@@ -633,7 +643,8 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   }
 
   if (mode === "powershell") {
-    if (POWERSHELL_DISK_WIPES.has(program)) return FORMAT_DISK;
+    const storage = windowsStorage(program, args);
+    if (storage) return storage;
     // Remove-Item's aliases off Windows, where `rm` and `rmdir` are the real programs the POSIX reading judges.
     if (!["remove-item", "ri", "rd", "del", "erase"].includes(program)) return null;
     const isSwitch = (arg: string) => /^-./.test(arg);
@@ -663,8 +674,9 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
     }
     return null;
   }
-  if (program === "format") return args.some((arg) => /^[A-Za-z]:\\?$/.test(arg)) ? FORMAT_DISK : null;
-  return POWERSHELL_DISK_WIPES.has(program) ? FORMAT_DISK : null;
+  // A drive letter with or without a folder after it, or a volume path (`\\?\Volume{...}`).
+  if (program === "format") return args.some((arg) => /^(?:[A-Za-z]:|\\\\[?.]\\)/.test(arg)) ? FORMAT_DISK : null;
+  return windowsStorage(program, args);
 }
 
 function scan(source: string, pass: Pass, mode: Mode, depth: number): FloorVerdict | null {
