@@ -63,7 +63,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
     const shown = deps.routineShown?.(auth);
     return shown ? all.filter(shown) : all;
   };
-  const { store, broadcast, publicBot, publicGroupState, groupWithThread, defaultSelection, packageImportDeps } = deps;
+  const { store, broadcast, publicBot, publicGroupState, groupWithThread, defaultSelection, packageImportDeps, newBotApproval } = deps;
   const added = (imported: PackageImportResult) => ({
     name: imported.name,
     section: imported.section,
@@ -208,7 +208,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if (currentFormat(body?.format) === "seira.backup") {
         if (importMode !== "add") return json(res, 400, { error: "Import backups alongside your existing bots; project mode is only for templates" });
         try {
-          const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth), newBotApproval: deps.newBotApproval?.() });
+          const imported = importTeamBackup(store, routines!, body, await defaultSelection(), { visibility: importVisibility, ...teamCreator(auth), newBotApproval: newBotApproval?.() });
           // A restore writes transcripts without store events: these frames carry the restored pages to other clients.
           const bots = imported.bots.map((bot) => publicBot(bot));
           const groups = imported.groups.map((group) => groupWithThread(group));
