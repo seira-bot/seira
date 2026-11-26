@@ -866,6 +866,29 @@ describe("settings changes judged on the turn's own request", () => {
     }
   });
 
+  it("a setting without a full-text review shows its old value only in the owner's own conversation, on a waiting card and on an applied one", async () => {
+    const earlier = "old.address@example.com";
+    for (const { name, options, shows } of [
+      { name: "own", options: {}, shows: true },
+      { name: "history", options: { verdict: CONFIRM_HISTORY }, shows: false },
+      { name: "room", options: { group: true, verdict: CONFIRM_HISTORY }, shows: false },
+      { name: "room, applied at once", options: { group: true }, shows: false },
+    ]) {
+      const fx = fixture(options);
+      (fx.cfg as { profile?: { email?: string } }).profile = { email: earlier };
+      expect((await fx.set("profile.email", "new.address@example.com")).status, name).toBe(200);
+      const request = fx.cards().at(-1)!;
+      expect(JSON.stringify(request.card).includes(earlier), `${name} applied or waiting`).toBe(shows);
+      expect(JSON.stringify(request.card).includes("new.address@example.com"), name).toBe(true);
+      if (fx.waiting().length) {
+        await fx.resolve(String(request.card.requestId), "allow");
+        expect(fx.cards().at(-1)!.card.autoApplied, name).toBe(true);
+        expect(JSON.stringify(fx.cards().at(-1)!.card).includes(earlier), `${name} after Apply`).toBe(shows);
+        expect(Object.hasOwn(fx.cards().at(-1)!.card.appSettingRequest, "before"), name).toBe(shows);
+      }
+    }
+  });
+
   it("clearing rules waits, and clearing rules that are already empty changes nothing", async () => {
     const fx = fixture();
     (fx.cfg as { everyBotRules?: string }).everyBotRules = "Be kind";
