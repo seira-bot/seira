@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:net";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEmailSignIn } from "./account-signin.ts";
 import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TRIES, SIGNIN_CODES_PER_ADDRESS_ALL, SIGNIN_CODE_TTL_MS, smtpOptions, type MailMessage } from "./sign-in-mail.ts";
@@ -88,6 +88,61 @@ describe("sign-in codes through the server's own mail server", () => {
     await mail.send("her@example.test");
     clock += SIGNIN_CODE_TTL_MS;
     expect(mail.check("her@example.test", box.code())).toBe("wrong");
+  });
+
+  describe("when the system clock moves", () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    async function sendAndCount(mail: ReturnType<typeof createSignInMail>, times: number): Promise<void> {
+      for (let sent = 0; sent < times; sent++) {
+        expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+        vi.advanceTimersByTime(SIGNIN_CODE_RESEND_MS);
+      }
+    }
+
+    it("sends a new code 30 real seconds later after the clock moved back an hour", async () => {
+      vi.useFakeTimers();
+      const box = mailbox();
+      const mail = createSignInMail({ url: URL_, from: "signin@example.test", transport: box.transport });
+      await mail.send("her@example.test");
+      vi.setSystemTime(Date.now() - 60 * 60_000);
+      expect(await mail.send("her@example.test")).toBe("tooSoon");
+      vi.advanceTimersByTime(SIGNIN_CODE_RESEND_MS);
+      expect(await mail.send("her@example.test")).toBe("sent");
+      expect(box.sent).toHaveLength(2);
+    });
+
+    it("keeps a code for ten real minutes when the clock moves forward", async () => {
+      vi.useFakeTimers();
+      const box = mailbox();
+      const mail = createSignInMail({ url: URL_, from: "signin@example.test", transport: box.transport });
+      await mail.send("her@example.test");
+      const code = box.code();
+      vi.setSystemTime(Date.now() + 60 * 60_000);
+      vi.advanceTimersByTime(SIGNIN_CODE_TTL_MS - 1);
+      expect(mail.check("her@example.test", code)).toBe("ok");
+    });
+
+    it("ends a code after ten real minutes even when the clock moved back", async () => {
+      vi.useFakeTimers();
+      const box = mailbox();
+      const mail = createSignInMail({ url: URL_, from: "signin@example.test", transport: box.transport });
+      await mail.send("her@example.test");
+      vi.setSystemTime(Date.now() - 60 * 60_000);
+      vi.advanceTimersByTime(SIGNIN_CODE_TTL_MS);
+      expect(mail.check("her@example.test", box.code())).toBe("wrong");
+    });
+
+    it("keeps the send limits when the clock moves forward, and ends them after ten real minutes", async () => {
+      vi.useFakeTimers();
+      const box = mailbox();
+      const mail = createSignInMail({ url: URL_, from: "signin@example.test", transport: box.transport });
+      await sendAndCount(mail, 3);
+      vi.setSystemTime(Date.now() + 60 * 60_000);
+      expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("tooSoon");
+      vi.advanceTimersByTime(SIGNIN_CODE_TTL_MS);
+      expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+    });
   });
 
   it("limits the codes one address gets in ten minutes", async () => {

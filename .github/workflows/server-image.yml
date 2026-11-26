@@ -74,11 +74,10 @@ jobs:
             [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "The tag must look like v0.1.173."; exit 1; }
             sha=$(gh api "repos/$REPOSITORY/commits/refs/tags/$TAG" --jq .sha) || { echo "Cannot resolve $TAG."; exit 1; }
             [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "$TAG did not resolve to a full commit sha."; exit 1; }
-            node scripts/release-gate.mjs --tag "$TAG" --sha "$sha"
+            node scripts/release-gate.mjs --tag "$TAG" --sha "$sha" && status=0 || status=$?
           else
-            node scripts/release-gate.mjs --sha "$sha"
+            node scripts/release-gate.mjs --sha "$sha" && status=0 || status=$?
           fi
-          status=$?
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;

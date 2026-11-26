@@ -160,10 +160,25 @@ export async function verifyWorkspaceBackup(report: (event: unknown) => void = (
     assert.equal(encrypted.byteLength, exported.body.bytes);
     for (const privateText of [soul, "fixture-voice-key", "WORKSPACE_SKILL_MARKER", "Keep draft"]) assert.equal(encrypted.includes(Buffer.from(privateText)), false);
     record({ command: "download encrypted workspace", bytes: encrypted.length, summary: exported.body.summary });
+    const archiveSha256 = createHash("sha256").update(encrypted).digest("hex");
+    assert.equal(exported.body.sha256, archiveSha256);
+    record({ command: "compare the export checksum with the downloaded bytes", sha256: archiveSha256 });
 
     const pairing = await api(destination, "POST", "/api/auth/pairing", { scopes: ["client"] });
     const paired = await api(destination, "POST", "/api/auth/pair", { code: pairing.body.code, label: "Fixture client" });
     assert.equal((await api(destination, "POST", "/api/workspace-backup/export", { password: PASSWORD }, paired.body.token)).status, 403);
+    const destinationUrl = destination.info.url;
+    const checked = async (sha256: string) => {
+      const started = await fetch(`${destinationUrl}/api/workspace-backup/upload/start`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bytes: encrypted.length }),
+      }).then((response) => response.json()) as { id: string };
+      const base = `${destinationUrl}/api/workspace-backup/upload/${started.id}`;
+      assert.equal((await fetch(`${base}/chunk?offset=0`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: encrypted })).status, 200);
+      return (await fetch(`${base}/finish?sha256=${sha256}`, { method: "POST" })).status;
+    };
+    assert.equal(await checked("0".repeat(64)), 422);
+    assert.equal(await checked(archiveSha256), 200);
+    record({ command: "finish a chunked upload with a wrong and a right checksum", statuses: [422, 200] });
     const upload = await fetch(`${destination.info.url}/api/workspace-backup/upload`, {
       method: "POST", headers: { "content-type": "application/octet-stream" }, body: encrypted,
     });

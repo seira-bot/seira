@@ -14,7 +14,8 @@ import { ActivityTab } from "./ActivityTab";
 import { ComputerTab } from "./ComputerTab";
 import { DetailsTab } from "./DetailsTab";
 import { LibraryTab } from "./LibraryTab";
-import { PAGES, TAB_LABEL, type PanelTab, type PanelTarget, type SimplePageId } from "./page-registry";
+import { pageStack, PAGES, TAB_LABEL, type PanelTab, type PanelTarget, type SimplePageId } from "./page-registry";
+import { GithubBotFlow } from "./GithubPages";
 import { PageBody, pageSurfaceCls } from "./pages";
 import { linkTarget, usePanelLink, type PanelLink } from "./panel-link";
 import { PanelHero } from "./PanelHero";
@@ -38,7 +39,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
   const [tab, setTab] = useState<PanelTab>(() => initialTarget(linkedSection, link).tab);
   const [stack, setStack] = useState<SimplePageId[]>(() => {
     const page = initialTarget(linkedSection, link).page;
-    return page ? [page] : [];
+    return page ? pageStack(page) : [];
   });
   const [anchor, setAnchor] = useState<string | null>(() => initialTarget(linkedSection, link).anchor ?? null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -50,7 +51,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
   const scrollTop = () => bodyRef.current?.scrollTo({ top: 0 });
   const go = (target: PanelTarget) => {
     setTab(target.tab);
-    setStack(target.page ? [target.page] : []);
+    setStack(target.page ? pageStack(target.page) : []);
     setAnchor(target.anchor ?? null);
     setEditorOpen(false);
     setEditingInstructions(Boolean(target.editInstructions));
@@ -161,6 +162,10 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
         ) : (
           <div data-panel-page-view={page}>
             <span id="bot-settings-title" className="sr-only">{bot.name}</span>
+            {page === "github" ? (
+              <GithubBotFlow bot={bot} backLabel={backLabel} onExit={back} />
+            ) : (
+            <>
             <PageHeader
               back={backLabel}
               title={t(PAGES[page].title, { name: bot.name })}
@@ -177,6 +182,8 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
                 onEditInstructions={setEditingInstructions}
               />
             </div>
+            </>
+            )}
           </div>
         )}
       </div>

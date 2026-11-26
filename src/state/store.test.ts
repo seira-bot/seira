@@ -172,6 +172,17 @@ describe("independent bot threads", () => {
     expect(updated.bots[0]?.tasks?.[1]).toEqual(bot.tasks?.[1]);
   });
 
+  it("marks a thread auto or pinned for the AI pool, and leaves the mark alone when none is sent", () => {
+    const selection = { instanceId: "codex", model: "new-model" };
+    const markOf = (state: ReturnType<typeof start>) => state.bots[0]?.tasks?.[0]?.aiPool;
+    expect(markOf(reducer(start(), { type: "setModel", botId: bot.id, threadId: "first", selection, aiPool: true }))).toBe("auto");
+    expect(markOf(reducer(start(), { type: "setModel", botId: bot.id, threadId: "first", selection, aiPool: false }))).toBe("pinned");
+    expect(markOf(reducer(start(), { type: "setModel", botId: bot.id, threadId: "first", selection }))).toBeUndefined();
+    const pinned = reducer(start(), { type: "setModel", botId: bot.id, threadId: "first", selection, aiPool: false });
+    expect(markOf(reducer(pinned, { type: "updateTask", botId: bot.id, threadId: "first", patch: { approvalMode: "ask" } }))).toBe("pinned");
+    expect(reducer(start(), { type: "updateTask", botId: bot.id, threadId: "first", patch: { modelSelection: selection, aiPool: true } }).bots[0]?.tasks?.[0]).not.toHaveProperty("aiPool.enabled");
+  });
+
   it("does not persist request-only model scope on a task", () => {
     const updated = reducer(start(), { type: "updateTask", botId: bot.id, threadId: "first", patch: { modelSelection: bot.modelSelection, updateBotDefault: true } });
     expect(updated.bots[0]?.tasks?.[0]).not.toHaveProperty("updateBotDefault");

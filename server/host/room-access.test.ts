@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { setDepartmentWalls } from "../peer-roster.ts";
+import { setAccessWalls } from "../peer-roster.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { createRoomAccess, PRIVATE_CHAT_ROOM_WRITE } from "./room-access.ts";
 
@@ -138,7 +138,7 @@ describe("roomHandoffProblem", () => {
 });
 
 describe("roomHandoffProblem behind a department wall", () => {
-  afterEach(() => setDepartmentWalls(() => false));
+  afterEach(() => setAccessWalls(() => null));
   const bots = {
     sales: { id: "sales", name: "Sales bot", section: "Sales" },
     fin: { id: "fin", name: "Finance bot", section: "Finance" },
@@ -158,7 +158,7 @@ describe("roomHandoffProblem behind a department wall", () => {
 
   it("refuses a hand-off from a walled bot to a bot of another department, in a room too", () => {
     expect(roomHandoffProblem(node("fin"), parent)).toBeUndefined();
-    setDepartmentWalls((section) => section === "Sales");
+    setAccessWalls((from, target) => (from.section === "Sales" && (target.section ?? "") !== "Sales" ? "department" : null));
     expect(roomHandoffProblem(node("fin"), parent)).toMatch(/another department/);
     expect(roomHandoffProblem(node("chief"), parent)).toMatch(/another department/);
     expect(roomHandoffProblem(node("sales"), { ...parent, botId: "fin" })).toBeUndefined();

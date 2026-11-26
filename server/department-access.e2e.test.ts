@@ -183,4 +183,213 @@ posixOnly("a person limited to some departments", () => {
       frame.close();
     }
   }, 60_000);
+
+  describe("an invite to chosen bots", () => {
+    const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    const extra: { desk: string; closed: string; salesThread: string; deskThread: string; finThread: string; room: string; roomThread: string; routine: string; avatar: string } =
+      { desk: "", closed: "", salesThread: "", deskThread: "", finThread: "", room: "", roomThread: "", routine: "", avatar: "" };
+    const later = () => Date.now() + 86_400_000;
+    const invite = async (access: { departments?: Array<{ name: string; level: "view" | "chat" }>; bots?: Array<{ id: string; level: "view" | "chat" }> } | null) => {
+      const res = await api("PUT", "/api/department-access", { entry: ADA, admitBots: true, access: access && { departments: access.departments ?? [], bots: access.bots ?? [] } }, BOSS);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      return res;
+    };
+    const listed = async (as = ADA) => (await api("GET", "/api/bots?messages=5", undefined, as)).body;
+    const botIds = async (as = ADA) => (await listed(as)).bots.map((bot: any) => bot.id).sort();
+    const status = async (method: string, path: string, body?: unknown, as = ADA) => (await api(method, path, body, as)).status;
+    const capability = async (botId: string, threadId: string) => {
+      const minted = await fetch(`${BASE}/api/testing/internal-capability`, {
+        method: "POST", headers: { "content-type": "application/json", "x-seira-test-capability": CAPABILITY_KEY },
+        body: JSON.stringify({ botId, threadId }),
+      });
+      return ((await minted.json()) as { token: string }).token;
+    };
+
+    beforeAll(async () => {
+      for (const [kind, id] of [["bot", ids.sales], ["bot", ids.fin], ["department", "Finance"]]) {
+        expect((await api("POST", "/api/paused", { kind, id, paused: false }, BOSS)).status).toBe(200);
+      }
+      const desk = await makeBot("Desk Heron", "Ops");
+      const closed = await makeBot("Vault Crane", "Ops");
+      Object.assign(extra, { desk: desk.id, deskThread: desk.threadId, closed: closed.id });
+      for (const id of [ids.sales, ids.fin, desk.id, closed.id]) {
+        expect((await api("PATCH", `/api/bots/${id}`, { modelSelection: { instanceId: "grok", model: "fake-model" } }, BOSS)).status).toBe(200);
+      }
+      expect((await api("PATCH", `/api/bots/${closed.id}`, { visibility: "admins" }, BOSS)).status).toBe(200);
+      const bots = (await listed(BOSS)).bots as Array<{ id: string; threadId: string }>;
+      extra.salesThread = bots.find((bot) => bot.id === ids.sales)!.threadId;
+      extra.finThread = bots.find((bot) => bot.id === ids.fin)!.threadId;
+      const room = await api("POST", "/api/groups", { memberIds: [ids.sales], name: "Sales huddle" }, BOSS);
+      expect(room.status, JSON.stringify(room.body)).toBe(201);
+      extra.room = room.body.group.id;
+      extra.roomThread = room.body.group.threadId;
+      const routine = await api("POST", "/api/routines", { name: "Sales sweep", botId: ids.sales, prompt: "Sweep.", enabled: false, schedule: { type: "interval", everyMinutes: 60, anchorAt: later() } }, BOSS);
+      expect(routine.status, JSON.stringify(routine.body)).toBe(201);
+      extra.routine = routine.body.routine.id;
+      const upload = await fetch(`${BASE}/api/attachments`, { method: "POST", headers: { "content-type": "image/png", authorization: `Bearer ${tokens[BOSS]}` }, body: new Uint8Array(PNG) });
+      expect(upload.status).toBe(201);
+      extra.avatar = ((await upload.json()) as { path: string }).path.split(/[\\/]/).pop()!;
+      expect((await api("PATCH", `/api/bots/${ids.sales}`, { avatarUrl: `/api/attachments/${extra.avatar}` }, BOSS)).status).toBe(200);
+    }, 60_000);
+
+    it("shows a member only the chosen bot, in the list and on the stream (AC-04)", async () => {
+      await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+      expect(await botIds()).toEqual([ids.sales]);
+      expect((await listed()).sections).toEqual(["Sales"]);
+      const ada = openStream(ADA);
+      try {
+        expect(await ada.ready()).toBeTruthy();
+        const finSend = await api("POST", `/api/bots/${ids.fin}/messages`, { text: "FIN-SECRET-1", threadId: extra.finThread }, BOSS);
+        expect(finSend.status, JSON.stringify(finSend.body)).toBe(202);
+        const salesSend = await api("POST", `/api/bots/${ids.sales}/messages`, { text: "SALES-OPEN-1", threadId: extra.salesThread }, BOSS);
+        expect(salesSend.status, JSON.stringify(salesSend.body)).toBe(202);
+        expect(await waitFor(() => ada.frames.some((frame) => frame.kind === "message" && frame.threadId === extra.salesThread))).toBe(true);
+        const seen = JSON.stringify(ada.frames);
+        for (const hidden of [ids.fin, extra.finThread, "FIN-SECRET-1", "Finance Zebra"]) expect(seen).not.toContain(hidden);
+      } finally {
+        ada.close();
+      }
+    }, 60_000);
+
+    it("keeps a bot whose audience refuses the member hidden, until the invite names it (AC-05, AC-06)", async () => {
+      await invite({ departments: [{ name: "Ops", level: "chat" }] });
+      expect(await botIds()).toEqual([extra.desk]);
+      await invite({ bots: [{ id: extra.closed, level: "chat" }] });
+      const stored = (await listed(BOSS)).bots.find((bot: any) => bot.id === extra.closed);
+      expect(stored.visibility).toEqual({ people: [ADA] });
+      expect(await botIds()).toEqual([extra.closed]);
+      expect((await api("PATCH", `/api/bots/${extra.closed}`, { visibility: "admins" }, BOSS)).status).toBe(200);
+      expect(await botIds()).toEqual([]);
+      await invite({ bots: [{ id: extra.closed, level: "chat" }] });
+      expect(await botIds()).toEqual([extra.closed]);
+      await invite(null);
+      expect((await listed(BOSS)).bots.find((bot: any) => bot.id === extra.closed).visibility).toBe("admins");
+      expect(await botIds()).not.toContain(extra.closed);
+      expect((await api("PATCH", `/api/bots/${extra.closed}`, { visibility: "admins" }, BOSS)).status).toBe(200);
+    }, 60_000);
+
+    it("tells a view grant its level and refuses each write with 403 (AC-07, AC-08)", async () => {
+      await invite({ bots: [{ id: ids.sales, level: "view" }, { id: extra.desk, level: "chat" }] });
+      const bots = (await listed()).bots as any[];
+      expect(bots.map((bot) => [bot.id, bot.yourAccess]).sort()).toEqual([[extra.desk, "chat"], [ids.sales, "view"]].sort());
+      for (const bot of bots) {
+        expect(bot.visibility).toBeUndefined();
+        expect(bot.access).toBeUndefined();
+        expect(bot.onlyPeopleAdded).toBeUndefined();
+      }
+      expect(await status("GET", `/api/threads/${extra.salesThread}/messages`)).toBe(200);
+      const refused: Array<[string, string, unknown]> = [
+        ["POST", `/api/bots/${ids.sales}/messages`, { text: "hello", threadId: extra.salesThread }],
+        ["POST", `/api/bots/${ids.sales}/tasks`, { title: "mine" }],
+        ["POST", `/api/groups/${extra.room}/messages`, { text: "hello" }],
+        ["POST", "/api/routines", { name: "Mine", botId: ids.sales, prompt: "x", enabled: false, schedule: { type: "interval", everyMinutes: 60, anchorAt: later() } }],
+        ["PATCH", `/api/routines/${extra.routine}`, { enabled: true }],
+      ];
+      for (const [method, path, body] of refused) {
+        const res = await api(method, path, body, ADA);
+        expect(res.status, `${method} ${path}: ${JSON.stringify(res.body)}`).toBe(403);
+        expect(res.body.errorKey).toBe("serverError.bot.viewOnly");
+      }
+      expect(await status("POST", `/api/bots/${extra.desk}/messages`, { text: "hello", threadId: extra.deskThread })).toBe(202);
+      expect(await status("POST", `/api/bots/${extra.desk}/tasks`, { title: "mine" })).toBe(201);
+    }, 60_000);
+
+    it("answers 404 for a bot, conversation, room, routine and file outside the grant (AC-10)", async () => {
+      await invite({ bots: [{ id: extra.desk, level: "chat" }] });
+      expect(await status("GET", `/api/attachments/${extra.avatar}`)).toBe(404);
+      const outside: Array<[string, string, unknown?]> = [
+        ["GET", `/api/threads/${extra.salesThread}/messages`],
+        ["POST", `/api/bots/${ids.sales}/messages`, { text: "hello", threadId: extra.salesThread }],
+        ["POST", `/api/bots/${ids.sales}/tasks`, { title: "mine" }],
+        ["GET", `/api/threads/${extra.roomThread}/messages`],
+        ["POST", `/api/groups/${extra.room}/messages`, { text: "hello" }],
+        ["PATCH", `/api/routines/${extra.routine}`, { enabled: true }],
+        ["POST", "/api/routines", { name: "Mine", botId: ids.sales, prompt: "x", enabled: false, schedule: { type: "interval", everyMinutes: 60, anchorAt: later() } }],
+        ["GET", `/api/bots/${ids.fin}/slack-management`],
+      ];
+      for (const [method, path, body] of outside) {
+        const res = await api(method, path, body, ADA);
+        expect(res.status, `${method} ${path}: ${JSON.stringify(res.body)}`).toBe(404);
+        expect(JSON.stringify(res.body)).not.toContain("forbidden");
+      }
+      const unknown = await api("GET", "/api/threads/no-such-thread/messages", undefined, ADA);
+      const hidden = await api("GET", `/api/threads/${extra.salesThread}/messages`, undefined, ADA);
+      expect(hidden.body).toEqual(unknown.body);
+      await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+      expect(await status("GET", `/api/attachments/${extra.avatar}`)).toBe(200);
+    }, 60_000);
+
+    it("closes the member's open stream when the grant changes or goes (AC-12)", async () => {
+      await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+      for (const change of [{ bots: [{ id: extra.desk, level: "view" as const }] }, null]) {
+        const ada = openStream(ADA);
+        try {
+          expect(await ada.ready()).toBeTruthy();
+          await invite(change);
+          expect(await waitFor(() => ada.state.ended)).toBe(true);
+        } finally {
+          ada.close();
+        }
+        if (change) await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+      }
+      expect((await botIds()).length).toBeGreaterThan(2);
+    }, 60_000);
+
+    it("refuses a hand-off from a bot the member sees to a bot they cannot see (AC-13)", async () => {
+      await invite({ bots: [{ id: ids.sales, level: "chat" }, { id: extra.desk, level: "chat" }] });
+      const token = await capability(ids.sales, extra.salesThread);
+      const ask = (to: string) => fetch(`${BASE}/api/internal/coordinate-bots`, {
+        method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ botIds: [to], message: "Please look at this.", reply: "none" }),
+      });
+      const refused = await ask(ids.fin);
+      const words = await refused.text();
+      expect(refused.status, words).toBe(403);
+      expect(words).toMatch(/is not shared with everyone who can use/);
+      const allowed = await ask(extra.desk);
+      expect(allowed.status, await allowed.text()).toBeLessThan(400);
+      await invite(null);
+      const open = await ask(ids.fin);
+      expect(open.status, await open.text()).toBeLessThan(400);
+    }, 60_000);
+
+    it("refuses a relayed message for a person who cannot chat with the bot (view), and sends it once they can", async () => {
+      const sendFor = async (n: string) => {
+        const sent = await api("POST", `/api/bots/${ids.sales}/messages/guarded`, {
+          threadId: extra.salesThread, sendId: `relay-access-test-${n}`, text: "Hello from a relay.", expectedActiveLeafId: null, onBehalfOf: { email: ADA, name: "Ada" },
+        }, BOSS);
+        return sent;
+      };
+      try {
+        await invite({ bots: [{ id: ids.sales, level: "view" }] });
+        const refused = await sendFor("view");
+        expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+        expect(refused.body.error).toContain(`${ADA} can't chat with`);
+        await invite({ bots: [{ id: ids.sales, level: "chat" }] });
+        const allowed = await sendFor("chat");
+        expect(allowed.status, JSON.stringify(allowed.body)).not.toBe(403);
+      } finally {
+        await invite(null);
+      }
+    }, 60_000);
+
+    it("removes a deleted bot from the grant and shows the member nothing more (AC-11)", async () => {
+      const gone = await makeBot("Short Lived", "Ops");
+      await invite({ bots: [{ id: gone.id, level: "chat" }, { id: extra.desk, level: "chat" }] });
+      expect(await botIds()).toEqual([extra.desk, gone.id].sort());
+      expect((await api("DELETE", `/api/bots/${gone.id}`, undefined, BOSS)).status).toBe(200);
+      expect((await api("GET", "/api/department-access", undefined, BOSS)).body.people[ADA].bots).toEqual([{ id: extra.desk, level: "chat" }]);
+      expect(await botIds()).toEqual([extra.desk]);
+    }, 60_000);
+
+    it("refuses a bot or department that does not exist, and stores nothing (AC-14)", async () => {
+      await invite({ bots: [{ id: extra.desk, level: "chat" }] });
+      const before = (await api("GET", "/api/department-access", undefined, BOSS)).body;
+      for (const access of [{ departments: [], bots: [{ id: "no-such-bot", level: "chat" }] }, { departments: [{ name: "No such place", level: "chat" }], bots: [] }, { departments: [], bots: [] }]) {
+        expect((await api("PUT", "/api/department-access", { entry: ADA, access }, BOSS)).status).toBe(400);
+      }
+      expect((await api("GET", "/api/department-access", undefined, BOSS)).body).toEqual(before);
+      await invite(null);
+    }, 60_000);
+  });
 });

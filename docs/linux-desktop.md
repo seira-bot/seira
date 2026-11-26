@@ -184,6 +184,7 @@ The snap is a classic snap: it uses the libraries of the host and runs with the 
 packages. It never turns the sandbox off and ships no setuid helper. `electron-builder` adds `--no-sandbox` to every
 classic snap, so `scripts/finish-snap.mjs` removes it after the build and fails the build if the switch is still in the
 launcher or in `meta/snap.yaml`. Classic confinement needs a store review before a public release.
+The `snap publish` workflow uploads the snap when a release is published (see [Releasing](releasing.md#publish-to-the-snap-store)).
 
 Install a local build with `sudo snap install --dangerous --classic Seira-*.snap`, and start it with `seira`.
 `scripts/linux-store/snap-vm-test.sh` installs the snap in an Ubuntu 24.04 VM and records whether the app and the bot

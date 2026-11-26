@@ -27,7 +27,7 @@ The installer ([`deploy/install.sh`](https://github.com/seira-bot/seira/blob/mai
 | Docker | Docker 24 or newer with the Compose plugin, running, not rootless |
 | Ports | 80 and 443 are free |
 | DNS | the domain resolves to this server's public address |
-| Outbound | HTTPS reaches the image registries (`ghcr.io`, `pkg-containers.githubusercontent.com`, Docker Hub), Let's Encrypt and `raw.githubusercontent.com` |
+| Outbound | HTTPS reaches the image registries (`ghcr.io`, `pkg-containers.githubusercontent.com`, Docker Hub), Let's Encrypt, `raw.githubusercontent.com` and `cloud.seira.bot` (announcement cards) |
 | User namespaces | switched on, for the bots' sandbox |
 | Bots' sandbox | AppArmor is on with its tools, as it is on a stock Ubuntu |
 | Clock | within five minutes of the internet's |

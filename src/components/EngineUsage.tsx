@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { activePool, MODE_LABEL_KEY } from "@/lib/ai-pool";
+import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import {
   limitLine, limitsCheckedAt, loadLimits, releaseLimit, reportsUsage, resetTime, shownUsageLimit, sameAccountAs, usageBars, usageRows, usageTone, useEngineLimits, USAGE_BARS, windowLabel,
   type EngineLimit, type UsageTone,
@@ -179,9 +181,23 @@ export function UsageRows({ limit, twin }: { limit: EngineLimit; /** Another AI 
   );
 }
 
+/** Owners and admins: the way from the usage rows to the settings that share usage across AIs. */
+function PoolLink({ reporting, onClose }: { reporting: number; onClose?: (() => void) | undefined }) {
+  const { state, dispatch } = useStore();
+  const ownerOrAdmin = useOwnerOrAdmin();
+  const pool = activePool(state.config);
+  if (ownerOrAdmin !== true || (!pool && reporting < 2)) return null;
+  return (
+    <button type="button" data-usage-pool onClick={() => { onClose?.(); dispatch({ type: "toggleAppSettings", open: true, section: "aiPool" }); }}
+      className="self-start text-[12px] font-medium leading-4 text-ink underline underline-offset-2 hover:text-ink-secondary">
+      {pool ? t("limits.pool.on", { mode: t(MODE_LABEL_KEY[pool.mode]) }) : t("limits.pool.share")}
+    </button>
+  );
+}
+
 /** One AI's rows, the bot's own to begin with. When another connected AI reports usage too, a ring for each sits above
  * the rows, and pressing a ring shows that AI's rows. */
-function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?: (engine: string) => void }) {
+function UsageOverview({ engine, onPick, onClose }: { engine: string | undefined; onPick?: (engine: string) => void; onClose?: (() => void) | undefined }) {
   const limits = useEngineLimits().filter(reportsUsage);
   const [picked, setPicked] = useState<string>();
   const shown = limits.find((limit) => limit.engine === picked) ?? limits.find((limit) => limit.engine === engine);
@@ -202,6 +218,7 @@ function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?
         </div>
       )}
       {shown && <UsageRows limit={shown} twin={sameAccountAs(shown, limits)} />}
+      <PoolLink reporting={limits.length} onClose={onClose} />
     </div>
   );
 }
@@ -212,7 +229,7 @@ const CARD_WIDTH = 272;
 const CARD_GAP = 8;
 const keep = (event: SyntheticEvent) => event.stopPropagation();
 
-function UsageCard({ id, limit, anchor, onEnter, onLeave }: { id?: string; limit: EngineLimit; anchor: DOMRect; onEnter: () => void; onLeave: () => void }) {
+function UsageCard({ id, limit, anchor, onEnter, onLeave, onClose }: { id?: string; limit: EngineLimit; anchor: DOMRect; onEnter: () => void; onLeave: () => void; onClose: () => void }) {
   const below = anchor.top < window.innerHeight / 2;
   // The window's rail of places is drawn over the page's left edge: the card never opens under it.
   const rail = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--rail-beside")) || 0;
@@ -225,7 +242,7 @@ function UsageCard({ id, limit, anchor, onEnter, onLeave }: { id?: string; limit
   return (
     <div id={id} data-usage-card role="group" aria-label={limit.name} style={style} className="menu-surface z-[90] px-3 py-2.5"
       onPointerEnter={onEnter} onPointerLeave={onLeave} onPointerDown={keep} onMouseDown={keep} onClick={keep} onKeyDown={keep}>
-      <UsageOverview engine={limit.engine} />
+      <UsageOverview engine={limit.engine} onClose={onClose} />
     </div>
   );
 }
@@ -267,7 +284,7 @@ export function UsageBars({ engine, compact = false, hover = true, className }: 
       onPointerEnter={card.enter} onPointerLeave={card.leave} onPointerDown={card.close}>
       <UsageGlyph limit={limit} className={compact && tone === "fine" ? "@max-4xl/chathead:hidden" : undefined} />
       <span className="sr-only">{limitLine(limit, Date.now(), ", ")}</span>
-      {card.anchor && createPortal(<UsageCard limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} />, document.body)}
+      {card.anchor && createPortal(<UsageCard limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} onClose={card.close} />, document.body)}
     </span>
   );
 }
@@ -293,7 +310,7 @@ export function SidebarUsageRing({ simple, shape = "row" }: { simple: boolean; s
           shape === "row" ? "size-8 rounded-lg touch:size-10" : "size-9 rounded-full")}>
         <UsageRing limit={limit} />
       </button>
-      {card.anchor && createPortal(<UsageCard id={id} limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} />, document.body)}
+      {card.anchor && createPortal(<UsageCard id={id} limit={limit} anchor={card.anchor} onEnter={() => card.enter()} onLeave={card.leave} onClose={card.close} />, document.body)}
     </>
   );
 }
@@ -302,9 +319,9 @@ export function SidebarUsageRing({ simple, shape = "row" }: { simple: boolean; s
 export const USAGE_WARN_WIDENS = "@max-4xl/chathead:has-[[data-usage-warn]]:w-auto @max-4xl/chathead:has-[[data-usage-warn]]:gap-1.5 @max-4xl/chathead:has-[[data-usage-warn]]:px-2";
 
 /** The rows at the top of the open model menu, with a ring for every connected AI that reports usage. */
-export function UsageMenuRows({ engine, onPick }: { engine: string | undefined; onPick?: (engine: string) => void }) {
+export function UsageMenuRows({ engine, onPick, onClose }: { engine: string | undefined; onPick?: (engine: string) => void; onClose?: () => void }) {
   if (!useEngineLimits().some(reportsUsage)) return null;
-  return <div data-usage-menu className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2.5"><UsageOverview engine={engine} onPick={onPick} /></div>;
+  return <div data-usage-menu className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2.5"><UsageOverview engine={engine} onPick={onPick} onClose={onClose} /></div>;
 }
 
 /** A phone's header has no model button: near or at the limit, the bars stand alone and open the bot's model. */

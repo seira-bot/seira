@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCheck, Loader2, Pause, Play, Share2, SlidersHorizontal, SquarePen, Trash2, Users } from "lucide-react";
+import { CheckCheck, Loader2, Pause, Play, Share2, SlidersHorizontal, SquarePen, Trash2, UserPlus, Users } from "lucide-react";
 import { isPausedHere, setPaused } from "@/lib/bot-pause";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { cn } from "@/lib/cn";
@@ -53,7 +53,7 @@ function PauseDepartment({ name, className, onDone }: { name: string; className:
   </button>;
 }
 
-export function TeamMenuItems({ onAddBots, onRename, onShare, onDelete, onSetForAll, department, onRead }: {
+export function TeamMenuItems({ onAddBots, onRename, onShare, onDelete, onSetForAll, onInvite, department, onRead }: {
   /** The department this menu is for: with it, the menu offers Mark all as read. */
   department?: string;
   onRead?: () => void;
@@ -62,6 +62,8 @@ export function TeamMenuItems({ onAddBots, onRename, onShare, onDelete, onSetFor
   onShare: () => void;
   onDelete: () => void;
   onSetForAll?: () => void;
+  /** Given only where the admin may invite people to this server. */
+  onInvite?: () => void;
 }) {
   const item = cn(MENU_ITEM, "hover:bg-menu-hover [&>svg]:text-ink-secondary");
   return (
@@ -69,6 +71,7 @@ export function TeamMenuItems({ onAddBots, onRename, onShare, onDelete, onSetFor
       <button type="button" role="menuitem" autoFocus className={item} onClick={onAddBots}><Users size={16} />{t("team.addBots")}</button>
       {department !== undefined && <MarkDepartmentRead name={department} className={cn(item, "disabled:opacity-60")} onDone={onRead ?? (() => {})} />}
       {department !== undefined && <PauseDepartment name={department} className={cn(item, "disabled:opacity-60")} onDone={onRead ?? (() => {})} />}
+      {onInvite && <button type="button" role="menuitem" data-team-invite className={item} onClick={onInvite}><UserPlus size={16} />{t("invite.departmentMenu")}</button>}
       {onSetForAll && <button type="button" role="menuitem" className={item} onClick={onSetForAll}><SlidersHorizontal size={16} />{t("teamSettings.menu")}</button>}
       <button type="button" role="menuitem" className={item} onClick={onRename}><SquarePen size={16} />{t("team.rename")}</button>
       <button type="button" role="menuitem" className={item} onClick={onShare}><Share2 size={16} />{t("team.shareDepartment")}</button>

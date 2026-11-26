@@ -10,12 +10,14 @@ import type { RouteContext } from "./table.ts";
 const bots = [{ id: "sales", threadId: "t-sales", section: "Sales" }, { id: "fin", threadId: "t-fin", section: "Finance" }];
 const auth = { kind: "session", scopes: ["client"] } as unknown as RequestAuth;
 
+const grantOf = (departments: ReadonlySet<string> | null) => (departments ? { departments: new Map([...departments].map((name) => [name, "chat" as const])), bots: new Map<string, "chat">() } : null);
+
 function fixture(departments: ReadonlySet<string> | null) {
   const createChannel = vi.fn((value: unknown) => ({ id: "g1", threadId: "t-g1", ...(value as object) }) as unknown as GroupRecord);
   const handler = createGroupRoutes({
     store: { bot: (id: string) => bots.find((bot) => bot.id === id), group: () => undefined, messagesFor: () => [], patchGroup: () => undefined } as never,
     cloudHome: false,
-    visibleFor: () => new VisibleSet(bots, [], { kind: "member", email: "ada@acme.test" }, undefined, undefined, departments),
+    visibleFor: () => new VisibleSet(bots, [], { kind: "member", email: "ada@acme.test" }, undefined, undefined, grantOf(departments)),
     actorKey: () => "ada",
     threadStarters: { set() {} },
     createChannel,

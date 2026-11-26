@@ -212,6 +212,12 @@ function registrationRefusal(response: Response, description: unknown): string {
   return `This server would not register Seira for sign-in (HTTP ${response.status})${reason ? `: ${reason}` : "."}${wait} Try again later.`;
 }
 
+function registrationRefusalLog(endpoint: string, response: Response, error: unknown): string {
+  const code = typeof error === "string" && /^[\w.-]{1,64}$/.test(error) ? ` ${error}` : "";
+  const type = response.headers.get("content-type")?.split(";")[0]?.trim().slice(0, 60) || "no content type";
+  return `mcp sign-in: ${new URL(endpoint).host} refused client registration: HTTP ${response.status}${code}, ${type}`;
+}
+
 export class McpOAuthManager {
   private readonly store: McpOAuthStore;
   private readonly lifetimeMs: number;
@@ -515,8 +521,9 @@ export class McpOAuthManager {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const parsed: unknown = await response.json().catch(() => null);
-    const body = (parsed && typeof parsed === "object" ? parsed : {}) as { client_id?: unknown; error_description?: unknown };
+    const body = (parsed && typeof parsed === "object" ? parsed : {}) as { client_id?: unknown; error?: unknown; error_description?: unknown };
     if (!response.ok || typeof body.client_id !== "string" || !body.client_id) {
+      console.warn(registrationRefusalLog(meta.registrationEndpoint, response, body.error));
       throw new RegistrationRefused(registrationRefusal(response, body.error_description));
     }
     return body.client_id;

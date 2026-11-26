@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ChatReasoningDetails, ChatToolCalls, MAX_REASONING_DETAIL_CHARS, toolArguments } from "./openai-chat-protocol.ts";
+import { ChatOutputLimitError, ChatReasoningDetails, ChatToolCalls, MAX_REASONING_DETAIL_CHARS, OUTPUT_LIMIT_CUT, StreamTruncatedError, toolArguments } from "./openai-chat-protocol.ts";
 
 const completeCall = {
   id: "call_echo",
@@ -248,5 +248,46 @@ describe("rejected tool arguments", () => {
     expect(message.startsWith(`tool arguments are not complete JSON; you sent ${text.length} characters: `)).toBe(true);
     expect(message).not.toContain("SYNTH");
     expect(message).toContain("[red");
+  });
+});
+
+describe("a reply that ends for another reason than a tool call", () => {
+  const partial = () => {
+    const calls = new ChatToolCalls();
+    calls.add([{ index: 0, ...completeCall, function: { ...completeCall.function, arguments: "{\"content\":\"abc" } }], true);
+    return calls;
+  };
+  const whole = () => {
+    const calls = new ChatToolCalls();
+    calls.add([{ index: 0, ...completeCall }], true);
+    return calls;
+  };
+
+  it("reports an output limit that cut a partial call", () => {
+    expect(() => partial().finish("length", false)).toThrow(ChatOutputLimitError);
+    expect(() => partial().finish("length", false)).toThrow(OUTPUT_LIMIT_CUT);
+  });
+
+  it("reports an output limit even when the cut call looks complete", () => {
+    expect(() => whole().finish("length", false)).toThrow(ChatOutputLimitError);
+  });
+
+  it("reports an output limit that cut a legacy function_call", () => {
+    const calls = new ChatToolCalls();
+    calls.addLegacy({ name: "echo", arguments: "{\"a\":" });
+    expect(() => calls.finish("length", false)).toThrow(ChatOutputLimitError);
+  });
+
+  it("returns no calls when the output limit cut a reply without calls", () => {
+    expect(new ChatToolCalls().finish("length", false)).toEqual([]);
+  });
+
+  it("names the finish reason when another reason stops a call", () => {
+    expect(() => whole().finish("content_filter", false)).toThrow(/\(content_filter\)/);
+  });
+
+  it("treats insufficient_system_resource as a truncated stream, with or without calls", () => {
+    expect(() => whole().finish("insufficient_system_resource", false)).toThrow(StreamTruncatedError);
+    expect(() => new ChatToolCalls().finish("insufficient_system_resource", false)).toThrow(StreamTruncatedError);
   });
 });

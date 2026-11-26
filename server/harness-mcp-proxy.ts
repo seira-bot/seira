@@ -61,7 +61,7 @@ function startedAsScript(): boolean {
 if (startedAsScript()) {
   const kind = parseHarnessMcpKind(process.argv[2]);
   if (!kind) {
-    process.stderr.write("usage: harness-mcp-proxy browser|computer|data|email|device\n");
+    process.stderr.write("usage: harness-mcp-proxy browser|computer|data|email|device|github\n");
     process.exitCode = 2;
   } else run(kind);
 }

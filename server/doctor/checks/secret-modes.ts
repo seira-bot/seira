@@ -9,6 +9,7 @@ import type { DoctorCheck } from "../types.ts";
 
 export const SECRET_FILES = [
   "config.json", "sessions.json", "bots.json", "groups.json", "messages.db", "webhooks.json", "tunnel-account.json", "browser-engine-key",
+  "team-key", "sign-in-people.json",
 ] as const;
 
 type Loose = { name: string; path: string; mode: number };
