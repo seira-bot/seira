@@ -221,7 +221,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "backup-export", page: "transfer", anchor: "take-out", labelKey: "backup.export", sectionKey: "settings.data.takeOut", topFor: ["backup", "backups", "export"], synonyms: ["full backup", "download"] },
   { id: "take-out", page: "transfer", anchor: "take-out", labelKey: "settings.data.takeOut", synonyms: ["export", "backup"] },
   { id: "move", page: "transfer", anchor: "move", labelKey: "settings.data.move", when: hereOnly, topFor: ["keep here", "move back", "bring back", "move to cloud"] },
-  { id: "storage", page: "data", anchor: "storage", labelKey: "settings.data.storage", synonyms: ["attachments", "clear attachments", "event log", "cleanup", "retention"] },
+  { id: "storage", page: "data", anchor: "storage", labelKey: "settings.data.storage", synonyms: ["attachments", "clear attachments", "event log", "cleanup", "retention", "approval history", "decision log"] },
   { id: "activity", page: "data", anchor: "activity", labelKey: "settings.section.activity", when: browserAdmin, topFor: ["activity", "audit", "audit log"], synonyms: ["history", "who did what"] },
   { id: "members", page: "people", anchor: "members", labelKey: "settings.people.members", synonyms: ["invite", "roles", "admins"] },
   { id: "bot-access", page: "people", anchor: "bot-access", labelKey: "settings.section.botAccess", synonyms: ["who can", "share", "permissions"] },
