@@ -47,7 +47,8 @@ const LAGUS: Account = { login: "seira-lagus[bot]", id: 359729064, type: "Bot" }
 const ROCTIS: Account = { login: "seira-roctis[bot]", id: 359729045, type: "Bot" };
 const RAMA: Account = { login: "RamaAditya49", id: 213913142, type: "User" };
 const OUTSIDER: Account = { login: "out", id: 1, type: "User" };
-const TRUSTED = { version: 1, botAuthors: [LAGUS, ROCTIS], adminAuthors: [RAMA], reviewerApps: [ROCTIS] };
+const entry = ({ login, id }: Account) => ({ login, id });
+const TRUSTED = { version: 1, botAuthors: [entry(LAGUS), entry(ROCTIS)], adminAuthors: [entry(RAMA)], reviewerApps: [entry(ROCTIS)] };
 
 const headOf = (number: number) => sha(5000 + number);
 
