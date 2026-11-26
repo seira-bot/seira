@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GithubAppStatus, GithubBotPolicy } from "../../shared/github-app";
@@ -12,10 +14,17 @@ vi.mock("@/state/store", () => ({ api: fixture.api }));
 vi.mock("@/lib/connector-oauth", () => ({ reserveConnectionPage: () => ({ open: fixture.open, cancel: fixture.cancel }) }));
 
 import {
-  completeGithub, connectGithub, githubBotHint, githubBotsUsing, githubHighestLevel, githubTurnedOn, githubWithLevel,
+  clearGithubJustLinked, completeGithub, connectGithub, githubBotHint, githubBotsUsing, githubHighestLevel, githubTurnedOn, githubWithLevel,
   githubWithoutRepo, githubWithRepos, GithubCodeError, loadGithubApp, openGithubConnect, removeGithubAccount, resetGithubApp,
-  setGithubBotPolicy,
+  refreshGithub, setGithubBotPolicy, useGithubApp,
 } from "./github-app";
+
+function snapshot() {
+  let seen: ReturnType<typeof useGithubApp> | null = null;
+  const Probe = () => { seen = useGithubApp({ load: false }); return null; };
+  renderToString(createElement(Probe));
+  return seen as unknown as ReturnType<typeof useGithubApp>;
+}
 
 const repo = { id: 7, name: "api", fullName: "acme/api", private: true, defaultBranch: "main" };
 const status = (extra: Partial<GithubAppStatus> = {}): GithubAppStatus => ({
@@ -64,6 +73,37 @@ describe("GitHub connection calls", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ code: "ABCDE12345" });
     await expect(completeGithub("   ")).rejects.toBeInstanceOf(GithubCodeError);
+  });
+
+  it("marks a finished connect once, when the accounts or requests grew", async () => {
+    fixture.api.mockResolvedValueOnce(status({ accounts: [], pending: [], connected: false }));
+    await loadGithubApp();
+    fixture.api.mockResolvedValueOnce({ url: "https://github.com/apps/seira/installations/new", codeEntry: false });
+    await connectGithub();
+    expect(snapshot().justLinked).toBe(false);
+    fixture.api.mockResolvedValueOnce(status({ accounts: [], pending: [], connected: false }));
+    await refreshGithub();
+    expect(snapshot().justLinked).toBe(false);
+    expect(snapshot().waiting).not.toBeNull();
+    fixture.api.mockResolvedValueOnce(status());
+    await refreshGithub();
+    expect(snapshot().justLinked).toBe(true);
+    expect(snapshot().waiting).toBeNull();
+    clearGithubJustLinked();
+    expect(snapshot().justLinked).toBe(false);
+  });
+
+  it("does not mark a refresh that no connect started", async () => {
+    fixture.api.mockResolvedValue(status());
+    await loadGithubApp();
+    await refreshGithub();
+    expect(snapshot().justLinked).toBe(false);
+  });
+
+  it("marks a finished code entry", async () => {
+    fixture.api.mockResolvedValue(status());
+    await completeGithub("abcde-12345");
+    expect(snapshot().justLinked).toBe(true);
   });
 
   it("puts a bot's policy, and sends null to remove it", async () => {

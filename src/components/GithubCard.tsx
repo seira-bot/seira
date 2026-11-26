@@ -27,7 +27,7 @@ export function GithubCard({ onChange }: {
 }) {
   const { state, dispatch } = useStore();
   const github = useGithubApp({ watchConnect: true });
-  const { status, waiting, manageUrl } = github;
+  const { status, waiting, manageUrl, justLinked, clearJustLinked } = github;
   const [busy, setBusy] = useState<"connect" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
@@ -37,6 +37,15 @@ export function GithubCard({ onChange }: {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+
+  const ownsConnection = status !== null && status.canEdit && status.ownedByYou;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    if (!justLinked || !ownsConnection) return;
+    clearJustLinked();
+    onChangeRef.current();
+  }, [justLinked, ownsConnection, clearJustLinked]);
 
   if (!status) return null;
   const bots = botsForApps(state.bots, state.instances);

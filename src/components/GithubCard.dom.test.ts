@@ -17,7 +17,7 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("@/lib/connector-oauth", () => ({ reserveConnectionPage: () => ({ open: async () => true, cancel: () => {} }) }));
 vi.mock("./Avatar", () => ({ BotAvatar: () => null }));
 
-import { resetGithubApp } from "@/lib/github-app";
+import { completeGithub, resetGithubApp } from "@/lib/github-app";
 import { GithubCard } from "./GithubCard";
 import { GithubGrantPrompt } from "./GithubGrantPrompt";
 
@@ -122,5 +122,30 @@ describe("Which bots can use GitHub?", () => {
     expect(switches.length).toBe(2);
     expect(switches.every((item) => item.disabled)).toBe(true);
     expect(dialog()?.textContent).toContain("Only Rama can change which bots use it.");
+  });
+});
+
+describe("after a connect", () => {
+  it("opens the bot dialog once for the person who owns the connection", async () => {
+    fixture.api.mockResolvedValue(status({ connected: false, accounts: [], bots: {} }));
+    const onChange = vi.fn();
+    await render(createElement(GithubCard, { onChange }));
+    expect(onChange).not.toHaveBeenCalled();
+    fixture.api.mockResolvedValue(status());
+    await act(async () => { await completeGithub("abcde-12345"); });
+    await flush();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await render(createElement(GithubCard, { onChange }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("never opens the dialog by itself for a person who does not own the connection", async () => {
+    fixture.api.mockResolvedValue(status({ connected: false, accounts: [], bots: {}, ownedByYou: false, canEdit: false }));
+    const onChange = vi.fn();
+    await render(createElement(GithubCard, { onChange }));
+    fixture.api.mockResolvedValue(status({ ownedByYou: false, canEdit: false }));
+    await act(async () => { await completeGithub("abcde-12345"); });
+    await flush();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

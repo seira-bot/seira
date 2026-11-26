@@ -33,9 +33,11 @@ interface GithubStore {
   /** A connect that opened GitHub and has not finished: `accounts` is how many accounts and requests there were then. */
   waiting: { url: string; codeEntry: boolean; accounts: number } | null;
   manageUrl: string | null;
+  /** A connect that this app started has just finished; the card reads it once and clears it. */
+  justLinked: boolean;
 }
 
-let store: GithubStore = { status: null, phase: "idle", waiting: null, manageUrl: null };
+let store: GithubStore = { status: null, phase: "idle", waiting: null, manageUrl: null, justLinked: false };
 let loading: Promise<void> | null = null;
 const watchers = new Set<() => void>();
 
@@ -64,8 +66,8 @@ function size(status: GithubAppStatus): number {
 
 function take(value: unknown): GithubAppStatus {
   if (!isStatus(value)) throw new Error(t("github.error"));
-  const waiting = store.waiting && size(value) > store.waiting.accounts ? null : store.waiting;
-  update({ status: value, phase: "ready", waiting });
+  const grew = store.waiting !== null && size(value) > store.waiting.accounts;
+  update({ status: value, phase: "ready", waiting: grew ? null : store.waiting, ...(grew ? { justLinked: true } : {}) });
   return value;
 }
 
@@ -83,7 +85,7 @@ export function loadGithubApp(force = false): Promise<void> {
 
 export function resetGithubApp(): void {
   loading = null;
-  store = { status: null, phase: "idle", waiting: null, manageUrl: null };
+  store = { status: null, phase: "idle", waiting: null, manageUrl: null, justLinked: false };
   for (const watch of Array.from(watchers)) watch();
 }
 
@@ -117,7 +119,7 @@ export async function completeGithub(raw: string): Promise<GithubAppStatus> {
   const code = normalizeGithubCompletionCode(raw);
   if (!code) throw new GithubCodeError();
   const status = take(await api(`${GITHUB_APP_API}/complete`, json("POST", { code })));
-  update({ waiting: null });
+  update({ waiting: null, justLinked: true });
   return status;
 }
 
@@ -141,6 +143,10 @@ export async function removeGithubAccount(installationId: number): Promise<strin
 
 export async function disconnectGithub(): Promise<GithubAppStatus> {
   return take(await api(GITHUB_APP_API, json("DELETE")));
+}
+
+export function clearGithubJustLinked(): void {
+  if (store.justLinked) update({ justLinked: false });
 }
 
 export function dismissGithubManageLink(): void {
@@ -172,6 +178,8 @@ export function useGithubApp({ load = true, watchConnect = false }: { load?: boo
     phase: snapshot.phase,
     waiting: snapshot.waiting,
     manageUrl: snapshot.manageUrl,
+    justLinked: snapshot.justLinked,
+    clearJustLinked: clearGithubJustLinked,
     reload: () => loadGithubApp(true),
   };
 }
