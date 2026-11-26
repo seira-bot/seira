@@ -51,8 +51,8 @@ function readJson(req: IncomingMessage): Promise<any> {
   });
 }
 
-export async function startGithubBrokerFake(): Promise<GithubBrokerFake> {
-  const token = "fake-broker-bearer";
+export async function startGithubBrokerFake(options: { token?: string } = {}): Promise<GithubBrokerFake> {
+  const token = options.token ?? "fake-broker-bearer";
   const failures = new Map<string, number>();
   const codes = new Map<string, number[]>();
   let minted = 0;
