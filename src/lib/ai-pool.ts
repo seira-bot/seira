@@ -59,11 +59,26 @@ export function suggestPoolMembers(instances: readonly InstanceInfo[], limits: r
   for (const { instance } of plans) {
     if (!kept.some((other) => otherSignInOfSameSubscription(other, instance))) kept.push(instance);
   }
-  const keys = ready.filter(billsEachUse);
-  return [...kept, ...keys].slice(0, MAX_POOL_MEMBERS).flatMap((instance) => {
+  return kept.slice(0, MAX_POOL_MEMBERS).flatMap((instance) => {
     const model = defaultModel(instance);
     return model ? [{ instanceId: instance.instanceId, model }] : [];
   });
+}
+
+/** Pay-per-use AIs that are ready and not yet in the list. The owner must opt in to each use of this list. */
+export function suggestPaidMembers(instances: readonly InstanceInfo[], members: readonly ModelSelection[]): ModelSelection[] {
+  const taken = new Set(members.map((member) => member.instanceId));
+  return instances.filter((instance) => poolReady(instance) && billsEachUse(instance) && !taken.has(instance.instanceId))
+    .slice(0, Math.max(0, MAX_POOL_MEMBERS - members.length))
+    .flatMap((instance) => {
+      const model = defaultModel(instance);
+      return model ? [{ instanceId: instance.instanceId, model }] : [];
+    });
+}
+
+export function isPaidMember(member: ModelSelection, instances: readonly InstanceInfo[]): boolean {
+  const instance = instances.find((candidate) => candidate.instanceId === member.instanceId);
+  return instance !== undefined && billsEachUse(instance);
 }
 
 export function memberStatus(instance: InstanceInfo | undefined, limit: EngineLimit | undefined, reserve: number, now: number): PoolStatus {
