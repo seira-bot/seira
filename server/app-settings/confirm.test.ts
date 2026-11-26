@@ -158,7 +158,7 @@ describe("risky values wait for the owner's tap", () => {
 
   it("turning tool groups back on waits and names them, and turning groups off or on again that are on does not", () => {
     expect(confirm("bots.tools", { botId: "nora", turnOn: ["email", "data"] })).toEqual({ code: "toolsOn", params: { bot: "Nora", groups: "Email" } });
-    expect(confirm("bots.tools", { botId: "nora", turnOn: ["email", "images"] })).toEqual({ code: "toolsOn", params: { bot: "Nora", groups: "Images, Email" } });
+    expect(confirm("bots.tools", { botId: "nora", turnOn: ["email", "images"] })).toEqual({ code: "toolsOn", params: { bot: "Nora", groups: "Email, Images" } });
     expect(confirm("bots.tools", { botId: "nora", turnOn: ["data"] })).toBeNull();
     expect(confirm("bots.tools", { botId: "nora", turnOff: ["data", "meetings"] })).toBeNull();
     expect(confirm("bots.tools", { botId: "kiwi", turnOn: ["email"] })).toBeNull();

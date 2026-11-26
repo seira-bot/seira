@@ -597,7 +597,7 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     (fx.cfg as { browserProfiles?: unknown }).browserProfiles = [{ id: "work", name: "Work" }];
     expect((await fx.set("desktops.browserProfiles", JSON.stringify([]))).body.error).toMatch(/^Removing the browser profile "Work" deletes its saved logins/);
     expect(fx.cards()).toEqual([]);
-    await fx.set("desktops.browserProfiles", JSON.stringify([{ id: "work", name: "Work" }, { name: "Mine", browser: "chrome" }]));
+    await fx.setAndApply("desktops.browserProfiles", JSON.stringify([{ id: "work", name: "Work" }, { name: "Mine", browser: "chrome" }]));
     expect(fx.cards()[0]!.card.subtitle).toBe("Browser profiles: add the profile \"Mine\" on your own running Chrome, with its logins");
     expect(fx.saved).toEqual([{ browserProfiles: [{ id: "work", name: "Work" }, { id: expect.stringMatching(/^profile-[0-9a-f]{32}$/), name: "Mine", browser: "chrome" }], expectedBrowserProfiles: [{ id: "work", name: "Work" }] }]);
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
@@ -629,7 +629,7 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     (fx.bots.find((bot) => bot.id === "kiwi") as { toolsOff?: string[] }).toolsOff = ["images"];
     await fx.set("bots.tools", JSON.stringify({ botId: "kiwi", turnOff: ["pages", "meetings"] }));
     expect(fx.cards()[0]!.card.subtitle).toBe("Kiwi: turn off Pages and apps, Meetings");
-    await fx.set("bots.tools", JSON.stringify({ botId: "kiwi", turnOn: ["images"] }));
+    await fx.setAndApply("bots.tools", JSON.stringify({ botId: "kiwi", turnOn: ["images"] }));
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
     expect(fx.botPatches).toEqual([
       { botId: "kiwi", body: { toolsOff: ["meetings", "pages", "images"] } },
