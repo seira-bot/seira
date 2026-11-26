@@ -76,7 +76,8 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
     review?(one: BotRecord, value: V): { before: string; after: string } | null;
   }) => writable({
     ...spec,
-    ...(spec.review ? { review: (value: V) => { const one = bot(value.botId); return one ? spec.review!(one, value) : null; } } : {}), current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
+    review: spec.review ? (value: V) => { const one = bot(value.botId); return one ? spec.review!(one, value) : null; } : undefined,
+    current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
     write: (value: V | R) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value as V)); },
   });
