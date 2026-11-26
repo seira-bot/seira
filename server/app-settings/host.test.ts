@@ -841,6 +841,31 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.saved).toEqual([{ everyBotRules: proposed }]);
   });
 
+  it("shows the old text only in the owner's own conversation, not in a room or a conversation someone else wrote into", async () => {
+    const earlier = "EARLIER-SECRET-RULES";
+    const proposed = "PROPOSED-RULES";
+    const cases = [
+      { name: "own", options: {}, shows: true },
+      { name: "history", options: { verdict: CONFIRM_HISTORY }, shows: false },
+      { name: "room", options: { group: true, verdict: CONFIRM_HISTORY }, shows: false },
+    ];
+    for (const { name, options, shows } of cases) {
+      const fx = fixture(options);
+      (fx.cfg as { everyBotRules?: string }).everyBotRules = earlier;
+      (fx.cfg as { profile?: { aboutMe?: string } }).profile = { aboutMe: earlier };
+      (fx.bots[0] as { soul?: string }).soul = earlier;
+      await fx.set("bots.everyBotRules", proposed);
+      await fx.set("profile.aboutMe", proposed);
+      await fx.set("bots.settings", { botId: "kiwi", soul: proposed });
+      expect(fx.waiting(), name).toHaveLength(3);
+      for (const { card } of fx.waiting()) {
+        expect(JSON.stringify(card).includes(earlier), name).toBe(shows);
+        expect(JSON.stringify(card).includes(proposed), name).toBe(true);
+        expect(Object.hasOwn(card.appSettingRequest, "before"), name).toBe(shows);
+      }
+    }
+  });
+
   it("clearing rules waits, and clearing rules that are already empty changes nothing", async () => {
     const fx = fixture();
     (fx.cfg as { everyBotRules?: string }).everyBotRules = "Be kind";

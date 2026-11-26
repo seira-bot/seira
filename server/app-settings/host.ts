@@ -262,15 +262,16 @@ export function createAppSettings(deps: AppSettingsDeps) {
   const openCards = (threadId: string) => [...waiting.values()].filter((one) => one.threadId === threadId && !settledElsewhere(one)).length;
 
   /** Posts the card the owner taps to apply the change; nothing changes before that. */
-  async function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, stored?: string) {
+  async function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, own: boolean, stored?: string) {
     const language = deps.language(turn.threadId);
     const state = await stateOf(entry, value);
     const was = entry.read();
     const shown: Shown = change === undefined ? { before: was, after: display(value) } : { after: change };
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
     const reviewed = entry.review?.(value) ?? null;
-    const cardShown: Shown = reviewed ?? shown;
-    const cardLine = reviewed ? `${notSet(reviewed.before)}\n→\n${notSet(reviewed.after)}` : shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}`;
+    // Security: a room or a conversation someone else wrote into is seen by others, so it shows the proposed text only.
+    const cardShown: Shown = reviewed ? (own ? reviewed : { after: reviewed.after }) : shown;
+    const cardLine = reviewed ? (own ? `${notSet(reviewed.before)}\n→\n${notSet(reviewed.after)}` : reviewed.after) : shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}`;
     const what = consequence ? serverLine(language, consequenceKey(consequence.code), consequence.params) : undefined;
     const requestId = randomUUID();
     const expiresAt = now() + CONFIRM_MS;
@@ -354,7 +355,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
     if (budget) return deny("budget", 429, budget);
     const picture = entry.fromFile ? await takePicture(turn, parsed.data) : { value: parsed.data };
     if ("refusal" in picture) return deny("picture", 400, picture.refusal);
-    if (tap) return ask(turn, bot, entry, picture.value, described?.change, consequence, picture.stored);
+    if (tap) return ask(turn, bot, entry, picture.value, described?.change, consequence, verdict.kind === "clean" && !deps.connectorThread(bot.id, turn.threadId)?.group, picture.stored);
     const applied = await apply(turn, bot, entry, picture.value, described?.change);
     if (picture.stored && applied.status >= 300) deps.pictures?.discard(picture.stored);
     return applied;
