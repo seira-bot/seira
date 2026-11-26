@@ -15,6 +15,7 @@ import { cloudHomeConfigured } from "../cloud-home.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
 import { AGENTS_TOOL_ALIASES } from "../../shared/agents-tool-names.ts";
 import { bridgedCallTarget, unbridgedServer } from "./agents-bridge.ts";
+import { inProcessServer, type InProcessServer } from "./chat-mcp-in-process.ts";
 import { chatImage, type ChatImagePart } from "./chat-images.ts";
 import { CALL_TOOL, DESCRIBE_TOOL, SEARCH_TOOL, ToolDirectory, directoryCallTarget, isDirectoryTool, type CatalogTool, type DirectoryResult } from "../mcp-directory.ts";
 import { AppObserver, modelVisible, withUiExtension } from "../mcp-app-observer.ts";
@@ -141,7 +142,8 @@ export function chatMcpEnvironment(serverEnv: Record<string, string>, source: No
 
 export class ChatMcpClient {
   private readonly frameBytes: number;
-  private child: ReturnType<typeof spawnCli>;
+  private child!: ReturnType<typeof spawnCli>;
+  private readonly local?: InProcessServer;
   private buffer = "";
   private nextId = 1;
   private frames = 0;
@@ -156,6 +158,8 @@ export class ChatMcpClient {
   constructor(server: Server, computerUse = false, configured = false) {
     this.frameBytes = computerUse ? 32 * 1024 * 1024 : FRAME_BYTES;
     this.configured = Object.values(server.env).filter((value) => value.length >= 6);
+    this.local = configured ? undefined : inProcessServer(server, (message) => queueMicrotask(() => this.onData(`${JSON.stringify(message)}\n`)));
+    if (this.local) return;
     try {
       // The desktop shell inherits Finder's bare PATH, where `npx`-style servers cannot find `node`.
       this.child = spawnCli(server.command, server.args, {
@@ -202,6 +206,11 @@ export class ChatMcpClient {
     for (const entry of this.pending.values()) entry.reject(new Error("MCP session closed"));
     this.pending.clear();
     this.buffer = "";
+    if (this.local) {
+      this.local.stop.abort();
+      this.closing = Promise.resolve();
+      return this.closing;
+    }
     // Windows reaps the tree via taskkill /T, which can exceed shorter budgets on a loaded machine;
     // elsewhere the budget is the TERM grace before KILL, not a verdict race, so it stays short.
     this.closing = killCliTree(this.child, process.platform === "win32" ? 15_000 : 5_000).then((stopped) => {
@@ -216,10 +225,11 @@ export class ChatMcpClient {
   }
 
   private write(frame: unknown): void {
-    if (this.closed || !this.child.stdin.writable || this.child.stdin.destroyed) throw new Error("MCP session closed");
+    if (this.closed || (!this.local && (!this.child.stdin.writable || this.child.stdin.destroyed))) throw new Error("MCP session closed");
     const encoded = JSON.stringify(frame) + "\n";
     if (Buffer.byteLength(encoded) > this.frameBytes) throw new Error("MCP request exceeds the frame limit");
-    this.child.stdin.write(encoded);
+    if (this.local) this.local.read(encoded.slice(0, -1));
+    else this.child.stdin.write(encoded);
   }
 
   private onData(chunk: string): void {
