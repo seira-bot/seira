@@ -3,6 +3,7 @@ import { CLOUD_HOME_PLACE } from "./system-prompt.ts";
 import { callLanguageInstruction, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveProvider } from "../shared/wire.ts";
 import type { Message } from "./store.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export const LIVE_MODEL = "gpt-live-1";
 const OPENAI_BASE = "https://api.openai.com";
@@ -174,6 +175,7 @@ export function liveHistoryFrom(messages: ReadonlyArray<Pick<Message, "role" | "
 }
 
 export class LiveSessionError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status: number) {
     super(message);

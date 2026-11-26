@@ -1,5 +1,6 @@
 // Without `model`, Hermes hits OpenRouter with HTTP 401, Qwen dies with Internal error and Grok silently runs its cloud default.
 import { isModelVariant, type EffortLevel, type ModelSelection } from "./contracts.ts";
+import { PublicError } from "./public-error.ts";
 
 export function assertModelVariantSupported(
   selection: Pick<ModelSelection, "variant" | "effort">,
@@ -7,10 +8,7 @@ export function assertModelVariantSupported(
 ): void {
   if (selection.variant !== undefined &&
       (!isModelVariant(selection.variant) || !capabilities.modelVariants || selection.effort !== undefined)) {
-    throw Object.assign(
-      new Error("the saved model variant cannot be applied by this AI — choose a variant in model settings"),
-      { status: 409, code: "unsupported_model_variant" },
-    );
+    throw Object.assign(new PublicError("the saved model variant cannot be applied by this AI — choose a variant in model settings", 409), { code: "unsupported_model_variant" });
   }
 }
 

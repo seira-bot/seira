@@ -34,6 +34,7 @@
   "server.moves.connectorStayedHere": "{name} ist auf {computer} geblieben, als deine Bots zu My Cloud umgezogen sind. Bots hier können es also nicht nutzen: Es verwendet Dateien oder eine Adresse, die nur {computer} hat.",
   "server.team.ask": "Erzähl mir von deiner Arbeit: Was machst du, und was kostet dich die meiste Zeit? Ich schlage dir ein kleines Team von Bots vor, das dazu passt.",
   "server.team.suggested": "Hier ist ein Team für {department}: {bots}. Ändere die Namen, entferne Bots, die du nicht willst, und erstelle dann das Team oder überspringe es.",
+  "server.taskSuggestions.heading": "Aufgaben, bei denen ich helfen kann:",
   "server.team.intro": "Dein Team {department} ist bereit: {bots}. Sprich einen Bot direkt an, oder bitte mich, und ich gebe die Arbeit weiter.",
   "server.moves.webhookMoved": "Jetzt, wo ich auf {place} lebe, hat mein Webhook „{name}“ eine neue Adresse. Öffne Automatisierungen, wähle bei „{name}“ die Option „Adresse kopieren“ und füge sie in die App ein, die Daten dorthin sendet.",
   "server.teammates.sameRequest": "Ein anderes Teammitglied hat eben dasselbe gefragt, daher bekommt dies dieselbe Antwort statt einer zweiten.",

@@ -15,6 +15,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { FILE_MAX_BYTES, PREVIEW_MAX_BYTES } from "../shared/upload-limits.ts";
 import { DATA_DIR } from "./config.ts";
 import { boxUploadsDir } from "./bot-box/plan.ts";
+import { PublicError } from "./public-error.ts";
 
 export { FILE_MAX_BYTES, PREVIEW_MAX_BYTES } from "../shared/upload-limits.ts";
 export const ATTACHMENTS_DIR = join(DATA_DIR, "attachments");
@@ -401,7 +402,7 @@ export interface SavedFile extends SavedAttachment {
 }
 
 function statusError(status: number, message: string): Error & { status: number } {
-  return Object.assign(new Error(message), { status });
+  return new PublicError(message, status);
 }
 
 function normalizedMime(mime: string | undefined): string | null {
@@ -591,10 +592,10 @@ export async function saveNamedAttachment(name: string, chunks: AsyncIterable<Ui
 /** The UUID filename is never attacker-controlled and never collides. */
 export function saveImage(bytes: Buffer, mime: string, requestedUploadId?: string): SavedAttachment {
   const ext = extensionForMime(mime);
-  if (!ext) throw Object.assign(new Error("unsupported image type"), { status: 400 });
-  if (bytes.byteLength === 0) throw Object.assign(new Error("empty image"), { status: 400 });
+  if (!ext) throw new PublicError("unsupported image type", 400);
+  if (bytes.byteLength === 0) throw new PublicError("empty image", 400);
   if (bytes.byteLength > IMAGE_MAX_BYTES) {
-    throw Object.assign(new Error(`image exceeds ${IMAGE_MAX_BYTES} bytes`), { status: 413 });
+    throw new PublicError(`image exceeds ${IMAGE_MAX_BYTES} bytes`, 413);
   }
   const uploadId = validateAttachmentUploadId(requestedUploadId);
   ensureAttachmentsDir();
@@ -654,12 +655,12 @@ const AUDIO_MIMES: Readonly<Record<string, { mime: string; ext: string }>> = {
 export function saveAudio(bytes: Buffer, mime: string): SavedAttachment {
   const format = AUDIO_MIMES[mime.split(";")[0]!.trim().toLowerCase()];
   if (!format) {
-    throw Object.assign(new Error("unsupported audio type"), { status: 400 });
+    throw new PublicError("unsupported audio type", 400);
   }
-  if (bytes.byteLength === 0) throw Object.assign(new Error("empty audio"), { status: 400 });
+  if (bytes.byteLength === 0) throw new PublicError("empty audio", 400);
   // Saved from memory and served whole by readAttachment, so held to the preview size, not the streamed store limit.
   if (bytes.byteLength > PREVIEW_MAX_BYTES) {
-    throw Object.assign(new Error(`audio exceeds ${PREVIEW_MAX_BYTES} bytes`), { status: 413 });
+    throw new PublicError(`audio exceeds ${PREVIEW_MAX_BYTES} bytes`, 413);
   }
   ensureAttachmentsDir();
   const reservation = new AttachmentReservation();
@@ -679,7 +680,7 @@ export function saveAudio(bytes: Buffer, mime: string): SavedAttachment {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       const saved = readFileSync(path);
       if (!saved.equals(bytes)) {
-        throw Object.assign(new Error("audio destination already exists with different bytes"), { status: 409 });
+        throw new PublicError("audio destination already exists with different bytes", 409);
       }
     }
     unlinkSync(partialPath);

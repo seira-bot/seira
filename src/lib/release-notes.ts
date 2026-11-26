@@ -1,4 +1,4 @@
-import { UserPlus, UserMinus, Mail, Activity, AppWindow, Eye, Globe, HardDrive, ListChecks, Inbox, Moon, Smile, Type, MapPin, Power, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
+import { Github, Lightbulb, UserPlus, UserMinus, Mail, Activity, AppWindow, Eye, Globe, HardDrive, ListChecks, Inbox, Moon, Smile, Type, MapPin, Power, RefreshCw, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Building2, CircleCheck, Copy, EyeOff, FolderLock, Gauge, History, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Phone, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,13 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.195", items: [
+    { id: "githubNative", icon: Github },
+    { id: "aiPoolEasy", icon: Layers },
+    { id: "aiPoolBot", icon: Wand2 },
+    { id: "renameDevices", icon: Pencil },
+    { id: "taskSuggestions", icon: Lightbulb },
+  ] },
   { version: "0.1.194", items: [
     { id: "inviteChosen", icon: UserPlus },
     { id: "peopleLimit", icon: KeyRound },

@@ -6,6 +6,7 @@ import { sectionKey, type Store } from "../store.ts";
 import { TEAM_MEMORY_KINDS, TeamMemory, TeamMemoryConflict, type TeamMemoryKind } from "../team-memory.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface TeamContextRouteDeps {
   store: Pick<Store, "sections" | "bots" | "groups">;
@@ -40,7 +41,7 @@ export function createTeamContextRoutes(deps: TeamContextRouteDeps): RouteHandle
         if (proposed.status === "proposed") teamMemory.resolve(section, proposed.entry.id, "accept");
         return json(res, 201, { entries: teamMemory.list(section), loadedIds: teamMemory.promptSelection(section).loadedIds });
       } catch (error) {
-        return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+        return json(res, 400, { error: publicErrorText(error, "POST team memory") });
       }
     }
     m = path.match(/^\/api\/team-memory\/([\w-]+)$/);
@@ -62,7 +63,7 @@ export function createTeamContextRoutes(deps: TeamContextRouteDeps): RouteHandle
         }
         return json(res, 200, { entries: teamMemory.list(section), loadedIds: teamMemory.promptSelection(section).loadedIds });
       } catch (error) {
-        return json(res, error instanceof TeamMemoryConflict ? 409 : 400, { error: error instanceof Error ? error.message : String(error), ...userErrorFields(error) });
+        return json(res, error instanceof TeamMemoryConflict ? 409 : 400, { error: publicErrorText(error, "PATCH team memory"), ...userErrorFields(error) });
       }
     }
 

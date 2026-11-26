@@ -3,6 +3,7 @@ import { CLAUDE_MODEL_ID } from "./drivers/claude-model-extras.ts";
 import { STATIC_CODEX_MODELS } from "./drivers/codex-catalog.ts";
 import { currentEngineCatalog } from "./model-manifest/manifest.ts";
 import { isLoopback, providerModelsUrl } from "./provider-key-check.ts";
+import { PublicError } from "./public-error.ts";
 
 const OFFICIAL_URL = { codex: "https://api.openai.com/v1", claude: "https://api.anthropic.com" } as const;
 const MAX_CATALOG_BYTES = 2 * 1024 * 1024;
@@ -57,7 +58,7 @@ export async function discoverAgentEndpointModels(entry: InstanceConfig, fetchIm
   const token = codex ? env.SEIRA_CODEX_API_KEY : env.ANTHROPIC_API_KEY;
   const headers = codex ? { authorization: `Bearer ${token}` } : { authorization: `Bearer ${token}`, "x-api-key": token!, "anthropic-version": "2023-06-01" };
   const modelsUrl = providerModelsUrl(codex ? "openai" : "anthropic", agentEndpointAddress(entry));
-  const failure = (detail: string) => Object.assign(new Error(`Could not discover gateway models: ${detail}`), { status: 400 });
+  const failure = (detail: string) => new PublicError(`Could not discover gateway models: ${detail}`, 400);
   // Same rule as checkProviderKey: the key goes out only over HTTPS, or over plain HTTP to this computer.
   const target = new URL(modelsUrl);
   if (target.protocol !== "https:" && !(target.protocol === "http:" && isLoopback(target.hostname))) {

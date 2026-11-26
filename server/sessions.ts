@@ -19,6 +19,7 @@ import {
 } from "../shared/pairing-code.ts";
 import { userError, type UserError } from "./user-errors.ts";
 import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { PublicError } from "./public-error.ts";
 
 export type Scope = "admin" | "client";
 export const SCOPES: readonly Scope[] = ["admin", "client"];
@@ -94,6 +95,8 @@ const sessionSchema = z.object({
   token: z.literal(true).optional(),
   /** A paired device's sign-in (see PairingCode.device): the paired-device limits apply to it whatever headers it sends. */
   pairedDevice: z.literal(true).optional(),
+  /** A sign-in to download one finished backup export and nothing else (server/workspace-backup-move-out.ts); the value is the export's id. */
+  moveOut: z.string().regex(/^[\w-]{36}$/).optional(),
 });
 
 /** Each record is checked on its own with sessionSchema, so one bad record does not end the others. */
@@ -334,9 +337,11 @@ export class SessionRegistry {
       this.keepDamagedCopy(text);
       console.error(`The session file had ${invalid} invalid ${invalid === 1 ? "record" : "records"}. ${invalid === 1 ? "It was" : "They were"} dropped and ${valid.length} kept; a copy of the file was kept next to it.`);
     }
-    const kept = valid.filter(session => restoreAccounts || (session.email === undefined && session.userId === undefined));
+    // A move-out sign-in lives in memory only: a file that names one is not ours to honour.
+    const restorable = valid.filter(session => !session.moveOut);
+    const kept = restorable.filter(session => restoreAccounts || (session.email === undefined && session.userId === undefined));
     this.sessions = kept;
-    const ended = valid.length - kept.length;
+    const ended = restorable.length - kept.length;
     if (ended > 0) {
       console.warn(`The server did not stop cleanly last time. ${ended} email or account sign-in${ended === 1 ? " was" : "s were"} ended for safety; those people sign in again. Pairing sessions stay valid.`);
     }
@@ -363,7 +368,7 @@ export class SessionRegistry {
     if (this.closed) throw new Error("Session registry is closed.");
     const dir = dirname(this.options.file);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileAtomic(this.options.file, JSON.stringify({ version: 1, sessions: this.sessions }, null, 2) + "\n", { mode: 0o600 });
+    writeFileAtomic(this.options.file, JSON.stringify({ version: 1, sessions: this.sessions.filter((session) => !session.moveOut) }, null, 2) + "\n", { mode: 0o600 });
     this.syncDirectory();
   }
 
@@ -433,7 +438,7 @@ export class SessionRegistry {
   private refusePersonal(scopes: readonly Scope[]): void {
     if (this.personal(scopes)) {
       const { error, ...fields } = this.adminOnly!;
-      throw Object.assign(new Error(error), { status: 403, code: "cloud_personal", ...fields });
+      throw Object.assign(new PublicError(error, 403), { code: "cloud_personal", ...fields });
     }
   }
 
@@ -639,6 +644,31 @@ export class SessionRegistry {
     this.persist();
     for (const listener of this.onIssued) listener(record);
     return { token, session: publicSession(record) };
+  }
+
+  /** A sign-in for reading one finished backup export, so a new server can pull it. It ends at `expiresAt`, never renews,
+   * reaches that export's download route only, and is never written to the sessions file: a restart ends it. */
+  issueMoveOut(input: { exportId: string; expiresAt: number }): { token: string; session: PublicSession } {
+    this.prune();
+    const now = this.now();
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
+    const record: SessionRecord = {
+      id: randomUUID(), tokenHash: sha256(token), label: "Moving this server out", scopes: ["admin"],
+      createdAt: now, lastSeenAt: now, expiresAt: Math.min(input.expiresAt, now + SESSION_TTL_MS), token: true, moveOut: input.exportId,
+    };
+    this.sessions.push(record);
+    this.lastSeenWrites.set(record.id, now);
+    for (const listener of this.onIssued) listener(record);
+    return { token, session: publicSession(record) };
+  }
+
+  /** Ends every sign-in that reads backup export `exportId`. */
+  revokeMoveOuts(exportId: string): number {
+    const ended = this.sessions.filter((s) => s.moveOut === exportId);
+    if (!ended.length) return 0;
+    this.sessions = this.sessions.filter((s) => s.moveOut !== exportId);
+    for (const s of ended) this.forget(s.id);
+    return ended.length;
   }
 
   /** Ends every sign-in that moves `bot` in: the bot arrived. */

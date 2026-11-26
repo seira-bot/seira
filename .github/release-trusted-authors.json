@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "botAuthors": [
+    { "login": "seira-roctis[bot]", "id": 359729045 },
+    { "login": "seira-lagus[bot]", "id": 359729064 },
+    { "login": "seira-urokai[bot]", "id": 359729083 },
+    { "login": "seira-m21[bot]", "id": 359729097 }
+  ],
+  "adminAuthors": [{ "login": "RamaAditya49", "id": 213913142 }],
+  "reviewerApps": [{ "login": "seira-roctis[bot]", "id": 359729045 }]
+}

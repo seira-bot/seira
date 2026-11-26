@@ -19,6 +19,7 @@ import { sendingProblem, type EmailService } from "./service.ts";
 import type { EmailAccount } from "./store.ts";
 import { EMAIL_TOOLS, emailError, emailText, emailToolCallProblem, isEmailRead, isEmailToolName, type EmailTool, type EmailToolResult } from "./tools.ts";
 import { serverTurnedOff } from "../drivers/agents-tool-groups.ts";
+import { PublicError } from "../public-error.ts";
 
 export const EMAIL_INTERNAL_MCP_PATH = "/api/internal/email/mcp";
 
@@ -148,7 +149,7 @@ export function createEmailHost(deps: EmailHostDeps) {
         assertActive();
         return { tools: EMAIL_TOOLS.filter((tool) => verdict(tool.name).ok), instructions: EMAIL_INSTRUCTIONS };
       }
-      if (request.method !== "tools/call") throw Object.assign(new Error("unsupported email method"), { status: 400 });
+      if (request.method !== "tools/call") throw new PublicError("unsupported email method", 400);
       const params = (request.params && typeof request.params === "object" ? request.params : {}) as { name?: unknown; arguments?: unknown };
       const args = (params.arguments ?? {}) as Record<string, unknown>;
       const problem = emailToolCallProblem(params.name, args);

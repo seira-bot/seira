@@ -8,6 +8,7 @@ import type { McpServerSpec } from "./contracts.ts";
 import { discoverMcpAuth, type McpAuthMetadata } from "./mcp-oauth-discovery.ts";
 import { McpOAuthStore, type McpOAuthRecord, type McpOAuthTokens } from "./mcp-oauth-store.ts";
 import type { McpOAuthClientConfig } from "./mcp-registry.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export type McpSignInPhase = "waiting" | "succeeded" | "failed" | "cancelled" | "expired";
 
@@ -89,6 +90,7 @@ interface StartingFlow {
 }
 
 export class McpSignInError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: 400 | 404 | 409;
   constructor(message: string, status: 400 | 404 | 409) {
     super(message);
