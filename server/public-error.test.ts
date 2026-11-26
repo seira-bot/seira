@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { placeConfirmed, placeLostAs, PLACE_LOST_MESSAGE } from "./place-lost.ts";
-import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText, refusalErrorText } from "./public-error.ts";
+import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText, PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
 import { userErrorThrown } from "./user-errors.ts";
 import { WebhookRequestError } from "./webhook-requests.ts";
 
@@ -71,19 +71,31 @@ describe("publicErrorText", () => {
   });
 });
 
-describe("refusalErrorText (transitional)", () => {
-  it("keeps the message of a PublicError and of a plain Error with a 4xx status", () => {
-    expect(refusalErrorText(new PublicError("name is required"), "x")).toBe("name is required");
-    expect(refusalErrorText(Object.assign(new Error("unknown instance"), { status: 404 }), "x")).toBe("unknown instance");
+describe("marked classes and withheld errors", () => {
+  class ExampleRefusal extends Error {
+    readonly [PUBLIC_ERROR_MARK] = true;
+    readonly status = 409;
+  }
+
+  it("keeps the message of a class that sets the public mark, whatever its status", () => {
+    expect(isPublicError(new ExampleRefusal("This name is taken."))).toBe(true);
+    expect(publicErrorText(new ExampleRefusal("This name is taken."), "x")).toBe("This name is taken.");
   });
 
-  it("gives the generic text, and logs, for an error with no status, a 5xx status or a non-Error value", () => {
+  it("gives the generic text, and logs, for an error that took back its public mark", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(refusalErrorText(new Error("ENOENT: /home/ada/x"), "x")).toBe(GENERIC_PUBLIC_ERROR);
-      expect(refusalErrorText(Object.assign(new Error("upstream host db-7"), { status: 502 }), "x")).toBe(GENERIC_PUBLIC_ERROR);
-      expect(refusalErrorText("/srv/private/path.ts", "x", "Not run.")).toBe("Not run.");
-      expect(logged).toHaveBeenCalledTimes(3);
+      const outside = withheld(new ExampleRefusal("remote said: host db-7 refused"));
+      expect(isPublicError(outside)).toBe(false);
+      expect(publicErrorText(outside, "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(String(logged.mock.calls[0]![0])).toContain("db-7");
+    } finally { logged.mockRestore(); }
+  });
+
+  it("gives the fallback for a value that is not an Error, even when it has a mark", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(publicErrorText({ [PUBLIC_ERROR_MARK]: true, message: "/srv/private" }, "x", "Not run.")).toBe("Not run.");
     } finally { logged.mockRestore(); }
   });
 });

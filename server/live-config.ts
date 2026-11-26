@@ -1,5 +1,6 @@
 // Live calls' settings in config.json: schema, type and environment overrides, kept out of server/config.ts.
 import { z } from "zod";
+import { PublicError } from "./public-error.ts";
 
 export const LIVE_KEY_NEEDS_ENDPOINT = "Save the Azure endpoint first: a Live key works only with the endpoint it was saved for.";
 export const LIVE_KEY_NEEDS_CUSTOM_ENDPOINT = "Save the custom endpoint first: a Live key works only with the endpoint it was saved for.";
@@ -72,7 +73,7 @@ export function liveSavePatch(current: LiveConfig | undefined, patch: LiveConfig
   const { keyFor: _fromRequest, ...asked } = patch;
   const target = liveKeyTarget({ ...current, ...asked });
   if (asked.key?.trim()) {
-    if (!target) throw Object.assign(new Error({ ...current, ...asked }.provider === "custom" ? LIVE_KEY_NEEDS_CUSTOM_ENDPOINT : LIVE_KEY_NEEDS_ENDPOINT), { status: 400 });
+    if (!target) throw new PublicError({ ...current, ...asked }.provider === "custom" ? LIVE_KEY_NEEDS_CUSTOM_ENDPOINT : LIVE_KEY_NEEDS_ENDPOINT, 400);
     return { ...asked, keyFor: target };
   }
   return asked.key !== undefined || target !== liveKeyTarget(current) ? { ...asked, key: "", keyFor: NOWHERE } : asked;

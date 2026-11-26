@@ -38,6 +38,7 @@ import { fishKeyFromLiveKey, liveConfigSchema, liveConfigWithEnv, liveSettingEnv
 import { browserEngineConfigSchema, isValidCdpTarget, type BrowserEngineConfig } from "./browser/config.ts";
 import { roomContextSettings } from "./room-context-settings.ts"; import { usageCapsSchema, type UsageCapsConfig } from "./usage-caps-config.ts";
 import { localVmConfigSchema } from "./local-vm-settings.ts";
+import { PublicError } from "./public-error.ts";
 export * from "./local-vm-settings.ts";
 
 const optionalText = z.string().optional();
@@ -578,7 +579,7 @@ export function loadBrowserProfileIdAliases(): ReadonlyMap<string, string> {
 export function parseConfigPatch(value: JsonValue): ConfigPatch {
   const parsed = appConfigPatchSchema.safeParse(value);
   if (!parsed.success) {
-    throw Object.assign(new Error(schemaIssue(parsed.error, "Invalid configuration")), { status: 400 });
+    throw new PublicError(schemaIssue(parsed.error, "Invalid configuration"), 400);
   }
   return parsed.data;
 }
@@ -961,7 +962,7 @@ function saveConfigNow(
       storedProfiles.success ? storedProfiles.data : [],
       nextProfiles,
     );
-    if (routingConflict) throw Object.assign(new Error(routingConflict), { status: 409 });
+    if (routingConflict) throw new PublicError(routingConflict, 409);
     disk.browserProfiles = nextProfiles;
     if (disk.newBotDefaults) {
       const defaults = newBotDefaultsSchema.parse(disk.newBotDefaults);

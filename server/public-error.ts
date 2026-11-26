@@ -18,11 +18,29 @@ export class PublicError extends Error {
   }
 }
 
-/** True only for an error that a server module made for the client: a `PublicError` or a subclass. Its message was written
- * for the person who reads it. Any other error is internal: a library, the file system or a remote service worded it, so
- * its text can name a path, an address or a secret. An HTTP status or an `errorKey` on an error does not make it public. */
-export function isPublicError(error: unknown): error is PublicError {
-  return error instanceof PublicError;
+/** A `PublicError` that carries no HTTP status, as an error thrown with no status did before. The reply then takes the
+ * status that the place sending it chooses. */
+export function unstatused<T extends PublicError>(error: T): T {
+  delete (error as { status?: number }).status;
+  return error;
+}
+
+/** A class that sets this key to `true` makes errors whose message was written for the client, with its own status.
+ * Use it on a refusal class when its constructor does not take the status in the same way as `PublicError`. */
+export const PUBLIC_ERROR_MARK = Symbol("seira.publicError");
+
+/** True only for an error that a server module made for the client: a `PublicError`, or an error of a class that sets
+ * `PUBLIC_ERROR_MARK`. Its message was written for the person who reads it. Any other error is internal: a library, the
+ * file system or a remote service worded it, so its text can name a path, an address or a secret. An HTTP status, a code
+ * or an `errorKey` on an error does not make it public. */
+export function isPublicError(error: unknown): error is Error {
+  return error instanceof Error && (error instanceof PublicError || (error as { [PUBLIC_ERROR_MARK]?: unknown })[PUBLIC_ERROR_MARK] === true);
+}
+
+/** Take back the public mark of one error whose message holds text from outside (a remote service or a library). */
+export function withheld<T extends Error>(error: T): T {
+  Object.defineProperty(error, PUBLIC_ERROR_MARK, { value: false, configurable: true });
+  return error;
 }
 
 function logInternal(error: unknown, where: string): void {
@@ -30,21 +48,11 @@ function logInternal(error: unknown, where: string): void {
   console.error(`[http] ${where} failed: ${redactSecretsInText(detail)}`);
 }
 
-/** The text of an HTTP error reply. A `PublicError` keeps its own message. Any other error gives `fallback`, and its full
- * text goes only to the server log, with secrets removed. `where` names the request in that log line. */
+/** The text of an HTTP error reply. A public error keeps its own message. Any other error gives `fallback`, and its full
+ * text goes only to the server log, with secrets removed. `where` names the request in that log line. The status and the
+ * code of the reply are a separate decision of the caller. */
 export function publicErrorText(error: unknown, where: string, fallback: string = GENERIC_PUBLIC_ERROR): string {
   if (isPublicError(error)) return error.message;
-  logInternal(error, where);
-  return fallback;
-}
-
-/** TRANSITIONAL. For a reply whose error comes from many server modules that raise a refusal as a plain `Error` with a 4xx
- * `status`. Such an error keeps its message. Any other error, and any error with a 5xx status, gives the fallback. Move
- * each module to `PublicError`, then use `publicErrorText` here. */
-export function refusalErrorText(error: unknown, where: string, fallback: string = GENERIC_PUBLIC_ERROR): string {
-  if (isPublicError(error)) return error.message;
-  const status = (error as { status?: unknown } | null)?.status;
-  if (error instanceof Error && typeof status === "number" && Number.isInteger(status) && status >= 400 && status < 500) return error.message;
   logInternal(error, where);
   return fallback;
 }

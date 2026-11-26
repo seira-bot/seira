@@ -15,6 +15,8 @@ import { z } from "zod";
 import { AUTH_CONFIG_ID } from "../shared/connector-availability.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
+import { PublicError } from "./public-error.ts";
+import { redactSecretsInText } from "./redact.ts";
 
 export const DEFAULT_BACKEND_ORIGIN = "https://backend.composio.dev";
 
@@ -38,8 +40,8 @@ export async function responseError(res: Response, fallback: string) {
   }
 }
 
-export function inputError(message: string, status = 400) {
-  return Object.assign(new Error(message), { status });
+export function inputError(message: string, status = 400): PublicError {
+  return new PublicError(message, status);
 }
 
 /** Composio's slug is `twitter`; saved cards and model calls may still say `x`. */
@@ -248,11 +250,11 @@ export function noAuthConfigReason(toolkit: string): string {
 
 function toolRouterOffReason(toolkit: string, id: string, said: string): string {
   return `Seira could not turn on Tool Router for your ${toolkit} auth config ${id}, which Composio needs before it `
-    + `uses it. Check that your Composio project key may edit auth configs. Composio said: ${said}`;
+    + `uses it. Check that your Composio project key may edit auth configs. Composio said: ${redactSecretsInText(said)}`;
 }
 
 export function refusedAuthConfigReason(toolkit: string, said: string): string {
-  return `Composio would not use your ${toolkit} auth config. Check it is enabled in your Composio project. Composio said: ${said}`;
+  return `Composio would not use your ${toolkit} auth config. Check it is enabled in your Composio project. Composio said: ${redactSecretsInText(said)}`;
 }
 
 /** A bot's explicit `auth_config_id`, checked against the project before any Session names it. */

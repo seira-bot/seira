@@ -19,6 +19,7 @@ import { zipFolder } from "../share-zip.ts";
 import type { BotRecord, GroupRecord } from "../store.ts";
 import { parseTeamManifest } from "../team-manifest.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { withheld } from "../public-error.ts";
 
 export interface ShareRouteDeps {
   host: ShareHost;
@@ -128,7 +129,7 @@ export function addTemplate(folder: ShareFolder, deps: PackageImportDeps, view: 
     try {
       manifest = parseTeamManifest(folder.manifest as Parameters<typeof parseTeamManifest>[0]);
     } catch (error) {
-      throw new ShareError(error instanceof Error ? error.message : "This folder has no bot.md or team.md.");
+      throw withheld(new ShareError(error instanceof Error ? error.message : "This folder has no bot.md or team.md."));
     }
     imported = importTeamManifest(manifest, { mode: "add" }, deps);
   }

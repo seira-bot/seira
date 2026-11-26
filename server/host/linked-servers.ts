@@ -67,6 +67,7 @@ import {
   ENDED_MAX, GUEST_TOKEN_PREFIX, LINKS_MAX, addInvite, botIdSchema, cleanName, cleanPlace, decodeInvite, encodeInvite, guestOrigin, hashSecret, instanceDir, liveInvite,
   newLinkId, newToken, pruneInvites, readLinks, sameHash, writeLinks, type ApprovalCap, type StoredLink,
 } from "./linked-servers-store.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 export { ADMIT } from "./linked-servers-admit.ts";
 export { GUEST_TOKEN_PREFIX, INVITE_TTL_MS, LINKS_MAX, type ApprovalCap } from "./linked-servers-store.ts";
@@ -110,6 +111,7 @@ export function capMode(mode: ApprovalMode, cap: ApprovalCap): ApprovalMode {
 
 /** A join that did not happen, with a message the person can read. */
 export class LinkedServerError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status: number) {
     super(message);

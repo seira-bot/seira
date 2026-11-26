@@ -7,6 +7,7 @@ import {
   type LocalVmTarget,
   SHARED_LOCAL_VM_TARGET,
 } from "./container-computer.ts";
+import { PublicError } from "./public-error.ts";
 
 export const LOCAL_VM_IN_BOX_MESSAGE =
   "The Local VM needs the Docker socket, which the bot box does not expose";
@@ -25,6 +26,6 @@ export function containerComputerMcp(
   botId?: string,
 ): ReturnType<typeof mountContainerComputerMcp> {
   const boxed = localVmInBoxMessage(botBox.boxesBot(botId));
-  if (boxed) throw Object.assign(new Error(boxed), { status: 409, code: "bot_box" });
+  if (boxed) throw Object.assign(new PublicError(boxed, 409), { code: "bot_box" });
   return mountContainerComputerMcp(runtime, control, target);
 }

@@ -6,7 +6,7 @@ import { askForSetup, cancelSetupRequest, type SetupRequestStore } from "../setu
 import type { Message } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { refusalBody, userError } from "../user-errors.ts";
-import { refusalErrorText } from "../public-error.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface SetupRequestRouteDeps {
   store: SetupRequestStore;
@@ -65,7 +65,7 @@ export function createSetupRequestRoutes(deps: SetupRequestRouteDeps): RouteHand
       const status = (error as { status?: unknown } | null)?.status;
       if (typeof status !== "number") throw error;
       deps.store.patchTask(botId, threadId, { setupRequest: undefined });
-      return json(res, status, { error: refusalErrorText(error, "POST setup request") });
+      return json(res, status, { error: publicErrorText(error, "POST setup request") });
     } finally {
       picking.delete(key);
     }

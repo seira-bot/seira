@@ -49,6 +49,7 @@ export type {
   BotActivity, GroupDefaultResponder, OptionCardData,
   SecretRequestCardData, Surface, TaskClosedBy, TaskOpenedBy, TaskUsage,
 } from "../shared/wire.ts";
+import { PublicError } from "./public-error.ts";
 export type { GroupTask as GroupTaskRecord, BotProject as BotProjectRecord } from "../shared/wire.ts";
 export type { InstalledPlaybook, InstalledPackageMetadata, SeiraColor, SeiraExpression } from "../shared/wire.ts";
 
@@ -1423,7 +1424,7 @@ export class Store {
   deleteBot(id: string, setupRequest?: TeamSetupRequest): boolean {
     const bot = this.own(id);
     if (!bot) return false;
-    if (bot.defaultBot) throw Object.assign(new Error(defaultBotRefusal(bot.name)), { status: 409 });
+    if (bot.defaultBot) throw new PublicError(defaultBotRefusal(bot.name), 409);
     let nextBots = this.bots.filter((b) => b.id !== id); this.threadsGoing([bot.threadId, ...(bot.tasks ?? []).map((t) => t.threadId)]);
     if (setupRequest) {
       const chief = this.own(setupRequest.botId);

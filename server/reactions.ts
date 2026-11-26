@@ -9,6 +9,7 @@ import { peerName } from "./peer-roster.ts";
 import { personOf, replyExcerpt, type PersonName, type ReplyTarget } from "./replies.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
+import { PublicError } from "./public-error.ts";
 
 export interface Reactor {
   by: string;
@@ -98,7 +99,7 @@ export function createReactions(deps: ReactionDeps) {
       const reply = store.groupByThread(threadId) ? null : cardReply(target.card!, answer);
       if (!reply) return "none";
       const result = await deps.answerCard({ auth, threadId, requestId: target.card!.requestId!, ...reply });
-      if (!result.ok) throw Object.assign(new Error(result.error), { status: result.status });
+      if (!result.ok) throw new PublicError(result.error, result.status);
       return "answered";
     }
     if ((target.kind !== "text" && target.kind !== "widget") || !target.text?.trim() || sent.latest === entry.emoji) return "none";
@@ -114,7 +115,7 @@ export function createReactions(deps: ReactionDeps) {
   }): Promise<{ message: Message; delivery: ReactionDelivery }> {
     const { auth, threadId, messageId, emoji, reactor, on } = input;
     const target = store.messagesFor(threadId).find((message) => message.id === messageId);
-    if (!target) throw Object.assign(new Error("no such message"), { status: 404 });
+    if (!target) throw new PublicError("no such message", 404);
     const previous = target.reactions?.find((reaction) => reaction.by === reactor.by);
     const kept = previous?.emoji === emoji ? null : previous?.emoji ?? null;
     const next = on === true || (on === undefined && previous?.emoji !== emoji) ? emoji : kept;
