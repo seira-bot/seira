@@ -7523,6 +7523,7 @@
   "call.live.codexCost": "Codex 통화는 ChatGPT 요금제의 음성 사용량을 사용합니다.",
   "alwaysOn.login.startupApps": "여기서는 로그인할 때 열기가 꺼져 있어요. Windows 설정의 시작 앱에서 켜 주세요.",
   "settings.ai.pool": "AI 풀",
+  "settings.pool.title": "여러 AI에 사용량 나누기",
   "aiImport.title": "다른 AI에서 옮겨 오기",
   "call.view.calling": "전화 거는 중…",
   "call.view.callWith": "{name} 통화",

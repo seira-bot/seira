@@ -7060,6 +7060,7 @@
   "call.live.codexCost": "Звонки через Codex расходуют голосовой лимит вашего тарифа ChatGPT.",
   "alwaysOn.login.startupApps": "Открытие при входе здесь выключено. Включите его в разделе «Автозагрузка приложений» в Параметрах Windows.",
   "settings.ai.pool": "Пул ИИ",
+  "settings.pool.title": "Делить использование между несколькими ИИ",
   "aiImport.title": "Переезд из другого AI",
   "call.view.calling": "Звоним…",
   "call.view.callWith": "Звонок с {name}",

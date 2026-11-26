@@ -11694,6 +11694,7 @@
   "room.panel.addBot": "Adicionar bot",
   "room.panel.lead": "Líder",
   "settings.ai.pool": "Grupo de IA",
+  "settings.pool.title": "Dividir o uso entre várias IAs",
   "konektor.description": "Leads do WhatsApp, caixa de entrada, transmissões, anúncios e rastreamento de conversões na sua conta do Konektor.id.",
   "konektor.notice": "Entre com o Konektor.id. Não é preciso ter uma chave de API. Um bot que pode usar o Konektor.id pode ler e alterar seus leads, caixa de entrada e anúncios e enviar mensagens pelo WhatsApp em seu nome. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "biver.description": "Crie e edite seus sites do Biver.id: páginas, seções, formulários, produtos, checkout e domínios.",

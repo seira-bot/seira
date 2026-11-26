@@ -6878,6 +6878,7 @@
   "call.live.codexCost": "Le chiamate Codex usano la quota vocale del tuo piano ChatGPT.",
   "alwaysOn.login.startupApps": "Apri all'accesso è disattivato qui. Attivalo in App di avvio nelle Impostazioni di Windows.",
   "settings.ai.pool": "Gruppo di IA",
+  "settings.pool.title": "Condividi l'uso tra più IA",
   "aiImport.title": "Passa da un’altra AI",
   "call.view.calling": "Chiamata in corso…",
   "call.view.callWith": "Chiamata con {name}",

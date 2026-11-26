@@ -122,8 +122,8 @@ export function AiPoolSettings() {
   const reserves = AI_POOL_RESERVES.includes(reserve) ? AI_POOL_RESERVES : [...AI_POOL_RESERVES, reserve];
   return (
     <SettingsRows selectWidth={200}>
-      <SettingRow title={t("settings.aiPool.title")} subtitle={<span id="ai-pool-help">{t("settings.aiPool.short")}</span>} message={message}>
-        <Switch id="ai-pool-enabled" checked={value.enabled} disabled={saving || !state.config} aria-label={t("settings.aiPool.title")} aria-describedby="ai-pool-help" onClick={toggle} />
+      <SettingRow title={t("settings.pool.title")} subtitle={<span id="ai-pool-help">{t("settings.aiPool.short")}</span>} message={message}>
+        <Switch id="ai-pool-enabled" checked={value.enabled} disabled={saving || !state.config} aria-label={t("settings.pool.title")} aria-describedby="ai-pool-help" onClick={toggle} />
       </SettingRow>
       {value.enabled && <SettingRow title={t("settings.aiPool.mode")} subtitle={t(MODE_LINE_KEY[value.mode])}>
         <ModeChoice mode={value.mode} disabled={saving} onChange={(mode) => change({ ...value, mode })} />

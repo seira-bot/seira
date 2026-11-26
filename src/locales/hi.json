@@ -3638,6 +3638,7 @@
   "call.live.codexCost": "Codex कॉल आपके ChatGPT प्लान की वॉइस सीमा का उपयोग करती हैं।",
   "alwaysOn.login.startupApps": "यहाँ लॉगिन पर खोलें बंद है। Windows सेटिंग्स में स्टार्टअप ऐप्स में इसे चालू करें।",
   "settings.ai.pool": "AI पूल",
+  "settings.pool.title": "कई AI में उपयोग साझा करें",
   "aiImport.title": "किसी दूसरे AI से यहाँ आएँ",
   "call.view.calling": "कॉल कर रहे हैं…",
   "call.view.callWith": "{name} के साथ कॉल",

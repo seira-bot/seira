@@ -5870,6 +5870,7 @@
   "call.live.codexCost": "Cuộc gọi Codex dùng hạn mức giọng nói của gói ChatGPT của bạn.",
   "alwaysOn.login.startupApps": "Mở khi đăng nhập đang tắt ở đây. Hãy bật nó trong Ứng dụng khởi động ở Cài đặt Windows.",
   "settings.ai.pool": "Nhóm AI",
+  "settings.pool.title": "Chia sẻ mức dùng giữa nhiều AI",
   "aiImport.title": "Chuyển từ AI khác",
   "call.view.calling": "Đang gọi…",
   "call.view.callWith": "Cuộc gọi với {name}",

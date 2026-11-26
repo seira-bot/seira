@@ -10043,6 +10043,7 @@
   "call.live.codexCost": "Codex 通話會使用你的 ChatGPT 方案的語音額度。",
   "alwaysOn.login.startupApps": "這裡的「登入時開啟」已關閉。請在 Windows 設定的「啟動應用程式」中開啟它。",
   "settings.ai.pool": "AI 池",
+  "settings.pool.title": "在多個 AI 之間分攤用量",
   "aiImport.title": "從其他 AI 搬過來",
   "call.view.calling": "正在撥打…",
   "call.view.callWith": "與{name}通話",

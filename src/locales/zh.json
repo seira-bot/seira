@@ -9953,6 +9953,7 @@
   "call.live.codexCost": "Codex 通话会使用你的 ChatGPT 套餐的语音额度。",
   "alwaysOn.login.startupApps": "这里的“登录时打开”已关闭。请在 Windows 设置的“启动应用”中打开它。",
   "settings.ai.pool": "AI 池",
+  "settings.pool.title": "在多个 AI 之间分摊用量",
   "aiImport.title": "从其他 AI 迁移",
   "call.view.calling": "正在呼叫…",
   "call.view.callWith": "与{name}通话",

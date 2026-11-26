@@ -3967,6 +3967,7 @@
   "call.live.codexCost": "Codex-Anrufe nutzen das Sprachkontingent deines ChatGPT-Tarifs.",
   "alwaysOn.login.startupApps": "Beim Anmelden öffnen ist hier aus. Schalte es in den Windows-Einstellungen unter Autostart-Apps ein.",
   "settings.ai.pool": "KI-Pool",
+  "settings.pool.title": "Nutzung auf mehrere KIs verteilen",
   "aiImport.title": "Von einer anderen KI umziehen",
   "call.view.calling": "Rufe an…",
   "call.view.callWith": "Anruf mit {name}",

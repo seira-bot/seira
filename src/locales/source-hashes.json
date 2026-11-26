@@ -2,6 +2,7 @@
   "version": 1,
   "locales": {
     "de": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "server.incidents.folded": "0f3510347ddace2c9fb06627f1759a1358aba45e82546e98aca8e968a5789105",
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
       "pro.seePlans": "30d9abfd7c7af513814bdfadcafe7ec4a90bc6bcee519086dc513f63f2cd7384",
@@ -4020,6 +4021,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "es": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -10439,6 +10441,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "fr": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
       "pro.seePlans": "30d9abfd7c7af513814bdfadcafe7ec4a90bc6bcee519086dc513f63f2cd7384",
       "pro.reauthShort": "089c74d900d6e3d84b0d4981fb4eb0b4038d9a243ca8209862f7500766382473",
@@ -14248,6 +14251,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "hi": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
       "pro.seePlans": "30d9abfd7c7af513814bdfadcafe7ec4a90bc6bcee519086dc513f63f2cd7384",
       "pro.reauthShort": "089c74d900d6e3d84b0d4981fb4eb0b4038d9a243ca8209862f7500766382473",
@@ -17937,6 +17941,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ja": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -25810,6 +25815,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "pt-br": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
       "voice.gemini.model": "da23d132c90fadd03238ffb38f5868d70d02895b07a7b75508cfdd4454d37fe2",
       "keys.label.geminiTts": "fa50097b6e379a37f644a1ee7ff626d6f5604753afd04d4a6dc0cc3dc0f45e55",
@@ -37895,6 +37901,7 @@
       "power.toast.updated": "da0fcccdc519425a9c333fda0838bbdd50d67fb0266194753bd1044abd0ecbb4"
     },
     "zh": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
       "pro.seePlans": "30d9abfd7c7af513814bdfadcafe7ec4a90bc6bcee519086dc513f63f2cd7384",
       "pro.reauthShort": "089c74d900d6e3d84b0d4981fb4eb0b4038d9a243ca8209862f7500766382473",
@@ -47894,6 +47901,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "zh-tw": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -57983,6 +57991,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "uk": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
       "pro.seePlans": "30d9abfd7c7af513814bdfadcafe7ec4a90bc6bcee519086dc513f63f2cd7384",
       "pro.reauthShort": "089c74d900d6e3d84b0d4981fb4eb0b4038d9a243ca8209862f7500766382473",
@@ -62091,6 +62100,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "vi": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -68012,6 +68022,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "tr": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -73933,6 +73944,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "pl": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -80990,6 +81002,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ru": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -88096,6 +88109,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "it": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
       "hostedMcp.disconnect": "d2ac39b755863cc4d98303430df47f8b030d817595d2f72cbd586d06a86d54ab",
       "hostedMcp.connected": "1d518aca6e81a04848e812bde0bd605a8bdc00d29b9a456925eda07cf1b35257",
@@ -95020,6 +95034,7 @@
       "settings.textSize.title": "d68761cc1eb296478531e007ff1fda9252fb7be5d24429a97eb05765211dafe5"
     },
     "ko": {
+      "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
       "connectedWorkspaces.missing": "ffa63583dfa6706b87d284b86b0d693a161e4840aad2c5cf6b5d27c3b9621f7d",
       "connectedWorkspaces.current": "e0d1b68224bf0b31ef16b206c65b5f8f6b89d18161f4a7cdcb8d0ac8d952549a",

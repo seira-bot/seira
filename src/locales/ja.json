@@ -7827,6 +7827,7 @@
   "call.live.codexCost": "Codex の通話では、ChatGPT プランの音声の利用枠を使います。",
   "alwaysOn.login.startupApps": "ここではログイン時に開く設定はオフです。Windows の設定の［スタートアップ アプリ］でオンにしてください。",
   "settings.ai.pool": "AIプール",
+  "settings.pool.title": "複数のAIで利用量を分け合う",
   "aiImport.title": "他の AI から移行",
   "call.view.calling": "呼び出し中…",
   "call.view.callWith": "{name}との通話",

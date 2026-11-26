@@ -5870,6 +5870,7 @@
   "call.live.codexCost": "Codex aramaları ChatGPT planınızın ses hakkını kullanır.",
   "alwaysOn.login.startupApps": "Oturum açılınca aç burada kapalı. Windows Ayarları'nda Başlangıç uygulamaları bölümünden aç.",
   "settings.ai.pool": "Yapay zeka havuzu",
+  "settings.pool.title": "Kullanımı birkaç yapay zeka arasında paylaş",
   "aiImport.title": "Başka bir yapay zekâdan taşıyın",
   "call.view.calling": "Aranıyor…",
   "call.view.callWith": "{name} ile arama",

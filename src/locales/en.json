@@ -11694,7 +11694,7 @@
   "room.panel.addBot": "Add bot",
   "room.panel.lead": "Lead",
   "settings.ai.pool": "AI pool",
-  "settings.aiPool.title": "Share usage across AIs",
+  "settings.pool.title": "Share usage across AIs",
   "settings.aiPool.short": "Your bots share usage across several AIs, so work keeps going when one runs low.",
   "settings.aiPool.status": "{count} AIs · used by {bots} of {total} bots",
   "settings.aiPool.needSecond": "Sign in to a second AI to share usage.",

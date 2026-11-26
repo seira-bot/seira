@@ -4057,6 +4057,7 @@
   "call.live.codexCost": "Дзвінки через Codex витрачають голосовий ліміт вашого тарифу ChatGPT.",
   "alwaysOn.login.startupApps": "Відкривання під час входу тут вимкнено. Увімкніть його в розділі «Автозапуск програм» у Параметрах Windows.",
   "settings.ai.pool": "Пул ШІ",
+  "settings.pool.title": "Ділити використання між кількома ШІ",
   "aiImport.title": "Переїзд з іншого ШІ",
   "call.view.calling": "Телефонуємо…",
   "call.view.callWith": "Дзвінок із {name}",

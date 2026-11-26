@@ -3758,6 +3758,7 @@
   "call.live.codexCost": "Les appels Codex utilisent le quota vocal de votre forfait ChatGPT.",
   "alwaysOn.login.startupApps": "Ouvrir à la connexion est désactivé ici. Activez-le dans Applications au démarrage, dans les Paramètres de Windows.",
   "settings.ai.pool": "Groupe d'IA",
+  "settings.pool.title": "Partager l'usage entre plusieurs IA",
   "aiImport.title": "Passer depuis une autre IA",
   "call.view.calling": "Appel en cours…",
   "call.view.callWith": "Appel avec {name}",

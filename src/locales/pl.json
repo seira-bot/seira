@@ -7011,6 +7011,7 @@
   "call.live.codexCost": "Rozmowy przez Codex korzystają z limitu głosowego Twojego planu ChatGPT.",
   "alwaysOn.login.startupApps": "Otwieranie przy logowaniu jest tu wyłączone. Włącz je w sekcji Aplikacje startowe w Ustawieniach systemu Windows.",
   "settings.ai.pool": "Pula AI",
+  "settings.pool.title": "Dziel zużycie między kilka AI",
   "aiImport.title": "Przenieś się z innej AI",
   "call.view.calling": "Dzwonię…",
   "call.view.callWith": "Rozmowa z {name}",

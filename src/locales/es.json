@@ -6368,6 +6368,7 @@
   "call.live.codexCost": "Las llamadas con Codex usan el límite de voz de tu plan de ChatGPT.",
   "alwaysOn.login.startupApps": "Abrir al iniciar sesión está desactivado aquí. Actívalo en Aplicaciones de inicio, dentro de Configuración de Windows.",
   "settings.ai.pool": "Grupo de IA",
+  "settings.pool.title": "Compartir el uso entre varias IA",
   "aiImport.title": "Pasar desde otra IA",
   "call.view.calling": "Llamando…",
   "call.view.callWith": "Llamada con {name}",
