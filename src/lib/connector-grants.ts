@@ -5,15 +5,22 @@ export type ConnectorVerb = "read" | "draft" | "send" | "modify" | "delete";
 
 const VERB_WORDS: ReadonlyArray<readonly [ConnectorVerb, readonly string[]]> = [
   ["delete", ["DELETE", "REMOVE", "TRASH", "PURGE", "DESTROY"]],
-  ["modify", ["UPDATE", "EDIT", "MODIFY", "PATCH", "SET", "RENAME", "MOVE", "TAG", "MARK", "UPLOAD", "ASSIGN", "APPROVE", "REJECT", "ARCHIVE", "PIN", "UNPIN", "STAR", "LABEL", "ENABLE", "DISABLE", "TOGGLE", "CANCEL", "CLOSE", "COMPLETE", "TRANSFER", "INSERT", "MERGE"]],
+  ["modify", ["UPDATE", "EDIT", "MODIFY", "PATCH", "SET", "RENAME", "MOVE", "TAG", "MARK", "UPLOAD", "ASSIGN", "APPROVE", "REJECT", "ARCHIVE", "PIN", "UNPIN", "STAR", "LABEL", "ENABLE", "DISABLE", "TOGGLE", "CANCEL", "CLOSE", "COMPLETE", "TRANSFER", "INSERT"]],
   ["send", ["SEND", "REPLY", "FORWARD", "PUBLISH", "POST", "SHARE", "NOTIFY", "INVITE", "MENTION", "COMMENT", "MESSAGE", "TWEET", "EMAIL", "MAIL", "CALL", "SMS", "TEXT"]],
-  ["draft", ["CREATE", "ADD", "NEW", "DRAFT", "COMPOSE", "GENERATE", "WRITE", "MAKE", "BUILD", "COMMIT"]],
+  ["draft", ["CREATE", "ADD", "NEW", "DRAFT", "COMPOSE", "GENERATE", "WRITE", "MAKE", "BUILD"]],
   ["read", ["READ", "LIST", "GET", "SEARCH", "FIND", "FETCH", "QUERY", "SHOW", "VIEW", "RETRIEVE", "LOOKUP", "CHECK", "DESCRIBE", "BROWSE", "DOWNLOAD", "STATS"]],
 ];
+
+const NATIVE_TOOL_VERBS: Readonly<Record<string, ConnectorVerb>> = {
+  GITHUB_APP_COMMIT_FILES: "draft",
+  GITHUB_APP_MERGE_PULL: "modify",
+};
 
 /** The more-privileged class wins regardless of word order (GMAIL_CREATE_AND_SEND sends). */
 export function classifyConnectorTool(name: string): ConnectorVerb | null {
   if (!CONNECTOR_TOOL_NAME_PATTERN.test(name)) return null;
+  const native = NATIVE_TOOL_VERBS[name];
+  if (native) return native;
   const words = name.split("_");
   for (const [verb, markers] of VERB_WORDS) {
     if (words.some((word) => markers.includes(word))) return verb;

@@ -154,4 +154,11 @@ describe("editing one service's grant", () => {
     expect(Object.keys(expected).sort()).toEqual([...GITHUB_APP_TOOL_NAMES].sort());
     for (const [name, verb] of Object.entries(expected)) expect(classifyConnectorTool(name), name).toBe(verb);
   });
+
+  it("keeps the verbs of Composio GitHub tools that share words with the native ones", () => {
+    expect(classifyConnectorTool("GITHUB_GET_A_COMMIT")).toBe("read");
+    expect(classifyConnectorTool("GITHUB_CREATE_A_COMMIT")).toBe("draft");
+    expect(classifyConnectorTool("GITHUB_MERGE_A_PULL_REQUEST")).toBeNull();
+    expect(classifyConnectorTool("GITHUB_LIST_COMMITS")).toBe("read");
+  });
 });
