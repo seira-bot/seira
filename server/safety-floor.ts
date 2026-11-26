@@ -75,20 +75,74 @@ const READ_ONLY_STORAGE_VERBS = new Set(["get", "test", "find", "show"]);
 const STORAGE_NOUN = /^(?:disk(?!image)|physicaldisk|virtualdisk|storagepool|storagetier|storagesubsystem|storageenclosure|partition|volume|fileintegrity)/;
 const STORAGE_CLASS = /\b(?:MSFT_(?:Disk|Partition|Volume|PhysicalDisk|StoragePool|VirtualDisk|StorageTier)|Win32_(?:Volume|DiskDrive|DiskPartition|LogicalDisk))\b/i;
 /** Commands that call a method of, change or remove a CIM or WMI instance. */
-const CIM_METHOD_COMMANDS = new Set(["invoke-cimmethod", "invoke-wmimethod", "set-ciminstance", "remove-ciminstance", "set-wmiinstance", "remove-wmiobject"]);
+const CIM_METHOD_COMMANDS = new Set([
+  "invoke-cimmethod", "invoke-wmimethod", "set-ciminstance", "remove-ciminstance", "set-wmiinstance", "remove-wmiobject",
+  "icim", "scim", "rcim", "iwmi", "swmi", "rwmi",
+]);
+const CIM_GET_COMMANDS = new Set(["get-ciminstance", "gcim", "get-wmiobject", "gwmi"]);
 const WMIC_STORAGE_ALIAS = /^(?:volume|diskdrive|partition|logicaldisk)$/i;
 const WMIC_CHANGE_VERB = /^(?:call|delete|set|create)$/i;
+/** Words of a `wmic` line that are not an alias: an alias is the first word that is none of these. */
+const WMIC_KEYWORDS = new Set(["call", "delete", "set", "create", "get", "list", "where", "assoc", "class", "context", "quit", "exit"]);
+const STORAGE_NAMESPACE = /root[\\/]+microsoft[\\/]+windows[\\/]+storage/i;
+const CLASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** True when `arg` is the parameter `full` or an abbreviation of it of at least `min` letters (`-Cl`, `-Class`). */
+function parameter(arg: string, full: string, min: number): boolean {
+  const name = /^-([A-Za-z]+)(?::|$)/.exec(arg)?.[1]?.toLowerCase();
+  return name !== undefined && name.length >= min && full.startsWith(name);
+}
+
+/** The literal class a CIM or WMI command names: `-ClassName`, `-Class`, or a first word that is not a switch. Null
+ * when there is none or it is computed; a quoted name is the same name. */
+function cimClass(args: string[], positional: boolean): string | null {
+  const flag = args.findIndex((arg) => parameter(arg, "classname", 2));
+  if (flag >= 0) {
+    const inline = args[flag].slice(args[flag].indexOf(":") + 1);
+    const value = args[flag].includes(":") ? inline : args[flag + 1];
+    return value !== undefined && CLASS_NAME.test(value) ? value : null;
+  }
+  return positional && args[0] !== undefined && CLASS_NAME.test(args[0]) ? args[0] : null;
+}
+
+/** A CIM or WMI change command is clear only when its target is a literal class that is not storage, in a namespace
+ * that is not storage. `pipe` holds the commands before it in the same pipeline. */
+function cimUnresolved(program: string, args: string[], pipe: Command[]): boolean {
+  const lines = [args, ...pipe.map((command) => command.words)];
+  if (lines.some((words) => words.some((word) => STORAGE_CLASS.test(word) || STORAGE_NAMESPACE.test(word)))) return true;
+  // A query, a WMI path or a resource URI names its target in text the floor does not read.
+  if (args.some((arg) => parameter(arg, "query", 1) || parameter(arg, "path", 2) || parameter(arg, "resourceuri", 2))) return true;
+  // A namespace that is computed can be the storage one.
+  const space = args.findIndex((arg) => parameter(arg, "namespace", 5));
+  if (space >= 0 && args.slice(space, space + 2).some((arg) => arg.includes(DYNAMIC))) return true;
+  // A first word that is not a switch is the class; one that is not a plain name is computed.
+  if (args[0] !== undefined && !args[0].startsWith("-") && !CLASS_NAME.test(args[0])) return true;
+  if (cimClass(args, true) !== null) return false;
+  if (args.some((arg) => parameter(arg, "classname", 2))) return true;
+  // The class comes from the nearest Get command of the pipe when the change command names none.
+  const source = [...pipe].reverse().find((command) => CIM_GET_COMMANDS.has(programName(command.words[0] ?? "")));
+  return source === undefined || cimClass(source.words.slice(1), true) === null;
+}
+
+/** `wmic` changes something with `call`, `delete`, `set` or `create`; it is clear only for a literal alias or
+ * `path CLASS` that is not storage, in a namespace that is not storage. */
+function wmicUnresolved(args: string[]): boolean {
+  if (!args.some((arg) => WMIC_CHANGE_VERB.test(arg))) return false;
+  if (args.some((arg) => STORAGE_CLASS.test(arg) || STORAGE_NAMESPACE.test(arg))) return true;
+  const switches = args.findIndex((arg) => !arg.startsWith("/"));
+  const first = args[switches < 0 ? args.length : switches];
+  const target = first?.toLowerCase() === "path" ? args[switches + 1] : first;
+  if (target === undefined || !CLASS_NAME.test(target) || WMIC_KEYWORDS.has(target.toLowerCase())) return true;
+  return WMIC_STORAGE_ALIAS.test(target);
+}
 
 /** A Windows storage operation the floor cannot classify as read-only: the line is reported as not read, so nothing
- * approves it automatically. `source` is the line, because a pipe puts the class in another command. */
-function unresolvedStorage(program: string, args: string[], source: string): boolean {
+ * approves it automatically. `pipe` holds the commands before this one in the same pipeline. */
+function unresolvedStorage(program: string, args: string[], pipe: Command[]): boolean {
   const dash = program.indexOf("-");
   if (dash > 0 && !READ_ONLY_STORAGE_VERBS.has(program.slice(0, dash)) && STORAGE_NOUN.test(program.slice(dash + 1))) return true;
-  if (CIM_METHOD_COMMANDS.has(program)) return STORAGE_CLASS.test(source) || args.some((arg) => arg.includes(DYNAMIC));
-  if (program === "wmic") {
-    return args.some((arg) => WMIC_STORAGE_ALIAS.test(arg) || STORAGE_CLASS.test(arg)) && args.some((arg) => WMIC_CHANGE_VERB.test(arg));
-  }
-  return false;
+  if (CIM_METHOD_COMMANDS.has(program)) return cimUnresolved(program, args, pipe);
+  return program === "wmic" && wmicUnresolved(args);
 }
 
 /** `-EncodedCommand` or any start of it (`-e`, `-enc`), and its alias `-ec`: the script is Base64, so it is not read. */
@@ -598,7 +652,7 @@ interface Pass {
   synced: boolean;
 }
 
-function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: number): FloorVerdict | null {
+function judge(command: Command, pipe: Command[], source: string, pass: Pass, mode: Mode, depth: number): FloorVerdict | null {
   const { host } = pass;
   if (mode === "posix" && command.writes.some(diskDevice)) return OVERWRITE_DISK;
   const words = [...command.words];
@@ -682,7 +736,7 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   if (mode === "powershell") {
     const storage = windowsStorage(program, args);
     if (storage) return storage;
-    if (unresolvedStorage(program, args, source)) pass.synced = false;
+    if (unresolvedStorage(program, args, pipe)) pass.synced = false;
     if (program === "iex" || program === "invoke-expression") return expression();
     // Remove-Item's aliases off Windows, where `rm` and `rmdir` are the real programs the POSIX reading judges.
     if (!["remove-item", "ri", "rd", "del", "erase"].includes(program)) return null;
@@ -717,7 +771,7 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   if (program === "format") return args.some((arg) => /^(?:[A-Za-z]:|\\\\[?.]\\)/.test(arg)) ? FORMAT_DISK : null;
   const storage = windowsStorage(program, args);
   if (storage) return storage;
-  if (unresolvedStorage(program, args, source)) pass.synced = false;
+  if (unresolvedStorage(program, args, pipe)) pass.synced = false;
   return program === "iex" || program === "invoke-expression" ? expression() : null;
 }
 
@@ -725,8 +779,13 @@ function scan(source: string, pass: Pass, mode: Mode, depth: number): FloorVerdi
   const reading = lex(source, mode !== "posix");
   if (!reading.synced) pass.synced = false;
   if (mode === "posix" && FORK_BOMBS.some((bomb) => bomb.test(reading.bare))) return FORK_BOMB;
+  // The commands before this one in the same pipeline: the text between two commands is only a `|`.
+  let pipe: Command[] = [];
+  let before: Command | undefined;
   for (const command of reading.commands) {
-    const verdict = judge(command, source, pass, mode, depth);
+    pipe = before && source.slice(before.to, command.from) === "|" ? [...pipe, before] : [];
+    before = command;
+    const verdict = judge(command, pipe, source, pass, mode, depth);
     if (verdict) return verdict;
   }
   return null;
