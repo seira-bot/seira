@@ -12411,11 +12411,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       return json(res, revoked ? 200 : 404, revoked ? { ok: true } : { error: "no such session" });
     }
     if (m && method === "PATCH") {
+      const sessionId = m[1];
       const parsed = z.object({ label: z.string().max(1000) }).strict().safeParse(await readBody(req, 1024));
-      const renamed = parsed.success ? sessions.rename(m[1], parsed.data.label) : "invalid";
+      const renamed = parsed.success ? sessions.rename(sessionId, parsed.data.label) : "invalid";
       if (renamed === "invalid") return json(res, 400, { error: "Invalid device name" });
       if (renamed === "missing") return json(res, 404, { error: "no such session" });
-      return json(res, 200, { ok: true, session: sessions.list(sessionPersonName).find((session) => session.id === m[1]) });
+      return json(res, 200, { ok: true, session: sessions.list(sessionPersonName).find((session) => session.id === sessionId) });
     }
     // Test-only routes exist only when the launcher sets a high-entropy test key, which production builds never set.
     if (method === "POST" && path === "/api/testing/org-library") {
