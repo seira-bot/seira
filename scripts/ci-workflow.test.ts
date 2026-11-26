@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -86,43 +86,155 @@ const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefine
 
 describe("snap publish workflow", () => {
   const flow = workflows.get(SNAP)!;
-  const build = flow.jobs.build!;
-  const publish = flow.jobs.publish!;
+  const text = texts.get(SNAP)!;
+  const { redispatch, commit, gate, approval, build, publish } = flow.jobs as Record<string, Job>;
+  const find = (job: Job, name: string) => stepsOf(job).find((step) => step.name === name)!;
+  const check = find(commit!, "Find the commit of the tag");
+  const RUN_IF = `!cancelled() && github.event_name == 'workflow_dispatch' && ${MAIN_REF} && needs.commit.result == 'success'`;
+  const CLEAR = `needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (${APPROVED_NOW}))`;
+
+  // Runs the shell of the `commit` job with `gh` and `git` replaced by fakes, to see which release states it rejects.
+  const runCommit = (env: { ref?: string; tag?: string; channel?: string; position?: string; release?: string | null; sha?: string }) => {
+    const sha = env.sha ?? "a".repeat(40);
+    const dir = mkdtempSync(join(tmpdir(), "snap-commit-"));
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const tag = env.tag ?? "v1.2.3";
+    const lsRemote = sha === "" ? "exit 0" : `printf '%s\\trefs/tags/${tag}\\n' ${sha}; exit 0`;
+    writeFileSync(join(bin, "git"), `#!/bin/bash\n[ "$1" = ls-remote ] && { ${lsRemote}; }\nexit 1\n`, { mode: 0o755 });
+    const release = env.release === undefined ? "false\\tfalse" : env.release;
+    writeFileSync(join(bin, "gh"), [
+      "#!/bin/bash",
+      'case "$2" in',
+      `  */compare/*) echo "${env.position ?? "behind"}" ;;`,
+      release === null ? "  */releases/tags/*) exit 1 ;;" : `  */releases/tags/*) printf '${release}\\n' ;;`,
+      "esac", "",
+    ].join("\n"), { mode: 0o755 });
+    const out = join(dir, "out");
+    const result = spawnSync("bash", ["-c", check.run!], {
+      encoding: "utf8",
+      env: {
+        PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_OUTPUT: out, GITHUB_STEP_SUMMARY: join(dir, "sum"),
+        REF: env.ref ?? "refs/heads/main", TAG: tag, CHANNEL: env.channel ?? "stable", GH_TOKEN: "x",
+      },
+    });
+    const written = existsSync(out) ? readFileSync(out, "utf8") : "";
+    rmSync(dir, { recursive: true, force: true });
+    return { status: result.status, output: result.stdout + result.stderr, written };
+  };
 
   it("starts on a published release and by hand, with a tag and a channel", () => {
     expect(Object.keys(flow.on).sort()).toEqual(["release", "workflow_dispatch"]);
     expect(flow.on.release).toEqual({ types: ["published"] });
-  });
-
-  it("skips a draft and a prerelease, and never cancels an upload that is running", () => {
-    expect(build.if).toContain("!github.event.release.draft");
-    expect(build.if).toContain("!github.event.release.prerelease");
+    const channel = (flow.on.workflow_dispatch as { inputs: { channel: { default: string; options: string[] } } }).inputs.channel;
+    expect(channel.default).toBe("stable");
+    expect(channel.options).toEqual(["stable", "candidate", "beta", "edge"]);
     expect(flow.concurrency).toEqual({ group: "snap-publish", "cancel-in-progress": false });
   });
 
-  it("builds the tag with no secret and no environment, and checks the snap", () => {
-    expect(build.environment).toBeUndefined();
+  it("starts the run on main for a release, and skips a draft and a prerelease", () => {
+    expect(redispatch!.if).toContain("github.event_name == 'release'");
+    expect(redispatch!.if).toContain("!github.event.release.draft");
+    expect(redispatch!.if).toContain("!github.event.release.prerelease");
+    expect(redispatch!.permissions).toEqual({ actions: "write", contents: "read" });
+    expect(redispatch!.environment).toBeUndefined();
+    expect(runs(redispatch!).join("\n")).toContain('--ref main -f tag="$TAG" -f channel=stable');
+  });
+
+  it("runs the release gate on the commit of the tag, and asks a person to approve a flagged run", () => {
+    expect(commit!.if).toBe("github.event_name == 'workflow_dispatch'");
+    expect(gate!.needs).toBe("commit");
+    expect(find(gate!, "Run the release gate").env?.SHA).toBe("${{ needs.commit.outputs.sha }}");
+    expect(find(gate!, "Run the release gate").run).toContain('--tag "$TAG" --sha "$SHA"');
+    expect(approval!.needs).toBe("gate");
+  });
+
+  it("builds and uploads only on main, after the gate passed or after an approval in this attempt", () => {
+    expect(build!.needs).toEqual(["commit", "gate", "approval"]);
+    expect(build!.if).toBe(`\${{ ${RUN_IF} && ${CLEAR} }}`);
+    expect(publish!.needs).toEqual(["commit", "gate", "approval", "build"]);
+    expect(publish!.if).toBe(`\${{ ${RUN_IF} && needs.build.result == 'success' && ${CLEAR} }}`);
+    for (const job of [build!, publish!]) expect(job.if).not.toContain("'skipped'");
+  });
+
+  it("builds the commit SHA, never the tag name, and checks the checkout", () => {
+    const checkout = stepsOf(build!).find((step) => step.uses?.startsWith("actions/checkout@"))!;
+    expect(checkout.with?.ref).toBe("${{ needs.commit.outputs.sha }}");
+    expect(text).not.toContain("refs/tags/${{");
+    expect(find(build!, "Check the version").run).toContain('"$(git rev-parse HEAD)" = "$SHA"');
+    expect(find(build!, "Check the version").run).toContain('[ "$TAG" = "v$version" ]');
+    expect(build!.environment).toBeUndefined();
     expect(JSON.stringify(build)).not.toContain("secrets.");
-    expect(runs(build).join("\n")).toContain("node scripts/check-snap.mjs");
-    expect(runs(build).join("\n")).toContain("pnpm package:snap");
+    expect(runs(build!).join("\n")).toContain("node scripts/check-snap.mjs");
+    expect(runs(build!).join("\n")).toContain("pnpm package:snap");
     expect(scripts["package:snap"]).toMatch(/electron-builder --linux snap --x64 --publish never$/);
   });
 
   it("uploads only from the snap-store environment, with the secret in the env of one step, and runs no repository code", () => {
-    expect(publish.needs).toBe("build");
-    expect(publish.environment).toBe("snap-store");
-    expect(publish.permissions).toEqual({ contents: "read" });
-    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
-    const upload = stepsOf(publish).find((step) => step.run?.includes("snapcraft upload"))!;
+    expect(publish!.environment).toBe("snap-store");
+    expect(publish!.permissions).toEqual({ contents: "read" });
+    expect(stepsOf(publish!).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
+    const upload = stepsOf(publish!).find((step) => step.run?.includes("snapcraft upload"))!;
     expect(upload.env?.SNAPCRAFT_STORE_CREDENTIALS).toBe("${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}");
+    expect(upload.env?.CHANNEL).toBe("${{ needs.commit.outputs.channel }}");
     expect(upload.run).toContain("exit 1");
     expect(upload.run).toContain('--release="$CHANNEL"');
   });
 
-  it("limits the channel to the four store channels", () => {
-    const channel = (flow.on.workflow_dispatch as { inputs: { channel: { default: string; options: string[] } } }).inputs.channel;
-    expect(channel.default).toBe("stable");
-    expect(channel.options).toEqual(["stable", "candidate", "beta", "edge"]);
+  it("allows a release that is published, not a prerelease, and in main", () => {
+    const result = runCommit({});
+    expect(result.status, result.output).toBe(0);
+    expect(result.written).toContain(`sha=${"a".repeat(40)}`);
+    expect(result.written).toContain("channel=stable");
+  });
+
+  it("allows a non-stable channel for a commit in main without a release", () => {
+    for (const channel of ["edge", "beta", "candidate"]) {
+      const result = runCommit({ channel, release: null, position: "identical" });
+      expect(result.status, result.output).toBe(0);
+      expect(result.written).toContain(`channel=${channel}`);
+    }
+  });
+
+  it("rejects a run on a ref that is not main", () => {
+    for (const ref of ["refs/heads/m21/snap-publish", "refs/tags/v1.2.3", "refs/pull/1/merge"]) {
+      const result = runCommit({ ref });
+      expect(result.status, ref).toBe(1);
+      expect(result.output).toContain("Run it from main");
+      expect(result.written).toBe("");
+    }
+  });
+
+  it("rejects a draft, a prerelease and a missing release for the stable channel", () => {
+    for (const release of ["true\\tfalse", "false\\ttrue", "true\\ttrue", null]) {
+      const result = runCommit({ release });
+      expect(result.status, String(release)).toBe(1);
+      expect(result.output).toContain("stable channel needs a published");
+      expect(result.written).toBe("");
+    }
+  });
+
+  it("rejects a commit that is not in the history of main, and a tag that does not exist", () => {
+    for (const position of ["ahead", "diverged"]) {
+      const result = runCommit({ position, channel: "edge" });
+      expect(result.status, position).toBe(1);
+      expect(result.output).toContain("not in the history of main");
+    }
+    const none = runCommit({ sha: "" });
+    expect(none.status).toBe(1);
+    expect(none.output).toContain("no commit for this tag");
+  });
+
+  it("rejects a tag and a channel that have the wrong shape", () => {
+    for (const tag of ["1.2.3", "v1.2", "v1.2.3-rc.1", "main"]) expect(runCommit({ tag }).status, tag).toBe(1);
+    expect(runCommit({ channel: "latest" }).status).toBe(1);
+  });
+
+  it("refuses an upload with no store credentials", () => {
+    const upload = stepsOf(publish!).find((step) => step.run?.includes("snapcraft upload"))!;
+    const result = spawnSync("bash", ["-c", upload.run!], { encoding: "utf8", env: { PATH: process.env.PATH, FILE: "x.snap", CHANNEL: "stable", TAG: "v1.2.3", SHA: "a" } });
+    expect(result.status).toBe(1);
+    expect(result.stderr + result.stdout).toContain("SNAPCRAFT_STORE_CREDENTIALS is missing");
   });
 });
 
@@ -152,7 +264,7 @@ describe("CI workflows", () => {
           continue;
         }
         const grants = JSON.stringify(job.permissions ?? {});
-        if (file === NPM && id === REDISPATCH) {
+        if ((file === NPM || file === SNAP) && id === REDISPATCH) {
           expect(job.permissions, `${file} job ${id}`).toEqual({ actions: "write", contents: "read" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
           continue;
@@ -203,7 +315,7 @@ describe("CI workflows", () => {
   });
 
   it("runs the release gate in a read-only job before every approval, with the reviewer list and no secret", () => {
-    for (const file of [NPM, IMAGE, MACOS]) {
+    for (const file of [NPM, IMAGE, MACOS, SNAP]) {
       const gate = workflows.get(file)!.jobs.gate!;
       expect(gate.permissions, file).toEqual({ contents: "read", "pull-requests": "read" });
       expect(gate.environment, file).toBeUndefined();
@@ -223,6 +335,7 @@ describe("CI workflows", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
     expect(texts.get(IMAGE)!.split(READ_TOKEN)).toHaveLength(2);
     expect(texts.get(NPM)!.split(READ_TOKEN)).toHaveLength(3);
+    expect(texts.get(SNAP)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
@@ -1074,6 +1187,7 @@ describe("Release job conditions", () => {
     { file: MACOS, job: "package", first: "commit" },
     { file: NPM, job: "publish", first: "commit" },
     { file: IMAGE, job: "publish", first: "image" },
+    { file: SNAP, job: "build", first: "commit" },
   ];
 
   for (const flow of flows) {
@@ -1100,6 +1214,31 @@ describe("Release job conditions", () => {
     expect(evaluate(workflows.get(NPM)!.jobs.publish!.if!, { needs, github, inputs: {} })).toBe(false);
   });
 
+  it.each(cases)("snap-publish.yml job publish: $name", (each) => {
+    const needs: Record<string, unknown> = {
+      commit: { result: each.first ?? "success", outputs: {} },
+      build: { result: "success", outputs: {} },
+      gate: { result: each.gate ?? "success", outputs: { pass: each.pass } },
+      approval: { result: each.approval, outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt } },
+    };
+    const github = { run_attempt: each.attempt ?? 1, ref: each.ref ?? "refs/heads/main", event_name: "workflow_dispatch" };
+    expect(evaluate(workflows.get(SNAP)!.jobs.publish!.if!, { needs, github, inputs: {} })).toBe(each.runs);
+  });
+
+  it("does not run the snap publish job when the build failed or was skipped", () => {
+    for (const result of ["failure", "skipped", "cancelled"]) {
+      const needs = { commit: { result: "success", outputs: {} }, build: { result, outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
+      const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "workflow_dispatch" };
+      expect(evaluate(workflows.get(SNAP)!.jobs.publish!.if!, { needs, github, inputs: {} }), result).toBe(false);
+    }
+  });
+
+  it("never runs the snap build or publish job for a release event", () => {
+    const needs = { commit: { result: "success", outputs: {} }, build: { result: "success", outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
+    const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "release" };
+    for (const id of ["build", "publish"]) expect(evaluate(workflows.get(SNAP)!.jobs[id]!.if!, { needs, github, inputs: {} }), id).toBe(false);
+  });
+
   it.each([
     { pass: "false", asks: true },
     { pass: "true", asks: false },
@@ -1118,6 +1257,7 @@ describe("Release gate step", () => {
   const GATE_FLOWS: { file: string; cases: { name: string; env: Record<string, string> }[] }[] = [
     { file: IMAGE, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }, { name: "commit", env: { TAG: "" } }] },
     { file: NPM, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
+    { file: SNAP, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
     { file: MACOS, cases: [{ name: "tag", env: { REF: "v0.1.1" } }, { name: "branch", env: { REF: "main" } }] },
   ];
   const folders: string[] = [];

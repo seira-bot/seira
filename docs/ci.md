@@ -475,12 +475,21 @@ Do not add a bot account to it.
 ## Snap publish workflow
 
 `snap-publish.yml` is the one workflow that uploads a package to a store without
-the `release` environment. A published release (not a draft, not a prerelease)
-starts it, and a person can start it by hand with a tag and a channel.
-`scripts/ci-workflow.test.ts` holds these rules:
+the `release` environment. It follows `npm-publish.yml`. A published release (not
+a draft, not a prerelease) starts it through a `redispatch` job that runs it again
+on `main`. A person can also start it by hand from `main` with a tag and a channel.
+`scripts/ci-workflow.test.ts` holds these rules, and runs the shell of the
+`commit` job with fake `gh` and `git` commands to test them:
 
-- The `build` job has `contents: read`, no secret and no environment. It builds
-  the tag, checks that the tag matches `package.json`, and runs
+- The `commit` job fails on any ref other than `main`. It resolves the tag once
+  to a commit SHA, and fails when the SHA is not in the history of `main`. For the
+  `stable` channel it also fails without a published release that is not a draft
+  and not a prerelease.
+- The `gate` job runs the release gate on the SHA. The `approval` job holds the
+  wait of a flagged run in the `release-approval` environment.
+- The `build` and `publish` jobs run only on `main`, after the gate passed or
+  after an approval in the same attempt. They use the SHA, never the tag name.
+- The `build` job has `contents: read`, no secret and no environment. It runs
   `scripts/check-snap.mjs`.
 - The `publish` job uses the `snap-store` environment. It does no checkout, so
   it runs no code of the repository. It reads `SNAPCRAFT_STORE_CREDENTIALS` in
