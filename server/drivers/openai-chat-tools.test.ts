@@ -1458,7 +1458,7 @@ describe("structured tool execution boundaries", () => {
     expect(log.length).toBeLessThan(large.length);
     const outgoing = log.trim().split("\n").map((line) => JSON.parse(line) as { dir: string; msg: unknown })
       .filter((entry) => entry.dir === "out").map((entry) => entry.msg);
-    expect(outgoing).toEqual(f.requests.map((request) => ({ model: "fixture-model", messageCount: request.messages.length })));
+    expect(outgoing).toEqual(f.requests.map((request) => ({ model: "fixture-model", messageCount: request.messages.length, contextWindow: { tokens: 128_000, source: "default" } })));
   });
 
   it.each(["stream", "approval", "rpc", "continuation"] as const)("cancels during %s, closes execution authority, and settles exactly once", async (stage) => {
