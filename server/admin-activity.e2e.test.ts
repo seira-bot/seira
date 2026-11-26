@@ -291,6 +291,6 @@ posixOnly("admin activity log", () => {
     expect(mine.filter((entry) => entry.action === "session.revoke")).toHaveLength(1);
     expect(mine.find((entry) => entry.action === "session.rename")).toMatchObject({
       who: BOSS, target: { id: phone, name: "Reception phone" }, before: { label: "Front desk phone" }, after: { label: "Reception phone" } });
-    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ who: BOSS, target: { id: phone, name: "Front desk phone" } });
+    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ who: BOSS, target: { id: phone, name: "Reception phone" } });
   });
 });
