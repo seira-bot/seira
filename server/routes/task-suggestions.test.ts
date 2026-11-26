@@ -58,9 +58,9 @@ describe("the task card route", () => {
     const s = setup();
     const ok = { threadId: s.bot.threadId, messageId: s.card.id, suggestionId: "s1", action: "hide" };
     for (const bad of [{ threadId: "a b" }, { threadId: undefined }, { messageId: "../x" }, { suggestionId: "x".repeat(129) }, { action: "delete" }, { action: 3 }]) {
-      expect((await s.call({ ...ok, ...bad })).status, JSON.stringify(bad)).toBe(400);
+      expect(await s.call({ ...ok, ...bad }), JSON.stringify(bad)).toMatchObject({ status: 400 });
     }
-    expect((await s.call(null)).status).toBe(400);
+    expect(await s.call(null)).toMatchObject({ status: 400 });
   });
 
   it("answers 404 for an unknown bot", async () => {

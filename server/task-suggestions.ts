@@ -10,7 +10,7 @@ import {
 import { redactSecretsInText } from "./redact.ts";
 import type { Message, Store } from "./store.ts";
 
-type CardStore = Pick<Store, "appendMessage" | "patchMessage" | "messagesFor">;
+type CardStore = Pick<Store, "patchMessage" | "messagesFor">;
 
 /** The card a bot asked for, or null when no task is left. A task that holds a secret is dropped whole: redaction must never
  * change what Start would send. An intro that holds a secret is left out. */
