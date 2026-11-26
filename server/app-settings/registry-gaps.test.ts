@@ -17,7 +17,7 @@ function registry(cfg: Record<string, unknown>) {
   const deps: RegistryDeps = {
     cfg: () => cfg as unknown as AppConfig, saveConfig: async (patch) => { saved.push(patch); return null; }, bots: () => [], sections: () => [], reorderBots: none, groupBots: none, pinBot: none, patchBot: none,
     call: none, read: async () => null, paused: () => [], credentials: () => (cfg as RegistryDeps["credentials"] extends () => infer C ? C : never), window: { read: () => undefined, write: () => null },
-    engines: () => [], addEngine: none, removeEngine: none,
+    engines: () => [], addEngine: none, removeEngine: none, threadModes: () => ({}), setThreadModes: none, threadModeRefusal: () => null,
   };
   const entries = createSettingsRegistry(deps);
   const entry = (id: string): WritableEntry => {
