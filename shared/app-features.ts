@@ -1,3 +1,5 @@
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
+
 /** One thing the app offers, in the words the person sees. A bot reads this catalog (app_settings action=features)
  * to answer where something is and what it does, so a page, tab, agent tool, slash command or release note with
  * no entry is a gap the drift test reports. */
@@ -380,6 +382,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "The top centre of the screen while a bot works (a tray icon only when Linux has no X11 support); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
     releaseNotes: ["glance", "glanceWayland"],
+  },
+  {
+    id: "github-app",
+    name: "GitHub",
+    place: "Apps → GitHub, then Connect; each bot's repositories are under its Apps page",
+    does: "Sign in with GitHub and choose repositories, with no key to paste. Each bot gets its own repositories and a level in each: Read, Pull requests or Write. Merging and deleting branches can wait for your answer.",
+    tools: GITHUB_APP_TOOL_NAMES,
   },
 ];
 

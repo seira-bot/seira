@@ -1,6 +1,7 @@
 // The MCP servers a pi turn mounts, each gated by the turn's tool scope like every other engine's.
 import { canUseMcpServer, parseToolScope } from "../../shared/tool-scope.ts";
 import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
+import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { appMountFor, customServerGate, gateServer, mcpStdioServer } from "../mcp-gate-config.ts";
 import { remoteMcpSpec } from "../mcp-http.ts";
@@ -34,6 +35,7 @@ export function buildMcpServers(turn: SendTurnInput): Record<string, unknown> | 
   }
   if (turn.integrations?.browser) servers.browser = { ...turn.integrations.browser };
   for (const name of ["data", "email", "device"] as const) if (turn.integrations?.[name]) servers[name] = { ...turn.integrations[name] };
+  if (turn.integrations?.github) servers[GITHUB_APP_MCP_SERVER] = { ...turn.integrations.github };
   for (const [name, server] of Object.entries(turn.integrations?.custom ?? {})) servers[name] = { ...server, scope: "custom" };
   for (const [name, server] of Object.entries(servers)) {
     if (parsed.scope !== undefined && !canUseMcpServer(parsed.scope, name)) { delete servers[name]; continue; }

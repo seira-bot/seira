@@ -3,6 +3,7 @@ import { botOwner, chiefScope } from "../shared/bot-owner.ts";
 import { z } from "zod";
 import { soulDiffLines } from "../shared/line-diff.ts";
 import { newId, type ModelSelection } from "./contracts.ts";
+import type { ApprovalMode } from "../shared/approval-mode.ts";
 import { fitsOnOneLine, parseBotProfilePatch } from "./bot-profile.ts";
 import { profileSnapshot } from "./profile-revision.ts";
 import { recordProfileChange, type HistoryActor } from "./profile-versions.ts";
@@ -91,7 +92,7 @@ interface SetupStore {
   messagesFor(threadId: string): Array<{ id: string; role?: string; card?: OptionCardData }>;
   appendMessage(threadId: string, message: { role: "bot"; kind: "options"; card: OptionCardData; from?: { botId: string; name: string; color: string } }): { id: string };
   patchMessage(threadId: string, messageId: string, patch: { card: OptionCardData }): unknown;
-  applyTeamSetup(request: TeamSetupRequest): TeamSetupResult;
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: Exclude<ApprovalMode, "custom">): TeamSetupResult;
   patchBot(id: string, patch: Partial<BotRecord>): unknown;
 }
 
@@ -108,6 +109,8 @@ interface Options {
   validateChange?(before: BotRecord, fields: TeamSetupFields): void;
   /** Why this MCP server cannot be given to this bot (unknown, or another bot's own); null when it can. */
   mcpServerProblem?(name: string, botId: string): string | null;
+  /** The level a new bot starts at, as bot creation would resolve and check it; undefined for the workspace default. */
+  newBotApproval?(): Exclude<ApprovalMode, "custom"> | undefined;
   maxBots: number;
   ownsThread(botId: string, threadId: string): boolean;
   /** `request` only for a reviewed deletion; Undo of a creation deletes without one. */
@@ -370,7 +373,7 @@ export class TeamSetupRequestService {
       const bot = operation.action === "update" ? this.options.store.bot(operation.botId) : undefined;
       return bot ? [{ id: bot.id, profile: profileSnapshot(bot) }] : [];
     });
-    const result = this.options.store.applyTeamSetup(request);
+    const result = this.options.store.applyTeamSetup(request, this.options.newBotApproval?.());
     for (const { id, profile } of before) {
       const bot = this.options.store.bot(id);
       if (bot) recordProfileChange(id, actor, via, profile, profileSnapshot(bot));

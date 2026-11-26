@@ -1,4 +1,4 @@
-// Seira's own agents, connected-apps, data, Email and phone servers answer chat-completions turns in the server process:
+// Seira's own agents, connected-apps, data, Email, phone and GitHub servers answer chat-completions turns in the server process:
 // a turn starts no Node process for them, and every call still reaches the harness only through the turn's capability token.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
 import { SPAWNED_PROXIES } from "../proxy-paths.ts";
 import { ChatMcpClient, mountChatTools, type ChatToolSession } from "./chat-mcp-tools.ts";
@@ -110,7 +111,7 @@ describe("the agents server on a chat-completions turn", () => {
     await settled;
   });
 
-  it("lists and calls the data tools through the harness without starting a process", async () => {
+  it.each([["data", "data"], ["github", GITHUB_APP_MCP_SERVER]] as const)("lists and calls the %s tools through the harness without starting a process", async (kind, server) => {
     const methods: string[] = [];
     const h = await harness(async (request, response) => {
       let body = "";
@@ -123,14 +124,14 @@ describe("the agents server on a chat-completions turn", () => {
         : { result: { content: [{ type: "text", text: "3 rows" }] } }));
     });
     const controller = new AbortController();
-    const data = { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "data"], env: { [harnessMcpTokenEnv("data")]: "data-here", SEIRA_HARNESS_URL: h.url } };
-    const session = await mountChatTools({ data }, controller.signal);
+    const descriptor = { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, kind], env: { [harnessMcpTokenEnv(kind)]: `${kind}-here`, SEIRA_HARNESS_URL: h.url } };
+    const session = await mountChatTools({ [kind]: descriptor }, controller.signal);
     cleanups.push(() => session.close());
 
-    expect(session.definitions.map((definition) => definition.function.name)).toEqual(["data_query"]);
-    await expect(session.execute("data_query", { sql: "select 1" }, controller.signal)).resolves.toMatchObject({ ok: true, text: "3 rows" });
+    expect(session.definitions.map((definition) => definition.function.name)).toEqual([`${server}_query`]);
+    await expect(session.execute(`${server}_query`, { sql: "select 1" }, controller.signal)).resolves.toMatchObject({ ok: true, text: "3 rows" });
     expect(methods).toEqual(["tools/list", "tools/call"]);
-    expect(h.seen.every((request) => request.url === "/api/internal/data/mcp" && request.authorization === "Bearer data-here")).toBe(true);
+    expect(h.seen.every((request) => request.url === `/api/internal/${kind}/mcp` && request.authorization === `Bearer ${kind}-here`)).toBe(true);
     expect(spawned).toEqual([]);
   });
 

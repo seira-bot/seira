@@ -14,6 +14,7 @@ import { mcpCommandEnvironment } from "../mcp-environment.ts";
 import { cloudHomeConfigured } from "../cloud-home.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
 import { AGENTS_TOOL_ALIASES } from "../../shared/agents-tool-names.ts";
+import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import { bridgedCallTarget, unbridgedServer } from "./agents-bridge.ts";
 import { inProcessServer, type InProcessServer } from "./chat-mcp-in-process.ts";
 import { chatImage, type ChatImagePart } from "./chat-images.ts";
@@ -86,7 +87,7 @@ const REQUEST_TIMED_OUT = "MCP request timed out; execution outcome may be uncer
 const STDERR_TAIL_CHARS = 4_000, STDERR_LINE_CHARS = 300;
 /** Built-ins a turn can go on without, saying so. A turn can't run without the agents server, nor without a Local VM it
  * was given (mountChatTools `mustHave`). */
-const OPTIONAL_BUILT_INS: ReadonlySet<string> = new Set(["computer", "browser", "composio", OWN_APPS_SERVER, "data", "email", "device"]);
+const OPTIONAL_BUILT_INS: ReadonlySet<string> = new Set(["computer", "browser", "composio", OWN_APPS_SERVER, "data", "email", "device", GITHUB_APP_MCP_SERVER]);
 /** With `background`, how long setup also waits for the servers a turn can start without, so one that starts quickly has
  * its tools in the first model request. */
 const BACKGROUND_GRACE_MS = 500;
@@ -564,6 +565,7 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
   if (integrations?.composioOwn && eligible(OWN_APPS_SERVER)) servers.push([OWN_APPS_SERVER, integrations.composioOwn]);
   if (integrations?.data && eligible("data")) servers.push(["data", integrations.data]);
   if (integrations?.email && eligible("email")) servers.push(["email", integrations.email]);
+  if (integrations?.github && eligible(GITHUB_APP_MCP_SERVER)) servers.push([GITHUB_APP_MCP_SERVER, integrations.github]);
   if (integrations?.device && eligible("device")) servers.push(["device", integrations.device]);
   // A failed mount of an optional built-in is skipped like a configured server's, which the model is told about, so one
   // dead helper can't fail every later turn. (CLI engines already drop them and go on.)
