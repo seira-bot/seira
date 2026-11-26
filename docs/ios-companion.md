@@ -477,11 +477,11 @@ A client answers with `POST /api/bots/:botId/task-suggestions` and this body:
 | 400 | `{ error }` | A field is missing or `action` is not known. |
 | 403 | `{ error }` | The caller may not write in this chat. |
 | 404 | `{ error }` | The bot, the chat, the message or the suggestion is unknown. |
-| 409 | `{ error, message }` | The action does not apply, for example Start on a started entry. `message` is the current card line. |
+| 409 | `{ error, message }` | The action does not apply, for example Start on a started entry. `message` is the current card line. While a Start on the same card is on its way, the body is `{ error }` only. |
 
 The state lives on the card line. Every client gets a change as a `message.patch` frame for the card line, so a second
 phone and the desktop show the same card. Start also sends the person's line as a normal `message` frame. If the bot is
-busy, the person's line waits, and `startedMessageId` is absent until the server stores it.
+busy, the person's line waits in the queue, and the entry has no `startedMessageId`.
 
 The fixture `server/testing/fixtures/task-suggestions.json` holds one capture of the card, each answer and the frames.
 `server/testing/fixtures/task-suggestions.test.ts` checks its shape, so a new suggestion field is a deliberate change.
