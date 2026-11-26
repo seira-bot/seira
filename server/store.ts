@@ -1330,7 +1330,7 @@ export class Store {
     return bot;
   }
 
-  applyTeamSetup(request: TeamSetupRequest): TeamSetupResult {
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: Exclude<ApprovalMode, "custom">): TeamSetupResult {
     const chief = this.own(request.botId);
     if (!chief) throw new Error("The requesting Chief no longer exists");
     if (chief.lastTeamSetupReceipt?.requestId === request.requestId) return chief.lastTeamSetupReceipt.result;
@@ -1357,6 +1357,9 @@ export class Store {
             unread: false, activity: "idle", busy: false }],
         };
         Object.assign(next, appsFromCreator(chief, next));
+        const level = newBotApproval ?? approvalModeFor({}); // the New bot default, checked as bot creation checks it; unset is the workspace default
+        Object.assign(next, { approvalMode: level, autoApprove: level === "auto" });
+        Object.assign(next.tasks![0], { approvalMode: level, autoApprove: level === "auto" });
         if (!next.cwd) delete next.cwd;
         nextBots.unshift(next);
       } else {

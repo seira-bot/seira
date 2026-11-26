@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { GITHUB_APP_SLUG, GITHUB_APP_TOOL_NAMES } from "../../../shared/github-app";
+import { GithubRepositoriesBlock } from "../bot-panel/GithubPages";
 import { browserUnavailableReason } from "@/lib/feature-flags";
 import { ChevronDown, ChevronRight, FolderOpen, Plus } from "lucide-react";
 
@@ -322,7 +324,10 @@ function ConnectorToolsGrants({
           const open = openSlug === slug;
           const grant = record?.[slug];
           const isAll = access.level === "all" && recordExists && grant?.tools === "*";
-          const serviceTools = tools?.[slug] ?? [];
+          const listed = tools?.[slug] ?? [];
+          const serviceTools: ToolListing[] = listed.length === 0 && slug === GITHUB_APP_SLUG
+            ? GITHUB_APP_TOOL_NAMES.map((name) => ({ name }))
+            : listed;
           const selected = selectedFor(slug);
           const query = search.trim().toLowerCase();
           const matches = query
@@ -362,6 +367,7 @@ function ConnectorToolsGrants({
               </button>
               {open && (
                 <div className="border-t border-hairline/40 bg-inset/40 px-3 py-3">
+                  {slug === GITHUB_APP_SLUG && <GithubRepositoriesBlock bot={bot} />}
                   {!access.editable ? (
                     <div className="text-[12px] leading-relaxed text-ink-secondary">
                       {t("botAccess.grants.uneditable")}

@@ -11,8 +11,8 @@ import { agentsMcp } from "./agents-mcp.ts";
 export type InProcessServer = { read(line: string): void; stop: AbortController };
 type Answer = (message: Json) => Promise<unknown>;
 
-/** The harness kinds that every turn mounts; browser and computer frames carry screenshots, so they keep a process. */
-const IN_PROCESS_KINDS: ReadonlySet<HarnessMcpKind> = new Set(["data", "email", "device"]);
+/** The harness kinds that answer in this process; browser and computer frames carry screenshots, so they keep a process. */
+const IN_PROCESS_KINDS: ReadonlySet<HarnessMcpKind> = new Set(["data", "email", "device", "github"]);
 
 function harnessAnswer(kind: HarnessMcpKind, env: NodeJS.ProcessEnv, stop: AbortSignal): Answer {
   const connection = { url: env.SEIRA_HARNESS_URL ?? "", token: env[harnessMcpTokenEnv(kind)] ?? "", kind, toolLimit: toolLimitFromEnv(env) };
@@ -27,7 +27,7 @@ function harnessAnswer(kind: HarnessMcpKind, env: NodeJS.ProcessEnv, stop: Abort
   };
 }
 
-/** Seira's own agents, connected-apps, data, Email and phone servers, as the harness launches them, answer in this process
+/** Seira's own agents, connected-apps, data, Email, phone and GitHub servers, as the harness launches them, answer in this process
  * for a chat-completions turn, as they do for engines that reach them by URL. Security: each reads the environment that
  * its process would get and reaches the harness only with the turn's capability token. */
 export function inProcessServer(server: { command: string; args: string[]; env: Record<string, string> }, reply: (message: unknown) => void): InProcessServer | undefined {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newBotDefaultsSchema, resolveBotCreationDefaults } from "./new-bot-defaults.ts";
+import { newBotApprovalLevel, newBotDefaultsSchema, resolveBotCreationDefaults } from "./new-bot-defaults.ts";
 import { parseConfigPatch } from "./config.ts";
 
 describe("new-bot templates", () => {
@@ -84,5 +84,20 @@ describe("new-bot defaults an earlier version saved", () => {
   it("reads a routine template whose run-on value is the old one", () => {
     const defaults = newBotDefaultsSchema.parse({ routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 }, runOn: "maus" }] });
     expect(defaults.routines[0]?.runOn).toBe("seira");
+  });
+});
+
+describe("the level a bot made by team setup starts at", () => {
+  const saved = (approvalMode?: "ask" | "auto" | "full" | "custom") => newBotDefaultsSchema.parse({ profile: approvalMode ? { approvalMode } : {} });
+  it("follows the saved New bot level, as bot creation does", () => {
+    expect(newBotApprovalLevel(undefined, false)).toBeUndefined();
+    expect(newBotApprovalLevel(saved(), false)).toBeUndefined();
+    expect(newBotApprovalLevel(saved("ask"), false)).toBe("ask");
+    expect(newBotApprovalLevel(saved("full"), false)).toBe("full");
+  });
+  it("falls back to Ask for a level bot creation refuses", () => {
+    expect(newBotApprovalLevel(saved("full"), true)).toBe("ask");
+    expect(newBotApprovalLevel(saved("auto"), false)).toBe("ask");
+    expect(newBotApprovalLevel(saved("custom"), false)).toBe("ask");
   });
 });

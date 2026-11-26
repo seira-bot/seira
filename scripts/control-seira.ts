@@ -225,6 +225,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     childEnv.SEIRA_COMPOSIO_BROKER_URL = brokerUrl;
     childEnv.SEIRA_COMPOSIO_BROKER_TOKEN = parentEnv.SEIRA_COMPOSIO_BROKER_TOKEN;
   }
+  // The native GitHub connection is off unless a recipe turns it on (server/github/flag.ts).
+  if (parentEnv.SEIRA_GITHUB_APP === "1") childEnv.SEIRA_GITHUB_APP = "1";
   // Research against loopback stubs only (server/x-research.e2e.test.ts): the relay token crosses only with its stub,
   // and a treg stand-in replaces treg.to, so no test reaches a real relay or treg.
   const xUrl = parentEnv.SEIRA_CLOUD_X_URL?.trim() ?? "";
