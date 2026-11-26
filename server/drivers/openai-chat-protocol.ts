@@ -19,6 +19,14 @@ export const MAX_REASONING_DETAIL_CHARS = 4_000_000;
 
 export class ChatProtocolError extends Error {}
 
+/** The provider closed the stream with neither finish_reason nor [DONE]; resending repeats nothing. */
+export class StreamTruncatedError extends ChatProtocolError {}
+
+export class ChatOutputLimitError extends ChatProtocolError {}
+export const OUTPUT_LIMIT_CUT = "The model reached its output limit while it wrote a tool call, so nothing ran. Ask for the work in smaller parts.";
+export const CUT_CALL_NOTE = "[Seira: your last reply reached the output limit while you wrote a tool call, so nothing ran. Do the work in smaller steps: split large content across several tool calls, for example write a long file in parts.]";
+export const MAX_CUT_CALL_ROUNDS = 2;
+
 export function object(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown> : undefined;
@@ -159,7 +167,10 @@ export class ChatToolCalls {
 
   finish(reason: string | null, malformedFrame: boolean): ChatToolCall[] {
     const calls = [...this.calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
+    // DeepSeek ends a reply that its inference servers stopped with "insufficient_system_resource".
+    if (reason === "insufficient_system_resource") throw new StreamTruncatedError("The provider ran out of capacity and stopped the reply.");
     if (malformedFrame) throw new ChatProtocolError("provider stream contained a malformed completion frame");
+    if (reason === "length" && (calls.length || this.legacy.name || this.legacy.arguments)) throw new ChatOutputLimitError(OUTPUT_LIMIT_CUT);
     // A legacy call counts only alone: relays that mirror tool_calls or send an empty placeholder add nothing.
     if (!calls.length) {
       if (this.legacyError) throw new ChatProtocolError(this.legacyError);
@@ -174,7 +185,7 @@ export class ChatToolCalls {
     }
     if (!calls.length) return calls;
     if (reason !== null && reason !== "tool_calls" && reason !== "function_call" && reason !== "stop") {
-      throw new ChatProtocolError("provider tool calls were truncated or malformed");
+      throw new ChatProtocolError(`The provider stopped the reply (${String(reason).slice(0, 64)}) while the model wrote a tool call, so nothing ran.`);
     }
     const ids = new Set<string>();
     for (const call of calls) {

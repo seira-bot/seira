@@ -20,8 +20,8 @@ import { chatToolLimitFor, chatToolLimitKey } from "../tool-count-limit.ts";
 import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent, type ChatContentPart } from "./chat-images.ts";
 import { promptHalves, volatileContextNote, withContextNote } from "./prompt-split.ts";
 import { createChatToolApproval, refusal } from "./chat-tool-approval.ts";
-import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object, replayableToolCalls, toolArguments, type ChatToolCall } from "./openai-chat-protocol.ts";
-import { completionError, httpErrorDetail, refusedToolCall, refusedToolCallFailure, rejectsReasoningReplay, rejectsToolsParameter, RejectedToolCallError, StreamTruncatedError, UnsupportedChatToolsError, UnsupportedReasoningReplayError, type ProviderBody } from "./openai-chat-refusals.ts";
+import { ChatOutputLimitError, ChatProtocolError, ChatReasoningDetails, ChatToolCalls, CUT_CALL_NOTE, MAX_CUT_CALL_ROUNDS, object, StreamTruncatedError, replayableToolCalls, toolArguments, type ChatToolCall } from "./openai-chat-protocol.ts";
+import { completionError, httpErrorDetail, refusedToolCall, refusedToolCallFailure, rejectsReasoningReplay, rejectsToolsParameter, RejectedToolCallError, UnsupportedChatToolsError, UnsupportedReasoningReplayError, type ProviderBody } from "./openai-chat-refusals.ts";
 import { ChatRepeatGuard } from "./chat-repeat-guard.ts";
 import { TextCallHoldback, textToolCalls } from "./chat-text-tool-calls.ts";
 import { createModelRoutes, ModelRouteRefused, noRouteLeft, readResponsesStream, responsesRequest, routeRefusal, type ModelRoute, type ResponseItem } from "./openai-responses.ts";
@@ -591,7 +591,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       let failure: string | undefined;
       let failureText: ReturnType<typeof runtimeErrorText>;
       let toolFailed = false;
-      let correctiveRounds = 0;
+      let correctiveRounds = 0, cutCalls = 0;
       const denials: string[] = [], failedCalls: string[] = [];
       const seenCalls = new Set<string>();
       let nudges = 0;
@@ -631,7 +631,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           let completion: Completion;
           for (;;) {
             let streamed = false;
-            let answerStreamed = false;
+            let answer = "";
             const holdback = options.localModel && tools.definitions.length ? new TextCallHoldback() : undefined;
             const pending = { assistant_text: "", reasoning_text: "" };
             const delta = (text: string, streamKind: keyof typeof pending, flush = false) => {
@@ -652,7 +652,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             try {
               completion = await complete(messages, model, true, abort.signal, (text, streamKind) => {
                 streamed = true;
-                if (streamKind === "assistant_text") answerStreamed = true;
+                if (streamKind === "assistant_text") answer += text;
                 const shown = holdback && streamKind === "assistant_text" ? holdback.feed(text) : text;
                 if (shown) delta(shown, streamKind);
               }, tools.definitions, undefined, turn.variant, turn.threadId);
@@ -703,7 +703,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
               // A refused tool call ran nothing, so the request goes again, but not once answer text streamed.
               if (error instanceof RejectedToolCallError) {
                 native("in", { refused: "tool_use_failed", attempt: attempt + 1, error: error.refusal });
-                if (!answerStreamed && !abort.signal.aborted && attempt < RETRY_MAX_ATTEMPTS - 1) {
+                if (!answer && !abort.signal.aborted && attempt < RETRY_MAX_ATTEMPTS - 1) {
                   emit({ ...base(turn.threadId, turnId), type: "turn.retrying", attempt: ++attempt, delayMs: 0, reason: "tool_use_failed" });
                   continue;
                 }
@@ -715,9 +715,16 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
                 tools.definitions.length = 0;
                 continue;
               }
-              // Never replay a handled call. A stream closed before any completion marker ran nothing upstream, so it may resend even where the caller never opted into retries.
+              if (error instanceof ChatOutputLimitError && !abort.signal.aborted && cutCalls < MAX_CUT_CALL_ROUNDS) {
+                cutCalls += 1;
+                if (answer.trim()) { delta("", "assistant_text", true); emit({ ...base(turn.threadId, turnId), type: "item.completed", itemType: "assistant_text", text: safeText(answer) }); }
+                messages.push(...(answer.trim() ? [{ role: "assistant" as const, content: answer }] : []), { role: "user", content: CUT_CALL_NOTE });
+                emit({ ...base(turn.threadId, turnId), type: "turn.retrying", attempt: cutCalls, delayMs: 0, reason: "output_limit" });
+                continue;
+              }
+              // A resend runs no handled call again: tools run only after a completion returns. A stream closed before any completion marker ran nothing upstream, so it may resend even where the caller never opted into retries.
               const truncation = error instanceof StreamTruncatedError, retryScale = truncation ? options.retryScale ?? 1 : options.retryScale;
-              if (retryScale === undefined || abort.signal.aborted || streamed || seenCalls.size || (!truncation && (error instanceof ChatProtocolError || !verdict.transient)) || attempt >= RETRY_MAX_ATTEMPTS - 1) throw error;
+              if (retryScale === undefined || abort.signal.aborted || streamed || (!truncation && (error instanceof ChatProtocolError || !verdict.transient)) || attempt >= RETRY_MAX_ATTEMPTS - 1) throw error;
               const delayMs = computeBackoff(attempt++);
               emit({ ...base(turn.threadId, turnId), type: "turn.retrying", attempt, delayMs, reason: truncation ? "stream_truncated" : verdict.reason });
               await interruptibleDelay(delayMs * retryScale, abort.signal).promise;
