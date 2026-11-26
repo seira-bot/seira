@@ -87,7 +87,8 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
         return { change: `${APPROVAL[mode].effect(one.name)} (${APPROVAL[mode].label})` };
       },
       was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as Exclude<ApprovalMode, "custom"> }),
-      confirm: ({ botId, mode }) => { const one = bot(botId); return one && AUTONOMY.indexOf(mode) > AUTONOMY.indexOf(approvalModeFor(one)) ? { code: "autonomyUp", params: { bot: one.name } } : null; },
+      // Every thread takes the mode too, and a thread can sit below the bot's own mode, so the same mode can still raise one.
+      confirm: ({ botId, mode }) => { const one = bot(botId); const to = AUTONOMY.indexOf(mode); return one && to > 0 && to >= AUTONOMY.indexOf(approvalModeFor(one)) ? { code: "autonomyUp", params: { bot: one.name } } : null; },
       patch: (_one, { mode }) => ({ approvalMode: mode, applyToAllThreads: true }),
     }),
     perBot({

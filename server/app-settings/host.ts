@@ -53,33 +53,49 @@ function parseValue(entry: WritableEntry, value: unknown) {
   }
 }
 
+/** What Apply and Undo compare to tell a setting changed since: what it reads as, and the value `current` gives for this
+ * change's target (one bot's own fields, a section without its keys). */
+async function stateOf(entry: WritableEntry, target: unknown): Promise<string> {
+  const read = entry.read();
+  try {
+    return JSON.stringify([read, (await entry.current(target)) ?? null]);
+  } catch {
+    return JSON.stringify([read]);
+  }
+}
+
 export interface Turn {
   botId: string;
   threadId: string;
   generation: string;
 }
 
-/** `before`: what Undo writes back; `after`: what the setting read as once applied, so Undo can tell it changed since. */
+/** `before`: what Undo writes back, never a key; `after`: what the setting read as once applied, and `state` the changed
+ * value itself (stateOf), so Undo can tell it changed since. */
 interface Undoable {
   entry: WritableEntry;
   before: unknown;
   after: string;
+  state?: string;
 }
 interface SavedUndo {
   requestId: string;
   entryId: string;
   before?: unknown;
   after: string;
+  state?: string;
 }
 
-/** A change on a card that waits for the owner's Apply. `was`: the setting as it read when the card was posted; Apply
- * refuses once it reads otherwise. `stored`: a picture taken for it, removed unless the change applies. */
+/** A change on a card that waits for the owner's Apply. `was`: the setting as it read when the card was posted; `state`:
+ * the same and the value the change replaces (stateOf), so Apply refuses once either differs. `stored`: a picture taken
+ * for it, removed unless the change applies. */
 interface Waiting {
   requestId: string;
   entry: WritableEntry;
   value: unknown;
   change?: string;
   was: string;
+  state: string;
   botId: string;
   botName: string;
   threadId: string;
@@ -99,7 +115,7 @@ const REFUSED: Record<SettingsRefusalCode, (where: string) => string> = {
 };
 
 /** What the bot hears once a waiting card has ended. */
-export function appSettingDecisionText(card: { appSettingRequest?: AppSettingRequest; held?: string }): string {
+export function appSettingDecisionText(card: { appSettingRequest?: AppSettingRequest }): string {
   const request = card.appSettingRequest;
   if (!request?.result) return "The settings card is still waiting for the user.";
   const label = request.label;
@@ -108,7 +124,7 @@ export function appSettingDecisionText(card: { appSettingRequest?: AppSettingReq
     declined: `The user declined the change to ${label}. Nothing changed.`,
     expired: `The card to change ${label} closed before the user applied it. Nothing changed; ask again only if they still want it.`,
     stale: `${label} changed after the card was shown, so the card no longer applied. Nothing changed; read the setting again before asking anew.`,
-    failed: `Applying the change to ${label} failed${card.held ? `: ${card.held}` : ""}. Nothing changed.`,
+    failed: `Applying the change to ${label} failed. Nothing changed.`,
   };
   return lines[request.result];
 }
@@ -157,16 +173,19 @@ export function createAppSettings(deps: AppSettingsDeps) {
       const saved = JSON.parse(readFileSync(undoFile, "utf8")) as SavedUndo[];
       for (const one of Array.isArray(saved) ? saved : []) {
         const entry = byId.get(one?.entryId);
-        if (entry?.tier === "safe" && typeof one.requestId === "string" && typeof one.after === "string") kept.set(one.requestId, { entry, before: one.before, after: one.after });
+        if (entry?.tier === "safe" && typeof one.requestId === "string" && typeof one.after === "string") {
+          kept.set(one.requestId, { entry, before: one.before, after: one.after, ...(typeof one.state === "string" ? { state: one.state } : {}) });
+        }
       }
     } catch {
       // A missing or unreadable file leaves Undo empty.
     }
     return kept;
   }
-  /** Security: the earlier values can hold a section's keys, as the config file does, so the file is the owner's alone. */
+  /** Security: a section's earlier value is read without its keys, so the file holds none; it is still the owner's alone,
+   * since it keeps earlier instructions and names. */
   function saveUndo() {
-    const saved: SavedUndo[] = [...undoable].map(([requestId, change]) => ({ requestId, entryId: change.entry.id, before: change.before, after: change.after }));
+    const saved: SavedUndo[] = [...undoable].map(([requestId, change]) => ({ requestId, entryId: change.entry.id, before: change.before, after: change.after, ...(change.state ? { state: change.state } : {}) }));
     try {
       writeFileAtomic(undoFile, JSON.stringify(saved), { mode: 0o600 });
     } catch {
@@ -192,12 +211,15 @@ export function createAppSettings(deps: AppSettingsDeps) {
   };
 
   /** Writes the value, reading first what Undo would write back. */
-  async function write(entry: WritableEntry, value: unknown): Promise<{ refusal: string } | { before: unknown; was: string; after: string }> {
+  async function write(entry: WritableEntry, value: unknown): Promise<{ refusal: string } | { before: unknown; was: string; after: string; state?: string }> {
     const before = await entry.current(value);
     const was = entry.read();
     const refusal = await entry.write(value);
-    return refusal ? { refusal } : { before, was, after: entry.read() };
+    if (refusal) return { refusal };
+    return { before, was, after: entry.read(), ...(before === undefined ? {} : { state: await stateOf(entry, before) }) };
   }
+  const undoOf = (entry: WritableEntry, written: { before: unknown; after: string; state?: string }): Undoable =>
+    ({ entry, before: written.before, after: written.after, ...(written.state ? { state: written.state } : {}) });
   /** The applied card's words, in the conversation's language. */
   function appliedCard(threadId: string, entry: WritableEntry, shown: Shown) {
     const language = deps.language(threadId);
@@ -209,15 +231,18 @@ export function createAppSettings(deps: AppSettingsDeps) {
   /** Applies the change, posts its applied card with Undo, and logs it in the decision log. */
   async function apply(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change?: string) {
     const written = await write(entry, value);
-    if ("refusal" in written) return refuse(409, written.refusal);
-    const { before, was, after } = written;
+    if ("refusal" in written) {
+      appendDecision(deps.dataDir, { threadId: turn.threadId, botId: turn.botId, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${change ?? display(value)}`, decision: "auto-denied", source: "app-settings", rule: "settings:failed" });
+      return refuse(409, written.refusal);
+    }
+    const { was, after } = written;
     const shown: Shown = change === undefined ? { before: was, after } : { after: change };
     const requestId = randomUUID();
     store.appendMessage(turn.threadId, {
       role: "bot", kind: "options", ...from(bot, turn.threadId),
       card: { ...appliedCard(turn.threadId, entry, shown), options: [], requestId, tool: TOOL, fixedOptions: true, appSettingRequest: requestOf(entry, shown), answered: "allow", dismissed: true, autoApplied: true },
     });
-    remember(requestId, { entry, before, after });
+    remember(requestId, undoOf(entry, written));
     appendDecision(deps.dataDir, { threadId: turn.threadId, requestId, botId: turn.botId, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${said(shown)}`, decision: "auto-approved", source: "app-settings" });
     const done = change === undefined ? `Changed ${entry.label} from ${text(was)} to ${text(after)}.` : `Done: ${change}. ${entry.label} now: ${text(after)}.`;
     return reply(200, { text: `${done} The user can undo it from the card in the conversation.` });
@@ -236,8 +261,9 @@ export function createAppSettings(deps: AppSettingsDeps) {
   const openCards = (threadId: string) => [...waiting.values()].filter((one) => one.threadId === threadId && !settledElsewhere(one)).length;
 
   /** Posts the card the owner taps to apply the change; nothing changes before that. */
-  function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, stored?: string) {
+  async function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, stored?: string) {
     const language = deps.language(turn.threadId);
+    const state = await stateOf(entry, value);
     const was = entry.read();
     const shown: Shown = change === undefined ? { before: was, after: display(value) } : { after: change };
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
@@ -253,29 +279,41 @@ export function createAppSettings(deps: AppSettingsDeps) {
     });
     const timer = setTimeout(() => expire(requestId), CONFIRM_MS);
     timer.unref?.();
-    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), timer });
+    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, state, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), timer });
     appendDecision(deps.dataDir, { threadId: turn.threadId, requestId, botId: bot.id, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${said(shown)}`, decision: "card-shown", source: "app-settings", ...(consequence ? { rule: `settings:${consequence.code}` } : {}) });
     return reply(200, { text: `A card asking the user to apply this is in the conversation: ${said(shown)}. Nothing has changed yet. End this turn now and say in one line that the change waits for their tap on Apply; Seira resumes you with the result.` });
   }
 
+  /** Writes how a waiting card ended on its row; `resume`: the bot hears it once, in `heard` when the row can't say it. */
+  function close(threadId: string, messageId: string, result: AppSettingResult, card: Record<string, unknown>, resume: boolean, heard?: string) {
+    const message = store.messagesFor(threadId).find((candidate) => candidate.id === messageId);
+    const current = message?.card;
+    if (!message || !current?.appSettingRequest) return undefined;
+    const ended = { ...current, ...card, options: [], appSettingRequest: { ...current.appSettingRequest, ...(card.appSettingRequest as object | undefined), result } };
+    store.patchMessage(threadId, message.id, { card: ended });
+    if (resume && deps.resume?.(threadId, message.id, heard ?? appSettingDecisionText(ended))) {
+      const resumed = { ...ended, appSettingRequest: { ...ended.appSettingRequest, resumed: true } };
+      store.patchMessage(threadId, message.id, { card: resumed });
+      return resumed;
+    }
+    return ended;
+  }
   /** Ends a waiting card: its row says how, the bot hears it once, and a picture taken for it goes unless it applied. */
-  function end(change: Waiting, result: AppSettingResult, card: Record<string, unknown>) {
+  function end(change: Waiting, result: AppSettingResult, card: Record<string, unknown>, heard?: string) {
     clearTimeout(change.timer);
     waiting.delete(change.requestId);
     if (result !== "applied" && change.stored) deps.pictures?.discard(change.stored);
-    const message = store.messagesFor(change.threadId).find((candidate) => candidate.id === change.messageId);
-    const current = message?.card;
-    if (!message || !current?.appSettingRequest) return;
-    const ended = { ...current, ...card, options: [], appSettingRequest: { ...current.appSettingRequest, ...(card.appSettingRequest as object | undefined), result } };
-    store.patchMessage(change.threadId, message.id, { card: ended });
-    if (deps.resume?.(change.threadId, message.id, appSettingDecisionText(ended))) {
-      store.patchMessage(change.threadId, message.id, { card: { ...ended, appSettingRequest: { ...ended.appSettingRequest, resumed: true } } });
-    }
+    close(change.threadId, change.messageId, result, card, true, heard);
   }
+  /** A waiting card that no change of this run holds: posted before the server restarted, so it can no longer apply. */
+  const orphan = (card: { requestId?: string; appSettingRequest?: AppSettingRequest; autoApplied?: boolean; answered?: string; dismissed?: boolean; expired?: boolean } | undefined) =>
+    Boolean(card?.appSettingRequest && !card.autoApplied && !card.appSettingRequest.result && !card.answered && !card.dismissed && !card.expired && !(card.requestId && waiting.has(card.requestId)));
 
   function expire(requestId: string) {
     const change = waiting.get(requestId);
-    if (change && !change.applying && !settledElsewhere(change)) end(change, "expired", { expired: true });
+    if (!change || change.applying || settledElsewhere(change)) return;
+    appendDecision(deps.dataDir, { threadId: change.threadId, requestId, botId: change.botId, botName: change.botName, tool: TOOL, summary: `${change.entry.id}: ${change.change ?? `${text(change.was)} → ${display(change.value)}`}`, decision: "auto-denied", source: "app-settings", rule: "settings:expired" });
+    end(change, "expired", { expired: true });
   }
 
   async function set(turn: Turn, body: Record<string, unknown>) {
@@ -415,6 +453,15 @@ export function createAppSettings(deps: AppSettingsDeps) {
       return refuse(400, `action must be find, get, set, show_card, show_place, places, features, ${THEME_ACTIONS.join(", ")}.`);
     },
 
+    /** Closes a waiting card posted before the server restarted, as expired; returns the closed card for the parked turn
+     * to hear, or null when the card is no such card. */
+    expireOrphan(threadId: string, messageId: string) {
+      const card = store.messagesFor(threadId).find((candidate) => candidate.id === messageId)?.card;
+      if (!orphan(card)) return null;
+      appendDecision(deps.dataDir, { threadId, ...(card!.requestId ? { requestId: card!.requestId } : {}), tool: TOOL, summary: `${card!.appSettingRequest!.settingId}: ${card!.appSettingRequest!.after}`, decision: "auto-denied", source: "app-settings", rule: "settings:expired" });
+      return close(threadId, messageId, "expired", { expired: true }, false) ?? null;
+    },
+
     /** The owner's answer to a waiting card; null when the card is no settings card. Apply needs `ownerReview`: the desktop
      * app at this computer or an admin session. Declining needs only the right to answer the card. */
     async resolve(args: { threadId: string; requestId: string; behavior: string; ownerReview: boolean }): Promise<{ status: number; body: Record<string, unknown> } | null> {
@@ -425,34 +472,35 @@ export function createAppSettings(deps: AppSettingsDeps) {
       const change = waiting.get(args.requestId);
       if (args.behavior === "allow" && !args.ownerReview) return refuse(403, "Only the owner applies this change, from the desktop app or a device paired with full access.");
       if (change?.applying) return reply(200, { ok: true, outcome: "allowed-once", alreadySettled: true });
+      const summary = change ? `${change.entry.id}: ${change.change ?? `${text(change.was)} → ${display(change.value)}`}` : `${card.appSettingRequest.settingId}: ${card.appSettingRequest.after}`;
+      const log = (decision: "user-approved" | "user-denied" | "auto-denied", rule?: string) =>
+        appendDecision(deps.dataDir, { threadId: args.threadId, requestId: args.requestId, ...(change ? { botId: change.botId, botName: change.botName } : {}), tool: TOOL, summary, decision, source: "app-settings", ...(rule ? { rule } : {}) });
       if (!change || now() >= change.expiresAt) {
+        log("auto-denied", "settings:expired");
         if (change) end(change, "expired", { expired: true });
-        else store.patchMessage(args.threadId, message.id, { card: { ...card, expired: true, options: [] } });
+        else close(args.threadId, message.id, "expired", { expired: true }, true);
         return refuse(409, "This card has closed. Nothing changed.");
       }
-      const summary = `${change.entry.id}: ${change.change ?? `${text(change.was)} → ${display(change.value)}`}`;
-      const log = (decision: "user-approved" | "user-denied", rule?: string) =>
-        appendDecision(deps.dataDir, { threadId: change.threadId, requestId: args.requestId, botId: change.botId, botName: change.botName, tool: TOOL, summary, decision, source: "app-settings", ...(rule ? { rule } : {}) });
       if (args.behavior !== "allow") {
         log("user-denied");
         end(change, "declined", { answered: "deny" });
         return reply(200, { ok: true, outcome: "rejected" });
       }
-      if (change.entry.read() !== change.was) {
+      change.applying = true;
+      clearTimeout(change.timer);
+      if ((await stateOf(change.entry, change.value)) !== change.state) {
         log("user-denied", "settings:stale");
         end(change, "stale", { expired: true });
         return refuse(409, "This setting changed after the card was shown. Nothing changed.");
       }
-      change.applying = true;
-      clearTimeout(change.timer);
       const written = await write(change.entry, change.value);
       if ("refusal" in written) {
         log("user-denied", "settings:failed");
-        end(change, "failed", { answered: "deny", held: written.refusal });
-        return refuse(409, written.refusal);
+        end(change, "failed", { answered: "deny" }, `Applying the change to ${change.entry.label} failed: ${written.refusal} Nothing changed.`);
+        return refuse(409, "The change could not be applied. Nothing changed.");
       }
       const shown: Shown = change.change === undefined ? { before: written.was, after: written.after } : { after: change.change };
-      remember(args.requestId, { entry: change.entry, before: written.before, after: written.after });
+      remember(args.requestId, undoOf(change.entry, written));
       log("user-approved");
       end(change, "applied", { ...appliedCard(change.threadId, change.entry, shown), answered: "allow", dismissed: true, autoApplied: true, appSettingRequest: { ...requestOf(change.entry, shown) } });
       return reply(200, { ok: true, outcome: "allowed-once" });
@@ -466,7 +514,8 @@ export function createAppSettings(deps: AppSettingsDeps) {
       if (current.undone) return { claimed: true, state: "already_undone" };
       const change = undoable.get(args.requestId);
       if (!change || current.answered !== "allow") return { claimed: true, state: "invalid", error: "This change can't be undone here.", status: 409 };
-      if (change.entry.read() !== change.after) return { claimed: true, state: "invalid", error: UNDO_STALE, status: 409, stale: true };
+      const moved = change.entry.read() !== change.after || (change.state !== undefined && (await stateOf(change.entry, change.before)) !== change.state);
+      if (moved) return { claimed: true, state: "invalid", error: UNDO_STALE, status: 409, stale: true };
       const refusal = change.before === undefined ? "The earlier value is not one that can be set back." : await change.entry.write(change.before);
       if (refusal) return { claimed: true, state: "invalid", error: refusal, status: 409 };
       undoable.delete(args.requestId);

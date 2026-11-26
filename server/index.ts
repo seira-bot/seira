@@ -1920,10 +1920,11 @@ function reconcileParkedNode(node: HandoffView): boolean {
       if (!request.resumed) store.patchMessage(node.threadId, message.id, { card: { ...message.card!, teamSetupRequest: { ...request, resumed: true } } });
       return true;
     }
-    const setting = message.card?.appSettingRequest;
-    if (setting?.result) {
-      if (!coordinator.answerNode(node.id, appSettingDecisionText(message.card!))) return false;
-      if (!setting.resumed) store.patchMessage(node.threadId, message.id, { card: { ...message.card!, appSettingRequest: { ...setting, resumed: true } } });
+    const settingCard = appSettings.expireOrphan(node.threadId, message.id) ?? message.card;
+    const setting = settingCard?.appSettingRequest;
+    if (settingCard && setting?.result) {
+      if (!coordinator.answerNode(node.id, appSettingDecisionText(settingCard))) return false;
+      if (!setting.resumed) store.patchMessage(node.threadId, message.id, { card: { ...settingCard, appSettingRequest: { ...setting, resumed: true } } });
       return true;
     }
     if (message.card?.mcpRequest && mcpRequests.decided(node.threadId, message.id)) return mcpRequests.resume(node.threadId, message.id, (text) => coordinator.answerNode(node.id, text));

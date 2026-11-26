@@ -11,6 +11,7 @@ import { botsTowardLimit } from "../../shared/bot-limit.ts";
 import { browserEngineChoice } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
 import { CONFIG_PATCH_FIELDS as F, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
+import { threadLogCapOrDefault } from "../thread-log-rotation.ts";
 import { hostOf, type Consequence, type ConsequenceCode } from "./confirm.ts";
 import { display, withoutKeys, type RegistryDeps, type SettingEntry, type Where, type WritableSpec } from "./registry.ts";
 
@@ -35,7 +36,8 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
     current(): unknown; patch(value: V): Record<string, unknown>; says?(value: V): string; read?(): string; confirm?(value: V): Consequence | null;
     refuse?(value: V): string | null; more?(): Record<string, unknown> }) => writable({
     id: spec.id, label: spec.label, help: spec.help, where: spec.where, synonyms: spec.synonyms, value: spec.value, allowed: spec.allowed,
-    current: spec.current, read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
+    // Security: Undo writes back what `current` gives and keeps it on disk; a section saves merged, so its keys stay as they are.
+    current: () => visible(spec.current()), read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
     ...(spec.says ? { describe: (value: V) => { const refusal = spec.refuse?.(value); return refusal ? { refusal } : { change: spec.says!(value) }; } } : {}),
     ...(spec.more ? { more: spec.more } : {}),
     ...(spec.confirm ? { confirm: spec.confirm } : {}),
@@ -50,9 +52,6 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
   /** A provider other than the one in use now sends conversation text to a new place. */
   const newProvider = (now: string | undefined, next: string | undefined): Consequence | null =>
     (next && next !== "off" && next !== now ? { code: "dataTo", params: { provider: next } } : null);
-  /** A lower log limit deletes logs at once; Undo can't bring them back. */
-  const fewerLogs = (now: number | null | undefined, next: number | null, ceiling: number): Consequence | null =>
-    (next !== null && next < (now ?? ceiling) ? { code: "deletesLogs" } : null);
   const libraryList = async () => ((await deps.read("skills", "/api/skills-library"))?.skills ?? []) as Array<{ name: string; enabled: boolean; everyBot: boolean }>;
   /** The bots a Starter Cloud's limit counts that are awake now, as POST /api/starter/awake takes them. */
   const awakeNow = () => { const paused = deps.paused(); return deps.bots().filter((bot) => botsTowardLimit([bot]) === 1 && !bot.chiefOfStaff && !paused.includes(bot.id)).map((bot) => bot.id); };
@@ -66,11 +65,11 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       says: ({ enabled, backup }) => (enabled && backup ? `Turn on automatic recovery: a bot whose engine fails before any work starts tries once more on ${backup.instanceId} / ${backup.model}` : "Turn off automatic recovery"),
     }),
     section({
-      id: "ai.routing", label: "Decision and extraction", help: "The small model that decides who answers in rooms and sorts the inbox (Cloudflare Workers AI, Jev, OpenRouter, the Cloud plan's included one or the person's custom endpoint). Its keys, and a custom endpoint's address, are set only in Settings.", where: "routing",
+      id: "ai.routing", label: "Decision and extraction", help: "The small model that decides who answers in rooms and sorts the inbox (Cloudflare Workers AI, Jev, OpenRouter, the Cloud plan's included one or the person's custom endpoint). Its keys and addresses are set only by the person.", where: "routing",
       synonyms: ["decision", "extraction", "routing", "who answers", "jev", "openrouter", "workers ai", "cloudflare", "custom endpoint", "system one"],
-      // Security: a custom endpoint's address is where its key goes, so only the person sets it.
-      value: nonEmpty(withoutKeys(F.decider.unwrap().omit({ key: true, openrouterKey: true, workersAiToken: true, customKey: true, customBaseUrl: true }).strict())),
-      allowed: '{"enabled"?,"provider"?:"jev"|"workersai"|"openrouter"|"custom"|"included"|"off","openrouterModel"?,"openrouterApi"?:"chat"|"decisions","customModel"?,"customApi"?:"systemone"|"decisions"|"chat","jobs"?:{"roomRouting"?,"inboxTriage"?,"inboxSort"?},"workersAiAccountId"?, addresses?}',
+      // Security: each address is where a saved key goes, so only the person sets it.
+      value: nonEmpty(withoutKeys(F.decider.unwrap().omit({ key: true, openrouterKey: true, workersAiToken: true, customKey: true, customBaseUrl: true, baseUrl: true, openrouterBaseUrl: true, workersAiBaseUrl: true }).strict())),
+      allowed: '{"enabled"?,"provider"?:"jev"|"workersai"|"openrouter"|"custom"|"included"|"off","openrouterModel"?,"openrouterApi"?:"chat"|"decisions","customModel"?,"customApi"?:"systemone"|"decisions"|"chat","jobs"?:{"roomRouting"?,"inboxTriage"?,"inboxSort"?},"workersAiAccountId"?}',
       current: () => cfg().decider ?? {}, patch: (decider) => ({ decider }),
       says: (decider) => `Decision and extraction: ${fields(decider)}. Decisions send conversation text to the chosen provider, off this computer`,
       confirm: (decider) => newProvider(cfg().decider?.provider, decider.provider),
@@ -151,7 +150,8 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       synonyms: ["log size", "storage", "event log", "cleanup"], value: z.number().int().min(MIN_THREAD_EVENT_LOG_BYTES).max(MAX_THREAD_EVENT_LOG_BYTES).nullable(),
       allowed: `${MIN_THREAD_EVENT_LOG_BYTES} to ${MAX_THREAD_EVENT_LOG_BYTES} bytes, or null for the default ceiling (256 MiB)`,
       current: () => cfg().threads?.eventLogMaxBytes ?? null, read: () => display(cfg().threads?.eventLogMaxBytes ?? "256 MiB (default ceiling)"), patch: (eventLogMaxBytes) => ({ threads: { eventLogMaxBytes } }),
-      confirm: (bytes) => fewerLogs(cfg().threads?.eventLogMaxBytes, bytes, MAX_THREAD_EVENT_LOG_BYTES),
+      // A lower limit deletes logs at once, and Undo can't bring them back. No limit still trims at the default ceiling.
+      confirm: (bytes) => (threadLogCapOrDefault(bytes) < threadLogCapOrDefault(cfg().threads?.eventLogMaxBytes ?? null) ? { code: "deletesLogs" } : null),
     }),
     section({
       id: "appearance.toolCalls", label: "Show tool calls", help: "Show each tool a bot runs in the conversation. Unset, Advanced mode shows them and Simple mode hides them.", where: "tool-calls",
