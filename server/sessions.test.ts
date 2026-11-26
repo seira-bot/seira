@@ -372,6 +372,35 @@ describe("pairing codes", () => {
       for (const label of [cut, labelAfter("😀".repeat(60)).label!]) expect(label.isWellFormed()).toBe(true);
     });
 
+    it("checks the stored value after the cut and the trim, not only the input", () => {
+      // The cut leaves a space, a joiner and a ZWNJ at the end: all three go, whatever order they came in.
+      expect(labelAfter(`${"a".repeat(77)}  \u200c\u200dbbbb`).label).toBe("a".repeat(77));
+      // A mark or a joiner with nothing before it has nothing to attach to.
+      expect(labelAfter("\u200d\u0301\ufe0f Kitchen").label).toBe("Kitchen");
+      expect(labelAfter("  \u200c\u200dKitchen").label).toBe("Kitchen");
+      // Variation selectors stay where they belong (after a base), at the end too.
+      expect(labelAfter("Home \u2764\ufe0f").label).toBe("Home \u2764\ufe0f");
+      expect(labelAfter(`${"a".repeat(77)}\u2764\ufe0f`).label).toBe(`${"a".repeat(77)}\u2764\ufe0f`);
+      // Text that is not valid Unicode is not stored: lone surrogates and noncharacters.
+      const lone = labelAfter("Kit\ud83dchen\ufdd0 \ude00iPad").label!;
+      expect(lone).toBe("Kitchen iPad");
+      expect(lone.isWellFormed()).toBe(true);
+    });
+
+    it("gives the same label when the stored label goes through the rules again", () => {
+      const inputs = [
+        "MacBook", "\u200d\u0301 x", `${"a".repeat(79)}\u200dbbbb`, `${"a".repeat(78)}\u{1F468}\u200d\u{1F469}\u200d\u{1F467}`,
+        "\u{1F600}".repeat(60), "Cafe\u0301 Zoe\u0308", "\u0645\u0643\u062a\u0628 \u200c\u0623\u062d\u0645\u062f", `${"a".repeat(76)} \u2764\ufe0f\ufe0f`,
+      ];
+      for (const input of inputs) {
+        const first = labelAfter(input).label!;
+        expect(first.length).toBeLessThanOrEqual(80);
+        expect(first.isWellFormed()).toBe(true);
+        expect(first).toBe(first.normalize("NFC"));
+        expect(labelAfter(first)).toEqual({ result: "renamed", label: first });
+      }
+    });
+
     it("applies the same rules when a device pairs, so no path stores a looser name", () => {
       expect(pair("Ki\u200btchen\u202E iPad").session.label).toBe("Kitchen iPad");
       expect(pair("\u200b\u3164").session.label).toBe("Unnamed device");
