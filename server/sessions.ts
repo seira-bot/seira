@@ -158,6 +158,9 @@ export interface PublicPairing {
   expiresAt: number;
 }
 
+/** One saved label change: both labels are read in the same save, so a concurrent rename cannot sit between them. */
+export interface SessionRename { id: string; before: string; after: string }
+
 export type ExchangeResult =
   | { ok: true; token: string; session: PublicSession }
   | ({ ok: false; status: 400 | 401 | 403 | 429; code: PairingErrorCode } & UserError);
@@ -265,6 +268,7 @@ export class SessionRegistry {
   private codeFailures: Failures = new Map();
   private replays: Array<{ codeHash: string; attemptId: string; browser: boolean; result: ExchangeResult; expiresAt: number }> = [];
   private readonly onRevoked = new Set<(sessionId: string) => void>();
+  private readonly onRenamed = new Set<(change: SessionRename) => void>();
   private readonly onIssued = new Set<(session: Pick<SessionRecord, "id" | "scopes" | "email" | "teamRole" | "membershipAuthority">) => void>();
   private lastSeenWrites = new Map<string, number>();
   private readonly now: () => number;
@@ -366,6 +370,12 @@ export class SessionRegistry {
   onSessionRevoked(listener: (sessionId: string) => void): () => void {
     this.onRevoked.add(listener);
     return () => this.onRevoked.delete(listener);
+  }
+
+  /** Called once for each label change that is saved, with the label it replaced and the label it saved. */
+  onSessionRenamed(listener: (change: SessionRename) => void): () => void {
+    this.onRenamed.add(listener);
+    return () => this.onRenamed.delete(listener);
   }
 
   private forget(sessionId: string): void {
@@ -806,8 +816,15 @@ export class SessionRegistry {
     if (!record) return "missing";
     const next = deviceLabel(label).slice(0, 80);
     if (!next) return "invalid";
+    const previous = record.label;
     record.label = next;
-    this.persist();
+    try {
+      this.persist();
+    } catch (error) {
+      record.label = previous;
+      throw error;
+    }
+    if (previous !== next) for (const listener of this.onRenamed) listener({ id: record.id, before: previous, after: next });
     return "renamed";
   }
 

@@ -337,6 +337,37 @@ describe("pairing codes", () => {
     expect(registry.list().find((s) => s.id === id)?.label).toBe("MacBook");
   });
 
+  describe("rename events", () => {
+    it("reports the label it replaced and the label it saved, once per change", () => {
+      const id = pair("MacBook").session.id;
+      const seen: unknown[] = [];
+      registry.onSessionRenamed((change) => seen.push(change));
+      registry.rename(id, "Office Mac");
+      registry.rename(id, "Office Mac");
+      registry.rename(id, "Den Mac");
+      expect(seen).toEqual([{ id, before: "MacBook", after: "Office Mac" }, { id, before: "Office Mac", after: "Den Mac" }]);
+    });
+
+    it("reports nothing for a refused name or an unknown session", () => {
+      const id = pair("MacBook").session.id;
+      const seen: unknown[] = [];
+      registry.onSessionRenamed((change) => seen.push(change));
+      expect(registry.rename(id, " \u202E ")).toBe("invalid");
+      expect(registry.rename("no-such-id", "Name")).toBe("missing");
+      expect(seen).toEqual([]);
+    });
+
+    it("keeps the old label and reports nothing when the save fails", () => {
+      const id = pair("MacBook").session.id;
+      const seen: unknown[] = [];
+      registry.onSessionRenamed((change) => seen.push(change));
+      vi.spyOn(atomic, "writeFileAtomic").mockImplementation(() => { throw new Error("EIO"); });
+      expect(() => registry.rename(id, "Office Mac")).toThrow("EIO");
+      expect(registry.list().find((s) => s.id === id)?.label).toBe("MacBook");
+      expect(seen).toEqual([]);
+    });
+  });
+
   it("keeps a new name after a restart", () => {
     const id = pair("MacBook").session.id;
     registry.rename(id, "Office Mac");
