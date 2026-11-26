@@ -32,15 +32,24 @@ export const PUBLIC_ERROR_MARK = Symbol("seira.publicError");
 /** True only for an error that a server module made for the client: a `PublicError`, or an error of a class that sets
  * `PUBLIC_ERROR_MARK`. Its message was written for the person who reads it. Any other error is internal: a library, the
  * file system or a remote service worded it, so its text can name a path, an address or a secret. An HTTP status, a code
- * or an `errorKey` on an error does not make it public. */
+ * or an `errorKey` on an error does not make it public. An explicit `withheld` decision always wins over the type. */
 export function isPublicError(error: unknown): error is Error {
-  return error instanceof Error && (error instanceof PublicError || (error as { [PUBLIC_ERROR_MARK]?: unknown })[PUBLIC_ERROR_MARK] === true);
+  if (!(error instanceof Error)) return false;
+  const mark = (error as { [PUBLIC_ERROR_MARK]?: unknown })[PUBLIC_ERROR_MARK];
+  if (mark === false) return false;
+  return error instanceof PublicError || mark === true;
 }
 
-/** Take back the public mark of one error whose message holds text from outside (a remote service or a library). */
+/** Take back the public status of one error whose message holds text from outside (a remote service or a library). This
+ * holds for a `PublicError` and for a marked class too. */
 export function withheld<T extends Error>(error: T): T {
   Object.defineProperty(error, PUBLIC_ERROR_MARK, { value: false, configurable: true });
   return error;
+}
+
+/** Give `wrapped` the decision that `source` has: a wrapper of an error that is not public is not public. */
+export function inheritingPublicDecision<T extends Error>(source: unknown, wrapped: T): T {
+  return isPublicError(source) ? wrapped : withheld(wrapped);
 }
 
 function logInternal(error: unknown, where: string): void {

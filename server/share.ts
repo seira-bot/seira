@@ -36,7 +36,7 @@ import type { Routine } from "./routines.ts";
 import { COMMUNITY_MAX_BYTES, COMMUNITY_MAX_FILES, type CommunityPublisher } from "./share-publish.ts";
 import type { BotRecord, GroupRecord } from "./store.ts";
 import { parseTeamManifest } from "./team-manifest.ts";
-import { PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
+import { PUBLIC_ERROR_MARK, withheld, inheritingPublicDecision } from "./public-error.ts";
 
 export class ShareError extends Error {
   readonly [PUBLIC_ERROR_MARK] = true;
@@ -354,7 +354,7 @@ export function createShareHost(deps: ShareHostDeps) {
         skipped: skills.skipped,
       });
     } catch (error) {
-      if (error instanceof TeamExportError) throw new ShareError(error.message);
+      if (error instanceof TeamExportError) throw inheritingPublicDecision(error, new ShareError(error.message, error.status));
       throw error;
     }
     const { document, redacted } = templateDocument(exported.document, bots, exported.published.keys.bots);

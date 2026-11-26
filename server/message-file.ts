@@ -45,7 +45,7 @@ export function messageFileRoots(options: {
 }
 
 function statusError(status: number, message: string, code?: string): Error & { status: number; code?: string } {
-  return Object.assign(new PublicError(message, status), { ...(code ? { code } : {}) });
+  return Object.assign(new PublicError(message, status), code ? { code } : {});
 }
 
 /** Rounded up so a file just over the limit never reads as the limit itself. */

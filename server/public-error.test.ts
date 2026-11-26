@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { placeConfirmed, placeLostAs, PLACE_LOST_MESSAGE } from "./place-lost.ts";
-import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText, PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
+import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText, PUBLIC_ERROR_MARK, inheritingPublicDecision, withheld } from "./public-error.ts";
 import { userErrorThrown } from "./user-errors.ts";
 import { WebhookRequestError } from "./webhook-requests.ts";
 
@@ -96,6 +96,28 @@ describe("marked classes and withheld errors", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       expect(publicErrorText({ [PUBLIC_ERROR_MARK]: true, message: "/srv/private" }, "x", "Not run.")).toBe("Not run.");
+    } finally { logged.mockRestore(); }
+  });
+
+  it("gives the generic text for a PublicError that was withheld: the explicit decision wins over the type", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const outside = withheld(new PublicError("remote said: host db-7 refused", 502));
+      expect(isPublicError(outside)).toBe(false);
+      expect(publicErrorText(outside, "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(outside.status).toBe(502);
+      expect(String(logged.mock.calls[0]![0])).toContain("db-7");
+    } finally { logged.mockRestore(); }
+  });
+
+  it("keeps the decision of the source when one error wraps another", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const own = new ExampleRefusal("This name is taken.");
+      const outside = withheld(new ExampleRefusal("remote said: host db-7 refused"));
+      expect(isPublicError(inheritingPublicDecision(own, new ExampleRefusal(own.message)))).toBe(true);
+      expect(isPublicError(inheritingPublicDecision(outside, new ExampleRefusal(outside.message)))).toBe(false);
+      expect(isPublicError(inheritingPublicDecision(new Error("library text"), new PublicError("library text")))).toBe(false);
     } finally { logged.mockRestore(); }
   });
 });

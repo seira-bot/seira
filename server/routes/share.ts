@@ -19,7 +19,7 @@ import { zipFolder } from "../share-zip.ts";
 import type { BotRecord, GroupRecord } from "../store.ts";
 import { parseTeamManifest } from "../team-manifest.ts";
 import { PASS, type RouteHandler } from "./table.ts";
-import { withheld } from "../public-error.ts";
+import { publicErrorText, withheld } from "../public-error.ts";
 
 export interface ShareRouteDeps {
   host: ShareHost;
@@ -57,11 +57,13 @@ export interface ImportReaders {
 
 const NO_LIBRARY = "A team's own templates are on a Team Cloud.";
 
-/** Words for an untrusted folder's refusal: the format's own sentence, else a plain one. */
-function refusal(error: unknown): { status: number; error: string } | null {
-  if (error instanceof ShareError || error instanceof GithubTemplateError) return { status: error.status, error: error.message };
+/** Words for an untrusted folder's refusal: the format's own fixed sentence, else the text policy of every HTTP reply
+ * (`publicErrorText`): an error that is withheld gives the generic text, and its detail goes to the server log. */
+export function refusal(error: unknown): { status: number; error: string } | null {
+  if (error instanceof ShareError || error instanceof GithubTemplateError || error instanceof PackageImportError) {
+    return { status: error.status, error: publicErrorText(error, "share request") };
+  }
   if (error instanceof PackageFormatError) return { status: error.code === "too_large" ? 413 : 400, error: error.message };
-  if (error instanceof PackageImportError) return { status: error.status, error: error.message };
   return null;
 }
 
