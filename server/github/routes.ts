@@ -9,7 +9,8 @@ import {
   type GithubBotPolicy,
   type GithubConnectStart,
 } from "../../shared/github-app.ts";
-import { githubAppEnabled, type AppConfig } from "../config.ts";
+import type { AppConfig } from "../config.ts";
+import { githubAppEnabled } from "./flag.ts";
 import { isLoopbackHost, isProxied, type RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";

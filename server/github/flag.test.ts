@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { githubAppEnabled } from "../config.ts";
+import { githubAppEnabled } from "./flag.ts";
 
 describe("githubAppEnabled", () => {
   it("is off by default and on only when the config says true", () => {

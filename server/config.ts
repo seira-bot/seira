@@ -659,13 +659,6 @@ export function sharedComputersEnabled(cfg: AppConfig): boolean { return cfg.fea
 /** A self-hosted server's own admin pairings may lend their computer unless this is false (each desktop asks its person first). */
 export function ownerLendingEnabled(cfg: AppConfig): boolean { return cfg.features?.sharedComputers !== false; }
 
-export function githubAppEnabled(cfg: Pick<AppConfig, "features">, env: NodeJS.ProcessEnv = process.env): boolean {
-  const forced = env.SEIRA_GITHUB_APP?.trim();
-  if (forced === "1") return true;
-  if (forced === "0") return false;
-  return cfg.features?.githubApp === true;
-}
-
 export function claudeUserMcpEnabled(cfg: Pick<AppConfig, "features">): boolean {
   return cfg.features?.claudeUserMcp === true;
 }
