@@ -5,9 +5,9 @@ export type ConnectorVerb = "read" | "draft" | "send" | "modify" | "delete";
 
 const VERB_WORDS: ReadonlyArray<readonly [ConnectorVerb, readonly string[]]> = [
   ["delete", ["DELETE", "REMOVE", "TRASH", "PURGE", "DESTROY"]],
-  ["modify", ["UPDATE", "EDIT", "MODIFY", "PATCH", "SET", "RENAME", "MOVE", "TAG", "MARK", "UPLOAD", "ASSIGN", "APPROVE", "REJECT", "ARCHIVE", "PIN", "UNPIN", "STAR", "LABEL", "ENABLE", "DISABLE", "TOGGLE", "CANCEL", "CLOSE", "COMPLETE", "TRANSFER", "INSERT"]],
+  ["modify", ["UPDATE", "EDIT", "MODIFY", "PATCH", "SET", "RENAME", "MOVE", "TAG", "MARK", "UPLOAD", "ASSIGN", "APPROVE", "REJECT", "ARCHIVE", "PIN", "UNPIN", "STAR", "LABEL", "ENABLE", "DISABLE", "TOGGLE", "CANCEL", "CLOSE", "COMPLETE", "TRANSFER", "INSERT", "MERGE"]],
   ["send", ["SEND", "REPLY", "FORWARD", "PUBLISH", "POST", "SHARE", "NOTIFY", "INVITE", "MENTION", "COMMENT", "MESSAGE", "TWEET", "EMAIL", "MAIL", "CALL", "SMS", "TEXT"]],
-  ["draft", ["CREATE", "ADD", "NEW", "DRAFT", "COMPOSE", "GENERATE", "WRITE", "MAKE", "BUILD"]],
+  ["draft", ["CREATE", "ADD", "NEW", "DRAFT", "COMPOSE", "GENERATE", "WRITE", "MAKE", "BUILD", "COMMIT"]],
   ["read", ["READ", "LIST", "GET", "SEARCH", "FIND", "FETCH", "QUERY", "SHOW", "VIEW", "RETRIEVE", "LOOKUP", "CHECK", "DESCRIBE", "BROWSE", "DOWNLOAD", "STATS"]],
 ];
 
