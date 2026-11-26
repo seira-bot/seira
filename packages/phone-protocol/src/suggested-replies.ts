@@ -54,6 +54,13 @@ function plain(text: string): boolean {
   return !SHELL_WORDS.has(text.split(" ", 1)[0]!);
 }
 
+/** One line of plain text with the chip rules: control characters replaced, whitespace trimmed, at most `max` characters,
+ * no link, slash command, shell syntax or action payload. `null` when nothing is left or a rule fails: never cut. */
+export function cleanPlainLine(value: unknown, max: number): string | null {
+  const text = clean(value);
+  return text && words(text) <= max && plain(text) ? text : null;
+}
+
 /** The list a client may show: at most 4 entries, each plain text, with a title of at most 40 and a prompt of at most 500
  * characters. Control characters are replaced and whitespace is trimmed; an entry with an empty or over-limit part, a link,
  * a slash command, shell syntax or an action payload is dropped whole, never cut, because a prompt is sent as written.
