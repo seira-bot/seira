@@ -516,7 +516,7 @@
   "releaseNotes.items.providerInUse.title": "O Seira mostra o que ainda usa uma IA antes de ocultá-la",
   "releaseNotes.items.providerInUse.body": "Quando o Seira não consegue ocultar ou remover um provedor de IA, ele agora lista cada bot, modelo reserva e conversa que ainda o usa, com um jeito de alterar cada um. Um admin pode ocultá-lo mesmo assim.",
   "releaseNotes.items.inviteChosen.title": "Convide uma pessoa só para a parte da equipe de que ela precisa",
-  "releaseNotes.items.inviteChosen.body": "Um admin do seu próprio servidor agora pode convidar uma pessoa para a equipe toda, para departamentos escolhidos ou para bots escolhidos. Cada escolha é Pode conversar ou Pode ver. Use Configurações → Pessoas → Convidar, ou o menu de um departamento ou de um bot. A lista de pessoas tem a ação Alterar acesso.",
+  "releaseNotes.items.inviteChosen.body": "Um admin do seu próprio servidor agora pode convidar uma pessoa para a equipe toda, para departamentos escolhidos ou para bots escolhidos. Cada escolha é Pode conversar ou Pode ver. Use Convidar em Configurações → Pessoas, ou o menu de um departamento ou de um bot. A lista de pessoas tem a ação Alterar acesso.",
   "releaseNotes.items.peopleLimit.title": "Seu próprio servidor é grátis para até 5 pessoas",
   "releaseNotes.items.peopleLimit.body": "Um servidor que você hospeda continua grátis para até 5 pessoas que entram com um e-mail. Uma chave Premium permite um número ilimitado de pessoas. Todos os recursos são os mesmos em todos os planos. Quem já entrou mantém o seu lugar.",
   "releaseNotes.items.emailCodes.title": "Os códigos de entrada por e-mail ficam mais confiáveis",

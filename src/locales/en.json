@@ -540,7 +540,7 @@
   "releaseNotes.items.providerInUse.title": "Seira names what still uses an AI before you hide it",
   "releaseNotes.items.providerInUse.body": "When Seira cannot hide or remove an AI provider, it now lists each bot, backup model and conversation that still uses it, with a way to change each one. An admin can hide it anyway.",
   "releaseNotes.items.inviteChosen.title": "Invite a person to only the part of the team they need",
-  "releaseNotes.items.inviteChosen.body": "An admin of your own server can now invite a person to the whole team, to chosen departments or to chosen bots. Each choice is Can chat or Can view. Use Settings → People → Invite, or the menu of a department or a bot. The People list has a Change access action.",
+  "releaseNotes.items.inviteChosen.body": "An admin of your own server can now invite a person to the whole team, to chosen departments or to chosen bots. Each choice is Can chat or Can view. Use Invite in Settings → People, or the menu of a department or a bot. The People list has a Change access action.",
   "releaseNotes.items.peopleLimit.title": "Your own server is free for up to 5 people",
   "releaseNotes.items.peopleLimit.body": "A server that you host stays free for up to 5 people who sign in with an email. A Premium key lets in unlimited people. Every feature is the same on every plan. People who are already in keep their place.",
   "releaseNotes.items.emailCodes.title": "Sign-in codes by email are more reliable",
