@@ -231,6 +231,26 @@ describe("the model picker in Simple mode", () => {
       pane(opened)!.props.onPick(instance("claude"), "claude-sonnet-5-5");
       expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false }));
     });
+
+    it("keeps the current AI unchecked while the pool runs it, and pressing it pins the conversation there", () => {
+      const opened = open(pooled("auto"));
+      const props = pane(opened)!.props;
+      const currentRow = nodes(SimpleModelMenu(props)).find((node) => node.props["data-current-model"] !== undefined)!;
+      expect(currentRow.props["aria-pressed"]).toBe(false);
+      click(currentRow);
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false,
+        selection: expect.objectContaining({ instanceId: "claude", model: "claude-opus-5-5" }) }));
+    });
+
+    it("pins a conversation the pool ran before, after the pool is off", () => {
+      const opened = open(pooled("auto"));
+      fixture.aiPool = { enabled: false, mode: "even", members: [] };
+      const off = open(fixture.bots[0]!);
+      expect(pane(off)!.props.pool).toBeNull();
+      pane(off)!.props.onPick(instance("claude"), "claude-sonnet-5-5");
+      expect(fixture.dispatch).toHaveBeenLastCalledWith(expect.objectContaining({ type: "setModel", aiPool: false }));
+      expect(pane(opened)).toBeDefined();
+    });
   });
 
   it("is a 324px menu on the shared menu surface, and the full picker keeps its own 420px", () => {

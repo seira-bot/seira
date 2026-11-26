@@ -8,6 +8,8 @@ export interface PoolMenuRow {
   runs: boolean;
   meta: string;
   onPick: () => void;
+  /** Keeps this conversation on its current AI, out of the pool. */
+  onPin: () => void;
 }
 
 export interface PoolChoice {
@@ -26,6 +28,7 @@ export function useAiPoolChoice(input: {
   name: string;
   canChange: boolean;
   onPick: (target: ModelSelection) => void;
+  onPin: () => void;
 }): PoolChoice {
   const limits = useEngineLimits();
   const pool = activePool(input.config);
@@ -38,7 +41,7 @@ export function useAiPoolChoice(input: {
     const target = poolPick(pool, input.instances, limits, input.selection, Date.now());
     if (target) input.onPick(target);
   };
-  return { pool, runs, title, row: { runs, meta, onPick } };
+  return { pool, runs, title, row: { runs, meta, onPick, onPin: input.onPin } };
 }
 
 export function AiPoolRow({ row }: { row: PoolMenuRow }) {

@@ -473,7 +473,8 @@ export function ModelPicker({
   const pick = (instance: InstanceInfo, model: string, variant?: string, pooled?: boolean) => {
     if (bot.busy || instance.policy) return;
     const nextSelection = modelSelectionForPick(selection, instance, model);
-    const aiPool = pooled ?? (state.aiPool?.enabled && (instance.instanceId !== selection.instanceId || model !== selection.model) ? false : undefined);
+    const poolOn = state.aiPool?.enabled || profile.tasks?.find((task) => task.threadId === (threadId ?? bot.threadId))?.aiPool === "auto";
+    const aiPool = pooled ?? (poolOn && (variant === undefined || instance.instanceId !== selection.instanceId || model !== selection.model) ? false : undefined);
     if (variant !== undefined) nextSelection.variant = variant;
     const updateBotDefault = !threadId || (simpleUpdatesBotDefault && (simpleView || scope === "bot"));
     const targets = [currentTaskBot(profile, threadId ?? bot.threadId), ...(updateBotDefault ? [profile] : [])];
@@ -502,7 +503,8 @@ export function ModelPicker({
   const poolMark = threadId ? profile.tasks?.find((task) => task.threadId === threadId) : undefined;
   const poolChoice = useAiPoolChoice({ config: state, instances, selection, botModel: profile.modelSelection, name: modelName(active, selection.model, selection.variant), canChange: !bot.busy && !locked,
     task: poolMark && { modelSelection: selection, aiPool: poolMark.aiPool, followsBotModel: poolMark.followsBotModel },
-    onPick: (to) => { const target = instances.find((candidate) => candidate.instanceId === to.instanceId); if (target) pick(target, to.model, to.variant, true); } });
+    onPick: (to) => { const target = instances.find((candidate) => candidate.instanceId === to.instanceId); if (target) pick(target, to.model, to.variant, true); },
+    onPin: () => { if (active) pick(active, selection.model, selection.variant, false); } });
 
   const resetVariant = contained && selection.variant !== undefined ? () => {
     const { variant: _variant, ...nextSelection } = selection;

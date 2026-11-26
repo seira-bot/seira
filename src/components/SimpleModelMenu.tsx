@@ -237,8 +237,8 @@ function Thinking({ thinking, labelId }: { thinking: SimpleThinking; labelId: st
 export function SimpleModelMenu(props: SimpleModelMenuProps) {
   const { menu, query, idPrefix } = props;
   const current = menu.current;
-  const shownCurrent = current && (!props.pool?.runs || current.warning) ? current : null;
-  const top = Boolean(shownCurrent || props.pool || menu.follow);
+  const pooled = props.pool?.runs === true;
+  const top = Boolean(current || props.pool || menu.follow);
   return (
     <div data-simple-model-menu className="flex min-h-0 flex-1 flex-col">
       {menu.search && (
@@ -265,30 +265,31 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
       <div data-simple-models className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain",
         menu.groups.some((group) => group.body.kind === "models" && group.body.toggle === "less") && "scroll-pt-8 scroll-pb-12")}>
         <div className="flex flex-col gap-0.5 p-1.5">
-          {shownCurrent && (
+          {current && (
             <button
               type="button"
               data-menu-row
               data-current-model
-              aria-pressed="true"
-              title={shownCurrent.title}
+              aria-pressed={!pooled}
+              title={current.title}
               onClick={(event) => {
-                const setUp = shownCurrent.warning && shownCurrent.instance && !shownCurrent.instance.policy && !shownCurrent.blocked ? shownCurrent.instance : undefined;
+                const setUp = current.warning && current.instance && !current.instance.policy && !current.blocked ? current.instance : undefined;
                 if (setUp) props.onSetUp(setUp, event.detail === 0);
+                else if (pooled) props.pool!.onPin();
                 else props.onPickCurrent();
               }}
               className={SIMPLE_MENU_ROW}
             >
               <Gutter>
-                {shownCurrent.instance
-                  ? <InstanceProviderMark instance={shownCurrent.instance} size={14} subtle />
+                {current.instance
+                  ? <InstanceProviderMark instance={current.instance} size={14} subtle />
                   : <span className="size-3.5 rounded-full bg-ink/[0.08]" aria-hidden="true" />}
               </Gutter>
-              <RowLines label={shownCurrent.label}>
-                {shownCurrent.meta && <span className={cn(SIMPLE_MENU_META, shownCurrent.warning && "text-warning")}>{shownCurrent.meta}</span>}
+              <RowLines label={current.label}>
+                {current.meta && <span className={cn(SIMPLE_MENU_META, current.warning && "text-warning")}>{current.meta}</span>}
               </RowLines>
-              {shownCurrent.pending && <Loader2 size={14} className="shrink-0 animate-spin text-ink-tertiary" aria-hidden="true" />}
-              <Check size={14} className="shrink-0 text-ink" aria-hidden="true" />
+              {current.pending && <Loader2 size={14} className="shrink-0 animate-spin text-ink-tertiary" aria-hidden="true" />}
+              {!pooled && <Check size={14} className="shrink-0 text-ink" aria-hidden="true" />}
             </button>
           )}
           {props.pool && (
