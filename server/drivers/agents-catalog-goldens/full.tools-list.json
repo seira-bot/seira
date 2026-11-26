@@ -2590,9 +2590,10 @@
             "type": "string",
             "enum": [
               "other-computers",
-              "ai-sign-in"
+              "ai-sign-in",
+              "ai-pool"
             ],
-            "description": "show_card: other-computers when the person asks how to connect or open this computer from another computer; ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out."
+            "description": "show_card: other-computers when the person asks how to connect or open this computer from another computer; ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out; ai-pool when the person wants to see or change the AI pool themselves, or a pay-per-use AI must join it."
           },
           "place": {
             "type": "string",

@@ -235,7 +235,7 @@ describe("a customer-run server: pausing remote management", () => {
 });
 
 describe("a customer-run server: what leaves it", () => {
-  const TOLD = /^(?:v?\d+\.\d+\.\d+|ghcr\.io\/milind-soni\/[a-z-]+[@:][\w.:-]+|Ubuntu 24\.04\.3 LTS|6\.8\.0-1021-azure|x86_64|28\.0\.4|customer-run|running|stopped|starting|updating|absent|[a-z]+|\d{8}-\d{6}-[0-9a-f]{4})$/;
+  const TOLD = /^(?:v?\d+\.\d+\.\d+|ghcr\.io\/(?:seira-bot|milind-soni)\/[a-z-]+[@:][\w.:-]+|Ubuntu 24\.04\.3 LTS|6\.8\.0-1021-azure|x86_64|28\.0\.4|customer-run|running|stopped|starting|updating|absent|[a-z]+|\d{8}-\d{6}-[0-9a-f]{4})$/;
   const strings = (value: unknown, out: string[] = []): string[] => {
     if (typeof value === "string") out.push(value);
     else if (Array.isArray(value)) for (const item of value) strings(item, out);
@@ -269,6 +269,23 @@ describe("a customer-run server: what leaves it", () => {
       connector: identity, mode: "customer-run", paused: false, seats: 7,
     });
     for (const text of strings(beat)) expect(text, text).toMatch(TOLD);
+  });
+
+  it("reports an image by Seira's own name, keeps the old names, and drops any other owner or name", () => {
+    const pinned = (name: string) => `ghcr.io/${name}@sha256:${"a".repeat(64)}`;
+    const beatFor = (home: string, connector: string) => reducedHeartbeat({
+      host: health, home: { state: "running", image: home, health: null }, connector: { ...identity, image: connector }, paused: false, seats: 1,
+    }).heartbeat as { home: { image: string | null }; connector: { image: string | null } };
+    const named = beatFor(pinned("seira-bot/seira"), pinned("seira-bot/seira-connector"));
+    expect(named.home.image).toBe(pinned("seira-bot/seira"));
+    expect(named.connector.image).toBe(pinned("seira-bot/seira-connector"));
+    expect(beatFor("ghcr.io/seira-bot/seira:v0.1.192", "ghcr.io/seira-bot/seira-connector:v0.1.192").connector.image).toBe("ghcr.io/seira-bot/seira-connector:v0.1.192");
+    // The names before the rename stay accepted.
+    expect(beatFor(pinned("milind-soni/openmausbot"), pinned("milind-soni/mausbot-connector")).connector.image).toBe(pinned("milind-soni/mausbot-connector"));
+    // Another owner, a look-alike owner or name, and an unpinned latest-less path are not ours.
+    for (const other of [pinned("someone-else/seira-connector"), pinned("seira-bots/seira-connector"), pinned("seira-bot/seira-connector-evil"), "ghcr.io/seira-bot/seira-connector", `ghcr.io/seira-bot/seira-connector@sha256:${"a".repeat(63)}`]) {
+      expect(beatFor(other, other).connector.image, other).toBeNull();
+    }
   });
 
   it("replaces anything that is not a version, an image or a machine's own name before it is sent", () => {

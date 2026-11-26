@@ -3,8 +3,8 @@
 Apps shows a GitHub tile that connects through the Seira GitHub App. A bot can
 use only the repositories its owner gives it, at the level the owner picks:
 Read, Pull requests or Write. Only the person who connected GitHub can change
-a bot's limits. Everyone else sees them read-only. The feature is off unless
-`SEIRA_GITHUB_APP=1` or `features.githubApp` is set.
+a bot's limits. Everyone else sees them read-only. The connection is on unless
+`SEIRA_GITHUB_APP=0` or `features.githubApp: false` is set.
 
 ## Isolated browser verification
 

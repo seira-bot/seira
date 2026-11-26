@@ -101,4 +101,11 @@ describe("findAppFeatures", () => {
     expect(findAppFeatures("")).toEqual([...APP_FEATURES]);
     expect(findAppFeatures("  the  ")).toEqual([...APP_FEATURES]);
   });
+
+  it("AC-10: says that a bot sets the AI pool when asked and only the person adds a pay-per-use AI", () => {
+    const feature = APP_FEATURES.find((one) => one.id === "ai-engines")!;
+    expect(feature.does).toMatch(/AI pool/);
+    expect(feature.does).toMatch(/bot sets it when you ask/i);
+    expect(feature.does).toMatch(/only you add a pay-per-use AI/i);
+  });
 });

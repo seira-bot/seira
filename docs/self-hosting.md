@@ -2185,3 +2185,14 @@ computer and are not part of a workspace backup.
 As a server starts, the doctor reads `messages.db` through and copies it before
 a checkpoint only while it and its write-ahead log come to 256 MB or less, so an update never waits on a large database;
 `seira doctor --data` does both at any size.
+
+### A bots.json that does not load
+
+When `bots.json` is in the data folder and does not read as a list of bots
+(cut short, empty, not JSON, or a file this user cannot read), the server does
+not start. It prints one line, exits with code 1, and does not change the file.
+The server never replaces that file with the default bot. When it can read the
+file, it keeps a copy as `bots.json.damaged-<id>` in the same folder (one copy
+for each content). Restore `bots.json` from a backup, fix its permissions, or
+move it away, then start the server again. A data folder with no `bots.json`
+starts as a new place.
