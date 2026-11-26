@@ -272,6 +272,31 @@ describe("a model the engine has no route to", () => {
   });
 });
 
+describe("a thread history the provider refuses", () => {
+  // DeepSeek's session/prompt answer for a replayed part that points at an object stored upstream, as acpRpcError words it.
+  const raw = "Internal error: turn failed: 'file_id' refers to an object stored upstream, which is not supported; send the content inline instead (session/prompt)";
+
+  it("says the provider refused this thread's history, keeps its reason, and does not promise a new thread works", () => {
+    const message = engineFailureMessage("DeepSeek", raw)!;
+    expect(message).toBe("DeepSeek refused the history of this thread (DeepSeek says: \"turn failed: 'file_id' refers to an object stored upstream, which is not supported; send the content inline instead\"), "
+      + "so running it again with the same history fails the same way. A new thread starts without that history, but this does not always fix it.");
+    expect(message).not.toMatch(/Internal error/);
+    expect(message).not.toMatch(/will work|fixes it\./);
+  });
+
+  it("is a final failure, raw or in plain words, and an unnamed failure stays unknown", () => {
+    for (const text of [raw, engineFailureMessage("DeepSeek", raw)!]) {
+      expect(classifyError({ text })).toEqual({ transient: false, reason: "invalid_request" });
+    }
+    expect(engineFailureKind(raw)).toBe("history_rejected");
+    // Other "not supported" failures keep their own class.
+    for (const text of ["Internal error: turn failed: image input is not supported by this model (session/prompt)", "Internal error: OpenCode service failure (session/prompt)"]) {
+      expect(classifyError({ text }).reason).toBe("unknown");
+      expect(engineFailureKind(text)).toBeNull();
+    }
+  });
+});
+
 describe("contextOverflow", () => {
   it.each([
     "Prompt is too long",

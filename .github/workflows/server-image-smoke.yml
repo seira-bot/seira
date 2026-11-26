@@ -44,6 +44,7 @@ jobs:
     steps:
       - name: Check the release tag
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -52,7 +53,21 @@ jobs:
             echo "The tag must look like v0.1.173."
             exit 1
           fi
-          curl -fsS -o /dev/null "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG" || { echo "$TAG is not a published release."; exit 1; }
+          # An unauthenticated call can get a 403 on a shared runner IP. Use the job token (contents: read),
+          # and try again only for a 403, a 429, a 5xx, or no answer. A real 404 fails at once.
+          code=""
+          for try in 1 2 3; do
+            out=$(gh api --include "repos/$REPOSITORY/releases/tags/$TAG" 2>&1 || true)
+            code=$(printf '%s\n' "$out" | sed -n '1s#^HTTP/[0-9.]* \([0-9][0-9]*\).*#\1#p')
+            case "$code" in
+              200) exit 0 ;;
+              404) echo "$TAG is not a published release (HTTP 404)."; exit 1 ;;
+            esac
+            echo "The release lookup for $TAG gave HTTP ${code:-none} (try $try of 3)."
+            [ "$try" -lt 3 ] && sleep $((try * 10))
+          done
+          echo "The release lookup for $TAG failed with HTTP ${code:-none}. The tag was not checked."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}
@@ -123,6 +138,7 @@ jobs:
     steps:
       - name: Check the release tag
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -131,7 +147,21 @@ jobs:
             echo "The tag must look like v0.1.173."
             exit 1
           fi
-          curl -fsS -o /dev/null "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG" || { echo "$TAG is not a published release."; exit 1; }
+          # An unauthenticated call can get a 403 on a shared runner IP. Use the job token (contents: read),
+          # and try again only for a 403, a 429, a 5xx, or no answer. A real 404 fails at once.
+          code=""
+          for try in 1 2 3; do
+            out=$(gh api --include "repos/$REPOSITORY/releases/tags/$TAG" 2>&1 || true)
+            code=$(printf '%s\n' "$out" | sed -n '1s#^HTTP/[0-9.]* \([0-9][0-9]*\).*#\1#p')
+            case "$code" in
+              200) exit 0 ;;
+              404) echo "$TAG is not a published release (HTTP 404)."; exit 1 ;;
+            esac
+            echo "The release lookup for $TAG gave HTTP ${code:-none} (try $try of 3)."
+            [ "$try" -lt 3 ] && sleep $((try * 10))
+          done
+          echo "The release lookup for $TAG failed with HTTP ${code:-none}. The tag was not checked."
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.sha || (inputs.tag && format('refs/tags/{0}', inputs.tag)) || '' }}

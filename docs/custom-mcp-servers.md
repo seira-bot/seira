@@ -86,7 +86,7 @@ bot's own: no other bot can use it. Connect again to give it to another bot.
 
 The server holds this rule itself. It refuses to save, replace, import, switch on or sign in a WAPilot address that has
 no bot, or a bot that does not exist, and it matches the address, not the name. The match ignores a trailing dot on the host, the letter case of the path, and percent-encoding of letters, digits and `-._~` in the path. An older entry with no bot, or with a
-bot that is gone, serves no bot until you choose one. A redirect is followed by Seira itself, up to 5 hops, and each hop is checked first: a hop to a WAPilot address is refused unless the saved server is that address. A redirect with no usable address is refused too. A hop to another origin carries none of your saved headers and no session: only `accept` and `content-type` go on. A server that sends a client to another address in its SSE `endpoint` event is not checked yet.
+bot that is gone, serves no bot until you choose one. A redirect is followed by Seira itself, up to 5 hops, and each hop is checked first: a hop to a WAPilot address is refused unless the saved server is that address. A redirect with no usable address is refused too. A hop to another origin carries none of your saved headers and no session: only `accept` and `content-type` go on. An SSE server also names an address in its `endpoint` event: that address is checked the same way, and a WAPilot address is refused unless the saved server is that address. Seira then sends nothing to it and ends the stream. An `endpoint` on another origin than the saved server gets the same headers as a hop to another origin: only `accept` and `content-type`, none of your saved headers and no session.
 
 ### Servers that ask you to sign in
 

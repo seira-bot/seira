@@ -47,6 +47,8 @@
 //     burns CPU, sleeps, holds a loopback TCP connection, or takes 64 MB more memory every 100 ms until it is stopped, as
 //     the call's command would
 //   FAKE_CLAUDE_TOOL_CALLS_FILE  path of the same JSON, read again each turn (a warm process's turns differ); missing: none
+//   FAKE_CLAUDE_TOOL_ROUTES  path of {"marker": [calls]} (the same calls), read again each turn: a prompt whose text contains
+//     a marker plays that marker's calls; no match, a missing file or bad JSON leaves the turn as it is without this knob
 //   FAKE_STREAM_SCRIPT, FAKE_STREAM_CADENCE  a scripted reply chosen by a marker in the prompt (stream-script.ts)
 //   FAKE_CLAUDE_STREAM_CADENCE  "chars:ms" (happy mode): stream each scripted reply as
 //     text_delta chunks of `chars` chars every `ms` ms before its assistant message
@@ -203,7 +205,22 @@ const parseToolCalls = (raw: string | undefined): ScriptedToolCall[] | null => {
   }
 };
 const scriptedToolCallsAtStart = parseToolCalls(process.env.FAKE_CLAUDE_TOOL_CALLS);
-const turnToolCalls = (): ScriptedToolCall[] | null => {
+const routedToolCalls = (prompt: JsonValue): ScriptedToolCall[] | null => {
+  const file = process.env.FAKE_CLAUDE_TOOL_ROUTES;
+  if (!file) return null;
+  try {
+    const routes: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!routes || typeof routes !== "object" || Array.isArray(routes)) return null;
+    const text = steeredText(prompt);
+    for (const [marker, calls] of Object.entries(routes)) {
+      if (marker !== "" && text.includes(marker)) return parseToolCalls(JSON.stringify(calls));
+    }
+  } catch {}
+  return null;
+};
+const turnToolCalls = (prompt: JsonValue): ScriptedToolCall[] | null => {
+  const routed = routedToolCalls(prompt);
+  if (routed) return routed;
   const file = process.env.FAKE_CLAUDE_TOOL_CALLS_FILE;
   if (!file) return scriptedToolCallsAtStart;
   try { return parseToolCalls(readFileSync(file, "utf8")) ?? []; } catch { return []; }
@@ -1267,7 +1284,7 @@ const playTurn = (prompt: JsonValue, late = false) => {
     emitPart(0);
     return;
   }
-  const scriptedToolCalls = turnToolCalls();
+  const scriptedToolCalls = turnToolCalls(prompt);
   if (scriptedToolCalls?.some((call) => call.hold)) {
     playHeldCalls(scriptedToolCalls, usage, () => {
       for (const text of replyParts) out({ type: "assistant", message: { content: [{ type: "text", text }], usage } });

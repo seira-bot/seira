@@ -24,7 +24,7 @@ export interface AppFeature {
 export const APP_FEATURE_DOES_MAX = 240;
 
 /** Agent tools that no person sees or asks about by name. */
-export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies"]);
+export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies", "suggest_tasks"]);
 
 export const APP_FEATURES: readonly AppFeature[] = [
   {
