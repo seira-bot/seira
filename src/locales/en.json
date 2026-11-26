@@ -12149,8 +12149,8 @@
   "github.level.pullRequests": "Pull requests",
   "github.level.write": "Write",
   "github.levelHint.read": "Look at code, issues and pull requests. Changes nothing.",
-  "github.levelHint.pullRequests": "Also open pull requests and comment, on its own branches.",
-  "github.levelHint.write": "Also push to any branch and merge.",
+  "github.levelHint.pullRequests": "Also comment, open pull requests and push to branches other than the main one.",
+  "github.levelHint.write": "Also push to the main branch, merge, close and delete branches.",
   "github.botOff": "{name} cannot use GitHub. Turn it on in Apps.",
   "github.botIntro": "The repositories {name} can use, and what it may do in each.",
   "github.noRepos": "{name} has no repositories yet.",
@@ -12166,8 +12166,8 @@
   "github.removeFrom": "Remove from {name}",
   "github.rules": "Rules",
   "github.askBig": "Ask before big changes",
-  "github.askBigHint": "{name} waits for your answer in chat before it merges, closes or deletes a branch.",
+  "github.askBigHint": "{name} waits for an answer in chat before it merges, closes an issue or pull request, or deletes a branch.",
   "github.ownBranches": "Own branches only",
-  "github.ownBranchesHint": "Below Write, {name} pushes only to branches it starts.",
+  "github.ownBranchesHint": "{name} changes only branches it starts, at every level.",
   "github.toolsNote": "The tools below work only in these repositories."
 }

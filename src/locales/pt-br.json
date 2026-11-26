@@ -12149,8 +12149,8 @@
   "github.level.pullRequests": "Pull requests",
   "github.level.write": "Escrita",
   "github.levelHint.read": "Vê código, issues e pull requests. Não muda nada.",
-  "github.levelHint.pullRequests": "Também abre pull requests e comenta, nas próprias branches.",
-  "github.levelHint.write": "Também envia para qualquer branch e faz merge.",
+  "github.levelHint.pullRequests": "Também comenta, abre pull requests e envia para branches que não sejam a principal.",
+  "github.levelHint.write": "Também envia para a branch principal, faz merge, fecha e apaga branches.",
   "github.botOff": "{name} não pode usar o GitHub. Ative em Apps.",
   "github.botIntro": "Os repositórios que {name} pode usar e o que pode fazer em cada um.",
   "github.noRepos": "{name} ainda não tem repositórios.",
@@ -12166,8 +12166,8 @@
   "github.removeFrom": "Remover de {name}",
   "github.rules": "Regras",
   "github.askBig": "Perguntar antes de grandes mudanças",
-  "github.askBigHint": "{name} espera sua resposta no chat antes de fazer merge, fechar ou apagar uma branch.",
+  "github.askBigHint": "{name} espera uma resposta no chat antes de fazer merge, fechar uma issue ou pull request, ou apagar uma branch.",
   "github.ownBranches": "Só branches próprias",
-  "github.ownBranchesHint": "Abaixo de Escrita, {name} envia só para as branches que ele cria.",
+  "github.ownBranchesHint": "{name} muda só as branches que ele cria, em todos os níveis.",
   "github.toolsNote": "As ferramentas abaixo funcionam só nesses repositórios."
 }
