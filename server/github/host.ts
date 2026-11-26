@@ -33,6 +33,8 @@ export interface GithubHostDeps {
   bot(id: string): GithubBot | undefined | null;
   /** Opens the "Send on your behalf?" card, which asks at every access level. */
   ask(input: { botId: string; threadId: string; tool: string; arguments: Record<string, unknown>; active: () => boolean }): Promise<OutboundHoldAnswer>;
+  /** Text on GitHub is written by others: the conversation that read some is outside work from then on (server/host/outside-lineage.ts). */
+  markOutside(threadId: string): void;
   /** An organisation's policy can keep this app off. */
   appAllowed?(): boolean;
   env?: NodeJS.ProcessEnv;
@@ -58,6 +60,8 @@ export function githubAccess(bot: GithubBot, name: string): Verdict {
   if (!access.ok) return { ok: false, rule: `scope:${GITHUB_APP_SLUG}:${access.reason}`, text: connectorScopeRefusalText({ kind: "tools", invoked: name, names: [name] }, access.reason, bot.name, "GitHub", action(name)) };
   return { ok: true, rule: verdict.legacy ? `scope:${GITHUB_APP_SLUG}` : verdict.rule };
 }
+
+const READS_OUTSIDE_TEXT: ReadonlySet<GithubAppToolName> = new Set(["GITHUB_APP_GET_FILE", "GITHUB_APP_SEARCH_CODE", "GITHUB_APP_LIST_ISSUES", "GITHUB_APP_GET_ISSUE", "GITHUB_APP_LIST_PULLS", "GITHUB_APP_GET_PULL"]);
 
 export function githubPrompt(policy: GithubBotPolicy, botId: string): string {
   const own = policy.ownBranchesOnly ? ` Push only to branches that start with ${githubBotBranchPrefix(botId)}.` : "";
@@ -111,6 +115,7 @@ export function createGithubHost(deps: GithubHostDeps) {
       if (again.verdict === "deny") return githubError(again.message);
     }
     log("auto-approved", decision.verdict === "ask" ? "github:asked" : `github:${decision.grant.level}`);
+    if (READS_OUTSIDE_TEXT.has(name)) deps.markOutside(capability.threadId);
     let token = "";
     try {
       const minted = await deps.broker.mintToken(decision.grant.installationId, decision.grant.repositoryId, decision.grant.level);

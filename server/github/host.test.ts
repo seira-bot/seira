@@ -32,11 +32,12 @@ function fixture(options: { policy?: GithubBotPolicy | null; flag?: boolean; bot
   });
   const rest = fakeGithubRest("acme/web", { files: { "README.md": "hello" } });
   const mint = vi.fn(options.mint ?? (async () => ({ token: TOKEN, expiresAt: Date.now() + 3_600_000 })));
+  const marked: string[] = [];
   const ask = vi.fn(options.ask ?? (async () => ({ ok: true as const, approved: true })));
   const bot: GithubBot | null = options.bot === undefined ? { id: "b1", name: "Ada" } : options.bot;
-  const host = createGithubHost({ store, broker: { mintToken: mint }, dataDir, cfg: () => ({ features: {} }), bot: () => bot, ask, env: { SEIRA_GITHUB_APP: options.flag === false ? "0" : "1" }, fetch: rest.fetch });
+  const host = createGithubHost({ store, broker: { mintToken: mint }, dataDir, cfg: () => ({ features: {} }), bot: () => bot, ask, markOutside: (thread) => { marked.push(thread); }, env: { SEIRA_GITHUB_APP: options.flag === false ? "0" : "1" }, fetch: rest.fetch });
   const call = (name: string, args: Record<string, unknown> = {}) => host.handle({ method: "tools/call", params: { name, arguments: args } }, { botId: "b1", threadId: "t1" }, () => {}) as Promise<GithubToolResult>;
-  return { host, call, mint, ask, rest, dataDir, bot: bot ?? { id: "b1", name: "Ada" } };
+  return { host, call, mint, ask, rest, dataDir, marked, bot: bot ?? { id: "b1", name: "Ada" } };
 }
 const names = async (host: ReturnType<typeof fixture>["host"]) => ((await host.handle({ method: "tools/list" }, { botId: "b1", threadId: "t1" }, () => {})) as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name);
 
@@ -169,7 +170,7 @@ describe("a big change waits on the card (AC-12)", () => {
     let bot: GithubBot = { id: "b1", name: "Ada" };
     const base = fixture({ policy: policy("write", { askBeforeBigChanges: true }) });
     const host = createGithubHost({ store: createGithubStore(base.dataDir), broker: { mintToken: base.mint }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => bot, env: { SEIRA_GITHUB_APP: "1" }, fetch: base.rest.fetch,
-      ask: async () => { bot = { id: "b1", name: "Ada", composio: false }; return { ok: true, approved: true }; } });
+      markOutside: () => {}, ask: async () => { bot = { id: "b1", name: "Ada", composio: false }; return { ok: true, approved: true }; } });
     const answer = await host.handle({ method: "tools/call", params: { name: "GITHUB_APP_MERGE_PULL", arguments: { repo: "acme/web", number: 3 } } }, { botId: "b1", threadId: "t1" }, () => {}) as GithubToolResult;
     expect(answer.isError).toBe(true);
     expect(base.rest.requests).toEqual([]);
@@ -210,7 +211,7 @@ describe("the token", () => {
   it("is cut out of a result even when GitHub's own text carries it", async () => {
     const base = fixture();
     const leaky = fakeGithubRest("acme/web", { files: { "notes.txt": `copied ${TOKEN} here` } });
-    const host = createGithubHost({ store: createGithubStore(base.dataDir), broker: { mintToken: base.mint }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => base.bot, env: { SEIRA_GITHUB_APP: "1" }, fetch: leaky.fetch, ask: base.ask });
+    const host = createGithubHost({ store: createGithubStore(base.dataDir), broker: { mintToken: base.mint }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => base.bot, env: { SEIRA_GITHUB_APP: "1" }, fetch: leaky.fetch, ask: base.ask, markOutside: () => {} });
     const answer = await host.handle({ method: "tools/call", params: { name: "GITHUB_APP_GET_FILE", arguments: { repo: "acme/web", path: "notes.txt" } } }, { botId: "b1", threadId: "t1" }, () => {}) as GithubToolResult;
     expect(answer.content[0]!.text).not.toContain(TOKEN);
     expect(answer.content[0]!.text).toContain("[removed]");
@@ -243,5 +244,31 @@ describe("the decision log", () => {
     const rows = readDecisions(dataDir, 10);
     expect(rows.map((row) => `${row.tool}:${row.decision}`).sort()).toEqual(["GITHUB_APP_CREATE_ISSUE:auto-denied", "GITHUB_APP_GET_FILE:auto-approved"]);
     expect(JSON.stringify(rows)).not.toContain("secret title");
+  });
+});
+
+describe("text from GitHub is outside work", () => {
+  it("marks the conversation for every read of GitHub text, even when the read fails", async () => {
+    const reads: Array<[string, Record<string, unknown>]> = [
+      ["GITHUB_APP_GET_FILE", { path: "README.md" }], ["GITHUB_APP_SEARCH_CODE", { query: "x" }], ["GITHUB_APP_LIST_ISSUES", {}],
+      ["GITHUB_APP_GET_ISSUE", { number: 1 }], ["GITHUB_APP_LIST_PULLS", {}], ["GITHUB_APP_GET_PULL", { number: 3 }],
+    ];
+    for (const [name, rest_] of reads) {
+      const { call, marked, rest } = fixture({ policy: policy("read") });
+      await call(name, { repo: "acme/web", ...rest_ });
+      expect(marked, name).toEqual(["t1"]);
+      const failing = fixture({ policy: policy("read") });
+      failing.rest.failWith(502);
+      expect((await failing.call(name, { repo: "acme/web", ...rest_ })).isError, name).toBe(true);
+      expect(failing.marked, name).toEqual(["t1"]);
+      expect(rest.requests.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("marks nothing for the list of granted repositories or a refused call", async () => {
+    const { call, marked } = fixture();
+    await call("GITHUB_APP_LIST_REPOS");
+    await call("GITHUB_APP_GET_FILE", { repo: "acme/secret", path: "README.md" });
+    expect(marked).toEqual([]);
   });
 });
