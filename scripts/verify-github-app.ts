@@ -29,6 +29,7 @@ mkdirSync(output, { recursive: true });
 const { chromium } = await import(process.env.SEIRA_VERIFY_PLAYWRIGHT || "playwright");
 const browser = await chromium.launch({ headless: true, executablePath: process.env.SEIRA_VERIFY_BROWSER_CHROME || undefined });
 const opened: Array<{ fixture: VerificationServer; ui: MountedPreview }> = [];
+const pages: any[] = [];
 
 const checks: Array<{ ac?: string; check: string; passed: boolean; detail?: string }> = [];
 async function check(name: string, run: () => Promise<void>, ac?: string) {
@@ -106,6 +107,7 @@ async function open(who: Who, viewport = { width: 900, height: 900 }) {
   const pairing = await fixtureApi(fixture.info.url)("POST", "/api/auth/pairing", { scopes: ["admin", "client"] });
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
+  pages.push(page);
   const errors: string[] = [];
   page.on("pageerror", (error: Error) => errors.push(error.message));
   await page.goto(ui.previewUrl);
@@ -338,6 +340,7 @@ try {
 } catch (error) {
   failure = error;
   console.error(error instanceof Error ? error.message : String(error));
+  for (const [index, page] of pages.entries()) await page.screenshot({ path: join(output, `failed-${index}.png`) }).catch(() => {});
   process.exitCode = 1;
 } finally {
   writeFileSync(join(output, "result.json"), `${JSON.stringify({
