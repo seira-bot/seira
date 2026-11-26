@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import { BOTS_FILE } from "./registry-store.ts";
+import { BOTS_FILE, type BotRecord, type RegistryStore } from "./registry-store.ts";
 
 /** bots.json is there, and it does not read as a list of bots. */
 export class UnreadableBotsError extends Error {}
@@ -29,6 +29,18 @@ export function refuseUnreadableBots(cause: unknown, file = BOTS_FILE): never {
     copy ? `A copy is at ${copy}.` : "No copy could be made.",
     "Restore bots.json, fix its permissions, or move it away, then start the server again.",
   ].join(" "));
+}
+
+/** The saved bots, and whether they were read. With no bots.json there is an empty list and `loaded` is false. A file
+ * that is there and does not read as a list stops the server: it must never read as "every bot was deleted". */
+export function loadBotsOrRefuse(registry: Pick<RegistryStore, "loadBots">): { bots: BotRecord[]; loaded: boolean } {
+  try {
+    const bots = registry.loadBots(); if (!Array.isArray(bots)) throw new TypeError("bots.json is not a list");
+    return { bots, loaded: true };
+  } catch (error) {
+    if (existsSync(BOTS_FILE)) refuseUnreadableBots(error);
+    return { bots: [], loaded: false };
+  }
 }
 
 /** A refusal is one plain line and exit code 1, never a stack trace. */
