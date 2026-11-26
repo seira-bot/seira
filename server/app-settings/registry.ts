@@ -87,6 +87,8 @@ export interface RegistryDeps {
   threadModes(botId: string): Record<string, ApprovalMode>;
   /** Puts each named conversation of the bot on its mode; checks every one exists before any write, and a refusal comes back as its text. */
   setThreadModes(botId: string, modes: Record<string, Exclude<ApprovalMode, "custom">>): Promise<string | null>;
+  /** Why one conversation of the bot may not go to this mode, as the bot's own Settings would refuse it; null when it may. */
+  threadModeRefusal(botId: string, threadId: string, mode: Exclude<ApprovalMode, "custom">): string | null;
   /** Another of the Settings window's routes, called as the window calls it. */
   call(route: AppRoute, method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: Record<string, unknown>): Promise<string | null>;
   /** GET on one of those routes, as the window reads it; null when it answers with an error. */
@@ -400,6 +402,7 @@ export function routeBackedRegistry(deps: {
   paused(): string[];
   browserEngine?: RegistryDeps["browserEngine"];
   imageReady?: RegistryDeps["imageReady"];
+  threadModeRefusal: RegistryDeps["threadModeRefusal"];
 }): SettingEntry[] {
   const auth: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
   const refusal = async (reply: Promise<RouteReply>) => {
@@ -411,7 +414,7 @@ export function routeBackedRegistry(deps: {
     }
   };
   return createSettingsRegistry({
-    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady,
+    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady, threadModeRefusal: deps.threadModeRefusal,
     saveConfig: (patch) => refusal(callRoute(deps.routes.config, { method: "PUT", path: "/api/config", body: patch, auth })),
     reorderBots: (botIds) => refusal(callRoute(deps.routes.botOrder, { method: "PUT", path: "/api/bots/order", body: { botIds }, auth })),
     pinBot: (botId, pinned) => refusal(callRoute(deps.routes.botPatch, { method: "PATCH", path: `/api/bots/${encodeURIComponent(botId)}`, body: { pinned }, auth })),

@@ -21,7 +21,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
-function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean; resumes?: boolean } = {}) {
+function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean; resumes?: boolean; threadRefusal?: (threadId: string, mode: string) => string | null } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "app-settings-"));
   dirs.push(dataDir);
   const bots: BotRecord[] = [
@@ -73,6 +73,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
       return null;
     },
     threadModes: (botId) => ({ ...threads[botId] }) as never,
+    threadModeRefusal: (_botId, threadId, mode) => options.threadRefusal?.(threadId, mode) ?? null,
     setThreadModes: async (botId, modes) => {
       const unknown = Object.keys(modes).find((id) => !(id in threads[botId]!));
       if (unknown) return `no conversation ${unknown}`;
@@ -787,11 +788,42 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.cards()[0]!.card.appSettingRequest).toMatchObject({ result: "stale" });
   });
 
-  it("refuses a conversation id that is not one of the bot's conversations", async () => {
+  it("refuses a conversation map in a bot's own request, and writes nothing", async () => {
     const fx = fixture();
-    const result = await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask", threads: { "t-clive": "ask" } }));
-    expect(result.status).toBe(409);
+    const result = await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask", threads: { "t-kiwi-2": "full" } }));
+    expect(result.status).toBe(400);
     expect(fx.botPatches).toEqual([]);
+    expect(fx.cards()).toEqual([]);
+  });
+
+  it("refuses to change a bot that has a conversation on Custom approval", async () => {
+    const fx = fixture();
+    fx.threads.kiwi!["t-kiwi-2"] = "custom";
+    const result = await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }));
+    expect(result).toMatchObject({ status: 409, body: { error: expect.stringContaining("Kiwi has a conversation on Custom approval") } });
+    expect(fx.botPatches).toEqual([]);
+  });
+
+  it("Undo is refused, and nothing changes, when a conversation would go to Full access where only the operator sets it", async () => {
+    const fx = fixture({ threadRefusal: (_id, mode) => (mode === "full" ? "On a shared company workspace Full access comes only from the operator." : null) });
+    await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }));
+    const patches = fx.botPatches.length;
+    const undone = await fx.undo();
+    expect(undone).toMatchObject({ claimed: true, state: "invalid", status: 409, error: expect.stringContaining("Full access") });
+    expect(fx.botPatches).toHaveLength(patches);
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "ask", "t-kiwi-2": "ask" });
+    expect(fx.bots[0]).toMatchObject({ approvalMode: "ask" });
+  });
+
+  it("Undo is refused, and nothing changes, when a conversation would go to Approve for me on a bot that uses this computer's desktop", async () => {
+    const fx = fixture({ threadRefusal: (_id, mode) => (mode === "auto" ? "Approve for me on this computer's own desktop needs a warning only the bot's Settings shows." : null) });
+    fx.threads.kiwi!["t-kiwi-2"] = "auto";
+    (fx.bots[0] as { approvalMode: string }).approvalMode = "auto";
+    await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }));
+    const patches = fx.botPatches.length;
+    expect(await fx.undo()).toMatchObject({ claimed: true, state: "invalid", status: 409 });
+    expect(fx.botPatches).toHaveLength(patches);
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "ask", "t-kiwi-2": "ask" });
   });
 
   it("a rule of 4,000 characters waits on a card that holds the whole text, before and after", async () => {
@@ -820,8 +852,9 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.waiting()[0]!.card.subtitle).toBe("Be kind\n→\nnot set\nEvery bot will read this from now on.");
     const empty = fixture();
     const result = await empty.set("bots.everyBotRules", "");
-    expect(result.body.text).toContain("already is");
-    expect(empty.cards()).toEqual([]);
+    expect(result.body.text).not.toContain("Nothing has changed yet");
+    expect(empty.waiting()).toEqual([]);
+    expect((empty.cfg as { everyBotRules?: string }).everyBotRules ?? "").toBe("");
   });
 
   it("new instructions for one bot wait on a card with the old and the new text in full, and clearing them waits too", async () => {

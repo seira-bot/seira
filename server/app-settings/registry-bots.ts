@@ -64,51 +64,54 @@ const groupNames = (groups: readonly ToolGroup[]) => groups.map((group) => TOOL_
 const changeLine = (one: BotRecord, value: Record<string, unknown>, full: boolean) => `${one.name}: ${Object.keys(value).filter((field) => field !== "botId")
   .map((field) => `${OTHER[field as OtherField].label} ${field === "soul" && full ? `"${String(value.soul)}"` : OTHER[field as OtherField].shown(value[field] as never)}`).join("; ")}`;
 
-export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot" | "threadModes" | "setThreadModes">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
+export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot" | "threadModes" | "setThreadModes" | "threadModeRefusal">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const bot = (id: string) => deps.bots().find((candidate) => candidate.id === id);
   const missing = (id: string) => ({ refusal: `No bot has the id ${id}. Use list_bots for the ids.` });
   const everyBot = (line: (one: BotRecord) => string) => () => deps.bots().map((one) => `${one.name}: ${line(one)}`).join("; ");
   /** A per-bot entry: `effect` names the change for the card, or refuses it, once the bot is known to exist; `was` is the
    * same bot's value before it, for Undo. */
-  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm" | "review"> & {
-    value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V; patch(one: BotRecord, value: V): Record<string, unknown>;
-    confirm?(value: V): Consequence | null; write?(one: BotRecord, value: V): Promise<string | null>;
+  const perBot = <V extends { botId: string }, R extends { botId: string } = V>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm" | "review"> & {
+    value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V | R; patch(one: BotRecord, value: V): Record<string, unknown>;
+    confirm?(value: V): Consequence | null; write?(one: BotRecord, value: V | R): Promise<string | null>;
     review?(one: BotRecord, value: V): { before: string; after: string } | null;
   }) => writable({
     ...spec,
     ...(spec.review ? { review: (value: V) => { const one = bot(value.botId); return one ? spec.review!(one, value) : null; } } : {}), current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
-    write: (value: V) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value)); },
+    write: (value: V | R) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value as V)); },
   });
 
   return [
-    perBot({
+    perBot<{ botId: string; mode: ThreadMode }, { botId: string; mode: ThreadMode; threads: Record<string, ThreadMode> }>({
       id: "bots.approvalModes", label: "Approval mode", help: "What one bot may do without asking you, on every one of its conversations.", where: "bot-settings",
       synonyms: ["permissions", "full access", "approve", "ask", "approval", "autonomy", "approve for me", "auto-accept edits"],
-      value: forBot({ mode: threadMode, threads: z.record(z.string().max(120), threadMode).optional() }),
+      value: forBot({ mode: threadMode }),
       allowed: '{"botId","mode"} with mode ask (Ask for approval), edits (Auto-accept edits), auto (Approve for me) or full (Full access). Custom is chosen only in the desktop app',
       read: everyBot((one) => approvalName(approvalModeFor(one))),
-      effect: (one, { mode, threads }) => {
-        const unknown = Object.keys(threads ?? {}).find((id) => !(id in deps.threadModes(one.id)));
-        if (unknown) return { refusal: `${one.name} has no conversation with the id ${unknown}.` };
+      effect: (one, { mode }) => {
+        if (Object.values(deps.threadModes(one.id)).includes("custom")) return { refusal: `${one.name} has a conversation on Custom approval, which is changed only in the desktop app, in ${one.name}'s Settings. Tell the user where.` };
         if (approvalModeFor(one) === "custom") return { refusal: `${one.name} is on Custom approval, which is changed only in the desktop app, in ${one.name}'s Settings. Tell the user where.` };
         // The route takes Approve for me on this computer's own desktop only with the warning its Settings dialog shows.
         if (mode === "auto" && one.computer === "local") return { refusal: `Approve for me while ${one.name} uses this computer's own desktop needs a warning only ${one.name}'s Settings shows. Tell the user to choose it there.` };
         return { change: `${APPROVAL[mode].effect(one.name)} (${APPROVAL[mode].label})` };
       },
       was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as ThreadMode, threads: Object.fromEntries(Object.entries(deps.threadModes(botId)).filter(([, mode]) => mode !== "custom")) as Record<string, ThreadMode> }),
-      confirm: ({ botId, mode, threads }) => {
+      confirm: ({ botId, mode }) => {
         const one = bot(botId);
         if (!one) return null;
         const rank = (value: ApprovalMode) => AUTONOMY.indexOf(value);
         const raises = rank(mode) > rank(approvalModeFor(one))
-          || Object.entries(deps.threadModes(botId)).some(([id, now]) => now !== "custom" && rank(threads?.[id] ?? mode) > rank(now));
+          || Object.values(deps.threadModes(botId)).some((now) => rank(mode) > rank(now));
         return raises ? { code: "autonomyUp", params: { bot: one.name } } : null;
       },
       patch: (_one, { mode }) => ({ approvalMode: mode, applyToAllThreads: true }),
-      write: async (one, { mode, threads }) => {
-        if (!threads) return deps.patchBot(one.id, { approvalMode: mode, applyToAllThreads: true });
-        return (await deps.patchBot(one.id, { approvalMode: mode })) ?? deps.setThreadModes(one.id, threads);
+      write: async (one, value) => {
+        if (!("threads" in value)) return deps.patchBot(one.id, { approvalMode: value.mode, applyToAllThreads: true });
+        for (const [threadId, mode] of Object.entries(value.threads)) {
+          const refusal = deps.threadModeRefusal(one.id, threadId, mode);
+          if (refusal) return refusal;
+        }
+        return (await deps.patchBot(one.id, { approvalMode: value.mode })) ?? deps.setThreadModes(one.id, value.threads);
       },
     }),
     perBot({

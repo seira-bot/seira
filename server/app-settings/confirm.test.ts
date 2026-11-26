@@ -23,7 +23,7 @@ function registry(cfg: Record<string, unknown> = {}, threads: Record<string, Rec
     cfg: () => config, saveConfig: async () => null, bots: () => bots, sections: () => [], reorderBots: async () => null, groupBots: async () => null,
     pinBot: async () => null, patchBot: async () => null, call: async () => null, read: async () => null, paused: () => [], credentials: () => config as never,
     threadModes: (botId: string) => threads[botId] ?? { [`${botId}-main`]: bots.find((bot) => bot.id === botId)?.approvalMode },
-    setThreadModes: async () => null,
+    setThreadModes: async () => null, threadModeRefusal: () => null,
     window: { read: () => undefined, write: () => null }, engines: () => [], addEngine: async () => null, removeEngine: async () => null,
   } as unknown as RegistryDeps);
   const entry = (id: string) => entries.find((candidate) => candidate.id === id) as WritableEntry;
@@ -60,12 +60,6 @@ describe("risky values wait for the owner's tap", () => {
     expect(below.confirm("bots.approvalModes", { botId: "max", mode: "edits" })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
     expect(below.confirm("bots.approvalModes", { botId: "max", mode: "ask" })).toBeNull();
     expect(below.confirm("bots.approvalModes", { botId: "edie", mode: "ask" })).toBeNull();
-  });
-
-  it("a conversation that goes up on its own, through the threads map, waits", () => {
-    const mixed = registry({}, { max: { "max-main": "full", "max-side": "ask" } });
-    expect(mixed.confirm("bots.approvalModes", { botId: "max", mode: "ask", threads: { "max-side": "full" } })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
-    expect(mixed.confirm("bots.approvalModes", { botId: "max", mode: "ask", threads: { "max-main": "full", "max-side": "ask" } })).toBeNull();
   });
 
   it("a shorter log retention waits, and a longer one or none does not", () => {
