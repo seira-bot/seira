@@ -41,6 +41,19 @@ describe("GitHub tool calls", () => {
     expect(request!.path).toBe("/repos/acme/web/contents/README.md");
   });
 
+  it("keeps every request on api.github.com, with the repository name inside the path", async () => {
+    const urls: string[] = [];
+    const record = (async (input: string | URL | Request) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({ type: "file", size: 1, sha: "s", encoding: "base64", content: "YQ==" }), { status: 200 });
+    }) as typeof fetch;
+    await runGithubTool("GITHUB_APP_GET_FILE", { repo: "acme/web", path: "a.txt" }, { token: TOKEN, repo: { fullName: "@evil.example/x?y#z", defaultBranch: "main" }, fetch: record });
+    const url = new URL(urls[0]!);
+    expect(url.origin).toBe("https://api.github.com");
+    expect(url.pathname).toBe("/repos/%40evil.example/x%3Fy%23z/contents/a.txt");
+    expect(url.search).toBe("");
+  });
+
   it("reads a file, cuts a long one at 200 KB, and lists a folder", async () => {
     const { run } = setup({ "big.txt": "x".repeat(GITHUB_FILE_MAX_BYTES + 5), "src/a.ts": "a", "src/b.ts": "b" });
     const big = body(await run("GITHUB_APP_GET_FILE", { repo: "acme/web", path: "big.txt" }));

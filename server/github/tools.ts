@@ -113,12 +113,13 @@ type Json = Record<string, any>;
 export async function runGithubTool(name: GithubAppToolName, args: Json, context: GithubToolContext): Promise<GithubToolResult> {
   const doFetch = context.fetch ?? fetch;
   const { fullName, defaultBranch } = context.repo;
-  const base = `/repos/${fullName}`;
+  const base = `/repos/${enc(fullName)}`;
 
   async function api(method: string, path: string, body?: unknown, allow404 = false): Promise<{ status: number; data: any }> {
+    if (!path.startsWith("/") || path.startsWith("//")) throw new GithubToolError(GITHUB_REFUSED_MESSAGE);
     let res: Response;
     try {
-      res = await doFetch(`https://api.github.com${path}`, {
+      res = await doFetch(`https://api.github.com/${path.slice(1)}`, {
         method,
         headers: {
           accept: "application/vnd.github+json",
