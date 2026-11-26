@@ -581,6 +581,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   // alone, on a personal Cloud its owner alone (routes/team-slack.ts); off a Cloud they answer 404
   { methods: ["GET"], path: /^\/api\/slack\/team\/bots$/ },
   { methods: ["POST"], path: /^\/api\/slack\/team\/messages(?:\/[0-9a-f-]{36}\/stop)?$/ },
+  // the GitHub connection: the handler shows each person only the bots they see, and every change checks for its owner
+  { methods: ["GET"], path: /^\/api\/github-app$/ },
+  { methods: ["POST"], path: /^\/api\/github-app\/refresh$/ },
 ];
 
 export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {

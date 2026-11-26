@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { FileText, FolderOpen, Maximize2, Minimize2, Plus, Server } from "lucide-react";
 
@@ -29,7 +29,9 @@ import { useBotApps, type BotApp } from "../bot-settings/useBotApps";
 import { useChoosesVisibility, VisibilitySection } from "../bot-settings/VisibilitySection";
 import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerived";
 import { RoutineList } from "../routines/RoutineList";
+import { GITHUB_APP_SLUG } from "../../../shared/github-app";
 import { BrowserLogins } from "./browser-logins";
+import { GithubRepositoriesRow, useGithubBotSwitch, useGithubEditing } from "./GithubPages";
 import { useOpenComputer, WherePage } from "./ComputerTab";
 import { SettingsPage } from "./SettingsPage";
 import { panelMemoryNotes, withMemoryNote, withoutMemoryNote, type PanelMemoryNote } from "./memory-notes";
@@ -55,7 +57,7 @@ function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export function AppsPage({ bot, derived }: PageContext) {
+export function AppsPage({ bot, derived, onOpen }: PageContext & { onOpen?: (page: SimplePageId) => void }) {
   const { dispatch } = useStore();
   const apps = useBotApps(bot);
   const { servers: allServers, error: mcpError } = useMcpServers();
@@ -63,7 +65,13 @@ export function AppsPage({ bot, derived }: PageContext) {
   const servers = allServers ? mcpServersOfBot(allServers, bot.id) : [];
   const mounted = new Set(mcpServersForBot(servers, bot.mcpServers, bot.id).map((server) => server.name));
 
+  const github = useGithubBotSwitch(bot);
+  const githubAccess = useGithubEditing();
   const toggle = (app: BotApp) => {
+    if (app.slug === GITHUB_APP_SLUG) {
+      if (githubAccess.editable) void github.toggle(app.scope === null);
+      return;
+    }
     const next = appSwitchPatch(bot, apps.connectedSlugs, app.slug, app.scope === null);
     if (Object.keys(next).length > 0) patch(next);
   };
@@ -86,20 +94,28 @@ export function AppsPage({ bot, derived }: PageContext) {
       <Card>
         {note && <NoteRow>{note}</NoteRow>}
         {canUseConnectedApps && apps.apps.map((app) => (
-          <div key={app.slug} data-simple-app={app.slug} className={rowCls}>
+          <Fragment key={app.slug}>
+          <div data-simple-app={app.slug} className={rowCls}>
             <ServiceIcon key={`${app.card.logo}:${app.card.domain}`} card={app.card} className="size-7 shrink-0" />
             <div className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">{app.label}</div>
             <BotSwitch
               color={bot.color}
               checked={app.scope !== null}
               aria-label={t("botSettings.simple.appToggle", { name: bot.name, app: app.label })}
-              disabled={Boolean(bot.busy)}
+              disabled={Boolean(bot.busy) || (app.slug === GITHUB_APP_SLUG && (!githubAccess.editable || github.busy))}
+              title={app.slug === GITHUB_APP_SLUG && !githubAccess.editable ? githubAccess.reason : undefined}
               onClick={() => toggle(app)}
               className="disabled:cursor-not-allowed"
             />
           </div>
+          {app.slug === GITHUB_APP_SLUG && app.scope !== null && onOpen && <GithubRepositoriesRow bot={bot} onOpen={() => onOpen("github")} />}
+          </Fragment>
         ))}
       </Card>
+      {github.failed && <p role="alert" className="mx-1 text-[12px] text-danger">{t("github.error")}</p>}
+      {apps.apps.some((app) => app.slug === GITHUB_APP_SLUG) && !githubAccess.editable && (
+        <p data-github-readonly className="mx-1 text-[13px] leading-normal text-ink-secondary">{t("github.memberBotNote", { owner: githubAccess.owner, name: bot.name })}</p>
+      )}
       {(servers.length > 0 || mcpError) && (
         <Card label={t("connectors.tab.mcp")}>
           {mcpError && <NoteRow>{t("botAccess.mcpRefreshError")}</NoteRow>}
@@ -621,7 +637,7 @@ export function PageBody({ page, onOpen, editingInstructions, onEditInstructions
     case "where":
       return <WherePage {...context} />;
     case "apps":
-      return <AppsPage {...context} />;
+      return <AppsPage {...context} onOpen={onOpen} />;
     case "routines":
       return <RoutinesPage {...context} />;
     case "visibility":
@@ -634,5 +650,7 @@ export function PageBody({ page, onOpen, editingInstructions, onEditInstructions
       return <FolderPage {...context} />;
     case "browser":
       return <BrowserPage {...context} />;
+    case "github":
+      return null;
   }
 }
