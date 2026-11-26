@@ -50,7 +50,7 @@ export const BOX_ENV_PREFIXES: readonly string[] = [
 /** Never, whatever the allow-list says: the control plane's settings and secrets, and the server's own placement. The
  * CLI's session token and server address (server/headless/client.ts) too: nothing in a box reads them. */
 export const BOX_ENV_NEVER: ReadonlySet<string> = new Set([
-  "SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_LOOPBACK_TRUST", "SEIRA_CLOUD_SECRETS_FD",
+  "SEIRA_LICENSE_KEY", "SEIRA_TEAM_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_LOOPBACK_TRUST", "SEIRA_CLOUD_SECRETS_FD",
   "SEIRA_DATA_DIR", "SEIRA_STATIC_DIR", "SEIRA_DUCKDB_DIR", "SEIRA_PORT", "SEIRA_WEBHOOK_PORT",
   "SEIRA_TOKEN", "SEIRA_URL",
 ]);

@@ -1,5 +1,5 @@
-// bots.json and groups.json (registry-store.ts). The Store takes one it cannot read for an empty list, and the next save
-// writes over it. Fixed only from a whole copy the server itself wrote after the damaged file: the temp file of a save
+// bots.json and groups.json (registry-store.ts). The server does not start on one it cannot read: it leaves the file
+// as it is (unreadable-bots.ts). Fixed only from a whole copy the server itself wrote after the damaged file: the temp file of a save
 // that was interrupted after it was written and before it was renamed. Otherwise a copy of the damaged
 // file goes into the backup before the server starts, so a later save cannot take the last of it. A file this user
 // cannot read at all is not taken for damaged: it is reported as not checked, and left alone.

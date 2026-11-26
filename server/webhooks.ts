@@ -12,6 +12,7 @@ import { PLACE_LOST_MESSAGE, placeConfirmed } from "./place-lost.ts";
 import type { RoutineRunOn } from "./routines.ts";
 import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
+import { PublicError } from "./public-error.ts";
 
 export type WebhookTriggerInput = z.input<typeof triggerInputSchema>;
 export type WebhookVerificationSample = z.output<typeof verificationSampleSchema>;
@@ -197,7 +198,7 @@ const taskPayloadSchema = z.object({ task: z.string().optional(), message: z.str
 const statusErrorSchema = z.object({ status: z.number().int().optional() });
 
 function fail(status: number, message: string): never {
-  throw Object.assign(new Error(message), { status });
+  throw new PublicError(message, status);
 }
 
 function invalidInput(error: z.ZodError): never {
@@ -931,7 +932,7 @@ export class WebhookManager {
   }
 
   private assertWritable(): void {
-    if (this.unreadable) throw Object.assign(new Error("Saved webhooks could not be read. Repair webhooks.json before changing them."), { status: 503 });
+    if (this.unreadable) throw new PublicError("Saved webhooks could not be read. Repair webhooks.json before changing them.", 503);
   }
 
   private save(): void {

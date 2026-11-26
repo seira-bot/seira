@@ -13,6 +13,8 @@ import { z } from "zod";
 export const ANNOUNCEMENTS_FILE = "announcements/announcements.json";
 export const ANNOUNCEMENTS_SCHEMA_FILE = "announcements/announcements.schema.json";
 export const ANNOUNCEMENTS_URL = `https://raw.githubusercontent.com/seira-bot/seira/main/${ANNOUNCEMENTS_FILE}`;
+/** The Seira team's own feed: the same shape as the project file, served anonymously by Seira Cloud. */
+export const CLOUD_ANNOUNCEMENTS_URL = "https://cloud.seira.bot/api/public/announcements";
 /** Pictures: files in the repository's announcements/ folder on main, as raw.githubusercontent.com serves them. */
 export const ANNOUNCEMENT_IMAGE_PREFIX = "https://raw.githubusercontent.com/seira-bot/seira/main/announcements/";
 

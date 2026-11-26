@@ -1,0 +1,407 @@
+{
+  "card": {
+    "id": "fixture-id-1",
+    "at": 1700000000000,
+    "parentId": "fixture-parent-2",
+    "role": "bot",
+    "kind": "text",
+    "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+    "taskSuggestions": {
+      "intro": "Hi, good morning! Tasks I could help with:",
+      "suggestions": [
+        {
+          "id": "s1",
+          "title": "Draft the weekly follow-up summary",
+          "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+          "icon": "document",
+          "state": "open"
+        },
+        {
+          "id": "s2",
+          "title": "Plan tomorrow's calendar",
+          "icon": "calendar",
+          "state": "open"
+        },
+        {
+          "id": "s3",
+          "title": "Sort the unread email",
+          "description": "Twelve messages wait since Monday.",
+          "icon": "mail",
+          "state": "open"
+        }
+      ]
+    }
+  },
+  "hide": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "message": {
+        "id": "fixture-id-1",
+        "at": 1700000000000,
+        "parentId": "fixture-parent-2",
+        "role": "bot",
+        "kind": "text",
+        "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+        "taskSuggestions": {
+          "intro": "Hi, good morning! Tasks I could help with:",
+          "suggestions": [
+            {
+              "id": "s1",
+              "title": "Draft the weekly follow-up summary",
+              "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+              "icon": "document",
+              "state": "hidden",
+              "changedAt": "2023-11-14T22:13:21.000Z"
+            },
+            {
+              "id": "s2",
+              "title": "Plan tomorrow's calendar",
+              "icon": "calendar",
+              "state": "open"
+            },
+            {
+              "id": "s3",
+              "title": "Sort the unread email",
+              "description": "Twelve messages wait since Monday.",
+              "icon": "mail",
+              "state": "open"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "show": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "message": {
+        "id": "fixture-id-1",
+        "at": 1700000000000,
+        "parentId": "fixture-parent-2",
+        "role": "bot",
+        "kind": "text",
+        "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+        "taskSuggestions": {
+          "intro": "Hi, good morning! Tasks I could help with:",
+          "suggestions": [
+            {
+              "id": "s1",
+              "title": "Draft the weekly follow-up summary",
+              "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+              "icon": "document",
+              "state": "open",
+              "changedAt": "2023-11-14T22:13:22.000Z"
+            },
+            {
+              "id": "s2",
+              "title": "Plan tomorrow's calendar",
+              "icon": "calendar",
+              "state": "open"
+            },
+            {
+              "id": "s3",
+              "title": "Sort the unread email",
+              "description": "Twelve messages wait since Monday.",
+              "icon": "mail",
+              "state": "open"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "start": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "message": {
+        "id": "fixture-id-1",
+        "at": 1700000000000,
+        "parentId": "fixture-parent-2",
+        "role": "bot",
+        "kind": "text",
+        "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+        "taskSuggestions": {
+          "intro": "Hi, good morning! Tasks I could help with:",
+          "suggestions": [
+            {
+              "id": "s1",
+              "title": "Draft the weekly follow-up summary",
+              "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+              "icon": "document",
+              "state": "started",
+              "changedAt": "2023-11-14T22:13:23.000Z",
+              "startedMessageId": "fixture-startedMessage-3"
+            },
+            {
+              "id": "s2",
+              "title": "Plan tomorrow's calendar",
+              "icon": "calendar",
+              "state": "open"
+            },
+            {
+              "id": "s3",
+              "title": "Sort the unread email",
+              "description": "Twelve messages wait since Monday.",
+              "icon": "mail",
+              "state": "open"
+            }
+          ]
+        }
+      },
+      "sent": {
+        "id": "fixture-startedMessage-3",
+        "at": 1700000004000,
+        "parentId": "fixture-parent-4",
+        "role": "user",
+        "kind": "text",
+        "text": "Draft the weekly follow-up summary",
+        "requestPending": true,
+        "fromTaskSuggestion": {
+          "messageId": "fixture-id-1",
+          "suggestionId": "s1"
+        }
+      }
+    }
+  },
+  "startAgain": {
+    "status": 409,
+    "body": {
+      "error": "This suggestion changed. Look at the card again.",
+      "errorKey": "serverError.taskSuggestion.changed",
+      "message": {
+        "id": "fixture-id-1",
+        "at": 1700000000000,
+        "parentId": "fixture-parent-2",
+        "role": "bot",
+        "kind": "text",
+        "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+        "taskSuggestions": {
+          "intro": "Hi, good morning! Tasks I could help with:",
+          "suggestions": [
+            {
+              "id": "s1",
+              "title": "Draft the weekly follow-up summary",
+              "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+              "icon": "document",
+              "state": "started",
+              "changedAt": "2023-11-14T22:13:23.000Z",
+              "startedMessageId": "fixture-startedMessage-3"
+            },
+            {
+              "id": "s2",
+              "title": "Plan tomorrow's calendar",
+              "icon": "calendar",
+              "state": "open"
+            },
+            {
+              "id": "s3",
+              "title": "Sort the unread email",
+              "description": "Twelve messages wait since Monday.",
+              "icon": "mail",
+              "state": "open"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "unknown": {
+    "status": 404,
+    "body": {
+      "error": "This suggestion is no longer here.",
+      "errorKey": "serverError.taskSuggestion.missing"
+    }
+  },
+  "frames": {
+    "status": 200,
+    "body": [
+      {
+        "kind": "message.patch",
+        "threadId": "fixture-thread-5",
+        "message": {
+          "id": "fixture-id-1",
+          "at": 1700000000000,
+          "parentId": "fixture-parent-2",
+          "role": "bot",
+          "kind": "text",
+          "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+          "taskSuggestions": {
+            "intro": "Hi, good morning! Tasks I could help with:",
+            "suggestions": [
+              {
+                "id": "s1",
+                "title": "Draft the weekly follow-up summary",
+                "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+                "icon": "document",
+                "state": "hidden",
+                "changedAt": "2023-11-14T22:13:21.000Z"
+              },
+              {
+                "id": "s2",
+                "title": "Plan tomorrow's calendar",
+                "icon": "calendar",
+                "state": "open"
+              },
+              {
+                "id": "s3",
+                "title": "Sort the unread email",
+                "description": "Twelve messages wait since Monday.",
+                "icon": "mail",
+                "state": "open"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "message.patch",
+        "threadId": "fixture-thread-5",
+        "message": {
+          "id": "fixture-id-1",
+          "at": 1700000000000,
+          "parentId": "fixture-parent-2",
+          "role": "bot",
+          "kind": "text",
+          "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+          "taskSuggestions": {
+            "intro": "Hi, good morning! Tasks I could help with:",
+            "suggestions": [
+              {
+                "id": "s1",
+                "title": "Draft the weekly follow-up summary",
+                "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+                "icon": "document",
+                "state": "open",
+                "changedAt": "2023-11-14T22:13:22.000Z"
+              },
+              {
+                "id": "s2",
+                "title": "Plan tomorrow's calendar",
+                "icon": "calendar",
+                "state": "open"
+              },
+              {
+                "id": "s3",
+                "title": "Sort the unread email",
+                "description": "Twelve messages wait since Monday.",
+                "icon": "mail",
+                "state": "open"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "message",
+        "threadId": "fixture-thread-5",
+        "message": {
+          "id": "fixture-startedMessage-3",
+          "at": 1700000004000,
+          "parentId": "fixture-parent-4",
+          "role": "user",
+          "kind": "text",
+          "text": "Draft the weekly follow-up summary"
+        }
+      },
+      {
+        "kind": "message.patch",
+        "threadId": "fixture-thread-5",
+        "message": {
+          "id": "fixture-id-1",
+          "at": 1700000000000,
+          "parentId": "fixture-parent-2",
+          "role": "bot",
+          "kind": "text",
+          "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+          "taskSuggestions": {
+            "intro": "Hi, good morning! Tasks I could help with:",
+            "suggestions": [
+              {
+                "id": "s1",
+                "title": "Draft the weekly follow-up summary",
+                "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+                "icon": "document",
+                "state": "started",
+                "changedAt": "2023-11-14T22:13:23.000Z",
+                "startedMessageId": "fixture-startedMessage-3"
+              },
+              {
+                "id": "s2",
+                "title": "Plan tomorrow's calendar",
+                "icon": "calendar",
+                "state": "open"
+              },
+              {
+                "id": "s3",
+                "title": "Sort the unread email",
+                "description": "Twelve messages wait since Monday.",
+                "icon": "mail",
+                "state": "open"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "page": {
+    "status": 200,
+    "body": {
+      "messages": [
+        {
+          "id": "fixture-id-1",
+          "at": 1700000000000,
+          "parentId": "fixture-parent-2",
+          "role": "bot",
+          "kind": "text",
+          "text": "Hi, good morning! Tasks I could help with:\n- Draft the weekly follow-up summary: You owe five follow-ups before the weekly meeting. I can draft the summary first.\n- Plan tomorrow's calendar\n- Sort the unread email: Twelve messages wait since Monday.",
+          "taskSuggestions": {
+            "intro": "Hi, good morning! Tasks I could help with:",
+            "suggestions": [
+              {
+                "id": "s1",
+                "title": "Draft the weekly follow-up summary",
+                "description": "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+                "icon": "document",
+                "state": "started",
+                "changedAt": "2023-11-14T22:13:23.000Z",
+                "startedMessageId": "fixture-startedMessage-3"
+              },
+              {
+                "id": "s2",
+                "title": "Plan tomorrow's calendar",
+                "icon": "calendar",
+                "state": "open"
+              },
+              {
+                "id": "s3",
+                "title": "Sort the unread email",
+                "description": "Twelve messages wait since Monday.",
+                "icon": "mail",
+                "state": "open"
+              }
+            ]
+          }
+        },
+        {
+          "id": "fixture-startedMessage-3",
+          "at": 1700000004000,
+          "parentId": "fixture-parent-4",
+          "role": "user",
+          "kind": "text",
+          "text": "Draft the weekly follow-up summary",
+          "requestPending": false,
+          "fromTaskSuggestion": {
+            "messageId": "fixture-id-1",
+            "suggestionId": "s1"
+          }
+        }
+      ],
+      "hasMore": false,
+      "activeLeafId": "fixture-activeLeaf-6"
+    }
+  }
+}

@@ -17,6 +17,7 @@ import { Select } from "./Select";
 import { cn } from "@/lib/cn";
 import { TeamPhoneCard } from "./TeamPhoneCard";
 import { ComputerNameRow } from "./ComputerNameRow";
+import { ServerRename, type RenameOutcome } from "./ServerRename";
 import { isPrivateHost, serverTransport } from "../../electron/server-address.mjs";
 
 export interface PairingOffer {
@@ -101,6 +102,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
   const [copied, setCopied] = useState<CopyFeedback>("idle");
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [renaming, setRenaming] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const revealed = useRef(0);
 
@@ -184,6 +186,16 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
     } finally {
       setBusy(false);
     }
+  }
+
+  async function renameDevice(id: string, label: string): Promise<RenameOutcome> {
+    try {
+      await api(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ label }) });
+    } catch {
+      return "failed";
+    }
+    await loadDevices();
+    return "saved";
   }
 
   async function signOut(id: string) {
@@ -313,17 +325,22 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
         <SettingsGroup label={t(pairingCodes ? "devices.paired" : "remote.serverPairing.portalDevices")} block="paired" actions={pairingCodes ? <span className="flex items-center gap-2">{choices}{pairButton}</span> : undefined}>
             <SettingsRows icons>
               {listed.map((device) => (
-                <div key={device.id} className="flex min-h-16 items-center gap-3 px-4 py-3" data-paired-device={device.id}>
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary"><Smartphone size={18} strokeWidth={1.75} aria-hidden="true" /></span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-[14px] leading-5 text-ink">{device.person ?? device.label}</span>
-                    <span className="truncate text-[13px] leading-[18px] text-ink-secondary">
-                      {[device.person ? device.label : null, device.email === device.person ? null : device.email, cloudHome ? null : scopeName(device), t("remote.serverPairing.seen", { when: lastSeen(device.lastSeenAt, now) }), device.id === current ? t("remote.serverPairing.thisBrowser") : null].filter(Boolean).join(" · ")}
+                <div key={device.id} className="px-4 py-3" data-paired-device={device.id}>
+                  <div className="flex min-h-10 items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary"><Smartphone size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[14px] leading-5 text-ink">{device.person ?? device.label}</span>
+                      <span className="truncate text-[13px] leading-[18px] text-ink-secondary">
+                        {[device.person ? device.label : null, device.email === device.person ? null : device.email, cloudHome ? null : scopeName(device), t("remote.serverPairing.seen", { when: lastSeen(device.lastSeenAt, now) }), device.id === current ? t("remote.serverPairing.thisBrowser") : null].filter(Boolean).join(" · ")}
+                      </span>
                     </span>
-                  </span>
-                  {device.id === current ? null : (
-                    <button type="button" onClick={() => void signOut(device.id)} data-danger="" className="settings-quiet shrink-0 cursor-pointer">{t("phone.devices.remove")}</button>
-                  )}
+                    <button type="button" onClick={() => setRenaming(device.id)} data-device-rename={device.id} aria-label={t("remote.serverPairing.renameAria", { name: device.label })} className="settings-quiet shrink-0 cursor-pointer">{t("remote.serverPairing.rename")}</button>
+                    {device.id === current ? null : (
+                      <button type="button" onClick={() => void signOut(device.id)} data-danger="" className="settings-quiet shrink-0 cursor-pointer">{t("phone.devices.remove")}</button>
+                    )}
+                  </div>
+                  {renaming === device.id && <ServerRename id={device.id} name={device.label} maxLength={80} ariaLabel={t("remote.serverPairing.renameAria", { name: device.label })}
+                    nameError={t("remote.serverPairing.renameName")} onRename={renameDevice} onDone={() => setRenaming(null)} />}
                 </div>
               ))}
             </SettingsRows>

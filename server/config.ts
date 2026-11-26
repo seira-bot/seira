@@ -1,6 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, existsSync, renameSync } from "node:fs";
 import { dataHome, ensurePrivateDir } from "./data-dir.ts";
+import { withDataLock } from "./data-lock.ts";
 import { useBotMemorySetting } from "./bot-memory-budget.ts";
 import "../electron/legacy-env-boot.mjs"; import { isHarnessEnvName } from "../electron/legacy-env.mjs"; import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
@@ -37,6 +38,7 @@ import { fishKeyFromLiveKey, liveConfigSchema, liveConfigWithEnv, liveSettingEnv
 import { browserEngineConfigSchema, isValidCdpTarget, type BrowserEngineConfig } from "./browser/config.ts";
 import { roomContextSettings } from "./room-context-settings.ts"; import { usageCapsSchema, type UsageCapsConfig } from "./usage-caps-config.ts";
 import { localVmConfigSchema } from "./local-vm-settings.ts";
+import { PublicError } from "./public-error.ts";
 export * from "./local-vm-settings.ts";
 
 const optionalText = z.string().optional();
@@ -249,7 +251,7 @@ const featureConfigSchema = z.object({
   /** Room jobs to several members run side by side, each in a thread of its own. On unless false. */
   parallelRoomJobs: z.boolean().optional(),
   acpPlanLines: z.boolean().optional(), // An ACP agent's plan as activity lines. Off unless true.
-}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional() }); // cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (SEIRA_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (SEIRA_PHONE_PUSH wins)
+}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional(), githubApp: z.boolean().optional() }); // githubApp: the native GitHub connection, on unless false (SEIRA_GITHUB_APP wins); cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (SEIRA_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (SEIRA_PHONE_PUSH wins)
 const onboardingConfigSchema = z.object({
   completedAt: z.string().trim().max(40).optional(),
   version: z.number().int().min(0).max(1000).optional(),
@@ -483,7 +485,7 @@ export interface AppConfig extends HelperConfig {
   context?: { rebuildBytes?: number; compactAt?: number; autoCompact?: boolean; roomCompactAt?: number; roomSessions?: boolean; replayToolHistory?: boolean };
   memory?: { captureQuietMs?: number; tidyHour?: number };
   localVm?: { mode?: "shared" | "per-bot" | "pool"; maxInstances?: number; idleTimeoutMinutes?: number; preserveInstalledApps?: boolean; memoryGb?: number; cpus?: number };
-  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean; usbPhoneTakeover?: boolean; cloudComputerAutoReplace?: boolean; phonePush?: boolean };
+  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean; usbPhoneTakeover?: boolean; cloudComputerAutoReplace?: boolean; phonePush?: boolean; githubApp?: boolean };
   onboarding?: { completedAt?: string; version?: number; reelSeen?: boolean; hintsSeen?: string[]; firstTurnAt?: string };
   browserProfiles?: BrowserProfile[];
   browserEngine?: BrowserEngineConfig;
@@ -577,7 +579,7 @@ export function loadBrowserProfileIdAliases(): ReadonlyMap<string, string> {
 export function parseConfigPatch(value: JsonValue): ConfigPatch {
   const parsed = appConfigPatchSchema.safeParse(value);
   if (!parsed.success) {
-    throw Object.assign(new Error(schemaIssue(parsed.error, "Invalid configuration")), { status: 400 });
+    throw new PublicError(schemaIssue(parsed.error, "Invalid configuration"), 400);
   }
   return parsed.data;
 }
@@ -888,14 +890,12 @@ export function onConfigSaved(listener: (before: JsonObject, after: JsonObject) 
 const RETIRED_CONFIG_SECTIONS = ["postiz"] as const;
 
 /** Secrets are never echoed back; callers report configured-or-not only. */
-export function saveConfig(
-  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & {
-    threads?: z.output<typeof threadsPatchSchema>;
-    newBots?: z.output<typeof newBotsPatchSchema>;
-    imageGen?: z.output<typeof imageGenPatchSchema>;
-  },
-  options: { replaceInstances?: boolean } = {},
-): void {
+export const saveConfig = (...args: Parameters<typeof saveConfigNow>): void => withDataLock(DATA_DIR, () => saveConfigNow(...args));
+
+/** Read, change and write happen under the lock that `seira access` and the people limit share: no other process writes between the read and the write. */
+function saveConfigNow(
+  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { threads?: z.output<typeof threadsPatchSchema>; newBots?: z.output<typeof newBotsPatchSchema>; imageGen?: z.output<typeof imageGenPatchSchema> },
+  options: { replaceInstances?: boolean } = {}): void {
   const p = join(DATA_DIR, "config.json");
   const read = readConfigFile(p);
   if (read.state === "unreadable" || read.state === "invalid") throw configSaveRefusal(read, p);
@@ -962,7 +962,7 @@ export function saveConfig(
       storedProfiles.success ? storedProfiles.data : [],
       nextProfiles,
     );
-    if (routingConflict) throw Object.assign(new Error(routingConflict), { status: 409 });
+    if (routingConflict) throw new PublicError(routingConflict, 409);
     disk.browserProfiles = nextProfiles;
     if (disk.newBotDefaults) {
       const defaults = newBotDefaultsSchema.parse(disk.newBotDefaults);
@@ -1003,7 +1003,6 @@ export function saveConfig(
       (disk.instances as JsonObject).openaiCompat = { ...entry.data, config: nextConfig };
     }
   }
-  ensurePrivateDir(DATA_DIR);
   if (read.state === "ok" && !writeConfigBackup(p, read.text)) throw configBackupRefusal(p);
   writeFileAtomic(p, JSON.stringify(disk, null, 2), { mode: 0o600 });
   storedConfig.forget();

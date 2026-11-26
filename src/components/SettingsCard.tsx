@@ -7,14 +7,18 @@ import { pageIsThisComputer } from "@/lib/companion-bridge";
 import { t } from "@/lib/i18n";
 import type { Message } from "@/state/store";
 import type { SettingsCardId } from "../../shared/app-settings";
+import { AdminOnly } from "./AdminOnly";
 import { SettingsLook } from "./SettingsPrimitives";
 
 const OtherComputersSetting = lazy(() => import("./TailnetComputers").then((module) => ({ default: module.OtherComputersSetting })));
 const AiSignIn = lazy(() => import("./EnginesSettings").then((module) => ({ default: module.AiSignInSettings })));
 
+const AiPool = lazy(() => import("./AiPoolSettings").then((module) => ({ default: module.AiPoolSettings })));
+
 const CARDS: Record<SettingsCardId, { here: () => boolean; control: () => ReactNode }> = {
   "other-computers": { here: pageIsThisComputer, control: () => <OtherComputersSetting /> },
   "ai-sign-in": { here: () => true, control: () => <AiSignIn /> },
+  "ai-pool": { here: () => true, control: () => <AdminOnly><AiPool /></AdminOnly> },
 };
 
 export function SettingsCard({ message }: { message: Message }) {

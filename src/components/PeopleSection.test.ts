@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { readMembership } from "../lib/membership";
 import { grantFor, openFolderDepartments } from "../lib/department-access";
-import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
 import { accessLine, inviteLink, lastSeenLabel, mergePeople, PeopleTable, peopleFromSessions, PortalPeople, type Person } from "./PeopleSection";
 
 describe("people helpers", () => {
@@ -57,6 +56,15 @@ describe("people table", () => {
     expect(html).toContain('aria-label="Invite link"');
   });
 
+  it("lays the header and every row on one grid, with the access under the person and the actions on a line of their own", () => {
+    const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access: {} }));
+    expect(html.startsWith('<div class="grid ')).toBe(true);
+    expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]");
+    expect(html.match(/col-span-full grid grid-cols-subgrid/g)).toHaveLength(people.length + 1);
+    expect(html.match(/data-person-access="true"/g)).toHaveLength(people.length);
+    expect(html.match(/data-person-actions="true" class="col-span-full /g)).toHaveLength(people.length);
+  });
+
   it("says so when nobody is on the list", () => {
     expect(renderToStaticMarkup(createElement(PeopleTable, { people: [], busy: false, onRole: noop, onRemove: noop, onLink: noop }))).toContain("Nobody yet");
   });
@@ -106,7 +114,7 @@ describe("people on a workspace the organisation's Admin manages", () => {
   });
 });
 
-describe("each user's departments", () => {
+describe("each user's access", () => {
   const people: Person[] = [
     { entry: "ada@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
     { entry: "bob@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
@@ -114,50 +122,27 @@ describe("each user's departments", () => {
     { entry: "dee@acme.test", role: "admin", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
   ];
   const noop = () => {};
+  const grant = { departments: [{ name: "Sales", level: "chat" as const }, { name: "", level: "view" as const }], bots: [{ id: "ani", level: "view" as const }] };
 
-  it("shows each user's departments or the whole team, and a way to change them", () => {
-    const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access: { "ada@acme.test": ["Sales", ""], "cy@acme.test": [] } }));
-    expect(accessLine(["Sales", ""])).toBe("Sales, General");
-    expect(html).toContain('Sales, General</span>');
-    expect(html).toContain('Whole team</span>');
-    expect(html).toContain('No department</span>');
+  it("AC-22 shows each user's departments and bots with their levels, or the whole team, and a way to change them", () => {
+    const names: Record<string, string> = { ani: "Ani" };
+    const html = renderToStaticMarkup(createElement(PeopleTable, {
+      people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, botName: (id) => names[id] ?? id,
+      access: { "ada@acme.test": grant, "cy@acme.test": { departments: [], bots: [] } },
+    }));
+    expect(accessLine(grant, (id) => names[id] ?? id)).toBe("Sales · Can chat, General · Can view, Ani · Can view");
+    expect(html).toContain("Sales · Can chat, General · Can view, Ani · Can view</span>");
+    expect(html).toContain("No department</span>");
+    expect(html.match(/Whole team<\/span>/g)).toHaveLength(2);
     expect(html.match(/>Change access</g)).toHaveLength(3);
   });
 
-  it("shows nothing about departments where nobody can be limited", () => {
+  it("shows nothing about access where nobody can be limited", () => {
     const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop }));
     expect(html).not.toMatch(/Whole team|Change access|data-person-access/);
   });
-});
 
-describe("the choice of departments", () => {
-  const render = (props: Partial<Parameters<typeof DepartmentAccessChoice>[0]>) => renderToStaticMarkup(createElement(DepartmentAccessChoice, { value: null, onChange: noop, departments: ["Sales", "Finance"], limited: new Set<string>(), ...props }));
-  const noop = () => {};
-
-  it("offers the whole team, and a list of departments only once some are chosen", () => {
-    expect(render({})).toContain(">Whole team<");
-    expect(render({})).toContain(">Chosen departments<");
-    expect(render({})).not.toContain('type="checkbox"');
-    const chosen = render({ value: ["Sales"] });
-    expect(chosen.match(/type="checkbox"/g)).toHaveLength(3);
-    expect(chosen).toContain(">General<");
-    expect(chosen).toMatch(/checked=""[^>]*\/>Sales|Sales/);
-  });
-
-  it("explains why an admin cannot be limited", () => {
-    const html = render({ adminReason: true, value: ["Sales"] });
-    expect(html).toContain("Admins see the whole team.");
-    expect(html).toMatch(/<select[^>]*disabled/);
-    expect(html).not.toContain('type="checkbox"');
-  });
-
-  it("warns about a chosen department whose bots can still read files outside their folders", () => {
-    const html = render({ value: ["Sales", "Finance"], limited: new Set(["Finance"]) });
-    expect(html).toContain("Bots in Sales can still read files outside their folders.");
-    expect(html).not.toContain("Bots in Finance");
-    expect(render({ value: [""], limited: new Set() })).toContain("Bots in General can still read");
-    expect(render({ value: ["Finance"], limited: new Set(["Finance"]) })).not.toContain("can still read");
-    expect(render({ value: null })).not.toContain("can still read");
+  it("keeps the folder warning of a chosen department", () => {
     expect(openFolderDepartments(["Sales", "Finance"], new Set(["Finance"]))).toEqual(["Sales"]);
   });
 });
@@ -167,13 +152,14 @@ describe("a user under a domain's departments", () => {
   const noop = () => {};
 
   it("shows the departments of the domain, as the server applies them, unless the address has its own", () => {
-    const access = { "@acme.test": ["Sales"], "bob@acme.test": ["Finance"] };
-    expect(grantFor(access, "ada@acme.test")).toEqual(["Sales"]);
-    expect(grantFor(access, "bob@acme.test")).toEqual(["Finance"]);
+    const only = (name: string) => ({ departments: [{ name, level: "chat" as const }], bots: [] });
+    const access = { "@acme.test": only("Sales"), "bob@acme.test": only("Finance") };
+    expect(grantFor(access, "ada@acme.test")).toEqual(only("Sales"));
+    expect(grantFor(access, "bob@acme.test")).toEqual(only("Finance"));
     expect(grantFor(access, "cy@other.test")).toBeUndefined();
     expect(grantFor(access, "@other.test")).toBeUndefined();
     const html = renderToStaticMarkup(createElement(PeopleTable, { people: [ada], busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access }));
-    expect(html).toContain("Sales</span>");
+    expect(html).toContain("Sales · Can chat</span>");
     expect(html).not.toContain("Whole team");
   });
 });

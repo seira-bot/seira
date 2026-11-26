@@ -1,9 +1,10 @@
 import type { WireMessage as Message } from "../shared/wire.ts";
 import { isPersistentQuestionCard } from "../shared/ask-question.ts";
 import { signInWaits } from "../shared/sign-in-request.ts";
+import { PublicError } from "./public-error.ts";
 
 export function requestConflict(message = "The request no longer owns this conversation") {
-  return Object.assign(new Error(message), { status: 409, code: "guarded_request_changed" });
+  return Object.assign(new PublicError(message, 409), { code: "guarded_request_changed" });
 }
 
 export function assertRequestTarget(
@@ -32,7 +33,7 @@ export function guardedRequestPath(messages: Message[], activeLeafId: string | n
     if (!message) throw requestConflict();
     path.unshift(message);
     if (message.id === source.id) break;
-    if (path.length >= 500) throw Object.assign(new Error("Open this request in the workspace; its transcript exceeds the response limit"), { status: 413 });
+    if (path.length >= 500) throw new PublicError("Open this request in the workspace; its transcript exceeds the response limit", 413);
     id = message.parentId ?? null;
   }
   if (path[0]?.id !== source.id || path.slice(1).some(message => message.role === "user")) throw requestConflict();

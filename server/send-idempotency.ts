@@ -1,12 +1,13 @@
 import type { Message } from "./store.ts";
 import { z } from "zod";
+import { PublicError } from "./public-error.ts";
 
 const sendIdSchema = z.string().regex(/^[A-Za-z0-9_-]{16,80}$/).optional();
 
 export function parseSendId(value: string | null | undefined): string | undefined {
   const parsed = sendIdSchema.safeParse(value);
   if (!parsed.success) {
-    throw Object.assign(new Error("sendId must be a client-generated id"), { status: 400 });
+    throw new PublicError("sendId must be a client-generated id", 400);
   }
   return parsed.data;
 }
@@ -49,7 +50,7 @@ export class SendSequencer {
     const existing = this.inFlight.get(key);
     if (existing) {
       if (existing.fingerprint !== fingerprint) {
-        throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
+        throw new PublicError("sendId already belongs to another message", 409);
       }
       // SAFETY: one key is one endpoint receipt, so every coalesced caller shares the owner's result type.
       return existing.result as Promise<T>;

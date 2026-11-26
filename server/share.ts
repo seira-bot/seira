@@ -36,8 +36,10 @@ import type { Routine } from "./routines.ts";
 import { COMMUNITY_MAX_BYTES, COMMUNITY_MAX_FILES, type CommunityPublisher } from "./share-publish.ts";
 import type { BotRecord, GroupRecord } from "./store.ts";
 import { parseTeamManifest } from "./team-manifest.ts";
+import { PUBLIC_ERROR_MARK, withheld, inheritingPublicDecision } from "./public-error.ts";
 
 export class ShareError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status = 400) {
     super(message);
@@ -193,7 +195,7 @@ function folderPackage(dir: string, scope: TemplateScope): PackageDocument {
     folder = readShareFolder(readFolderFromDisk(dir));
   } catch (error) {
     if (error instanceof ShareError) throw new ShareError("This template's folder is gone. Make the template again.", 410);
-    throw new ShareError(error instanceof Error ? error.message : "This template's folder can't be read.");
+    throw withheld(new ShareError(error instanceof Error ? error.message : "This template's folder can't be read."));
   }
   if (folder.kind !== "package" || folder.scope !== scope) throw new ShareError(`This template's folder no longer holds its ${scope === "bot" ? "bot.md" : "team.md"}.`);
   const secrets = packageSecretFindings(folder.document);
@@ -352,7 +354,7 @@ export function createShareHost(deps: ShareHostDeps) {
         skipped: skills.skipped,
       });
     } catch (error) {
-      if (error instanceof TeamExportError) throw new ShareError(error.message);
+      if (error instanceof TeamExportError) throw inheritingPublicDecision(error, new ShareError(error.message, error.status));
       throw error;
     }
     const { document, redacted } = templateDocument(exported.document, bots, exported.published.keys.bots);

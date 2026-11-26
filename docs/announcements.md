@@ -7,9 +7,14 @@ change to it on `main` and every install that runs this version or later picks i
 ## How it works
 
 - **One file on `main`.** The app's server downloads
-  `https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/announcements/announcements.json` when a page of the app
+  `https://raw.githubusercontent.com/seira-bot/seira/main/announcements/announcements.json` when a page of the app
   asks for the cards: at launch, then about hourly while the app is in use. Whoever can merge to `main` can publish a card;
   there is no other sign-in and no backend.
+- **Seira's team can also post a card from its own service.** The server downloads a second list,
+  `https://cloud.seira.bot/api/public/announcements`, with the same rules: an anonymous GET, nothing about the person,
+  the same limits and the same off switch. It has the same shape as the file. The server keeps its last good copy in
+  `cloud.json` beside the file's cache. The page gets both lists as one: the team's cards first, then the file's, a repeated
+  id once, at most 20 cards. When one source fails, the other still answers.
 - **The server fetches, the page decides.** The desktop app's own server, a Seira Cloud and a self-hosted server all
   download the file the same way (`server/announcements/feed.ts`) and hand the cards to their pages at
   `GET /api/announcements`. Each page then decides, from what it already knows, whether a card is for the person looking
@@ -25,9 +30,9 @@ change to it on `main` and every install that runs this version or later picks i
 
 ### What the app sends
 
-One plain GET of that public file, from the server: no cookie, no account, no install id, no version, no query string.
-GitHub sees the server's IP address, as for any download. When a card has a picture, the person's browser loads it from
-the same place, with no cookie and no referrer. Clicking a card's link opens its address exactly as the file has it,
+One plain GET of each public list (the file on GitHub and the team's list on `cloud.seira.bot`), from the server: no cookie, no account, no install id, no version, no query string.
+GitHub and Seira see the server's IP address, as for any download. When a card has a picture, the person's browser loads it from
+the same place, with no cookie and no referrer. (Cards from the team's list use only the built-in marks, never a picture address.) Clicking a card's link opens its address exactly as the file has it,
 in the system browser on the desktop (a new tab with no opener or referrer in a browser), with nothing added. With
 analytics on, the app counts the card (see [Counting](#counting)).
 
@@ -186,7 +191,7 @@ record as an `announcements-read-<ms>` hint, the newest only (on a Team Cloud, i
 never opened it counts as having read everything dated before 11 November 2026.
 
 A card from this file is dated by its `starts`, else by the file's `updatedAt` (which `GET /api/announcements` hands over
-with the cards). Give a card `starts` when its date matters.
+with the cards: the newer of the two lists' dates). Give a card `starts` when its date matters.
 
 ### Adding an announcement
 

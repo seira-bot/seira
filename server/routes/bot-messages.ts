@@ -41,6 +41,7 @@ import { parseMentionPicks } from "../../shared/room-mentions.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import { refusalBody, refusalText, userError } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { PublicError } from "../public-error.ts";
 
 type RunningInstance = ReturnType<ProviderRegistry["get"]>;
 
@@ -314,10 +315,10 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
             const expectedMode = body.expectedApprovalMode ?? "ask";
             if (approvalModeFor(currentAtStart) !== expectedMode ||
                 (expectedMode === "ask" && (currentAtStart.autoApprove === true || currentAtStart.alwaysAllow?.length))) {
-              throw Object.assign(new Error("guarded sends require the exact expected approval mode; Ask cannot have remembered permissions"), { status: 409, code: "guarded_permissions" });
+              throw Object.assign(new PublicError("guarded sends require the exact expected approval mode; Ask cannot have remembered permissions", 409), { code: "guarded_permissions" });
             }
             if (store.activeLeaf(threadId) !== body.expectedActiveLeafId) {
-              throw Object.assign(new Error("the conversation changed before this message could start"), { status: 409, code: "guarded_branch" });
+              throw Object.assign(new PublicError("the conversation changed before this message could start", 409), { code: "guarded_branch" });
             }
             const guardedAdmission = admit("guarded", {}, {
               botBusy: currentAtStart.busy,
@@ -327,7 +328,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
               groupTurn: Boolean(activeGroupTurnForBot(bot.id)),
             });
             if (guardedAdmission.action === "refuse") {
-              throw Object.assign(new Error("wait for a free thread slot before retrying this message"), { status: 409, code: "guarded_busy" });
+              throw Object.assign(new PublicError("wait for a free thread slot before retrying this message", 409), { code: "guarded_busy" });
             }
             // The relayed line is named after the person it is for; with no key it is nobody's own line and acts for nobody.
             const message = await startTurn(bot.id, text, { threadId, replyTo, sendId, sender: onBehalfOf ? { name: onBehalfOf.name ?? onBehalfOf.email! } : sender, trigger, relayed: true, dataContext });
@@ -446,9 +447,9 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         // No destination left: settle, so a restart cannot replay words a dead turn may have run.
         settleHeldSteeredQueue(held);
         if (!store.taskByThread(bot.id, bot.threadId)) {
-          throw Object.assign(new Error("the target task no longer exists"), { status: 409 });
+          throw new PublicError("the target task no longer exists", 409);
         }
-        throw Object.assign(new Error("no such bot"), { status: 404 });
+        throw new PublicError("no such bot", 404);
       }
       restoreHeldSteeredQueue(held);
       if (current && !current.busy) drainQueuedSends();

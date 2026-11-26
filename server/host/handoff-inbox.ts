@@ -18,6 +18,7 @@ import { constants, lstatSync, mkdirSync, promises as fsp, realpathSync, rmdirSy
 import type { FileHandle } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, posix, relative, resolve, sep, win32 } from "node:path";
 import { randomBytes } from "node:crypto";
+import { PublicError } from "../public-error.ts";
 
 export const INBOX_FOLDER = "inbox";
 const PART_MAX = 48;
@@ -194,7 +195,7 @@ export async function openInboxFile(requested: string, inbox: InboxRead, maxByte
       handle = await fsp.open(candidate, constants.O_RDONLY | noFollow | (constants.O_NONBLOCK ?? 0));
       const opened = await handle.stat();
       if (!opened.isFile()) throw new Error("not a file");
-      if (opened.size > maxBytes) throw Object.assign(new Error(`${basename(candidate)} exceeds ${maxBytes} bytes`), { status: 413 });
+      if (opened.size > maxBytes) throw new PublicError(`${basename(candidate)} exceeds ${maxBytes} bytes`, 413);
       const after = await fsp.stat(candidate);
       if (!samePath(await fsp.realpath(candidate), candidate) || after.dev !== opened.dev || after.ino !== opened.ino) throw new Error("the inbox changed while the file was opened");
       return { handle, bytes: opened.size, name: basename(candidate), path: candidate };

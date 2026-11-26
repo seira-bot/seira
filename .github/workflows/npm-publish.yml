@@ -108,8 +108,7 @@ jobs:
           SHA: ${{ needs.commit.outputs.sha }}
         run: |
           set -uo pipefail
-          node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA"
-          status=$?
+          node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA" && status=0 || status=$?
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
             1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;

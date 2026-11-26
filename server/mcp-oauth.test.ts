@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cardOwner, McpOAuthError, McpOAuthManager, mcpCallbackOrigin, mcpOAuthRedirectUri, type McpSignInPhase, type McpSignInStatus, withMcpSignIn, withoutPendingSignIn } from "./mcp-oauth.ts";
 import type { McpOAuthClientConfig } from "./mcp-registry.ts";
@@ -46,6 +46,7 @@ beforeEach(() => {
   registered = undefined;
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   manager?.dispose();
   await mcp?.close();
   await oauth?.close();
@@ -124,6 +125,23 @@ describe("McpOAuthManager sign-in", () => {
     await setup({ registerRefusal: { status: 500, body: {} } });
     const error = await manager.start("docs", mcp.url).catch((cause: unknown) => cause);
     expect((error as Error).message).toBe("This server would not register Seira for sign-in. Try again later.");
+  });
+
+  it("logs the status and OAuth error code of a refused registration", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await setup({ registerRefusal: { status: 429, body: { error: "temporarily_unavailable", error_description: "slow down" }, headers: { "retry-after": "60" } } });
+    await manager.start("docs", mcp.url).catch(() => {});
+    expect(warn.mock.calls.map(([line]) => line)).toEqual([`mcp sign-in: ${new URL(oauth.issuer).host} refused client registration: HTTP 429 temporarily_unavailable, application/json`]);
+  });
+
+  it("logs a refusal page without its body or the endpoint path", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await setup({ registerRefusal: { status: 503, body: "<html>worker threw</html>", headers: { "content-type": "text/html; charset=utf-8" } } });
+    const error = await manager.start("docs", mcp.url).catch((cause: unknown) => cause);
+    expect((error as Error).message).toBe("This server would not register Seira for sign-in. Try again later.");
+    const lines = warn.mock.calls.map(([line]) => String(line));
+    expect(lines).toEqual([`mcp sign-in: ${new URL(oauth.issuer).host} refused client registration: HTTP 503, text/html`]);
+    expect(lines.join("\n")).not.toMatch(/worker threw|\/register/);
   });
 
   it("still reports the refusal when the body is JSON null", async () => {

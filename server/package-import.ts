@@ -15,6 +15,7 @@ import { importedMemberProfile, type ParsedTeamManifest, type TeamManifestMember
 import { takeImportName } from "../shared/import-name.ts";
 import { decodeBase64, type PackageAgent, type PackageDocument, type PackageTrust } from "../shared/package-format.ts";
 import type { BotVisibility, ModelSelection } from "../shared/wire.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export const NO_BOTS_MESSAGE = "This package has no bots. Add it from your organization's shelf, or update Seira.";
 export const NO_PRESETS_MESSAGE = "This file has no bots or preset bots to add. Its skills can be added from your organization's shelf.";
@@ -22,6 +23,7 @@ export const NO_PRESETS_MESSAGE = "This file has no bots or preset bots to add. 
 export type PackageImportErrorCode = "no_bots" | "invalid_package" | "too_many_bots";
 
 export class PackageImportError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly code: PackageImportErrorCode;
   constructor(code: PackageImportErrorCode, message: string, status = 400) {

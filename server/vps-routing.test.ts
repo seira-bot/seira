@@ -20,6 +20,7 @@ import { CONTROL_BUSY, CONTROL_REFUSAL_PLAIN, controlRefusal, createControlClien
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import type { RoutineSchedule } from "../shared/routines.ts";
 import { workerPort } from "./testing/worker-port.ts";
+import { GENERIC_PUBLIC_ERROR } from "./public-error.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLI = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
@@ -389,7 +390,7 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
       writeFileSync(failed, "fail");
       const failure = await api("POST", `${path}/screenshot`, {});
       expect(failure.status).toBe(500);
-      expect(failure.body.error).toMatch(/fixture capture failed/);
+      expect(failure.body.error).toBe(GENERIC_PUBLIC_ERROR);
       rmSync(failed, { force: true });
       expect((await api("POST", `${path}/screenshot`, {})).status).toBe(200);
     } finally {

@@ -106,7 +106,7 @@ async function oneTurn({ api, control }: Fixture, pool: (claude: { instanceId: s
   expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("settled");
   const messages = await messagesOf(api, threadId);
   const task = (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === bot.id).tasks.find((entry: any) => entry.threadId === threadId);
-  return { messages, model: (task.modelSelection ?? claude) as { instanceId: string } };
+  return { messages, model: (task.modelSelection ?? claude) as { instanceId: string }, bot, threadId, claude };
 }
 
 it("moves a conversation to the AI with more usage left, and says so in one line", async () => {
@@ -158,5 +158,23 @@ it("leaves a conversation alone whose model a person switched to a pool member t
     expect(model).toMatchObject({ instanceId: "codex" });
     expect(lastReply(messages)).toMatchObject({ text: "done from fake codex" });
     expect(fixture.claudePrompts()).toHaveLength(0);
+  });
+}, 120_000);
+
+it("keeps the AI a person picked from a client that sends no aiPool", async () => {
+  await withPoolFixture({ claudeUsed: 70, codexUsed: 10 }, async (fixture) => {
+    const { api, control } = fixture;
+    const first = await oneTurn(fixture, (claude) => ({ enabled: true, mode: "even", members: [claude, codex] }));
+    expect(first.model).toMatchObject({ instanceId: "codex" });
+    await api("PATCH", `/api/bots/${first.bot.id}/tasks/${first.threadId}`, { modelSelection: first.claude });
+    await control("send", "--bot", first.bot.id, "--task", first.threadId, "--text", "And the next day");
+    expect((await control("wait", "--bot", first.bot.id, "--task", first.threadId, "--timeout", "30")).status).toBe("settled");
+    const task = (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === first.bot.id).tasks.find((entry: any) => entry.threadId === first.threadId);
+    const messages = await messagesOf(api, first.threadId);
+    expect(task.aiPool).toBe("pinned");
+    expect(task.modelSelection ?? first.claude).toMatchObject({ instanceId: "claude" });
+    expect(recoveryLines(messages)).toHaveLength(1);
+    expect(lastReply(messages)).toMatchObject({ text: "hello from fake claude" });
+    expect(fixture.claudePrompts()).toHaveLength(1);
   });
 }, 120_000);

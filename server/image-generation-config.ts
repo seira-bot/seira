@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { IMAGE_COMPLEXITIES, IMAGE_PROVIDERS, looksLikeApiKey, normalizeImageGenerationUrl, type ImageGenerationConfig } from "../shared/image-generation.ts";
+import { PublicError } from "./public-error.ts";
 
 const imageModelIdSchema = z.string().trim().max(200).refine(
   (value) => !["\r", "\n", "\0"].some((character) => value.includes(character)),
@@ -56,7 +57,7 @@ export function keepKeysOutOfImageModels(disk: Record<string, unknown>, patch: z
     const keys = new Set([...before, ...storedImageKeys(disk)]);
     const isKey = (model: unknown) => typeof model === "string" && keys.has(model.trim());
     if ([patch?.primary?.model, patch?.fallback?.model, patch && "customModel" in patch ? patch.customModel : undefined].some(isKey)) {
-      throw Object.assign(new Error("This is an API key, not a model ID: paste the key in the key field instead"), { status: 400 });
+      throw new PublicError("This is an API key, not a model ID: paste the key in the key field instead", 400);
     }
     const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
     if (!isRecord(disk.imageGen)) return;

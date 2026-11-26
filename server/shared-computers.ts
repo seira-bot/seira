@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { DeviceLinks, LinkedComputer } from "./device-links.ts";
 import { awayNotice, deviceWord, lendScreenSteps, LENT_PLATFORMS, type LentComputers, type LentPlatform } from "./lent-computers.ts";
 import type { LentCopies } from "./lent-copies.ts";
+import { PublicError } from "./public-error.ts";
 export { LentComputers } from "./lent-computers.ts";
 
 const folder = z.object({ id: z.string().uuid(), name: z.string().min(1).max(120), write: z.boolean() }).strict();
@@ -80,7 +81,7 @@ type Job = {
   timer: NodeJS.Timeout; delivery?: NodeJS.Timeout;
 };
 type Computer = { registration: Registration; owner: SharedComputerOwner; secret: string; seen: number; jobs: Map<string, Job>; wake?: () => void; polls: number };
-const failure = (message: string, status = 409) => Object.assign(new Error(message), { status });
+const failure = (message: string, status = 409) => new PublicError(message, status);
 const TOTAL = 100;
 const RETAIN_MS = 14 * 24 * 60 * 60_000;
 /** The desktop leases a job before it runs it, so a job not leased by then went to a poll whose answer never arrived. */

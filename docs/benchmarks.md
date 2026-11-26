@@ -1,0 +1,125 @@
+# Benchmarks
+
+Seira runs the engines you already use: Claude Code, Codex, OpenCode and others.
+The engine and its model decide how smart and how fast an answer is. These
+benchmarks measure what Seira itself adds: the install, the memory and CPU it
+keeps, the time it takes to start, and the time it adds to each chat turn.
+
+Every number on this page comes from one script,
+[`scripts/bench-server.ts`](../scripts/bench-server.ts), run on a released
+version. The raw output is in [`docs/benchmarks/`](benchmarks/). Run the script
+on your own server to get your own numbers (see [Run it yourself](#run-it-yourself)).
+
+## Results: a small VPS
+
+Seira 0.1.194 from npm, on a VPS with 2 vCPU (Intel Xeon Silver 4216, 2.10 GHz),
+7.3 GB of memory, Ubuntu 26.04.1 LTS and Node 24.22.3. Two runs on 2026-11-26,
+one after the other, with nothing else running on the server.
+
+| Measure | Run 1 | Run 2 |
+|---|---|---|
+| Install with npm, empty cache | 10.7 s | 6.2 s |
+| Download / on disk | 55 MB / 166 MB | 55 MB / 166 MB |
+| Start to healthy, new data folder (median of 5) | 2.9 s | 2.9 s |
+| Start to healthy, existing data folder (median of 5) | 2.7 s | 2.8 s |
+| Memory at idle, both processes | 390 MB | 383 MB |
+| CPU at idle (one core = 100%) | 0.6% | 0.7% |
+| CPU in the first minute after start | 12.9% | 12.0% |
+| Seira time per chat turn, p50 / p95 | 397 ms / 430 ms | 392 ms / 422 ms |
+| Part of that before the model request, p50 | 371 ms | 363 ms |
+| 10 bots get a message at once: last turn ends after | 3.9 s | 4.0 s |
+| `/api/health` at max load | 2,586 req/s, p99 37 ms | 2,927 req/s, p99 32 ms |
+| `/api/health` at 100 req/s, p50 / p99 | 1.5 ms / 3.7 ms | 1.7 ms / 3.5 ms |
+| List of 12 bots at max load | 638 req/s, p99 139 ms | 731 req/s, p99 133 ms |
+| List of 12 bots at 100 req/s, p50 / p99 | 3.3 ms / 12.0 ms | 3.3 ms / 12.1 ms |
+
+Install time depends on the network to the npm registry. The other numbers
+depend on the CPU.
+
+### What the numbers show
+
+- **Small enough for a 2 vCPU server.** At idle Seira uses about 0.7% of one
+  core and less than 400 MB of memory. After 81 chat turns on 11 bots the
+  memory was 534 MB (run 1) and 550 MB (run 2).
+- **Two processes.** `seira serve` keeps a small supervisor (about 122 MB) that
+  starts the server again if it stops. The server itself uses about 260 MB.
+- **The first 20 seconds are busy.** After a start, Seira runs the sandbox
+  self-check (33 checks in less than 1 second) and prepares the browser. On the
+  first start in a data folder it also installs OpenCode as a free engine. The
+  CPU is back at idle after about 20 seconds.
+- **The model decides the speed of a chat.** A real model takes seconds for an
+  answer. Seira adds about 0.4 s to each turn on this CPU, most of it before the
+  request goes to the model.
+- **Turns that start together wait for each other.** 10 bots that get a message
+  at the same moment finish in about 4 s, which is 10 times the time of one
+  turn. So the work before the model request does not run in parallel. With a
+  real model the bots still wait for the model in parallel.
+- **The HTTP API is fast at normal load.** At 100 requests per second the p99
+  is under 4 ms for health and about 12 ms for the bot list.
+
+### Notes for Ubuntu 26.04
+
+- Ubuntu 26.04 has Node 22 in its own packages, without npm. Seira needs Node 24.
+  Install it from NodeSource, as the [VPS guide](deploy-vps.md) shows.
+- The one-command Docker installer accepts Ubuntu 22.04 and 24.04. On 26.04 it
+  stops, unless you set `SEIRA_INSTALL_ALLOW_UNTESTED_OS=1`.
+- A minimal Ubuntu 26.04 has no `unzip`. Without it Seira cannot prepare Chrome
+  at the first start, and bots use the engine's own browser. Run
+  `npx @seira-bot/seira browser install --with-deps` to give bots a browser.
+
+## Run it yourself
+
+You need a Linux server with Node 24 or newer. For the HTTP part, put
+[oha](https://github.com/hatoo/oha) on `PATH`. Without oha the script skips that
+part.
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/seira-bot/seira/main/scripts/bench-server.ts
+node bench-server.ts --out bench-server.json
+```
+
+- The script installs the newest release into a temporary folder. `--version 0.1.194` picks a version.
+  `--seira PATH` measures a `seira` command that you installed already.
+- Each server gets a temporary data folder and port 28799. Your own Seira data and port 8799 stay untouched.
+- It uses no AI account and sends nothing to a model provider. A fake model on 127.0.0.1 answers each turn.
+- It takes about 8 minutes. It writes `bench-server.json` and a summary table in `bench-server.md`.
+- Stop other heavy work on the server first. A busy server gives slower numbers.
+
+## What each number means
+
+| Measure | How the script gets it |
+|---|---|
+| Install | `npm install` of `@seira-bot/seira` into an empty folder with an empty npm cache. Download is the size of that cache. On disk is the size of `node_modules`. |
+| Start to healthy | From the start of `seira serve` to the first `200` from `/api/health`. Five runs with a new data folder, five with a data folder that a previous start filled. The table shows the median. |
+| Memory at idle | The sum of the resident memory (RSS) of every process of the server, after 2 to 3 minutes without work. |
+| CPU at idle | CPU time of every process of the server, sampled every 10 seconds. The table shows the mean of the last 60 seconds of a 180-second idle period. |
+| Seira time per chat turn | A fake OpenAI-compatible model on 127.0.0.1 answers "OK" at once. The script sends a message and waits for the turn to end on the event stream. The model takes about 0 ms, so the time is the work of Seira. One bot, 50 turns after one warm-up turn. |
+| Bots at once | 10 bots each get one message at the same time. Three rounds. The table shows the time until the last turn ends. |
+| HTTP | oha for 20 seconds per run. Max load: 50 connections, as fast as the server answers. Fixed rate: 10 connections at 100 requests per second with `--latency-correction`, which counts the time a request waits to be sent. |
+
+## Agent benchmarks
+
+The numbers above describe Seira, not the engine. To compare how well an engine
+does real work, use a standard agent benchmark. These are the common ones in
+2026:
+
+| Benchmark | What it measures | Fit for Seira |
+|---|---|---|
+| [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1) | Tasks in a terminal inside a container: coding, system work, data work. Runs on the [Harbor](https://docs.harborframework.com) framework, which already has Claude Code, Codex and OpenCode agents. | Best fit. Run the same engine directly and through Seira. Equal scores show that Seira keeps the engine's quality. |
+| [SWE-bench Verified](https://www.swebench.com) | 500 real GitHub issues: the agent writes a patch, and the project's tests check it. | Good for coding claims. The official board takes new entries only with a paper. |
+| [τ²-bench](https://github.com/sierra-research/tau2-bench) | A support agent talks to a simulated customer and uses tools under rules (airline, retail, telecom). | Fits bots that serve customers. |
+| [GAIA](https://huggingface.co/spaces/gaia-benchmark/leaderboard) | General assistant questions that need search, files and several steps. | Fits a research bot. |
+| [OSWorld-Verified](https://os-world.github.io) | 369 tasks on a real desktop with mouse and keyboard. | Fits computer use only. |
+| [MCP-Universe](https://mcp-universe.github.io) | Tasks that need tools from MCP servers in six areas. | Fits connected apps and custom MCP servers. |
+
+Each run of these needs a model account and costs money. The Terminal-Bench
+board asks for 5 trials of every task. Publish such a score with the engine,
+model, Seira version, trial count and date, as the boards do.
+
+### How other projects publish footprint numbers
+
+Small agent projects often publish a table of memory, start time and install
+size. Many copy the numbers of other projects from their README files. Measure
+every project on the same server with the same script before you compare. A
+single-process agent and Seira do different work: Seira also serves the web
+app, the event stream, the bots' sandbox and many bots at once.

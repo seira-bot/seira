@@ -1,6 +1,7 @@
 import { PAIRING_INPUT_PROBLEM_TEXT } from "../shared/pairing-code.ts";
 import { redactParams } from "../shared/redact.ts";
 import { formatServerText, type ServerErrorBody, type ServerTextParams } from "../shared/server-text.ts";
+import { PublicError, unstatused } from "./public-error.ts";
 
 /** The client translates by key and falls back to this English, which the server keeps sending for older clients. */
 export const USER_ERROR = {
@@ -15,6 +16,11 @@ export const USER_ERROR = {
   "serverError.email.notAllowed": "this email is not on this server's sign-in list; ask the server's owner to add it",
   "serverError.email.unavailable": "the sign-in service could not be reached ({detail}); try again in a moment",
   "serverError.email.notSetUp": "email sign-in is not set up on this server; use a pairing code",
+  "serverError.email.workspaceFull": "This installation is full. Ask your admin to make room for you.",
+  "serverError.people.full": "Your plan includes {limit} people. Upgrade to add more.",
+  "serverError.premiumKey.invalid": "This is not a valid Premium key. Copy the whole key from Seira Cloud, then paste it again.",
+  "serverError.premiumKey.ended": "That key has ended. Renew Premium to get a new key.",
+  "serverError.premiumKey.locked": "This server's Premium key is part of its setup, so it can't be changed here.",
   "serverError.signIn.tooMany": "too many failed sign-in attempts from your address; try again in {seconds}s",
   "serverError.cloud.personal": "My Cloud is personal: only your own devices can connect.",
   "serverError.model.botBusy": "the bot is working — stop it before changing models",
@@ -27,6 +33,8 @@ export const USER_ERROR = {
   "serverError.chat.routineElsewhere": "this bot is running a routine in another conversation",
   "serverError.chat.busyInRoom": "this bot is working in channel {room}",
   "serverError.chat.answerSent": "That answer is already on its way.",
+  "serverError.taskSuggestion.missing": "This suggestion is no longer here.",
+  "serverError.taskSuggestion.changed": "This suggestion changed. Look at the card again.",
   "serverError.chat.savingCredential": "this task is securely saving a credential — try again when it finishes",
   "serverError.team.personalMove": "Moving a computer's bots, chats and logins goes to My Cloud only. Nothing personal comes into {team}.",
   "serverError.team.memberLogin": "On {team} only an admin can save a login, and it is then used by every bot in {team}.",
@@ -237,7 +245,7 @@ export function userError(key: UserErrorKey, params?: ServerTextParams): UserErr
 
 export function userErrorThrown(key: UserErrorKey, params?: ServerTextParams): Error {
   const { error, ...fields } = userError(key, params);
-  return Object.assign(new Error(error), fields);
+  return Object.assign(unstatused(new PublicError(error)), fields);
 }
 
 export function userErrorFields(value: unknown): Pick<ServerErrorBody, "errorKey" | "errorParams"> {

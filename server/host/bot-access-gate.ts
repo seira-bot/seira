@@ -1,7 +1,8 @@
 // Security: on a Team Cloud what a member may do with a bot is its level (shared/bot-access.ts): viewing reads, chatting
 // writes, editing changes its setup. Seeing at all is the visibility gate's (404 for a bot they cannot see); this is the
 // second check every member request passes, on the bot its path names, the bot of the conversation it names, and every
-// bot of a room. Admins pass: they can edit every bot.
+// bot of a room. Admins pass: they can edit every bot. Off a Team Cloud only a grant that says "view"
+// (department-access.ts) limits a member, and a needed "edit" counts as "chat" there, as it did before levels.
 import type { IncomingMessage } from "node:http";
 
 import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";
@@ -12,6 +13,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { Store } from "../store.ts";
 import { userError, userErrorFields, type UserError } from "../user-errors.ts";
+import { PublicError } from "../public-error.ts";
 
 type Target = { botId?: unknown; groupId?: unknown };
 
@@ -46,7 +48,8 @@ export function refusalFor(name: string, needed: BotAccessLevel): UserError | { 
 }
 
 /** The first of these bots the member sees but may not do this with. A bot they cannot see is the visibility gate's. */
-export function shortOf(botName: (botId: string) => string | undefined, visible: VisibleSet, botIds: readonly string[], needed: BotAccessLevel): ReturnType<typeof refusalFor> | null {
+export function shortOf(botName: (botId: string) => string | undefined, visible: VisibleSet, botIds: readonly string[], asked: BotAccessLevel): ReturnType<typeof refusalFor> | null {
+  const needed = asked === "edit" && !visible.filtersThreads ? "chat" : asked;
   for (const id of botIds) {
     const level = visible.level(id);
     if (level !== "none" && !atLeast(level, needed)) return refusalFor(botName(id) ?? "this bot", needed);
@@ -65,7 +68,7 @@ export function createBotAccessGate(deps: BotAccessGateDeps) {
 
   /** Null to let the request through; else why a member may not. Body fields are checked as the route reads them. */
   return function accessRefusal(req: IncomingMessage, auth: RequestAuth, method: string, path: string, visible: VisibleSet): ReturnType<typeof refusalFor> | null {
-    if (auth.kind !== "session" || !visible.member || !visible.filtersThreads) return null;
+    if (auth.kind !== "session" || !visible.member || !visible.leveled) return null;
     const needed = levelNeeded(method, path);
     const subject = pathSubject(path);
     const named = !subject ? [] : subject.kind === "bot" ? [subject.id] : subject.kind === "thread" ? ownerBots(deps.threadOwner(subject.id))
@@ -83,7 +86,7 @@ export function createBotAccessGate(deps: BotAccessGateDeps) {
       const targeted = path === "/api/routines" || routine !== null ? targetBots(record) : [];
       const threads = bodyThreadIds(body).flatMap((threadId) => ownerBots(deps.threadOwner(threadId)));
       const error = short(visible, [...added, ...targeted, ...threads], bodyNeeds);
-      if (error) throw Object.assign(new Error(error.error), { status: 403 }, userErrorFields(error));
+      if (error) throw Object.assign(new PublicError(error.error, 403), userErrorFields(error));
       return null;
     });
     return null;
@@ -137,7 +140,7 @@ export function createBotAccessHost(deps: BotAccessHostDeps) {
   /** The same level check for a route that reads the bots out of a body or a stored record itself. */
   function botsRefusal(auth: RequestAuth, botIds: readonly string[], needed: Exclude<BotAccessLevel, "none">): string | null {
     const visible = deps.visibleFor(auth);
-    if (auth.kind !== "session" || !visible.member || !visible.filtersThreads) return null;
+    if (auth.kind !== "session" || !visible.member || !visible.leveled) return null;
     return shortOf((id) => deps.store().bot(id)?.name, visible, botIds, needed)?.error ?? null;
   }
   /** What a person needs on a routine's bots: "chat" on their own routine and on a new one, else "edit". */

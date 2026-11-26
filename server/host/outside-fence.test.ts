@@ -24,6 +24,10 @@ describe("what a confined turn reaches of Seira's own routes", () => {
     expect(outsideRouteRefused("POST", "/api/internal/mcp-http/server-a")).toBe(false);
   });
 
+  it("refuses the task card route for a confined turn", () => {
+    expect(outsideRouteRefused("POST", "/api/internal/task-suggestions")).toBe(true);
+  });
+
   it("speaks plainly and tells the bot to finish where it is", () => {
     expect(OUTSIDE_REFUSAL).toContain("came in from outside");
     expect(OUTSIDE_REFUSAL).toContain("Finish what you can in this conversation");
