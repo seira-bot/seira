@@ -7,6 +7,7 @@ import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile.ts";
 import { TOOL_GROUP_LABELS, TOOL_GROUPS, type ToolGroup } from "../../shared/tool-groups.ts";
 import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../../shared/wire.ts";
 import type { BotRecord } from "../store.ts";
+import type { Consequence } from "./confirm.ts";
 import { withoutKeys, type RegistryDeps, type SettingEntry, type WritableSpec } from "./registry.ts";
 
 const botId = z.string().regex(/^[\w-]{1,120}$/);
@@ -19,6 +20,7 @@ const APPROVAL: Record<Exclude<ApprovalMode, "custom">, { label: string; effect:
   full: { label: "Full access", effect: (name) => `Let ${name} act without asking` },
 };
 const approvalName = (mode: ApprovalMode) => (mode === "custom" ? "Custom" : APPROVAL[mode].label);
+const AUTONOMY: readonly ApprovalMode[] = ["ask", "edits", "auto", "full"];
 
 const COMPUTER = {
   auto: "pick its own computer", cloud: "use a cloud desktop", vm: "use a private desktop on this computer",
@@ -62,8 +64,9 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
   const everyBot = (line: (one: BotRecord) => string) => () => deps.bots().map((one) => `${one.name}: ${line(one)}`).join("; ");
   /** A per-bot entry: `effect` names the change for the card, or refuses it, once the bot is known to exist; `was` is the
    * same bot's value before it, for Undo. */
-  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value"> & {
+  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm"> & {
     value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V; patch(one: BotRecord, value: V): Record<string, unknown>;
+    confirm?(value: V): Consequence | null;
   }) => writable({
     ...spec, current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
@@ -84,6 +87,7 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
         return { change: `${APPROVAL[mode].effect(one.name)} (${APPROVAL[mode].label})` };
       },
       was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as Exclude<ApprovalMode, "custom"> }),
+      confirm: ({ botId, mode }) => { const one = bot(botId); return one && AUTONOMY.indexOf(mode) > AUTONOMY.indexOf(approvalModeFor(one)) ? { code: "autonomyUp", params: { bot: one.name } } : null; },
       patch: (_one, { mode }) => ({ approvalMode: mode, applyToAllThreads: true }),
     }),
     perBot({
@@ -148,6 +152,7 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
       effect: (one, value) => ({ change: `${one.name}: ${(Object.keys(value) as Array<OtherField | "botId">).filter((field) => field !== "botId")
         .map((field) => `${OTHER[field as OtherField].label} ${OTHER[field as OtherField].shown(value[field as OtherField] as never)}`).join("; ")}` }),
       was: (one, value) => ({ botId: one.id, ...Object.fromEntries(Object.keys(value).filter((field) => field !== "botId").map((field) => [field, OTHER[field as OtherField].was(one)])) }),
+      confirm: ({ botId, computer, soul }) => { const one = bot(botId); return !one ? null : computer === "local" && one.computer !== "local" ? { code: "thisComputer", params: { bot: one.name } } : soul ? { code: "botRule", params: { bot: one.name } } : null; },
       patch: (_one, { botId: _id, computer, ...rest }) => ({ ...rest, ...(computer ? { computer: computer === "auto" ? null : computer } : {}) }),
     }),
   ];

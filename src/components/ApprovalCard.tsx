@@ -82,7 +82,10 @@ const staleRoutineCard = (card: OptionCardData) => Boolean(card.routineRequest &
 
 /** Cards whose server-written title and first option say what approving does. */
 export const titledCard = (card: OptionCardData | undefined) =>
-  Boolean(card?.teamSetupRequest || card?.mcpRequest || card?.lendingLift || isSkillSwitchAction(card?.skillRequest?.action));
+  Boolean(card?.teamSetupRequest || card?.mcpRequest || card?.lendingLift || waitingSetting(card) || isSkillSwitchAction(card?.skillRequest?.action));
+
+/** A bot's settings change that applies only once the owner taps the card's first option. */
+export const waitingSetting = (card: OptionCardData | undefined) => Boolean(card?.appSettingRequest && !card.autoApplied);
 
 export function titledCardAction(card: OptionCardData): string {
   if (card.mcpRequest) return mcpRequestActionLabel(card.mcpRequest.action);

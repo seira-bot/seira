@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { credentialIsConfigured, CREDENTIAL_TARGETS, PROVIDER_CREDENTIAL_TARGETS, type CredentialConfig, type CredentialTargetId } from "../../shared/credential-request.ts";
 import { WINDOW_PREFS, type WindowPrefId } from "../../shared/app-settings.ts";
+import type { ImageProvider } from "../../shared/image-generation.ts";
 import type { BrowserEngineKind } from "../browser/config.ts";
 import { defaultBotThreads, MAX_CONCURRENT_BOT_THREADS } from "../bot-thread-limits.ts";
 import { isClaudeBedrock } from "../claude-bedrock.ts";
@@ -17,6 +18,7 @@ import { callRoute, type RouteReply } from "../routes/call-route.ts";
 import type { RouteHandler } from "../routes/table.ts";
 import type { BotRecord, Store } from "../store.ts";
 import type { SettingsPlaceId } from "../../shared/settings-places.ts";
+import { hostOf, type Consequence } from "./confirm.ts";
 import { placePath } from "./places.ts";
 import { botEntries } from "./registry-bots.ts";
 import { configEntries } from "./registry-config.ts";
@@ -34,6 +36,8 @@ interface Base {
   synonyms: string[];
   /** What a person or bot sees. Never a secret: a key reads as set or not set. */
   read(): string;
+  /** More facts `get` returns, such as the choices a value takes. Never a key. */
+  more?(): Record<string, unknown>;
 }
 /** `value` checks what the bot sends at the boundary. `current`, read just before the write, is what Undo writes back to
  * put things as they were (typed as `write` takes it); undefined when the earlier state can't be set back. `describe` is
@@ -48,6 +52,8 @@ interface Writable {
   current(value: unknown): unknown;
   write(value: unknown): Promise<string | null>;
   describe?(value: unknown): { change: string } | { refusal: string };
+  /** Non-null when this value only applies after the owner taps Apply on a card naming what follows. */
+  confirm?(value: unknown): Consequence | null;
 }
 interface Secret {
   tier: "secret";
@@ -80,6 +86,8 @@ export interface RegistryDeps {
   paused(): string[];
   /** The engine that runs bots' browsers now; unset, the saved choice or agent-browser. */
   browserEngine?(): BrowserEngineKind;
+  /** Whether an image provider has what it needs to make images (a key, or Codex's own sign-in); never the key. */
+  imageReady?(provider: ImageProvider): boolean;
   credentials(): CredentialConfig;
   window: { read(id: WindowPrefId): unknown; write(id: WindowPrefId, value: unknown): string | null };
   /** The engines Settings → AI lists; never a key. */
@@ -97,12 +105,13 @@ const KEY_WHERE: Partial<Record<CredentialTargetId, Where>> = {
   onePasswordToken: "vault",
 };
 
-export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe"> & {
+export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm"> & {
   read?(): string; current(value: never): unknown; write(value: never): Promise<string | null>; describe?(value: never): { change: string } | { refusal: string };
+  confirm?(value: never): Consequence | null;
 };
 /** `line` says what the new value does on the applied card; `refusal` names a value only the person sets, in Settings. */
 export type WindowPref = (id: WindowPrefId, label: string, help: string, where: Where, synonyms: string[], allowed: string,
-  line?: { says(value: never): string; refusal?(value: never): string | null }) => SettingEntry;
+  line?: { says(value: never): string; refusal?(value: never): string | null; confirm?(value: never): Consequence | null }) => SettingEntry;
 /** One plain line for a change only the person makes, in Settings. */
 export const personOnly = (what: string, where: Where) => `${what} is changed only by the person, in ${placePath(where)}. Tell them where in one line; do not try another way.`;
 
@@ -145,12 +154,14 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
   const writable = (spec: WritableSpec): SettingEntry => ({
     ...spec, tier: "safe", read: spec.read ?? (() => display((spec.current as () => unknown)())), current: spec.current as Writable["current"],
     write: spec.write as Writable["write"], ...(spec.describe ? { describe: spec.describe as Writable["describe"] } : {}),
+    ...(spec.confirm ? { confirm: spec.confirm as Writable["confirm"] } : {}),
   });
   const config = <V,>(patch: (value: V) => Record<string, unknown>) => (value: V) => deps.saveConfig(patch(value));
   const windowPref: WindowPref = (id, label, help, where, synonyms, allowed, line) => writable({
     id, label, help, where, synonyms, value: WINDOW_PREFS[id], allowed,
     current: () => deps.window.read(id), write: async (value: unknown) => deps.window.write(id, value),
     ...(line ? { describe: (value: never) => { const refusal = line.refusal?.(value); return refusal ? { refusal } : { change: line.says(value) }; } } : {}),
+    ...(line?.confirm ? { confirm: line.confirm } : {}),
   });
   const enumOf = (values: readonly string[]) => values.join(", ");
   const pinned = () => deps.bots().filter((bot) => bot.pinned).map((bot) => bot.id);
@@ -220,6 +231,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       synonyms: ["cleanup", "clean up", "retention", "logs", "delete old", "storage"], value: z.number().int().min(1).max(3650).nullable(), allowed: "1 to 3650 days, or null to keep forever",
       current: () => cfg().threads?.eventLogRetentionDays ?? null, read: () => display(cfg().threads?.eventLogRetentionDays ?? "forever"),
       write: config((eventLogRetentionDays: number | null) => ({ threads: { eventLogRetentionDays } })),
+      confirm: (days: number | null) => (days !== null && days < (cfg().threads?.eventLogRetentionDays ?? Infinity) ? { code: "deletesLogs" } : null),
     }),
     writable({
       id: "rooms.turnTimeoutMinutes", label: "Room turn timeout", help: "Minutes a bot's turn in a room may run before it is stopped.", where: "group-turns",
@@ -239,9 +251,11 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
     }),
   ];
 
+  /** The address a provider's saved key goes to: pointing it anywhere but the provider's own waits for the owner's tap. */
   const provider = (id: string, label: string, synonyms: string[], current: () => string | undefined, patch: (text: string) => Record<string, unknown>): SettingEntry => writable({
     id, label, help: `${label}: the address Seira sends requests to. Empty uses the provider's own.`, where: "keys", synonyms: [...synonyms, "url", "base url", "endpoint", "address", "proxy"],
     value: url, allowed: "an http(s) address, or empty to clear", current: () => current() ?? "", write: config(patch),
+    confirm: (text: string) => (text && text !== (current() ?? "") ? { code: "keyTo", params: { service: label.replace(/ address$/, ""), host: hostOf(text) } } : null),
   });
   const providers: SettingEntry[] = [
     provider("providers.anthropic.url", "Anthropic address", ["anthropic", "claude"], () => cfg().anthropic?.url, (text) => ({ anthropic: { ...cfg().anthropic, url: text } })),
@@ -294,6 +308,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       if (change.kind === "bedrock") return { change: `Add the engine "${change.name}" (Claude on Amazon Bedrock), AWS profile ${change.awsProfile} in ${change.awsRegion}, model ${change.model}` };
       return { change: `Add the engine "${change.name ?? LOCAL_SERVER[change.kind].name}" (${LOCAL_SERVER[change.kind].name} on ${change.url})` };
     },
+    confirm: (change: EngineChange) => (change.kind === "openai-compat" ? { code: "keyTo", params: { service: CREDENTIAL_TARGETS[change.keyFrom].label, host: hostOf(change.url) } } : null),
     write: async (change: EngineChange | EngineKeep) => {
       if (change.kind === "keep") {
         for (const { instanceId } of deps.engines()) {
@@ -342,7 +357,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
 }
 
 export function findSettings(entries: readonly SettingEntry[], query: string, limit = 8): SettingEntry[] {
-  const words = query.toLowerCase().split(/[^a-z0-9.-]+/).filter((word) => word.length > 1);
+  const words = query.toLocaleLowerCase().normalize("NFC").split(/[^\p{L}\p{M}\p{N}.-]+/u).filter((word) => word.length > 1 || /\p{Script=Han}|\p{Script=Hangul}/u.test(word));
   if (!words.length) return [];
   const phrase = words.join(" ");
   const scored = entries.map((entry) => {
@@ -366,6 +381,7 @@ export function routeBackedRegistry(deps: {
   window: RegistryDeps["window"];
   paused(): string[];
   browserEngine?: RegistryDeps["browserEngine"];
+  imageReady?: RegistryDeps["imageReady"];
 }): SettingEntry[] {
   const auth: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
   const refusal = async (reply: Promise<RouteReply>) => {
@@ -377,7 +393,7 @@ export function routeBackedRegistry(deps: {
     }
   };
   return createSettingsRegistry({
-    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine,
+    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady,
     saveConfig: (patch) => refusal(callRoute(deps.routes.config, { method: "PUT", path: "/api/config", body: patch, auth })),
     reorderBots: (botIds) => refusal(callRoute(deps.routes.botOrder, { method: "PUT", path: "/api/bots/order", body: { botIds }, auth })),
     pinBot: (botId, pinned) => refusal(callRoute(deps.routes.botPatch, { method: "PATCH", path: `/api/bots/${encodeURIComponent(botId)}`, body: { pinned }, auth })),
