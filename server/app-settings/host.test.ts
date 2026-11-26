@@ -33,6 +33,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
   const engineCalls: unknown[] = [];
   const engines = [{ instanceId: "claude", name: "Claude", working: true }, { instanceId: "openai-compat-gw", name: "Gateway", working: true }];
   const botPatches: Array<{ botId: string; body: Record<string, unknown> }> = [];
+  const threads: Record<string, Record<string, string>> = { kiwi: { "t-kiwi": "full", "t-kiwi-2": "full" }, clive: { "t-clive": "ask", "t-clive-2": "ask" } };
   const routeCalls: unknown[] = [];
   const saved: Record<string, unknown>[] = [];
   const messages: Array<Record<string, any>> = [];
@@ -64,7 +65,20 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
     bots: () => bots,
     sections: () => ["Sales"],
     reorderBots: async (botIds) => { bots.sort((a, b) => botIds.indexOf(a.id) - botIds.indexOf(b.id)); return null; },
-    patchBot: async (botId, body) => { if (options.patchRefusal) return options.patchRefusal; botPatches.push({ botId, body }); Object.assign(bots.find((bot) => bot.id === botId)!, body); return null; },
+    patchBot: async (botId, body) => {
+      if (options.patchRefusal) return options.patchRefusal;
+      botPatches.push({ botId, body });
+      Object.assign(bots.find((bot) => bot.id === botId)!, body);
+      if (body.applyToAllThreads) for (const id of Object.keys(threads[botId]!)) threads[botId]![id] = String(body.approvalMode);
+      return null;
+    },
+    threadModes: (botId) => ({ ...threads[botId] }) as never,
+    setThreadModes: async (botId, modes) => {
+      const unknown = Object.keys(modes).find((id) => !(id in threads[botId]!));
+      if (unknown) return `no conversation ${unknown}`;
+      Object.assign(threads[botId]!, modes);
+      return null;
+    },
     call: async (route, method, path, body) => { routeCalls.push({ route, method, path, body }); return null; },
     read: async (_route, path) => (path === "/api/skills-library" ? { skills: [{ name: "notes", enabled: false, everyBot: false }] } : null),
     paused: () => [],
@@ -122,7 +136,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
     return { posted, applied: await resolve(String(card.requestId), "allow"), requestId: String(card.requestId) };
   };
   const decisions = async () => { await flushDecisionLog(dataDir); return readDecisions(dataDir, 100); };
-  return { host, build, cfg, saved, messages, cards, waiting, resolve, setAndApply, decisions, clock, resumed, verdict, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
+  return { host, build, threads, cfg, saved, messages, cards, waiting, resolve, setAndApply, decisions, clock, resumed, verdict, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
 }
 
 describe("a set to the value the setting already has", () => {
@@ -536,7 +550,7 @@ describe("every other setting applies at once with Undo, Full access or not", ()
     expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }))).status).toBe(200);
     expect(fx.cards()[0]!.card.subtitle).toBe("Make Kiwi ask you before each command or file change (Ask for approval)");
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
-    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { approvalMode: "ask", applyToAllThreads: true } }, { botId: "kiwi", body: { approvalMode: "full", applyToAllThreads: true } }]);
+    expect(fx.botPatches).toEqual([{ botId: "kiwi", body: { approvalMode: "ask", applyToAllThreads: true } }, { botId: "kiwi", body: { approvalMode: "full" } }]);
   });
 
   it("refuses an unknown bot, an invalid mode, Custom, and Approve for me on this computer's own desktop", async () => {
@@ -727,6 +741,57 @@ describe("settings changes judged on the turn's own request", () => {
     const fx = fixture();
     expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "edits" }))).body.text).toContain("Done:");
     expect(fx.waiting()).toEqual([]);
+  });
+
+  it("a bot on Full access with one conversation on Ask waits when set to Edits, because that conversation goes up", async () => {
+    const fx = fixture();
+    fx.threads.kiwi!["t-kiwi-2"] = "ask";
+    const result = await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "edits" }));
+    expect(result.body.text).toContain("Nothing has changed yet");
+    expect(fx.waiting()[0]!.card.appSettingRequest).toMatchObject({ consequence: "Kiwi will do more without asking you first." });
+    expect(fx.botPatches).toEqual([]);
+  });
+
+  it("a bot and all its conversations on Full access apply Edits at once", async () => {
+    const fx = fixture();
+    expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "edits" }))).body.text).toContain("Done:");
+    expect(fx.waiting()).toEqual([]);
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "edits", "t-kiwi-2": "edits" });
+  });
+
+  it("Undo of an approval change puts each conversation back on its own mode", async () => {
+    const fx = fixture();
+    fx.threads.kiwi!["t-kiwi-2"] = "ask";
+    expect((await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }))).body.text).toContain("Done:");
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "ask", "t-kiwi-2": "ask" });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "full", "t-kiwi-2": "ask" });
+    expect(fx.bots[0]).toMatchObject({ approvalMode: "full" });
+  });
+
+  it("Undo of an approval change is refused as stale when one conversation changed after the change", async () => {
+    const fx = fixture();
+    await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }));
+    fx.threads.kiwi!["t-kiwi-2"] = "edits";
+    expect(await fx.undo()).toMatchObject({ claimed: true, state: "invalid", status: 409, stale: true });
+    expect(fx.threads.kiwi).toEqual({ "t-kiwi": "ask", "t-kiwi-2": "edits" });
+  });
+
+  it("Apply of a raised approval mode is refused as stale when one conversation changed after the card", async () => {
+    const fx = fixture();
+    await fx.set("bots.approvalModes", UP);
+    fx.threads.clive!["t-clive-2"] = "edits";
+    const refused = await fx.resolve(String(fx.cards()[0]!.card.requestId), "allow");
+    expect(refused.status).toBe(409);
+    expect(fx.botPatches).toEqual([]);
+    expect(fx.cards()[0]!.card.appSettingRequest).toMatchObject({ result: "stale" });
+  });
+
+  it("refuses a conversation id that is not one of the bot's conversations", async () => {
+    const fx = fixture();
+    const result = await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask", threads: { "t-clive": "ask" } }));
+    expect(result.status).toBe(409);
+    expect(fx.botPatches).toEqual([]);
   });
 
   it("AC-04 refuses Apply without the owner's review and leaves the setting and the card as they were", async () => {

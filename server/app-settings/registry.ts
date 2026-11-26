@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { credentialIsConfigured, CREDENTIAL_TARGETS, PROVIDER_CREDENTIAL_TARGETS, type CredentialConfig, type CredentialTargetId } from "../../shared/credential-request.ts";
+import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode.ts";
 import { WINDOW_PREFS, type WindowPrefId } from "../../shared/app-settings.ts";
 import type { ImageProvider } from "../../shared/image-generation.ts";
 import type { BrowserEngineKind } from "../browser/config.ts";
@@ -80,6 +81,10 @@ export interface RegistryDeps {
   pinBot(botId: string, pinned: boolean): Promise<string | null>;
   /** PATCH /api/bots/:id as the bot's Settings panel does; a refusal comes back as its text. */
   patchBot(botId: string, body: Record<string, unknown>): Promise<string | null>;
+  /** Each of one bot's conversations with the approval mode it runs on now. */
+  threadModes(botId: string): Record<string, ApprovalMode>;
+  /** Puts each named conversation of the bot on its mode; checks every one exists before any write, and a refusal comes back as its text. */
+  setThreadModes(botId: string, modes: Record<string, Exclude<ApprovalMode, "custom">>): Promise<string | null>;
   /** Another of the Settings window's routes, called as the window calls it. */
   call(route: AppRoute, method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: Record<string, unknown>): Promise<string | null>;
   /** GET on one of those routes, as the window reads it; null when it answers with an error. */
@@ -384,7 +389,7 @@ export function findSettings(entries: readonly SettingEntry[], query: string, li
 /** The registry over the Settings window's own routes, called as the window calls them. */
 export function routeBackedRegistry(deps: {
   cfg(): AppConfig;
-  store: Pick<Store, "bots" | "sections">;
+  store: Pick<Store, "bots" | "sections" | "tasks" | "projectBotForTask" | "patchTask">;
   routes: { config: RouteHandler; botOrder: RouteHandler; botPatch: RouteHandler; sections: RouteHandler; instances: RouteHandler } & Record<AppRoute, RouteHandler>;
   providers: Pick<ProviderRegistry, "instances" | "lastSnapshot" | "access">;
   credentials(): CredentialConfig;
@@ -412,6 +417,16 @@ export function routeBackedRegistry(deps: {
     read: async (route, path) => {
       const reply = await callRoute(deps.routes[route], { method: "GET", path, auth }).catch(() => null);
       return reply && reply.status < 300 ? reply.body : null;
+    },
+    threadModes: (botId) => Object.fromEntries(deps.store.tasks(botId).map((task) => [task.threadId, approvalModeFor(deps.store.projectBotForTask(botId, task.threadId) ?? {})])),
+    setThreadModes: async (botId, modes) => {
+      const known = new Set(deps.store.tasks(botId).map((task) => task.threadId));
+      const unknown = Object.keys(modes).find((threadId) => !known.has(threadId));
+      if (unknown) return `This bot has no conversation with the id ${unknown}.`;
+      for (const [threadId, mode] of Object.entries(modes)) {
+        if (!deps.store.patchTask(botId, threadId, { approvalMode: mode, autoApprove: mode === "auto" })) return `The conversation ${threadId} could not be changed.`;
+      }
+      return null;
     },
     groupBots: (name, botIds) => refusal(callRoute(deps.routes.sections, { method: "POST", path: "/api/sidebar-sections", body: { name, botIds }, auth })),
     engines: () => deps.providers.instances().filter((instance) => instance.enabled).map((instance) => ({

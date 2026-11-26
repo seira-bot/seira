@@ -14,7 +14,7 @@ const bots = [
   { id: "edie", name: "Edie", approvalMode: "edits" },
 ] as unknown as BotRecord[];
 
-function registry(cfg: Record<string, unknown> = {}) {
+function registry(cfg: Record<string, unknown> = {}, threads: Record<string, Record<string, string>> = {}) {
   const config = {
     anthropic: { url: "https://api.anthropic.com" }, threads: { eventLogRetentionDays: 30, eventLogMaxBytes: MIN_THREAD_EVENT_LOG_BYTES * 4 },
     decider: { provider: "jev" }, imageGen: { primary: { provider: "openai" }, customUrl: "https://img.example/v1" }, ...cfg,
@@ -22,6 +22,8 @@ function registry(cfg: Record<string, unknown> = {}) {
   const entries = createSettingsRegistry({
     cfg: () => config, saveConfig: async () => null, bots: () => bots, sections: () => [], reorderBots: async () => null, groupBots: async () => null,
     pinBot: async () => null, patchBot: async () => null, call: async () => null, read: async () => null, paused: () => [], credentials: () => config as never,
+    threadModes: (botId: string) => threads[botId] ?? { [`${botId}-main`]: bots.find((bot) => bot.id === botId)?.approvalMode },
+    setThreadModes: async () => null,
     window: { read: () => undefined, write: () => null }, engines: () => [], addEngine: async () => null, removeEngine: async () => null,
   } as unknown as RegistryDeps);
   const entry = (id: string) => entries.find((candidate) => candidate.id === id) as WritableEntry;
@@ -51,12 +53,19 @@ describe("risky values wait for the owner's tap", () => {
     expect(confirm("bots.approvalModes", { botId: "max", mode: "ask" })).toBeNull();
   });
 
-  it("AC-08 the mode a bot already has waits when it is above ask, because a thread can sit below it", () => {
-    expect(confirm("bots.approvalModes", { botId: "edie", mode: "edits" })).toEqual({ code: "autonomyUp", params: { bot: "Edie" } });
-    expect(confirm("bots.approvalModes", { botId: "max", mode: "full" })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
-    expect(confirm("bots.approvalModes", { botId: "kiwi", mode: "ask" })).toBeNull();
-    expect(confirm("bots.approvalModes", { botId: "max", mode: "edits" })).toBeNull();
-    expect(confirm("bots.approvalModes", { botId: "edie", mode: "ask" })).toBeNull();
+  it("the mode a bot already has waits only when one of its conversations sits below it", () => {
+    const below = registry({}, { max: { "max-main": "full", "max-side": "ask" }, edie: { "edie-main": "edits", "edie-side": "edits" } });
+    expect(below.confirm("bots.approvalModes", { botId: "max", mode: "full" })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
+    expect(below.confirm("bots.approvalModes", { botId: "edie", mode: "edits" })).toBeNull();
+    expect(below.confirm("bots.approvalModes", { botId: "max", mode: "edits" })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
+    expect(below.confirm("bots.approvalModes", { botId: "max", mode: "ask" })).toBeNull();
+    expect(below.confirm("bots.approvalModes", { botId: "edie", mode: "ask" })).toBeNull();
+  });
+
+  it("a conversation that goes up on its own, through the threads map, waits", () => {
+    const mixed = registry({}, { max: { "max-main": "full", "max-side": "ask" } });
+    expect(mixed.confirm("bots.approvalModes", { botId: "max", mode: "ask", threads: { "max-side": "full" } })).toEqual({ code: "autonomyUp", params: { bot: "Max" } });
+    expect(mixed.confirm("bots.approvalModes", { botId: "max", mode: "ask", threads: { "max-main": "full", "max-side": "ask" } })).toBeNull();
   });
 
   it("a shorter log retention waits, and a longer one or none does not", () => {

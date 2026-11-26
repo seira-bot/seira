@@ -21,6 +21,8 @@ const APPROVAL: Record<Exclude<ApprovalMode, "custom">, { label: string; effect:
 };
 const approvalName = (mode: ApprovalMode) => (mode === "custom" ? "Custom" : APPROVAL[mode].label);
 const AUTONOMY: readonly ApprovalMode[] = ["ask", "edits", "auto", "full"];
+type ThreadMode = Exclude<ApprovalMode, "custom">;
+const threadMode = z.enum(["ask", "edits", "auto", "full"]);
 
 const COMPUTER = {
   auto: "pick its own computer", cloud: "use a cloud desktop", vm: "use a private desktop on this computer",
@@ -58,7 +60,7 @@ const toolGroups = z.array(z.enum(TOOL_GROUPS)).max(TOOL_GROUPS.length).optional
 const offNow = (one: BotRecord): ToolGroup[] => TOOL_GROUPS.filter((group) => one.toolsOff?.includes(group));
 const groupNames = (groups: readonly ToolGroup[]) => groups.map((group) => TOOL_GROUP_LABELS[group]).join(", ");
 
-export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
+export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot" | "threadModes" | "setThreadModes">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const bot = (id: string) => deps.bots().find((candidate) => candidate.id === id);
   const missing = (id: string) => ({ refusal: `No bot has the id ${id}. Use list_bots for the ids.` });
   const everyBot = (line: (one: BotRecord) => string) => () => deps.bots().map((one) => `${one.name}: ${line(one)}`).join("; ");
@@ -66,30 +68,42 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
    * same bot's value before it, for Undo. */
   const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm"> & {
     value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V; patch(one: BotRecord, value: V): Record<string, unknown>;
-    confirm?(value: V): Consequence | null;
+    confirm?(value: V): Consequence | null; write?(one: BotRecord, value: V): Promise<string | null>;
   }) => writable({
     ...spec, current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
-    write: (value: V) => { const one = bot(value.botId); return one ? deps.patchBot(one.id, spec.patch(one, value)) : Promise.resolve(missing(value.botId).refusal); },
+    write: (value: V) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value)); },
   });
 
   return [
     perBot({
       id: "bots.approvalModes", label: "Approval mode", help: "What one bot may do without asking you, on every one of its conversations.", where: "bot-settings",
       synonyms: ["permissions", "full access", "approve", "ask", "approval", "autonomy", "approve for me", "auto-accept edits"],
-      value: forBot({ mode: z.enum(["ask", "edits", "auto", "full"]) }),
+      value: forBot({ mode: threadMode, threads: z.record(z.string().max(120), threadMode).optional() }),
       allowed: '{"botId","mode"} with mode ask (Ask for approval), edits (Auto-accept edits), auto (Approve for me) or full (Full access). Custom is chosen only in the desktop app',
       read: everyBot((one) => approvalName(approvalModeFor(one))),
-      effect: (one, { mode }) => {
+      effect: (one, { mode, threads }) => {
+        const unknown = Object.keys(threads ?? {}).find((id) => !(id in deps.threadModes(one.id)));
+        if (unknown) return { refusal: `${one.name} has no conversation with the id ${unknown}.` };
         if (approvalModeFor(one) === "custom") return { refusal: `${one.name} is on Custom approval, which is changed only in the desktop app, in ${one.name}'s Settings. Tell the user where.` };
         // The route takes Approve for me on this computer's own desktop only with the warning its Settings dialog shows.
         if (mode === "auto" && one.computer === "local") return { refusal: `Approve for me while ${one.name} uses this computer's own desktop needs a warning only ${one.name}'s Settings shows. Tell the user to choose it there.` };
         return { change: `${APPROVAL[mode].effect(one.name)} (${APPROVAL[mode].label})` };
       },
-      was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as Exclude<ApprovalMode, "custom"> }),
-      // Every thread takes the mode too, and a thread can sit below the bot's own mode, so the same mode can still raise one.
-      confirm: ({ botId, mode }) => { const one = bot(botId); const to = AUTONOMY.indexOf(mode); return one && to > 0 && to >= AUTONOMY.indexOf(approvalModeFor(one)) ? { code: "autonomyUp", params: { bot: one.name } } : null; },
+      was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as ThreadMode, threads: Object.fromEntries(Object.entries(deps.threadModes(botId)).filter(([, mode]) => mode !== "custom")) as Record<string, ThreadMode> }),
+      confirm: ({ botId, mode, threads }) => {
+        const one = bot(botId);
+        if (!one) return null;
+        const rank = (value: ApprovalMode) => AUTONOMY.indexOf(value);
+        const raises = rank(mode) > rank(approvalModeFor(one))
+          || Object.entries(deps.threadModes(botId)).some(([id, now]) => now !== "custom" && rank(threads?.[id] ?? mode) > rank(now));
+        return raises ? { code: "autonomyUp", params: { bot: one.name } } : null;
+      },
       patch: (_one, { mode }) => ({ approvalMode: mode, applyToAllThreads: true }),
+      write: async (one, { mode, threads }) => {
+        if (!threads) return deps.patchBot(one.id, { approvalMode: mode, applyToAllThreads: true });
+        return (await deps.patchBot(one.id, { approvalMode: mode })) ?? deps.setThreadModes(one.id, threads);
+      },
     }),
     perBot({
       id: "bots.name", label: "Bot name", help: "A bot's name, as the sidebar and chats show it.", where: "bot-settings", synonyms: ["rename", "name", "call", "bot name"],
