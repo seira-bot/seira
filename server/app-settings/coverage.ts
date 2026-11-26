@@ -82,7 +82,6 @@ export const PLACE_EXCLUSIONS: Record<string, string> = {
   "add-always-on": DEVICE,
   "other-computers": DEVICE,
   "wake-automations": "The desktop app keeps this computer awake for automations, from the person's own click.",
-  "ai-pool": "The AI pool moves usage between paid accounts, so only the owner sets it.",
   "away-emails": "These emails go to the person's own address, so only the person turns them on.",
   spending: "A spending limit is set only by the owner, so a bot cannot lift it.",
   "grok-move": FILES,
