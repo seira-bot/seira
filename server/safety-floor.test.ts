@@ -667,6 +667,8 @@ const NOT_CLEAR: Array<[command: string, on: Platform | "posix" | "all", outcome
   ["Invoke-CimMethod -ClassName $c -MethodName Z", "win32", "unreadable"],
   ["Get-CimInstance -ClassName $c | Invoke-CimMethod -MethodName Z", "win32", "unreadable"],
   ["Get-CimInstance -Query \"SELECT * FROM X\" | Remove-CimInstance", "win32", "unreadable"],
+  ["Get-CimInstance -ClassName Win32_ComputerSystem | Get-CimAssociatedInstance | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
+  ["Get-CimInstance -ClassName Win32_Process | ForEach-Object { $_ } | Invoke-CimMethod -MethodName X", "win32", "unreadable"],
   ["wmic call format", "win32", "unreadable"],
   ["wmic $alias call format", "win32", "unreadable"],
   ["wmic /namespace:\\\\root\\microsoft\\windows\\storage path Foo call Bar", "win32", "unreadable"],

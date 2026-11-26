@@ -119,9 +119,10 @@ function cimUnresolved(program: string, args: string[], pipe: Command[]): boolea
   if (args[0] !== undefined && !args[0].startsWith("-") && !CLASS_NAME.test(args[0])) return true;
   if (cimClass(args, true) !== null) return false;
   if (args.some((arg) => parameter(arg, "classname", 2))) return true;
-  // The class comes from the nearest Get command of the pipe when the change command names none.
-  const source = [...pipe].reverse().find((command) => CIM_GET_COMMANDS.has(programName(command.words[0] ?? "")));
-  return source === undefined || cimClass(source.words.slice(1), true) === null;
+  // With no class of its own, the class comes from the command directly before it, and only from a Get command:
+  // any command between the two can replace the objects.
+  const source = pipe.at(-1);
+  return source === undefined || !CIM_GET_COMMANDS.has(programName(source.words[0] ?? "")) || cimClass(source.words.slice(1), true) === null;
 }
 
 /** `wmic` changes something with `call`, `delete`, `set` or `create`; it is clear only for a literal alias or
