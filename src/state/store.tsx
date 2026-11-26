@@ -232,7 +232,7 @@ export interface Task extends Pick<WireTask, "private" | "shared" | "sharedWith"
   cacheKeepWarm?: import("../../shared/wire").CacheKeepWarmStatus;
   cwd?: string | null;
   modelSelection?: ModelSelection;
-  followsBotModel?: boolean;
+  followsBotModel?: boolean; aiPool?: "auto" | "pinned";
   approvalMode?: ApprovalMode;
   autoApprove?: boolean;
   alwaysAllow?: string[];
@@ -378,7 +378,7 @@ export function currentTaskBot(bot: Bot, threadId = bot.threadId): Bot {
 
 export type TaskUpdatePatch = Partial<Pick<Task, "modelSelection" | "approvalMode" | "autoApprove" | "pinnedMessageId">> & {
   acknowledgeLocalAuto?: boolean;
-  updateBotDefault?: boolean;
+  updateBotDefault?: boolean; aiPool?: boolean;
   resetApprovalToAsk?: boolean;
   projectId?: string | null;
   archivedAt?: number | null;
@@ -389,7 +389,7 @@ export type TaskUpdatePatch = Partial<Pick<Task, "modelSelection" | "approvalMod
 };
 
 function taskPatchFields(patch: TaskUpdatePatch): Partial<Task> {
-  const { acknowledgeLocalAuto: _localAck, updateBotDefault: _modelDefault, resetApprovalToAsk, projectId, archivedAt, snoozedUntil, surface, pinned, link, ...fields } = patch;
+  const { acknowledgeLocalAuto: _localAck, updateBotDefault: _modelDefault, aiPool: _aiPool, resetApprovalToAsk, projectId, archivedAt, snoozedUntil, surface, pinned, link, ...fields } = patch;
   return { ...fields, ...(resetApprovalToAsk ? { approvalMode: "ask", autoApprove: false, alwaysAllow: [] } : {}),
     ...(projectId === undefined ? {} : { projectId: projectId ?? undefined }),
     ...(archivedAt === undefined ? {} : { archivedAt: archivedAt ?? undefined }),
@@ -468,7 +468,7 @@ export interface InstanceInfo extends InstanceEndpointInfo {
 /** A Settings page (`SettingsPageId`) or an older page name that `settings-index.ts` sends to its new page and section. */
 export type AppSettingsSection = SettingsPageId
   | "desktopWorkspaces" | "organization" | "cloudAccount" | "experimental" | "connections" | "decisionModel" | "imageGeneration"
-  | "engines" | "companion" | "remote" | "computer" | "logins" | "botAccess" | "activity" | "backups" | "workspaces"
+  | "engines" | "aiPool" | "companion" | "remote" | "computer" | "logins" | "botAccess" | "activity" | "backups" | "workspaces"
   | "skills" | "import" | "updates";
 export type SettingsPageId = "overview" | "phone" | "ai" | "bots" | "desktops" | "vault" | "usage" | "transfer" | "data" | "people"
   | "installations" | "account" | "plan" | "app" | "general" | "appearance";
@@ -728,7 +728,7 @@ export type Action =
   | { type: "dataView"; view: AppState["dataView"] }
   | { type: "loadDataSheet"; botId: string; onError?: (message: string) => void }
   | { type: "modelVariantRuntime"; event: RuntimeEvent }
-  | { type: "setModel"; botId: string; selection: ModelSelection; threadId?: string; updateBotDefault?: boolean; resetApprovalToAsk?: boolean }
+  | { type: "setModel"; botId: string; selection: ModelSelection; threadId?: string; updateBotDefault?: boolean; aiPool?: boolean; resetApprovalToAsk?: boolean }
   | { type: "interrupt"; botId: string; threadId?: string; onError?: () => void }
   | { type: "connected"; value: boolean }
   | { type: "error"; message: string | null }
@@ -1347,7 +1347,7 @@ export function reducer(state: AppState, action: Action): AppState {
         const picked = reducer(state, { type: "updateTask", botId: action.botId, threadId: action.threadId,
           patch: { modelSelection: action.selection, resetApprovalToAsk: action.resetApprovalToAsk } });
         return updateBot(picked, action.botId, (bot) => ({ ...bot, tasks: bot.tasks?.map((task) => task.threadId !== action.threadId ? task
-          : { ...task, followsBotModel: Boolean(action.updateBotDefault) || sameModelSelection(action.selection, bot.modelSelection) }) }));
+          : { ...task, followsBotModel: Boolean(action.updateBotDefault) || sameModelSelection(action.selection, bot.modelSelection), ...(action.aiPool === undefined ? {} : { aiPool: action.aiPool ? "auto" as const : "pinned" as const }) }) }));
       }
       return reconcileModelVariantSessions(updateBot(state, action.botId, (b) => ({ ...b, modelSelection: action.selection })));
     case "updateTask": {
@@ -2667,7 +2667,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (action.threadId) {
             persistTaskPatch(action.botId, action.threadId, {
               modelSelection: action.selection,
-              ...(action.updateBotDefault ? { updateBotDefault: true } : {}),
+              ...(action.updateBotDefault ? { updateBotDefault: true } : {}), ...(action.aiPool === undefined ? {} : { aiPool: action.aiPool }),
               ...(action.resetApprovalToAsk ? { resetApprovalToAsk: true } : {}),
             });
             break;

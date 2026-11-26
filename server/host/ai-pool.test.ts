@@ -21,7 +21,7 @@ const fileIn = () => {
 interface Over {
   pool?: Partial<AiPoolConfig> | null; thread?: ModelSelection | null; bot?: ModelSelection | null;
   usage?: Record<string, number | null>; resets?: Record<string, number | null>; blocked?: string[]; paid?: string[]; moveOk?: boolean;
-  file?: string; now?: () => number; maxTracked?: number;
+  file?: string; now?: () => number; maxTracked?: number; mark?: "auto" | "pinned";
 }
 
 function setup(over: Over = {}) {
@@ -34,11 +34,14 @@ function setup(over: Over = {}) {
     return true;
   });
   const note = vi.fn();
+  const markThread = vi.fn();
   const make = () => createAiPool({
     ...(over.file ? { file: over.file } : {}),
     ...(over.maxTracked ? { maxTrackedThreads: over.maxTracked } : {}),
     config: () => pool,
     threadModel: () => state.thread,
+    threadMark: () => over.mark,
+    markThread,
     botModel: () => (over.bot === undefined ? own : over.bot),
     reading: (id) => ({ remaining: state.usage[id] ?? null, resetsAt: state.resets[id] ?? null }),
     paid: (id) => Boolean(over.paid?.includes(id)),
@@ -46,7 +49,7 @@ function setup(over: Over = {}) {
     moveTo, note, engineName: (id) => NAMES[id] ?? id,
     now: over.now ?? (() => NOW),
   });
-  return { instance: make(), make, moveTo, note, state, pool };
+  return { instance: make(), make, moveTo, note, markThread, state, pool };
 }
 
 describe("AI pool placement", () => {
@@ -228,5 +231,58 @@ describe("AI pool backups", () => {
   it("lists none when the pool is off or the AI is not a member", () => {
     expect(setup({ pool: { enabled: false } }).instance.backupsFor(on("a"))).toEqual([]);
     expect(setup().instance.backupsFor(on("zzz"))).toEqual([]);
+  });
+});
+
+describe("AI pool marks", () => {
+  it("never moves a pinned conversation and drops its record", () => {
+    const file = fileIn();
+    const first = setup({ file });
+    first.instance.place("bot", "t");
+    expect(Object.keys(JSON.parse(readFileSync(file, "utf8")))).toEqual(["t"]);
+    const { instance, moveTo } = setup({ file, mark: "pinned", thread: { instanceId: "b", model: "b-model" } });
+    expect(instance.place("bot", "t")).toBe(false);
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({});
+  });
+
+  it("places an auto conversation although its model differs from the bot's", () => {
+    const { instance, moveTo, markThread } = setup({ mark: "auto", thread: { instanceId: "a", model: "picked" }, bot: { instanceId: "a", model: "mine" } });
+    expect(instance.place("bot", "t")).toBe(true);
+    expect(moveTo).toHaveBeenCalledWith("bot", "t", { instanceId: "a", model: "picked" }, on("b"));
+    expect(markThread).toHaveBeenCalledWith("bot", "t", "auto");
+  });
+
+  it("does not mark a conversation that stayed", () => {
+    const { instance, markThread } = setup({ usage: { a: 95, b: 96, c: 96 } });
+    expect(instance.place("bot", "t")).toBe(false);
+    expect(markThread).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI pool turns mode", () => {
+  const fresh = (file?: string) => setup({ pool: { mode: "turns" }, usage: { a: 80, b: 80, c: 80 }, ...(file ? { file } : {}) });
+  const rotate = (made: ReturnType<typeof setup>, threads: string[]) => threads.map((thread) => {
+    made.state.thread = { instanceId: "a", model: "mine" };
+    made.instance.place("bot", thread);
+    return made.state.thread.instanceId;
+  });
+
+  it("gives three new conversations to a, b, c in turn", () => {
+    expect(rotate(fresh(), ["t1", "t2", "t3", "t4"])).toEqual(["a", "b", "c", "a"]);
+  });
+
+  it("says that the AI is next in turn", () => {
+    const made = fresh();
+    rotate(made, ["t1", "t2"]);
+    expect(made.note).toHaveBeenLastCalledWith("t2", "Beta is next in turn, so this conversation moved from Alpha to Beta.");
+  });
+
+  it("restores the cursor from the file after a restart", () => {
+    const file = fileIn();
+    const before = fresh(file);
+    expect(rotate(before, ["t1", "t2"])).toEqual(["a", "b"]);
+    const after = fresh(file);
+    expect(rotate(after, ["t3"])).toEqual(["c"]);
   });
 });

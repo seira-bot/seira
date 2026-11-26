@@ -183,6 +183,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     // FAKE_CLAUDE_DUMP stays the launcher's: assertions read fixtureDumpPath.
     if ((key.startsWith("FAKE_CLAUDE_") || key.startsWith("FAKE_CODEX_TEXT_") || key.startsWith("FAKE_CODEX_COMMAND") || key.startsWith("FAKE_STREAM_") || key === "FAKE_ACP_HANG_ON") && key !== "FAKE_CLAUDE_DUMP" && value) childEnv[key] = value;
   }
+  // Plan usage from a test file instead of each engine's own sign-in, so a UI check can show usage.
+  if (parentEnv.SEIRA_TEST_PLAN_USAGE_FILE) childEnv.SEIRA_TEST_PLAN_USAGE_FILE = parentEnv.SEIRA_TEST_PLAN_USAGE_FILE;
   // Enables POST /api/testing/org-library; the route does not exist without it.
   if (parentEnv.SEIRA_TEST_ORG_LIBRARY_KEY) childEnv.SEIRA_TEST_ORG_LIBRARY_KEY = parentEnv.SEIRA_TEST_ORG_LIBRARY_KEY;
   // Enables POST /api/testing/internal-capability (a bot's own tool routes, such as publish_page); the route refuses without it.

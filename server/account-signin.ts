@@ -1,8 +1,10 @@
 // Email sign-in through the Seira control plane, or through the server's own mail server when SEIRA_SIGNIN_SMTP_URL is
 // set: the code exchange is server-side, so a browser only talks to this server, and a server with an empty allow-list
 // does not expose the routes. The result is an ordinary local session.
-import { resolveCompanionControlPlaneURL } from "../electron/companion-account-service.mjs";
+import { cloudOriginOf } from "../electron/cloud-signin.mjs";
+import { resolveServerControlPlaneURL } from "../electron/companion-account-service.mjs";
 import { ControlPlaneError, createControlPlaneClient, normalizeAccountEmail, type ControlPlaneClient } from "../electron/control-plane-client.mjs";
+import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
 import type { Scope } from "./sessions.ts";
 import { createSignInMail, SignInMailError, type MailTransport, type SignInMail } from "./sign-in-mail.ts";
 import { userError, type UserError } from "./user-errors.ts";
@@ -46,6 +48,9 @@ export interface EmailSignIn {
 const NOT_WELCOME: SignInFailure = { ok: false, status: 403, ...userError("serverError.email.notAllowed") };
 const CODE_WRONG: SignInFailure = { ok: false, status: 401, ...userError("serverError.email.codeWrong") };
 const CODE_FORMAT: SignInFailure = { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
+const TOO_MANY: SignInFailure = { ok: false, status: 429, ...userError("serverError.email.tooMany") };
+
+const MAX_OPEN_CODES = 1000;
 
 const codeShapeOk = (code: string): boolean => code.length <= 32 && /^\d{8}$/.test(code.replace(/[\s-]/g, ""));
 
@@ -55,6 +60,8 @@ export function createEmailSignIn(options: {
   fetchImpl?: typeof fetch;
   client?: ControlPlaneClient;
   mailTransport?: MailTransport;
+  /** The server's release version, which Seira's sign-in names the device with. */
+  version?: string;
 }): EmailSignIn {
   const env = options.env ?? process.env;
   const allow = () => (typeof options.allow === "function" ? options.allow() : options.allow);
@@ -63,23 +70,49 @@ export function createEmailSignIn(options: {
     return mailedSignIn(allow, createSignInMail({ url: smtpUrl, from: env.SEIRA_SIGNIN_SMTP_FROM,
       ...(options.mailTransport ? { transport: options.mailTransport } : {}) }));
   }
-  let client: ControlPlaneClient | null = options.client ?? null;
-  const controlPlane = (): ControlPlaneClient => {
-    if (client) return client;
-    const url = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-    if (!url) throw new Error("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
-    client = createControlPlaneClient({ baseURL: url, fetchImpl: options.fetchImpl });
-    return client;
+  // An address reaches an account service only when the operator names one in SEIRA_CONTROL_PLANE_URL, and Seira Cloud's
+  // sign-in only when the operator also names its origin in SEIRA_CLOUD_ORIGIN. Otherwise the request fails closed.
+  const controlPlaneURL = (): string => (Object.hasOwn(env, "SEIRA_CONTROL_PLANE_URL") ? resolveServerControlPlaneURL({ environment: env }) : "");
+  const newClient = (): ControlPlaneClient => {
+    if (options.client) return options.client;
+    const baseURL = controlPlaneURL();
+    if (!baseURL) throw new Error("this server has no account service for email sign-in");
+    const cloudOrigin = cloudOriginOf(env.SEIRA_CLOUD_ORIGIN);
+    return createControlPlaneClient({
+      baseURL,
+      fetchImpl: options.fetchImpl,
+      ...(cloudOrigin
+        ? {
+            cloudSignIn: createSeiraCloudSignIn({
+              origin: cloudOrigin,
+              identity: { deviceName: "Seira server", platform: process.platform, appVersion: options.version },
+              ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            }),
+          }
+        : {}),
+    });
+  };
+  const open = new Map<string, ControlPlaneClient>();
+  const remember = (email: string, client: ControlPlaneClient): void => {
+    open.delete(email);
+    open.set(email, client);
+    for (const oldest of open.keys()) {
+      if (open.size <= MAX_OPEN_CODES) break;
+      open.delete(oldest);
+    }
   };
   return {
-    enabled: () => signInEnabled(allow()) && (client !== null || resolveCompanionControlPlaneURL({ isPackaged: true, environment: env }) !== ""),
+    enabled: () => signInEnabled(allow()) && (options.client !== undefined || controlPlaneURL() !== ""),
     async start(rawEmail) {
       const email = normalizeAccountEmail(rawEmail);
       if (!email) return { ok: false, status: 400, ...userError("serverError.email.invalid") };
       if (!allowedScopes(email, allow())) return NOT_WELCOME;
       try {
-        await controlPlane().requestOTP(email);
+        const client = newClient();
+        await client.requestOTP(email);
+        remember(email, client);
       } catch (error) {
+        if (error instanceof ControlPlaneError && error.status === 429) return TOO_MANY;
         return unavailable(error);
       }
       return { ok: true };
@@ -88,29 +121,36 @@ export function createEmailSignIn(options: {
       if (!codeShapeOk(code)) return CODE_FORMAT;
       const email = normalizeAccountEmail(rawEmail);
       if (!email || !allowedScopes(email, allow())) return CODE_WRONG;
+      let client: ControlPlaneClient;
       let verified: { accountToken: string; user: { id: string; email: string } };
       try {
-        verified = await controlPlane().verifyOTP(email, code);
+        const sent = open.get(email);
+        client = sent ?? newClient();
+        if (!sent && (await client.accounts()) === "seira-cloud") return CODE_WRONG;
+        verified = await client.verifyOTP(email, code);
       } catch (error) {
         // The client refuses a malformed code before any request (status 0);
         // the control plane's own "invalid_otp" is a wrong or expired code.
         if (error instanceof ControlPlaneError && error.code === "invalid_otp" && !error.status) {
           return { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
         }
-        if (error instanceof ControlPlaneError && error.status === 429) {
-          return { ok: false, status: 429, ...userError("serverError.email.tooMany") };
+        if (error instanceof ControlPlaneError && error.status === 429) return TOO_MANY;
+        if (error instanceof ControlPlaneError && error.status === 410) {
+          open.delete(email);
+          return CODE_WRONG;
         }
         if (error instanceof ControlPlaneError && (error.status === 400 || error.status === 401 || error.status === 403)) {
           return { ok: false, status: 401, ...userError("serverError.email.codeWrong") };
         }
         return unavailable(error);
       }
-      void controlPlane()
-        .signOut(verified.accountToken)
-        .catch(() => undefined);
-      const scopes = allowedScopes(verified.user.email, allow());
+      open.delete(email);
+      void client.signOut(verified.accountToken).catch(() => undefined);
+      // A session goes only to the address that asked for the code.
+      if (normalizeAccountEmail(verified.user.email) !== email) return CODE_WRONG;
+      const scopes = allowedScopes(email, allow());
       if (!scopes) return NOT_WELCOME;
-      return { ok: true, email: verified.user.email, userId: verified.user.id, scopes };
+      return { ok: true, email, userId: verified.user.id, scopes };
     },
   };
 }

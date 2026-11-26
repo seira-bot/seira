@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import { allowedScopes, createEmailSignIn, parseAllowList, signInEnabled } from "./account-signin.ts";
-import { startControlPlaneStub } from "./testing/control-plane-stub.ts";
+import { startControlPlaneStub, type ControlPlaneStub } from "./testing/control-plane-stub.ts";
 
 describe("the sign-in allow-list", () => {
   it("splits on commas, spaces and newlines and ignores case", () => {
@@ -105,5 +105,155 @@ describe("the exchange with the control plane", () => {
     expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
     expect(createEmailSignIn({ allow, env: {}, client: {} as ControlPlaneClient }).enabled()).toBe(true);
     expect(createEmailSignIn({ allow, env: { SEIRA_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
+  });
+});
+
+describe("emailed codes from Seira's account service, with no mail server", () => {
+  const allow = { admins: ["milind@example.test"], members: ["guest@example.test"] };
+  const envFor = (stub: ControlPlaneStub) => ({ SEIRA_CONTROL_PLANE_URL: stub.url, SEIRA_CLOUD_ORIGIN: stub.url });
+  const withService = async (run: (stub: ControlPlaneStub) => Promise<void>) => {
+    const stub = await startControlPlaneStub({ accounts: "seira-cloud" });
+    try {
+      await run(stub);
+    } finally {
+      await stub.close();
+    }
+  };
+
+  const operatorEnv = { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test", SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" };
+  const startBody = { cloudContractVersion: 1, attempt: "a".repeat(43), expiresIn: 600, resendAfter: 30, signupOpen: true };
+  const serviceAnswering = (start: { status: number; body: unknown }, verify: { status: number; body: unknown }) =>
+    (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.endsWith("/healthz")) return Response.json({ ok: true, service: "seira-control-plane", accounts: "seira-cloud" });
+      const answer = url.endsWith("/sign-in/start") ? start : verify;
+      return Response.json(answer.body, { status: answer.status });
+    }) as typeof fetch;
+
+  it("sends the code through the Seira sign-in and never through Better Auth", async () => {
+    await withService(async (stub) => {
+      const signIn = createEmailSignIn({ allow, env: envFor(stub) });
+      expect(await signIn.start("Milind@Example.test")).toEqual({ ok: true });
+      expect(stub.calls.some((call) => call.startsWith("POST /api/auth/"))).toBe(false);
+      expect(stub.cloudBodies[0]).toMatchObject({ path: "/api/cloud/app/sign-in/start", body: { email: "milind@example.test" } });
+
+      expect(await signIn.verify("milind@example.test", "00000000")).toMatchObject({ ok: false, status: 401 });
+      expect(await signIn.verify("milind@example.test", stub.otp)).toEqual({ ok: true, email: "milind@example.test", userId: stub.cloudAccountId, scopes: ["admin", "client"] });
+      await vi.waitFor(() => expect(stub.calls).toContain("DELETE /api/cloud/desktop/session"));
+    });
+  });
+
+  it("keeps two people who sign in at the same time apart", async () => {
+    await withService(async (stub) => {
+      const signIn = createEmailSignIn({ allow, env: envFor(stub) });
+      expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
+      expect(await signIn.start("guest@example.test")).toEqual({ ok: true });
+      expect(await signIn.verify("milind@example.test", stub.otp)).toMatchObject({ ok: true, email: "milind@example.test", scopes: ["admin", "client"] });
+      expect(await signIn.verify("guest@example.test", stub.otp)).toMatchObject({ ok: true, email: "guest@example.test", scopes: ["client"] });
+    });
+  });
+
+  it("calls a code with no open attempt wrong or expired, without asking Better Auth", async () => {
+    await withService(async (stub) => {
+      const signIn = createEmailSignIn({ allow, env: envFor(stub) });
+      const result = await signIn.verify("milind@example.test", stub.otp);
+      expect(result).toMatchObject({ ok: false, status: 401 });
+      expect(stub.calls.some((call) => call.startsWith("POST /api/auth/"))).toBe(false);
+    });
+  });
+
+  it("uses only the account service that the operator names", async () => {
+    const asked: string[] = [];
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 500, body: {} });
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const unnamed = createEmailSignIn({ allow, env: {}, fetchImpl });
+    expect(unnamed.enabled()).toBe(false);
+    expect(await unnamed.start("milind@example.test")).toMatchObject({ ok: false, status: 502 });
+    expect(await unnamed.verify("milind@example.test", "12345678")).toMatchObject({ ok: false, status: 502 });
+    expect(asked).toEqual([]);
+    const named = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
+    expect(named.enabled()).toBe(true);
+    expect(await named.start("milind@example.test")).toEqual({ ok: true });
+    expect(asked).toEqual(["https://accounts.example.test/healthz", "https://cloud.example.test/api/cloud/app/sign-in/start"]);
+    expect(createEmailSignIn({ allow: { admins: [], members: [] }, env: operatorEnv }).enabled()).toBe(false);
+  });
+
+  it("does not send an address to Seira's own Cloud unless the operator names its origin", async () => {
+    const asked: string[] = [];
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 200, body: {} });
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL }, fetchImpl });
+    await signIn.start("milind@example.test");
+    await signIn.verify("milind@example.test", "12345678");
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
+    const staging = createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: operatorEnv.SEIRA_CONTROL_PLANE_URL, SEIRA_CLOUD_STAGING: "1" }, fetchImpl });
+    asked.length = 0;
+    await staging.start("milind@example.test");
+    expect(asked.every((url) => url.startsWith("https://accounts.example.test/"))).toBe(true);
+  });
+
+  it("gives a session only to the address that asked for the code", async () => {
+    const answeringAs = (email: string) =>
+      serviceAnswering(
+        { status: 200, body: startBody },
+        { status: 200, body: { accessToken: `omc_${"b".repeat(43)}`, expiresAt: Date.now() + 60_000, device: { id: "device_test" }, account: { id: "account_test", email } } },
+      );
+    const asking = (email: string) => createEmailSignIn({ allow, env: operatorEnv, fetchImpl: answeringAs(email) });
+
+    const other = asking("milind@example.test");
+    expect(await other.start("guest@example.test")).toEqual({ ok: true });
+    expect(await other.verify("guest@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
+
+    const same = asking("GUEST@example.test");
+    expect(await same.start("guest@example.test")).toEqual({ ok: true });
+    expect(await same.verify("guest@example.test", "12345678")).toEqual({ ok: true, email: "guest@example.test", userId: "account_test", scopes: ["client"] });
+  });
+
+  it("keeps the mail server path when SEIRA_SIGNIN_SMTP_URL is set, even when an account service is named", async () => {
+    const sent: string[] = [];
+    const signIn = createEmailSignIn({
+      allow,
+      env: { ...operatorEnv, SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
+      mailTransport: { sendMail: async (message) => { sent.push(String(message.to)); } },
+      fetchImpl: (async () => { throw new Error("the account service must not be asked"); }) as typeof fetch,
+    });
+    expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
+    expect(sent).toEqual(["milind@example.test"]);
+  });
+
+  it("keeps a thousand open codes, then forgets the oldest", async () => {
+    const service = serviceAnswering({ status: 200, body: startBody }, { status: 200, body: {} });
+    const asked: string[] = [];
+    const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      asked.push(String(input));
+      return service(input, init);
+    }) as typeof fetch;
+    const signIn = createEmailSignIn({ allow: { admins: [], members: ["@crowd.test"] }, env: operatorEnv, fetchImpl });
+    for (let person = 0; person < 1001; person += 1) expect(await signIn.start(`person${person}@crowd.test`)).toEqual({ ok: true });
+    asked.length = 0;
+    await signIn.verify("person1@crowd.test", "12345678");
+    expect(asked.some((url) => url.endsWith("/healthz"))).toBe(false);
+    await signIn.verify("person0@crowd.test", "12345678");
+    expect(asked.some((url) => url.endsWith("/healthz"))).toBe(true);
+  });
+
+  it("tells a person to wait when Seira asks for a pause", async () => {
+    const fetchImpl = serviceAnswering({ status: 429, body: { error: "rate_limited" } }, { status: 500, body: {} });
+    const signIn = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
+    expect(await signIn.start("milind@example.test")).toMatchObject({ ok: false, status: 429 });
+  });
+
+  it("calls a code that Seira says has expired wrong or expired", async () => {
+    const fetchImpl = serviceAnswering({ status: 200, body: startBody }, { status: 410, body: { error: "expired" } });
+    const signIn = createEmailSignIn({ allow, env: operatorEnv, fetchImpl });
+    expect(await signIn.start("milind@example.test")).toEqual({ ok: true });
+    expect(await signIn.verify("milind@example.test", "12345678")).toMatchObject({ ok: false, status: 401 });
   });
 });

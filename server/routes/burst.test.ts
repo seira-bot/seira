@@ -38,6 +38,18 @@ describe("burst card routes", () => {
     expect(sent).toEqual({ status: 403, body: userError("serverError.card.cloudOwnerOnly") });
   });
 
+  it("asks the refusal about the bot of the burst, and answers 403 to edit, run, retry and cancel when it refuses", async () => {
+    const asked: string[] = [];
+    const refusal = (_auth: RequestAuth, _thread: string, _id: string, botId: string) => { asked.push(botId); return USER_ERROR["serverError.bot.viewOnly"]; };
+    const routes = createBurstRoutes(deps({ owner: () => ({ botId: "sales", threadId: "t" }), refusal, edit: () => { throw new Error("must not edit"); }, run: () => { throw new Error("must not run"); }, retry: () => { throw new Error("must not retry"); }, cancel: () => { throw new Error("must not cancel"); } }));
+    for (const action of ["edit", "run", "retry", "cancel"]) {
+      const { context, sent } = ctx(`/api/bursts/b1/${action}`, "POST", { items: ["a"] });
+      await routes(context);
+      expect(sent.status).toBe(403);
+    }
+    expect(asked).toEqual(["sales", "sales", "sales", "sales"]);
+  });
+
   it("runs, cancels and retries on a press", async () => {
     const pressed: string[] = [];
     const routes = createBurstRoutes(deps({ run: () => { pressed.push("run"); return {} as never; }, cancel: () => { pressed.push("cancel"); return {} as never; }, retry: () => { pressed.push("retry"); return {} as never; } }));

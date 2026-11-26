@@ -321,6 +321,29 @@ describe("pairing codes", () => {
     expect(registry.issue({ label: "Ada\u202Es phone\r", scopes: ["client"] }).session.label).toBe("Adas phone");
   });
 
+  it("renames a session: trims it, drops control and bidi characters, cuts it at 80 characters", () => {
+    const id = pair("MacBook").session.id;
+    expect(registry.rename(id, "  Kitchen\u202E iPad\n\u0007  ")).toBe("renamed");
+    expect(registry.list().find((s) => s.id === id)?.label).toBe("Kitchen iPad");
+    expect(registry.rename(id, "x".repeat(200))).toBe("renamed");
+    expect(registry.list().find((s) => s.id === id)?.label).toBe("x".repeat(80));
+  });
+
+  it("refuses an empty name and an unknown session, and keeps the old name", () => {
+    const id = pair("MacBook").session.id;
+    expect(registry.rename(id, " \u202E\u0000 ")).toBe("invalid");
+    expect(registry.rename(id, "")).toBe("invalid");
+    expect(registry.rename("no-such-id", "Name")).toBe("missing");
+    expect(registry.list().find((s) => s.id === id)?.label).toBe("MacBook");
+  });
+
+  it("keeps a new name after a restart", () => {
+    const id = pair("MacBook").session.id;
+    registry.rename(id, "Office Mac");
+    const reloaded = new SessionRegistry({ file: file(), now: () => clock });
+    expect(reloaded.list().find((s) => s.id === id)?.label).toBe("Office Mac");
+  });
+
   it("carries scopes from the code into the session, deduplicated", () => {
     const { code } = registry.openPairing({ scopes: ["client", "client"] });
     const result = registry.exchange({ code, label: "viewer", source: "s" });

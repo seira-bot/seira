@@ -1,7 +1,7 @@
 import { api } from "@/state/store";
-import type { DepartmentAccessView } from "../../shared/department-access";
+import type { AccessGrant, DepartmentAccessView } from "../../shared/department-access";
 
-export type { DepartmentAccessView };
+export type { AccessGrant, DepartmentAccessView };
 
 export interface DepartmentChoices {
   access: DepartmentAccessView;
@@ -28,8 +28,9 @@ export async function loadDepartmentChoices(): Promise<DepartmentChoices | null>
   }
 }
 
-export async function saveDepartmentAccess(entry: string, departments: string[] | null): Promise<void> {
-  await api("/api/department-access", { method: "PUT", body: JSON.stringify({ entry, departments }) });
+/** `admitBots` confirms that the entry joins the people of each chosen bot that is not shared with them yet. */
+export async function saveDepartmentAccess(entry: string, access: AccessGrant | null, admitBots = false): Promise<void> {
+  await api("/api/department-access", { method: "PUT", body: JSON.stringify({ entry, access, ...(admitBots ? { admitBots: true } : {}) }) });
 }
 
 /** The chosen departments whose bots are not held to chosen folders: they can still read files outside them. */
@@ -37,7 +38,7 @@ export function openFolderDepartments(chosen: readonly string[], limited: Readon
   return chosen.filter((name) => !limited.has(name));
 }
 
-/** The departments a sign-in entry is limited to: its own entry, else its `@domain`'s, as the server decides. */
-export function grantFor(people: Readonly<Record<string, string[]>>, entry: string): string[] | undefined {
+/** What a sign-in entry may reach: its own entry, else its `@domain`'s, as the server decides. */
+export function grantFor(people: Readonly<Record<string, AccessGrant>>, entry: string): AccessGrant | undefined {
   return people[entry] ?? (entry.startsWith("@") ? undefined : people[entry.slice(entry.lastIndexOf("@"))]);
 }
