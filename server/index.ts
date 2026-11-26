@@ -12414,6 +12414,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (m && method === "PATCH") {
       const sessionId = m[1];
       const parsed = z.object({ label: z.string().max(1000) }).strict().safeParse(await readBody(req, 1024));
+      // A session revoked while a slow client sends the body must not rename a device.
+      if (auth.kind === "session" && !sessions.record(auth.session.id)?.scopes.includes("admin")) {
+        return json(res, 401, { error: "Your session ended. Sign in again before renaming a device." });
+      }
       const renamed = parsed.success ? sessions.rename(sessionId, parsed.data.label) : "invalid";
       if (renamed === "invalid") return json(res, 400, { error: "Invalid device name" });
       if (renamed === "missing") return json(res, 404, { error: "no such session" });
