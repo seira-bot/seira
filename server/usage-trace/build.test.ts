@@ -1,4 +1,5 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { monthKey, type UsageRow } from "../usage-ledger.ts";
 import { groupRuns, linkTurns, summarizeRoot, traceTurn } from "./build.ts";
 import { ledgerRows } from "./ledger.ts";
 import { createTraceService } from "./service.ts";
-import { appendSpans, flushSpans, type SpanRecord } from "./spans.ts";
+import { appendSpans, flushSpans, spansDir, type SpanRecord } from "./spans.ts";
 
 const T0 = Date.UTC(2026, 9, 22, 9, 0, 0);
 const iso = (ms: number) => new Date(T0 + ms).toISOString();
@@ -121,7 +122,7 @@ describe("trace service", () => {
     expect(await ledgerRows(...range)).toHaveLength(6);
   });
 
-  it("builds a 500-span trace from disk in well under 100 ms and pages the runs list", async () => {
+  it("builds a 500-span trace from disk in under 12 times the bare parse of its spans and pages the runs list", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "seira-trace-service-"));
     dirs.push(dataDir);
     const now = Date.UTC(2026, 9, 22, 12, 0, 0);
@@ -146,11 +147,22 @@ describe("trace service", () => {
     expect(page.roots).toHaveLength(50);
     expect(page.next).toBe(50);
     expect(page.totals.tools).toBe(250);
-    const begin = performance.now();
+    const coldBegin = performance.now();
     const detail = await service.detail("worker~w1", T0, () => true);
-    const ms = performance.now() - begin;
-    console.log(`trace service: 500-span trace built from disk in ${ms.toFixed(1)} ms`);
-    expect(ms).toBeLessThan(100);
+    const cold = performance.now() - coldBegin;
+    // Timed against parsing the same span files in this process: a slower machine or a busy CI runner slows both.
+    const files = readdirSync(spansDir(dataDir)).map((name) => join(spansDir(dataDir), name));
+    const parseOnly = async () => { for (const file of files) for (const line of (await readFile(file, "utf8")).split("\n")) if (line) JSON.parse(line); };
+    const clock = async (work: () => Promise<unknown>) => { const begin = performance.now(); await work(); return performance.now() - begin; };
+    const parsed: number[] = [];
+    const built: number[] = [];
+    for (let run = 0; run < 20; run += 1) {
+      parsed.push(await clock(parseOnly));
+      built.push(await clock(() => service.detail("worker~w1", T0, () => true)));
+    }
+    const ratio = Math.min(...built) / Math.min(...parsed);
+    console.log(`trace service: 500-span trace built from disk in ${Math.min(...built).toFixed(1)} ms, ${ratio.toFixed(1)}x the ${Math.min(...parsed).toFixed(2)} ms to parse its spans (first build ${cold.toFixed(1)} ms)`);
+    expect(ratio).toBeLessThan(12);
     expect(detail!.root).toMatchObject({ id: "chief~c1", title: "Tidy the CRM please", tools: 250 });
     const worker = detail!.turns[0]!.children.find((node): node is TraceTurn => node.kind === "turn")!;
     expect(worker.children.map((node) => node.kind)).toEqual(["step", "group"]);

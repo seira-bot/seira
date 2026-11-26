@@ -132,6 +132,7 @@ describe("old links", () => {
     expect(where("remote")).toEqual({ page: "phone" });
     expect(resolveSettingsTarget("remote", fullContext({ client: true }))).toEqual({ page: "app", anchor: "your-computers" });
     expect(where("engines")).toEqual({ page: "ai", anchor: "providers" });
+    expect(where("aiPool")).toEqual({ page: "ai", anchor: "ai-pool" });
     expect(where("connections")).toEqual({ page: "ai", anchor: "ai-keys" });
     expect(where("imageGeneration")).toEqual({ page: "ai", anchor: "images" });
     expect(where("computer")).toEqual({ page: "desktops" });

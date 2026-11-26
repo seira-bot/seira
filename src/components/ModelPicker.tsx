@@ -2,7 +2,7 @@ import { engineDisplayName } from "@/lib/engine-rail";
 import { modelLabel, modelProvider } from "@/lib/model-label";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, KeyRound, Loader2, RefreshCw, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, KeyRound, Layers, Loader2, RefreshCw, X } from "lucide-react";
 import { useStore, currentTaskBot, type Bot, type InstanceInfo, type ModelSelection } from "@/state/store"; import { sameFields, useStoreActions, useStoreSelector } from "@/state/store-select";
 import type { EffortLevel } from "../../shared/wire";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "@/lib/custom-models";
@@ -25,7 +25,7 @@ import { useMenuMotion } from "./MenuMotion";
 import { SimpleModelMenu, type SimpleThinking } from "./SimpleModelMenu";
 import { useProviderOrder } from "@/lib/provider-health";
 import { ProviderMenu } from "./ProviderMenu";
-import { apiKeysLabel, ClaudeAccountSelect, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch } from "./ModelPickerFull";
+import { apiKeysLabel, ClaudeAccountSelect, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch, ScopeToggle } from "./ModelPickerFull";
 import { MENU_LABEL, MENU_LINE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING } from "./menu-recipe";
 import { modelMenuKey, modelMenuPointerMove } from "./model-menu-keys";
 import { lockedWhileBusy, offersReasoning, useRefocusAfterPick, variantChoices, variantLabel } from "./model-picker-reasoning";
@@ -42,6 +42,7 @@ import { threadsOnOwnModel } from "../../shared/thread-model";
 import { ThreadModelsLine } from "./ThreadModelsLine";
 import { USAGE_WARN_WIDENS, UsageBars, UsageMenuRows } from "./EngineUsage";
 import { Select } from "./Select";
+import { AiPoolRow, useAiPoolChoice } from "./ModelPickerPool";
 
 const COMPACT_MODEL_COUNT = 5;
 
@@ -218,7 +219,7 @@ export function ModelPicker({
   label?: ReactNode;
   size?: "sm" | "md";
 }) {
-  const { dispatch: storeDispatch, refreshInstances, refreshModels: refreshInstanceModels } = useStoreActions(), state = useStoreSelector((s) => ({ instances: s.instances, modelVariantSessions: s.modelVariantSessions, profile: s.bots.find((candidate) => candidate.id === shown.id) }), sameFields);
+  const { dispatch: storeDispatch, refreshInstances, refreshModels: refreshInstanceModels } = useStoreActions(), state = useStoreSelector((s) => ({ instances: s.instances, modelVariantSessions: s.modelVariantSessions, profile: s.bots.find((candidate) => candidate.id === shown.id), aiPool: s.config?.aiPool }), sameFields);
   const [open, setOpen] = useState(false);
   const { bot, dispatch } = useAiSwitch({ bot: shown, threadId, contained, dispatch: storeDispatch, setOpen: (next) => (next ? openMenu() : setOpen(false)) });
   const locked = lockedWhileBusy(state, bot, contained, threadId);
@@ -236,7 +237,7 @@ export function ModelPicker({
   const simpleUpdatesBotDefault = ownerOrAdmin === true;
   const [fullView, setFullView] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<{ botId: string; threadId: string;
-    selection: ModelSelection; updateBotDefault: boolean; name: string } | null>(null);
+    selection: ModelSelection; updateBotDefault: boolean; aiPool?: boolean; name: string } | null>(null);
   const [placement, setPlacement] = useState<PickerPlacement | null>(null);
   const [changedBotModel, setChangedBotModel] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -469,9 +470,11 @@ export function ModelPicker({
     dispatch({ type: "setModel", botId: bot.id, threadId: threadId ?? bot.threadId, updateBotDefault: false, selection: profile.modelSelection });
   };
 
-  const pick = (instance: InstanceInfo, model: string, variant?: string) => {
+  const pick = (instance: InstanceInfo, model: string, variant?: string, pooled?: boolean) => {
     if (bot.busy || instance.policy) return;
     const nextSelection = modelSelectionForPick(selection, instance, model);
+    const poolOn = state.aiPool?.enabled || profile.tasks?.find((task) => task.threadId === (threadId ?? bot.threadId))?.aiPool === "auto";
+    const aiPool = pooled ?? (poolOn && (variant === undefined || instance.instanceId !== selection.instanceId || model !== selection.model) ? false : undefined);
     if (variant !== undefined) nextSelection.variant = variant;
     const updateBotDefault = !threadId || (simpleUpdatesBotDefault && (simpleView || scope === "bot"));
     const targets = [currentTaskBot(profile, threadId ?? bot.threadId), ...(updateBotDefault ? [profile] : [])];
@@ -479,7 +482,7 @@ export function ModelPicker({
       state.instances.find((candidate) => candidate.instanceId === target.modelSelection.instanceId)?.driverKind,
       instance.driverKind))) {
       setPendingSwitch({ botId: bot.id, threadId: threadId ?? bot.threadId,
-        selection: nextSelection, updateBotDefault, name: modelLabel(instance, model) });
+        selection: nextSelection, updateBotDefault, ...(aiPool === undefined ? {} : { aiPool }), name: modelLabel(instance, model) });
       close(false);
       return;
     }
@@ -488,14 +491,20 @@ export function ModelPicker({
       botId: bot.id,
       threadId: threadId ?? bot.threadId,
       updateBotDefault,
-      selection: nextSelection,
+      selection: nextSelection, ...(aiPool === undefined ? {} : { aiPool }),
     });
     if (updateBotDefault && threadId) setChangedBotModel(true);
     // A model with reasoning levels keeps the menu open, so its level can be set next without opening it again;
     // picking a variant row already sets that level.
-    if (variant !== undefined || contained || !offersReasoning(state, instance, nextSelection, threadId ?? bot.threadId)) close(true);
+    if (variant !== undefined || contained || pooled || !offersReasoning(state, instance, nextSelection, threadId ?? bot.threadId)) close(true);
     else refocusAfterPick();
   };
+
+  const poolMark = threadId ? profile.tasks?.find((task) => task.threadId === threadId) : undefined;
+  const poolChoice = useAiPoolChoice({ config: state, instances, selection, botModel: profile.modelSelection, name: modelName(active, selection.model, selection.variant), canChange: !bot.busy && !locked,
+    task: poolMark && { modelSelection: selection, aiPool: poolMark.aiPool, followsBotModel: poolMark.followsBotModel },
+    onPick: (to) => { const target = instances.find((candidate) => candidate.instanceId === to.instanceId); if (target) pick(target, to.model, to.variant, true); },
+    onPin: () => { if (active) pick(active, selection.model, selection.variant, false); } });
 
   const resetVariant = contained && selection.variant !== undefined ? () => {
     const { variant: _variant, ...nextSelection } = selection;
@@ -606,7 +615,7 @@ export function ModelPicker({
     "aria-expanded": open && !locked,
     "aria-haspopup": "dialog" as const,
     "aria-controls": open ? menuId : undefined,
-    title: `${summary}${followLine}${attentionLine}${busyLine}`,
+    title: `${summary}${poolChoice.title ? `\n${poolChoice.title}` : ""}${followLine}${attentionLine}${busyLine}`,
   };
 
   const trigger = advanced ? (
@@ -627,6 +636,7 @@ export function ModelPicker({
         <span data-model-account-compact className="hidden max-w-20 truncate @max-4xl/chathead:inline">{engineDisplayName(active)}</span>
       )}
       <span className={cn("flex min-w-0 items-center gap-1", !contained && active && "@max-4xl/chathead:hidden")}>
+        {poolChoice.runs && <Layers data-ai-pool-mark size={12} aria-hidden="true" className="shrink-0 text-ink-secondary" />}
         <span className="max-w-[160px] truncate">
           {active && showActiveAccount && (
             <span data-model-account className="text-ink-secondary">{engineDisplayName(active)} · </span>
@@ -671,6 +681,7 @@ export function ModelPicker({
           : <span className="size-3.5 rounded-full bg-ink/[0.08]" aria-hidden="true" />}
         {attention && <span data-model-attention className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full bg-warning ring-[1.5px] ring-app" />}
       </span>
+      {poolChoice.runs && <Layers data-ai-pool-mark size={12} aria-hidden="true" className="mr-1 shrink-0 text-ink-secondary" />}
       <span className={cn("min-w-0 truncate", !contained && "max-w-[160px]")}>{modelName(active, selection.model)}</span>
       {selection.variant !== undefined && <span className="shrink-0 whitespace-pre">{variantSuffix(active, selection.model, selection.variant)}</span>}
       {selection.variant === undefined && selection.effort && <span data-model-effort className="shrink-0 whitespace-pre">{` · ${effortLabel(selection.effort)}`}</span>}
@@ -702,6 +713,7 @@ export function ModelPicker({
           </button>
         </div>
       )}
+      {poolChoice.row && <AiPoolRow row={poolChoice.row} />}
       {follows !== undefined && (
         <FollowBotModelRow name={profile.name} model={botModelName} follows={follows} onPick={pickBotModel} />
       )}
@@ -709,22 +721,7 @@ export function ModelPicker({
         {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail} onAddApiKeys={remote ? undefined : openApiKeys} health={health} />}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-          {threadId && simpleUpdatesBotDefault && (
-            <div className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2">
-              <div role="group" aria-label={t("model.scope.label")} className="flex gap-1">
-                {(["thread", "bot"] as const).map((value) => (
-                  <button key={value} type="button" aria-pressed={scope === value} onClick={() => setScope(value)}
-                    className={cn("h-6 rounded-full px-2.5 text-[12px] leading-4",
-                      scope === value ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
-                    {value === "bot" ? t("model.scope.bot") : t("model.scope.thread")}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1.5 text-[12px] leading-4 text-ink-tertiary">
-                {scope === "bot" ? t("model.scope.botHelp") : t("model.scope.threadHelp")}
-              </p>
-            </div>
-          )}
+          {threadId && simpleUpdatesBotDefault && <ScopeToggle scope={scope} onChange={setScope} />}
           {railInstance ? (
             <>
               <div className="shrink-0 px-3.5 pb-2 pt-3">
@@ -970,7 +967,7 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
-      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} />
+      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} onClose={() => close(false)} />
       {bot.busy ? <BusyModelMenu bot={shown} threadId={threadId} updateBotDefault={busyUpdatesBotDefault} variants={Boolean(active?.capabilities?.modelVariants)} /> : simpleMenu ? (
         <SimpleModelMenu
           menu={simpleMenu}
@@ -978,6 +975,7 @@ export function ModelPicker({
           bot={profile}
           botModel={{ label: modelName(botModelInstance, profile.modelSelection.model, profile.modelSelection.variant), title: botModelName }}
           thinking={thinking}
+          pool={poolChoice.row}
           idPrefix={menuId}
           onQuery={setQuery}
           onPick={pick}
@@ -1029,7 +1027,7 @@ export function ModelPicker({
           }
           dispatch({ type: "setModel", botId: pendingSwitch.botId, threadId: pendingSwitch.threadId,
             selection: pendingSwitch.selection, updateBotDefault: pendingSwitch.updateBotDefault,
-            resetApprovalToAsk: true });
+            ...(pendingSwitch.aiPool === undefined ? {} : { aiPool: pendingSwitch.aiPool }), resetApprovalToAsk: true });
           if (pendingSwitch.updateBotDefault && threadId) setChangedBotModel(true);
           setPendingSwitch(null);
         }}

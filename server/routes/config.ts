@@ -35,6 +35,7 @@ import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import { forgetKey } from "../key-rejections.ts";
 import type { ComputerIdleTimer } from "../computer-idle.ts";
 import { PROVIDER_KEY_KINDS } from "../provider-key-check.ts";
+import type { PeopleLimit } from "../people-limit.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { SharedComputerControl } from "../shared-computer-control.ts";
 import type { SharedComputers } from "../shared-computers.ts";
@@ -63,6 +64,7 @@ export interface ConfigRouteDeps {
   cfg: AppConfig;
   registry: Pick<ProviderRegistry, "get" | "forgetSnapshots">;
   sessions: Pick<SessionRegistry, "revalidateEmailSessions">;
+  people: Pick<PeopleLimit, "listsChanging">;
   browserCleanup: Pick<BrowserCleanupCoordinator, "hasPendingProfile" | "prepare" | "abort" | "commit" | "ensure">;
   browserLive: Pick<BrowserLive, "closeAll" | "closeForSession">;
   browserRuntime: Pick<BrowserRuntime, "heldBy">;
@@ -117,7 +119,7 @@ export interface ConfigRouteDeps {
 
 export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
   const {
-    store, cfg, registry, sessions, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
+    store, cfg, registry, sessions, people, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
     closeBrowser, browserEngineSwitched, browserEngine, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy, localVmModeChanging,
     providerConfigBusy, computerProviderConfigTransitions, managedComputerOwners, providerOperationConflict,
@@ -163,6 +165,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       // Saved, it would be overruled by the environment at once: say so instead of answering 200 with nothing changed.
       const signInPinned = signInEnvRefusal(patch.signIn);
       if (signInPinned) return json(res, 409, { error: signInPinned, code: "signin_env" });
+      const peopleFull = (limit: number) => json(res, 409, { ...userError("serverError.people.full", { limit }), code: "people_full" });
+      let peopleChange = patch.signIn ? people.listsChanging(patch.signIn) : null;
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       if (patch.newBotDefaults) {
         if (patch.newBotDefaults.profile.modelSelection) {
           const checked = checkedModelSelection(patch.newBotDefaults.profile.modelSelection);
@@ -365,6 +370,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         const conflict = providerOperationConflict(provider);
         if (conflict) return json(res, 409, { error: conflict });
       }
+      // Asked again after the awaits: someone who signed in meanwhile may now hold the last place.
+      if (patch.signIn) peopleChange = people.listsChanging(patch.signIn);
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       // Only the named keys change; merged with no await before the save.
       if (patch.opencodeGo?.providerKeys) {
         const merged = mergeOpenCodeProviderKeys(cfg, patch.opencodeGo.providerKeys);
@@ -465,6 +473,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       }
       let browserReferenceCleanupError: unknown = null;
       if (patch.signIn !== undefined) {
+        if (peopleChange && "saved" in peopleChange) peopleChange.saved();
         sessions.revalidateEmailSessions();
         resyncOpenCodeProviderKeys();
       }

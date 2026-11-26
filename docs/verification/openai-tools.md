@@ -65,6 +65,12 @@ announcement recovery. Earlier tool results stay in the conversation, and the
 nudge asks the model not to repeat an operation that may already have taken
 effect; whether a call runs is still decided by the turn's permissions.
 
+A reply that reaches the provider's output limit while it writes a tool call runs none of its calls. The runtime tells the model that nothing ran and asks for smaller steps, at most twice in one turn. A third cut ends the turn and says so. A transient provider failure (HTTP 429 or 5xx, a reset connection, an idle stream, or a stream that ends early) gets the same retries on every round of a turn while no text has streamed. A resend never runs a handled call again.
+
+```sh
+pnpm exec vitest run server/drivers/openai-chat-protocol.test.ts server/drivers/openai-chat-stream-retry.test.ts server/drivers/openai-chat-output-limit.test.ts
+```
+
 One turn stops after 64 model steps, or 200 tool calls in total (each reply
 may carry up to 32). The stop says so in one line with one next action: the
 steps so far already ran, so ask only for what's left (retrying the whole task

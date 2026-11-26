@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, BellDot, Check, CheckCheck, ChevronRight, ClipboardCopy, Copy, Crown, FolderMinus, FolderOpen, FolderPlus, Loader2, MessagesSquare, MoreHorizontal, Pause, Pencil, Pin, PinOff, Play, SquarePen, Star, Trash2, Users } from "lucide-react";
+import { Archive, BellDot, Check, CheckCheck, ChevronRight, ClipboardCopy, Copy, Crown, FolderMinus, FolderOpen, FolderPlus, Loader2, MessagesSquare, MoreHorizontal, Pause, Pencil, Pin, PinOff, Play, SquarePen, Star, Trash2, UserPlus, Users } from "lucide-react";
 import { isBotHeld, isEveryBotPaused, isPausedHere, setEveryBotPaused, setPaused } from "@/lib/bot-pause";
 import { api, useStore, openBot, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -39,6 +39,7 @@ export function BotContextMenu({
   onNewTaskFolder,
   onRename,
   onNewSection,
+  onInvite,
 }: {
   menu: MenuState | null;
   onClose: () => void;
@@ -50,6 +51,8 @@ export function BotContextMenu({
   onRename?: (botId: string) => void;
   /** Simple: "New department…" names a department in the sidebar, with this bot in it. */
   onNewSection?: (botId: string) => void;
+  /** Given only where the admin may invite people to this server. */
+  onInvite?: (botId: string) => void;
 }) {
   const motion = useHeldMenuMotion(menu);
   const simpleMenu = !useAdvancedMode();
@@ -217,6 +220,8 @@ export function BotContextMenu({
     t(everyBotPaused ? "pause.resumeAll" : "pause.pauseAll"),
     () => { void setEveryBotPaused(!everyBotPaused).catch((error: unknown) => dispatch({ type: "error", message: error instanceof Error ? error.message : String(error) })); });
 
+  const invite = onInvite ? item(<UserPlus size={16} className="text-ink-secondary" />, t("invite.botMenu"), () => onInvite(bot.id)) : null;
+
   if (simpleMenu) {
     const showFlyout = (key: Flyout, focus: boolean) => {
       more.openNow(key);
@@ -336,6 +341,7 @@ export function BotContextMenu({
             () => dispatch({ type: "updateBot", botId: bot.id, patch: { pinned: !bot.pinned } }),
           ),
           moveToSection,
+          invite,
           readState,
           ...threads,
           ...(rename ? [divider("rename"), rename] : []),
@@ -421,6 +427,7 @@ export function BotContextMenu({
           onClose();
           onMoveToSection(bot.id);
         }),
+        invite,
         item(<BellDot size={16} className="text-ink-secondary" />, t("sidebar.bot.markUnread"), () =>
           dispatch({ type: "markUnread", botId: bot.id }),
         ),

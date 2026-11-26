@@ -5,6 +5,7 @@
 # - the token can only read the repository, and no job asks for more;
 # - no step reads a secret, every checkout drops its credentials, and every action is pinned to a full commit SHA.
 # No workflow in this repository creates a tag or publishes a release or a package (docs/releasing.md).
+# One exception: snap-publish.yml uploads the desktop snap to the Snap Store from the `snap-store` environment.
 # scripts/ci-workflow.test.ts holds these rules.
 name: CI
 

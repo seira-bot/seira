@@ -57,7 +57,8 @@ export function smtpOptions(url: string) {
 const digest = (code: string) => createHash("sha256").update(code).digest();
 
 export function createSignInMail(options: { url: string; from?: string; now?: () => number; transport?: MailTransport }): SignInMail {
-  const now = options.now ?? Date.now;
+  // Elapsed time, not the wall clock: a clock step (NTP, a resumed VM, a changed date) must not stretch or end a code's life or a send limit.
+  const now = options.now ?? (() => performance.now());
   const pending = new Map<string, { hash: Buffer; sentAt: number; tries: number }>();
   let transport: Promise<MailTransport> | undefined = options.transport ? Promise.resolve(options.transport) : undefined;
   const from = (): string => {

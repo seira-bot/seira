@@ -2,13 +2,17 @@ import { Children, createElement, isValidElement, type ReactElement, type ReactN
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConfigStatus, InstanceInfo } from "@/state/store";
+import type { EngineLimit } from "@/lib/limit-resets";
 import { AiPoolSettings } from "./AiPoolSettings";
-import { Switch } from "./SettingsPrimitives";
+import { AddRows, MemberRows } from "./AiPoolMembers";
+import { SettingsLook, Switch } from "./SettingsPrimitives";
 
 const fixture = vi.hoisted(() => ({
   values: [] as unknown[], index: 0,
   config: {} as Pick<ConfigStatus, "aiPool">,
   instances: [] as InstanceInfo[],
+  bots: [] as { id: string; name: string; modelSelection: { instanceId: string; model: string } }[],
+  limits: [] as EngineLimit[],
   api: vi.fn(), dispatch: vi.fn(),
 }));
 vi.mock("react", async (original) => ({
@@ -23,235 +27,251 @@ vi.mock("react", async (original) => ({
     return fixture.values[index] ??= { current: initial };
   },
 }));
-vi.mock("@/state/store", () => ({
+vi.mock("@/state/store", async (original) => ({
+  ...await original<typeof import("@/state/store")>(),
   api: fixture.api,
-  useStore: () => ({ state: { config: fixture.config, instances: fixture.instances }, dispatch: fixture.dispatch }),
+  useStore: () => ({ state: { config: fixture.config, instances: fixture.instances, bots: fixture.bots }, dispatch: fixture.dispatch }),
+}));
+vi.mock("@/lib/limit-resets", async (original) => ({
+  ...await original<typeof import("@/lib/limit-resets")>(),
+  useEngineLimits: () => fixture.limits,
 }));
 
-const FOLD = 7;
-const MORE = 3;
+const NEEDS_SECOND = 4;
+const FOLD = 5;
 
 type Node = ReactElement<Record<string, unknown> & { children?: ReactNode }>;
 function nodes(value: ReactNode): Node[] {
   return Children.toArray(value).flatMap((child) => {
     if (!isValidElement(child)) return [];
     const node = child as Node;
+    if (typeof node.type === "function" && node.type.name === "ModeChoice") return [node, ...nodes((node.type as (props: unknown) => ReactNode)(node.props))];
+    if (node.type === MemberRows || node.type === AddRows) return [node, ...nodes((node.type as (props: unknown) => ReactNode)(node.props))];
     return [node, ...nodes(node.props.children)];
   });
 }
 function render() {
   let tree: ReactNode = null;
   function Capture() { fixture.index = 0; tree = AiPoolSettings(); return tree; }
-  const html = renderToStaticMarkup(createElement(Capture));
+  const html = renderToStaticMarkup(createElement(SettingsLook.Provider, { value: true }, createElement(Capture)));
   const all = nodes(tree);
-  const byId = (id: string) => all.find((node) => node.props.id === id)!;
-  return {
-    html,
-    toggle: all.find((node) => node.type === Switch)!,
-    mode: byId("ai-pool-mode"),
-    addEngine: byId("ai-pool-add-engine"),
-    addModel: byId("ai-pool-add-model"),
-    levels: byId("ai-pool-levels"),
-    floor: byId("ai-pool-floor"),
-    button: (label: string) => all.find((node) => node.type === "button" && node.props["aria-label"] === label)!,
-  };
+  const byId = (id: string) => all.find((node) => node.props.id === id);
+  const button = (label: string) => all.find((node) => node.type === "button" && node.props["aria-label"] === label);
+  const radio = (label: string) => all.find((node) => node.type === "button" && node.props.role === "radio" && node.props.children === label);
+  return { html, toggle: all.find((node) => node.type === Switch)!, byId, button, radio, all };
 }
-const click = (node: Node) => (node.props.onClick as () => void)();
-const blur = (node: Node) => (node.props.onBlur as () => void)();
-const choose = (node: Node, value: string) => (node.props.onChange as (event: { target: { value: string } }) => void)({ target: { value } });
+const click = (node: Node | undefined) => (node!.props.onClick as () => void)();
+const choose = (node: Node | undefined, value: string) => (node!.props.onChange as (event: { target: { value: string } }) => void)({ target: { value } });
 const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 const sent = (call = 0) => JSON.parse((fixture.api.mock.calls[call]![1] as { body: string }).body) as { aiPool: Record<string, unknown> };
 
-const claude = { instanceId: "claude", model: "c1" };
-const codex = { instanceId: "codex", model: "x1" };
-const gemini = { instanceId: "gemini", model: "g1" };
-const engine = (id: string, name: string, model: string): InstanceInfo => ({
-  instanceId: id, driverKind: "codex", displayName: name,
-  snapshot: { state: "available", authenticated: true }, models: { default: model, options: [{ id: model, label: `${name} model` }] },
+const claude = { instanceId: "claude", model: "claude-m" };
+const codex = { instanceId: "codex", model: "codex-m" };
+const gemini = { instanceId: "gemini", model: "gemini-m" };
+const engine = (id: string, name: string, kind = "codex", extra: Partial<InstanceInfo> = {}): InstanceInfo => ({
+  instanceId: id, driverKind: kind, displayName: name, access: "subscription",
+  snapshot: { state: "available", authenticated: true }, models: { default: `${id}-m`, options: [{ id: `${id}-m`, label: `${name} model` }] },
+  ...extra,
 });
+const limit = (id: string, usedPercent: number): EngineLimit => ({ engine: id, name: id, driver: "codex", window: null, usedPercent, resetsAt: null, blocked: false } as EngineLimit);
 
 beforeEach(() => {
   fixture.values = [];
   fixture.config = {};
-  fixture.instances = [engine("claude", "Claude", "c1"), engine("codex", "Codex", "x1"), engine("gemini", "Gemini", "g1")];
+  fixture.limits = [];
+  fixture.bots = [];
+  fixture.instances = [engine("claude", "Claude", "claudeAgent"), engine("codex", "Codex", "codex"), engine("gemini", "Gemini", "antigravityAgent")];
   fixture.api.mockReset();
-  fixture.dispatch.mockReset().mockImplementation(({ config }: { config: ConfigStatus }) => { fixture.config = config; });
+  fixture.dispatch.mockReset().mockImplementation((action: { type: string; config?: ConfigStatus }) => { if (action.config) fixture.config = action.config; });
 });
 
 describe("AiPoolSettings", () => {
-  it("starts off with one short line; Learn more explains both modes, shared plans and pay-per-use keys", () => {
+  it("starts off with one short line and no other control", () => {
     const view = render();
     expect(view.toggle.props.checked).toBe(false);
-    expect(view.mode).toBeUndefined();
-    expect(view.addEngine).toBeUndefined();
-    expect(view.html).toContain("Use more than one AI for your conversations, so you run out of usage less often.");
-    expect(view.html).toContain("Learn more");
-    expect(view.html).not.toContain("Two sign-ins");
-    fixture.values[MORE] = true;
-    const more = render().html;
-    expect(more).toContain("Even: a conversation moves to another AI in the pool");
-    expect(more).toContain("In order: each turn uses the first AI in the list that has usage left. A conversation goes back to an earlier AI when it has usage left again.");
-    expect(more).toContain("Two sign-ins to the same AI plan can&#x27;t share a pool.");
-    expect(more).toContain("In even mode, a pay-per-use key is used only when the AIs with a plan are low. A key may cost money.");
+    expect(view.toggle.props["aria-label"]).toBe("Share usage across AIs");
+    expect(view.html).toContain("Your bots share usage across several AIs");
+    expect(view.radio("Balance usage")).toBeUndefined();
+    expect(view.html).not.toContain("How to share");
   });
 
-  it("turns on and saves at once when two AIs are already in the pool", async () => {
-    fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex] } };
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
+  it("turns on with the AIs that are signed in, keeping one sign-in per plan", async () => {
+    fixture.instances.push(engine("claude2", "Claude 2", "claudeAgent"));
+    fixture.limits = [limit("claude", 50), limit("codex", 10), limit("gemini", 90), limit("claude2", 20)];
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [codex, claude, gemini] } });
     click(render().toggle);
     await flush();
-    expect(fixture.api).toHaveBeenCalledTimes(1);
     expect(fixture.api.mock.calls[0]![0]).toBe("/api/config");
-    expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
-    expect(render().toggle.props.checked).toBe(true);
+    expect(sent().aiPool.enabled).toBe(true);
+    expect((sent().aiPool.members as { instanceId: string }[]).map((m) => m.instanceId)).toEqual(["codex", "claude2", "gemini"]);
   });
 
-  it("with one AI it does not save and says what is missing", () => {
-    fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude] } };
+  it("with one signed-in AI it does not save and offers to add one", () => {
+    fixture.instances = [engine("codex", "Codex")];
     click(render().toggle);
     expect(fixture.api).not.toHaveBeenCalled();
-    expect(render().toggle.props.checked).toBe(true);
-    expect(render().html).toContain("Add at least two AIs.");
-  });
-
-  it("adds AIs one at a time, hides the ones already in the list, and saves with the second", async () => {
-    click(render().toggle);
-    expect(render().html).toContain("Add at least two AIs.");
-    choose(render().addEngine, "claude");
-    expect(render().html).toContain('aria-label="Model"');
-    choose(render().addModel, "c1");
-    expect(fixture.api).not.toHaveBeenCalled();
-    const view = render();
-    expect(view.html).toContain("Claude model");
-    expect(view.html).not.toContain('<option value="claude"');
-    expect(view.html).toContain('<option value="codex"');
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
-    choose(view.addEngine, "codex");
-    choose(render().addModel, "x1");
-    await flush();
-    expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
-  });
-
-  it("stops offering the add row at ten AIs", () => {
-    const many = Array.from({ length: 10 }, (_, i) => ({ instanceId: `e${i}`, model: "m" }));
-    fixture.config = { aiPool: { enabled: true, mode: "even", members: many } };
+    expect(fixture.values[NEEDS_SECOND]).toBe(true);
     const html = render().html;
-    expect(html).toContain("The pool holds up to 10 AIs.");
-    expect(html).not.toContain('aria-label="Add an AI"');
+    expect(html).toContain("Sign in to a second AI to share usage.");
+    expect(html).toContain("Add an AI");
   });
 
-  it("saves the new order when an AI moves up or down", async () => {
+  it("turns off at once", async () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: false, mode: "even", members: [claude, codex] } });
+    click(render().toggle);
+    await flush();
+    expect(sent()).toEqual({ aiPool: { enabled: false, mode: "even", members: [claude, codex] } });
+  });
+
+  it("shows the three modes as radios and saves the mode", async () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    const view = render();
+    expect(view.html).toContain('role="radiogroup"');
+    expect(view.html).toContain('aria-label="How to share"');
+    expect(view.radio("Balance usage")!.props["aria-checked"]).toBe(true);
+    expect(view.radio("Take turns")!.props["aria-checked"]).toBe(false);
+    expect(view.radio("In order")).toBeDefined();
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "turns", members: [claude, codex] } });
+    click(view.radio("Take turns"));
+    await flush();
+    expect(sent()).toEqual({ aiPool: { enabled: true, mode: "turns", members: [claude, codex] } });
+  });
+
+  it("shows each member with a status line, the next tag and named controls", () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    fixture.limits = [limit("claude", 70), limit("codex", 20)];
+    const view = render();
+    expect(view.html).toContain("30% left");
+    expect(view.html).toContain("80% left");
+    expect(view.html).toContain("Next");
+    expect(view.byId("ai-pool-model-claude")!.props["aria-label"]).toBe("Model for Claude");
+    expect(view.button("Move Claude up")!.props.disabled).toBe(true);
+    expect(view.button("Move Codex down")!.props.disabled).toBe(true);
+    expect(view.button("Remove Codex")).toBeDefined();
+  });
+
+  it("saves the new order, the model and a removal", async () => {
     fixture.config = { aiPool: { enabled: true, mode: "inOrder", members: [claude, codex, gemini] } };
-    expect(render().button("Move Claude up").props.disabled).toBe(true);
-    expect(render().button("Move Gemini down").props.disabled).toBe(true);
     fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "inOrder", members: [codex, claude, gemini] } });
     click(render().button("Move Codex up"));
     await flush();
-    expect(sent(0)).toEqual({ aiPool: { enabled: true, mode: "inOrder", members: [codex, claude, gemini] } });
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "inOrder", members: [codex, gemini, claude] } });
-    click(render().button("Move Claude down"));
+    expect(sent(0).aiPool.members).toEqual([codex, claude, gemini]);
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "inOrder", members: [codex, claude, gemini] } });
+    choose(render().byId("ai-pool-model-claude"), "other");
     await flush();
-    expect(sent(1)).toEqual({ aiPool: { enabled: true, mode: "inOrder", members: [codex, gemini, claude] } });
+    expect(sent(1).aiPool.members).toEqual([codex, { instanceId: "claude", model: "other" }, gemini]);
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "inOrder", members: [codex, gemini] } });
+    click(render().button("Remove Claude"));
+    await flush();
+    expect(sent(2).aiPool.members).toEqual([codex, gemini]);
   });
 
-  it("removes an AI, and does not save a pool left with one", async () => {
-    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex, gemini] } };
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, gemini] } });
+  it("turns the pool off, with a notice, when a removal leaves one AI", async () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: false, mode: "even", members: [claude] } });
     click(render().button("Remove Codex"));
     await flush();
-    expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, gemini] } });
-    click(render().button("Remove Gemini"));
-    expect(fixture.api).toHaveBeenCalledTimes(1);
-    expect(render().html).toContain("Add at least two AIs.");
+    expect(sent().aiPool).toEqual({ enabled: false, mode: "even", members: [claude] });
+    expect(render().html).toContain("The AI pool is off. It needs at least two AIs.");
   });
 
-  it("saves the mode", async () => {
+  it("adds an AI that is not in the pool", async () => {
     fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "inOrder", members: [claude, codex] } });
-    choose(render().mode, "inOrder");
+    const view = render();
+    expect(view.html).toContain("Add to the pool");
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex, gemini] } });
+    click(view.button("Add Gemini"));
     await flush();
-    expect(sent()).toEqual({ aiPool: { enabled: true, mode: "inOrder", members: [claude, codex] } });
+    expect(sent().aiPool.members).toEqual([claude, codex, gemini]);
   });
 
-  it("checks the levels and the floor before it saves, and saves them when they are valid", async () => {
+  it("dims a second sign-in to a pooled plan with the reason, and swaps on request", async () => {
+    fixture.instances.push(engine("claude2", "Claude 2", "claudeAgent"));
     fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    const view = render();
+    expect(view.html).toContain("Claude is already in the pool. The provider allows one sign-in per plan in a pool.");
+    expect(view.button("Add Claude 2")).toBeUndefined();
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [{ instanceId: "claude2", model: "claude2-m" }, codex] } });
+    click(view.button("Use Claude 2 instead of Claude"));
+    await flush();
+    expect(sent().aiPool.members).toEqual([{ instanceId: "claude2", model: "claude2-m" }, codex]);
+  });
+
+  it("offers a sign-in, not a swap, for a signed-out second sign-in to a pooled plan", () => {
+    fixture.instances.push(engine("claude2", "Claude 2", "claudeAgent", { snapshot: { state: "available", authenticated: false } }));
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    const view = render();
+    expect(view.html).toContain("Claude is already in the pool. The provider allows one sign-in per plan in a pool.");
+    expect(view.button("Use Claude 2 instead of Claude")).toBeUndefined();
+    click(view.button("Sign in to Claude 2"));
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "engines" });
+  });
+
+  it("shows a signed-out AI with a sign-in button that opens providers", () => {
+    fixture.instances.push(engine("grok", "Grok", "grokAgent", { snapshot: { state: "available", authenticated: false } }));
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    const view = render();
+    expect(view.html).toContain("Signed out");
+    click(view.button("Sign in to Grok"));
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "engines" });
+  });
+
+  it("stops offering the add rows at ten AIs", () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ instanceId: `e${i}`, model: "m" }));
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: many } };
+    const view = render();
+    expect(view.html).toContain("The pool holds up to 10 AIs.");
+    expect(view.button("Add Claude")!.props.disabled).toBe(true);
+  });
+
+  it("keeps reserve and steps behind More options, and saves levels that stay above the reserve", async () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    expect(render().byId("ai-pool-more")!.props.open).toBe(false);
     fixture.values[FOLD] = true;
-    choose(render().levels, "90, 90");
-    blur(render().levels);
-    expect(render().html).toContain("Each level must be lower than the one before it.");
-    choose(render().levels, "90, abc");
-    expect(render().html).toContain("Use whole numbers from 1 to 99, like 90, 80, 70.");
-    choose(render().levels, "100, 50");
-    expect(render().html).toContain("Use whole numbers from 1 to 99, like 90, 80, 70.");
-    choose(render().levels, "9 8 7 6 5 4 3 2 1 0");
-    expect(render().html).toContain("Use whole numbers from 1 to 99");
-    choose(render().levels, "99 98 97 96 95 94 93 92 91 90");
-    expect(render().html).toContain("Use between 1 and 9 levels.");
-    choose(render().levels, "90, 80");
-    choose(render().floor, "80");
-    expect(render().html).toContain("The floor must be lower than the last level.");
-    choose(render().floor, "99");
-    expect(render().html).toContain("The floor is a whole number from 0 to 98.");
-    blur(render().floor);
-    expect(fixture.api).not.toHaveBeenCalled();
-    choose(render().floor, "");
-    expect(render().html).not.toContain('role="alert"');
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], levels: [90, 70, 50] } });
-    choose(render().levels, "90, 70, 50");
-    blur(render().levels);
+    const view = render();
+    expect(view.byId("ai-pool-reserve")!.props["aria-label"]).toBe("Keep in reserve");
+    expect(view.byId("ai-pool-steps")!.props["aria-label"]).toBe("Switch in steps of");
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: [90, 80, 70, 60, 50, 40, 30] } });
+    choose(view.byId("ai-pool-reserve"), "20");
     await flush();
-    expect(sent(0)).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex], levels: [90, 70, 50] } });
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], levels: [90, 70, 50], floor: 40 } });
-    choose(render().floor, "40");
-    blur(render().floor);
+    const trimmed = [90, 80, 70, 60, 50, 40, 30];
+    expect(sent(0).aiPool).toEqual({ enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: trimmed });
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: [80, 60, 40] } });
+    choose(render().byId("ai-pool-steps"), "20");
     await flush();
-    expect(sent(1)).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex], levels: [90, 70, 50], floor: 40 } });
+    expect(sent(1).aiPool).toEqual({ enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: [80, 60, 40] });
   });
 
-  it("with no levels typed it sends none, so the usual levels apply", async () => {
-    fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex] } };
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
-    click(render().toggle);
-    await flush();
-    expect(sent().aiPool).not.toHaveProperty("levels");
-    expect(sent().aiPool).not.toHaveProperty("floor");
+  it("hides the steps outside balance mode", () => {
+    fixture.config = { aiPool: { enabled: true, mode: "turns", members: [claude, codex] } };
+    fixture.values[FOLD] = true;
+    const view = render();
+    expect(view.byId("ai-pool-reserve")).toBeDefined();
+    expect(view.byId("ai-pool-steps")).toBeUndefined();
   });
 
-  it("shows a refusal from the server as it came, keeps the choice, and disables the controls while it saves", async () => {
-    fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex] } };
-    let reject!: (cause: Error) => void;
-    fixture.api.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
-    click(render().toggle);
-    expect(render().toggle.props.disabled).toBe(true);
-    expect(render().button("Move Claude down").props.disabled).toBe(true);
-    reject(new Error("Fixture refusal from the server."));
-    await flush();
+  it("lists the bots that do not use the pool", () => {
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    fixture.bots = [
+      { id: "b1", name: "Alpha", modelSelection: claude },
+      { id: "b2", name: "Beta", modelSelection: gemini },
+    ];
     const html = render().html;
-    expect(html).toContain('role="alert"');
-    expect(html).toContain("Fixture refusal from the server.");
-    expect(render().toggle.props.checked).toBe(true);
-    expect(render().toggle.props.disabled).toBe(false);
+    expect(html).toContain("1 of 2 bots");
+    expect(html).toContain("Bots not using the pool (1)");
+    expect(html).toContain("Beta");
+    expect(html).toContain("data-ai-pool-idle");
   });
 
-  it("turns off at once, keeps the AIs, and shows a failed turn-off under the switch", async () => {
-    fixture.config = { aiPool: { enabled: true, mode: "inOrder", members: [claude, codex], levels: [80, 40], floor: 5 } };
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: false, mode: "inOrder", members: [claude, codex], levels: [80, 40], floor: 5 } });
+  it("shows the error and drops the draft when a save fails", async () => {
+    fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex] } };
+    fixture.api.mockRejectedValueOnce(new Error("Nope"));
     click(render().toggle);
     await flush();
-    expect(sent()).toEqual({ aiPool: { enabled: false, mode: "inOrder", members: [claude, codex], levels: [80, 40], floor: 5 } });
-    expect(render().toggle.props.checked).toBe(false);
-    fixture.config = { aiPool: { enabled: true, mode: "inOrder", members: [claude, codex] } };
-    fixture.values = [];
-    fixture.api.mockRejectedValueOnce(new Error("Fixture turn-off failed."));
-    click(render().toggle);
-    await flush();
-    expect(render().html).toContain("Fixture turn-off failed.");
-  });
-
-  it("shows a saved AI that is no longer available", () => {
-    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, { instanceId: "gone", model: "old" }] } };
-    const html = render().html;
-    expect(html).toContain("gone");
-    expect(html).toContain("old (unavailable)");
+    const view = render();
+    expect(view.html).toContain('role="alert"');
+    expect(view.html).toContain("Nope");
+    expect(view.toggle.props.checked).toBe(false);
   });
 });

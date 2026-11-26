@@ -15,10 +15,11 @@ const SELECTED_THREAD_ROUTE = /^\/api\/bots\/([\w-]+)\/(?:messages(?:\/guarded)?
 
 /** "no such conversation" when the request names someone else's private chat in its path or query. Its JSON body is
  * checked as a route reads it: one that names such a chat, or leaves out the conversation on a route that then acts on a
- * selected conversation that is someone else's, fails the read with 404. Nothing at all off a Team Cloud. */
+ * selected conversation that is someone else's, fails the read with 404. Off a Team Cloud it applies only to a member
+ * whose access is limited, where a conversation of a bot outside that access is someone else's too. */
 export function hiddenThreadRefusal(req: IncomingMessage, path: string, query: URLSearchParams, visible: VisibleSet,
   selectedThread: (botId: string) => string | undefined): string | null {
-  if (!visible.filtersThreads) return null;
+  if (!visible.filtersThreads && !visible.limitedToDepartments) return null;
   if (requestThreadIds(path, query).some((id) => visible.hides(id))) return NO_SUCH_CONVERSATION;
   const selectedRoute = SELECTED_THREAD_ROUTE.exec(path);
   onParsedBody(req, (body) => {

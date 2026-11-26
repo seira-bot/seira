@@ -453,7 +453,7 @@ describe("what Responses can answer", () => {
     }));
     const { end, events: seen } = await f.turn();
     expect(end).toMatchObject({ ok: false });
-    expect(failureOf(seen)).toContain("truncated");
+    expect(failureOf(seen)).toContain("reached its output limit");
     expect(seen.some((event) => event.type === "item.started")).toBe(false);
   });
 

@@ -8,6 +8,7 @@ import { MEETING_TOOL_NAMES } from "../server/drivers/agents-meeting-tools.ts";
 import { CORE_TOOLS } from "../server/drivers/agents-tool-groups.ts";
 import { RELEASE_NOTES } from "../src/lib/release-notes.ts";
 import { APP_FEATURE_DOES_MAX, APP_FEATURES, findAppFeatures, INTERNAL_AGENT_TOOLS } from "./app-features.ts";
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
 import { AUTOMATION_VIEWS } from "./automation-views.ts";
 import { BUILT_IN_SLASH_COMMANDS } from "./skill-command.ts";
 import { MENTION_ROW_KINDS } from "../src/lib/mention-row-kinds.ts";
@@ -15,7 +16,7 @@ import { MENTION_ROW_KINDS } from "../src/lib/mention-row-kinds.ts";
 const FIX = "Add or update its entry in shared/app-features.ts, so a bot can tell the person where it is and what it does.";
 const golden = JSON.parse(readFileSync(fileURLToPath(new URL("../server/drivers/agents-catalog-goldens/full.tools-list.json", import.meta.url)), "utf8")) as { tools: Array<{ name: string }> };
 const everyProfileOn = { skillAuthoring: true, sharedComputers: true, voiceNotes: true, xResearch: true, research: true, cloudHome: false, memoryEnabled: true, chief: true, botId: WATCHER_OPTIONS_CARD_BOT_ID, team: true, seira: true, computerSelection: true, imageGeneration: true, meetings: true, appHosting: true };
-const agentTools = new Set([...golden.tools.map((tool) => tool.name), ...availableTools(everyProfileOn).map((tool) => tool.name), ...CORE_TOOLS, ...MEETING_TOOL_NAMES]);
+const agentTools = new Set([...golden.tools.map((tool) => tool.name), ...availableTools(everyProfileOn).map((tool) => tool.name), ...CORE_TOOLS, ...MEETING_TOOL_NAMES, ...GITHUB_APP_TOOL_NAMES]);
 const claimed = new Set(APP_FEATURES.flatMap((feature) => feature.tools ?? []));
 const releaseNoteIds = RELEASE_NOTES.flatMap((note) => note.items.map((item) => item.id));
 

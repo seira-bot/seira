@@ -185,6 +185,10 @@ describe("aiPoolSchema", () => {
     const parsed = aiPoolSchema.parse({ enabled: true, members: [member("a"), member("b")] });
     expect(parsed.mode).toBe("even");
   });
+  it("accepts the turns mode and refuses an unknown mode", () => {
+    expect(aiPoolSchema.parse({ enabled: true, mode: "turns", members: [member("a"), member("b")] }).mode).toBe("turns");
+    expect(message({ enabled: true, mode: "random", members: [member("a"), member("b")] })).not.toBeNull();
+  });
   it("refuses fewer than two members when on", () => {
     expect(message({ enabled: true, members: [member("a")] })).toBe("Choose at least two AIs before you turn on the AI pool.");
     expect(message({ enabled: false, members: [member("a")] })).toBeNull();

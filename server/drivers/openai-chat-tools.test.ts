@@ -1024,8 +1024,8 @@ describe("structured tool execution boundaries", () => {
     });
     await f.start({ approvalMode: "full" });
     expect(await f.completed()).toMatchObject({ ok: false });
-    expect(f.requests).toHaveLength(2);
-    expect(f.requests[1].messages.find((message) => message.role === "assistant")).toMatchObject({ reasoning_content: "Synthetic reasoning." });
+    expect(f.requests).toHaveLength(status === 500 ? 4 : 2);
+    for (const request of f.requests.slice(1)) expect(request.messages.find((message) => message.role === "assistant")).toMatchObject({ reasoning_content: "Synthetic reasoning." });
     expect(f.effects()).toEqual([{ name: "receipt", value: "done" }]);
   });
 
@@ -1281,7 +1281,6 @@ describe("structured tool execution boundaries", () => {
     { scenario: "duplicate call IDs", frames: [chunk({ tool_calls: [toolCall(), { ...toolCall(), index: 1 }] }, "tool_calls")] },
     { scenario: "missing call ID", frames: [chunk({ tool_calls: [{ index: 0, type: "function", function: toolCall().function }] }, "tool_calls")] },
     { scenario: "changed call ID", frames: [chunk({ tool_calls: [toolCall()] }), chunk({ tool_calls: [{ index: 0, id: "a_different_call" }] }, "tool_calls")] },
-    { scenario: "truncated tool completion", frames: [chunk({ tool_calls: [toolCall()] }, "length")] },
     { scenario: "tool finish without a call", frames: [chunk({}, "tool_calls")] },
   ])("rejects $scenario before any tool can execute", async ({ frames }) => {
     const f = await fixture((_body, response) => sse(response, frames));
@@ -1311,7 +1310,7 @@ describe("structured tool execution boundaries", () => {
     expect(f.recorder.events.some((event) => event.type === "runtime.error" || (event.type === "item.completed" && event.itemType === "tool" && !event.ok))).toBe(true);
   });
 
-  it("never retries a provider error after a tool's effect has already happened", async () => {
+  it("retries a provider error after a tool's effect has already happened, without running the tool again", async () => {
     const f = await fixture((_body, response, round) => {
       if (round === 1) sse(response, [chunk({ tool_calls: [toolCall()] }, "tool_calls")]);
       else { response.writeHead(503); response.end("Synthetic provider unavailable"); }
@@ -1320,8 +1319,8 @@ describe("structured tool execution boundaries", () => {
     await f.decide();
     expect(await f.completed()).toMatchObject({ ok: false });
     expect(f.effects()).toHaveLength(1);
-    expect(f.requests).toHaveLength(2);
-    expect(f.recorder.events.some((event) => event.type === "turn.retrying")).toBe(false);
+    expect(f.requests).toHaveLength(4);
+    expect(f.recorder.events.filter((event) => event.type === "turn.retrying")).toHaveLength(2);
     expect(f.recorder.events.filter((event) => event.type === "turn.completed")).toHaveLength(1);
   });
 

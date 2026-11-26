@@ -38,6 +38,12 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 </div>
 
 <p align="center">
+  <a href="docs/assets/demo/seira-demo.mp4">
+    <img src="docs/assets/demo/seira-demo.gif" alt="A 23-second demo of Seira: a person gives the bot Pepper a job, Pepper asks for approval before it runs a command, the person selects Allow once, and Pepper finishes the job" width="900">
+  </a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/docs-model-picker.png" alt="The Seira app: the Bots list on the left, a chat with the bot Pepper in the middle, and the model picker open on the right" width="900">
 </p>
 
