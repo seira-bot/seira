@@ -112,6 +112,13 @@ describe("request source for the lockout", () => {
 });
 
 describe("scopes", () => {
+  it("lets signed-in clients answer a task card with POST only", () => {
+    const path = "/api/bots/bot-1/task-suggestions";
+    expect(requiredScope("POST", path)).toBe("client");
+    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) expect(requiredScope(method, path), method).toBe("admin");
+    expect(requiredScope("POST", `${path}/extra`)).toBe("admin");
+  });
+
   it("lets signed-in clients fork bot and room conversations without opening other task actions", () => {
     for (const path of ["/api/bots/bot-1/tasks/thread-1/forks", "/api/groups/room-1/tasks/thread-1/forks"]) {
       expect(requiredScope("POST", path), path).toBe("client");
