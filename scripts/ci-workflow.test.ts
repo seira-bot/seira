@@ -721,6 +721,9 @@ describe("Package workflows", () => {
         expect(step.with?.cache, file).toBeUndefined();
         expect(step.with?.["package-manager-cache"], file).toBe(false);
       }
+      for (const step of steps.filter((step) => step.uses?.startsWith("pnpm/action-setup@"))) {
+        expect(step.with?.cache, file).toBe(false);
+      }
     }
   });
 
