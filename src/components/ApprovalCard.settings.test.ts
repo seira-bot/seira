@@ -109,8 +109,8 @@ describe("a waiting card in a conversation that others can read", () => {
       { status: 200, body: { before: "", after: "https://example.test/v1" } },
       { status: 403, body: { error: "Only the owner sees this." } },
     ];
-    const fetchMock = vi.fn(async (input: string) => {
-      const next = input.endsWith("/review") ? answers.shift()! : { status: 200, body: {} };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      const next = input.endsWith("/review") && init?.method === "POST" ? answers.shift()! : { status: 200, body: {} };
       return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } });
     });
     vi.stubGlobal("fetch", fetchMock);

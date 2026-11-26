@@ -30,7 +30,7 @@ async function start(auth: RequestAuth, refusal: string | null = null) {
   await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const get = async (requestId: string) => {
-    const response = await fetch(`${base}/api/threads/t1/app-settings/${requestId}/review`);
+    const response = await fetch(`${base}/api/threads/t1/app-settings/${requestId}/review`, { method: "POST" });
     return { status: response.status, body: await response.json() as Record<string, unknown> };
   };
   return { get, reviewAppSetting };

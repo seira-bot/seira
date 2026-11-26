@@ -41,7 +41,7 @@ client scope only. Nothing touches live app data.
 - **A conversation someone else wrote into.** After a second paired device writes
   a line in the bot's thread, a safe setting (`rooms.turnTimeoutMinutes`) waits
   on a card with no consequence line. The card leaves out the current value. The
-  owner opens both values through the review route (`GET
+  owner opens both values through the review route (`POST
   /api/threads/:id/app-settings/:requestId/review`) with an admin session. A
   client-scope device gets 403. Apply applies it, and Undo restores it.
 - **Secret.** `set keys.xaiApiKey` with a value is refused. Without a value it

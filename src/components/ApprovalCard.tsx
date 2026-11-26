@@ -94,7 +94,7 @@ export function SettingReview({ threadId, requestId }: { threadId?: string; requ
   if (!threadId || !requestId) return null;
   const open = () => {
     setState("loading");
-    api<{ before: string; after: string }>(`/api/threads/${threadId}/app-settings/${requestId}/review`)
+    api<{ before: string; after: string }>(`/api/threads/${threadId}/app-settings/${requestId}/review`, { method: "POST" })
       .then((values) => setState({ before: values.before, after: values.after }))
       .catch((failure: unknown) => setState({ error: failure instanceof Error && failure.message ? failure.message : t("approval.review.failed") }));
   };

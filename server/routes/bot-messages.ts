@@ -658,7 +658,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       });
     }
     m = path.match(/^\/api\/threads\/([\w-]+)\/app-settings\/([\w-]+)\/review$/);
-    if (m && method === "GET") {
+    if (m && method === "POST") {
       const refusal = cardAnswerRefusal(auth, m[1], m[2], "allow");
       if (refusal) return json(res, 403, refusalText(refusal));
       const review = reviewAppSetting({ threadId: m[1], requestId: m[2] }, ownerReview(auth, req));
