@@ -97,7 +97,7 @@ describe("a tool call cut at the output limit", () => {
 
   it("keeps the answer text that came before the cut call", async () => {
     const { events, bodies } = await runTurn([cutCall("I will write it now."), answer]);
-    const kept = events.findIndex((event) => event.type === "item.completed" && event.text === "I will write it now.");
+    const kept = events.findIndex((event) => event.type === "item.completed" && event.itemType === "assistant_text" && event.text === "I will write it now.");
     const retry = events.findIndex((event) => event.type === "turn.retrying");
     expect(kept).toBeGreaterThanOrEqual(0);
     expect(kept).toBeLessThan(retry);
