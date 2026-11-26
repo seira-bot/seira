@@ -19,7 +19,7 @@ const deps = (overrides: { originIsUser?: boolean; written?: string[] } = {}) =>
   adminPersons: () => new Set([ADMIN]), originIsUser: () => overrides.originIsUser ?? true,
   ownerWrote: (id: string) => (overrides.written ?? [ROUTINE]).includes(id),
 });
-const owners = (turn: DesktopTurn, d = deps()) => cloudHomeLendingRefusal(desktopLendingTurn(turn, d)) === null;
+const owners = (turn: DesktopTurn, d: Parameters<typeof desktopLendingTurn>[1] = deps()) => cloudHomeLendingRefusal(desktopLendingTurn(turn, d)) === null;
 
 describe("whose turn may use the desktop owner's phones", () => {
   it("a line typed at this machine, with no person on it, is the owner's", () => {

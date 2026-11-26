@@ -114,7 +114,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
   /** Undo on the newest applied card. */
   const undo = () => host.undo({ threadId: turn.threadId, requestId: String(cards().at(-1)!.card.requestId) });
   const waiting = () => cards().filter((message) => !message.card.autoApplied && !message.card.answered && !message.card.dismissed && !message.card.expired);
-  const resolve = (requestId: string, behavior: "allow" | "deny", ownerReview = true) => host.resolve({ threadId: turn.threadId, requestId, behavior, ownerReview });
+  const resolve = async (requestId: string, behavior: "allow" | "deny", ownerReview = true) => (await host.resolve({ threadId: turn.threadId, requestId, behavior, ownerReview }))!;
   /** Sets the value and taps Apply on the card it posts. */
   const setAndApply = async (id: string, value?: unknown) => {
     const posted = await set(id, value);
