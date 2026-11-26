@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -922,5 +922,161 @@ describe("the paired-device mark on a session's pairing record", () => {
     registry = new SessionRegistry({ file: file(), now: () => clock });
     expect(isPairedDeviceSession(registry.record(phone.id)!)).toBe(true);
     expect(isPairedDeviceSession(registry.record(desktop.id)!)).toBe(false);
+  });
+});
+
+describe("the lockout clock", () => {
+  // The wall clock moves; the elapsed-time clock does not follow it.
+  function steppedStore() {
+    const time = { wall: 1_700_000_000_000, elapsed: 5_000 };
+    const store = new SessionRegistry({ file: join(dir, "stepped.json"), now: () => time.wall, elapsed: () => time.elapsed });
+    return { time, store };
+  }
+
+  it("keeps a sign-in lock the same length when the system clock is set back", () => {
+    const { time, store } = steppedStore();
+    for (let i = 0; i < LOCKOUT.failures; i++) store.noteFailure("mail");
+    expect(store.attemptAllowed("mail")).toEqual({ ok: false, retryAfterMs: LOCKOUT.lockMs });
+    time.wall -= 2 * 3_600_000;
+    expect(store.attemptAllowed("mail")).toEqual({ ok: false, retryAfterMs: LOCKOUT.lockMs });
+    time.elapsed += LOCKOUT.lockMs + 1;
+    expect(store.attemptAllowed("mail")).toEqual({ ok: true });
+    store.close();
+  });
+
+  it("does not end a sign-in lock early when the system clock is set forward", () => {
+    const { time, store } = steppedStore();
+    for (let i = 0; i < LOCKOUT.failures; i++) store.noteFailure("mail");
+    time.wall += 2 * 3_600_000;
+    expect(store.attemptAllowed("mail").ok).toBe(false);
+    store.close();
+  });
+
+  it("keeps a pairing lock the same length when the system clock is set back", () => {
+    const { time, store } = steppedStore();
+    for (let i = 0; i < PAIRING_LOCKOUT.failures; i++) store.exchange({ code: "AAAAAAAAAAAA", label: "", source: "attacker" });
+    time.wall -= 2 * 3_600_000;
+    const locked = store.exchange({ code: store.openPairing().code, label: "", source: "attacker" });
+    expect(locked).toMatchObject({ ok: false, status: 429, errorParams: { seconds: PAIRING_LOCKOUT.lockMs / 1000 } });
+    time.elapsed += PAIRING_LOCKOUT.lockMs + 1;
+    expect(store.exchange({ code: store.openPairing().code, label: "", source: "attacker" }).ok).toBe(true);
+    store.close();
+  });
+
+  it("counts a failure window in elapsed time, not by the system clock", () => {
+    const { time, store } = steppedStore();
+    for (let i = 0; i < LOCKOUT.failures - 1; i++) store.noteFailure("mail");
+    time.wall += 3_600_000;
+    store.noteFailure("mail");
+    expect(store.attemptAllowed("mail").ok).toBe(false);
+    store.close();
+  });
+
+  it("follows `now` for the lockouts when only `now` is given", () => {
+    for (let i = 0; i < LOCKOUT.failures; i++) registry.noteFailure("mail");
+    expect(registry.attemptAllowed("mail").ok).toBe(false);
+    clock += LOCKOUT.lockMs + 1;
+    expect(registry.attemptAllowed("mail").ok).toBe(true);
+  });
+});
+
+describe("a restart that was not clean", () => {
+  it("names the ended email sign-ins in the log, and keeps pairing sessions", () => {
+    const first = new SessionRegistry({ file: file(), now: () => clock, emailScopes: () => ["client"] });
+    const email = first.issue({ label: "browser", email: "person@example.test", scopes: ["client"] });
+    const paired = first.openPairing(), phone = first.exchange({ code: paired.code, label: "Pixel", source: "10.0.0.9" });
+    if (!phone.ok) throw new Error("expected a pairing session");
+    // No close(): the open marker stays, as after a kill.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const second = new SessionRegistry({ file: file(), now: () => clock, emailScopes: () => ["client"] });
+    expect(second.authenticate(email.token)).toBeNull();
+    expect(second.authenticate(phone.token)?.id).toBe(phone.session.id);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toMatch(/did not stop cleanly last time\. 1 email or account sign-in was ended/);
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain("person@example.test");
+    second.close();
+  });
+
+  it("writes no log line after a clean stop", () => {
+    const first = new SessionRegistry({ file: file(), now: () => clock, emailScopes: () => ["client"] });
+    first.issue({ label: "browser", email: "person@example.test", scopes: ["client"] });
+    first.close();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    new SessionRegistry({ file: file(), now: () => clock, emailScopes: () => ["client"] }).close();
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("a damaged sessions file", () => {
+  const copies = () => readdirSync(dir).filter((name) => name.startsWith("sessions.json.damaged-"));
+
+  function twoSessions() {
+    registry.close();
+    const first = new SessionRegistry({ file: file(), now: () => clock });
+    const one = first.openPairing(), two = first.openPairing();
+    const a = first.exchange({ code: one.code, label: "one", source: "10.0.0.1" });
+    const b = first.exchange({ code: two.code, label: "two", source: "10.0.0.2" });
+    if (!a.ok || !b.ok) throw new Error("expected two pairing sessions");
+    first.close();
+    return { a, b };
+  }
+
+  it("drops only the invalid record, logs one line, and keeps a copy", () => {
+    const { a, b } = twoSessions();
+    const stored = JSON.parse(readFileSync(file(), "utf8")) as { version: number; sessions: Array<Record<string, unknown>> };
+    stored.sessions.push({ id: "broken", hash: 7 });
+    const text = JSON.stringify(stored);
+    writeFileSync(file(), text);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const loaded = new SessionRegistry({ file: file(), now: () => clock });
+    expect(loaded.authenticate(a.token)?.id).toBe(a.session.id);
+    expect(loaded.authenticate(b.token)?.id).toBe(b.session.id);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toMatch(/1 invalid record\. It was dropped and 2 kept/);
+    expect(copies()).toHaveLength(1);
+    expect(readFileSync(join(dir, copies()[0]!), "utf8")).toBe(text);
+    if (process.platform !== "win32") expect(statSync(join(dir, copies()[0]!)).mode & 0o777).toBe(0o600);
+    loaded.close();
+    // The next write holds the two valid records only.
+    expect(JSON.parse(readFileSync(file(), "utf8")).sessions).toHaveLength(2);
+  });
+
+  it("never turns a dropped record into a session", () => {
+    const { a } = twoSessions();
+    const stored = JSON.parse(readFileSync(file(), "utf8")) as { version: number; sessions: Array<Record<string, unknown>> };
+    const forged = { ...stored.sessions[0]!, scopes: ["root"] };
+    stored.sessions[0] = forged;
+    writeFileSync(file(), JSON.stringify(stored));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const loaded = new SessionRegistry({ file: file(), now: () => clock });
+    expect(loaded.authenticate(a.token)).toBeNull();
+    loaded.close();
+  });
+
+  it("keeps a copy of a file that is not JSON, and starts with no session", () => {
+    registry.close();
+    writeFileSync(file(), "{ not json");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const loaded = new SessionRegistry({ file: file(), now: () => clock });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(copies()).toHaveLength(1);
+    expect(readFileSync(join(dir, copies()[0]!), "utf8")).toBe("{ not json");
+    loaded.close();
+  });
+
+  it("keeps a copy of a file with a version this server does not know", () => {
+    registry.close();
+    writeFileSync(file(), JSON.stringify({ version: 2, sessions: [] }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    new SessionRegistry({ file: file(), now: () => clock }).close();
+    expect(copies()).toHaveLength(1);
+  });
+
+  it("writes no copy and no log line for a good file", () => {
+    twoSessions();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    new SessionRegistry({ file: file(), now: () => clock }).close();
+    expect(error).not.toHaveBeenCalled();
+    expect(copies()).toEqual([]);
   });
 });
