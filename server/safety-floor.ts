@@ -660,6 +660,15 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
     return null;
   }
   if (program === "format") return args.some((arg) => /^[A-Za-z]:\\?$/.test(arg)) ? FORMAT_DISK : null;
+  if (program === "format-volume") return FORMAT_DISK;
+  // Clear-Disk refuses a disk that holds data unless -RemoveData (or an unambiguous start of it) is given.
+  // PowerShell also takes an en dash, em dash or horizontal bar in place of the hyphen.
+  if (program === "clear-disk") {
+    return args.some((arg) => {
+      const name = arg.split(":")[0].toLowerCase().replace(/^[\u2013\u2014\u2015]/, "-");
+      return name.length >= "-removed".length && "-removedata".startsWith(name);
+    }) ? FORMAT_DISK : null;
+  }
   return null;
 }
 
