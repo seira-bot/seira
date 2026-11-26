@@ -29,6 +29,7 @@ import {
   type LogSignal, type ProcessSample, type QuietState,
 } from "./quiet-status.ts";
 import { acpMissingSession } from "./rpc-error.ts";
+import { permissionOptions } from "./permission-options.ts";
 import { readSessionReport } from "./session-reports.ts";
 import { acpTurnSteering, advertisedCommands, type AcpSteerSupport } from "./steer.ts";
 import { pickSessionModel, SessionModelControls, type AcpModelSelection } from "./session-model-controls.ts";
@@ -684,14 +685,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           const params = support.permissionRequest ? support.permissionRequest(msg.params ?? {}) : msg.params ?? {};
           current.flushAssistantText();
           const options: Array<{ optionId?: string; kind?: string; name?: string }> = Array.isArray(params.options) ? params.options : [];
-          // An approval never takes a wider option than the one the person gave: allow picks only `allow_once`.
-          const optionFor = (want: "allow" | "reject") =>
-            options.find((o) => o.kind === `${want}_once` && typeof o.optionId === "string")?.optionId
-              ?? (want === "reject" ? options.find((o) => String(o.kind ?? "").startsWith("reject") && typeof o.optionId === "string")?.optionId : undefined)
-              ?? null;
-          const optionAlways = support.nativeSessionGrant
-            ? options.find((o) => o.kind === "allow_always" && typeof o.optionId === "string")?.optionId ?? null
-            : null;
+          const { optionFor, optionAlways } = permissionOptions(options, support.nativeSessionGrant === true);
           const cancelled = { outcome: { outcome: "cancelled" } };
           const missing = (want: string) =>
             emit({
