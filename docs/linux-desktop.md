@@ -495,9 +495,11 @@ Create the socket directory and turn off the EGL vendor before you start the ser
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 export __EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent LIBGL_ALWAYS_SOFTWARE=1
 Xvfb :99 -screen 0 1280x800x24 -nolisten tcp &
+./Seira-*-x86_64.AppImage --appimage-extract
 DISPLAY=:99 ./squashfs-root/seira --disable-gpu --disable-dev-shm-usage
 ```
 
 Do not point `DISPLAY` at the host X server, and do not bind the host `/tmp/.X11-unix` into the sandbox. A message
 that `/tmp/.X11-unix` is not owned by root is a warning, not an error. If the AppImage cannot start the Chromium
-sandbox inside a nested sandbox, use the extracted app and add `--no-sandbox` for that test run only.
+sandbox inside a nested sandbox, run the window smoke outside the nested sandbox, or use the CI package
+validation. Do not add `--no-sandbox`.
