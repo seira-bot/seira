@@ -2,15 +2,7 @@ import type { ServerLineKey } from "../server-lines.ts";
 
 /** What follows from a change that waits for the owner's tap: a code whose words come from the language packs, with the
  * names the line fills in. */
-export const CONSEQUENCES = ["keyTo", "autonomyUp", "dataTo", "deletesLogs", "standingRule", "botRule", "newBots", "thisComputer", "lending", "browserLan", "browserProxy", "wayIn", "usageData", "emailOut", "deletesHistory"] as const;
-export type ConsequenceCode = (typeof CONSEQUENCES)[number];
-export interface Consequence {
-  code: ConsequenceCode;
-  params?: Record<string, string>;
-}
-
-/** Each line is named in full, so a search for its key finds where the server uses it. */
-const CONSEQUENCE_KEYS: Record<ConsequenceCode, ServerLineKey> = {
+const CONSEQUENCE_KEYS = {
   keyTo: "server.appSettings.confirm.keyTo",
   autonomyUp: "server.appSettings.confirm.autonomyUp",
   dataTo: "server.appSettings.confirm.dataTo",
@@ -26,7 +18,14 @@ const CONSEQUENCE_KEYS: Record<ConsequenceCode, ServerLineKey> = {
   usageData: "server.appSettings.confirm.usageData",
   emailOut: "server.appSettings.confirm.emailOut",
   deletesHistory: "server.appSettings.confirm.deletesHistory",
-};
+} as const satisfies Record<string, ServerLineKey>;
+export type ConsequenceCode = keyof typeof CONSEQUENCE_KEYS;
+export const CONSEQUENCES = Object.keys(CONSEQUENCE_KEYS) as ConsequenceCode[];
+export interface Consequence {
+  code: ConsequenceCode;
+  params?: Record<string, string>;
+}
+
 export const consequenceKey = (code: ConsequenceCode): ServerLineKey => CONSEQUENCE_KEYS[code];
 
 /** The host an address sends to, as the card names it; the address itself when it is no URL. */
