@@ -386,6 +386,57 @@
       }
     },
     {
+      "name": "suggest_tasks",
+      "description": "Show the person a card of up to 5 tasks you can do for them now. Each task has Start and Hide. Start sends the title as the person's own message. Write each title as a short request in the language of this conversation, such as \"Draft the weekly follow-up summary\". Plain text only: no links, commands or code. Call it at most once in a turn.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intro": {
+            "type": "string",
+            "description": "A short lead-in above the tasks."
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "The request the person would send, at most 80 characters."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "One line that says what you will do, at most 240 characters."
+                },
+                "icon": {
+                  "type": "string",
+                  "enum": [
+                    "idea",
+                    "mail",
+                    "calendar",
+                    "document",
+                    "search",
+                    "chart",
+                    "reminder",
+                    "message",
+                    "task"
+                  ]
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "tasks"
+        ]
+      }
+    },
+    {
       "name": "start_thread",
       "description": "Open a separate job on yourself: one conversation with its own history and its own run, shown to the person as a row under you, without switching the person's selected conversation. Use it only when the user requests independent jobs (for example one review per pull request, \"review each pull request\" — one thread per pull request) instead of doing them inside this conversation, or a second opinion from another model (model_selection from list_models, report_back true). The title becomes the row's name, so make it short and specific, and write it as #Title when you mention it to the person; give complete instructions, since the run will not see this conversation. You can open at most five per turn; a self-opened job cannot open more jobs. This is not a teammate handoff: use coordinate_bots for teammates (thread \"new\" opens a fresh thread on them) and their automatic replies. If a call is refused, do not retry it: say what you still wanted opened.",
       "inputSchema": {
