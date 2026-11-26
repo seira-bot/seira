@@ -396,6 +396,19 @@ describe("Server image smoke workflow", () => {
     expect(runs(build).join("\n")).not.toMatch(/docker (login|push)/);
   });
 
+  it("checks the release tag with the job token, tries again only for a transient answer, and fails closed on a 404", () => {
+    for (const id of ["image", "cloud-home"]) {
+      const step = stepsOf(smoke.jobs[id]!).find((each) => each.name === "Check the release tag")!;
+      expect(step.env?.GH_TOKEN, id).toBe("${{ github.token }}");
+      expect(step.run, id).toContain('gh api --include "repos/$REPOSITORY/releases/tags/$TAG"');
+      expect(step.run, id).not.toContain("curl");
+      expect(step.run, id).toContain("404) echo");
+      expect(step.run, id).toContain("for try in 1 2 3");
+      expect(step.run, id).toContain("The tag was not checked.");
+    }
+    expect(smoke.permissions).toEqual({ contents: "read" });
+  });
+
   it("boots the container and checks the server, the UI and the user", () => {
     const boot = stepsOf(build).find((step) => step.name === "Boot the container and prove the server and UI answer");
     expect(boot?.run).toContain("docker run -d -e SEIRA_COMPOSIO_BROKER=off --name seira seira-server:ci");
