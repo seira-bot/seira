@@ -579,3 +579,73 @@ it("cuts a download under way when its sign-in ends", async () => {
   });
   expect(received).toBeLessThan(48 * 1024 * 1024);
 });
+
+// A paused client holds the transfer open, so only a deadline can end it: nothing revokes, signs in or reaches the server meanwhile.
+async function relisten(extra: Parameters<typeof listen>[0]) {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen(extra);
+}
+async function bigExport() {
+  const { id, path } = fakeArchive();
+  writeFileSync(path, Buffer.alloc(48 * 1024 * 1024));
+  archive.create.mockImplementationOnce(async () => ({ id, path, summary: { ...fakeArchive().summary, id } }));
+  return id;
+}
+function pausedDownload(path: string, token: string, pauseMs: number) {
+  return new Promise<number>((resolve) => {
+    let bytes = 0;
+    const download = request(`${url}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) }, (response) => {
+      response.pause();
+      setTimeout(() => {
+        response.on("data", (chunk: Buffer) => { bytes += chunk.length; });
+        response.on("close", () => resolve(bytes));
+        response.on("error", () => {});
+        response.resume();
+      }, pauseMs);
+    });
+    download.on("error", () => resolve(bytes));
+    download.end();
+  });
+}
+
+it("cuts a move-out download at the export's expiry, with no other activity", async () => {
+  await relisten({ exportLifetimeMs: 600 });
+  await bigExport();
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  const received = await pausedDownload(body.path, body.token, 1_500);
+  expect(received).toBeLessThan(48 * 1024 * 1024);
+});
+
+it("cuts a download at the sign-in's expiry when that comes before the export's", async () => {
+  await bigExport();
+  // An access token never renews, so its expiry stays where it was set.
+  const { code } = sessions.openPairing({ scopes: ["admin", "client"], tokenTtlMs: 800 });
+  const paired = sessions.exchange({ code, label: "Short script", source: "10.0.0.7" });
+  if (!paired.ok) throw new Error("expected a token");
+  const { id } = await exportBackup(paired.token);
+  const received = await pausedDownload(`/api/workspace-backup/download/${id}`, paired.token, 1_500);
+  expect(received).toBeLessThan(48 * 1024 * 1024);
+});
+
+it("lets a download that ends before the deadline finish, and clears the deadline", async () => {
+  const lifetime = 987_654;
+  const handles: unknown[] = [];
+  const realSet = globalThis.setTimeout;
+  vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: () => void, delay?: number) => {
+    const handle = realSet(handler, delay);
+    if (typeof delay === "number" && delay > lifetime - 5_000 && delay <= lifetime) handles.push(handle);
+    return handle;
+  }) as typeof setTimeout);
+  const cleared = vi.spyOn(globalThis, "clearTimeout");
+  await relisten({ exportLifetimeMs: lifetime });
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  const response = await read(body.path, body.token);
+  expect(response.status).toBe(200);
+  await response.arrayBuffer();
+  expect(handles).toHaveLength(1);
+  // The server clears the deadline just after the last byte leaves.
+  await vi.waitFor(() => expect(cleared.mock.calls.map(([handle]) => handle)).toContain(handles[0]));
+});

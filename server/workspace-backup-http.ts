@@ -25,6 +25,8 @@ const MAX_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_UPLOAD_BYTES;
 const MAX_CHUNK_BYTES = 32 * 1024 ** 2;
 const MAX_CLIENT_STATE_BYTES = 2 * 1024 ** 2;
 const EXPIRES_MS = 60 * 60_000;
+/** setTimeout fires at once for a delay above this. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 const passwordSchema = z.string().min(12, "Use a password of at least 12 characters.").max(1024);
 const failure = (message: string, status = 400) => Object.assign(new Error(message), { status });
 type Artifact = {
@@ -77,6 +79,8 @@ export function createWorkspaceBackupRoutes(options: {
   /** Starts this server again so startup installs a committed restore. Given only where a launcher always starts it
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
+  /** How long a finished export can be read. Default one hour; tests give a short time. */
+  exportLifetimeMs?: number;
   /** Signs in a new server to read one export (server/workspace-backup-move-out.ts). */
   moveOut?: {
     issue(exportId: string, expiresAt: number): { token: string };
@@ -200,7 +204,7 @@ export function createWorkspaceBackupRoutes(options: {
           return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion, leaveOut });
         }));
         try { check(req, auth); } catch (error) { removeWorkspaceBackupJob(options.dataDir, result.id); throw error; }
-        artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });
+        artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + (options.exportLifetimeMs ?? EXPIRES_MS) });
         json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, summary: result.summary });
         return true;
       }
@@ -230,11 +234,14 @@ export function createWorkspaceBackupRoutes(options: {
         const file = artifact.path!;
         const size = statSync(file).size;
         const range = byteRange(req.headers.range, size);
-        // Ending a move-out sign-in also cuts a download it has under way.
+        // A download under way ends when its sign-in ends, and at the earlier of the export's expiry and the sign-in's
+        // expiry, even when nothing else touches the server: only a deadline sees a quiet expiry.
         const stop = new AbortController();
+        const endsAt = Math.min(artifact.expires, auth.kind === "session" ? auth.session.expiresAt : Infinity);
         const send = async (source: ReturnType<typeof createReadStream>) => {
           const unwatch = granted(auth, download[1]) && auth.kind === "session" ? options.moveOut?.watch(auth.session.id, () => stop.abort()) : undefined;
-          try { await pipeline(source, res, { signal: stop.signal }); } finally { unwatch?.(); }
+          const deadline = setTimeout(() => stop.abort(), Math.min(Math.max(endsAt - Date.now(), 0), MAX_TIMER_MS));
+          try { await pipeline(source, res, { signal: stop.signal }); } finally { clearTimeout(deadline); unwatch?.(); }
         };
         const headers = {
           "content-type": "application/octet-stream",
