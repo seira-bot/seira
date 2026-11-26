@@ -39,7 +39,10 @@ export interface GithubAccount {
   avatarUrl?: string;
   repositorySelection: "all" | "selected";
   suspended: boolean;
+  /** For a person who cannot change the connection: only the repositories that bots they can see use. */
   repositories: GithubRepo[];
+  /** Every repository of the account, when `repositories` lists only some. */
+  repositoryCount?: number;
 }
 
 export interface GithubRepoGrant {
@@ -80,7 +83,8 @@ export interface GithubAppStatus {
 }
 
 /**
- * Routes (every change answers 403 unless the person asking owns the connection):
+ * Routes (every change answers 403 unless the person asking owns the connection; every status lists only the bots
+ * the person asking can see, and pending installs and all repositories only to a person who can change it):
  * - GET    /api/github-app                          -> GithubAppStatus
  * - POST   /api/github-app/connect                  -> GithubConnectStart (the browser opens url)
  * - POST   /api/github-app/complete  { code }       -> GithubAppStatus (the code GitHub's last page shows)

@@ -36,6 +36,7 @@ let server: Server;
 let base: string;
 let enabled = true;
 const bots = new Set(["ada", "bo"]);
+const hiddenFrom = new Map<RequestAuth, Set<string>>();
 
 beforeEach(async () => {
   fake = await startGithubBrokerFake();
@@ -44,12 +45,14 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "seira-gh-routes-"));
   store = createGithubStore(join(dir, "data"));
   enabled = true;
+  hiddenFrom.clear();
   const handler = createGithubRoutes({
     cfg: () => ({ features: { githubApp: enabled }, profile: { name: "Rama" } }),
     env: {},
     store,
     broker: createGithubBrokerClient({ access: () => ({ url: fake.url, token: fake.token }) }),
     botExists: (id) => bots.has(id),
+    botVisible: (auth, id) => !hiddenFrom.get(auth)?.has(id),
   });
   server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
@@ -184,6 +187,36 @@ describe("github routes", () => {
     await connectAs("ana");
     expect((await call("GET", "/api/github-app", "viewer")).status).toBe(200);
     expect((await call("POST", "/api/github-app/refresh", "viewer")).status).toBe(200);
+  });
+
+  it("shows a person who did not connect GitHub only the bots they see and the repositories those bots use", async () => {
+    await connectAs("ana");
+    await call("PUT", "/api/github-app/bots/ada", "ana", policy({ repos: [{ installationId: 1, repositoryId: 10, fullName: "shop/site", level: "write" }] }));
+    await call("PUT", "/api/github-app/bots/bo", "ana", policy({ repos: [{ installationId: 1, repositoryId: 11, fullName: "shop/docs", level: "read" }] }));
+    store.update((data) => { data.pending = [{ login: "other-org" }]; });
+    hiddenFrom.set(people.editor!, new Set(["bo"]));
+    for (const [method, path] of [["GET", "/api/github-app"], ["POST", "/api/github-app/refresh"]] as const) {
+      const member = (await call(method, path, "editor")).body as GithubAppStatus;
+      expect(Object.keys(member.bots), path).toEqual(["ada"]);
+      expect(member.accounts[0]!.repositories.map((repo) => repo.id), path).toEqual([10]);
+      expect(member.accounts[0]!.repositoryCount, path).toBe(2);
+      expect(JSON.stringify(member), path).not.toContain("shop/docs");
+      expect(member.pending, path).toEqual([]);
+    }
+    const owner = (await call("GET", "/api/github-app", "ana")).body as GithubAppStatus;
+    expect(Object.keys(owner.bots).sort()).toEqual(["ada", "bo"]);
+    expect(owner.accounts[0]!.repositories).toHaveLength(2);
+    expect(owner.accounts[0]!.repositoryCount).toBeUndefined();
+  });
+
+  it("hides a bot from its owner's status and refuses its change when the owner cannot see it", async () => {
+    await connectAs("ana");
+    await call("PUT", "/api/github-app/bots/bo", "ana", policy());
+    hiddenFrom.set(people.ana!, new Set(["bo"]));
+    expect((await call("GET", "/api/github-app", "ana")).body.bots).toEqual({});
+    expect((await call("PUT", "/api/github-app/bots/bo", "ana", policy({ repos: [] }))).status).toBe(404);
+    expect((await call("PUT", "/api/github-app/bots/bo", "ana", null)).status).toBe(404);
+    expect(store.read().bots.bo).toEqual(policy());
   });
 
   it("stores a bot policy as the owner sent it, and leaves out bots that no longer exist", async () => {

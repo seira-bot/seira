@@ -11760,7 +11760,7 @@ const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => is
   checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
   revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser, levelOf, team: Boolean(CLOUD_TEAM), mainThreadTasks, chiefChanged: (changed) => chiefRooms.moved(changed), ...(personRooms.personMarkThread ? { personMarkThread: personRooms.personMarkThread, shownThread: (auth: RequestAuth, bot: BotRecord) => memberBot(wireBot(bot), visibleTo(viewerFor(auth))).threadId } : {}),
 }); ROUTES.push(botPatchRoutes);
-ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null }));
+ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: githubBroker, botExists: (id) => store.bot(id) !== null, botVisible: (auth, id) => visibleTo(viewerFor(auth)).bot(id) }));
 ROUTES.push(createBotLifecycleRoutes({
   store, routines: () => routines, interruptAllDirectThreads, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
   activeGroupTurnForBot, cancelGroupTurnOperations, runningTurnInstance, closeOpenApprovals, deleteBotWithLifecycle, deleteRefusal: (auth, botId) => memberDeleteRefusal(auth, store.bot(botId), Boolean(CLOUD_TEAM)),

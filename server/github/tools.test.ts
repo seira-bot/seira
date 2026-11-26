@@ -118,6 +118,19 @@ describe("GitHub tool calls", () => {
     expect(body(await run("GITHUB_APP_DELETE_BRANCH", { repo: "acme/web", branch: "seira/b1/z" })).deleted).toBe("seira/b1/z");
   });
 
+  it("asks before every change and reads without asking", async () => {
+    const rest = fakeGithubRest("acme/web", { files: { "README.md": "hello" } });
+    const asked: number[] = [];
+    let allow = 2;
+    const writeRefusal = () => { asked.push(rest.requests.length); return allow-- > 0 ? null : "Stopped."; };
+    const out = await runGithubTool("GITHUB_APP_COMMIT_FILES", { repo: "acme/web", branch: "seira/b1/x", message: "m", files: [{ path: "a", content: "1" }, { path: "b", content: "2" }] }, { token: TOKEN, repo, fetch: rest.fetch, writeRefusal });
+    expect(out).toEqual({ content: [{ type: "text", text: "Stopped." }], isError: true });
+    expect(rest.requests.filter((request) => request.method !== "GET")).toHaveLength(2);
+    expect(asked).toHaveLength(3);
+    const read = fakeGithubRest("acme/web", { files: { "README.md": "hello" } });
+    expect((await runGithubTool("GITHUB_APP_GET_FILE", { repo: "acme/web", path: "README.md" }, { token: TOKEN, repo, fetch: read.fetch, writeRefusal: () => "Stopped." })).isError).toBeUndefined();
+  });
+
   it("answers a GitHub failure in fixed words, with no response detail", async () => {
     const { rest, run } = setup();
     const ask = () => run("GITHUB_APP_GET_ISSUE", { repo: "acme/web", number: 1 });

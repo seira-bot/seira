@@ -114,6 +114,7 @@ export interface GithubToolContext {
   repo: { fullName: string; defaultBranch: string };
   fetch?: typeof fetch;
   timeoutMs?: number;
+  writeRefusal?: () => string | null;
 }
 
 type Json = Record<string, any>;
@@ -127,6 +128,8 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
 
   async function api(method: string, path: string, body?: unknown, allow404 = false): Promise<{ status: number; data: any }> {
     if (!isSafeGithubApiPath(path)) throw new GithubToolError(GITHUB_REFUSED_MESSAGE);
+    const refused = method === "GET" ? null : context.writeRefusal?.();
+    if (refused) throw new GithubToolError(refused);
     let res: Response;
     try {
       res = await doFetch(`https://api.github.com/${path.slice(1)}`, {

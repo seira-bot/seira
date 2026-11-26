@@ -26,6 +26,7 @@ export interface GithubRouteDeps {
   store: GithubStore;
   broker: GithubBrokerClient;
   botExists(botId: string): boolean;
+  botVisible(auth: RequestAuth, botId: string): boolean;
   now?: () => number;
   listenerTimeoutMs?: number;
 }
@@ -54,17 +55,24 @@ export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
 
   function statusFor(auth: RequestAuth): GithubAppStatus {
     const data = store.read();
-    const bots = Object.fromEntries(Object.entries(data.bots).filter(([id]) => deps.botExists(id)));
-    return {
+    const canEdit = canConnect(auth, data);
+    const bots = Object.fromEntries(Object.entries(data.bots).filter(([id]) => deps.botExists(id) && deps.botVisible(auth, id)));
+    const status = {
       enabled: true,
       connected: data.accounts.length > 0,
-      canEdit: canConnect(auth, data),
+      canEdit,
       ownedByYou: isConnectionOwner(auth, data),
       ...(data.ownerLabel ? { ownerLabel: data.ownerLabel } : {}),
-      accounts: data.accounts,
-      pending: data.pending,
       bots,
     };
+    if (canEdit) return { ...status, accounts: data.accounts, pending: data.pending };
+    const used = new Set(Object.values(bots).flatMap((policy) => policy.repos.map((grant) => `${grant.installationId}:${grant.repositoryId}`)));
+    const accounts = data.accounts.map((account) => ({
+      ...account,
+      repositories: account.repositories.filter((repo) => used.has(`${account.installationId}:${repo.id}`)),
+      repositoryCount: account.repositories.length,
+    }));
+    return { ...status, accounts, pending: [] };
   }
 
   const stripGrants = (data: GithubStoreData, keep: (installationId: number, repositoryId: number) => boolean) => {
@@ -237,6 +245,7 @@ export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
       const read = await body();
       if (!read.ok) return json(res, 400, { error: "The body must be JSON." });
       const data = store.read();
+      if (deps.botExists(botId) && !deps.botVisible(auth, botId)) return json(res, 404, { error: "That bot does not exist." });
       if (read.value === null) {
         if (!deps.botExists(botId) && !data.bots[botId]) return json(res, 404, { error: "That bot does not exist." });
         store.update((next) => { delete next.bots[botId]; });

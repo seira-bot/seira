@@ -143,7 +143,7 @@ export function GithubCard({ onChange }: {
               <div key={account.installationId} data-github-account={account.login} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
                 <span className="min-w-0 truncate text-ink">
                   {account.login}
-                  <span className="text-ink-secondary"> · {githubRepoCount(account.repositories.length)}</span>
+                  <span className="text-ink-secondary"> · {githubRepoCount(account.repositoryCount ?? account.repositories.length)}</span>
                 </span>
                 {status.ownedByYou && (
                   <button

@@ -7,7 +7,7 @@ import { GITHUB_APP_SLUG, GITHUB_APP_TOOL_NAMES, githubLevelPermissions, type Gi
 import { flushDecisionLog, readDecisions } from "../decision-log.ts";
 import { fakeGithubRest } from "../testing/fake-github-rest.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE, GithubBrokerError } from "./broker-client.ts";
-import { createGithubHost, GITHUB_INTERNAL_MCP_PATH, githubAccess, type GithubBot, type GithubHostDeps } from "./host.ts";
+import { createGithubHost, GITHUB_ACCESS_CHANGED_MESSAGE, GITHUB_INTERNAL_MCP_PATH, githubAccess, type GithubBot, type GithubHostDeps } from "./host.ts";
 import { createGithubStore } from "./store.ts";
 import type { GithubToolResult } from "./tools.ts";
 
@@ -174,6 +174,106 @@ describe("a big change waits on the card (AC-12)", () => {
     const answer = await host.handle({ method: "tools/call", params: { name: "GITHUB_APP_MERGE_PULL", arguments: { repo: "acme/web", number: 3 } } }, { botId: "b1", threadId: "t1" }, () => {}) as GithubToolResult;
     expect(answer.isError).toBe(true);
     expect(base.rest.requests).toEqual([]);
+  });
+});
+
+describe("access that changes while a call waits", () => {
+  const writes = (rest: ReturnType<typeof fixture>["rest"]) => rest.requests.filter((request) => request.method !== "GET");
+
+  function changing(change: (store: ReturnType<typeof createGithubStore>) => void, options: Parameters<typeof fixture>[0] = {}) {
+    const base = fixture(options);
+    const store = createGithubStore(base.dataDir);
+    const mint = vi.fn(async () => { change(store); return { token: TOKEN, expiresAt: Date.now() + 3_600_000 }; });
+    const host = createGithubHost({ store, broker: { mintToken: mint }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => base.bot, ask: base.ask, markOutside: () => {}, env: { SEIRA_GITHUB_APP: "1" }, fetch: base.rest.fetch });
+    const call = (name: string, args: Record<string, unknown>) => host.handle({ method: "tools/call", params: { name, arguments: args } }, { botId: "b1", threadId: "t1" }, () => {}) as Promise<GithubToolResult>;
+    return { ...base, store, mint, call };
+  }
+
+  it("sends nothing when the owner lowers the level while the token is made", async () => {
+    const { call, rest, mint } = changing((store) => store.update((data) => { data.bots.b1 = policy("read"); }));
+    const answer = await call("GITHUB_APP_CREATE_ISSUE", { repo: "acme/web", title: "T" });
+    expect(answer).toMatchObject({ isError: true });
+    expect(answer.content[0]!.text).toContain("has not allowed this bot");
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(rest.requests).toEqual([]);
+  });
+
+  it("sends nothing when the owner raises the level while the token is made, because the token was made for the old one", async () => {
+    const { call, rest } = changing((store) => store.update((data) => { data.bots.b1 = policy("write", { ownBranchesOnly: false }); }), { policy: policy("pull_requests") });
+    expect(await call("GITHUB_APP_CREATE_ISSUE", { repo: "acme/web", title: "T" })).toEqual({ content: [{ type: "text", text: GITHUB_ACCESS_CHANGED_MESSAGE }], isError: true });
+    expect(rest.requests).toEqual([]);
+  });
+
+  it("sends nothing when the account or the repository leaves while the token is made", async () => {
+    for (const change of [
+      (store: ReturnType<typeof createGithubStore>) => store.update((data) => { data.accounts = []; }),
+      (store: ReturnType<typeof createGithubStore>) => store.update((data) => { data.accounts[0]!.repositories = []; }),
+      (store: ReturnType<typeof createGithubStore>) => store.update((data) => { data.accounts[0]!.installationId = 2; data.bots.b1!.repos[0]!.installationId = 2; }),
+    ]) {
+      const { call, rest } = changing(change);
+      expect((await call("GITHUB_APP_CREATE_COMMENT", { repo: "acme/web", number: 1, body: "hi" })).isError).toBe(true);
+      expect(rest.requests).toEqual([]);
+    }
+  });
+
+  it("does not merge without the card when the owner turns the question on while the token is made", async () => {
+    const { call, rest, ask } = changing((store) => store.update((data) => { data.bots.b1!.askBeforeBigChanges = true; }));
+    expect(await call("GITHUB_APP_MERGE_PULL", { repo: "acme/web", number: 3 })).toEqual({ content: [{ type: "text", text: GITHUB_ACCESS_CHANGED_MESSAGE }], isError: true });
+    expect(ask).not.toHaveBeenCalled();
+    expect(writes(rest)).toEqual([]);
+  });
+
+  it("does not merge after the card when the owner removed the repository while the card waited", async () => {
+    let store: ReturnType<typeof createGithubStore> | undefined;
+    const base = fixture({ policy: policy("write", { askBeforeBigChanges: true }), ask: async () => { store!.update((data) => { data.bots.b1!.repos = []; }); return { ok: true, approved: true }; } });
+    store = createGithubStore(base.dataDir);
+    expect((await base.call("GITHUB_APP_MERGE_PULL", { repo: "acme/web", number: 3 })).isError).toBe(true);
+    expect(base.mint).not.toHaveBeenCalled();
+    expect(base.rest.requests).toEqual([]);
+  });
+
+  it("stops a commit before its first change when access goes away after GitHub was read", async () => {
+    const base = fixture({ policy: policy("write") });
+    const store = createGithubStore(base.dataDir);
+    const fetchThenRevoke = (async (input: string | URL | Request, init?: RequestInit) => {
+      const response = await base.rest.fetch(input, init);
+      store.update((data) => { delete data.bots.b1; });
+      return response;
+    }) as typeof fetch;
+    const host = createGithubHost({ store, broker: { mintToken: base.mint }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => base.bot, ask: base.ask, markOutside: () => {}, env: { SEIRA_GITHUB_APP: "1" }, fetch: fetchThenRevoke });
+    const answer = await host.handle({ method: "tools/call", params: { name: "GITHUB_APP_COMMIT_FILES", arguments: { repo: "acme/web", branch: "seira/b1/x", message: "m", files: [{ path: "a.txt", content: "A" }] } } }, { botId: "b1", threadId: "t1" }, () => {}) as GithubToolResult;
+    expect(answer.isError).toBe(true);
+    expect(answer.content[0]!.text).toContain("has not given this bot access");
+    expect(base.rest.requests.length).toBeGreaterThan(0);
+    expect(writes(base.rest)).toEqual([]);
+  });
+
+  it("sends nothing when the bot loses GitHub or the flag goes off while the token is made", async () => {
+    let bot: GithubBot = { id: "b1", name: "Ada" };
+    const env: NodeJS.ProcessEnv = { SEIRA_GITHUB_APP: "1" };
+    for (const change of [() => { bot = { id: "b1", name: "Ada", composio: false }; }, () => { env.SEIRA_GITHUB_APP = "0"; }]) {
+      bot = { id: "b1", name: "Ada" };
+      env.SEIRA_GITHUB_APP = "1";
+      const base = fixture();
+      const host = createGithubHost({ store: createGithubStore(base.dataDir), broker: { mintToken: async () => { change(); return { token: TOKEN, expiresAt: Date.now() + 3_600_000 }; } }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => bot, ask: base.ask, markOutside: () => {}, env, fetch: base.rest.fetch });
+      expect((await host.handle({ method: "tools/call", params: { name: "GITHUB_APP_CREATE_ISSUE", arguments: { repo: "acme/web", title: "T" } } }, { botId: "b1", threadId: "t1" }, () => {}) as GithubToolResult).isError).toBe(true);
+      expect(base.rest.requests).toEqual([]);
+    }
+  });
+
+  it("sends nothing when the conversation stops while the token is made", async () => {
+    let live = true;
+    const base = fixture();
+    const host = createGithubHost({ store: createGithubStore(base.dataDir), broker: { mintToken: async () => { live = false; return { token: TOKEN, expiresAt: Date.now() + 3_600_000 }; } }, dataDir: base.dataDir, cfg: () => ({ features: {} }), bot: () => base.bot, ask: base.ask, markOutside: () => {}, env: { SEIRA_GITHUB_APP: "1" }, fetch: base.rest.fetch });
+    const stopped = new Error("stopped");
+    await expect(host.handle({ method: "tools/call", params: { name: "GITHUB_APP_CREATE_ISSUE", arguments: { repo: "acme/web", title: "T" } } }, { botId: "b1", threadId: "t1" }, () => { if (!live) throw stopped; })).rejects.toBe(stopped);
+    expect(base.rest.requests).toEqual([]);
+  });
+
+  it("runs when nothing changed", async () => {
+    const { call, rest } = changing(() => {});
+    expect((await call("GITHUB_APP_CREATE_ISSUE", { repo: "acme/web", title: "T" })).isError).toBeUndefined();
+    expect(writes(rest)).toHaveLength(1);
   });
 });
 
