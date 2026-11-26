@@ -141,14 +141,33 @@ export function humanApproved(reviews, logins, headSha) {
   return [...latest.values()].some((review) => review.state === "APPROVED" && Boolean(headSha) && review.commit_id === headSha);
 }
 
-const entriesOf = (value) => (Array.isArray(value) ? value.filter((item) => item && typeof item.login === "string" && Number.isInteger(item.id)) : []);
+/** One list is valid when each entry has exactly a string login and a positive integer ID, with no duplicate ID or login. */
+function validEntries(list) {
+  if (!Array.isArray(list)) return null;
+  const ids = new Set();
+  const logins = new Set();
+  for (const item of list) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const keys = Object.keys(item);
+    if (keys.length !== 2 || !keys.includes("login") || !keys.includes("id")) return null;
+    if (typeof item.login !== "string" || item.login === "" || !Number.isInteger(item.id) || item.id <= 0) return null;
+    const login = item.login.toLowerCase();
+    if (ids.has(item.id) || logins.has(login)) return null;
+    ids.add(item.id);
+    logins.add(login);
+  }
+  return list.map((item) => ({ login: item.login, id: item.id }));
+}
 
-/** Reads the trusted-author file. Bad JSON gives empty lists, so every pull request needs a person. */
+/** Reads the trusted-author file. Any fault in the file gives empty lists, so every pull request needs a person. */
 export function parseTrustedAuthors(text) {
   try {
     const value = JSON.parse(String(text));
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return { bots: entriesOf(value.botAuthors), admins: entriesOf(value.adminAuthors), reviewers: entriesOf(value.reviewerApps), valid: true };
+    if (value && typeof value === "object" && !Array.isArray(value) && value.version === 1) {
+      const bots = validEntries(value.botAuthors);
+      const admins = validEntries(value.adminAuthors);
+      const reviewers = validEntries(value.reviewerApps);
+      if (bots && admins && reviewers) return { bots, admins, reviewers, valid: true };
     }
   } catch {
     // Bad JSON is treated as empty lists below.
@@ -188,11 +207,15 @@ export function evaluatePull({ pull, detail = pull, files, reviews, logins, trus
   const authorOk = kind === "bot" || (kind === "admin" && isAdmin);
   if (!authorOk) reasons.push(`author ${user?.login ?? "unknown"} is not a trusted author (${kind === "admin" ? "admin permission not confirmed" : "not in the list on main"})`);
   else if (!reviewerApproved(reviews, trusted, detail.head?.sha)) reasons.push("the reviewer App has no approval of the final head commit");
-  if (typeof detail.changed_files === "number" && detail.changed_files > files.length) reasons.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
+  // A listed human approval may clear only the two author reasons. Evidence faults and sensitive paths always stay.
+  const authorReasons = reasons.length;
+  const humanLogins = logins.filter((login) => !trusted.admins.some((entry) => entry.login.toLowerCase() === login));
+  const cleared = authorReasons > 0 && humanApproved(reviews, humanLogins, detail.head?.sha);
+  const kept = cleared ? [] : reasons;
+  if (typeof detail.changed_files === "number" && detail.changed_files > files.length) kept.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
   const touched = sensitiveFiles(files);
-  if (touched.length > 0) reasons.push(`it changes a sensitive path: ${touched.join(", ")}`);
-  if (reasons.length === 0 || humanApproved(reviews, logins, detail.head?.sha)) return [];
-  return reasons;
+  if (touched.length > 0) kept.push(`it changes a sensitive path: ${touched.join(", ")}`);
+  return kept;
 }
 
 /** The merged pull request whose merge commit is `sha` on main, or null. */

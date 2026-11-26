@@ -469,9 +469,16 @@ refuses the run (exit status 2). An error from the permission call counts as "no
 A path that matches a sensitive pattern flags the run for any author, and a bot review
 never clears it.
 
-A pull request that breaks a rule passes when a listed human reviewer approved
-it. The latest review of that reviewer must be an approval of the final commit
-of the pull request.
+A listed human reviewer can clear only the author rules: an author who is not
+trusted, and a missing reviewer App approval. The latest review of that reviewer
+must be an approval of the final commit of the pull request. A human approval
+never clears an incomplete file list or a sensitive path: these always flag the
+run. The shared admin account is never counted as a human reviewer.
+
+The trusted-author file must be fully valid: `version` is 1, the three lists are
+arrays, each entry has exactly a string `login` and a positive integer `id`, and no
+list repeats an ID or a login (case-insensitive). One bad entry makes the whole file
+invalid, so every pull request is flagged.
 
 The gate has three results:
 

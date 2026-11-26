@@ -157,7 +157,7 @@ describe("release gate", () => {
   it("accepts an outside author after a listed human approved (exit 0)", async () => {
     const world: World = {
       pulls: { [sha(1)]: [pull(1, sha(1), { user: OUTSIDER })] },
-      reviews: { 1: [{ user: { login: "Boss" }, state: "APPROVED" }] },
+      reviews: { 1: [{ user: { login: "Boss" }, state: "APPROVED", commit_id: headOf(1) }] },
     };
     expect((await run(world, { reviewers: '["boss"]' })).code).toBe(0);
     expect((await run(world, { reviewers: '["someone"]' })).code).toBe(1);
@@ -171,9 +171,24 @@ describe("release gate", () => {
     }
   });
 
-  it("accepts a sensitive path after a listed human approved (exit 0)", async () => {
-    const result = await run({ files: { 1: [{ filename: ".npmrc" }] }, reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED" }] } }, { reviewers: '["boss"]' });
-    expect(result.code).toBe(0);
+  it("keeps a sensitive path flagged after a listed human approved (exit 1)", async () => {
+    const result = await run({ files: { 1: [{ filename: ".npmrc" }] }, reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED", commit_id: headOf(1) }] } }, { reviewers: '["boss"]' });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("sensitive path");
+  });
+
+  it("keeps an incomplete file list flagged after a listed human approved (exit 1)", async () => {
+    const result = await run({ changedFiles: { 1: 3001 }, reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED", commit_id: headOf(1) }] } }, { reviewers: '["boss"]' });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("file list is incomplete");
+  });
+
+  it("does not take the shared admin account as a human approval (exit 1)", async () => {
+    const world: World = {
+      pulls: { [sha(1)]: [pull(1, sha(1), { user: OUTSIDER })] },
+      reviews: { 1: [{ user: { login: "RamaAditya49" }, state: "APPROVED", commit_id: headOf(1) }] },
+    };
+    expect((await run(world, { reviewers: '["RamaAditya49"]' })).code).toBe(1);
   });
 
   it("flags a commit without a merged pull request (exit 1)", async () => {
@@ -383,6 +398,29 @@ describe("trusted authors", () => {
     expect(parsed.admins.map((entry) => entry.login)).toEqual(["RamaAditya49"]);
     expect(parsed.bots.every((entry) => entry.login.endsWith("[bot]"))).toBe(true);
     expect(isSensitivePath(TRUSTED_AUTHORS_PATH)).toBe(true);
+  });
+
+  it("rejects the whole list when one entry or the version is bad", () => {
+    const good = { login: "a[bot]", id: 1 };
+    const parse = (value: object) => parseTrustedAuthors(JSON.stringify(value));
+    expect(parse(TRUSTED).valid).toBe(true);
+    for (const bad of [{ login: "b[bot]" }, { login: "b[bot]", id: 0 }, { login: "b[bot]", id: 1.5 }, { login: 7, id: 2 }, { login: "b[bot]", id: 2, extra: true }, null, "x"]) {
+      const result = parse({ ...TRUSTED, botAuthors: [good, bad] });
+      expect(result.valid).toBe(false);
+      expect(result.bots).toEqual([]);
+      expect(result.admins).toEqual([]);
+    }
+    expect(parse({ ...TRUSTED, version: 2 }).valid).toBe(false);
+    expect(parse({ ...TRUSTED, version: undefined }).valid).toBe(false);
+    expect(parse({ ...TRUSTED, reviewerApps: {} }).valid).toBe(false);
+    expect(parse({ version: 1, botAuthors: [], adminAuthors: [] }).valid).toBe(false);
+  });
+
+  it("rejects a duplicate ID or a duplicate login inside one list", () => {
+    const parse = (list: object[]) => parseTrustedAuthors(JSON.stringify({ ...TRUSTED, botAuthors: list }));
+    expect(parse([{ login: "a[bot]", id: 1 }, { login: "b[bot]", id: 1 }]).valid).toBe(false);
+    expect(parse([{ login: "a[bot]", id: 1 }, { login: "A[BOT]", id: 2 }]).valid).toBe(false);
+    expect(parse([{ login: "a[bot]", id: 1 }, { login: "b[bot]", id: 2 }]).valid).toBe(true);
   });
 
   it("matches an account by type, ID and login together", () => {
