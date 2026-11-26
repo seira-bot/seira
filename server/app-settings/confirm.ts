@@ -9,7 +9,25 @@ export interface Consequence {
   params?: Record<string, string>;
 }
 
-export const consequenceKey = (code: ConsequenceCode): ServerLineKey => `server.appSettings.confirm.${code}`;
+/** Each line is named in full, so a search for its key finds where the server uses it. */
+const CONSEQUENCE_KEYS: Record<ConsequenceCode, ServerLineKey> = {
+  keyTo: "server.appSettings.confirm.keyTo",
+  autonomyUp: "server.appSettings.confirm.autonomyUp",
+  dataTo: "server.appSettings.confirm.dataTo",
+  deletesLogs: "server.appSettings.confirm.deletesLogs",
+  standingRule: "server.appSettings.confirm.standingRule",
+  botRule: "server.appSettings.confirm.botRule",
+  newBots: "server.appSettings.confirm.newBots",
+  thisComputer: "server.appSettings.confirm.thisComputer",
+  lending: "server.appSettings.confirm.lending",
+  browserLan: "server.appSettings.confirm.browserLan",
+  browserProxy: "server.appSettings.confirm.browserProxy",
+  wayIn: "server.appSettings.confirm.wayIn",
+  usageData: "server.appSettings.confirm.usageData",
+  emailOut: "server.appSettings.confirm.emailOut",
+  deletesHistory: "server.appSettings.confirm.deletesHistory",
+};
+export const consequenceKey = (code: ConsequenceCode): ServerLineKey => CONSEQUENCE_KEYS[code];
 
 /** The host an address sends to, as the card names it; the address itself when it is no URL. */
 export function hostOf(address: string): string {
