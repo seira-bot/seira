@@ -83,8 +83,8 @@ preferences (remote access, open at login, window frame, sidebar colour, talk
 shortcut, product emails) are covered only by `src/lib/window-prefs.test.ts`
 with a stubbed bridge, not a packaged desktop app. Undo of the per-bot,
 browser-profile and library-skill settings, turning a way in on but not off,
-and the owner-only list, the 15-minute expiry, a value that changed after the card, the
-three-card limit and the refusals for a Cloud guest, a shared server and a Team
-Cloud are covered by the unit tests in
-`server/app-settings/host.test.ts`. The fixture's engine reports no tool
+and the owner-only list, the 15-minute expiry, a value that changed after the card, a
+card that a restart left open, an undo file with no key in it, the three-card limit and
+the refusals for a Cloud guest, a shared server and a Team Cloud are covered by the unit
+tests in `server/app-settings/host.test.ts`. The fixture's engine reports no tool
 activity lines, so the secret check reads the thread as the fixture writes it.
