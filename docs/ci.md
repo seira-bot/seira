@@ -436,14 +436,38 @@ The gate checks:
 - The release commit is on `main`. If not, the gate refuses the run.
 - Each commit comes from a merged pull request into `main`. A commit without
   one flags the run.
-- The author of each pull request is an owner or member of the organization.
-  Another author flags the run.
+- The author of each pull request is a trusted author. Another author flags the run.
+  See [Trusted authors](#trusted-authors).
+- A trusted author needs one more fact: the reviewer App `seira-roctis[bot]` has an
+  approval whose `commit_id` is the final head commit of the pull request. Without it,
+  the gate flags the run.
 - Each pull request leaves these paths alone: `.github/**`, `scripts/release-*`,
   `scripts/git-hooks/**`, `pnpm-workspace.yaml`, and `.npmrc` files.
   A change to one of them flags the run.
 - An earlier version of the package exists on npm. If not, the gate flags the run.
 - A tag run has at least one commit since the baseline. If not, the gate flags the run.
 - GitHub returns the full list of commits and of changed files. A cut list flags the run.
+
+#### Trusted authors
+
+The file `.github/release-trusted-authors.json` is the only list. The gate reads it
+from `main` through the API (`contents/...?ref=main`). It never reads the file from the
+pull request under review. The file is under `.github/**`, so each change to it flags
+the run that ships it.
+
+- `botAuthors`: GitHub Apps. A pull request author counts only when its `type` is `Bot`
+  and its numeric `id` and its login both match one entry. The login alone never counts.
+- `adminAuthors`: people. The author must match the `id` and login, have the type `User`,
+  and the API must report `admin` for the account on the repository. The gate asks
+  `GET repos/{repo}/collaborators/{login}/permission`. This call needs `Metadata: read`,
+  which every `GITHUB_TOKEN` has. The gate does not use public organization membership.
+- `reviewerApps`: the Apps whose approval counts. Same match rule as `botAuthors`.
+
+The gate fails closed. A missing or invalid list means that no author is trusted, so
+the run is flagged. An error from the API for the list, the files, or the reviews
+refuses the run (exit status 2). An error from the permission call counts as "not admin".
+A path that matches a sensitive pattern flags the run for any author, and a bot review
+never clears it.
 
 A pull request that breaks a rule passes when a listed human reviewer approved
 it. The latest review of that reviewer must be an approval of the final commit
