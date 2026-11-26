@@ -9,7 +9,9 @@ import { PASS, type RouteHandler } from "./table.ts";
 import { userError } from "../user-errors.ts";
 
 export interface TaskSuggestionRouteDeps {
-  store: Pick<Store, "bot" | "messagesFor" | "patchMessage">;
+  store: Pick<Store, "bot" | "taskByThread" | "messagesFor" | "patchMessage">;
+  /** The caller may see this conversation. */
+  threadVisible(auth: RequestAuth, threadId: string): boolean;
   /** Why this caller may not write in this conversation (a Cloud guest in the owner's chat), or null. */
   sendRefusal(auth: RequestAuth, threadId: string): string | null;
   /** Sends the title in this conversation exactly as a typed message, starting (or queueing) its turn. A refusal throws an
@@ -36,6 +38,7 @@ export function createTaskSuggestionRoutes(deps: TaskSuggestionRouteDeps): Route
     if (!deps.store.bot(botId)) return json(res, 404, { error: "no such bot" });
     const refused = deps.sendRefusal(auth, threadId);
     if (refused) return json(res, 403, { error: refused });
+    if (!(deps.store.bot(botId)?.threadId === threadId || deps.store.taskByThread(botId, threadId)) || !deps.threadVisible(auth, threadId)) return json(res, 404, userError("serverError.taskSuggestion.missing"));
     const found = findTaskSuggestion(deps.store, threadId, messageId, suggestionId);
     if (!found) return json(res, 404, userError("serverError.taskSuggestion.missing"));
     const key = `${threadId}:${messageId}`;

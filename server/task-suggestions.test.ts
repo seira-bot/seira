@@ -78,7 +78,7 @@ describe("posting and answering a card", () => {
 });
 
 describe("the card request from a bot", () => {
-  const deps = (store: Store, room = false) => ({ store, turns: new TaskSuggestionTurns(), isRoom: () => room });
+  const deps = (store: Store, room = false, person = true) => ({ store, turns: new TaskSuggestionTurns(), isRoom: () => room, personStarted: () => person });
 
   it("stores the card and answers 201 with the message id and the kept count", () => {
     const { store, bot } = make();
@@ -91,6 +91,19 @@ describe("the card request from a bot", () => {
     const lines = store.messagesFor(bot.threadId).length;
     expect(offerTaskSuggestions(deps(store), bot.threadId, "g1", { tasks: [{ title: "see http://x.example" }] })).toEqual({ status: 400, body: { error: TASK_SUGGESTIONS_NONE } });
     expect(store.messagesFor(bot.threadId)).toHaveLength(lines);
+  });
+
+  it("refuses a turn that a person did not start with 409 and stores nothing", () => {
+    const { store, bot } = make();
+    const lines = store.messagesFor(bot.threadId).length;
+    expect(offerTaskSuggestions(deps(store, false, false), bot.threadId, "g1", { tasks }).status).toBe(409);
+    expect(store.messagesFor(bot.threadId)).toHaveLength(lines);
+  });
+
+  it("leaves out an intro that holds a secret and keeps the tasks", () => {
+    const card = taskSuggestionsFromInput({ intro: "Key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789", tasks });
+    expect(card?.intro).toBeUndefined();
+    expect(card?.suggestions).toHaveLength(2);
   });
 
   it("refuses a room with 409 and stores nothing", () => {

@@ -13,7 +13,7 @@ import type { Message, Store } from "./store.ts";
 type CardStore = Pick<Store, "appendMessage" | "patchMessage" | "messagesFor">;
 
 /** The card a bot asked for, or null when no task is left. A task that holds a secret is dropped whole: redaction must never
- * change what Start would send. */
+ * change what Start would send. An intro that holds a secret is left out. */
 export function taskSuggestionsFromInput(body: { intro?: unknown; tasks?: unknown } | null | undefined): TaskSuggestionsCard | null {
   const tasks = Array.isArray(body?.tasks)
     ? body.tasks.filter((task: unknown) => {
@@ -22,7 +22,8 @@ export function taskSuggestionsFromInput(body: { intro?: unknown; tasks?: unknow
         return [title, description].every((text) => typeof text !== "string" || redactSecretsInText(text) === text);
       })
     : body?.tasks;
-  return parseTaskSuggestionsInput({ intro: body?.intro, tasks });
+  const intro = typeof body?.intro === "string" && redactSecretsInText(body.intro) !== body.intro ? undefined : body?.intro;
+  return parseTaskSuggestionsInput({ intro, tasks });
 }
 
 export function postTaskSuggestions(store: Pick<Store, "appendMessage">, threadId: string, card: TaskSuggestionsCard): Message {
@@ -78,11 +79,12 @@ export const TASK_SUGGESTIONS_NONE = "No task was kept: each needs a plain-text 
 
 /** The bot's request for a card in its own thread. A room never takes one, and a turn posts one card at most. */
 export function offerTaskSuggestions(
-  deps: { store: Pick<Store, "appendMessage">; turns: TaskSuggestionTurns; isRoom(threadId: string): boolean },
+  deps: { store: Pick<Store, "appendMessage">; turns: TaskSuggestionTurns; isRoom(threadId: string): boolean; personStarted(threadId: string, generation: string): boolean },
   threadId: string,
   generation: string,
   body: { intro?: unknown; tasks?: unknown } | null | undefined,
 ): { status: number; body: Record<string, unknown> } {
+  if (!deps.personStarted(threadId, generation)) return { status: 409, body: { error: "A task card is only for a turn that the person started. Write the tasks in your reply instead." } };
   if (deps.isRoom(threadId)) return { status: 409, body: { error: "A room does not take a task card. Write the tasks in your reply instead." } };
   const card = taskSuggestionsFromInput(body);
   if (!card) return { status: 400, body: { error: TASK_SUGGESTIONS_NONE } };

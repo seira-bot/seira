@@ -12,7 +12,7 @@ import { PASS } from "./table.ts";
 
 const person: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
 
-function setup(options: { refusal?: string | null; sendStatus?: number; sendThrows?: Error; hold?: Promise<void>; noMessage?: boolean } = {}) {
+function setup(options: { visible?: boolean; refusal?: string | null; sendStatus?: number; sendThrows?: Error; hold?: Promise<void>; noMessage?: boolean } = {}) {
   const store = new Store(() => ({ instanceId: "claude", model: "claude-sonnet-5" }), undefined, undefined, "en");
   const bot = store.createBot({ name: "Ava" });
   const changes: StoreChange[] = [];
@@ -25,7 +25,7 @@ function setup(options: { refusal?: string | null; sendStatus?: number; sendThro
     await options.hold;
     return options.noMessage ? { ok: true as const } : { ok: true as const, message: store.appendMessage(threadId, { role: "user", kind: "text", text }) };
   };
-  const route = createTaskSuggestionRoutes({ store, sendRefusal: () => options.refusal ?? null, send });
+  const route = createTaskSuggestionRoutes({ store, threadVisible: () => options.visible ?? true, sendRefusal: () => options.refusal ?? null, send });
   const card = postTaskSuggestions(store, bot.threadId, taskSuggestionsFromInput({ tasks: [{ title: "Draft the weekly summary" }, { title: "Plan next week" }] })!);
   const call = async (body: unknown, botId = bot.id, method = "POST", path = `/api/bots/${botId}/task-suggestions`) => {
     let answer: { status: number; body: any } | undefined;
@@ -83,6 +83,21 @@ describe("the task card route", () => {
     expect(await s.call({ threadId: s.bot.threadId, messageId: plain.id, suggestionId: "s1", action: "hide" })).toMatchObject(missing);
     expect(await s.act("hide", "s9")).toMatchObject(missing);
     expect(await s.call({ threadId: other.threadId, messageId: s.card.id, suggestionId: "s1", action: "hide" })).toMatchObject(missing);
+  });
+
+  it("answers 404 when the caller cannot see the conversation, and changes nothing", async () => {
+    const s = setup({ visible: false });
+    expect(await s.act("hide")).toMatchObject({ status: 404, body: { errorKey: "serverError.taskSuggestion.missing" } });
+    expect(await s.act("start")).toMatchObject({ status: 404 });
+    expect(s.sent).toEqual([]);
+    expect(s.stored()[0]?.state).toBe("open");
+  });
+
+  it("answers 404 when the thread is not that bot's, even if the line exists", async () => {
+    const s = setup();
+    const other = s.store.createBot({ name: "Bo" });
+    expect(await s.call({ threadId: s.bot.threadId, messageId: s.card.id, suggestionId: "s1", action: "hide" }, other.id)).toMatchObject({ status: 404, body: { errorKey: "serverError.taskSuggestion.missing" } });
+    expect(s.stored()[0]?.state).toBe("open");
   });
 
   it("hides and shows, patching the stored line and sending a message.patch frame", async () => {
