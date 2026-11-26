@@ -1330,7 +1330,7 @@ export class Store {
     return bot;
   }
 
-  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: "ask" | "auto" | "full"): TeamSetupResult {
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: Exclude<ApprovalMode, "custom">): TeamSetupResult {
     const chief = this.own(request.botId);
     if (!chief) throw new Error("The requesting Chief no longer exists");
     if (chief.lastTeamSetupReceipt?.requestId === request.requestId) return chief.lastTeamSetupReceipt.result;
@@ -1349,7 +1349,7 @@ export class Store {
         next = { id: operation.botId, threadId: operation.threadId, name: operation.fields.name,
           title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), ...freshCharacter(nextBots), unread: false,
           resumeCursors: {}, createdAt, ...operation.fields, modelSelection,
-          ...(newBotApproval ? { approvalMode: newBotApproval } : {}), autoApprove: newBotApproval === "auto",
+          autoApprove: false,
           ...sharedAsMaker(chief),
           // A Chief's new specialist reports to the Chief's own person.
           ...(botOwner(chief) ? { createdBy: botOwner(chief)! } : {}),
@@ -1357,6 +1357,9 @@ export class Store {
             unread: false, activity: "idle", busy: false }],
         };
         Object.assign(next, appsFromCreator(chief, next));
+        const level = newBotApproval ?? approvalModeFor({}); // the New bot default, checked as bot creation checks it; unset is the workspace default
+        Object.assign(next, { approvalMode: level, autoApprove: level === "auto" });
+        Object.assign(next.tasks![0], { approvalMode: level, autoApprove: level === "auto" });
         if (!next.cwd) delete next.cwd;
         nextBots.unshift(next);
       } else {

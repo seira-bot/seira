@@ -386,7 +386,7 @@ import { skillReferencesSha256 } from "./skill-storage.ts";
 import { createSkillsLibraryHost } from "./host/skills-library.ts";
 import { skillExport } from "./skill-export.ts";
 import { pickBotName } from "./names.ts";
-import { botSkillTemplateSchema, newBotApproval, newBotDefaultsSchema } from "./new-bot-defaults.ts";
+import { botSkillTemplateSchema, newBotApprovalLevel, newBotDefaultsSchema } from "./new-bot-defaults.ts";
 import { expandLearnTurnText, learnSource } from "./skill-learn.ts";
 import { connectedAppsForSetup, expandSetupTurnText, setupModeActive, setupSystemPrompt, type SetupConnectedApps } from "./setup-mode.ts"; import { forgetSetupPresser, setupPresser, setupTurnText, takeSetupRequest } from "./setup-request.ts"; import { setupSuggestionsFor } from "./setup-suggestions.ts"; import { createSetupRequestRoutes } from "./routes/setup-request.ts"; import { postTeamSuggestion, takeTeamRequest, teamTurnText } from "./team-request.ts";
 import { isSkillSwitchAction, type SkillRequestCardData } from "../shared/skill-request.ts"; import { createSkillSwitchHost } from "./host/skill-switch-host.ts";
@@ -8866,8 +8866,7 @@ const modelRequests = new ModelRequestService({
 });
 const teamSetupTeams = () => [...new Set(["", ...readSections(), ...store.bots.map((bot) => sectionKey(bot.section)), ...store.groups.map((group) => sectionKey(group.section))])];
 const teamSetupRequests = new TeamSetupRequestService({
-  store, teams: teamSetupTeams, hasTeamAuthority, canPersist: proposalPersistence, maxBots: MAX_WORKSPACE_BOTS,
-  newBotApproval: () => newBotApproval(cfg.newBotDefaults, HOSTED_WORKSPACE),
+  store, teams: teamSetupTeams, newBotApproval: () => newBotApprovalLevel(cfg.newBotDefaults, HOSTED_WORKSPACE), hasTeamAuthority, canPersist: proposalPersistence, maxBots: MAX_WORKSPACE_BOTS,
   autoApply: appliesDirectly,
   validateChange: (before, fields) => assertComputerChangeIdle(before, { ...before, ...fields }),
   mcpServerProblem: (name, botId) => mcpServerProblemFor(cfg.mcpServers, name, botId), ownsThread: (botId, threadId) => Boolean(connectorThread(botId, threadId)),
@@ -11689,7 +11688,7 @@ const workspaceBackupAccess = {
   }, keepLocked),
   status: () => ({ busy: workspaceMaintenance.active, pendingRestore: workspaceMaintenance.pendingRestore }),
 };
-const workspaceCopyAccess = { dataDir: DATA_DIR, appVersion: serverVersion(), readBody, restored: workspaceRestore, ...workspaceBackupAccess, ...(CLOUD_HOME ? { restart: () => { restartRequested = true; gracefulShutdown(); } } : {}) };
+const workspaceCopyAccess = { dataDir: DATA_DIR, appVersion: serverVersion(), readBody, restored: workspaceRestore, moveOut: { issue: (exportId: string, expiresAt: number) => sessions.issueMoveOut({ exportId, expiresAt }), revoke: (exportId: string) => sessions.revokeMoveOuts(exportId), watch: (sessionId: string, ended: () => void) => sessions.onSessionRevoked((id) => { if (id === sessionId) ended(); }) }, ...workspaceBackupAccess, ...(CLOUD_HOME ? { restart: () => { restartRequested = true; gracefulShutdown(); } } : {}) };
 const workspaceBackupRoutes = createWorkspaceBackupRoutes(workspaceCopyAccess);
 let restartRequested = false;
 const cloudMoveRoutes = createCloudMoveRoutes();
