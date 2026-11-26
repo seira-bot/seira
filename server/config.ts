@@ -290,6 +290,9 @@ const threadsConfigSchema = z.object({
   /** Days a closed or archived thread's event logs survive; absent keeps them forever. */
   eventLogRetentionDays: z.number().int().min(1).max(3650).optional(),
 }).strict();
+/** Memory upkeep timing: `captureQuietMs` is the quiet time (ms) after a turn before its facts are captured; `tidyHour` is the local hour after which the nightly tidy-up runs. */
+const memoryConfigSchema = z.object({ captureQuietMs: z.number().int().min(1_000).max(24 * 60 * 60_000).optional(), tidyHour: z.number().int().min(0).max(23).optional() }).strict();
+const decisionsConfigSchema = z.object({ retentionDays: z.number().int().min(1).max(3650).optional() }).strict();
 const newBotsConfigSchema = z.object({
   /** Effort for a new bot whose model selection names none. */
   effort: z.enum(EFFORT_LEVELS).optional(),
@@ -302,6 +305,9 @@ const threadsPatchSchema = threadsConfigSchema.extend({
   eventLogMaxBytes: threadsConfigSchema.shape.eventLogMaxBytes.nullable(),
   eventLogRetentionDays: threadsConfigSchema.shape.eventLogRetentionDays.nullable(),
 });
+/** A null field clears what was saved, so Undo of a change to an unset value puts it back unset. */
+const memoryPatchSchema = memoryConfigSchema.extend({ captureQuietMs: memoryConfigSchema.shape.captureQuietMs.nullable(), tidyHour: memoryConfigSchema.shape.tidyHour.nullable() }).partial();
+const decisionsPatchSchema = decisionsConfigSchema.extend({ retentionDays: decisionsConfigSchema.shape.retentionDays.nullable() });
 const appConfigSchema = z.object({
   /** Set only by the verified domain endpoint, never by a config patch. */
   customDomain: z.string().optional(),
@@ -395,16 +401,10 @@ const appConfigSchema = z.object({
     compactAt: z.number().positive().max(10_000_000).optional(),
     autoCompact: z.boolean().optional(),
   }).extend(roomContextSettings).extend(replaySettings).optional(),
-  /** Memory upkeep timing, for bots with Memory upkeep switched on. */
-  memory: z.object({
-    /** Quiet time after a turn before its facts are captured (ms). */
-    captureQuietMs: z.number().int().min(1_000).max(24 * 60 * 60_000).optional(),
-    /** Local hour (0-23) after which the nightly tidy-up runs. */
-    tidyHour: z.number().int().min(0).max(23).optional(),
-  }).strict().optional(),
+  memory: memoryConfigSchema.optional(),
   threads: threadsConfigSchema.optional(), /** Burst mode on an open-source install; a Cloud's plan sets it instead. `maxParallel`: burst threads running at once (default 10). */ burst: z.object({ maxParallel: z.number().int().min(1).max(100).optional() }).strict().optional(),
   /** Minimum days of decision-log month files kept; SEIRA_DECISION_RETENTION_DAYS wins. */
-  decisions: z.object({ retentionDays: z.number().int().min(1).max(3650).optional() }).strict().optional(),
+  decisions: decisionsConfigSchema.optional(),
   loopGuard: loopGuardConfigSchema.optional(),
   safetyFloor: z.object({ enabled: z.boolean().optional() }).strict().optional(), // off by default: safetyFloorEnabled in server/safety-floor-gate.ts
   localVm: localVmConfigSchema.optional(),
@@ -427,7 +427,7 @@ const storedAppConfigSchema = appConfigSchema.extend(helperStoredShape).extend({
   }).optional(),
 });
 const appConfigPatchSchema = appConfigSchema.omit({ instances: true, mcpServers: true, cliStartup: true, customDomain: true, box: true })
-  .extend({ threads: threadsPatchSchema.optional(), newBots: newBotsPatchSchema.optional(), imageGen: imageGenPatchSchema.optional() }); export const CONFIG_PATCH_FIELDS = appConfigPatchSchema.shape;
+  .extend({ threads: threadsPatchSchema.optional(), newBots: newBotsPatchSchema.optional(), imageGen: imageGenPatchSchema.optional(), memory: memoryPatchSchema.optional(), decisions: decisionsPatchSchema.optional() }); export const CONFIG_PATCH_FIELDS = appConfigPatchSchema.shape;
 const jsonObjectSchema = z.record(z.string(), z.json());
 
 export interface AppConfig extends HelperConfig {
@@ -893,13 +893,13 @@ export const saveConfig = (...args: Parameters<typeof saveConfigNow>): void => w
 
 /** Read, change and write happen under the lock that `seira access` and the people limit share: no other process writes between the read and the write. */
 function saveConfigNow(
-  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { threads?: z.output<typeof threadsPatchSchema>; newBots?: z.output<typeof newBotsPatchSchema>; imageGen?: z.output<typeof imageGenPatchSchema> },
+  patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen" | "memory" | "decisions">> & { threads?: z.output<typeof threadsPatchSchema>; newBots?: z.output<typeof newBotsPatchSchema>; imageGen?: z.output<typeof imageGenPatchSchema>; memory?: z.output<typeof memoryPatchSchema>; decisions?: z.output<typeof decisionsPatchSchema> },
   options: { replaceInstances?: boolean } = {}): void {
   const p = join(DATA_DIR, "config.json");
   const read = readConfigFile(p);
   if (read.state === "unreadable" || read.state === "invalid") throw configSaveRefusal(read, p);
   const disk: JsonObject = read.state === "ok" ? read.value : {};
-  const checkedPatch = appConfigSchema.partial().extend({ threads: threadsPatchSchema.optional(), newBots: newBotsPatchSchema.optional(), imageGen: imageGenPatchSchema.optional() }).parse(patch);
+  const checkedPatch = appConfigSchema.partial().extend({ threads: threadsPatchSchema.optional(), newBots: newBotsPatchSchema.optional(), imageGen: imageGenPatchSchema.optional(), memory: memoryPatchSchema.optional(), decisions: decisionsPatchSchema.optional() }).parse(patch);
   const before = configSaveListeners.size ? structuredClone(disk) : disk;
   const keepImageModels = keepKeysOutOfImageModels(disk, checkedPatch.imageGen);
   const storedProfiles = storedBrowserProfilesSchema.safeParse(disk.browserProfiles);

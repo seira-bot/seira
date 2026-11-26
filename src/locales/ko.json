@@ -6996,6 +6996,7 @@
   "server.appSettings.confirm.wayIn": "연결된 기기가 이 방법으로 이 컴퓨터에 접속할 수 있어요.",
   "server.appSettings.confirm.usageData": "이 앱의 익명 사용 데이터가 Seira로 전송돼요.",
   "server.appSettings.confirm.emailOut": "내 이메일 주소가 Seira로 전송돼요.",
+  "server.appSettings.confirm.deletesHistory": "{days}일보다 오래된 승인 기록이 삭제됩니다. 실행 취소로 되살릴 수 없습니다.",
   "native.connect.empty": "서버 주소를 입력하거나 링크를 붙여 넣으세요.",
   "native.connect.codeOnly": "페어링 코드입니다. 서버 주소도 입력하세요. 예: {example}",
   "native.connect.emailCode": "이메일로 받은 로그인 코드입니다. 페어링에는 7KQ2-M9XD-H4TP 같은 12자리 코드가 필요합니다.",

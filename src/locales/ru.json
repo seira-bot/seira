@@ -6487,6 +6487,7 @@
   "server.appSettings.confirm.wayIn": "Ваши подключённые устройства смогут так связаться с этим компьютером.",
   "server.appSettings.confirm.usageData": "Анонимные данные об использовании этого приложения будут отправлены в Seira.",
   "server.appSettings.confirm.emailOut": "Ваш адрес электронной почты будет отправлен в Seira.",
+  "server.appSettings.confirm.deletesHistory": "История одобрений старше {days} дн. будет удалена. Отмена её не вернёт.",
   "native.connect.empty": "Введите адрес сервера или вставьте его ссылку.",
   "native.connect.codeOnly": "Это код сопряжения. Введите также адрес сервера, например {example}.",
   "native.connect.emailCode": "Это код входа из письма. Для сопряжения нужен 12-символьный код, например 7KQ2-M9XD-H4TP.",

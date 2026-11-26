@@ -925,6 +925,24 @@ describe("saving the newer sections", () => {
     }
   });
 
+  it("clears a saved memory or approval-history value with null while other keys survive", () => {
+    const path = join(DATA_DIR, "config.json");
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(path, JSON.stringify({}));
+    try {
+      expect(parseConfigPatch({ memory: { tidyHour: null } })).toEqual({ memory: { tidyHour: null } });
+      expect(parseConfigPatch({ decisions: { retentionDays: null } })).toEqual({ decisions: { retentionDays: null } });
+      expect(() => parseConfigPatch({ memory: { tidyHour: 24 } })).toThrow();
+      saveConfig({ memory: { captureQuietMs: 5000, tidyHour: 4 }, decisions: { retentionDays: 30 } });
+      saveConfig({ memory: { captureQuietMs: null }, decisions: { retentionDays: null } });
+      const disk = JSON.parse(readFileSync(path, "utf8"));
+      expect(disk.memory).toEqual({ tidyHour: 4 });
+      expect(disk.decisions).toEqual({});
+    } finally {
+      rmSync(path, { force: true });
+    }
+  });
+
   it("seeds what this machine holds when the first threads save is an event-log knob, so an older version can still read the file", () => {
     const path = join(DATA_DIR, "config.json");
     mkdirSync(DATA_DIR, { recursive: true });

@@ -3109,6 +3109,7 @@
   "server.appSettings.confirm.wayIn": "Vos appareils associés peuvent joindre cet ordinateur de cette façon.",
   "server.appSettings.confirm.usageData": "Des données d'utilisation anonymes de cette app seront envoyées à Seira.",
   "server.appSettings.confirm.emailOut": "Votre adresse e-mail sera envoyée à Seira.",
+  "server.appSettings.confirm.deletesHistory": "L'historique des approbations de plus de {days} jours sera supprimé. Annuler ne le rétablit pas.",
   "native.connect.empty": "Saisissez l'adresse du serveur ou collez son lien.",
   "native.connect.codeOnly": "C'est un code d'appairage. Saisissez aussi l'adresse du serveur, par exemple {example}.",
   "native.connect.emailCode": "C'est un code de connexion reçu par e-mail. L'appairage demande un code de 12 caractères comme 7KQ2-M9XD-H4TP.",

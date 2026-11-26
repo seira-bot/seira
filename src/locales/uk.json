@@ -3423,6 +3423,7 @@
   "server.appSettings.confirm.wayIn": "Ваші під’єднані пристрої можуть так дістатися до цього комп’ютера.",
   "server.appSettings.confirm.usageData": "Анонімні дані про використання цього застосунку буде надіслано до Seira.",
   "server.appSettings.confirm.emailOut": "Вашу адресу електронної пошти буде надіслано до Seira.",
+  "server.appSettings.confirm.deletesHistory": "Історію схвалень старшу за {days} дн. буде видалено. Скасування її не поверне.",
   "native.connect.empty": "Введіть адресу сервера або вставте його посилання.",
   "native.connect.codeOnly": "Це код прив'язки. Введіть також адресу сервера, наприклад {example}.",
   "native.connect.emailCode": "Це код входу з листа. Для прив'язки потрібен 12-символьний код, наприклад 7KQ2-M9XD-H4TP.",

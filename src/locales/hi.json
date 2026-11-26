@@ -2988,6 +2988,7 @@
   "server.appSettings.confirm.wayIn": "आपके जुड़े हुए डिवाइस इस तरीके से इस कंप्यूटर तक पहुँच सकते हैं।",
   "server.appSettings.confirm.usageData": "इस ऐप का गुमनाम उपयोग डेटा Seira को भेजा जाएगा।",
   "server.appSettings.confirm.emailOut": "आपका ईमेल पता Seira को भेजा जाएगा।",
+  "server.appSettings.confirm.deletesHistory": "{days} दिन से पुराना अनुमोदन इतिहास हटा दिया जाएगा। पूर्ववत करने से वह वापस नहीं आएगा।",
   "native.connect.empty": "सर्वर का पता दर्ज करें या उसका लिंक पेस्ट करें।",
   "native.connect.codeOnly": "यह एक पेयरिंग कोड है। सर्वर का पता भी दर्ज करें, जैसे {example}।",
   "native.connect.emailCode": "यह ईमेल से आया साइन-इन कोड है। पेयरिंग के लिए 7KQ2-M9XD-H4TP जैसा 12 अक्षरों का कोड चाहिए।",

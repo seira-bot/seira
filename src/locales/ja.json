@@ -7318,6 +7318,7 @@
   "server.appSettings.confirm.wayIn": "ペアリング済みのデバイスが、この方法でこのコンピューターに接続できます。",
   "server.appSettings.confirm.usageData": "このアプリの匿名の利用データが Seira に送信されます。",
   "server.appSettings.confirm.emailOut": "あなたのメールアドレスが Seira に送信されます。",
+  "server.appSettings.confirm.deletesHistory": "{days} 日より古い承認履歴は削除されます。元に戻しても復元できません。",
   "native.connect.empty": "サーバーのアドレスを入力するか、リンクを貼り付けてください。",
   "native.connect.codeOnly": "これはペアリングコードです。サーバーのアドレスも入力してください（例：{example}）。",
   "native.connect.emailCode": "これはメールで届いたサインインコードです。ペアリングには 7KQ2-M9XD-H4TP のような 12 文字のコードが必要です。",

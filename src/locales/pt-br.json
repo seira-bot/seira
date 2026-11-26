@@ -270,6 +270,7 @@
   "server.appSettings.confirm.wayIn": "Seus dispositivos pareados podem chegar a este computador por este caminho.",
   "server.appSettings.confirm.usageData": "Dados de uso anônimos deste app serão enviados ao Seira.",
   "server.appSettings.confirm.emailOut": "Seu endereço de e-mail será enviado ao Seira.",
+  "server.appSettings.confirm.deletesHistory": "O histórico de aprovações com mais de {days} dias será apagado. Desfazer não consegue trazê-lo de volta.",
   "server.mcp.askedRemove": "Pediu para remover o servidor MCP {name}",
   "server.mcp.card.turnOn": "Ligar {name}?",
   "server.mcp.card.change": "Alterar {name}?",

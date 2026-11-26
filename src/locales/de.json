@@ -162,6 +162,7 @@
   "server.appSettings.confirm.wayIn": "Deine gekoppelten Geräte können diesen Computer auf diesem Weg erreichen.",
   "server.appSettings.confirm.usageData": "Anonyme Nutzungsdaten dieser App gehen an Seira.",
   "server.appSettings.confirm.emailOut": "Deine E-Mail-Adresse wird an Seira gesendet.",
+  "server.appSettings.confirm.deletesHistory": "Der Freigabeverlauf, der älter als {days} Tage ist, wird gelöscht. Mit „Rückgängig“ kommt er nicht zurück.",
   "server.mcp.askedRemove": "Entfernen von MCP-Server {name} angefragt",
   "server.mcp.card.turnOn": "{name} einschalten?",
   "server.mcp.card.change": "{name} ändern?",

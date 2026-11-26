@@ -71,6 +71,22 @@ client scope only. Nothing touches live app data.
   engine has that key. `get` lists it with no key. Removing it is refused with
   one line saying the person does that in Settings → AI, and Undo on the add
   removes it. The key is in no tool result, message or decision row.
+- **Address changes keep the saved key.** Each provider address, the OpenAI-compatible
+  model and the voice server address save only the changed field. A key that
+  came from the environment is not copied into `config.json`.
+  `server/app-settings/registry-gaps.test.ts` checks the saved patch.
+- **Voice provider.** `set voice.provider` to a cloud provider waits on a card
+  that says the text goes to that company. System and Chatterbox apply at once.
+  Undo puts back the provider, the voice and the model.
+- **Approval history.** `set decisions.retentionDays` to a lower number waits on a
+  card that says the older history is deleted and Undo cannot bring it back.
+  A higher number applies at once. It is refused when the server's setup fixes
+  the days. Undo of a change from an unset value clears the saved number.
+- **Memory upkeep timing.** `set memory.upkeep` takes the quiet time (in
+  milliseconds) and the tidy hour. Both apply at once, and Undo clears each
+  field that was unset.
+- **treg key.** `set keys.tregApiKey` without a value posts the secure key card in
+  Apps. It reads as set once a key is saved.
 - **Not the owner's turn.** A webhook's run can `get` a setting, but its `set`
   is refused with the automation line and the setting stays as it was.
 

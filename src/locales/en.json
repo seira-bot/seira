@@ -287,6 +287,7 @@
   "server.appSettings.confirm.wayIn": "Your paired devices can reach this computer this way.",
   "server.appSettings.confirm.usageData": "Anonymous usage data from this app will go to Seira.",
   "server.appSettings.confirm.emailOut": "Your email address will be sent to Seira.",
+  "server.appSettings.confirm.deletesHistory": "Approval history older than {days} days will be deleted. Undo can't bring it back.",
   "server.mcp.askedRemove": "Asked to remove MCP server {name}",
   "server.mcp.card.turnOn": "Turn on {name}?",
   "server.mcp.card.change": "Change {name}?",

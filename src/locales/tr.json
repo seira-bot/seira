@@ -5283,6 +5283,7 @@
   "server.appSettings.confirm.wayIn": "Eşlenmiş cihazlarınız bu bilgisayara bu yoldan ulaşabilir.",
   "server.appSettings.confirm.usageData": "Bu uygulamanın anonim kullanım verileri Seira'ya gönderilecek.",
   "server.appSettings.confirm.emailOut": "E-posta adresiniz Seira'ya gönderilecek.",
+  "server.appSettings.confirm.deletesHistory": "{days} günden eski onay geçmişi silinecek. Geri alma bunu geri getirmez.",
   "native.connect.empty": "Sunucunun adresini girin veya bağlantısını yapıştırın.",
   "native.connect.codeOnly": "Bu bir eşleştirme kodu. Sunucunun adresini de girin, örneğin {example}.",
   "native.connect.emailCode": "Bu, bir e-postadan gelen oturum açma kodu. Eşleştirme için 7KQ2-M9XD-H4TP gibi 12 karakterlik bir kod gerekir.",

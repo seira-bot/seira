@@ -172,7 +172,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "settings",
     name: "Settings",
     place: "the menu under the person's name at the bottom of the sidebar",
-    does: "Appearance, language, defaults for new bots, AI engines and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
+    does: "Appearance, language, defaults for new bots, AI engines, the voice provider, how long approval history is kept, memory upkeep timing and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
     tools: ["app_settings"],
     releaseNotes: ["updateCheckHonest", "uiMap", "placeCard"],
   },
