@@ -12,7 +12,6 @@ import * as tts from "../tts/index.ts";
 import { toUtterances, VOICE_FIRST_BLOCK_MAX_CHARS } from "../tts/speech-text.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
-import { publicErrorText } from "../public-error.ts";
 
 /** About six minutes of 16 kHz mono 16-bit PCM. */
 export const TRANSCRIBE_MAX_BYTES = 12 * 1024 * 1024;
@@ -43,7 +42,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
         };
         return json(res, 200, { voices: await tts.listVoices(cfg, undefined, search) });
       } catch (e) {
-        return json(res, 200, { voices: [], error: publicErrorText(e, "TTS", "The voice service could not answer.") });
+        return json(res, 200, { voices: [], error: e instanceof Error ? e.message : String(e) });
       }
     }
     if (method === "POST" && path === "/api/tts/voices/add") {
@@ -56,7 +55,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       try {
         return json(res, 200, { voiceId: await tts.addSharedVoice(cfg, publicOwnerId, voiceId, name) });
       } catch (e) {
-        return json(res, 502, { error: publicErrorText(e, "TTS", "The voice service could not answer.") });
+        return json(res, 502, { error: e instanceof Error ? e.message : String(e) });
       }
     }
     if (method === "POST" && path === "/api/tts/speak") {
@@ -82,7 +81,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
         if (controller.signal.aborted) return;
         const failure = voiceFailure(e);
         if (failure) return json(res, failure.status, failure.body);
-        return json(res, 502, { error: publicErrorText(e, "TTS", "The voice service could not answer.") });
+        return json(res, 502, { error: e instanceof Error ? e.message : String(e) });
       } finally {
         res.off("close", cancel);
       }
@@ -140,7 +139,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
         if (controller.signal.aborted) return;
         const failure = voiceFailure(e);
         if (failure) return json(res, failure.status, failure.body);
-        return json(res, 502, { error: publicErrorText(e, "TTS", "The voice service could not answer."), ...userErrorFields(e) });
+        return json(res, 502, { error: e instanceof Error ? e.message : String(e), ...userErrorFields(e) });
       } finally {
         res.off("close", cancel);
       }
