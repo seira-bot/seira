@@ -6,6 +6,7 @@ import { createGrokMove, type GrokMove } from "../grok-move-tunnel.ts";
 import { applySetupImport, detectSetup, thisMachine, type SetupHost, type SetupMachine } from "../setup-import.ts";
 import type { BusyFlag } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface SetupImportRouteDeps {
   /** See setupImportLocal. */
@@ -67,7 +68,7 @@ export function createSetupImportRoutes(deps: SetupImportRouteDeps): RouteHandle
       try {
         return json(res, 200, await (method === "POST" ? grokMove.connect() : method === "DELETE" ? grokMove.end() : grokMove.look(after)));
       } catch (error) {
-        return json(res, 502, { error: error instanceof Error ? error.message : String(error) });
+        return json(res, 502, { error: publicErrorText(error, "Grok connector", "The Grok connector could not answer.") });
       }
     }
     if (path !== SETUP_IMPORT_PATH) return PASS;

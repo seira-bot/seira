@@ -9,6 +9,7 @@ import * as gemini from "../tts/gemini.ts";
 import * as openai from "../tts/openai.ts";
 import { voiceFailure } from "../tts/errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface CallVoicePreviewDeps {
   config(): AppConfig;
@@ -59,7 +60,7 @@ export function createCallVoicePreviewRoutes(deps: CallVoicePreviewDeps): RouteH
       if (controller.signal.aborted) return;
       const failure = voiceFailure(e);
       if (failure) return json(res, failure.status, failure.body);
-      return json(res, 502, { error: e instanceof Error ? e.message : String(e) });
+      return json(res, 502, { error: publicErrorText(e, "GET call voice preview", "The voice sample could not be made.") });
     } finally {
       res.off("close", cancel);
     }

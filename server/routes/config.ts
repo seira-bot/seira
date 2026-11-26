@@ -47,6 +47,7 @@ import * as vps from "../vps-computer.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface BusyFlag {
   get(): boolean;
@@ -321,7 +322,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
             const prepared = await composio.prepareProjectSession(requestedComposioKey, cfg.composio, undefined, { reuseEarlierUser: !sharedMembership() });
             patch.composio = { ...patch.composio, ...prepared };
           } catch (error) {
-            return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+            return json(res, 400, { error: publicErrorText(error, "PATCH config (Composio key)", "The Composio key could not be checked.") });
           }
         } else {
           patch.composio = { ...patch.composio, apiKey: "", sessionId: "" };

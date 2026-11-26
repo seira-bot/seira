@@ -42,6 +42,7 @@ import { forkMessageId } from "./fork-request.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { sawThread } from "../thread-presence.ts";
 import { readThreadNotifications, type NotificationListed } from "./notifications.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export type MessagePage = { messages: Array<Message | Record<string, unknown>>; hasMore?: boolean; activeLeafId: string | null };
 
@@ -387,7 +388,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
       try {
         assertWithinBudget(cfg, DATA_DIR);
       } catch (error) {
-        return json(res, 409, { error: error instanceof Error ? error.message : String(error), code: "spend_cap" });
+        return json(res, 409, { error: publicErrorText(error, "POST channel message"), code: "spend_cap" });
       }
       const ownsThread = group.dm
         ? group.threadId === threadId

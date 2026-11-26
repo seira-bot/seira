@@ -81,7 +81,7 @@ import { RoomTurnDeadline, RoomTurnStallRegistry, effectiveRoomTurnTimeoutMinute
 import { roomTurnEnd, type RoomClaimEnd } from "./room-turn-end.ts";
 import { applyHoldDirective, classifyHoldDirective, heldMemberLine, rememberHeldMessage, stopWordPlacement } from "./room-holds.ts";
 import { refusalBody, refusalText, USER_ERROR, userError, userErrorFields, userErrorThrown } from "./user-errors.ts";
-import { publicErrorMessage } from "./public-error.ts";
+import { publicErrorMessage, publicErrorText } from "./public-error.ts";
 import { chatNotice, failedNoticeTool, noticeTool, runtimeNoticeTool } from "./chat-notices.ts";
 import type { ServerErrorBody } from "../shared/server-text.ts";
 import { emailSignInRoute } from "./routes/email-sign-in.ts";
@@ -12914,7 +12914,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           try {
             applied = webhookRequests.submit({ botId: from.id, threadId: fromThreadId, operation: { ...request.operation, forBot }, from: sender, canCommit: () => internalCapabilityIsActive(internalCapability) });
           } catch (error) {
-            return json(res, error instanceof WebhookRequestError ? error.status : (error as { status?: number }).status ?? 400, { error: error instanceof Error ? error.message : String(error) });
+            return json(res, error instanceof WebhookRequestError ? error.status : (error as { status?: number }).status ?? 400, { error: publicErrorText(error, "POST internal trigger request (webhook)") });
           }
           appendDecision(DATA_DIR, { threadId: fromThreadId, requestId: applied.requestId, botId: from.id, botName: from.name,
             tool: applied.action === "create" ? "create_trigger" : "manage_trigger", summary: applied.summary, decision: "auto-approved", source: "routine" });
@@ -12988,7 +12988,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           const submitted = teamMemoryRequests.submit(from, body.fromThreadId, Boolean(owner.group), input, appliesDirectly(from.id, body.fromThreadId));
           return json(res, submitted.status, submitted.body);
         } catch (error) {
-          return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+          return json(res, 400, { error: publicErrorText(error, "POST internal team memory request") });
         }
       }
       if (method === "POST" && path === "/api/internal/profile-requests") {
@@ -13501,7 +13501,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         try {
           await retryThread({ chief: from, bot: target, threadId, note, unattended: isUnattended(from.id, fromThreadId) });
         } catch (error) {
-          return json(res, 409, { error: error instanceof Error ? error.message : String(error) });
+          return json(res, 409, { error: publicErrorText(error, "POST internal thread retry") });
         }
         store.appendMessage(fromThreadId, {
           role: "bot",
@@ -14546,7 +14546,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       try {
         return json(res, 200, { configured: true, services: { ...await composio.listConnectorTools(cfg), ...nativeTools } });
       } catch (e) {
-        return json(res, 502, { configured: true, services: {}, error: e instanceof Error ? e.message : String(e) });
+        return json(res, 502, { configured: true, services: {}, error: publicErrorText(e, "GET connector tools", "The connected apps could not be listed.") });
       }
     }
     if (method === "GET" && path === "/api/connectors") {
