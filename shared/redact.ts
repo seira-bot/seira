@@ -149,9 +149,37 @@ function maskJwts(text: string): string {
 
 /** The most text one call reads. Every matcher below reads its input in time linear in its length. This limit is a
  * second guard on the total work of the whole call, held-secret scrubbers included. Text over it is not skipped: it is
- * masked whole, before any stage runs, so nothing in it can pass through. A marker is shorter than the limit, so a
- * second pass leaves the result the same. */
+ * masked whole, before any stage runs, so nothing in it can pass through. */
 export const REDACT_SCAN_LIMIT = 2 * 1024 * 1024;
+
+/** UTF-8 size of a string, counted without a copy (shared code also runs where `Buffer` does not exist). */
+function utf8Length(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdbff && i + 1 < text.length && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00 ? (i++, 4) : 3;
+  }
+  return bytes;
+}
+
+/** `head` plus a fill so the result has exactly `units` UTF-16 units and `bytes` UTF-8 bytes; null when that cannot be. */
+function fillTo(head: string, units: number, bytes: number): string | null {
+  const room = units - head.length;
+  const extra = bytes - utf8Length(head) - room; // bytes past one per unit
+  if (room < 0 || extra < 0 || extra > 2 * room) return null;
+  const wide = extra >> 1, mid = extra & 1; // `€` adds 2 bytes, `é` adds 1
+  return head + "x".repeat(room - wide - mid) + (mid ? "é" : "") + "€".repeat(wide);
+}
+
+/** An oversize text becomes a marker and a fill with the SAME length and the SAME UTF-8 size as the text. A caller that
+ * counts the redacted text (a size limit, a page of rows, a file cap) then counts what it counted before, so the mask
+ * cannot move a limit. The result is a pure function of the length and size, so a second pass returns it unchanged. */
+function maskOversize(text: string): string {
+  const units = text.length, bytes = utf8Length(text);
+  // The marker is plain ASCII: the usual `«` takes 2 bytes, which an all-ASCII text has no room for. Without the marker
+  // only when almost every character takes 3 bytes: the fill alone always fits.
+  return fillTo(`[redacted ${units} chars]`, units, bytes) ?? fillTo("", units, bytes) ?? "";
+}
 
 function redactWithinLimit(text: string): string {
   let out = maskPemBlocks(text);
@@ -168,7 +196,7 @@ function redactWithinLimit(text: string): string {
 
 export function redactSecretsInText(text: string): string {
   if (!text) return text;
-  if (text.length > REDACT_SCAN_LIMIT) return mask(text);
+  if (text.length > REDACT_SCAN_LIMIT) return maskOversize(text);
   // Held values first: a short one-time code is still a secret.
   const held = scrubHeldSecrets(text);
   if (held.length < 8) return held;

@@ -98,7 +98,9 @@ describe("redactSecretsInText scan limit", () => {
     const text = `head api_key=abcdefgh1234\n${filler(REDACT_SCAN_LIMIT)}\n${secret} tail`;
     const { out, ms } = timed(text);
     expect(ms).toBeLessThan(TIME_LIMIT_MS);
-    expect(out).toBe(`«redacted ${text.length} chars»`);
+    expect(out.startsWith(`[redacted ${text.length} chars]`)).toBe(true);
+    expect(out).not.toContain("sk-ant");
+    expect(out).not.toContain("abcdefgh1234");
     expect(redactSecretsInText(out)).toBe(out);
   });
 
@@ -115,6 +117,44 @@ describe("redactSecretsInText scan limit", () => {
 
   it("masks an oversize unbroken run whole", () => {
     const out = redactSecretsInText(`start ${"A".repeat(REDACT_SCAN_LIMIT + 10)}`);
-    expect(out).toBe(`«redacted ${REDACT_SCAN_LIMIT + 16} chars»`);
+    expect(out.startsWith(`[redacted ${REDACT_SCAN_LIMIT + 16} chars]`)).toBe(true);
+    expect(out).not.toContain("AAAA");
+  });
+
+  // A caller that counts the redacted text (a size limit, a page of rows, a file cap) must count what it counted before.
+  describe("keeps the length and the UTF-8 size of the text it masks", () => {
+    const bytes = (text: string) => Buffer.byteLength(text);
+    const shapes: Record<string, string> = {
+      ascii: "word ",
+      "two-byte": "é",
+      "three-byte": "€",
+      "four-byte": "😀",
+      mixed: "a€é😀 ",
+    };
+    for (const [name, unit] of Object.entries(shapes)) {
+      it(name, () => {
+        const text = unit.repeat(Math.ceil((REDACT_SCAN_LIMIT + 1) / unit.length)).concat("é");
+        const out = redactSecretsInText(text);
+        expect(out.length).toBe(text.length);
+        expect(bytes(out)).toBe(bytes(text));
+        expect(out).not.toBe(text);
+        expect(redactSecretsInText(out)).toBe(out);
+      });
+    }
+
+    it("when the text has only 3-byte characters, so no room is left for the marker", () => {
+      const text = "€".repeat(REDACT_SCAN_LIMIT + 1);
+      const out = redactSecretsInText(text);
+      expect(out.length).toBe(text.length);
+      expect(bytes(out)).toBe(bytes(text));
+      expect(redactSecretsInText(out)).toBe(out);
+    });
+
+    it("a lone surrogate counts as 3 bytes, like Buffer counts it", () => {
+      const text = `${"a".repeat(REDACT_SCAN_LIMIT)}\ud800\ud83d`;
+      const out = redactSecretsInText(text);
+      expect(out.length).toBe(text.length);
+      expect(bytes(out)).toBe(bytes(text));
+    });
   });
 });
