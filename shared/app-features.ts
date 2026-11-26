@@ -109,13 +109,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "People and access",
     place: "Settings → People; a department's menu, Invite to this department; a bot's menu, Invite to this bot",
     does: "An admin invites a person by email or @domain, as admin or user. Access is the whole team, chosen departments or chosen bots, each Can chat or Can view. A user sees only what was chosen.",
-    releaseNotes: ["departmentAccess"],
+    releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut"],
   },
   {
     id: "premium-key",
     name: "Premium key",
     place: "Settings → People",
     does: "A self-hosted server lets up to 5 people sign in by email for free. An admin adds a Premium key there for unlimited people. Every feature is the same on every plan.",
+    releaseNotes: ["peopleLimit"],
   },
   {
     id: "handoffs",
