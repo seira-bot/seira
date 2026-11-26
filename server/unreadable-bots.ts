@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import { BOTS_FILE, type BotRecord, type RegistryStore } from "./registry-store.ts";
+import { BOTS_FILE, type RegistryStore } from "./registry-store.ts";
+import type { BotRecord } from "./store.ts";
 
 /** bots.json is there, and it does not read as a list of bots. */
 export class UnreadableBotsError extends Error {}
