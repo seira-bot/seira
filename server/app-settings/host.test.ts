@@ -695,7 +695,8 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.saved).toEqual([]);
     expect(fx.cfg.rooms).toEqual({ turnTimeoutMinutes: 30 });
     const card = fx.waiting()[0]!.card;
-    expect(card).toMatchObject({ options: ["Apply", "Not now"], subtitle: "30 → 45", tool: "app_settings", fixedOptions: true, appSettingRequest: { settingId: "rooms.turnTimeoutMinutes", before: "30", after: "45", expiresAt: fx.clock.at + CONFIRM_MS } });
+    expect(card).toMatchObject({ options: ["Apply", "Not now"], subtitle: "45", tool: "app_settings", fixedOptions: true, appSettingRequest: { settingId: "rooms.turnTimeoutMinutes", after: "45", expiresAt: fx.clock.at + CONFIRM_MS } });
+    expect(card.appSettingRequest).not.toHaveProperty("before");
     expect(card).not.toHaveProperty("autoApplied");
     expect(card.appSettingRequest).not.toHaveProperty("consequence");
     expect((await fx.decisions()).at(-1)).toMatchObject({ decision: "card-shown", source: "app-settings", requestId: card.requestId });
