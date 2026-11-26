@@ -45,7 +45,7 @@ function fixture(options: { owner?: boolean; guest?: boolean; pool?: Pool; engin
   };
   const entries = createSettingsRegistry({
     cfg: () => cfg,
-    saveConfig: async (patch) => { saved.push(patch); Object.assign(cfg, structuredClone(patch)); return null; },
+    saveConfig: async (patch: Record<string, unknown>) => { saved.push(patch); Object.assign(cfg, structuredClone(patch)); return null; },
     bots: () => bots, sections: () => [], credentials: () => cfg, paused: () => [],
     window: { read: () => undefined, write: () => null },
     engines: () => [], poolEngines: () => options.engines ?? ENGINES,
