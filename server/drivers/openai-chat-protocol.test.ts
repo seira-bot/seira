@@ -291,3 +291,16 @@ describe("a reply that ends for another reason than a tool call", () => {
     expect(() => new ChatToolCalls().finish("insufficient_system_resource", false)).toThrow(StreamTruncatedError);
   });
 });
+
+describe("the shape of tool calls", () => {
+  it("lists names, ID presence and argument length, and the legacy call last", () => {
+    const calls = new ChatToolCalls();
+    calls.add([{ index: 0, id: "c1", type: "function", function: { name: "echo", arguments: '{"a":"secret"}' } }], true);
+    calls.addLegacy({ name: "old", arguments: "{}" });
+    expect(calls.shape()).toEqual([
+      { name: "echo", hasId: true, argumentChars: 14 },
+      { name: "old", hasId: false, argumentChars: 2 },
+    ]);
+    expect(new ChatToolCalls().shape()).toEqual([]);
+  });
+});

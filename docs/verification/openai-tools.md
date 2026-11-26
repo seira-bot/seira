@@ -172,4 +172,5 @@ request.
 Each refusal's full error object, `failed_generation` included, is written to
 the thread's redacted native log (`native/THREAD.ndjson` in the data
 directory), next to the tool names every request offered.
+A failed attempt also writes one entry there. It shows the error, the HTTP status and content type, the finish reason, whether `[DONE]` arrived, the frame count, and each tool call's name, ID presence and argument length. It never shows argument or message text. Each request entry shows the context window and where it came from: the model list, the model name, or the default.
 

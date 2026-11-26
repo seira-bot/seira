@@ -21,7 +21,7 @@ import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent,
 import { promptHalves, volatileContextNote, withContextNote } from "./prompt-split.ts";
 import { createChatToolApproval, refusal } from "./chat-tool-approval.ts";
 import { ChatOutputLimitError, ChatProtocolError, ChatReasoningDetails, ChatToolCalls, CUT_CALL_NOTE, MAX_CUT_CALL_ROUNDS, object, StreamTruncatedError, replayableToolCalls, toolArguments, type ChatToolCall } from "./openai-chat-protocol.ts";
-import { completionError, httpErrorDetail, refusedToolCall, refusedToolCallFailure, rejectsReasoningReplay, rejectsToolsParameter, RejectedToolCallError, UnsupportedChatToolsError, UnsupportedReasoningReplayError, type ProviderBody } from "./openai-chat-refusals.ts";
+import { completionError, httpErrorDetail, refusedToolCall, refusedToolCallFailure, rejectsReasoningReplay, rejectsToolsParameter, RejectedToolCallError, UnsupportedChatToolsError, UnsupportedReasoningReplayError } from "./openai-chat-refusals.ts";
 import { ChatRepeatGuard } from "./chat-repeat-guard.ts";
 import { TextCallHoldback, textToolCalls } from "./chat-text-tool-calls.ts";
 import { createModelRoutes, ModelRouteRefused, noRouteLeft, readResponsesStream, responsesRequest, routeRefusal, type ModelRoute, type ResponseItem } from "./openai-responses.ts";
@@ -37,6 +37,8 @@ import { classifyContinuable, writeTurnHandoff } from "../turn-continuation.ts";
 import { KEY_REJECTED_REASON, keyRejected, noteKeyAccepted, noteKeyRejected, rejectsKey } from "../key-rejections.ts";
 import { FETCH_LIMIT_MS, fetchPastLimit } from "./openai-chat-fetch.ts";
 import { announcesAction } from "./chat-announcement.ts";
+import { attachTrace, completionUsage, failureEntry, newCompletionTrace, readChatStream, usageFrom, type CompletionJson, type Usage } from "./openai-chat-stream.ts";
+import { contextWindowSource } from "../context-budget.ts";
 
 export interface OpenAIChatMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -46,11 +48,6 @@ export interface OpenAIChatMessage {
   reasoning_content?: string;
   reasoning?: string;
   reasoning_details?: Record<string, unknown>[];
-}
-
-interface Usage {
-  input: number;
-  output: number;
 }
 
 export interface Completion {
@@ -65,23 +62,10 @@ export interface Completion {
   responseOutput?: ResponseItem[];
 }
 
-interface CompletionJson extends ProviderBody {
-  model?: string;
-  choices?: Array<{
-    index?: number;
-    message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown; reasoning_details?: unknown; tool_calls?: unknown; function_call?: unknown };
-    delta?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown; reasoning_details?: unknown; tool_calls?: unknown; function_call?: unknown };
-    finish_reason?: string | null;
-  }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number }; cost?: number };
-  /** Groq reports streaming usage in its final x_groq envelope. */
-  x_groq?: { usage?: CompletionJson["usage"] };
-}
-
 interface NativeLog {
   source: string;
-  outgoing(turn: SendTurnInput, messages: OpenAIChatMessage[], model: string, tools: ChatToolDefinition[]): unknown;
-  incoming(completion: Completion): unknown;
+  outgoing(turn: SendTurnInput, messages: OpenAIChatMessage[], model: string, tools: ChatToolDefinition[]): Record<string, unknown>;
+  incoming(completion: Completion): Record<string, unknown>;
 }
 
 const LIVENESS_MISSES = 3;
@@ -130,13 +114,6 @@ interface RuntimeOptions<Config> {
    * to fix a failed call instead of ending the turn on it. */
   localModel?: boolean;
 }
-
-const usageFrom = (usage: CompletionJson["usage"]): Usage | null =>
-  usage
-    ? { input: usage.prompt_tokens ?? 0, output: usage.completion_tokens ?? 0 }
-    : null;
-
-const completionUsage = (json: CompletionJson) => json.usage ?? json.x_groq?.usage;
 
 const asError = (value: unknown): Error =>
   value instanceof Error ? value : new Error(String(value));
@@ -260,6 +237,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     tools: ChatToolDefinition[] = [],
     onUsage?: TextGenerationOptions["onUsage"], variant?: string, threadId?: string,
   ): Promise<Completion> => {
+    const trace = newCompletionTrace();
     const timeoutController = new AbortController();
     let idleTimer: NodeJS.Timeout | null = null;
     const resetIdleTimer = () => {
@@ -293,6 +271,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         body: payload,
         signal: activeSignal,
       });
+      trace.httpStatus = response.status; trace.contentType = response.headers.get("content-type") ?? undefined;
       const failure = (status: number, body: string): Error => {
         const plain = options.plainRefusal?.(status, body); if (plain) return new Error(plain);
         const message = `${options.httpErrorLabel} HTTP ${status}${body ? `: ${httpErrorDetail(body)}` : ""}`;
@@ -343,6 +322,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         details.add(message.reasoning_details);
         const reasoning = message.reasoning_content ?? message.reasoning;
         const finishReason = json.choices?.[0]?.finish_reason ?? null;
+        trace.finishReason = finishReason; trace.calls = calls;
         activeSignal.throwIfAborted();
         return {
           text: options.contentText ? options.contentText(message?.content) : typeof message?.content === "string" ? message.content : "",
@@ -360,94 +340,11 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       if (!response.body) {
         throw new Error(options.noBodyError ?? `${options.httpErrorLabel} returned no response body`);
       }
-      let text = "";
-      let reasoning = "";
-      let protocolReasoning = "";
-      let usage: Usage | null = null;
-      let finishReason: string | null = null;
-      let malformedFrame = false;
-      let sawChoice = false;
-      const calls = new ChatToolCalls();
-      const details = new ChatReasoningDetails();
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const consumeDataLine = (line: string, atEof = false): boolean => {
-        if (!line.startsWith("data:")) return false;
-        const data = line.slice(5).trim();
-        if (data === "[DONE]") return true;
-        let chunk: CompletionJson;
-        try {
-          chunk = JSON.parse(data) as CompletionJson;
-        } catch {
-          // A tail left when the socket closed is an incomplete frame (stop, abort, drop), not a malformed one.
-          if (!atEof) malformedFrame = true;
-          return false;
-        }
-        const chunkError = completionError(chunk, "streaming completion error");
-        if (chunkError) throw chunkError;
-        const choice = chunk.choices?.find((row) => row.index === undefined || row.index === 0);
-        const delta = choice?.delta;
-        if (object(delta)) sawChoice = true;
-        calls.add(delta?.tool_calls, true);
-        calls.addLegacy(delta?.function_call);
-        details.add(delta?.reasoning_details);
-        if (choice?.finish_reason) finishReason = choice.finish_reason;
-        const reasoningPart = delta?.reasoning_content ?? delta?.reasoning;
-        if (typeof reasoningPart === "string") protocolReasoning += reasoningPart;
-        const reasoningDelta = options.reasoning && typeof reasoningPart === "string"
-          ? reasoningPart
-          : "";
-        const contentDelta = options.contentText ? options.contentText(delta?.content) : typeof delta?.content === "string" ? delta.content : "";
-        if (reasoningDelta) {
-          reasoning += reasoningDelta;
-          onDelta?.(reasoningDelta, "reasoning_text");
-        }
-        if (contentDelta) {
-          text += contentDelta;
-          onDelta?.(contentDelta, "assistant_text");
-        }
-        const tokenUsage = completionUsage(chunk);
-        if (tokenUsage) usage = usageFrom(tokenUsage);
-        return false;
-      };
-      try {
-        readLoop: for (;;) {
-          const { done, value } = await reader.read();
-          if (done) {
-            buffer += decoder.decode();
-            const line = buffer.trim();
-            if (line && line !== "data: [DONE]") consumeDataLine(line, true);
-            // MiniMax's api.minimax.io/v1 closes the connection after the
-            // finish_reason chunk and never sends `[DONE]`.
-            if (buffer.trim() === "data: [DONE]" || finishReason) break;
-            if (!sawChoice) {
-              let body: CompletionJson | undefined;
-              try { body = JSON.parse(buffer) as CompletionJson; } catch { body = undefined; }
-              const bodyError = body ? completionError(body, "completion error") : null;
-              if (bodyError) throw bodyError;
-            }
-            throw new StreamTruncatedError("Stream ended before completion");
-          }
-          resetIdleTimer();
-          buffer += decoder.decode(value, { stream: true });
-          if (buffer.length > 2_000_000) throw new ChatProtocolError("provider stream frame exceeded the size limit");
-          let newline: number;
-          while ((newline = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, newline).trim();
-            buffer = buffer.slice(newline + 1);
-            if (consumeDataLine(line)) break readLoop;
-          }
-        }
-      } finally {
-        await reader.cancel().catch(() => {});
-      }
-      activeSignal.throwIfAborted();
-      if (!sawChoice) throw new ChatProtocolError("provider returned no streaming completion choice");
-      return { text, reasoning, usage, toolCalls: calls.finish(finishReason, malformedFrame), finishReason, protocolReasoning, protocolReasoningDetails: details.blocks };
+      return await readChatStream(response.body, { signal: activeSignal, reasoning: Boolean(options.reasoning), contentText: options.contentText, onBytes: resetIdleTimer, onDelta, trace });
     } catch (error) {
-      if (timeoutController.signal.reason instanceof RuntimeNoticeError) throw timeoutController.signal.reason;
-      throw error;
+      const thrown = timeoutController.signal.reason instanceof RuntimeNoticeError ? timeoutController.signal.reason : error;
+      attachTrace(thrown, trace);
+      throw thrown;
     } finally {
       if (idleTimer) clearTimeout(idleTimer);
       if (liveness) clearInterval(liveness);
@@ -625,7 +522,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           // Servers still starting join between rounds, never once the tools were dropped (none left while ask_user is allowed).
           const joined = !questionAllowed || tools.definitions.length ? await joinLateChatTools(tools, [ASK_USER_TOOL_DEFINITION]) : undefined;
           for (const message of joined ?? []) emit({ ...base(turn.threadId, turnId), type: "runtime.notice", message: safeText(message) });
-          native("out", options.nativeLog.outgoing(turn, messages, model, tools.definitions));
+          native("out", { ...options.nativeLog.outgoing(turn, messages, model, tools.definitions), contextWindow: contextWindowSource(model, options.models()) });
           let attempt = 0;
           let resized = false;
           let completion: Completion;
@@ -674,6 +571,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
               break;
             } catch (value) {
               const error = asError(value);
+              native("in", failureEntry(error));
               const verdict = classifyError(error);
               // Refused for too many tools, nothing ran: learn the limit and list fewer (after a call only when servers just joined).
               const listedBefore = tools.definitions.length, refit = streamed || (seenCalls.size && !joined) || abort.signal.aborted ? undefined : await refitChatTools(tools, error, chatToolLimitKey(options.apiUrl, model), [ASK_USER_TOOL_DEFINITION]);
@@ -731,7 +629,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
               abort.signal.throwIfAborted();
             }
           }
-          native("in", options.nativeLog.incoming(completion));
+          native("in", { ...options.nativeLog.incoming(completion), finishReason: completion.finishReason });
           unread = [];
           if (completion.usage) {
             usage.input += completion.usage.input;

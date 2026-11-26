@@ -92,6 +92,12 @@ export class ChatToolCalls {
   /** Why the legacy call can't be used; reported only when it is the reply's call, so a mirror can't reject tool_calls. */
   private legacyError = "";
 
+  /** Names and sizes only: argument text can hold data that the log redaction does not know. */
+  shape(): Array<{ name: string; hasId: boolean; argumentChars: number }> {
+    const calls = [...this.calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => ({ name: call.function.name.slice(0, 64), hasId: Boolean(call.id), argumentChars: call.function.arguments.length }));
+    return this.legacy.name || this.legacy.arguments ? [...calls, { name: this.legacy.name.slice(0, 64), hasId: false, argumentChars: this.legacy.arguments.length }] : calls;
+  }
+
   addLegacy(value: unknown): void {
     if (value === undefined || value === null || this.legacyError) return;
     const fn = object(value);
