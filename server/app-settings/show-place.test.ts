@@ -101,7 +101,7 @@ describe("app_settings show_place", () => {
   });
 
   it("no Settings place id is also an id of the UI map", () => {
-    const ui = new Set(UI_PLACES.map((place) => place.id));
+    const ui = new Set<string>(UI_PLACES.map((place) => place.id));
     expect(SETTINGS_PLACES.filter((place) => ui.has(place.id))).toEqual([]);
   });
 
