@@ -105,24 +105,36 @@ function cimClass(args: string[], positional: boolean): string | null {
   return positional && args[0] !== undefined && CLASS_NAME.test(args[0]) ? args[0] : null;
 }
 
-/** A CIM or WMI change command is clear only when its target is a literal class that is not storage, in a namespace
- * that is not storage. `pipe` holds the commands before it in the same pipeline. */
-function cimUnresolved(program: string, args: string[], pipe: Command[]): boolean {
-  const lines = [args, ...pipe.map((command) => command.words)];
-  if (lines.some((words) => words.some((word) => STORAGE_CLASS.test(word) || STORAGE_NAMESPACE.test(word)))) return true;
-  // A query, a WMI path or a resource URI names its target in text the floor does not read.
+/** True when the target in `args` is not confirmed as outside storage: a storage class or namespace, a query, a WMI
+ * path or a resource URI (text the floor does not read), a computed namespace, class or first word. `needClass`: no
+ * literal class at all is also unconfirmed. The same check runs on a command's own words and on the Get command whose
+ * objects it takes. */
+function cimTargetUnresolved(args: string[], needClass: boolean): boolean {
+  if (args.some((word) => STORAGE_CLASS.test(word) || STORAGE_NAMESPACE.test(word))) return true;
   if (args.some((arg) => parameter(arg, "query", 1) || parameter(arg, "path", 2) || parameter(arg, "resourceuri", 2))) return true;
-  // A namespace that is computed can be the storage one.
+  // A namespace that is computed, or whose value was cut off, can be the storage one.
   const space = args.findIndex((arg) => parameter(arg, "namespace", 5));
-  if (space >= 0 && args.slice(space, space + 2).some((arg) => arg.includes(DYNAMIC))) return true;
+  if (space >= 0) {
+    const value = args[space].includes(":") ? args[space] : args[space + 1];
+    if (value === undefined || value.includes(DYNAMIC)) return true;
+  }
   // A first word that is not a switch is the class; one that is not a plain name is computed.
   if (args[0] !== undefined && !args[0].startsWith("-") && !CLASS_NAME.test(args[0])) return true;
+  if (args.some((arg) => parameter(arg, "classname", 2)) && cimClass(args, false) === null) return true;
+  return needClass && cimClass(args, true) === null;
+}
+
+/** A CIM or WMI change command is clear only when its target is a literal class that is not storage, in a namespace
+ * that is not storage. With no class of its own, the class comes from the command directly before it, and only from a
+ * Get command: any command between the two can replace the objects. `pipe` holds the commands before it in the same
+ * pipeline. */
+function cimUnresolved(args: string[], pipe: Command[]): boolean {
+  if (pipe.some((command) => command.words.some((word) => STORAGE_CLASS.test(word) || STORAGE_NAMESPACE.test(word)))) return true;
+  if (cimTargetUnresolved(args, false)) return true;
   if (cimClass(args, true) !== null) return false;
-  if (args.some((arg) => parameter(arg, "classname", 2))) return true;
-  // With no class of its own, the class comes from the command directly before it, and only from a Get command:
-  // any command between the two can replace the objects.
   const source = pipe.at(-1);
-  return source === undefined || !CIM_GET_COMMANDS.has(programName(source.words[0] ?? "")) || cimClass(source.words.slice(1), true) === null;
+  if (source === undefined || !CIM_GET_COMMANDS.has(programName(source.words[0] ?? ""))) return true;
+  return cimTargetUnresolved(source.words.slice(1), true);
 }
 
 /** `wmic` changes something with `call`, `delete`, `set` or `create`; it is clear only for a literal alias or
@@ -142,7 +154,7 @@ function wmicUnresolved(args: string[]): boolean {
 function unresolvedStorage(program: string, args: string[], pipe: Command[]): boolean {
   const dash = program.indexOf("-");
   if (dash > 0 && !READ_ONLY_STORAGE_VERBS.has(program.slice(0, dash)) && STORAGE_NOUN.test(program.slice(dash + 1))) return true;
-  if (CIM_METHOD_COMMANDS.has(program)) return cimUnresolved(program, args, pipe);
+  if (CIM_METHOD_COMMANDS.has(program)) return cimUnresolved(args, pipe);
   return program === "wmic" && wmicUnresolved(args);
 }
 
