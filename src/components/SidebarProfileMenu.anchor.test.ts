@@ -10,7 +10,7 @@ import { SidebarProfileMenu } from "./SidebarProfileMenu";
 beforeEach(() => { vi.stubGlobal("window", { ogb: { updater: {} } }); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-type Props = Parameters<typeof SidebarProfileMenu>[0];
+type Props = NonNullable<Parameters<typeof SidebarProfileMenu>[0]>;
 const layouts: Array<[string, Props]> = [
   ["the full row", {}],
   ["icon only", { iconOnly: true }],
@@ -19,6 +19,6 @@ const layouts: Array<[string, Props]> = [
 ];
 
 it.each(layouts)("carries data-ui sidebar.account once in Advanced mode: %s", (_name, props) => {
-  const html = renderToStaticMarkup(createElement(SidebarProfileMenu, props));
+  const html = renderToStaticMarkup(createElement<Props>(SidebarProfileMenu, props));
   expect(html.match(/data-ui="sidebar\.account"/g)).toHaveLength(1);
 });
