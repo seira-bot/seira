@@ -967,7 +967,7 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
-      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} />
+      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} onClose={() => close(false)} />
       {bot.busy ? <BusyModelMenu bot={shown} threadId={threadId} updateBotDefault={busyUpdatesBotDefault} variants={Boolean(active?.capabilities?.modelVariants)} /> : simpleMenu ? (
         <SimpleModelMenu
           menu={simpleMenu}

@@ -89,7 +89,7 @@ describe("AiPoolSettings", () => {
   it("starts off with one short line and no other control", () => {
     const view = render();
     expect(view.toggle.props.checked).toBe(false);
-    expect(view.toggle.props["aria-label"]).toBe("AI pool");
+    expect(view.toggle.props["aria-label"]).toBe("Share usage across AIs");
     expect(view.html).toContain("Your bots share usage across several AIs");
     expect(view.radio("Balance usage")).toBeUndefined();
     expect(view.html).not.toContain("How to share");
@@ -196,6 +196,16 @@ describe("AiPoolSettings", () => {
     click(view.button("Use Claude 2 instead of Claude"));
     await flush();
     expect(sent().aiPool.members).toEqual([{ instanceId: "claude2", model: "claude2-m" }, codex]);
+  });
+
+  it("offers a sign-in, not a swap, for a signed-out second sign-in to a pooled plan", () => {
+    fixture.instances.push(engine("claude2", "Claude 2", "claudeAgent", { snapshot: { state: "available", authenticated: false } }));
+    fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
+    const view = render();
+    expect(view.html).toContain("Claude is already in the pool. The provider allows one sign-in per plan in a pool.");
+    expect(view.button("Use Claude 2 instead of Claude")).toBeUndefined();
+    click(view.button("Sign in to Claude 2"));
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "engines" });
   });
 
   it("shows a signed-out AI with a sign-in button that opens providers", () => {

@@ -14,7 +14,9 @@ const fixture = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   dispatch: vi.fn(),
   api: vi.fn(async (..._args: unknown[]) => ({}) as unknown),
+  ownerOrAdmin: false,
 }));
+vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.ownerOrAdmin }));
 vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   useStore: () => ({ state: fixture.state, dispatch: fixture.dispatch }),
@@ -59,6 +61,8 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   setLocale("en");
   fixture.api.mockReset();
+  fixture.dispatch.mockReset();
+  fixture.ownerOrAdmin = false;
   fixture.state = { bots: [bot("scout", "claude")], selectedId: "scout" };
   serve([claude(40)]);
 });
@@ -133,6 +137,18 @@ it("closes the card on Escape and on a click outside, but not on a click inside 
   expect(card()).not.toBeNull();
   flushSync(() => document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
   await vi.waitFor(() => expect(card()).toBeNull());
+});
+
+it("closes the card when an admin opens the AI pool settings from it", () => {
+  fixture.ownerOrAdmin = true;
+  fixture.state = { ...fixture.state, config: { aiPool: { enabled: true, mode: "turns", members: [{ instanceId: "claude", model: "m" }, { instanceId: "go", model: "m" }] } } };
+  const found = ring(mount(false))!;
+  flushSync(() => found.click());
+  const link = card()!.querySelector<HTMLButtonElement>("[data-usage-pool]")!;
+  expect(link.textContent).toBe("AI pool: Take turns");
+  flushSync(() => link.click());
+  expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "aiPool" });
+  return vi.waitFor(() => expect(card()).toBeNull());
 });
 
 it("lists the Monthly window in the card", () => {

@@ -109,10 +109,10 @@ export function AddRows({ pool, instances, limits, now, saving, onMembers, onSig
         <SettingRow key={instance.instanceId} title={name} className={cn((conflict || signedOut) && "opacity-60")}
           leading={<InstanceProviderMark instance={instance} size={18} />}
           subtitle={conflict ? t("settings.aiPool.conflict", { name: conflict.displayName }) : <StatusLine status={status} limit={limitOf(limits, instance)} />}>
-          {conflict
-            ? <button type="button" className={textButton} disabled={saving} aria-label={t("settings.aiPool.useInstead", { name, other: conflict.displayName })} onClick={swap}>{t("settings.aiPool.useThis")}</button>
-            : signedOut
-              ? <button type="button" className={textButton} aria-label={t("settings.aiPool.signInTo", { name })} onClick={onSignIn}>{t("settings.aiPool.signIn")}</button>
+          {signedOut
+            ? <button type="button" className={textButton} aria-label={t("settings.aiPool.signInTo", { name })} onClick={onSignIn}>{t("settings.aiPool.signIn")}</button>
+            : conflict
+              ? <button type="button" className={textButton} disabled={saving || !model} aria-label={t("settings.aiPool.useInstead", { name, other: conflict.displayName })} onClick={swap}>{t("settings.aiPool.useThis")}</button>
               : <button type="button" className={textButton} disabled={saving || full || !model} aria-label={t("settings.aiPool.addNamed", { name })}
                 onClick={() => model && onMembers([...pool.members, { instanceId: instance.instanceId, model }])}>{t("settings.aiPool.add")}</button>}
         </SettingRow>
