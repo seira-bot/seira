@@ -216,7 +216,7 @@ describe("AiPoolSettings", () => {
 
   it("keeps reserve and steps behind More options, and saves levels that stay above the reserve", async () => {
     fixture.config = { aiPool: { enabled: true, mode: "even", members: [claude, codex] } };
-    expect(render().byId("ai-pool-reserve")).toBeUndefined();
+    expect(render().byId("ai-pool-more")!.props.open).toBe(false);
     fixture.values[FOLD] = true;
     const view = render();
     expect(view.byId("ai-pool-reserve")!.props["aria-label"]).toBe("Keep in reserve");
