@@ -800,6 +800,17 @@ export class SessionRegistry {
     return ended.length;
   }
 
+  rename(id: string, label: string): "renamed" | "invalid" | "missing" {
+    this.prune();
+    const record = this.sessions.find((s) => s.id === id);
+    if (!record) return "missing";
+    const next = deviceLabel(label).slice(0, 80);
+    if (!next) return "invalid";
+    record.label = next;
+    this.persist();
+    return "renamed";
+  }
+
   revoke(id: string): boolean {
     const before = this.sessions.length;
     this.sessions = this.sessions.filter((s) => s.id !== id);
