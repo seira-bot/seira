@@ -613,6 +613,7 @@ import { createTaskRoutes } from "./routes/tasks.ts";
 import { createTeamRoutes } from "./routes/teams.ts";
 import { createThreadModelRoutes } from "./routes/thread-models.ts";
 import { createUndoRoutes } from "./routes/undo.ts";
+import { ownerReview } from "./routes/owner-review.ts";
 import { createDesktopViewer, desktopViewerUrl } from "./routes/desktop-viewer.ts";
 import { createUpgrades } from "./routes/upgrades.ts";
 import { createBrowserViewerRoutes } from "./routes/browser-viewers.ts";
@@ -11969,6 +11970,8 @@ ROUTES.push(createThreadModelRoutes({
 }));
 ROUTES.push(createUndoRoutes({
   refusal: (auth, threadId, requestId) => cardAnswerRefusal(auth, threadId, requestId, "allow"),
+  ownerOnly: (threadId, requestId) => store.messagesFor(threadId).some((message) => message.card?.requestId === requestId && message.card.appSettingRequest !== undefined),
+  ownerReview: (auth, req) => ownerReview(auth, req, { desktopManaged: DESKTOP_MANAGED, anyBotWorking: () => store.bots.some((bot) => bot.busy || activeGroupTurnForBot(bot.id)) }),
   undo: (auth, res, threadId, requestId) => withDecisionActor(decisionActorFor(auth), () => undoAppliedChange(res, threadId, requestId)),
 }));
 ROUTES.push(createAntigravityLeftoverRoutes({

@@ -292,6 +292,17 @@ it("a session without admin rights cannot apply a waiting card: Apply is refused
   await finished("NOT-ADMIN-HEARD");
 }, 90_000);
 
+it("a session without admin rights cannot undo an applied settings card: Undo is refused with 403 and the value stays", async () => {
+  await start("CLIENT-UNDO", [step({ action: "set", id: "mcp.callTimeoutMinutes", value: "33" })]);
+  await finished("CLIENT-UNDO");
+  const card = await newest("mcp.callTimeoutMinutes");
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  const refused = await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 403, clientDevice);
+  expect(refused.error).toMatch(/^Undo this change from the desktop app/);
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 200, ownerDevice)).toMatchObject({ ok: true, undone: true });
+}, 90_000);
+
 it("get ai.images lists the models and each provider's readiness with no key, and set refuses a model its provider does not have", async () => {
   await start("IMAGES", [
     step({ action: "get", id: "ai.images" }),

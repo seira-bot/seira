@@ -41,6 +41,7 @@ import { parseMentionPicks } from "../../shared/room-mentions.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import { refusalBody, refusalText, userError } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { ownerReview as sharedOwnerReview } from "./owner-review.ts";
 
 type RunningInstance = ReturnType<ProviderRegistry["get"]>;
 
@@ -181,11 +182,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     cancelGroupTurnOperations, closeOpenApprovals, harnessCardOutcome, pressRecords, serverPress, relayedReaction, answeredIn, fromPhone, notePhoneSend, goals,
   } = deps; const owners = routeRunOwners(deps.runOwners, deps.runActor);
   const pinnedClientThread = pinnedClientThreadGuard(store);
-  /** Security: a bot's own shell must never approve its own card, so a local request counts only from the desktop app, or
-   * from a browser while every bot is idle. */
-  const ownerReview = (auth: RequestAuth, req: IncomingMessage) => auth.kind === "loopback"
-    ? DESKTOP_MANAGED || Boolean(req.headers.origin) && !store.bots.some((bot) => bot.busy || activeGroupTurnForBot(bot.id))
-    : auth.scopes.includes("admin");
+  const ownerReview = (auth: RequestAuth, req: IncomingMessage) => sharedOwnerReview(auth, req, { desktopManaged: DESKTOP_MANAGED, anyBotWorking: () => store.bots.some((bot) => bot.busy || activeGroupTurnForBot(bot.id)) });
   /** widget -> sendId of a press on its way in: a second tap before acceptance must not send a second answer. */
   const pressesInFlight = new Map<string, string | undefined>();
   const appMessageRate = new AppMessageRate();
