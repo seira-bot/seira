@@ -5,7 +5,7 @@ import type { ConfigStatus, InstanceInfo } from "@/state/store";
 import type { EngineLimit } from "@/lib/limit-resets";
 import { AiPoolSettings } from "./AiPoolSettings";
 import { AddRows, MemberRows } from "./AiPoolMembers";
-import { Switch } from "./SettingsPrimitives";
+import { SettingsLook, Switch } from "./SettingsPrimitives";
 
 const fixture = vi.hoisted(() => ({
   values: [] as unknown[], index: 0,
@@ -53,7 +53,7 @@ function nodes(value: ReactNode): Node[] {
 function render() {
   let tree: ReactNode = null;
   function Capture() { fixture.index = 0; tree = AiPoolSettings(); return tree; }
-  const html = renderToStaticMarkup(createElement(Capture));
+  const html = renderToStaticMarkup(createElement(SettingsLook.Provider, { value: true }, createElement(Capture)));
   const all = nodes(tree);
   const byId = (id: string) => all.find((node) => node.props.id === id);
   const button = (label: string) => all.find((node) => node.type === "button" && node.props["aria-label"] === label);
@@ -144,7 +144,6 @@ describe("AiPoolSettings", () => {
     const view = render();
     expect(view.html).toContain("30% left");
     expect(view.html).toContain("80% left");
-    console.log(view.html.slice(0, 1200));
     expect(view.html).toContain("Next");
     expect(view.byId("ai-pool-model-claude")!.props["aria-label"]).toBe("Model for Claude");
     expect(view.button("Move Claude up")!.props.disabled).toBe(true);
