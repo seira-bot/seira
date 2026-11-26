@@ -34,14 +34,15 @@ export function TaskSuggestionsCard({ botId, threadId, message, viewOnly }: { bo
   const shown = message.taskSuggestions;
   const [local, setLocal] = useState<{ from: unknown; card: TaskSuggestionsData } | null>(null);
   const [undoable, setUndoable] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const busy = pending !== null;
   const [error, setError] = useState<string | null>(null);
   const card = local && local.from === shown ? local.card : shown;
   if (!card) return null;
 
   const send = async (suggestion: TaskSuggestion, action: TaskSuggestionAction) => {
     if (busy || viewOnly || !threadId) return;
-    setBusy(true);
+    setPending(suggestion.id);
     setError(null);
     try {
       const answer = await api<{ message?: unknown }>(`/api/bots/${encodeURIComponent(botId)}/task-suggestions`, {
@@ -57,7 +58,7 @@ export function TaskSuggestionsCard({ botId, threadId, message, viewOnly }: { bo
       if (current) setLocal({ from: shown, card: current });
       setError(cause instanceof Error && cause.message ? cause.message : t("chat.taskSuggestions.failed"));
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
@@ -119,7 +120,7 @@ export function TaskSuggestionsCard({ botId, threadId, message, viewOnly }: { bo
                       onClick={() => void send(suggestion, "start")}
                       className={ASK_PRIMARY_BUTTON}
                     >
-                      {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : t("chat.taskSuggestions.start")}
+                      {pending === suggestion.id ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : t("chat.taskSuggestions.start")}
                     </button>
                   </div>
                 )
