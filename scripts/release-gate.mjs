@@ -199,6 +199,9 @@ export function reviewerApproved(reviews, trusted, headSha) {
   return [...latest.values()].some((review) => review.state === "APPROVED" && Boolean(headSha) && review.commit_id === headSha);
 }
 
+/** The shared account of the bots. It never counts as a human reviewer. */
+const SHARED_ACCOUNT = { login: "RamaAditya49", id: 213913142 };
+
 /** The reasons why a merged pull request needs a person. An empty list means the pull request passes. */
 export function evaluatePull({ pull, detail = pull, files, reviews, logins, trusted = parseTrustedAuthors(""), isAdmin = false }) {
   const reasons = [];
@@ -208,9 +211,11 @@ export function evaluatePull({ pull, detail = pull, files, reviews, logins, trus
   if (!authorOk) reasons.push(`author ${user?.login ?? "unknown"} is not a trusted author (${kind === "admin" ? "admin permission not confirmed" : "not in the list on main"})`);
   else if (!reviewerApproved(reviews, trusted, detail.head?.sha)) reasons.push("the reviewer App has no approval of the final head commit");
   // A listed human approval may clear only the two author reasons. Evidence faults and sensitive paths always stay.
-  const authorReasons = reasons.length;
-  const humanLogins = logins.filter((login) => !trusted.admins.some((entry) => entry.login.toLowerCase() === login));
-  const cleared = authorReasons > 0 && humanApproved(reviews, humanLogins, detail.head?.sha);
+  // With an invalid list, no human review clears anything. The shared account is never a human reviewer: it is fixed here,
+  // so the exclusion holds also when the list is invalid or the account is missing from it.
+  const humanLogins = logins.filter((login) => login !== SHARED_ACCOUNT.login.toLowerCase());
+  const humanReviews = reviews.filter((review) => review.user?.id !== SHARED_ACCOUNT.id);
+  const cleared = reasons.length > 0 && trusted.valid === true && humanApproved(humanReviews, humanLogins, detail.head?.sha);
   const kept = cleared ? [] : reasons;
   if (typeof detail.changed_files === "number" && detail.changed_files > files.length) kept.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
   const touched = sensitiveFiles(files);

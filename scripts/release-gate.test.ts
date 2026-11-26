@@ -184,13 +184,27 @@ describe("release gate", () => {
     expect(result.out).toContain("file list is incomplete");
   });
 
-  it("does not take the shared admin account as a human approval (exit 1)", async () => {
+  it("does not take the shared account as a human approval, also when it is not in adminAuthors (exit 1)", async () => {
+    const world = (trustedFile: object): World => ({
+      pulls: { [sha(1)]: [pull(1, sha(1), { user: OUTSIDER })] },
+      reviews: { 1: [{ user: { login: "RamaAditya49", id: 213913142, type: "User" }, state: "APPROVED", commit_id: headOf(1) }] },
+      trustedFile,
+    });
+    expect((await run(world(TRUSTED), { reviewers: '["RamaAditya49"]' })).code).toBe(1);
+    expect((await run(world({ ...TRUSTED, adminAuthors: [] }), { reviewers: '["RamaAditya49"]' })).code).toBe(1);
+  });
+
+  it("lets no human review clear anything when the trusted list is invalid (exit 1)", async () => {
     const world: World = {
       pulls: { [sha(1)]: [pull(1, sha(1), { user: OUTSIDER })] },
-      reviews: { 1: [{ user: { login: "RamaAditya49" }, state: "APPROVED", commit_id: headOf(1) }] },
+      reviews: { 1: [{ user: { login: "boss" }, state: "APPROVED", commit_id: headOf(1) }] },
     };
-    expect((await run(world, { reviewers: '["RamaAditya49"]' })).code).toBe(1);
+    expect((await run({ ...world, trustedFile: "badjson" }, { reviewers: '["boss"]' })).code).toBe(1);
+    expect((await run({ ...world, trustedFile: { ...TRUSTED, version: 2 } }, { reviewers: '["boss"]' })).code).toBe(1);
+    expect((await run({ ...world, trustedFile: "missing" }, { reviewers: '["boss"]' })).code).toBe(1);
+    expect((await run({ ...world, trustedFile: TRUSTED }, { reviewers: '["boss"]' })).code).toBe(0);
   });
+
 
   it("flags a commit without a merged pull request (exit 1)", async () => {
     const other = [pull(1, sha(9))];
