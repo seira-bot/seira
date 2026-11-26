@@ -54,7 +54,7 @@ export interface GithubBotPolicy {
   repos: GithubRepoGrant[];
   /** Merge, close and branch delete wait for the owner's answer in chat. */
   askBeforeBigChanges: boolean;
-  /** Below the write level, pushes go only to branches under githubBotBranchPrefix. */
+  /** Pushes go only to branches under githubBotBranchPrefix, at every level. */
   ownBranchesOnly: boolean;
 }
 

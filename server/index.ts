@@ -582,6 +582,7 @@ import { createBotCreateRoutes } from "./routes/bots-create.ts"; import { privat
 import { createTeamOwnerRoutes } from "./routes/team-owners.ts";
 import { createBotSettingsRoutes } from "./routes/bot-settings.ts";
 import { createBotPatchRoutes } from "./routes/bot-patch.ts";
+import { createGithubBrokerClient } from "./github/broker-client.ts"; import { isConnectionOwner as isGithubConnectionOwner } from "./github/owner.ts"; import { createGithubRoutes } from "./github/routes.ts"; import { createGithubStore } from "./github/store.ts";
 import { createBotOrderRoutes } from "./routes/bot-order.ts";
 import { createGroupOrderRoutes } from "./routes/group-order.ts";
 import { createBotLifecycleRoutes } from "./routes/bot-lifecycle.ts";
@@ -11745,7 +11746,8 @@ ROUTES.push(createBotSettingsRoutes({
   canManageCommandAllowlist, commandAllowlistResponse, cardAnswerRefusal, threadRead: teamMessages.seen, levelOf, personMarkThread: personRooms.personMarkThread,
 }));
 const botOrderRoutes = createBotOrderRoutes({ store, visibleFor: (auth) => visibleTo(viewerFor(auth)), ...(botOrders ? { own: { person: botOrders.personOf, order: botOrders, told: (person, botIds) => broadcast({ kind: "bots.order", botIds }, { person }) } } : {}) }); ROUTES.push(createGroupOrderRoutes({ store, visibleFor: (auth) => visibleTo(viewerFor(auth)) }), botOrderRoutes, createBotAccessRoutes({ team: CLOUD_TEAM, people: teamOwners.people, store, levelOf, wireBot, publicGroupState, broadcast, audienceChanged, record: (auth, row) => appendAdminAction(DATA_DIR, { ...row, actor: decisionActorFor(auth) }), shared: createShareNotice({ people: () => teamOwners.people?.list() ?? [], profileName: (email) => teamHost.people.profile(personKey({ id: "", email })).name, store: () => store, inbox: () => teamMessages.inbox }) }), accessRequests.routes);
-const botPatchRoutes = createBotPatchRoutes({ turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
+const githubStore = createGithubStore(DATA_DIR);
+const botPatchRoutes = createBotPatchRoutes({ ownsGithubConnection: (auth) => isGithubConnectionOwner(auth, githubStore.read()), turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
   store, cfg, registry, sessions, browserRuntime, browserLive, memoryUpkeep, cacheKeepWarm, hostedModels, supportsApprovalMode,
   routines: () => routines, callSpeedChanged: (botId, speed) => liveCalls.speedChanged(botId, speed), activeVpsThreads,
   hostedWorkspace: HOSTED_WORKSPACE, cloudHome: CLOUD_HOME !== null, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
@@ -11753,6 +11755,7 @@ const botPatchRoutes = createBotPatchRoutes({ turnBots: directTurnBots, folderAc
   checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
   revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertComputerChangeIdle, forgetTemporaryBrowser, levelOf, team: Boolean(CLOUD_TEAM), mainThreadTasks, chiefChanged: (changed) => chiefRooms.moved(changed), ...(personRooms.personMarkThread ? { personMarkThread: personRooms.personMarkThread, shownThread: (auth: RequestAuth, bot: BotRecord) => memberBot(wireBot(bot), visibleTo(viewerFor(auth))).threadId } : {}),
 }); ROUTES.push(botPatchRoutes);
+ROUTES.push(createGithubRoutes({ cfg: () => cfg, store: githubStore, broker: createGithubBrokerClient(), botExists: (id) => store.bot(id) !== null }));
 ROUTES.push(createBotLifecycleRoutes({
   store, routines: () => routines, interruptAllDirectThreads, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
   activeGroupTurnForBot, cancelGroupTurnOperations, runningTurnInstance, closeOpenApprovals, deleteBotWithLifecycle, deleteRefusal: (auth, botId) => memberDeleteRefusal(auth, store.bot(botId), Boolean(CLOUD_TEAM)),
