@@ -552,6 +552,8 @@
   "releaseNotes.items.githubNative.body": "Connect GitHub in Apps. Choose the repositories, then give each bot Read, Pull requests or Write access to each one. Only the person who connected GitHub can change this.",
   "releaseNotes.items.aiPoolEasy.title": "The AI pool is easy to turn on, with a new Take turns mode",
   "releaseNotes.items.aiPoolEasy.body": "Turn on the pool in Settings → AI. Seira fills it with your ready AIs. Choose Balance usage, Take turns or In order. Each AI shows its usage left and when it resets.",
+  "releaseNotes.items.aiPoolBot.title": "Ask Seira to set up the AI pool",
+  "releaseNotes.items.aiPoolBot.body": "When you ask, Seira turns the AI pool on or off, picks its mode and chooses its AIs. Each change shows a card with Undo. Only you add an AI that is paid per use.",
   "releaseNotes.items.renameDevices.title": "Rename your paired phones and computers",
   "releaseNotes.items.renameDevices.body": "Give each paired phone or computer its own name in Settings → Phone & devices, so two of the same model are easy to tell apart.",
   "releaseNotes.items.taskSuggestions.title": "Bots can suggest tasks they could help with",

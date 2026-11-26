@@ -12,6 +12,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
   { version: "0.1.195", items: [
     { id: "githubNative", icon: Github },
     { id: "aiPoolEasy", icon: Layers },
+    { id: "aiPoolBot", icon: Wand2 },
     { id: "renameDevices", icon: Pencil },
     { id: "taskSuggestions", icon: Lightbulb },
   ] },

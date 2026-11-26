@@ -528,6 +528,8 @@
   "releaseNotes.items.githubNative.body": "Conecte o GitHub em Apps. Escolha os repositórios e dê a cada bot acesso de Leitura, Pull requests ou Escrita a cada um deles. Só quem conectou o GitHub pode mudar isso.",
   "releaseNotes.items.aiPoolEasy.title": "O pool de IAs é fácil de ativar, com um novo modo Revezar",
   "releaseNotes.items.aiPoolEasy.body": "Ative o pool em Configurações → IA. O Seira o preenche com as suas IAs prontas. Escolha Equilibrar o uso, Revezar ou Em ordem. Cada IA mostra o uso restante e quando ele renova.",
+  "releaseNotes.items.aiPoolBot.title": "Peça ao Seira para configurar o pool de IAs",
+  "releaseNotes.items.aiPoolBot.body": "Quando você pede, o Seira ativa ou desativa o pool de IAs, escolhe o modo e escolhe as IAs. Cada mudança mostra um cartão com Desfazer. Só você adiciona uma IA paga por uso.",
   "releaseNotes.items.renameDevices.title": "Renomeie seus celulares e computadores pareados",
   "releaseNotes.items.renameDevices.body": "Dê a cada celular ou computador pareado um nome próprio em Configurações → Celular e dispositivos, para distinguir dois aparelhos do mesmo modelo.",
   "releaseNotes.items.taskSuggestions.title": "Bots podem sugerir tarefas em que poderiam ajudar",
