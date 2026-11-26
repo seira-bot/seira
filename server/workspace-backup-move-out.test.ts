@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { SessionRegistry } from "./sessions.ts";
 import { moveOutRefusal } from "./workspace-backup-move-out.ts";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -37,8 +37,32 @@ it("issues a sign-in that never renews, ends with its export, and stays out of t
     expect(registry.revokeMoveOuts(OTHER)).toBe(0);
     expect(registry.revokeMoveOuts(ID)).toBe(1);
     expect(registry.authenticate(token)).toBeNull();
-    // It survives a restart of the registry until it ends, so a restart does not widen it.
-    const again = registry.issueMoveOut({ exportId: ID, expiresAt: soon });
-    expect(new SessionRegistry({ file: join(dir, "sessions.json") }).authenticate(again.token)?.moveOut).toBe(ID);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+it("keeps the sign-in out of the sessions file, so a restart ends it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "seira-move-out-"));
+  const file = join(dir, "sessions.json");
+  try {
+    const registry = new SessionRegistry({ file });
+    registry.issue({ label: "Fixture admin", scopes: ["admin"] });
+    const { token } = registry.issueMoveOut({ exportId: ID, expiresAt: Date.now() + 10 * 60_000 });
+    expect(readFileSync(file, "utf8")).not.toContain(ID);
+    registry.close();
+    expect(readFileSync(file, "utf8")).not.toContain(ID);
+    expect(new SessionRegistry({ file }).authenticate(token)).toBeNull();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+it("does not honour a move-out sign-in that a sessions file names", () => {
+  const dir = mkdtempSync(join(tmpdir(), "seira-move-out-"));
+  const file = join(dir, "sessions.json");
+  try {
+    const source = new SessionRegistry({ file });
+    const { token } = source.issueMoveOut({ exportId: ID, expiresAt: Date.now() + 10 * 60_000 });
+    const record = { ...source.authenticate(token)! };
+    source.close();
+    writeFileSync(file, JSON.stringify({ version: 1, sessions: [record] }));
+    expect(new SessionRegistry({ file }).authenticate(token)).toBeNull();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

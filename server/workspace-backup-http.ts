@@ -78,7 +78,12 @@ export function createWorkspaceBackupRoutes(options: {
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
   /** Signs in a new server to read one export (server/workspace-backup-move-out.ts). */
-  moveOut?: { issue(exportId: string, expiresAt: number): { token: string }; revoke(exportId: string): number };
+  moveOut?: {
+    issue(exportId: string, expiresAt: number): { token: string };
+    revoke(exportId: string): number;
+    /** Calls `ended` when sign-in `sessionId` ends, however it ends; returns the way to stop watching. */
+    watch(sessionId: string, ended: () => void): () => void;
+  };
 }) {
   // The report skips the same paths as the export does: it calls the export's own rule.
   const sizesOnce = singleFlightSizes((root) => partSizesAsync(root, [], omittedFromWorkspaceBackup));
@@ -206,6 +211,7 @@ export function createWorkspaceBackupRoutes(options: {
         if (auth.kind === "session" && auth.session.moveOut) throw failure("This sign-in only reads one backup file.", 403);
         if (method === "POST" && !grant[1]) {
           const body = z.object({ id: z.string().uuid() }).strict().parse(await options.readBody(req));
+          check(req, auth);
           const artifact = get(body.id, auth, "download");
           options.moveOut.revoke(body.id);
           const { token } = options.moveOut.issue(body.id, artifact.expires);
@@ -224,6 +230,12 @@ export function createWorkspaceBackupRoutes(options: {
         const file = artifact.path!;
         const size = statSync(file).size;
         const range = byteRange(req.headers.range, size);
+        // Ending a move-out sign-in also cuts a download it has under way.
+        const stop = new AbortController();
+        const send = async (source: ReturnType<typeof createReadStream>) => {
+          const unwatch = granted(auth, download[1]) && auth.kind === "session" ? options.moveOut?.watch(auth.session.id, () => stop.abort()) : undefined;
+          try { await pipeline(source, res, { signal: stop.signal }); } finally { unwatch?.(); }
+        };
         const headers = {
           "content-type": "application/octet-stream",
           "accept-ranges": "bytes",
@@ -237,11 +249,11 @@ export function createWorkspaceBackupRoutes(options: {
         }
         if (range) {
           res.writeHead(206, { ...headers, "content-range": `bytes ${range.start}-${range.end}/${size}`, "content-length": range.end - range.start + 1 });
-          await pipeline(createReadStream(file, range), res);
+          await send(createReadStream(file, range));
           return true;
         }
         res.writeHead(200, { ...headers, "content-length": size });
-        await pipeline(createReadStream(file), res);
+        await send(createReadStream(file));
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/upload`) {

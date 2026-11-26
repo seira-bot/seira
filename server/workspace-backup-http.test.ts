@@ -8,7 +8,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkspaceBackupSummary } from "../shared/workspace-backup.ts";
 import { resolveRequestAuth } from "./request-auth.ts";
 import { SessionRegistry } from "./sessions.ts";
-import { moveOutRefusal } from "./workspace-backup-move-out.ts";
 import { WorkspaceBackupMaintenance } from "./workspace-backup-maintenance.ts";
 import { userError, userErrorThrown } from "./user-errors.ts";
 
@@ -53,7 +52,7 @@ beforeEach(async () => {
 
 /** Serves the backup routes; `extra` adds options such as a launcher restart. */
 async function listen(extra: Partial<Parameters<typeof createWorkspaceBackupRoutes>[0]> = {}) {
-  const authenticate = (req: IncomingMessage) => resolveRequestAuth(req, { sessions, cookieName: "fixture", streamPath: "/api/events", url: new URL(req.url!, url), restricted: (session, method, path) => moveOutRefusal(session, method, path) });
+  const authenticate = (req: IncomingMessage) => resolveRequestAuth(req, { sessions, cookieName: "fixture", streamPath: "/api/events", url: new URL(req.url!, url) });
   const routes = createWorkspaceBackupRoutes({
     dataDir, appVersion: "0.1.71", restored: {},
     readBody: async (req, limit = 1_000_000) => {
@@ -73,7 +72,7 @@ async function listen(extra: Partial<Parameters<typeof createWorkspaceBackupRout
     },
     status: () => ({ busy: maintenance.active, pendingRestore: maintenance.pendingRestore }),
     exclusive: (work, keepLocked) => maintenance.run(work, { idle: () => true, pause: () => {}, resume: () => {}, flush: async () => {} }, keepLocked),
-    moveOut: { issue: (exportId, expiresAt) => sessions.issueMoveOut({ exportId, expiresAt }), revoke: (exportId) => sessions.revokeMoveOuts(exportId) },
+    moveOut: { issue: (exportId, expiresAt) => sessions.issueMoveOut({ exportId, expiresAt }), revoke: (exportId) => sessions.revokeMoveOuts(exportId), watch: (sessionId, ended) => sessions.onSessionRevoked((id) => { if (id === sessionId) ended(); }) },
     ...extra,
   });
   server = createServer(async (req, res) => {
@@ -542,4 +541,41 @@ it("refuses to make the sign-in where the server has no support for it", async (
   await listen({ moveOut: undefined });
   const { id } = await exportBackup();
   expect((await grantFor(id)).response.status).toBe(404);
+});
+
+it("refuses to make the sign-in when the caller loses authority while the request body is pending", async () => {
+  const { id } = await exportBackup();
+  const payload = JSON.stringify({ id });
+  const status = await new Promise<number>((resolve, reject) => {
+    const pending = request(`${url}/api/workspace-backup/move-out`, { method: "POST", headers: { authorization: `Bearer ${admin.token}`, "content-type": "application/json", "content-length": String(payload.length) }, signal: AbortSignal.timeout(5000) }, (response) => { response.resume(); resolve(response.statusCode!); });
+    pending.on("error", reject);
+    pending.write(payload.slice(0, 5));
+    setTimeout(() => { sessions.revoke(admin.session.id); pending.end(payload.slice(5)); }, 50);
+  });
+  expect(status).toBe(403);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("cuts a download under way when its sign-in ends", async () => {
+  const { id, path } = fakeArchive();
+  writeFileSync(path, Buffer.alloc(48 * 1024 * 1024));
+  archive.create.mockImplementationOnce(async () => ({ id, path, summary: { ...fakeArchive().summary, id } }));
+  await exportBackup();
+  const { body } = await grantFor(id);
+  const received = await new Promise<number>((resolve) => {
+    let bytes = 0;
+    const download = request(`${url}${body.path}`, { headers: { authorization: `Bearer ${body.token}` }, signal: AbortSignal.timeout(10_000) }, (response) => {
+      response.pause();
+      setTimeout(() => {
+        sessions.revokeMoveOuts(id);
+        response.on("data", (chunk: Buffer) => { bytes += chunk.length; });
+        response.on("close", () => resolve(bytes));
+        response.on("error", () => {});
+        response.resume();
+      }, 100);
+    });
+    download.on("error", () => resolve(bytes));
+    download.end();
+  });
+  expect(received).toBeLessThan(48 * 1024 * 1024);
 });
