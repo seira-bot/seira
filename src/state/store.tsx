@@ -536,7 +536,6 @@ export interface AppState {
   appSettingsSection: AppSettingsSection;
   appSettingsCloudLink: number;
   appSettingsPhonePairing: number;
-  /** The block a request for Settings scrolls to on its page, or null. */
   appSettingsAnchor: string | null;
   shortcutsOpen: boolean;
   cloudAdd: { source: import("@/lib/cloud-plan").CloudSource; signIn?: true } | null;
@@ -1834,8 +1833,7 @@ export const initialState: AppState = {
   appSettingsOpen: false,
   appSettingsSection: "overview",
   appSettingsCloudLink: 0,
-  appSettingsPhonePairing: 0,
-  appSettingsAnchor: null,
+  appSettingsPhonePairing: 0, appSettingsAnchor: null,
   shortcutsOpen: false,
   cloudAdd: null,
   cloudHowTo: false,
