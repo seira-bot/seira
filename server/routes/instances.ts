@@ -413,7 +413,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       } catch (error) {
         const requestedStatus = error && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
         const status = typeof requestedStatus === "number" && [400, 401, 404, 409, 413, 415].includes(requestedStatus) ? requestedStatus : 500;
-        return json(res, status, { error: publicErrorText(error, "instance sign-in, update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
+        return json(res, status, { error: error instanceof Error ? error.message : String(error), ...userErrorFields(error) });
       }
     }
 
@@ -466,7 +466,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         resetPathCache();
         return json(res, 200, { ok: true, version: result.version });
       } catch (error) {
-        return json(res, 500, { error: publicErrorText(error, "instance sign-in, update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
+        return json(res, 500, { error: publicErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
       } finally {
         claudeUpdatesInFlight.delete(target.cli);
         // Even a failed update may have replaced the executable.
@@ -591,7 +591,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         try { await providerAuthSessions.signOut(live, auth.kind === "session" ? auth.session.id : "loopback"); }
         catch (error) {
           if ((error as { code?: unknown }).code !== "chatgpt_revocation_unconfirmed") {
-            return json(res, 409, { error: publicErrorText(error, "instance sign-in, update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
+            return json(res, 409, { error: publicErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
           }
         }
       }
