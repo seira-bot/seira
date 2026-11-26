@@ -38,6 +38,7 @@ import { fishKeyFromLiveKey, liveConfigSchema, liveConfigWithEnv, liveSettingEnv
 import { browserEngineConfigSchema, isValidCdpTarget, type BrowserEngineConfig } from "./browser/config.ts";
 import { roomContextSettings } from "./room-context-settings.ts"; import { usageCapsSchema, type UsageCapsConfig } from "./usage-caps-config.ts";
 import { localVmConfigSchema } from "./local-vm-settings.ts";
+import { PublicError } from "./public-error.ts";
 export * from "./local-vm-settings.ts";
 
 const optionalText = z.string().optional();
@@ -250,7 +251,7 @@ const featureConfigSchema = z.object({
   /** Room jobs to several members run side by side, each in a thread of its own. On unless false. */
   parallelRoomJobs: z.boolean().optional(),
   acpPlanLines: z.boolean().optional(), // An ACP agent's plan as activity lines. Off unless true.
-}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional(), githubApp: z.boolean().optional() }); // githubApp: the native GitHub connection, off unless true (SEIRA_GITHUB_APP wins); cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (SEIRA_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (SEIRA_PHONE_PUSH wins)
+}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional(), githubApp: z.boolean().optional() }); // githubApp: the native GitHub connection, on unless false (SEIRA_GITHUB_APP wins); cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (SEIRA_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (SEIRA_PHONE_PUSH wins)
 const onboardingConfigSchema = z.object({
   completedAt: z.string().trim().max(40).optional(),
   version: z.number().int().min(0).max(1000).optional(),
@@ -578,7 +579,7 @@ export function loadBrowserProfileIdAliases(): ReadonlyMap<string, string> {
 export function parseConfigPatch(value: JsonValue): ConfigPatch {
   const parsed = appConfigPatchSchema.safeParse(value);
   if (!parsed.success) {
-    throw Object.assign(new Error(schemaIssue(parsed.error, "Invalid configuration")), { status: 400 });
+    throw new PublicError(schemaIssue(parsed.error, "Invalid configuration"), 400);
   }
   return parsed.data;
 }
@@ -961,7 +962,7 @@ function saveConfigNow(
       storedProfiles.success ? storedProfiles.data : [],
       nextProfiles,
     );
-    if (routingConflict) throw Object.assign(new Error(routingConflict), { status: 409 });
+    if (routingConflict) throw new PublicError(routingConflict, 409);
     disk.browserProfiles = nextProfiles;
     if (disk.newBotDefaults) {
       const defaults = newBotDefaultsSchema.parse(disk.newBotDefaults);

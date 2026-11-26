@@ -9,6 +9,7 @@ import { Store, type StoreChange } from "../store.ts";
 import { postTaskSuggestions, taskSuggestionsFromInput } from "../task-suggestions.ts";
 import { createTaskSuggestionRoutes } from "./task-suggestions.ts";
 import { PASS } from "./table.ts";
+import { PublicError } from "../public-error.ts";
 
 const person: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
 
@@ -20,7 +21,7 @@ function setup(options: { visible?: boolean; refusal?: string | null; sendStatus
   const sent: string[] = [];
   const send = async (_auth: RequestAuth, _botId: string, threadId: string, text: string) => {
     if (options.sendThrows) throw options.sendThrows;
-    if (options.sendStatus) throw Object.assign(new Error("Ava is busy."), { status: options.sendStatus });
+    if (options.sendStatus) throw new PublicError("Ava is busy.", options.sendStatus);
     sent.push(text);
     await options.hold;
     return options.noMessage ? { ok: true as const } : { ok: true as const, message: store.appendMessage(threadId, { role: "user", kind: "text", text }) };

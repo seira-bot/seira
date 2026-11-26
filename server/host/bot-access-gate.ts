@@ -13,6 +13,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { Store } from "../store.ts";
 import { userError, userErrorFields, type UserError } from "../user-errors.ts";
+import { PublicError } from "../public-error.ts";
 
 type Target = { botId?: unknown; groupId?: unknown };
 
@@ -85,7 +86,7 @@ export function createBotAccessGate(deps: BotAccessGateDeps) {
       const targeted = path === "/api/routines" || routine !== null ? targetBots(record) : [];
       const threads = bodyThreadIds(body).flatMap((threadId) => ownerBots(deps.threadOwner(threadId)));
       const error = short(visible, [...added, ...targeted, ...threads], bodyNeeds);
-      if (error) throw Object.assign(new Error(error.error), { status: 403 }, userErrorFields(error));
+      if (error) throw Object.assign(new PublicError(error.error, 403), userErrorFields(error));
       return null;
     });
     return null;

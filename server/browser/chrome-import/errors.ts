@@ -1,7 +1,9 @@
+import { PUBLIC_ERROR_MARK } from "../../public-error.ts";
 export type ChromeImportStatus = 400 | 404 | 409 | 413 | 503;
 
 /** `message` is meant for the person using the app; `status` is the HTTP status a route answers with. */
 export class ChromeImportError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: ChromeImportStatus;
 
   constructor(status: ChromeImportStatus, message: string) {

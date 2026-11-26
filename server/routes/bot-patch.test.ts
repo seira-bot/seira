@@ -663,6 +663,46 @@ describe("PATCH /api/bots/:id github_app grants", () => {
     expect(store.bot(bot.id)?.connectorScopes).toEqual({ apps: { gmail: "read" } });
   });
 
+  it("refuses a person who did not connect GitHub turning it back on for a bot with GitHub access", async () => {
+    const cases: Array<[Partial<BotRecord>, Record<string, unknown>]> = [
+      [{ composio: false }, { composio: true }],
+      [{ connectorScopes: { apps: { gmail: "read" } } as ConnectorScopes }, { connectorScopes: null }],
+      [{ connectorTools: { gmail: { tools: "*" } } }, { connectorTools: null }],
+    ];
+    for (const [before, body] of cases) {
+      const { store, bot, patch } = fixture({ ownsGithubConnection: () => false, githubGrantedTo: () => true });
+      store.patchBot(bot.id, before);
+
+      expect((await patch(bot.id, body)).status).toBe(403);
+      expect(store.bot(bot.id)).toMatchObject(before);
+    }
+  });
+
+  it("lets a person who did not connect GitHub turn it off, or turn Composio on for a bot without GitHub access", async () => {
+    const off = fixture({ ownsGithubConnection: () => false, githubGrantedTo: () => true });
+    expect((await off.patch(off.bot.id, { composio: false })).status).toBe(200);
+    expect(off.store.bot(off.bot.id)?.composio).toBe(false);
+
+    const none = fixture({ ownsGithubConnection: () => false, githubGrantedTo: () => false });
+    none.store.patchBot(none.bot.id, { composio: false });
+    expect((await none.patch(none.bot.id, { composio: true })).status).toBe(200);
+    expect(none.store.bot(none.bot.id)?.composio).toBe(true);
+  });
+
+  it("lets the owner turn GitHub back on, but not from a local caller while a bot is busy, whatever its Origin", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => true, githubGrantedTo: () => true });
+    store.patchBot(bot.id, { composio: false });
+    const worker = store.createBot({ name: "Worker" });
+    store.patchBot(worker.id, { busy: true });
+
+    expect((await patch(bot.id, { composio: true })).status).toBe(409);
+    expect((await patch(bot.id, { composio: true }, { headers: { origin: "http://localhost:5173" } })).status).toBe(409);
+    expect(store.bot(bot.id)?.composio).toBe(false);
+    store.patchBot(worker.id, { busy: false });
+    expect((await patch(bot.id, { composio: true })).status).toBe(200);
+    expect(store.bot(bot.id)?.composio).toBe(true);
+  });
+
   it("stops the owner-less clearing of a github_app scope too", async () => {
     const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
     store.patchBot(bot.id, { connectorScopes: scopes as ConnectorScopes });

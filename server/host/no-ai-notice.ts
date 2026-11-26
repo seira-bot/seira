@@ -14,6 +14,7 @@ import { personKey } from "../person-key.ts";
 import { serverLine, type LineLanguage } from "../server-lines.ts";
 import type { Delivery } from "./person-inbox.ts";
 import { teamAiOwner } from "./team-ai-owner.ts";
+import { PublicError } from "../public-error.ts";
 
 export const NO_AI_NOTICES_FILE = "no-ai-notices.json";
 const DAY_MS = 24 * 60 * 60_000;
@@ -93,7 +94,7 @@ export function createNoAiNotice(deps: NoAiNoticeDeps) {
     refusal(threadId: string, sender: ResolvedSender | undefined, instanceId?: string): NoAiRefusal | null {
       if (instanceId) return null;
       const language = deps.threadLanguage(threadId);
-      const refused = (line: string) => Object.assign(new Error(line), { status: 409, code: "no_ai" as const });
+      const refused = (line: string) => Object.assign(new PublicError(line, 409), { code: "no_ai" as const });
       if (!deps.team) return refused(serverLine(language, "server.noAi.admin"));
       const asker = sender?.id ? deps.people().find((person) => keyOf(person.email) === sender.id) : undefined;
       if (!asker) return refused(serverLine(language, "server.noAi.nobodyHere"));

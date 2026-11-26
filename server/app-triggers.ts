@@ -26,6 +26,7 @@ import { instructionsUpdateRefusal } from "./automation-instructions.ts";
 import { DATA_DIR } from "./config.ts";
 import type { RoutineRunOn } from "./routines.ts";
 import { PLACE_LOST_MESSAGE, placeConfirmed, placeLostAs } from "./place-lost.ts";
+import { PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
 
 export const DEFAULT_MAX_PENDING_RUNS = 3;
 const MAX_ATTEMPTS = 2_000;
@@ -41,6 +42,7 @@ const NAME_MAX = 80;
 const PROMPT_MAX = 20_000;
 
 export class AppTriggerError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
 
   constructor(message: string, status = 400) {
@@ -297,7 +299,7 @@ export class AppTriggerManager {
         if (!trigger.enabled) await this.applyEnabled(trigger.remote.triggerId);
       } catch (error) {
         // Composio refused this config: nothing to save. Anything else is retried by reconciliation.
-        if (error instanceof BrokerError && !error.transient && error.status !== 403) throw new AppTriggerError(error.message, 400);
+        if (error instanceof BrokerError && !error.transient && error.status !== 403) throw withheld(new AppTriggerError(error.message, 400));
         this.markRemoteFailure(trigger, error);
       }
       this.triggers.unshift(trigger);
@@ -430,7 +432,7 @@ export class AppTriggerManager {
         this.wake();
         return { via: "service" };
       } catch (error) {
-        if (!(error instanceof BrokerError) || !error.transient) throw new AppTriggerError(error instanceof Error ? error.message : String(error), 502);
+        if (!(error instanceof BrokerError) || !error.transient) throw withheld(new AppTriggerError(error instanceof Error ? error.message : String(error), 502));
       }
     }
     const eventId = `test_${randomUUID()}`;
@@ -673,7 +675,7 @@ export class AppTriggerManager {
     try {
       apps = await this.options.connectedApps();
     } catch (error) {
-      throw new AppTriggerError(`Connected apps could not be checked: ${error instanceof Error ? error.message : String(error)}`, 503);
+      throw withheld(new AppTriggerError(`Connected apps could not be checked: ${error instanceof Error ? error.message : String(error)}`, 503));
     }
     const accounts = (apps[app]?.accounts ?? []).filter((account) => active(account.status));
     const label = appLabel(app);
@@ -760,7 +762,7 @@ export class AppTriggerManager {
     try {
       return await work();
     } catch (error) {
-      if (error instanceof BrokerError) throw new AppTriggerError(error.transient ? `The connected-apps service could not be reached (${error.message}). Try again in a minute.` : error.message, error.transient ? 503 : 400);
+      if (error instanceof BrokerError) throw withheld(new AppTriggerError(error.transient ? `The connected-apps service could not be reached (${error.message}). Try again in a minute.` : error.message, error.transient ? 503 : 400));
       throw error;
     }
   }

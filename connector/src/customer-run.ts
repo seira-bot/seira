@@ -182,7 +182,8 @@ export function parseHomeReads(output: string): HomeFacts {
 // field that is not copied below is not sent. No name, no address, no file name, no log line.
 
 const VERSION = /^v?\d{1,5}\.\d{1,5}\.\d{1,5}(?:-[0-9A-Za-z.]{1,32})?$/;
-const IMAGE = /^ghcr\.io\/milind-soni\/(?:openmausbot|mausbot-connector)(?:@sha256:[0-9a-f]{64}|:[0-9A-Za-z][0-9A-Za-z._-]{0,63})$/;
+// Seira's own names first; the names before the rename stay accepted (same pairs as CUSTOMER_HOME_IMAGE and CONNECTOR_IMAGE).
+const IMAGE = /^ghcr\.io\/(?:seira-bot\/(?:seira|seira-connector)|milind-soni\/(?:openmausbot|mausbot-connector))(?:@sha256:[0-9a-f]{64}|:[0-9A-Za-z][0-9A-Za-z._-]{0,63})$/;
 /** An operating system, kernel or Docker version as the machine names itself: letters, digits and version punctuation. */
 const MACHINE = /^[0-9A-Za-z][0-9A-Za-z ._:+~()/#-]{0,79}$/;
 const COPY_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;

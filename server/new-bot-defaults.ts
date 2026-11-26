@@ -6,6 +6,7 @@ import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../shared/wire.ts";
 import { isModelVariant } from "./contracts.ts";
 import { normalizeCronSchedule } from "../shared/routine-schedule.ts";
 import { parseToolScope, type ToolScope } from "../shared/tool-scope.ts";
+import { PublicError } from "./public-error.ts";
 
 const strings = (max: number, length: number) => z.array(z.string().max(length)).max(max);
 const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
@@ -125,14 +126,14 @@ function settingsError(error: z.ZodError): Error {
   if (!issue) return userErrorThrown("serverError.botDefaults.invalid");
   if (issue.code === "too_big" && issue.path[0] === "name") return userErrorThrown("serverError.botDefaults.nameLength");
   if (issue.code === "too_big" && issue.path[0] === "section") return userErrorThrown("serverError.botDefaults.sectionLength");
-  if (issue.code === "unrecognized_keys") return new Error(`unsupported bot field: ${issue.keys[0] ?? "unknown"}`);
+  if (issue.code === "unrecognized_keys") return new PublicError(`unsupported bot field: ${issue.keys[0] ?? "unknown"}`);
   const field = issue.path.join(".");
-  return new Error(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
+  return new PublicError(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
 }
 
 export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, body: Record<string, unknown>) {
   if (body.useDefaults !== undefined && typeof body.useDefaults !== "boolean") {
-    throw Object.assign(new Error("useDefaults must be true or false"), { status: 400 });
+    throw new PublicError("useDefaults must be true or false", 400);
   }
   const template = newBotDefaultsSchema.parse(body.useDefaults === false ? {} : saved ?? {});
   const checked = botDefaultsProfileSchema.safeParse(body.settings === undefined ? {} : body.settings);

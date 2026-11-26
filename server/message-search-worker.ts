@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs";
 import { Worker } from "node:worker_threads";
 import type { SearchHit } from "./message-search-query.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export class SearchUnavailable extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status = 503;
 }
 

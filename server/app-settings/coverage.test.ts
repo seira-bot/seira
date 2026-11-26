@@ -9,7 +9,7 @@ const none = async () => null;
 const deps: RegistryDeps = {
   cfg: () => ({}) as ReturnType<RegistryDeps["cfg"]>, saveConfig: none, bots: () => [], sections: () => [], reorderBots: none, groupBots: none, pinBot: none, patchBot: none,
   call: none, read: async () => null, paused: () => [], credentials: () => ({}), window: { read: () => undefined, write: () => null },
-  engines: () => [], addEngine: none, removeEngine: none,
+  engines: () => [], addEngine: none, removeEngine: none, threadModes: () => ({}), setThreadModes: none, threadModeRefusal: () => null,
 };
 const entries = createSettingsRegistry(deps);
 const entryIds = new Set(entries.map((entry) => entry.id));

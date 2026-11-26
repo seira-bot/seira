@@ -20,6 +20,7 @@ import type { LocalSource } from "./reader.ts";
 import { expireReceipts, undoJob } from "./receipts.ts";
 import { SUMMARY_FILE, type ReadSummary } from "./spool.ts";
 import { createUploadStore, type ImportLimits, type UploadPart } from "./upload.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -27,6 +28,7 @@ const UPLOAD_KEEP_MS = DAY;
 const PASTE_REF = "paste";
 
 export class ImportJobError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly code: ImportErrorCode | "not-found" | "conflict" | "invalid";
 

@@ -17,6 +17,7 @@ import {
 } from "./attachments.ts";
 import { mimeFor, openFileSavedSince, openMessageFile, referencedPathIdentity, type OpenedMessageFile } from "./message-file.ts";
 import type { Message } from "./store.ts";
+import { PublicError } from "./public-error.ts";
 
 export type BotAttachment = NonNullable<Message["attachments"]>[number];
 
@@ -26,7 +27,7 @@ export const ATTACH_SUPPORTED_TYPES =
   "and archives (zip, rar, 7z, tar, gz, tgz, bz2, xz)";
 
 function statusError(status: number, message: string): Error & { status: number } {
-  return Object.assign(new Error(message), { status });
+  return new PublicError(message, status);
 }
 
 /** Maps a guest workspace path onto its bind-mounted host directory; anything outside it, `..` escapes included, is null. */

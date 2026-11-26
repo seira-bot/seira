@@ -41,6 +41,8 @@ import { parseMentionPicks } from "../../shared/room-mentions.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import { refusalBody, refusalText, userError } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { ownerReview as sharedOwnerReview } from "./owner-review.ts";
+import { PublicError } from "../public-error.ts";
 
 type RunningInstance = ReturnType<ProviderRegistry["get"]>;
 
@@ -101,6 +103,8 @@ export interface BotMessageRouteDeps {
   resolveAndSendTeamSetup(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
   /** A settings card's Apply or Not now; false when the card is no settings card. */
   resolveAndSendAppSetting(res: ServerResponse, args: { threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
+  /** The full current and new value of a waiting settings card, for the owner; null when the card is no settings card. */
+  reviewAppSetting(args: { threadId: string; requestId: string }, ownerReview: boolean): { status: number; body: Record<string, unknown> } | null;
   resolveAndSendMcp(res: ServerResponse, args: { botId: string; threadId: string; requestId: string; behavior: string }, ownerReview: boolean): Promise<boolean>;
   resolveAndSendRoutine(res: ServerResponse, args: CardAnswer): boolean;
   resolveAndSendProfile(res: ServerResponse, args: CardAnswer): boolean;
@@ -175,17 +179,13 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     acceptDirectSend, directSendRefusal, startTurn, usageTriggerFor, messageSender, cloudGuestSendRefusal, cloudThreadRefusal,
     cardAnswerRefusal, commandRememberRefusal, requestBehavior, requestedTaskBot, botForThread, threadBusy,
     botAtThreadCapacity, parksBehindCoordination, activeGroupTurnForBot, runningTurnInstance, engineSteersImages, resolveReplyTarget,
-    turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, resolveAndSendMcp,
+    turnSelection, policyModelRefusal, clearUnattended, drainQueuedSends, answeringCardAs, resolveAndSendTrust, resolveAndSendTeamSetup, resolveAndSendAppSetting, reviewAppSetting, resolveAndSendMcp,
     resolveAndSendRoutine, resolveAndSendProfile, resolveAndSendModel, resolveSkillRequest, sendSkillResolution, answerRequest,
     deliverLateQuestionAnswer, stopThreadForPerson, cancelDirectTurnDispatch, revokeInternalCapabilitiesForThread,
     cancelGroupTurnOperations, closeOpenApprovals, harnessCardOutcome, pressRecords, serverPress, relayedReaction, answeredIn, fromPhone, notePhoneSend, goals,
   } = deps; const owners = routeRunOwners(deps.runOwners, deps.runActor);
   const pinnedClientThread = pinnedClientThreadGuard(store);
-  /** Security: a bot's own shell must never approve its own card, so a local request counts only from the desktop app, or
-   * from a browser while every bot is idle. */
-  const ownerReview = (auth: RequestAuth, req: IncomingMessage) => auth.kind === "loopback"
-    ? DESKTOP_MANAGED || Boolean(req.headers.origin) && !store.bots.some((bot) => bot.busy || activeGroupTurnForBot(bot.id))
-    : auth.scopes.includes("admin");
+  const ownerReview = (auth: RequestAuth, req: IncomingMessage) => sharedOwnerReview(auth, req, { desktopManaged: DESKTOP_MANAGED, anyBotWorking: () => store.bots.some((bot) => bot.busy || activeGroupTurnForBot(bot.id)) });
   /** widget -> sendId of a press on its way in: a second tap before acceptance must not send a second answer. */
   const pressesInFlight = new Map<string, string | undefined>();
   const appMessageRate = new AppMessageRate();
@@ -316,10 +316,10 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
             const expectedMode = body.expectedApprovalMode ?? "ask";
             if (approvalModeFor(currentAtStart) !== expectedMode ||
                 (expectedMode === "ask" && (currentAtStart.autoApprove === true || currentAtStart.alwaysAllow?.length))) {
-              throw Object.assign(new Error("guarded sends require the exact expected approval mode; Ask cannot have remembered permissions"), { status: 409, code: "guarded_permissions" });
+              throw Object.assign(new PublicError("guarded sends require the exact expected approval mode; Ask cannot have remembered permissions", 409), { code: "guarded_permissions" });
             }
             if (store.activeLeaf(threadId) !== body.expectedActiveLeafId) {
-              throw Object.assign(new Error("the conversation changed before this message could start"), { status: 409, code: "guarded_branch" });
+              throw Object.assign(new PublicError("the conversation changed before this message could start", 409), { code: "guarded_branch" });
             }
             const guardedAdmission = admit("guarded", {}, {
               botBusy: currentAtStart.busy,
@@ -329,7 +329,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
               groupTurn: Boolean(activeGroupTurnForBot(bot.id)),
             });
             if (guardedAdmission.action === "refuse") {
-              throw Object.assign(new Error("wait for a free thread slot before retrying this message"), { status: 409, code: "guarded_busy" });
+              throw Object.assign(new PublicError("wait for a free thread slot before retrying this message", 409), { code: "guarded_busy" });
             }
             // The relayed line is named after the person it is for; with no key it is nobody's own line and acts for nobody.
             const message = await startTurn(bot.id, text, { threadId, replyTo, sendId, sender: onBehalfOf ? { name: onBehalfOf.name ?? onBehalfOf.email! } : sender, trigger, relayed: true, dataContext });
@@ -448,9 +448,9 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         // No destination left: settle, so a restart cannot replay words a dead turn may have run.
         settleHeldSteeredQueue(held);
         if (!store.taskByThread(bot.id, bot.threadId)) {
-          throw Object.assign(new Error("the target task no longer exists"), { status: 409 });
+          throw new PublicError("the target task no longer exists", 409);
         }
-        throw Object.assign(new Error("no such bot"), { status: 404 });
+        throw new PublicError("no such bot", 404);
       }
       restoreHeldSteeredQueue(held);
       if (current && !current.busy) drainQueuedSends();
@@ -657,6 +657,13 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         }
         return json(res, 200, { ok: true, outcome });
       });
+    }
+    m = path.match(/^\/api\/threads\/([\w-]+)\/app-settings\/([\w-]+)\/review$/);
+    if (m && method === "POST") {
+      const refusal = cardAnswerRefusal(auth, m[1], m[2], "allow");
+      if (refusal) return json(res, 403, refusalText(refusal));
+      const review = reviewAppSetting({ threadId: m[1], requestId: m[2] }, ownerReview(auth, req));
+      return review ? json(res, review.status, review.body) : json(res, 404, { error: "No settings card with that id." });
     }
     m = path.match(/^\/api\/threads\/([\w-]+)\/respond$/);
     if (m && method === "POST") {

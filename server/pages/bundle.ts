@@ -7,6 +7,7 @@ import { PAGE_FILE_EXTENSIONS, PAGE_MAX_BYTES, PAGE_MAX_FILES } from "../../shar
 import { guestWorkspaceToHost } from "../bot-attachment.ts";
 import { VM_WORKSPACE_GUEST } from "../container-computer.ts";
 import { inSecretFolder, SECRET_FILE_REFUSAL } from "../secret-folder.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 export interface PageFile {
   path: string;
@@ -43,6 +44,7 @@ const SKIPPED_FOLDERS = new Set(["node_modules", "__pycache__"]);
 const SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._ ()+@-]{0,99}$/;
 
 export class PageBundleError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status = 400) {
     super(message);

@@ -102,6 +102,8 @@ interface Waiting {
   messageId: string;
   expiresAt: number;
   stored?: string;
+  own: boolean;
+  review: { before: string; after: string };
   timer: ReturnType<typeof setTimeout>;
   applying?: true;
 }
@@ -226,10 +228,13 @@ export function createAppSettings(deps: AppSettingsDeps) {
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
     return { title: serverLine(language, "server.appSettings.changed", { label: entry.label }), subtitle: shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}` };
   }
+  /** Security: a room, or a conversation someone else wrote into, is seen by others, so its cards hold the new value only. */
+  const ownerSees = (bot: BotRecord, threadId: string, verdict?: SettingsVerdict) => (verdict === undefined || verdict.kind === "clean") && !deps.connectorThread(bot.id, threadId)?.group;
+  const forAudience = (shown: Shown, own: boolean): Shown => (own ? shown : { after: shown.after });
   const requestOf = (entry: WritableEntry, shown: Shown): AppSettingRequest => ({ settingId: entry.id, label: entry.label, ...(shown.before === undefined ? {} : { before: shown.before }), after: shown.after, tier: entry.tier });
 
   /** Applies the change, posts its applied card with Undo, and logs it in the decision log. */
-  async function apply(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change?: string) {
+  async function apply(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, own: boolean) {
     const written = await write(entry, value);
     if ("refusal" in written) {
       appendDecision(deps.dataDir, { threadId: turn.threadId, botId: turn.botId, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${change ?? display(value)}`, decision: "auto-denied", source: "app-settings", rule: "settings:failed" });
@@ -241,7 +246,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
     const requestId = randomUUID();
     store.appendMessage(turn.threadId, {
       role: "bot", kind: "options", ...from(bot, turn.threadId),
-      card: { ...appliedCard(turn.threadId, entry, shown), options: [], requestId, tool: TOOL, fixedOptions: true, appSettingRequest: requestOf(entry, shown), answered: "allow", dismissed: true, autoApplied: true },
+      card: { ...appliedCard(turn.threadId, entry, forAudience(shown, own)), options: [], requestId, tool: TOOL, fixedOptions: true, appSettingRequest: requestOf(entry, forAudience(shown, own)), answered: "allow", dismissed: true, autoApplied: true },
     });
     remember(requestId, undoOf(entry, written));
     appendDecision(deps.dataDir, { threadId: turn.threadId, requestId, botId: turn.botId, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${said(shown)}`, decision: "auto-approved", source: "app-settings" });
@@ -262,25 +267,29 @@ export function createAppSettings(deps: AppSettingsDeps) {
   const openCards = (threadId: string) => [...waiting.values()].filter((one) => one.threadId === threadId && !settledElsewhere(one)).length;
 
   /** Posts the card the owner taps to apply the change; nothing changes before that. */
-  async function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, stored?: string) {
+  async function ask(turn: Turn, bot: BotRecord, entry: WritableEntry, value: unknown, change: string | undefined, consequence: Consequence | null, own: boolean, stored?: string) {
     const language = deps.language(turn.threadId);
     const state = await stateOf(entry, value);
     const was = entry.read();
     const shown: Shown = change === undefined ? { before: was, after: display(value) } : { after: change };
     const notSet = (value: string) => value || serverLine(language, "server.appSettings.notSet");
+    const reviewed = entry.review?.(value) ?? null;
+    const review = reviewed ?? { before: was, after: display(value) };
+    const cardShown = forAudience(reviewed ?? shown, own);
+    const cardLine = cardShown.before === undefined ? cardShown.after : `${notSet(cardShown.before)}${reviewed ? "\n→\n" : " → "}${notSet(cardShown.after)}`;
     const what = consequence ? serverLine(language, consequenceKey(consequence.code), consequence.params) : undefined;
     const requestId = randomUUID();
     const expiresAt = now() + CONFIRM_MS;
     const message = store.appendMessage(turn.threadId, {
       role: "bot", kind: "options", ...from(bot, turn.threadId),
       card: { title: serverLine(language, "server.appSettings.confirmTitle", { label: entry.label }),
-        subtitle: [shown.before === undefined ? shown.after : `${notSet(shown.before)} → ${notSet(shown.after)}`, what].filter(Boolean).join("\n"),
+        subtitle: [cardLine, what].filter(Boolean).join("\n"),
         options: [serverLine(language, "server.appSettings.apply"), serverLine(language, "server.appSettings.notNow")], requestId, tool: TOOL, fixedOptions: true,
-        appSettingRequest: { ...requestOf(entry, shown), ...(what ? { consequence: what } : {}), expiresAt } },
+        appSettingRequest: { ...requestOf(entry, cardShown), ...(what ? { consequence: what } : {}), ...(own ? {} : { privateReview: true as const }), expiresAt } },
     });
     const timer = setTimeout(() => expire(requestId), CONFIRM_MS);
     timer.unref?.();
-    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, state, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), timer });
+    waiting.set(requestId, { requestId, entry, value, ...(change === undefined ? {} : { change }), was, state, botId: bot.id, botName: bot.name, threadId: turn.threadId, messageId: message.id, expiresAt, ...(stored ? { stored } : {}), own, review, timer });
     appendDecision(deps.dataDir, { threadId: turn.threadId, requestId, botId: bot.id, botName: bot.name, tool: TOOL, summary: `${entry.id}: ${said(shown)}`, decision: "card-shown", source: "app-settings", ...(consequence ? { rule: `settings:${consequence.code}` } : {}) });
     return reply(200, { text: `A card asking the user to apply this is in the conversation: ${said(shown)}. Nothing has changed yet. End this turn now and say in one line that the change waits for their tap on Apply; Seira resumes you with the result.` });
   }
@@ -351,8 +360,9 @@ export function createAppSettings(deps: AppSettingsDeps) {
     if (budget) return deny("budget", 429, budget);
     const picture = entry.fromFile ? await takePicture(turn, parsed.data) : { value: parsed.data };
     if ("refusal" in picture) return deny("picture", 400, picture.refusal);
-    if (tap) return ask(turn, bot, entry, picture.value, described?.change, consequence, picture.stored);
-    const applied = await apply(turn, bot, entry, picture.value, described?.change);
+    const own = ownerSees(bot, turn.threadId, verdict);
+    if (tap) return ask(turn, bot, entry, picture.value, described?.change, consequence, own, picture.stored);
+    const applied = await apply(turn, bot, entry, picture.value, described?.change, own);
     if (picture.stored && applied.status >= 300) deps.pictures?.discard(picture.stored);
     return applied;
   }
@@ -382,7 +392,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
     if (asked && "error" in asked) return refuse(400, asked.error);
     const budget = spendWrite(turn);
     if (budget) return refuse(429, budget);
-    return asked ? apply(turn, bot, themes.entry(person), asked.wear, asked.change) : themes.addAsset(turn, person, body);
+    return asked ? apply(turn, bot, themes.entry(person), asked.wear, asked.change, ownerSees(bot, turn.threadId)) : themes.addAsset(turn, person, body);
   }
 
   /** Shows a setting's own control in the conversation. Security invariant: the reply and the row carry fixed words and
@@ -510,8 +520,20 @@ export function createAppSettings(deps: AppSettingsDeps) {
       const shown: Shown = change.change === undefined ? { before: written.was, after: written.after } : { after: change.change };
       remember(args.requestId, undoOf(change.entry, written));
       log("user-approved");
-      end(change, "applied", { ...appliedCard(change.threadId, change.entry, shown), answered: "allow", dismissed: true, autoApplied: true, appSettingRequest: { ...requestOf(change.entry, shown) } });
+      end(change, "applied", { ...appliedCard(change.threadId, change.entry, forAudience(shown, change.own)), answered: "allow", dismissed: true, autoApplied: true, appSettingRequest: { ...requestOf(change.entry, forAudience(shown, change.own)) } });
       return reply(200, { ok: true, outcome: "allowed-once" });
+    },
+
+    /** The full current and new value of a waiting card, for the owner only. Security invariant: the full old value goes only
+     * to the owner, never into the conversation, and the stored values hold no key. */
+    review(args: { threadId: string; requestId: string; ownerReview: boolean }): { status: number; body: Record<string, unknown> } | null {
+      const message = store.messagesFor(args.threadId).find((candidate) => candidate.card?.requestId === args.requestId && candidate.card.appSettingRequest);
+      const card = message?.card;
+      if (!message || !card?.appSettingRequest) return null;
+      if (!args.ownerReview) return refuse(403, "Only the owner sees this, from the desktop app or a device paired with full access.");
+      const change = waiting.get(args.requestId);
+      if (card.answered || card.dismissed || card.expired || !change || now() >= change.expiresAt) return refuse(409, "This card has closed.");
+      return reply(200, { before: change.review.before, after: change.review.after });
     },
 
     /** Undo on an applied card: restores the value read before the change, unless it changed since. */

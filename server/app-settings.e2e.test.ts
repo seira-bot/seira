@@ -292,6 +292,17 @@ it("a session without admin rights cannot apply a waiting card: Apply is refused
   await finished("NOT-ADMIN-HEARD");
 }, 90_000);
 
+it("a session without admin rights cannot undo an applied settings card: Undo is refused with 403 and the value stays", async () => {
+  await start("CLIENT-UNDO", [step({ action: "set", id: "mcp.callTimeoutMinutes", value: "33" })]);
+  await finished("CLIENT-UNDO");
+  const card = await newest("mcp.callTimeoutMinutes");
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  const refused = await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 403, clientDevice);
+  expect(refused.error).toMatch(/^Undo this change from the desktop app/);
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 200, ownerDevice)).toMatchObject({ ok: true, undone: true });
+}, 90_000);
+
 it("get ai.images lists the models and each provider's readiness with no key, and set refuses a model its provider does not have", async () => {
   await start("IMAGES", [
     step({ action: "get", id: "ai.images" }),
@@ -478,6 +489,14 @@ it("a conversation another person wrote into waits on a card even for a safe set
   expect(waiting).toMatchObject({ options: ["Apply", "Not now"], appSettingRequest: { tier: "safe", after: "33" } });
   expect(waiting.autoApplied).toBeUndefined();
   expect(waiting.appSettingRequest.consequence).toBeUndefined();
+  expect(waiting.appSettingRequest.privateReview).toBe(true);
+  expect(waiting.appSettingRequest).not.toHaveProperty("before");
+  const reviewPath = `/api/threads/${bot.threadId}/app-settings/${waiting.requestId}/review`;
+  const review = await api("POST", reviewPath, undefined, 200, ownerDevice);
+  expect(review.after).toBe("33");
+  if (earlier === undefined) expect(review.before).toMatch(/^\d+$/);
+  else expect(review.before).toBe(String(earlier));
+  expect((await api("POST", reviewPath, undefined, 403, clientDevice)).error).toBeTruthy();
   await respond(waiting.requestId, "allow");
   await finished("HISTORY-HEARD");
   expect(config().rooms.turnTimeoutMinutes).toBe(33);

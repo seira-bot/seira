@@ -94,6 +94,7 @@ export class JsonRegistry implements RegistryStore {
   loadGroups(): GroupRecord[] {
     tightenRegistryFile(GROUPS_FILE);
     const text = readFileSync(GROUPS_FILE, "utf8"), groups = JSON.parse(text) as GroupRecord[];
+    if (!Array.isArray(groups)) throw new TypeError("groups.json is not a list");
     this.groupsFile.loaded(text);
     return groups;
   }

@@ -9,6 +9,7 @@ import { codedLine, type RoutineLine, type RoutineLineKey } from "../routine-lin
 import { serverLine, type ServerLineKey } from "../server-lines.ts";
 import { hostTimeZone } from "../turn-clock.ts";
 import { CAP_FIELDS, capsFromEnv, capStates, effectiveCaps, reachedCap, type CapLimits, type CapState, type CapStops, type UsageCapsConfig } from "../usage-caps.ts";
+import { PublicError } from "../public-error.ts";
 
 export const USAGE_CAP_CODE = "spend_cap";
 
@@ -151,7 +152,7 @@ export function createUsageCapGate(deps: {
     },
     assertTurn(botId, personWaiting, language) {
       const state = blocking(botId, personWaiting);
-      if (state) throw Object.assign(new Error(refusedWords(state, language)), { status: 409, code: USAGE_CAP_CODE, resetsAt: state.resetsAt });
+      if (state) throw Object.assign(new PublicError(refusedWords(state, language), 409), { code: USAGE_CAP_CODE, resetsAt: state.resetsAt });
     },
     routineSkip(botId, routineId) {
       const state = blocking(botId, false);

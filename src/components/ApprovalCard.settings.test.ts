@@ -1,8 +1,12 @@
-import { createElement } from "react";
+// @vitest-environment happy-dom
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/state/store";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const fixture = vi.hoisted(() => ({ admin: true as boolean | null }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.admin }));
@@ -58,6 +62,22 @@ describe("a bot's settings card that waits for a tap", () => {
     expect(html).not.toContain(">Cancel<");
   });
 
+  it("shows a proposed text of 2,000 characters in full, and the text it replaces", () => {
+    const proposed = `proposed ${"z".repeat(1991)}`;
+    const earlier = `earlier ${"q".repeat(900)}`;
+    const long: Message = {
+      ...waiting, id: "long",
+      card: { ...waiting.card!, title: "Change Rules for every bot?", subtitle: `${earlier}\n→\n${proposed}\nEvery bot will read this from now on.`,
+        appSettingRequest: { ...request, settingId: "bots.everyBotRules", label: "Rules for every bot", before: earlier, after: proposed, consequence: "Every bot will read this from now on." } },
+    };
+    expect(proposed).toHaveLength(2000);
+    const card = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: long, threadId: "thread-1" }));
+    expect(card).toContain(proposed);
+    expect(card).toContain(earlier);
+    const [pending] = pendingApprovals([long]);
+    expect(renderToStaticMarkup(createElement(PendingApprovalPanel, { pending: pending!, count: 1, index: 0 }))).toContain(proposed);
+  });
+
   it("shows Undo once it is applied", () => {
     const html = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: applied, threadId: "thread-1" }));
     expect(html).toContain(">Undo<");
@@ -65,5 +85,50 @@ describe("a bot's settings card that waits for a tap", () => {
 
   it("is not pending once it is applied", () => {
     expect(pendingApprovals([applied])).toEqual([]);
+  });
+});
+
+describe("a waiting card in a conversation that others can read", () => {
+  const shared: Message = {
+    ...waiting, id: "shared",
+    card: { ...waiting.card!, subtitle: "https://example.test/v1", appSettingRequest: { ...request, before: undefined, privateReview: true, expiresAt: 2_000_000_000_000 } },
+  };
+
+  it("offers the owner a button to read both values, and nothing on an own card", () => {
+    const [pending] = pendingApprovals([shared]);
+    const panel = renderToStaticMarkup(createElement(PendingApprovalPanel, { pending: pending!, count: 1, index: 0, threadId: "thread-1" }));
+    expect(panel).toContain("Show what changes");
+    const card = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: shared, threadId: "thread-1" }));
+    expect(card).toContain("Show what changes");
+    const own = renderToStaticMarkup(createElement(ApprovalCard, { bot: { name: "Luna" }, message: waiting, threadId: "thread-1" }));
+    expect(own).not.toContain("Show what changes");
+  });
+
+  it("shows the old and the new text after a click, and the server's words when the owner is refused", async () => {
+    const answers: Array<{ status: number; body: unknown }> = [
+      { status: 200, body: { before: "", after: "https://example.test/v1" } },
+      { status: 403, body: { error: "Only the owner sees this." } },
+    ];
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      const next = input.endsWith("/review") && init?.method === "POST" ? answers.shift()! : { status: 200, body: {} };
+      return new Response(JSON.stringify(next.body), { status: next.status, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const click = async () => { await act(async () => { host.querySelector<HTMLButtonElement>("[data-setting-review] button")!.click(); }); await act(async () => {}); };
+    await act(async () => { root.render(createElement(ApprovalCard, { bot: { name: "Luna" }, message: shared, threadId: "thread-1" })); });
+    await click();
+    expect(fetchMock.mock.calls.map(([input]) => input).filter((input) => input.endsWith("/review"))).toEqual(["/api/threads/thread-1/app-settings/request-1/review"]);
+    expect(host.querySelector("[data-setting-review] pre")!.textContent).toBe("not set\n→\nhttps://example.test/v1");
+    await act(async () => { root.unmount(); });
+    const second = createRoot(host);
+    await act(async () => { second.render(createElement(ApprovalCard, { bot: { name: "Luna" }, message: shared, threadId: "thread-1" })); });
+    await click();
+    expect(host.querySelector("[data-setting-review] [role=alert]")!.textContent).toBe("Only the owner sees this.");
+    await act(async () => { second.unmount(); });
+    host.remove();
+    vi.unstubAllGlobals();
   });
 });

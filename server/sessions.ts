@@ -19,6 +19,7 @@ import {
 } from "../shared/pairing-code.ts";
 import { userError, type UserError } from "./user-errors.ts";
 import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { PublicError } from "./public-error.ts";
 
 export type Scope = "admin" | "client";
 export const SCOPES: readonly Scope[] = ["admin", "client"];
@@ -389,7 +390,7 @@ export class SessionRegistry {
   private refusePersonal(scopes: readonly Scope[]): void {
     if (this.personal(scopes)) {
       const { error, ...fields } = this.adminOnly!;
-      throw Object.assign(new Error(error), { status: 403, code: "cloud_personal", ...fields });
+      throw Object.assign(new PublicError(error, 403), { code: "cloud_personal", ...fields });
     }
   }
 

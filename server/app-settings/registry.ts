@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { credentialIsConfigured, CREDENTIAL_TARGETS, PROVIDER_CREDENTIAL_TARGETS, type CredentialConfig, type CredentialTargetId } from "../../shared/credential-request.ts";
+import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode.ts";
 import { WINDOW_PREFS, type WindowPrefId } from "../../shared/app-settings.ts";
 import type { ImageProvider } from "../../shared/image-generation.ts";
 import type { BrowserEngineKind } from "../browser/config.ts";
@@ -8,7 +9,8 @@ import { defaultBotThreads, MAX_CONCURRENT_BOT_THREADS } from "../bot-thread-lim
 import { isClaudeBedrock } from "../claude-bedrock.ts";
 import { isClaudeEndpoint } from "../claude-endpoints.ts";
 import { isCodexEndpoint } from "../codex-endpoints.ts";
-import { MAX_MCP_CALL_TIMEOUT_MINUTES, MAX_ROOM_TURN_TIMEOUT_MINUTES, mcpCallTimeoutMinutes, MIN_MCP_CALL_TIMEOUT_MINUTES, MIN_ROOM_TURN_TIMEOUT_MINUTES, persistableInstanceConfigs, roomTurnTimeoutMinutes, type AppConfig } from "../config.ts";
+import { billsEachUse } from "../limit-failover.ts";
+import { instanceConfigs, MAX_MCP_CALL_TIMEOUT_MINUTES, MAX_ROOM_TURN_TIMEOUT_MINUTES, mcpCallTimeoutMinutes, MIN_MCP_CALL_TIMEOUT_MINUTES, MIN_ROOM_TURN_TIMEOUT_MINUTES, persistableInstanceConfigs, roomTurnTimeoutMinutes, type AppConfig } from "../config.ts";
 import type { InstanceConfig } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import type { ProviderRegistry } from "../harness/registry.ts";
@@ -21,6 +23,7 @@ import type { SettingsPlaceId } from "../../shared/settings-places.ts";
 import { hostOf, type Consequence } from "./confirm.ts";
 import { placePath } from "./places.ts";
 import { botEntries } from "./registry-bots.ts";
+import { aiPoolEntries } from "./registry-ai-pool.ts";
 import { configEntries } from "./registry-config.ts";
 import { pictureEntries } from "./registry-pictures.ts";
 import { windowEntries } from "./registry-window.ts";
@@ -54,6 +57,8 @@ interface Writable {
   describe?(value: unknown): { change: string } | { refusal: string };
   /** Non-null when this value only applies after the owner taps Apply on a card naming what follows. */
   confirm?(value: unknown): Consequence | null;
+  /** The complete current and proposed text for the card that waits for the owner's Apply, so the owner reads all of what they approve. */
+  review?(value: unknown): { before: string; after: string } | null;
 }
 interface Secret {
   tier: "secret";
@@ -78,6 +83,12 @@ export interface RegistryDeps {
   pinBot(botId: string, pinned: boolean): Promise<string | null>;
   /** PATCH /api/bots/:id as the bot's Settings panel does; a refusal comes back as its text. */
   patchBot(botId: string, body: Record<string, unknown>): Promise<string | null>;
+  /** Each of one bot's conversations with the approval mode it runs on now. */
+  threadModes(botId: string): Record<string, ApprovalMode>;
+  /** Puts each named conversation of the bot on its mode; checks every one exists before any write, and a refusal comes back as its text. */
+  setThreadModes(botId: string, modes: Record<string, Exclude<ApprovalMode, "custom">>): Promise<string | null>;
+  /** Why one conversation of the bot may not go to this mode, as the bot's own Settings would refuse it; null when it may. */
+  threadModeRefusal(botId: string, threadId: string, mode: Exclude<ApprovalMode, "custom">): string | null;
   /** Another of the Settings window's routes, called as the window calls it. */
   call(route: AppRoute, method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: Record<string, unknown>): Promise<string | null>;
   /** GET on one of those routes, as the window reads it; null when it answers with an error. */
@@ -95,6 +106,14 @@ export interface RegistryDeps {
   /** POST /api/instances/<path> and DELETE /api/instances/<id>, as Settings does; a refusal comes back as its text. */
   addEngine(path: "openai-compat" | "claude-bedrock", body: Record<string, unknown>): Promise<string | null>;
   removeEngine(instanceId: string): Promise<string | null>;
+  /** The signed-in AIs the AI pool can use, with the model each would run; never a key. `billing` is "unknown" when the AI does not say. */
+  poolEngines?(): PoolEngine[];
+}
+export interface PoolEngine {
+  instanceId: string;
+  name: string;
+  model: string;
+  billing: "plan" | "pay per use" | "unknown";
 }
 
 /** A setting's value for a person or bot; empty when unset, so each edge can say "not set" in its own words. */
@@ -106,9 +125,9 @@ const KEY_WHERE: Partial<Record<CredentialTargetId, Where>> = {
   tregApiKey: "apps",
 };
 
-export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm"> & {
+export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review"> & {
   read?(): string; current(value: never): unknown; write(value: never): Promise<string | null>; describe?(value: never): { change: string } | { refusal: string };
-  confirm?(value: never): Consequence | null;
+  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null;
 };
 /** `line` says what the new value does on the applied card; `refusal` names a value only the person sets, in Settings. */
 export type WindowPref = (id: WindowPrefId, label: string, help: string, where: Where, synonyms: string[], allowed: string,
@@ -156,6 +175,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
     ...spec, tier: "safe", read: spec.read ?? (() => display((spec.current as () => unknown)())), current: spec.current as Writable["current"],
     write: spec.write as Writable["write"], ...(spec.describe ? { describe: spec.describe as Writable["describe"] } : {}),
     ...(spec.confirm ? { confirm: spec.confirm as Writable["confirm"] } : {}),
+    ...(spec.review ? { review: spec.review as Writable["review"] } : {}),
   });
   const config = <V,>(patch: (value: V) => Record<string, unknown>) => (value: V) => deps.saveConfig(patch(value));
   const windowPref: WindowPref = (id, label, help, where, synonyms, allowed, line) => writable({
@@ -354,7 +374,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       ["https", "public address"], () => "managed in Settings"),
   ];
 
-  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
+  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...aiPoolEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
 }
 
 export function findSettings(entries: readonly SettingEntry[], query: string, limit = 8): SettingEntry[] {
@@ -375,14 +395,15 @@ export function findSettings(entries: readonly SettingEntry[], query: string, li
 /** The registry over the Settings window's own routes, called as the window calls them. */
 export function routeBackedRegistry(deps: {
   cfg(): AppConfig;
-  store: Pick<Store, "bots" | "sections">;
+  store: Pick<Store, "bots" | "sections" | "tasks" | "projectBotForTask" | "patchTask">;
   routes: { config: RouteHandler; botOrder: RouteHandler; botPatch: RouteHandler; sections: RouteHandler; instances: RouteHandler } & Record<AppRoute, RouteHandler>;
-  providers: Pick<ProviderRegistry, "instances" | "lastSnapshot">;
+  providers: Pick<ProviderRegistry, "instances" | "lastSnapshot" | "access">;
   credentials(): CredentialConfig;
   window: RegistryDeps["window"];
   paused(): string[];
   browserEngine?: RegistryDeps["browserEngine"];
   imageReady?: RegistryDeps["imageReady"];
+  threadModeRefusal: RegistryDeps["threadModeRefusal"];
 }): SettingEntry[] {
   const auth: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
   const refusal = async (reply: Promise<RouteReply>) => {
@@ -394,7 +415,7 @@ export function routeBackedRegistry(deps: {
     }
   };
   return createSettingsRegistry({
-    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady,
+    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady, threadModeRefusal: deps.threadModeRefusal,
     saveConfig: (patch) => refusal(callRoute(deps.routes.config, { method: "PUT", path: "/api/config", body: patch, auth })),
     reorderBots: (botIds) => refusal(callRoute(deps.routes.botOrder, { method: "PUT", path: "/api/bots/order", body: { botIds }, auth })),
     pinBot: (botId, pinned) => refusal(callRoute(deps.routes.botPatch, { method: "PATCH", path: `/api/bots/${encodeURIComponent(botId)}`, body: { pinned }, auth })),
@@ -404,11 +425,31 @@ export function routeBackedRegistry(deps: {
       const reply = await callRoute(deps.routes[route], { method: "GET", path, auth }).catch(() => null);
       return reply && reply.status < 300 ? reply.body : null;
     },
+    threadModes: (botId) => Object.fromEntries(deps.store.tasks(botId).map((task) => [task.threadId, approvalModeFor(deps.store.projectBotForTask(botId, task.threadId) ?? {})])),
+    setThreadModes: async (botId, modes) => {
+      const known = new Set(deps.store.tasks(botId).map((task) => task.threadId));
+      const unknown = Object.keys(modes).find((threadId) => !known.has(threadId));
+      if (unknown) return `This bot has no conversation with the id ${unknown}.`;
+      for (const [threadId, mode] of Object.entries(modes)) {
+        if (!deps.store.patchTask(botId, threadId, { approvalMode: mode, autoApprove: mode === "auto" })) return `The conversation ${threadId} could not be changed.`;
+      }
+      return null;
+    },
     groupBots: (name, botIds) => refusal(callRoute(deps.routes.sections, { method: "POST", path: "/api/sidebar-sections", body: { name, botIds }, auth })),
     engines: () => deps.providers.instances().filter((instance) => instance.enabled).map((instance) => ({
       instanceId: instance.instanceId, working: deps.providers.lastSnapshot(instance.instanceId)?.state === "available",
       name: instance.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === instance.driverKind)?.metadata.displayName ?? instance.instanceId,
     })),
+    poolEngines: () => deps.providers.instances().flatMap((instance) => {
+      const snapshot = deps.providers.lastSnapshot(instance.instanceId);
+      if (!instance.enabled || snapshot?.state !== "available" || snapshot.authenticated === false) return [];
+      const usable = instance.models.options.filter((model) => !model.orgBlocked && !model.needsCliUpdate);
+      const model = usable.find((option) => option.id === instance.models.default) ?? usable[0];
+      if (!model) return [];
+      const perUse = deps.providers.access(instance.instanceId) === "api" || snapshot.billing === "metered" || billsEachUse(instanceConfigs(deps.cfg())[instance.instanceId]);
+      return [{ instanceId: instance.instanceId, name: instance.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === instance.driverKind)?.metadata.displayName ?? instance.instanceId,
+        model: model.id, billing: perUse ? "pay per use" as const : snapshot.billing === "subscription" ? "plan" as const : "unknown" as const }];
+    }),
     addEngine: (path, body) => refusal(callRoute(deps.routes.instances, { method: "POST", path: `/api/instances/${path}`, body, auth })),
     removeEngine: (instanceId) => refusal(callRoute(deps.routes.instances, { method: "DELETE", path: `/api/instances/${encodeURIComponent(instanceId)}`, auth })),
   });

@@ -49,21 +49,25 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
   /** A setting saved with PUT /api/config; `says` is the applied card's line, else it shows before → after. */
   const section = <V,>(spec: { id: string; label: string; help: string; where: Where; synonyms: string[]; value: z.ZodType<V>; allowed: string;
     current(): unknown; patch(value: V): Record<string, unknown>; says?(value: V): string; read?(): string; confirm?(value: V): Consequence | null;
-    refuse?(value: V): string | null; more?(): Record<string, unknown> }) => writable({
+    refuse?(value: V): string | null; more?(): Record<string, unknown>; review?(value: V): { before: string; after: string } }) => writable({
     id: spec.id, label: spec.label, help: spec.help, where: spec.where, synonyms: spec.synonyms, value: spec.value, allowed: spec.allowed,
     // Security: Undo writes back what `current` gives and keeps it on disk; a section saves merged, so its keys stay as they are.
     current: () => visible(spec.current()), read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
     ...(spec.says ? { describe: (value: V) => { const refusal = spec.refuse?.(value); return refusal ? { refusal } : { change: spec.says!(value) }; } } : {}),
     ...(spec.more ? { more: spec.more } : {}),
     ...(spec.confirm ? { confirm: spec.confirm } : {}),
+    ...(spec.review ? { review: spec.review } : {}),
   });
   /** `onConfirm`: turning it on waits for the owner's tap, naming this. */
-  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => section({
-    id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
-    current: () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; },
-    patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
-    ...(onConfirm ? { confirm: (on: boolean) => (on ? { code: onConfirm } : null) } : {}),
-  });
+  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => {
+    const isOn = () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; };
+    return section({
+      id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
+      current: isOn,
+      patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
+      ...(onConfirm ? { confirm: (on: boolean) => (on && !isOn() ? { code: onConfirm } : null) } : {}),
+    });
+  };
   /** A provider other than the one in use now sends conversation text to a new place. */
   const newProvider = (now: string | undefined, next: string | undefined): Consequence | null =>
     (next && next !== "off" && next !== now ? { code: "dataTo", params: { provider: next } } : null);
@@ -120,13 +124,15 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       id: "profile.aboutMe", label: "About you", help: "What every bot knows about you.", where: "about-you", synonyms: ["about me", "about you", "profile", "bio"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().profile?.aboutMe ?? "", read: () => cfg().profile?.aboutMe ?? "",
       patch: (aboutMe) => ({ profile: { aboutMe } }), says: (text) => (text ? `Tell every bot this about you: ${quoted(text)}` : "Clear what every bot knows about you"),
-      confirm: (text) => (text ? { code: "standingRule" } : null),
+      confirm: (text) => (text !== (cfg().profile?.aboutMe ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().profile?.aboutMe ?? "", after: text }),
     }),
     section({
       id: "bots.everyBotRules", label: "Rules for every bot", help: "Instructions every bot follows, ahead of its own.", where: "about-you", synonyms: ["rules", "rules for every bot", "instructions", "every bot"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().everyBotRules ?? "", read: () => cfg().everyBotRules ?? "",
       patch: (everyBotRules) => ({ everyBotRules }), says: (text) => (text ? `Make every bot follow: ${quoted(text)}` : "Clear the rules every bot follows"),
-      confirm: (text) => (text ? { code: "standingRule" } : null),
+      confirm: (text) => (text !== (cfg().everyBotRules ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().everyBotRules ?? "", after: text }),
     }),
     section({
       id: "bots.newBotEffort", label: "Effort for new bots", help: "The reasoning effort a new bot starts with when its model names none; null uses the engine's own.", where: "new-bots",
@@ -139,6 +145,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       current: () => cfg().newBotDefaults, patch: (newBotDefaults) => ({ newBotDefaults }),
       says: (template) => `Replace the template every new bot starts from with: ${display(visible(template)).slice(0, 400)}`,
       confirm: () => ({ code: "newBots" }),
+      review: (template) => ({ before: cfg().newBotDefaults ? JSON.stringify(visible(cfg().newBotDefaults), null, 2) : "", after: JSON.stringify(visible(template), null, 2) }),
     }),
     section({
       id: "bots.keepWarm", label: "Keep caches warm", help: "After a turn, keep each bot's prompt cache warm so its next reply is faster and cheaper; it costs a few tokens.", where: "limits",
@@ -176,13 +183,13 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       patch: (on: boolean) => ({ features: { showToolCalls: on } }), says: (on: boolean) => (on ? "Show each tool a bot runs in its conversation" : "Hide tool runs from conversations"),
     }),
     feature("desktops.browser", "Built-in browser", "Bots may use the built-in browser; each bot also has its own switch.", "browser", ["browser", "built-in browser"], "browser", true,
-      "Let bots use the built-in browser", "Turn off the built-in browser for every bot"),
+      "Let bots use the built-in browser", "Turn off the built-in browser for every bot", "browserOnAll"),
     section({
       id: "desktops.browserLocalNetwork", label: "Browser on your local network", help: "Whether bots' browsers may open sites on this computer's local network.", where: "browser",
       synonyms: ["local network", "lan", "browser sites", "intranet"], value: z.boolean(), allowed: "true or false",
       current: () => cfg().browserEngine?.egress?.localNetwork === true, patch: (localNetwork) => ({ browserEngine: { egress: { localNetwork } } }),
       says: (on) => (on ? "Let bots' browsers open sites on your local network" : "Keep bots' browsers off your local network"),
-      confirm: (on) => (on ? { code: "browserLan" } : null),
+      confirm: (on) => (on && cfg().browserEngine?.egress?.localNetwork !== true ? { code: "browserLan" } : null),
     }),
     section({
       id: "desktops.browserProxy", label: "Browser proxy", help: "An unauthenticated SOCKS5 proxy bots' browsers reach public sites through; empty sends them direct. Its address is never shown, only whether one is set.",
@@ -191,7 +198,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       allowed: 'an unauthenticated "socks5://host:port", or "" for no proxy', current: () => cfg().browserEngine?.egress?.proxy ?? "",
       read: () => (cfg().browserEngine?.egress?.proxy ? "set" : ""), patch: (proxy) => ({ browserEngine: { egress: { proxy } } }),
       says: (proxy) => (proxy ? "Send bots' browsers to public sites through the SOCKS5 proxy you named" : "Send bots' browsers to public sites directly, with no proxy"),
-      confirm: (proxy) => (proxy ? { code: "browserProxy" } : null),
+      confirm: (proxy) => (proxy && proxy !== (cfg().browserEngine?.egress?.proxy ?? "") ? { code: "browserProxy" } : null),
     }),
     section({
       id: "desktops.browserEngine", label: "Browser engine", help: "What runs bots' browsers: Seira's own Chrome driver (the default where this computer has a Chrome for it) or agent-browser.", where: "browser",
@@ -229,6 +236,10 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
           return [...(before.name !== wanted.name ? [`rename "${before.name}" to "${wanted.name}"`] : []), ...(Boolean(before.browser) !== Boolean(wanted.browser) ? [`move "${wanted.name}" to ${where(wanted)}`] : [])];
         });
         return lines.length ? { change: `Browser profiles: ${lines.join("; ")}` } : { refusal: "That list is the same as the current one." };
+      },
+      confirm: (next: BrowserProfileChange[]) => {
+        const current = cfg().browserProfiles ?? [];
+        return next.some((wanted) => wanted.browser === "chrome" && !current.find((profile) => profile.id === wanted.id)?.browser) ? { code: "ownChrome" } : null;
       },
       write: (next: BrowserProfileChange[]) => {
         const current = (cfg().browserProfiles ?? []).map(({ id, name, browser }) => ({ id, name, ...(browser ? { browser } : {}) }));
