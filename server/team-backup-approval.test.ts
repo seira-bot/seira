@@ -27,13 +27,13 @@ describe("a bot a team backup restore creates starts at the saved New bot level"
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
-  it.each(["ask", "auto", "full"] as const)("starts at %s when that level is passed in", (level) => {
+  it.each(["ask", "full"] as const)("starts at %s when that level is passed in", (level) => {
     const { store, routines, backup } = backupOfOneBot();
     const restored = importTeamBackup(store, routines, backup, selection(), { newBotApproval: level }).bots.map((bot) => store.bot(bot.id)!);
     expect(restored.length).toBeGreaterThan(0);
     for (const bot of restored) {
       expect(approvalModeFor(bot)).toBe(level);
-      expect(bot.autoApprove).toBe(level === "auto");
+      expect(bot.autoApprove).toBe(false);
     }
   });
 

@@ -37,7 +37,7 @@ import { movesThreadToTop, nextOpenThread } from "../shared/wire.ts";
 import { parseConnectorTools } from "./connector-tools.ts"; import { retireBoatFromBotsAtBoot } from "./boat-retirement.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
 import { sameModelSelection } from "../shared/thread-model.ts";
 import { initialGreetingMessage } from "./initial-greeting.ts"; import { createDefaultBot, defaultBotRefusal, type DefaultBotIntro } from "./default-bot.ts";
-import { appsFromCreator } from "./inherited-apps.ts"; import type { NewBotApproval } from "./new-bot-defaults.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
+import { appsFromCreator } from "./inherited-apps.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
 import { ThreadCache, type ThreadState } from "./thread-cache.ts";
 import { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 import { buildTask, threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
@@ -1271,7 +1271,7 @@ export class Store {
         BotRecord,
         "name" | "title" | "description" | "soul" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "mascotAccessories" | "modelSelection" | "section" | "cwd" | "visibility" | "toolScope" | "createdBy" | "reportsTo"
       >
-    > & { approvalMode?: NewBotApproval } = {},
+    > & { approvalMode?: Exclude<ApprovalMode, "custom"> } = {},
     opts: {
       seedMessages?: boolean; id?: string; threadId?: string; beforeShown?: (bot: BotRecord) => void;
     } = {},
@@ -1294,8 +1294,7 @@ export class Store {
       ...(profile.mascotAccessories?.length ? { mascotAccessories: profile.mascotAccessories } : {}), ...(profile.mascotExpression ? { mascotExpression: profile.mascotExpression } : {}),
       ...(profile.mascotBody ? { mascotBody: profile.mascotBody } : {}),
       ...this.newBotSharing(profile.visibility, newBotOwner(profile)),
-      ...(toolScope.scope ? { toolScope: toolScope.scope } : {}),
-      ...(profile.approvalMode ? { approvalMode: profile.approvalMode, autoApprove: profile.approvalMode === "auto" } : {}),
+      ...(toolScope.scope ? { toolScope: toolScope.scope } : {}), ...(profile.approvalMode ? { approvalMode: profile.approvalMode, autoApprove: profile.approvalMode === "auto" } : {}),
       unread: false,
       modelSelection: this.newBotSelection(profile.modelSelection),
       resumeCursors: {},
@@ -1331,7 +1330,7 @@ export class Store {
     return bot;
   }
 
-  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: NewBotApproval): TeamSetupResult {
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: Exclude<ApprovalMode, "custom">): TeamSetupResult {
     const chief = this.own(request.botId);
     if (!chief) throw new Error("The requesting Chief no longer exists");
     if (chief.lastTeamSetupReceipt?.requestId === request.requestId) return chief.lastTeamSetupReceipt.result;
@@ -1350,7 +1349,7 @@ export class Store {
         next = { id: operation.botId, threadId: operation.threadId, name: operation.fields.name,
           title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), ...freshCharacter(nextBots), unread: false,
           resumeCursors: {}, createdAt, ...operation.fields, modelSelection,
-          ...(newBotApproval ? { approvalMode: newBotApproval } : {}), autoApprove: newBotApproval === "auto",
+          autoApprove: false,
           ...sharedAsMaker(chief),
           // A Chief's new specialist reports to the Chief's own person.
           ...(botOwner(chief) ? { createdBy: botOwner(chief)! } : {}),
@@ -1358,6 +1357,9 @@ export class Store {
             unread: false, activity: "idle", busy: false }],
         };
         Object.assign(next, appsFromCreator(chief, next));
+        const level = newBotApproval ?? approvalModeFor({}); // the New bot default, checked as bot creation checks it; unset is the workspace default
+        Object.assign(next, { approvalMode: level, autoApprove: level === "auto" });
+        Object.assign(next.tasks![0], { approvalMode: level, autoApprove: level === "auto" });
         if (!next.cwd) delete next.cwd;
         nextBots.unshift(next);
       } else {

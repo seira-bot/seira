@@ -23,6 +23,7 @@ import { flushLaterSaves } from "./save-batch.ts";
 import { Store, toWireTask, type BotRecord } from "./store.ts";
 import { STARTER_CHARACTERS } from "./bot-look.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
+import { DEFAULT_APPROVAL_MODE, approvalModeFor, setDefaultApprovalMode } from "../shared/approval-mode.ts";
 import { SECTION_CONTEXTS_FILE, readSectionContext, writeSectionContext } from "./section-context.ts";
 import { allowsTool } from "../shared/tool-scope.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
@@ -2696,6 +2697,36 @@ describe("soul", () => {
       ] });
     return store.bot(botId)!;
   };
+  it("starts a bot made by team setup at the level it is given, on the bot and its first conversation", () => {
+    const store = new Store(selection);
+    const chief = store.createBot({ name: "Chief", section: "Ops" });
+    store.patchBot(chief.id, { chiefOfStaff: true });
+    const made = createdBy(store, chief, "helper-default", "setup-helper-default");
+    expect(made).toMatchObject({ approvalMode: "full", autoApprove: false });
+    expect(made.tasks?.[0]).toMatchObject({ approvalMode: "full", autoApprove: false });
+    store.applyTeamSetup({ version: 1, requestId: "setup-level-ask", botId: chief.id, threadId: chief.threadId, reason: "Requested", createdAt: 1,
+      requesterRevision: "fixture", newTeams: [], operations: [
+        { action: "create", botId: "asked", threadId: "asked-thread", fields: { name: "Asked", section: chief.section, modelSelection: selection() } },
+      ] }, "ask");
+    expect(new Store(selection).bot("asked")).toMatchObject({ approvalMode: "ask", autoApprove: false });
+    expect(new Store(selection).bot("asked")?.tasks?.[0]).toMatchObject({ approvalMode: "ask", autoApprove: false });
+  });
+
+  it("starts a bot made by team setup at Ask when the workspace default is Ask", () => {
+    setDefaultApprovalMode("ask");
+    try {
+      const store = new Store(selection);
+      const chief = store.createBot({ name: "Chief", section: "Ops" });
+      store.patchBot(chief.id, { chiefOfStaff: true });
+      const made = createdBy(store, chief, "helper-default-ask", "setup-helper-default-ask");
+      expect(approvalModeFor(made)).toBe("ask");
+      expect(made).toMatchObject({ approvalMode: "ask" });
+      expect(made.tasks?.[0]).toMatchObject({ approvalMode: "ask" });
+    } finally {
+      setDefaultApprovalMode(DEFAULT_APPROVAL_MODE);
+    }
+  });
+
   const grantsOf = (bot: BotRecord) => ({ composio: bot.composio, connectorTools: bot.connectorTools, connectorScopes: bot.connectorScopes, mcpServers: bot.mcpServers });
 
   it("starts a bot a Chief creates with the Chief's own connected apps and levels, copied, never more", () => {

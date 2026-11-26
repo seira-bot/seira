@@ -3,6 +3,7 @@ import { botOwner, chiefScope } from "../shared/bot-owner.ts";
 import { z } from "zod";
 import { soulDiffLines } from "../shared/line-diff.ts";
 import { newId, type ModelSelection } from "./contracts.ts";
+import type { ApprovalMode } from "../shared/approval-mode.ts";
 import { fitsOnOneLine, parseBotProfilePatch } from "./bot-profile.ts";
 import { profileSnapshot } from "./profile-revision.ts";
 import { recordProfileChange, type HistoryActor } from "./profile-versions.ts";
@@ -13,7 +14,6 @@ import { MAX_MCP_SERVERS, mcpServerNameError } from "./mcp-registry.ts";
 import { redactSecretsInText } from "./redact.ts"; import { chiefLevel } from "./chief-level.ts"; import { defaultBotRefusal } from "./default-bot.ts";
 import type { BotRecord, OptionCardData } from "./store.ts"; import { outsideDepartmentReason } from "./peer-roster.ts";
 import type { TeamSetupFields, TeamSetupOperation, TeamSetupRequest, TeamSetupResult, TeamSetupUndo } from "../shared/team-setup.ts";
-import type { NewBotApproval } from "./new-bot-defaults.ts";
 
 const section = (value?: string) => value?.trim() || "";
 const teamName = z.string().trim().min(1).max(60).refine(fitsOnOneLine).refine((value) => redactSecretsInText(value) === value, "Team names cannot contain credentials");
@@ -92,7 +92,7 @@ interface SetupStore {
   messagesFor(threadId: string): Array<{ id: string; role?: string; card?: OptionCardData }>;
   appendMessage(threadId: string, message: { role: "bot"; kind: "options"; card: OptionCardData; from?: { botId: string; name: string; color: string } }): { id: string };
   patchMessage(threadId: string, messageId: string, patch: { card: OptionCardData }): unknown;
-  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: NewBotApproval): TeamSetupResult;
+  applyTeamSetup(request: TeamSetupRequest, newBotApproval?: Exclude<ApprovalMode, "custom">): TeamSetupResult;
   patchBot(id: string, patch: Partial<BotRecord>): unknown;
 }
 
@@ -109,9 +109,9 @@ interface Options {
   validateChange?(before: BotRecord, fields: TeamSetupFields): void;
   /** Why this MCP server cannot be given to this bot (unknown, or another bot's own); null when it can. */
   mcpServerProblem?(name: string, botId: string): string | null;
+  /** The level a new bot starts at, as bot creation would resolve and check it; undefined for the workspace default. */
+  newBotApproval?(): Exclude<ApprovalMode, "custom"> | undefined;
   maxBots: number;
-  /** The saved New bot level for a bot this setup creates; undefined keeps the workspace default. */
-  newBotApproval?(): NewBotApproval | undefined;
   ownsThread(botId: string, threadId: string): boolean;
   /** `request` only for a reviewed deletion; Undo of a creation deletes without one. */
   deleteBot(botId: string, revalidate: () => void, request?: TeamSetupRequest): Promise<void>;

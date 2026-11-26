@@ -375,18 +375,6 @@ export const GROK_ASK_USER_QUESTION: AcpQuestionRequest = {
   },
 };
 
-// Grok 1.0 also offers project- and tool-wide allow_always options; only this one ends with the session.
-const GROK_SESSION_ALLOW = "allow-edits-session";
-
-export function grokPermissionRequest(params: Record<string, any>): Record<string, any> {
-  if (String(params.toolCall?.toolCallId ?? "").startsWith("interaction_") || !Array.isArray(params.options)) return params;
-  return {
-    ...params,
-    options: params.options.filter((option: { optionId?: unknown; kind?: unknown }) =>
-      option?.kind !== "allow_always" || option.optionId === GROK_SESSION_ALLOW),
-  };
-}
-
 const support: AcpSupport = {
   driverKind: "grokAgent",
   questionRequests: {
@@ -395,7 +383,6 @@ const support: AcpSupport = {
   },
   askTool: "ask_user_question",
   displayName: "Grok",
-  permissionRequest: grokPermissionRequest,
   images: true,
   acceptsUnadvertisedImages: grokAcceptsUnadvertisedImages,
   get models() { return currentEngineCatalog("grok"); },

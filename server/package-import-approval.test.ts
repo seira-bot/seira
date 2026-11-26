@@ -50,10 +50,10 @@ describe("a bot a team package import creates starts at the saved New bot level"
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
-  it.each(["ask", "auto", "full"] as const)("starts every imported bot at %s when that level is passed in", (level) => {
+  it.each(["ask", "full"] as const)("starts every imported bot at %s when that level is passed in", (level) => {
     for (const bot of importFullTeam(() => level)) {
       expect(approvalModeFor(bot)).toBe(level);
-      expect(bot.autoApprove).toBe(level === "auto");
+      expect(bot.autoApprove).toBe(false);
     }
   });
 

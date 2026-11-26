@@ -109,6 +109,7 @@ const SUPPORT: AcpSupport = {
   accountErrorText: (code) => code === "invalid_credentials" ? undefined : { key: "chat.notice.devinAccountRefused" },
   permissionRequest: devinPermissionRequest,
   sessionScopedApproval: true,
+  nativeSessionGrant: true,
   async configureSession({ request, sessionId, config }) {
     const value = config.fullAuto ? DEVIN_MODE.full : DEVIN_MODE.ask;
     let confirmed: unknown;

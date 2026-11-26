@@ -130,17 +130,6 @@ function settingsError(error: z.ZodError): Error {
   return new Error(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
 }
 
-export type NewBotApproval = "ask" | "auto" | "full";
-
-/** The level a bot made without the New bot dialog starts at, or undefined for the workspace default.
- * Custom needs the desktop permission flow, so it starts at Ask. Full on a hosted workspace keeps the workspace default. */
-export function newBotApproval(saved: NewBotDefaults | undefined, hosted: boolean): NewBotApproval | undefined {
-  const mode = saved?.profile.approvalMode;
-  if (mode === "custom") return "ask";
-  if (mode === "full" && hosted) return undefined;
-  return mode;
-}
-
 export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, body: Record<string, unknown>) {
   if (body.useDefaults !== undefined && typeof body.useDefaults !== "boolean") {
     throw Object.assign(new Error("useDefaults must be true or false"), { status: 400 });
@@ -158,3 +147,13 @@ export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, bo
   if (!resolved.data.name?.trim()) delete resolved.data.name;
   return { ...template, profile: resolved.data };
 }
+
+/** The level a bot made by team setup or an import starts at, under bot creation's rules for the saved New bot level: no Custom, no Full in a hosted
+ * workspace, and no Auto, which needs a warning only a person confirms. A level creation refuses becomes Ask; undefined is the workspace default. */
+export function newBotApprovalLevel(saved: NewBotDefaults | undefined, hostedWorkspace: boolean): "ask" | "full" | undefined {
+  const level = saved?.profile.approvalMode;
+  if (level === undefined) return undefined;
+  return level === "full" && !hostedWorkspace ? "full" : "ask";
+}
+
+export type NewBotApproval = NonNullable<ReturnType<typeof newBotApprovalLevel>>;
