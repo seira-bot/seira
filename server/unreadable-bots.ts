@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { BOTS_FILE } from "./registry-store.ts";
 
@@ -29,6 +29,18 @@ export function refuseUnreadableBots(cause: unknown, file = BOTS_FILE): never {
     copy ? `A copy is at ${copy}.` : "No copy could be made.",
     "Restore bots.json, fix its permissions, or move it away, then start the server again.",
   ].join(" "));
+}
+
+/** The bots that bots.json lists, or undefined when there is no file. A file that does not read as a list stops the start. */
+export function loadBotsOrRefuse<T>(load: () => unknown, file = BOTS_FILE): T[] | undefined {
+  try {
+    const loaded = load();
+    if (!Array.isArray(loaded)) throw new TypeError("bots.json is not a list");
+    return loaded as T[];
+  } catch (error) {
+    if (existsSync(file)) refuseUnreadableBots(error, file);
+    return undefined;
+  }
 }
 
 /** A refusal is one plain line and exit code 1, never a stack trace. */
