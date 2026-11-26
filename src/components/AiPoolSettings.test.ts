@@ -45,6 +45,7 @@ function nodes(value: ReactNode): Node[] {
   return Children.toArray(value).flatMap((child) => {
     if (!isValidElement(child)) return [];
     const node = child as Node;
+    if (typeof node.type === "function" && node.type.name === "ModeChoice") return [node, ...nodes((node.type as (props: unknown) => ReactNode)(node.props))];
     if (node.type === MemberRows || node.type === AddRows) return [node, ...nodes((node.type as (props: unknown) => ReactNode)(node.props))];
     return [node, ...nodes(node.props.children)];
   });
@@ -143,6 +144,7 @@ describe("AiPoolSettings", () => {
     const view = render();
     expect(view.html).toContain("30% left");
     expect(view.html).toContain("80% left");
+    console.log(view.html.slice(0, 1200));
     expect(view.html).toContain("Next");
     expect(view.byId("ai-pool-model-claude")!.props["aria-label"]).toBe("Model for Claude");
     expect(view.button("Move Claude up")!.props.disabled).toBe(true);
@@ -221,10 +223,11 @@ describe("AiPoolSettings", () => {
     const view = render();
     expect(view.byId("ai-pool-reserve")!.props["aria-label"]).toBe("Keep in reserve");
     expect(view.byId("ai-pool-steps")!.props["aria-label"]).toBe("Switch in steps of");
-    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], floor: 20 } });
+    fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: [90, 80, 70, 60, 50, 40, 30] } });
     choose(view.byId("ai-pool-reserve"), "20");
     await flush();
-    expect(sent(0).aiPool).toEqual({ enabled: true, mode: "even", members: [claude, codex], floor: 20 });
+    const trimmed = [90, 80, 70, 60, 50, 40, 30];
+    expect(sent(0).aiPool).toEqual({ enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: trimmed });
     fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex], floor: 20, levels: [80, 60, 40] } });
     choose(render().byId("ai-pool-steps"), "20");
     await flush();
