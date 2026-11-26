@@ -1,10 +1,40 @@
+import type { ConnectorScopes } from "../../shared/connector-scopes.ts";
 import {
+  GITHUB_APP_SLUG,
   GITHUB_APP_TOOL_RULES,
   githubBotBranchPrefix,
   githubLevelAtLeast,
   type GithubBotPolicy,
   type GithubRepoGrant,
 } from "../../shared/github-app.ts";
+import type { ConnectorToolGrant } from "../../shared/wire.ts";
+
+export interface GithubBotSwitches {
+  composio?: boolean;
+  connectorTools?: Record<string, ConnectorToolGrant>;
+  connectorScopes?: ConnectorScopes;
+}
+
+export function githubAllowedFor(bot: GithubBotSwitches): boolean {
+  if (bot.composio === false) return false;
+  if (bot.connectorScopes && !Object.hasOwn(bot.connectorScopes.apps, GITHUB_APP_SLUG)) return false;
+  if (bot.connectorTools !== undefined && !Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG)) return false;
+  return true;
+}
+
+const grantKey = (grant: Pick<GithubRepoGrant, "installationId" | "repositoryId">) => `${grant.installationId}:${grant.repositoryId}`;
+
+export function githubPolicyWidens(before: GithubBotPolicy | undefined, after: GithubBotPolicy | null): boolean {
+  if (after === null) return false;
+  if (before === undefined) return true;
+  if (before.askBeforeBigChanges && !after.askBeforeBigChanges) return true;
+  if (before.ownBranchesOnly && !after.ownBranchesOnly) return true;
+  const levels = new Map(before.repos.map((grant) => [grantKey(grant), grant.level]));
+  return after.repos.some((grant) => {
+    const level = levels.get(grantKey(grant));
+    return level === undefined || !githubLevelAtLeast(level, grant.level);
+  });
+}
 
 export type GithubRepoRef = { installationId: number; repositoryId: number } | { fullName: string };
 

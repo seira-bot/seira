@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { githubBotBranchPrefix, type GithubBotPolicy, type GithubRepoLevel } from "../../shared/github-app.ts";
-import { decideGithubCall } from "./policy.ts";
+import { decideGithubCall, githubPolicyWidens } from "./policy.ts";
 
 const prefix = githubBotBranchPrefix("ada");
 const policy = (level: GithubRepoLevel, over: Partial<GithubBotPolicy> = {}): GithubBotPolicy => ({
@@ -77,5 +77,27 @@ describe("github policy", () => {
 
   it("gives the matched grant on allow", () => {
     expect(call("GITHUB_APP_GET_FILE", policy("read"))).toMatchObject({ verdict: "allow", grant: { repositoryId: 10, level: "read" } });
+  });
+});
+
+describe("githubPolicyWidens", () => {
+  const before = policy("pull_requests", { askBeforeBigChanges: true });
+  const docs = { installationId: 1, repositoryId: 11, fullName: "shop/docs", level: "read" as const };
+
+  it("is true for a first policy, a new repository, a higher level and a rule turned off", () => {
+    expect(githubPolicyWidens(undefined, policy("read", { repos: [] }))).toBe(true);
+    expect(githubPolicyWidens(before, { ...before, repos: [...before.repos, docs] })).toBe(true);
+    expect(githubPolicyWidens(before, policy("write", { askBeforeBigChanges: true }))).toBe(true);
+    expect(githubPolicyWidens(before, { ...before, askBeforeBigChanges: false })).toBe(true);
+    expect(githubPolicyWidens(before, { ...before, ownBranchesOnly: false })).toBe(true);
+  });
+
+  it("is false for the same policy, a narrower one and a removal", () => {
+    expect(githubPolicyWidens(before, before)).toBe(false);
+    expect(githubPolicyWidens(before, policy("read", { askBeforeBigChanges: true }))).toBe(false);
+    expect(githubPolicyWidens(before, { ...before, repos: [] })).toBe(false);
+    expect(githubPolicyWidens({ ...before, askBeforeBigChanges: false, ownBranchesOnly: false }, before)).toBe(false);
+    expect(githubPolicyWidens(before, null)).toBe(false);
+    expect(githubPolicyWidens(undefined, null)).toBe(false);
   });
 });
