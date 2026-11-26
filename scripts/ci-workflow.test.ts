@@ -50,6 +50,8 @@ const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
 const MILESTONES = "milestones.yml";
 const SMOKE = "server-image-smoke.yml";
+// Uploads the desktop snap to the Snap Store from the `snap-store` environment, when a release is published.
+const SNAP = "snap-publish.yml";
 // Artifact-only candidate build of the patched Windows browser engine. It never publishes and has no secret.
 const VENDOR = "browser-vendor-windows.yml";
 const image = workflows.get(IMAGE)!;
@@ -82,9 +84,51 @@ const allSteps = () => [...workflows.values()].flatMap((flow) => Object.values(f
 const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] : [step.run]));
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
+describe("snap publish workflow", () => {
+  const flow = workflows.get(SNAP)!;
+  const build = flow.jobs.build!;
+  const publish = flow.jobs.publish!;
+
+  it("starts on a published release and by hand, with a tag and a channel", () => {
+    expect(Object.keys(flow.on).sort()).toEqual(["release", "workflow_dispatch"]);
+    expect(flow.on.release).toEqual({ types: ["published"] });
+  });
+
+  it("skips a draft and a prerelease, and never cancels an upload that is running", () => {
+    expect(build.if).toContain("!github.event.release.draft");
+    expect(build.if).toContain("!github.event.release.prerelease");
+    expect(flow.concurrency).toEqual({ group: "snap-publish", "cancel-in-progress": false });
+  });
+
+  it("builds the tag with no secret and no environment, and checks the snap", () => {
+    expect(build.environment).toBeUndefined();
+    expect(JSON.stringify(build)).not.toContain("secrets.");
+    expect(runs(build).join("\n")).toContain("node scripts/check-snap.mjs");
+    expect(runs(build).join("\n")).toContain("pnpm package:snap");
+    expect(scripts["package:snap"]).toMatch(/electron-builder --linux snap --x64 --publish never$/);
+  });
+
+  it("uploads only from the snap-store environment, with the secret in the env of one step, and runs no repository code", () => {
+    expect(publish.needs).toBe("build");
+    expect(publish.environment).toBe("snap-store");
+    expect(publish.permissions).toEqual({ contents: "read" });
+    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
+    const upload = stepsOf(publish).find((step) => step.run?.includes("snapcraft upload"))!;
+    expect(upload.env?.SNAPCRAFT_STORE_CREDENTIALS).toBe("${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}");
+    expect(upload.run).toContain("exit 1");
+    expect(upload.run).toContain('--release="$CHANNEL"');
+  });
+
+  it("limits the channel to the four store channels", () => {
+    const channel = (flow.on.workflow_dispatch as { inputs: { channel: { default: string; options: string[] } } }).inputs.channel;
+    expect(channel.default).toBe("stable");
+    expect(channel.options).toEqual(["stable", "candidate", "beta", "edge"]);
+  });
+});
+
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows, the Windows browser vendor build and the two server image workflows only", () => {
-    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE]);
+  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
+    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
@@ -123,6 +167,10 @@ describe("CI workflows", () => {
       for (const [id, job] of Object.entries(flow.jobs)) {
         const where = `${file} job ${id}`;
         if (job.environment === undefined) continue;
+        if (file === SNAP && id === "publish") {
+          expect(job.environment, where).toBe("snap-store");
+          continue;
+        }
         expect(["release", "release-approval"], where).toContain(job.environment);
         if (job.environment !== "release-approval") continue;
         expect(id, where).toBe("approval");
@@ -193,7 +241,7 @@ describe("CI workflows", () => {
       expect(count(texts.get(file)!), `${file} reads a secret outside a job`).toBe(inJobs);
       for (const [id, job] of jobs) {
         expect(job, `${file} job ${id} passes secrets on`).not.toHaveProperty("secrets");
-        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe("release");
+        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe(file === SNAP ? "snap-store" : "release");
       }
     }
   });
@@ -213,8 +261,8 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads a secret only in the macOS package workflow, for the Apple signature, and in the server image workflow", () => {
-    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml", IMAGE]);
+  it("reads a secret only in the macOS package workflow, for the Apple signature, in the server image workflow and in the snap publish workflow", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml", IMAGE, SNAP]);
   });
 
   it("drops the credentials of every checkout", () => {

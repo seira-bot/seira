@@ -122,6 +122,10 @@ A `gate` job with read-only permissions runs the release gate (see
 [The release gate](#the-release-gate)). The `redispatch` job of
 `npm-publish.yml` has `actions: write` and no environment. It starts the
 workflow again on `main`.
+One more workflow reads a secret outside the `release` environment:
+`snap-publish.yml` reads `SNAPCRAFT_STORE_CREDENTIALS` in its `publish` job,
+which uses the `snap-store` environment (see [Snap publish workflow](#snap-publish-workflow)).
+
 Two workflows read secrets in the `release` environment:
 
 - `package-macos.yml` reads the Apple signing secrets;
@@ -467,3 +471,23 @@ Do not add a bot account to it.
 - A published release starts `npm-publish.yml` again on `main`. The
   `redispatch` job does it with the workflow token. GitHub makes a new run for
   this kind of start.
+
+## Snap publish workflow
+
+`snap-publish.yml` is the one workflow that uploads a package to a store without
+the `release` environment. A published release (not a draft, not a prerelease)
+starts it, and a person can start it by hand with a tag and a channel.
+`scripts/ci-workflow.test.ts` holds these rules:
+
+- The `build` job has `contents: read`, no secret and no environment. It builds
+  the tag, checks that the tag matches `package.json`, and runs
+  `scripts/check-snap.mjs`.
+- The `publish` job uses the `snap-store` environment. It does no checkout, so
+  it runs no code of the repository. It reads `SNAPCRAFT_STORE_CREDENTIALS` in
+  the `env` of one step, and fails when the value is empty.
+- The channel is `stable`, `candidate`, `beta` or `edge`. A release always
+  uses `stable`.
+- Every action is pinned to a full commit SHA, and every checkout drops its
+  credentials.
+
+See [Releasing](releasing.md#publish-to-the-snap-store) for the one-time setup.

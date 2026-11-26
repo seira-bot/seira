@@ -13,8 +13,9 @@ Seira ships three desktop packages:
 A maintainer creates the tag and the draft GitHub release, and attaches the
 Linux and Windows files by hand. For a signed `v*` tag, the `Package macOS`
 workflow attaches the macOS files to the draft release. No workflow creates a
-tag or publishes a release. The only package that a workflow publishes is the
-npm package (see [Publish to npm](#publish-to-npm)).
+tag or publishes a release. A workflow publishes two packages: the
+npm package (see [Publish to npm](#publish-to-npm)) and the desktop snap (see
+[Publish to the Snap Store](#publish-to-the-snap-store)).
 
 Only the maintainers can release:
 
@@ -443,6 +444,7 @@ The command makes the draft release public and marks it as the latest release.
 - It refuses when `check` finds a problem. The release stays a draft.
 - It runs `check` again after it publishes the release.
 - Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
+- It also starts the `snap publish` workflow (see [Publish to the Snap Store](#publish-to-the-snap-store)).
 - A published release without the Windows assets makes installed Windows apps fail their update check.
 - It also breaks the `Seira-setup.exe` download link.
 - Do not publish with `gh release edit` or the GitHub web page.
@@ -557,6 +559,59 @@ later version comes from the workflow.
 
 If a run fails with an authentication error, check that the four fields above
 match the workflow file name and the environment name exactly.
+
+## Publish to the Snap Store
+
+The `snap publish` workflow (`.github/workflows/snap-publish.yml`) uploads the
+classic snap `seira` to the Snap Store. Nobody uploads a snap by hand.
+
+```sh
+# Automatic: when a maintainer publishes the GitHub release (step 7), the
+# workflow builds the snap from the release tag and uploads it to `stable`.
+# A draft or a prerelease does not start it.
+# By hand, from any branch (the workflow file of that branch runs):
+gh workflow run snap-publish.yml --repo seira-bot/seira -f tag=v<version> -f channel=stable
+gh run list --repo seira-bot/seira --workflow snap-publish.yml --limit 1
+```
+
+- The `build` job has no secret. It builds the tag with `pnpm package:snap`.
+  It stops when the tag does not match `package.json`. `scripts/check-snap.mjs`
+  checks the snap: the name, classic confinement, no sandbox-off switch, and no
+  setuid file. A build that fails a check uploads nothing.
+- The `publish` job uses the `snap-store` environment and uploads the file with
+  `snapcraft upload --release=<channel>`. Only this job reads the secret
+  `SNAPCRAFT_STORE_CREDENTIALS`. When the secret is missing, the job fails and
+  uploads nothing.
+- The channel is `stable` for a release. A manual start can use `candidate`,
+  `beta` or `edge`.
+- A repeated upload of the same version makes the store refuse it. The store
+  does not accept two builds with one version number.
+- The upload does not make the snap public by itself. The store holds a
+  classic snap until a reviewer grants classic confinement, so the first
+  `stable` release waits for that review (see [Linux desktop](linux-desktop.md#snap)).
+
+### One-time Snap Store setup
+
+An organization owner does this once. The workflow cannot do it.
+
+1. Register the name `seira` on the Snap Store with the publisher account.
+   Request classic confinement for it on the Snapcraft forum.
+2. On a trusted computer, export store credentials that can only upload this
+   snap and expire:
+
+   ```sh
+   snapcraft export-login --snaps=seira --channels=stable,candidate,beta,edge \
+     --acls=package_access,package_push,package_release --expires=<ISO date> -
+   ```
+
+3. In the repository settings, create the environment `snap-store`. Limit its
+   deployment branches and tags to `main` and `v*` tags, and add required
+   reviewers if a person must approve each upload.
+4. Add the exported text as the environment secret `SNAPCRAFT_STORE_CREDENTIALS`.
+   Do not put it in a repository secret, a variable, an issue, or a log.
+5. Renew the credentials before they expire.
+
+Until the secret exists, a run fails at the upload step with a clear error.
 
 ## macOS signing secrets
 
