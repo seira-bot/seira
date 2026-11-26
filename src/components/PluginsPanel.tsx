@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, Search, Server, TriangleAlert, X } from "lucide-react";
 import { api, useStore, type Bot, type InstanceInfo } from "@/state/store";
@@ -122,7 +122,6 @@ export function PluginsPanel() {
   const [xConnected, setXConnected] = useState<boolean | null>(null);
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
   const github = useGithubApp().status;
-  const [githubDialog, setGithubDialog] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerListing[]>([]);
 
   const disconnectingRef = useRef<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null);
@@ -289,6 +288,7 @@ export function PluginsPanel() {
   const { suggestions, picking, pick } = useSuggestedApps(cards !== null && configured && inventoryPhase === "ready", `${cardsRefresh}:${Object.keys(status).filter((slug) => status[slug]?.connected).sort().join()}`);
   const [disconnecting, setDisconnecting] = useState<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null); disconnectingRef.current = disconnecting;
   const [featuredSlot, setFeaturedSlot] = useState<HTMLElement | null>(null);
+  const [githubDialog, setGithubDialog] = useReducer((_open: boolean, next: boolean) => next, false);
   const usage = useAppUsage(cards !== null, cardsRefresh);
 
   const openConnectUrl = async (url: string) => {
@@ -720,7 +720,7 @@ export function PluginsPanel() {
               >
                 {(() => {
                   const githubTile = <div data-native-card="github" className={showGithub && !inCategoryView ? "contents" : "hidden"}><GithubCard onChange={() => setGithubDialog(true)} /></div>;
-                  return featuredSlot && sectioned && !githubConnected ? createPortal(githubTile, featuredSlot) : githubTile;
+                  return featuredSlot?.nodeType === 1 && sectioned && !githubConnected ? createPortal(githubTile, featuredSlot) : githubTile;
                 })()}
                 <McpServersPanel hostedCards={{ shown: (id) => !inCategoryView && shownHosted.has(id), featured: sectioned ? featuredSlot : null, onConnections: setHostedConnected, onServers: setMcpServers, ...(filter === "connected" ? { ownServers: { shown: ownServerShown, manage: () => chooseFilter("mcp") } } : {}) }} refreshKey={cardsRefresh} />
                 <div data-native-card="x" className={showX && !inCategoryView ? "contents" : "hidden"}><XCard refreshKey={cardsRefresh} onConnection={setXConnected} /></div>
