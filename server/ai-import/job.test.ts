@@ -161,6 +161,20 @@ describe("reading", () => {
     await jobs.close();
   });
 
+  it("a worker that cannot start fails the job and does not answer 422", async () => {
+    const { make, listeners, store } = fixture({ readersModule: new URL("./testing/missing-readers.ts", import.meta.url).href });
+    const bots = store.bots.length;
+    const jobs = make();
+    jobs.start();
+    const id = await upload(jobs, { agents: 1, conversations: 2, messagesPer: 2 });
+    const job = await jobs.create({ from: "upload", uploadIds: [id] });
+    const failed = await waitFor(jobs, listeners, job.id, (view) => view.state === "failed");
+    expect(failed.error).toBe("worker-failed");
+    expect(jobs.uploads.get(id)).toBeNull();
+    expect(store.bots.length).toBe(bots);
+    await jobs.close();
+  });
+
   it("unknown upload", async () => {
     const { make } = fixture();
     const jobs = make();

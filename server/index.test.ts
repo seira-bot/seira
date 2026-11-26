@@ -6270,6 +6270,26 @@ describe("harness HTTP API", () => {
     }
   });
 
+  it("marks a conversation for the AI pool or pins it, with the model pick", async () => {
+    const claude = (model: string) => ({ instanceId: "claude", model });
+    const bot = (await api("POST", "/api/bots", { modelSelection: claude("pool-start") })).body.bot;
+    try {
+      const path = `/api/bots/${bot.id}/tasks/${bot.threadId}`;
+      const auto = await api("PATCH", path, { modelSelection: claude("pool-a"), aiPool: true });
+      expect(auto.status).toBe(200);
+      expect(auto.body.task.aiPool).toBe("auto");
+      const pinned = await api("PATCH", path, { modelSelection: claude("pool-b"), aiPool: false });
+      expect(pinned.status).toBe(200);
+      expect(pinned.body.task.aiPool).toBe("pinned");
+      expect((await api("PATCH", path, { aiPool: true })).status).toBe(400);
+      expect((await api("PATCH", path, { modelSelection: claude("pool-c"), aiPool: "yes" })).status).toBe(400);
+      const plain = await api("PATCH", path, { modelSelection: claude("pool-d") });
+      expect(plain.body.task.aiPool).toBe("pinned");
+    } finally {
+      await api("DELETE", `/api/bots/${bot.id}`);
+    }
+  });
+
   it("moves a team's following threads to a new bot model and leaves each thread's own model, on screen or not", async () => {
     const claude = (model: string) => ({ instanceId: "claude", model });
     type WireBot = { modelSelection: { model: string }; tasks: Array<{ threadId: string; modelSelection: { model: string }; followsBotModel: boolean }> };

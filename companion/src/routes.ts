@@ -121,6 +121,8 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   // Set me up under a new bot's greeting and the x on its chip: no more than a typed /setup.
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/setup-request$/ },
   { method: "DELETE", path: /^\/api\/bots\/[\w-]+\/setup-request$/ },
+  // Start, Hide or Show on a task card: Start sends the shown title as a typed line would.
+  { method: "POST", path: /^\/api\/bots\/[\w-]+\/task-suggestions$/ },
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/tasks$/ },
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+$/ },
   { method: "PATCH", path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+$/ },

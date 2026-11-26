@@ -44,6 +44,7 @@ import { vpsSshAliasForBot } from "../vps-hosts.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import type { ModelSelectionCheck } from "./bots-create.ts";
+import { GITHUB_APP_SLUG } from "../../shared/github-app.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotPatchRouteDeps {
@@ -58,6 +59,8 @@ export interface BotPatchRouteDeps {
   hostedModels: ReturnType<typeof hostedModelPolicy>;
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
   routines(): RoutineManager | null;
+  /** Whether the requester owns the GitHub connection. Without it nobody may change a bot's github_app grants. */
+  ownsGithubConnection?(auth: RequestAuth): boolean;
   /** Called after a bot's saved call speed changed, so a call that is live can use it. */
   callSpeedChanged?(botId: string, speed: number | undefined): void;
   activeVpsThreads: { has(botId: string): boolean };
@@ -631,6 +634,13 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           return json(res, 400, userError("serverError.bot.alwaysAllowFull", { max: MAX_ALWAYS_ALLOW }));
         }
         patch.alwaysAllow = alwaysAllow;
+      }
+      const githubGrantChanged = (body.connectorTools !== undefined &&
+          JSON.stringify(existingBot?.connectorTools?.[GITHUB_APP_SLUG] ?? null) !== JSON.stringify((patch as Pick<Partial<BotRecord>, "connectorTools">).connectorTools?.[GITHUB_APP_SLUG] ?? null)) ||
+        (body.connectorScopes !== undefined &&
+          (existingBot?.connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null) !== ((patch as Pick<Partial<BotRecord>, "connectorScopes">).connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null));
+      if (githubGrantChanged && deps.ownsGithubConnection?.(auth) !== true) {
+        return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
       }
       // Known gap: outside the packaged desktop, loopback is the owner, so these loosenings are one curl from
       // the bot they constrain. An originless, session-less loopback caller may loosen only while every bot is idle.

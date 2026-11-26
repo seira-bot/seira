@@ -236,6 +236,34 @@ describe("pairing", () => {
     expect((await call("/api/bots", { headers: remote("10.0.0.2", { authorization: `Bearer ${paired.body.token}` }) })).status).toBe(200);
   });
 
+  it("renames a paired device for an admin only, and refuses bad names", async () => {
+    const opened = await pairingCode(["client"]);
+    const paired = await call("/api/auth/pair", { method: "POST", headers: remote("10.0.0.61"), body: JSON.stringify({ code: opened.code, label: "Old name" }) });
+    expect(paired.status).toBe(200);
+    const id = paired.body.session.id as string;
+    const labelOf = async () => (await call("/api/auth/sessions")).body.sessions.find((s: { id: string }) => s.id === id)?.label;
+    const rename = (body: unknown, target = id, headers?: Record<string, string>) =>
+      call(`/api/auth/sessions/${target}`, { method: "PATCH", body: JSON.stringify(body), ...(headers ? { headers } : {}) });
+
+    const renamed = await rename({ label: "  Front desk phone  " });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.session).toMatchObject({ id, label: "Front desk phone" });
+    expect(await labelOf()).toBe("Front desk phone");
+
+    expect((await rename({ label: "   " })).status).toBe(400);
+    expect((await rename([])).status).toBe(400);
+    expect((await rename("Front")).status).toBe(400);
+    expect((await rename({ label: "A", extra: true })).status).toBe(400);
+    expect((await rename({ label: 5 })).status).toBe(400);
+    expect(await labelOf()).toBe("Front desk phone");
+
+    expect((await rename({ label: "Name" }, "no-such-session")).status).toBe(404);
+
+    const denied = await rename({ label: "Hijacked" }, id, remote("10.0.0.61", { authorization: `Bearer ${paired.body.token}` }));
+    expect(denied.status).toBe(403);
+    expect(await labelOf()).toBe("Front desk phone");
+  });
+
   it("rechecks an admin session after a slow pairing body before minting a code", async () => {
     const opened = await pairingCode();
     const paired = await call("/api/auth/pair", {

@@ -118,6 +118,11 @@ describe("classifyRoutineFailure", () => {
     // A model its engine has no route to fails the same way every time, raw or in the plain words the person sees.
     ["Internal error: Unsupported package for chutes/deepseek-ai/DeepSeek-V4.1-Flash-1017: unknown (session/prompt, service: session, provider.no-route)", { stopReason: "rpc_error" }, { kind: "final" }],
     ["OpenCode can't use the model chutes/deepseek-ai/DeepSeek-V4.1-Flash-1017 here, so choose another model for this bot.", { stopReason: "rpc_error" }, { kind: "final" }],
+    // A provider that refuses the thread's replayed history refuses it again on a second start, raw or in the plain words the person sees.
+    ["Internal error: turn failed: 'file_id' refers to an object stored upstream, which is not supported; send the content inline instead (session/prompt)", { stopReason: "rpc_error" }, { kind: "final" }],
+    ["DeepSeek refused the history of this thread (DeepSeek says: \"'file_id' refers to an object stored upstream, which is not supported; send the content inline instead\"), so running it again with the same history fails the same way.", { stopReason: "rpc_error" }, { kind: "final" }],
+    // Another unknown failure of the same kind still gets its one retry.
+    ["Internal error: turn failed: something else is not supported (session/prompt)", { stopReason: "rpc_error" }, { kind: "retry", cause: "failed" }],
     [CAPPED, {}, { kind: "final" }],
     ["Model-call limit reached before a final answer", {}, { kind: "final" }],
     ["The bot repeated the same call 6 times, so it was stopped", { cause: "cap" }, { kind: "final" }],

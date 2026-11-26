@@ -90,6 +90,7 @@ const TEAM_ACTION_KEYS: Record<string, string> = {
   close_thread: "activity.tool.team.closeThread",
   rename_thread: "activity.tool.team.renameThread",
   suggest_replies: "activity.tool.team.suggestReplies",
+  suggest_tasks: "activity.tool.team.suggestTasks",
   coordinate_bots: "activity.tool.team.coordinateBots",
   create_bot: "activity.tool.team.createBot",
   suggest_team: "activity.tool.team.suggestTeam",
@@ -230,6 +231,7 @@ export function describedTool(name: string, input?: unknown): Described {
       const member = (AGENTS_ACTION_TOOLS[action]?.members.length ?? 0) > 1 ? agentsCallMember(action, callArguments(input)) : action;
       return Object.hasOwn(RESEARCH_TOOL_LABELS, member) ? RESEARCH_TOOL_LABELS[member]! : ownAction("Team", member, TEAM_ACTION_KEYS);
     }
+    if (server === "github_app") return { app: "GitHub", label: humanize(action.replace(/^GITHUB_APP_/, "")) };
     if (server === "email") return { app: "Email", appKey: "activity.app.email", label: humanize(action.replace(/^EMAIL_/, "")) };
     if (server === "device") return { app: "Phone", label: humanize(action.replace(/^PHONE_/, "")) };
     if (server.startsWith("claude_ai_")) {

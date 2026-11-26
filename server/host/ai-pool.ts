@@ -13,6 +13,8 @@ export interface AiPoolDeps {
   maxTrackedThreads?: number;
   config(): AiPoolConfig | undefined;
   threadModel(botId: string, threadId: string): ModelSelection | null;
+  threadMark(botId: string, threadId: string): "auto" | "pinned" | undefined;
+  markThread(botId: string, threadId: string, mark: "auto"): void;
   botModel(botId: string): ModelSelection | null;
   reading(instanceId: string): { remaining: number | null; resetsAt: number | null };
   paid(instanceId: string): boolean;
@@ -43,6 +45,7 @@ export function poolNote(reason: PoolReason, from: string, to: string): string {
   switch (reason) {
     case "cannotRun": return `${from} can't take this turn, so this conversation moved to ${to}.`;
     case "low": return `${from} is low on usage, so this conversation moved to ${to}.`;
+    case "turn": return `${to} is next in turn, so this conversation moved from ${from} to ${to}.`;
     case "payPerUse": return `${from} is pay-per-use, so this conversation moved to ${to}.`;
     case "order": return `${to} comes first in the AI pool, so this conversation moved from ${from} to ${to}.`;
     default: return `${to} has more usage left, so this conversation moved from ${from} to ${to}.`;
@@ -69,6 +72,11 @@ export function createAiPool(deps: AiPoolDeps) {
     while (records.size > (deps.maxTrackedThreads ?? MAX_TRACKED_THREADS)) records.delete(records.keys().next().value!);
     save();
   };
+  let cursor: string | undefined | null = null;
+  const lastTaker = () => {
+    if (cursor === null) cursor = [...records.values()].at(-1)?.instanceId;
+    return cursor;
+  };
   const active = () => {
     const pool = deps.config();
     return pool?.enabled && pool.members.length >= 2 ? pool : undefined;
@@ -79,12 +87,18 @@ export function createAiPool(deps: AiPoolDeps) {
       const pool = active(), current = deps.threadModel(botId, threadId);
       if (!pool || !current) return false;
       const currentIndex = pool.members.findIndex((member) => member.instanceId === current.instanceId);
-      const record = records.get(threadId);
-      if (currentIndex === -1 || (record && (record.instanceId !== current.instanceId || record.model !== current.model))) {
-        if (record) write(threadId, null);
+      const mark = deps.threadMark(botId, threadId);
+      const found = records.get(threadId);
+      if (mark === "pinned" || currentIndex === -1) {
+        if (found) write(threadId, null);
         return false;
       }
-      if (!record) {
+      const record = found && found.instanceId === current.instanceId && found.model === current.model ? found : undefined;
+      if (found && !record) {
+        write(threadId, null);
+        if (mark !== "auto") return false;
+      }
+      if (!record && mark !== "auto") {
         const own = deps.botModel(botId);
         if (!own || own.instanceId !== current.instanceId || own.model !== current.model) return false;
       }
@@ -100,7 +114,10 @@ export function createAiPool(deps: AiPoolDeps) {
         ...readings[index]!,
       }));
       const threadLevel = record && record.until !== null && record.until > at ? record.level : undefined;
-      const picked = pickPoolMember({ mode: pool.mode, levels: pool.levels ?? AI_POOL_LEVELS, floor: pool.floor ?? 0, members, currentIndex, threadLevel });
+      const taker = lastTaker();
+      const picked = pickPoolMember({ mode: pool.mode, levels: pool.levels ?? AI_POOL_LEVELS, floor: pool.floor ?? 0, members, currentIndex, threadLevel,
+        fresh: !record, cursor: pool.members.findIndex((member) => member.instanceId === taker) });
+      if (picked.took) cursor = pool.members[picked.index]!.instanceId;
       if (picked.index === currentIndex) {
         write(threadId, recordFor(currentIndex, picked.threadLevel));
         return false;
@@ -108,6 +125,7 @@ export function createAiPool(deps: AiPoolDeps) {
       const to = pool.members[picked.index]!;
       if (!deps.moveTo(botId, threadId, current, to)) return false;
       write(threadId, recordFor(picked.index, picked.threadLevel));
+      deps.markThread(botId, threadId, "auto");
       deps.note(threadId, poolNote(picked.reason, deps.engineName(current.instanceId), deps.engineName(to.instanceId)));
       return true;
     },

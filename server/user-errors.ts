@@ -32,6 +32,8 @@ export const USER_ERROR = {
   "serverError.chat.routineElsewhere": "this bot is running a routine in another conversation",
   "serverError.chat.busyInRoom": "this bot is working in channel {room}",
   "serverError.chat.answerSent": "That answer is already on its way.",
+  "serverError.taskSuggestion.missing": "This suggestion is no longer here.",
+  "serverError.taskSuggestion.changed": "This suggestion changed. Look at the card again.",
   "serverError.chat.savingCredential": "this task is securely saving a credential — try again when it finishes",
   "serverError.team.personalMove": "Moving a computer's bots, chats and logins goes to My Cloud only. Nothing personal comes into {team}.",
   "serverError.team.memberLogin": "On {team} only an admin can save a login, and it is then used by every bot in {team}.",
