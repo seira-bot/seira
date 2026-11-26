@@ -1,9 +1,10 @@
-import { chmodSync, mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
 import type { GithubAccount, GithubBotPolicy } from "../../shared/github-app.ts";
 import { writeFileAtomic } from "../atomic.ts";
+import { ensurePrivateDir } from "../data-dir.ts";
 
 export const GITHUB_STORE_FILE = "github-app.json";
 
@@ -83,8 +84,7 @@ export function createGithubStore(dataDir: string, log: (line: string) => void =
     }
   };
   const write = (data: GithubStoreData): void => {
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-    chmodSync(dataDir, 0o700);
+    ensurePrivateDir(dataDir);
     writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
   };
   return {

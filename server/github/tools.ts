@@ -96,6 +96,14 @@ export function safePath(path: string): boolean {
 }
 
 const enc = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
+const API_SEGMENT = String.raw`[A-Za-z0-9_.!~*'()%-]+`;
+const API_PATH = new RegExp(String.raw`^/(?:repos/${API_SEGMENT}/${API_SEGMENT}(?:/${API_SEGMENT})*|search/code)(?:\?[A-Za-z0-9_.!~*'()%=&-]*)?$`, "u");
+
+/** Every request path the tools build: a repository route or code search, made only of encoded parts, no dot segment. */
+export function isSafeGithubApiPath(path: string): boolean {
+  return API_PATH.test(path) && !path.split("?")[0]!.split("/").some((part) => part === "." || part === "..");
+}
 const cut = (text: unknown, max = TEXT_MAX): string => (typeof text === "string" ? (text.length > max ? `${text.slice(0, max)}… [cut]` : text) : "");
 
 /** A failure the person or bot may read: fixed words, never GitHub's own text, a URL or a header. */
@@ -116,7 +124,7 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
   const base = `/repos/${enc(fullName)}`;
 
   async function api(method: string, path: string, body?: unknown, allow404 = false): Promise<{ status: number; data: any }> {
-    if (!path.startsWith("/") || path.startsWith("//")) throw new GithubToolError(GITHUB_REFUSED_MESSAGE);
+    if (!isSafeGithubApiPath(path)) throw new GithubToolError(GITHUB_REFUSED_MESSAGE);
     let res: Response;
     try {
       res = await doFetch(`https://api.github.com/${path.slice(1)}`, {

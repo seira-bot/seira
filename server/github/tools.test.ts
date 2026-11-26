@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { GITHUB_APP_TOOL_NAMES } from "../../shared/github-app.ts";
 import { fakeGithubRest } from "../testing/fake-github-rest.ts";
-import { GITHUB_FILE_MAX_BYTES, GITHUB_NOT_FOUND_MESSAGE, GITHUB_REFUSED_MESSAGE, GITHUB_TOOLS, githubToolCallProblem, runGithubTool } from "./tools.ts";
+import { GITHUB_FILE_MAX_BYTES, GITHUB_NOT_FOUND_MESSAGE, GITHUB_REFUSED_MESSAGE, GITHUB_TOOLS, githubToolCallProblem, isSafeGithubApiPath, runGithubTool } from "./tools.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE } from "./broker-client.ts";
 
 const TOKEN = "ghs_fake_installation_token_1";
@@ -52,6 +52,15 @@ describe("GitHub tool calls", () => {
     expect(url.origin).toBe("https://api.github.com");
     expect(url.pathname).toBe("/repos/%40evil.example/x%3Fy%23z/contents/a.txt");
     expect(url.search).toBe("");
+  });
+
+  it("accepts only encoded repository routes and code search as request paths", () => {
+    for (const path of ["/repos/acme/web/contents/src/a.ts?ref=main", "/repos/acme/web/issues?state=open&per_page=50", "/repos/acme/web/git/ref/heads/seira%2Fb%2Fx", "/search/code?q=fix%20repo%3Aacme%2Fweb&per_page=50"]) {
+      expect(isSafeGithubApiPath(path), path).toBe(true);
+    }
+    for (const path of ["//evil.example/x", "/repos/acme/web/../../user", "/repos/acme/web/issues/1 2", "/user/repos", "/repos/acme/web#x", "/repos/acme/web/contents/a?b=c#d", "https://evil.example/x"]) {
+      expect(isSafeGithubApiPath(path), path).toBe(false);
+    }
   });
 
   it("reads a file, cuts a long one at 200 KB, and lists a folder", async () => {
