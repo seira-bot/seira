@@ -69,6 +69,31 @@ function windowsStorage(program: string, args: string[]): FloorVerdict | null {
   return program === "cipher" && args.some((arg) => /^\/w(?::|$)/i.test(arg)) ? OVERWRITE_DISK : null;
 }
 
+/** Verbs of a Storage-module cmdlet that change nothing. Any other verb on a storage noun is not classified. */
+const READ_ONLY_STORAGE_VERBS = new Set(["get", "test", "find", "show"]);
+/** Storage nouns by their start: `Partition` also covers `PartitionAccessPath`. A disk image is a file, not a disk. */
+const STORAGE_NOUN = /^(?:disk(?!image)|physicaldisk|virtualdisk|storagepool|storagetier|storagesubsystem|storageenclosure|partition|volume|fileintegrity)/;
+const STORAGE_CLASS = /\b(?:MSFT_(?:Disk|Partition|Volume|PhysicalDisk|StoragePool|VirtualDisk|StorageTier)|Win32_(?:Volume|DiskDrive|DiskPartition|LogicalDisk))\b/i;
+/** Commands that call a method of, change or remove a CIM or WMI instance. */
+const CIM_METHOD_COMMANDS = new Set(["invoke-cimmethod", "invoke-wmimethod", "set-ciminstance", "remove-ciminstance", "set-wmiinstance", "remove-wmiobject"]);
+const WMIC_STORAGE_ALIAS = /^(?:volume|diskdrive|partition|logicaldisk)$/i;
+const WMIC_CHANGE_VERB = /^(?:call|delete|set|create)$/i;
+
+/** A Windows storage operation the floor cannot classify as read-only: the line is reported as not read, so nothing
+ * approves it automatically. `source` is the line, because a pipe puts the class in another command. */
+function unresolvedStorage(program: string, args: string[], source: string): boolean {
+  const dash = program.indexOf("-");
+  if (dash > 0 && !READ_ONLY_STORAGE_VERBS.has(program.slice(0, dash)) && STORAGE_NOUN.test(program.slice(dash + 1))) return true;
+  if (CIM_METHOD_COMMANDS.has(program)) return STORAGE_CLASS.test(source) || args.some((arg) => arg.includes(DYNAMIC));
+  if (program === "wmic") {
+    return args.some((arg) => WMIC_STORAGE_ALIAS.test(arg) || STORAGE_CLASS.test(arg)) && args.some((arg) => WMIC_CHANGE_VERB.test(arg));
+  }
+  return false;
+}
+
+/** `-EncodedCommand` or any start of it (`-e`, `-enc`), and its alias `-ec`: the script is Base64, so it is not read. */
+const encodedFlag = (arg: string): boolean => arg.length > 1 && ("-encodedcommand".startsWith(arg.toLowerCase()) || arg.toLowerCase() === "-ec");
+
 // A function that pipes itself into itself in the background, then runs; the name is bounded to keep the regex cheap.
 const BOMB_BODY = String.raw`\s*\{\s*\1\s*\|\s*\1\s*&\s*\}\s*;?\s*\1(?![\w:.-])`;
 const BOMB_NAME = String.raw`([A-Za-z_:.][\w:.-]{0,63})`;
@@ -593,11 +618,22 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
     return scan(line, pass, as, depth + 1);
   };
 
+  // `iex` with no text (it takes a pipeline) or a computed one cannot be read; a literal one is read as a line.
+  const expression = (): FloorVerdict | null => {
+    const script = args.filter((arg) => !(arg.length > 1 && "-command".startsWith(arg.toLowerCase())));
+    if (!script.length || script.some((arg) => arg.includes(DYNAMIC))) {
+      pass.synced = false;
+      return null;
+    }
+    return run(script.join(" "), mode);
+  };
+
   if (SHELLS.has(program)) return run(inlineScript(args), "posix");
   // PowerShell 7 off Windows: `rm` is the real rm and Remove-Item takes POSIX paths, so its script is read both ways.
   // The outer shell already removed the quotes, so the words after the flag are the script.
   if (!host.windows && mode === "posix" && (program === "pwsh" || program === "powershell")) {
     const flag = args.findIndex((arg) => arg.length > 1 && "-command".startsWith(arg.toLowerCase()));
+    if (args.slice(0, flag < 0 ? undefined : flag).some(encodedFlag)) pass.synced = false;
     const inner = flag < 0 ? "" : args.slice(flag + 1).join(" ");
     return run(inner, "posix") ?? run(inner, "powershell");
   }
@@ -615,6 +651,7 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
     const first = read.words.findIndex((word) => programName(word) === program) + 1;
     const flag = read.words.findIndex((arg, at) => at >= first &&
       (program === "cmd" ? /^\/[ck]$/i.test(arg) : arg.length > 1 && "-command".startsWith(arg.toLowerCase())));
+    if (program !== "cmd" && read.words.slice(first, flag < 0 ? undefined : flag).some(encodedFlag)) pass.synced = false;
     if (flag < 0) return null;
     // One quoted argument is the whole line; otherwise it is the raw text after the flag, quotes included.
     const rest = read.words.slice(flag + 1);
@@ -645,6 +682,8 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   if (mode === "powershell") {
     const storage = windowsStorage(program, args);
     if (storage) return storage;
+    if (unresolvedStorage(program, args, source)) pass.synced = false;
+    if (program === "iex" || program === "invoke-expression") return expression();
     // Remove-Item's aliases off Windows, where `rm` and `rmdir` are the real programs the POSIX reading judges.
     if (!["remove-item", "ri", "rd", "del", "erase"].includes(program)) return null;
     const isSwitch = (arg: string) => /^-./.test(arg);
@@ -676,7 +715,10 @@ function judge(command: Command, source: string, pass: Pass, mode: Mode, depth: 
   }
   // A drive letter with or without a folder after it, or a volume path (`\\?\Volume{...}`).
   if (program === "format") return args.some((arg) => /^(?:[A-Za-z]:|\\\\[?.]\\)/.test(arg)) ? FORMAT_DISK : null;
-  return windowsStorage(program, args);
+  const storage = windowsStorage(program, args);
+  if (storage) return storage;
+  if (unresolvedStorage(program, args, source)) pass.synced = false;
+  return program === "iex" || program === "invoke-expression" ? expression() : null;
 }
 
 function scan(source: string, pass: Pass, mode: Mode, depth: number): FloorVerdict | null {
