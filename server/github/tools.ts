@@ -122,6 +122,8 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
   const doFetch = context.fetch ?? fetch;
   const { fullName, defaultBranch } = context.repo;
   const base = `/repos/${enc(fullName)}`;
+  const number = encodeURIComponent(String(args.number));
+  const state = encodeURIComponent(String(args.state ?? "open"));
 
   async function api(method: string, path: string, body?: unknown, allow404 = false): Promise<{ status: number; data: any }> {
     if (!isSafeGithubApiPath(path)) throw new GithubToolError(GITHUB_REFUSED_MESSAGE);
@@ -176,24 +178,24 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
         return githubText({ total: data.total_count, items: (data.items ?? []).slice(0, GITHUB_LIST_MAX).map((item: Json) => ({ path: item.path, url: item.html_url })) });
       }
       case "GITHUB_APP_LIST_ISSUES": {
-        const { data } = await api("GET", `${base}/issues?state=${args.state ?? "open"}&per_page=${GITHUB_LIST_MAX}`);
+        const { data } = await api("GET", `${base}/issues?state=${state}&per_page=${GITHUB_LIST_MAX}`);
         return githubText({ issues: (data as Json[]).filter((item) => !item.pull_request).slice(0, GITHUB_LIST_MAX).map(issueLine) });
       }
       case "GITHUB_APP_GET_ISSUE": {
-        const { data } = await api("GET", `${base}/issues/${args.number}`);
-        const comments = (await api("GET", `${base}/issues/${args.number}/comments?per_page=${GITHUB_LIST_MAX}`)).data as Json[];
+        const { data } = await api("GET", `${base}/issues/${number}`);
+        const comments = (await api("GET", `${base}/issues/${number}/comments?per_page=${GITHUB_LIST_MAX}`)).data as Json[];
         return githubText({ ...issueLine(data), isPull: Boolean(data.pull_request), body: cut(data.body), comments: comments.slice(0, GITHUB_LIST_MAX).map((comment) => ({ author: person(comment.user), at: comment.created_at, body: cut(comment.body, 4000) })) });
       }
       case "GITHUB_APP_LIST_PULLS": {
-        const { data } = await api("GET", `${base}/pulls?state=${args.state ?? "open"}&per_page=${GITHUB_LIST_MAX}`);
+        const { data } = await api("GET", `${base}/pulls?state=${state}&per_page=${GITHUB_LIST_MAX}`);
         return githubText({ pulls: (data as Json[]).slice(0, GITHUB_LIST_MAX).map((item) => ({ ...issueLine(item), draft: Boolean(item.draft), branch: item.head?.ref, base: item.base?.ref })) });
       }
       case "GITHUB_APP_GET_PULL": {
-        const { data } = await api("GET", `${base}/pulls/${args.number}`);
+        const { data } = await api("GET", `${base}/pulls/${number}`);
         return githubText({ ...issueLine(data), draft: Boolean(data.draft), merged: Boolean(data.merged), mergeable: data.mergeable ?? null, branch: data.head?.ref, base: data.base?.ref, changedFiles: data.changed_files, additions: data.additions, deletions: data.deletions, body: cut(data.body) });
       }
       case "GITHUB_APP_CREATE_COMMENT": {
-        const { data } = await api("POST", `${base}/issues/${args.number}/comments`, { body: args.body });
+        const { data } = await api("POST", `${base}/issues/${number}/comments`, { body: args.body });
         return githubText({ id: data.id, url: data.html_url });
       }
       case "GITHUB_APP_CREATE_ISSUE": {
@@ -212,7 +214,7 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
           parent = await startOf(args.base ?? defaultBranch);
           await api("POST", `${base}/git/refs`, { ref: `refs/heads/${args.branch}`, sha: parent });
         } else parent = existing.data.object.sha;
-        const baseTree = (await api("GET", `${base}/git/commits/${parent}`)).data.tree.sha;
+        const baseTree = (await api("GET", `${base}/git/commits/${encodeURIComponent(parent)}`)).data.tree.sha;
         const tree: Json[] = [];
         for (const file of args.files as Array<{ path: string; content?: string; delete?: true }>) {
           if (file.delete) { tree.push({ path: file.path, mode: "100644", type: "blob", sha: null }); continue; }
@@ -229,11 +231,11 @@ export async function runGithubTool(name: GithubAppToolName, args: Json, context
         return githubText({ number: data.number, url: data.html_url });
       }
       case "GITHUB_APP_MERGE_PULL": {
-        const { data } = await api("PUT", `${base}/pulls/${args.number}/merge`, { merge_method: args.merge_method ?? "merge", ...(args.message ? { commit_title: args.message } : {}) });
+        const { data } = await api("PUT", `${base}/pulls/${number}/merge`, { merge_method: args.merge_method ?? "merge", ...(args.message ? { commit_title: args.message } : {}) });
         return githubText({ merged: Boolean(data.merged), sha: data.sha });
       }
       case "GITHUB_APP_CLOSE_ISSUE_OR_PULL": {
-        const { data } = await api("PATCH", `${base}/issues/${args.number}`, { state: "closed" });
+        const { data } = await api("PATCH", `${base}/issues/${number}`, { state: "closed" });
         return githubText({ number: data.number, state: data.state });
       }
       case "GITHUB_APP_DELETE_BRANCH":
