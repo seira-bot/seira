@@ -1,7 +1,7 @@
 // Cost of `redactSecretsInText`: long input must cost linear time and must still be masked.
 import { describe, expect, it } from "vitest";
 
-import { REDACT_SCAN_LIMIT, holdsCredential, redactSecretsInText } from "./redact.ts";
+import { REDACT_SCAN_LIMIT, addHeldSecretScrubber, holdsCredential, redactSecretsInText } from "./redact.ts";
 
 const LONG = 400_000;
 // Before the fix these shapes cost minutes at this size. The limit is far above a healthy run (a few ms) and far below that.
@@ -93,26 +93,28 @@ describe("redactSecretsInText scan limit", () => {
     expect(redactSecretsInText(text).endsWith("api_key=«redacted 12 chars»")).toBe(true);
   });
 
-  it("masks the part of an oversize text that the matchers do not read", () => {
+  it("masks an oversize text whole, before any stage runs", () => {
     const secret = "sk-ant-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const text = `head api_key=abcdefgh1234\n${filler(REDACT_SCAN_LIMIT)}\n${secret} tail`;
     const { out, ms } = timed(text);
     expect(ms).toBeLessThan(TIME_LIMIT_MS);
-    expect(out).toContain("head api_key=«redacted 12 chars»");
-    expect(out).not.toContain(secret);
-    expect(out.length).toBeLessThan(REDACT_SCAN_LIMIT);
+    expect(out).toBe(`«redacted ${text.length} chars»`);
     expect(redactSecretsInText(out)).toBe(out);
+  });
+
+  it("masks an oversize text before the held-secret scrubbers run", () => {
+    let calls = 0;
+    const remove = addHeldSecretScrubber((t) => { calls++; return t; });
+    try {
+      redactSecretsInText("A".repeat(REDACT_SCAN_LIMIT + 1));
+      expect(calls).toBe(0);
+      redactSecretsInText("A".repeat(REDACT_SCAN_LIMIT));
+      expect(calls).toBe(1);
+    } finally { remove(); }
   });
 
   it("masks an oversize unbroken run whole", () => {
     const out = redactSecretsInText(`start ${"A".repeat(REDACT_SCAN_LIMIT + 10)}`);
-    expect(out).toBe(`start «redacted ${REDACT_SCAN_LIMIT + 10} chars»`);
-  });
-
-  it("does not cut a private key block in two at the limit", () => {
-    const body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n".repeat(50);
-    const lead = filler(REDACT_SCAN_LIMIT / 4 - 200);
-    const out = redactSecretsInText(`${lead}\n-----BEGIN PRIVATE KEY-----\n${body}-----END PRIVATE KEY-----\n${filler(REDACT_SCAN_LIMIT)}`);
-    expect(out).not.toContain("MIIEvQIBADANBgkq");
+    expect(out).toBe(`«redacted ${REDACT_SCAN_LIMIT + 16} chars»`);
   });
 });

@@ -147,13 +147,11 @@ function maskJwts(text: string): string {
   return last === 0 ? text : out + text.slice(last);
 }
 
-/** The most text the matchers read in one call. Every matcher above reads its input in time linear in its length. This
- * limit is a second guard on the total work: text over it is not skipped. The part inside the head budget is
- * redacted as usual, and everything after it is masked as one piece. */
+/** The most text one call reads. Every matcher below reads its input in time linear in its length. This limit is a
+ * second guard on the total work of the whole call, held-secret scrubbers included. Text over it is not skipped: it is
+ * masked whole, before any stage runs, so nothing in it can pass through. A marker is shorter than the limit, so a
+ * second pass leaves the result the same. */
 export const REDACT_SCAN_LIMIT = 2 * 1024 * 1024;
-/** The head budget is a quarter of the limit, so masking small secrets (a marker is longer than a short value) never
- * grows redacted text back over the limit, and a second pass leaves the result byte-for-byte the same. */
-const REDACT_HEAD_BUDGET = REDACT_SCAN_LIMIT / 4;
 
 function redactWithinLimit(text: string): string {
   let out = maskPemBlocks(text);
@@ -168,24 +166,13 @@ function redactWithinLimit(text: string): string {
   return out;
 }
 
-/** Where the head of an oversize text ends. Never inside a token and never inside a private key block that has no
- * END yet, because the tail is masked whole and a cut there would leave half a secret in the head. */
-function headEnd(text: string): number {
-  let cut = REDACT_HEAD_BUDGET;
-  while (cut > 0 && !/\s/.test(text[cut - 1] ?? "")) cut--;
-  const begin = text.lastIndexOf("-----BEGIN ", cut);
-  if (begin !== -1 && begin > text.lastIndexOf("-----END ", cut)) cut = begin;
-  return cut;
-}
-
 export function redactSecretsInText(text: string): string {
   if (!text) return text;
+  if (text.length > REDACT_SCAN_LIMIT) return mask(text);
   // Held values first: a short one-time code is still a secret.
   const held = scrubHeldSecrets(text);
   if (held.length < 8) return held;
-  if (held.length <= REDACT_SCAN_LIMIT) return redactWithinLimit(held);
-  const cut = headEnd(held);
-  return redactWithinLimit(held.slice(0, cut)) + mask(held.slice(cut));
+  return redactWithinLimit(held);
 }
 
 /** Security invariant: a sentence's params are scrubbed like the English they fill, so a secret survives in neither. */
