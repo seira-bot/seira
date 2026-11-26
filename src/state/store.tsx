@@ -536,6 +536,8 @@ export interface AppState {
   appSettingsSection: AppSettingsSection;
   appSettingsCloudLink: number;
   appSettingsPhonePairing: number;
+  /** The block a request for Settings scrolls to on its page, or null. */
+  appSettingsAnchor: string | null;
   shortcutsOpen: boolean;
   cloudAdd: { source: import("@/lib/cloud-plan").CloudSource; signIn?: true } | null;
   cloudHowTo: boolean;
@@ -747,7 +749,7 @@ export type Action =
   | { type: "focusMessage"; threadId: string; messageId: string; matchText?: string }
   | { type: "focusMessageConsumed"; nonce: number }
   | { type: "unreadDividerDone"; threadId: string }
-  | { type: "toggleAppSettings"; open?: boolean; section?: AppSettingsSection; cloudLink?: boolean; phonePairing?: boolean }
+  | { type: "toggleAppSettings"; open?: boolean; section?: AppSettingsSection; anchor?: string; cloudLink?: boolean; phonePairing?: boolean }
   | { type: "toggleShortcuts"; open?: boolean }
   | { type: "openCloudAdd"; source: import("@/lib/cloud-plan").CloudSource; signIn?: true }
   | { type: "closeCloudAdd" }
@@ -1498,6 +1500,7 @@ export function reducer(state: AppState, action: Action): AppState {
         appSettingsSection: action.section ?? (open ? "overview" : state.appSettingsSection),
         appSettingsCloudLink: action.cloudLink && open ? state.appSettingsCloudLink + 1 : 0,
         appSettingsPhonePairing: action.phonePairing && open ? state.appSettingsPhonePairing + 1 : 0,
+        appSettingsAnchor: open ? action.anchor ?? null : null,
         settingsOpen: open ? false : state.settingsOpen,
         computerOpen: open ? false : state.computerOpen,
         inspectorOpen: open ? false : state.inspectorOpen,
@@ -1832,6 +1835,7 @@ export const initialState: AppState = {
   appSettingsSection: "overview",
   appSettingsCloudLink: 0,
   appSettingsPhonePairing: 0,
+  appSettingsAnchor: null,
   shortcutsOpen: false,
   cloudAdd: null,
   cloudHowTo: false,
