@@ -322,7 +322,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
             const prepared = await composio.prepareProjectSession(requestedComposioKey, cfg.composio, undefined, { reuseEarlierUser: !sharedMembership() });
             patch.composio = { ...patch.composio, ...prepared };
           } catch (error) {
-            return json(res, 400, { error: publicErrorText(error, "PATCH config (Composio key)", "The Composio key could not be checked.") });
+            return json(res, 400, { error: publicErrorText(error, "PATCH config (Composio key)", "Composio did not accept this key, or could not be reached. Check the key and try again.") });
           }
         } else {
           patch.composio = { ...patch.composio, apiKey: "", sessionId: "" };

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { placeConfirmed, placeLostAs, PLACE_LOST_MESSAGE } from "./place-lost.ts";
-import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText } from "./public-error.ts";
+import { GENERIC_PUBLIC_ERROR, isPublicError, PublicError, publicErrorMessage, publicErrorText, refusalErrorText } from "./public-error.ts";
 import { userErrorThrown } from "./user-errors.ts";
 import { WebhookRequestError } from "./webhook-requests.ts";
 
@@ -56,9 +56,34 @@ describe("publicErrorText", () => {
     } finally { logged.mockRestore(); }
   });
 
-  it("keeps the message of a PublicError, a language-pack error and a 4xx refusal", () => {
+  it("keeps the message of a PublicError and of a language-pack error", () => {
     expect(publicErrorText(new PublicError("name is required"), "x")).toBe("name is required");
     expect(publicErrorText(userErrorThrown("serverError.email.invalid"), "x")).toBe("enter a valid email address");
-    expect(publicErrorText(Object.assign(new Error("unknown instance"), { status: 404 }), "x")).toBe("unknown instance");
+  });
+
+  it("fails closed: a status, a code or an error key on a plain Error does not make it public", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(publicErrorText(Object.assign(new Error("unknown instance /srv/x"), { status: 404 }), "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(publicErrorText(Object.assign(new Error("db-7 refused"), { errorKey: "serverError.example" }), "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(isPublicError(Object.assign(new Error("x"), { status: 400 }))).toBe(false);
+    } finally { logged.mockRestore(); }
+  });
+});
+
+describe("refusalErrorText (transitional)", () => {
+  it("keeps the message of a PublicError and of a plain Error with a 4xx status", () => {
+    expect(refusalErrorText(new PublicError("name is required"), "x")).toBe("name is required");
+    expect(refusalErrorText(Object.assign(new Error("unknown instance"), { status: 404 }), "x")).toBe("unknown instance");
+  });
+
+  it("gives the generic text, and logs, for an error with no status, a 5xx status or a non-Error value", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(refusalErrorText(new Error("ENOENT: /home/ada/x"), "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(refusalErrorText(Object.assign(new Error("upstream host db-7"), { status: 502 }), "x")).toBe(GENERIC_PUBLIC_ERROR);
+      expect(refusalErrorText("/srv/private/path.ts", "x", "Not run.")).toBe("Not run.");
+      expect(logged).toHaveBeenCalledTimes(3);
+    } finally { logged.mockRestore(); }
   });
 });

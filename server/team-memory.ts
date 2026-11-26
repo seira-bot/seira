@@ -77,11 +77,10 @@ type TeamMemoryFile = z.infer<typeof fileSchema>;
 const emptyFile = (): TeamMemoryFile => ({ version: 2, sections: Object.create(null) });
 
 const clean = (value: unknown, max: number): string => (typeof value === "string" ? redactSecretsInText(value).replace(/\s+/g, " ").trim().slice(0, max + 1) : "");
-export class TeamMemoryConflict extends Error {
-  readonly status = 409;
+export class TeamMemoryConflict extends PublicError {
   declare readonly errorKey?: UserErrorKey;
   constructor(message?: string) {
-    super(message ?? USER_ERROR["serverError.department.memoryChanged"]);
+    super(message ?? USER_ERROR["serverError.department.memoryChanged"], 409);
     if (message === undefined) this.errorKey = "serverError.department.memoryChanged";
   }
 }

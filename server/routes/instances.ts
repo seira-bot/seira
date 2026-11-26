@@ -48,7 +48,7 @@ import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { PHONE_WIRE_NAMES, sentWireName } from "../../electron/phone-wire-names.mjs";
-import { publicErrorText } from "../public-error.ts";
+import { refusalErrorText } from "../public-error.ts";
 
 export interface InstanceRouteDeps {
   store: Pick<Store, "bots" | "tasks">;
@@ -231,7 +231,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         return json(res, 201, { instanceId, instances: await describeInstances() });
       } catch (error) {
         const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: publicErrorText(error, "instance settings", "The engine settings could not be saved.") });
+        return json(res, typeof status === "number" ? status : 400, { error: refusalErrorText(error, "instance settings", "The engine settings could not be saved.") });
       } finally { providerConfigBusy.set(false); }
     }
 
@@ -259,7 +259,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         return json(res, 200, { instances: await describeInstances() });
       } catch (error) {
         const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: publicErrorText(error, "instance settings", "The engine settings could not be saved.") });
+        return json(res, typeof status === "number" ? status : 400, { error: refusalErrorText(error, "instance settings", "The engine settings could not be saved.") });
       } finally {
         providerInstancesChanging.delete(instanceId);
         providerConfigBusy.set(false);
@@ -280,7 +280,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         return json(res, 201, { instanceId, instances: await describeInstances() });
       } catch (error) {
         const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: publicErrorText(error, "instance settings", "The engine settings could not be saved.") });
+        return json(res, typeof status === "number" ? status : 400, { error: refusalErrorText(error, "instance settings", "The engine settings could not be saved.") });
       } finally { providerConfigBusy.set(false); }
     }
 
@@ -304,7 +304,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         return json(res, 200, { instances: await describeInstances() });
       } catch (error) {
         const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: publicErrorText(error, "instance settings", "The engine settings could not be saved.") });
+        return json(res, typeof status === "number" ? status : 400, { error: refusalErrorText(error, "instance settings", "The engine settings could not be saved.") });
       } finally {
         providerInstancesChanging.delete(instanceId);
         providerConfigBusy.set(false);
@@ -466,7 +466,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         resetPathCache();
         return json(res, 200, { ok: true, version: result.version });
       } catch (error) {
-        return json(res, 500, { error: publicErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
+        return json(res, 500, { error: refusalErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
       } finally {
         claudeUpdatesInFlight.delete(target.cli);
         // Even a failed update may have replaced the executable.
@@ -591,7 +591,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         try { await providerAuthSessions.signOut(live, auth.kind === "session" ? auth.session.id : "loopback"); }
         catch (error) {
           if ((error as { code?: unknown }).code !== "chatgpt_revocation_unconfirmed") {
-            return json(res, 409, { error: publicErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
+            return json(res, 409, { error: refusalErrorText(error, "instance update or removal", "The engine request could not be finished."), ...userErrorFields(error) });
           }
         }
       }
