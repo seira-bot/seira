@@ -166,8 +166,22 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
 /** The English fallback's clock; a client words `until` in its own time zone. */
 const utcClock = (at: number) => `${new Date(at).toISOString().slice(11, 16)} UTC`;
 
+const LABEL_MAX = 80;
+/** Controls, direction marks and invisible fillers. Joiners (U+200C, U+200D) and variation selectors stay: scripts and emoji need them. */
+const HIDDEN_IN_LABEL = /[\p{Cc}\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b\u200e\u200f\u2028-\u202e\u2060-\u206f\u3164\ufeff\uffa0\ufff9-\ufffb\u{e0000}-\u{e007f}\u{e0100}-\u{e01ef}]/gu;
+const SHOWN_IN_LABEL = /[\p{L}\p{N}\p{P}\p{S}]/u;
+
+/** A device label for display only: who the device belongs to comes from the session's email and id, never from this text.
+ * Empty when nothing a person can see is left. The cut is by whole characters, so it never splits an emoji. */
 function deviceLabel(value: string | undefined): string {
-  return (value ?? "").replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim();
+  const clean = (value ?? "").replace(HIDDEN_IN_LABEL, "").normalize("NFC").trim();
+  if (!SHOWN_IN_LABEL.test(clean)) return "";
+  let cut = "";
+  for (const character of clean) {
+    if (cut.length + character.length > LABEL_MAX) break;
+    cut += character;
+  }
+  return cut.replace(/[\s\u200c\u200d]+$/u, "");
 }
 
 function sameDigest(a: string, b: string): boolean {
@@ -404,7 +418,7 @@ export class SessionRegistry {
       codeHash: sha256(code),
       credentialHash: sha256(credential),
       scopes,
-      label: (input.label ?? "").trim().slice(0, 80),
+      label: deviceLabel(input.label),
       createdAt: now,
       expiresAt: now + (input.ttlMs ?? PAIRING_CODE_TTL_MS),
       ...(input.browser ? { browser: true as const, ...(input.owner ? { owner: input.owner } : {}) } : {}),
@@ -506,7 +520,7 @@ export class SessionRegistry {
     const record: SessionRecord = {
       id: randomUUID(),
       tokenHash: sha256(token),
-      label: (deviceLabel(input.label) || deviceLabel(pairing.label) || deviceLabel(input.fallbackLabel) || "Unnamed device").slice(0, 80),
+      label: deviceLabel(input.label) || deviceLabel(pairing.label) || deviceLabel(input.fallbackLabel) || "Unnamed device",
       scopes: [...pairing.scopes],
       createdAt: now,
       lastSeenAt: now,
@@ -583,7 +597,7 @@ export class SessionRegistry {
     const now = this.now();
     const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
     const record: SessionRecord = {
-      id: randomUUID(), tokenHash: sha256(token), label: (deviceLabel(input.label) || "Moving a bot in").slice(0, 80), scopes: ["admin", "client"],
+      id: randomUUID(), tokenHash: sha256(token), label: deviceLabel(input.label) || "Moving a bot in", scopes: ["admin", "client"],
       createdAt: now, lastSeenAt: now, expiresAt: teamSessionExpiresAt(now, now + SESSION_TTL_MS),
       email: input.email, teamRole: input.teamRole, membershipAuthority: "team", moveIn: input.bot,
     };
@@ -618,7 +632,7 @@ export class SessionRegistry {
     const record: SessionRecord = {
       id: randomUUID(),
       tokenHash: sha256(token),
-      label: (deviceLabel(input.label) || "Unnamed device").slice(0, 80),
+      label: deviceLabel(input.label) || "Unnamed device",
       scopes: [...new Set(input.scopes)],
       createdAt: now,
       lastSeenAt: now,
@@ -804,7 +818,7 @@ export class SessionRegistry {
     this.prune();
     const record = this.sessions.find((s) => s.id === id);
     if (!record) return "missing";
-    const next = deviceLabel(label).slice(0, 80);
+    const next = deviceLabel(label);
     if (!next) return "invalid";
     record.label = next;
     this.persist();

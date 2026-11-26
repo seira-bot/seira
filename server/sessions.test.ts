@@ -25,6 +25,7 @@ import {
   daysMs,
   isPairedDeviceSession,
 } from "./sessions.ts";
+import { personKey } from "./person-key.ts";
 import { userError } from "./user-errors.ts";
 
 let dir: string;
@@ -335,6 +336,58 @@ describe("pairing codes", () => {
     expect(registry.rename(id, "")).toBe("invalid");
     expect(registry.rename("no-such-id", "Name")).toBe("missing");
     expect(registry.list().find((s) => s.id === id)?.label).toBe("MacBook");
+  });
+
+  describe("device labels", () => {
+    const labelAfter = (label: string) => {
+      const id = pair("MacBook").session.id;
+      const result = registry.rename(id, label);
+      return { result, label: registry.list().find((s) => s.id === id)?.label };
+    };
+
+    it("keeps names in other scripts, accents, joiners and emoji", () => {
+      for (const name of ["مكتب أحمد", "המחשב של דנה", "रसोई का फ़ोन", "Café Zoë", "می\u200cخواهم", "👨\u200d👩\u200d👧 iPad", "厨房的 iPad", "Home ❤\ufe0f"]) {
+        expect(labelAfter(name)).toEqual({ result: "renamed", label: name });
+      }
+    });
+
+    it("drops invisible characters but keeps the name around them", () => {
+      expect(labelAfter("Ki\u200btchen\ufeff \u00adiPad\u2060\u2028").label).toBe("Kitchen iPad");
+      expect(labelAfter("A\u{e0041}\u{e0042}B\u3164").label).toBe("AB");
+    });
+
+    it("refuses a name with nothing visible and keeps the old one", () => {
+      for (const name of ["\u200b\u200c\u200d", "\u3164\u2060 \ufeff", "\u200d", "\u0301"]) {
+        expect(labelAfter(name)).toEqual({ result: "invalid", label: "MacBook" });
+      }
+    });
+
+    it("cuts at 80 UTF-16 units without splitting a character or leaving a joiner", () => {
+      expect(labelAfter("😀".repeat(60)).label).toBe("😀".repeat(40));
+      expect(labelAfter(`${"a".repeat(79)}😀`).label).toBe("a".repeat(79));
+      const family = "👨\u200d👩\u200d👧";
+      const cut = labelAfter(`${"a".repeat(78)}${family}`).label!;
+      expect(cut).toBe(`${"a".repeat(78)}👨`);
+      expect(labelAfter(`${"a".repeat(79)}\u200dbbbbb`).label).toBe("a".repeat(79));
+      for (const label of [cut, labelAfter("😀".repeat(60)).label!]) expect(label.isWellFormed()).toBe(true);
+    });
+
+    it("applies the same rules when a device pairs, so no path stores a looser name", () => {
+      expect(pair("Ki\u200btchen\u202E iPad").session.label).toBe("Kitchen iPad");
+      expect(pair("\u200b\u3164").session.label).toBe("Unnamed device");
+      expect(registry.issue({ label: "😀".repeat(60), scopes: ["client"] }).session.label).toBe("😀".repeat(40));
+    });
+
+    it("keeps the label apart from the email, role and id of the account", () => {
+      const issued = registry.issue({ label: "phone", email: "person@example.test", scopes: ["client"] });
+      const before = { id: issued.session.id, email: issued.session.email, key: personKey({ id: issued.session.id, email: issued.session.email }) };
+      expect(registry.rename(issued.session.id, "boss@example.test \u202E admin")).toBe("renamed");
+      const after = registry.list().find((s) => s.id === before.id)!;
+      expect(after.label).toBe("boss@example.test  admin");
+      expect(after.email).toBe("person@example.test");
+      expect(after.scopes).toEqual(["client"]);
+      expect(personKey({ id: after.id, email: after.email })).toBe(before.key);
+    });
   });
 
   it("keeps a new name after a restart", () => {
