@@ -47,6 +47,13 @@ describe("the pages", () => {
     expect(ids(fullContext()).filter((id) => simple.includes(id))).toEqual(simple);
   });
 
+  it("lands on the block a request names on a page, and turns Advanced on when that block needs it", () => {
+    expect(resolveSettingsTarget("ai", fullContext(), "ai-pool")).toEqual({ page: "ai", anchor: "ai-pool" });
+    expect(resolveSettingsTarget("ai", fullContext({ advanced: false }), "routing")).toEqual({ page: "ai", anchor: "routing", advanced: true });
+    expect(resolveSettingsTarget("ai", fullContext(), null)).toEqual({ page: "ai" });
+    expect(resolveSettingsTarget("people", fullContext({ team: false, admin: false }), "bot-access")).toMatchObject({ page: "overview", missing: "people" });
+  });
+
   it("turns Advanced on for a link, a notice or a search hit that asks for an Advanced page or row from Simple", () => {
     const simple = fullContext({ advanced: false });
     expect(resolveSettingsTarget("general", simple)).toEqual({ page: "general", advanced: true });
