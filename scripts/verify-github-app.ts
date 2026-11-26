@@ -118,9 +118,14 @@ async function open(who: Who, viewport = { width: 900, height: 900 }) {
   await page.locator('[data-app-tile="github"]').waitFor();
   const tile = page.locator('[data-app-tile="github"]');
   const status = () => page.evaluate(async () => (await fetch("/api/github-app")).json()) as Promise<GithubAppStatus>;
-  const openBot = async (page2?: "apps" | "github") => {
-    await page.waitForFunction(() => Boolean((window as any).__githubFixture));
-    await page.evaluate(([id, target]: [string, string | undefined]) => (window as any).__githubFixture.openBot(id, target), [starter.id, page2]);
+  const openBot = async (target?: "apps" | "github") => {
+    // The bots may still be loading after a reload, and opening a bot that is not loaded does nothing: try until the panel is open.
+    await page.waitForFunction(([id, wanted]: [string, string | undefined]) => {
+      const fixtureApi = (window as any).__githubFixture;
+      if (!fixtureApi) return false;
+      if (!document.querySelector("aside[role=dialog]")) fixtureApi.openBot(id, wanted);
+      return Boolean(document.querySelector("aside[role=dialog]"));
+    }, [starter.id, target], { polling: 250 });
   };
   return { page, tile, errors, status, openBot, starterId: starter.id, helperId: helper.id, fixture };
 }
