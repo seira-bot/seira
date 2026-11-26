@@ -336,10 +336,16 @@ describe("github bot access from a local shell", () => {
     expect(store.read().bots).toEqual({});
   });
 
-  it("lets wider access through from a browser, a paired session, the packaged desktop, or while every bot is idle", async () => {
+  it("does not take an Origin header as proof of a browser", async () => {
     await connectAs("desktop");
     busy = true;
-    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy(), { origin: "http://localhost:5173" })).status).toBe(200);
+    expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy(), { origin: "http://localhost:5173" })).status).toBe(409);
+    expect(store.read().bots).toEqual({});
+  });
+
+  it("lets wider access through in the packaged desktop, or while every bot is idle", async () => {
+    await connectAs("desktop");
+    busy = true;
     desktopManaged = true;
     expect((await call("PUT", "/api/github-app/bots/ada", "desktop", policy({ repos: [{ ...site, level: "pull_requests" }] }))).status).toBe(200);
     desktopManaged = false;

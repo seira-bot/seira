@@ -652,7 +652,12 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       const loosened: string[] = [];
       const trustPatch = patch as Pick<Partial<BotRecord>, "outbound" | "connectorScopes" | "fallback">;
       if (body.outbound !== undefined && trustPatch.outbound?.policy === "allow" && existingBot?.outbound?.policy !== "allow") loosened.push("outbound");
-      if (githubReopened) loosened.push("github");
+      if (githubReopened) {
+        if (auth.kind === "loopback" && !DESKTOP_MANAGED && store.bots.some((candidate) => candidate.busy)) {
+          return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
+        }
+        loosened.push("github");
+      }
       if (body.connectorScopes !== undefined && widensConnectorScopes(existingBot?.connectorScopes, trustPatch.connectorScopes)) loosened.push("connectorScopes");
       if (body.phoneApps !== undefined && existingBot) {
         // Compare effective grants: clearing falls back to every app.

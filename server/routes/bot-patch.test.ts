@@ -689,15 +689,17 @@ describe("PATCH /api/bots/:id github_app grants", () => {
     expect(none.store.bot(none.bot.id)?.composio).toBe(true);
   });
 
-  it("lets the owner turn GitHub back on, but not from an originless local caller while a bot is busy", async () => {
+  it("lets the owner turn GitHub back on, but not from a local caller while a bot is busy, whatever its Origin", async () => {
     const { store, bot, patch } = fixture({ ownsGithubConnection: () => true, githubGrantedTo: () => true });
     store.patchBot(bot.id, { composio: false });
     const worker = store.createBot({ name: "Worker" });
     store.patchBot(worker.id, { busy: true });
 
     expect((await patch(bot.id, { composio: true })).status).toBe(409);
+    expect((await patch(bot.id, { composio: true }, { headers: { origin: "http://localhost:5173" } })).status).toBe(409);
     expect(store.bot(bot.id)?.composio).toBe(false);
-    expect((await patch(bot.id, { composio: true }, { headers: { origin: "http://localhost:5173" } })).status).toBe(200);
+    store.patchBot(worker.id, { busy: false });
+    expect((await patch(bot.id, { composio: true })).status).toBe(200);
     expect(store.bot(bot.id)?.composio).toBe(true);
   });
 

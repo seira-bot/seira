@@ -48,10 +48,6 @@ function resultPage(ok: boolean): string {
 const remoteBrowser = (req: IncomingMessage, auth: RequestAuth) =>
   auth.kind === "session" && (isProxied(req) || !isLoopbackHost(req.headers.host));
 
-/** Outside the packaged desktop a loopback caller is the owner, so a bot's own shell could widen its access. */
-const fromLocalShell = (req: IncomingMessage, auth: RequestAuth, desktopManaged: boolean) =>
-  auth.kind === "loopback" && !desktopManaged && !(typeof req.headers.origin === "string" && req.headers.origin.trim() !== "");
-
 const BUSY_WIDEN_REFUSAL = "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle.";
 
 export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
@@ -274,7 +270,8 @@ export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
         seen.add(key);
         policy.repos.push({ installationId: repo.installationId, repositoryId: repo.repositoryId, fullName: known.fullName, level: repo.level });
       }
-      if (fromLocalShell(req, auth, deps.desktopManaged) && githubPolicyWidens(data.bots[botId], policy)) {
+      // Outside the packaged desktop a loopback caller is the owner, and a bot's own shell can forge any header.
+      if (auth.kind === "loopback" && !deps.desktopManaged && githubPolicyWidens(data.bots[botId], policy)) {
         if (deps.anyBotBusy()) return json(res, 409, { error: BUSY_WIDEN_REFUSAL });
         console.warn(`bot ${botId}: GitHub access widened by ${requestSource(req)} through the local API with no paired session`);
       }
