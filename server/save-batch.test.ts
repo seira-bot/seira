@@ -30,6 +30,14 @@ describe("batchSaves", () => {
     error.mockRestore();
   });
 
+  it("runs the pass-end write, which may write behind, only at the end of a batch", () => {
+    const writes: string[] = [];
+    const a = {};
+    saveSoon(a, () => writes.push("now"), () => writes.push("behind"));
+    batchSaves(() => saveSoon(a, () => writes.push("now"), () => writes.push("behind")));
+    expect(writes).toEqual(["now", "behind"]);
+  });
+
   it("hands back what the batch returned", () => {
     expect(batchSaves(() => 42)).toBe(42);
   });
