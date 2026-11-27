@@ -577,6 +577,8 @@
   "releaseNotes.items.removedStaysOut.body": "When an admin removes a person in Settings → People, an @domain entry no longer lets that person in again. To let the person in, an admin lists the address itself.",
   "releaseNotes.items.storeTools.title": "Built-in tools work again in the Microsoft Store app",
   "releaseNotes.items.storeTools.body": "On Windows 10, bots in the Microsoft Store app can create bots, use connected apps, and control the browser and computer again.",
+  "releaseNotes.items.inviteAnywhere.title": "Invite people from the desktop app and through a bot",
+  "releaseNotes.items.inviteAnywhere.body": "After Connect to a server, an admin can invite people in Settings → People in the desktop window. A bot can also invite a person, change what they see, or remove them. Each change shows a card and applies only after you tap Apply.",
   "releaseNotes.items.boardTodos.title": "Add todos to the Board, for you and your bots",
   "releaseNotes.items.boardTodos.body": "On the Board, add a todo with New todo. A bot can add todos too. Choose which bot picks a bot for open todos, or pick one yourself.",
   "releaseNotes.items.botSettings.title": "Ask a bot to change a setting",

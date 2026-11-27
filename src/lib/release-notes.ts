@@ -11,6 +11,7 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   { version: "0.1.196", items: [
     { id: "storeTools", icon: Wrench },
+    { id: "inviteAnywhere", icon: UserPlus },
     { id: "boardTodos", icon: ListChecks },
     { id: "botSettings", icon: SlidersHorizontal },
     { id: "moveHideTarget", icon: ArrowRightLeft },

@@ -4043,7 +4043,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "es": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -10487,7 +10492,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "fr": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -14321,7 +14331,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "hi": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -18035,7 +18050,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "ja": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -25933,7 +25953,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -26213,6 +26238,11 @@
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
       "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
       "server.mcp.askedRemove": "071a8e818a08e424b657abe6c63dd53c27c22f195b77d111fbf25915e57c8b93",
       "server.mcp.card.turnOn": "c277c4f5c573a0cf8250168f3eaa5749558884f9a9ecf5a44879b66ae5f3fbcc",
       "server.mcp.card.change": "8494eeada8f5dc0dc261e796c0c18e120cd2166a17b5d5ffdf7a2a8b5d222f18",
@@ -26485,6 +26515,8 @@
       "releaseNotes.items.removedStaysOut.body": "26002d131a9018f6bcb97b9a0d00fadec2099d8537edcfbd126b98f7be24a577",
       "releaseNotes.items.storeTools.title": "b6b017e7cabda0e9d70231f5370d7feaf743c2a63843f8e941a4d20b1fcfdd8f",
       "releaseNotes.items.storeTools.body": "a51d81fd0fca2cb9804b0aacfc82012acb47a09e561287745d1bd8ed6ea82c92",
+      "releaseNotes.items.inviteAnywhere.title": "ead301c3610b86100b954303009ca9b2962e59e6f373db2c35adf06e4012fa99",
+      "releaseNotes.items.inviteAnywhere.body": "71c7203f407c8fbb91665f848f52bfe184b7037445646f293ec9e3c025138547",
       "releaseNotes.items.boardTodos.title": "1f4d45911c4932e29829df68a5839b4199346db75766a242d693d9acbada2641",
       "releaseNotes.items.boardTodos.body": "dc11a373e8f14e136731a8139e0e5c6b408e60d667fcfcf426637400ff3f234a",
       "releaseNotes.items.botSettings.title": "7380c7a7cd41de652e8e18b15d1934daf89aea40908c146d3e10303ee4ab7ca9",
@@ -48403,7 +48435,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "zh-tw": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -58517,7 +58554,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "uk": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -62650,7 +62692,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "vi": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -68596,7 +68643,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "tr": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -74542,7 +74594,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "pl": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -81624,7 +81681,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "ru": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -88755,7 +88817,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "it": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -95704,7 +95771,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     },
     "ko": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -103298,7 +103370,12 @@
       "server.appSettings.confirm.browserOnAll": "e12df38beae764e9b7f345c4fa83c026f65bbbbf1fce7ddfcad9af8e0b9ec6e2",
       "server.appSettings.confirm.appsOn": "a320a6e65cce622b68e2e08b82307e858486babdbd4974c8c5ec68b38b8a7cf2",
       "server.appSettings.confirm.toolsOn": "99c1120a484ecbc1565436b9f2d8dd2ebcea79bdbd77a22ec9c34ca1df0f1a6b",
-      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653"
+      "server.appSettings.confirm.ownChrome": "d90737d198e81955a204ef1ce16c8f073620135ee22b5fe17fb68a5dc5f6a653",
+      "server.appSettings.confirm.wholeIn": "dc5eea8066f1c138307c52b32867d8f754f7da7410d078e3235ee8df6446544f",
+      "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
+      "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
+      "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
     }
   }
 }

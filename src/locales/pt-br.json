@@ -553,6 +553,8 @@
   "releaseNotes.items.removedStaysOut.body": "Quando um admin remove uma pessoa em Configurações → Pessoas, uma entrada @domínio não deixa mais essa pessoa entrar de novo. Para deixá-la entrar, um admin lista o próprio endereço.",
   "releaseNotes.items.storeTools.title": "As ferramentas internas voltam a funcionar no app da Microsoft Store",
   "releaseNotes.items.storeTools.body": "No Windows 10, os bots do app da Microsoft Store voltam a criar bots, usar apps conectados e controlar o navegador e o computador.",
+  "releaseNotes.items.inviteAnywhere.title": "Convide pessoas pelo app de computador e por um bot",
+  "releaseNotes.items.inviteAnywhere.body": "Depois de Conectar a um servidor, um admin pode convidar pessoas em Configurações → Pessoas na janela do computador. Um bot também pode convidar uma pessoa, mudar o que ela vê ou removê-la. Cada mudança mostra um cartão e só vale depois que você toca em Aplicar.",
   "releaseNotes.items.boardTodos.title": "Adicione itens a fazer ao Quadro, para você e seus bots",
   "releaseNotes.items.boardTodos.body": "No Quadro, adicione um item a fazer com Novo item a fazer. Um bot também pode adicionar itens. Escolha qual bot distribui os itens abertos ou escolha você mesmo.",
   "releaseNotes.items.botSettings.title": "Peça a um bot para mudar uma configuração",
