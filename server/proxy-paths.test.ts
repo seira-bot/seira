@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { ownNodeCommand, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
+import { aliasPresent, ownNodeCommand, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
 
 describe("local computer proxy runtime path", () => {
   it("resolves an existing TypeScript entry in development", () => {
@@ -81,6 +81,18 @@ describe("the program that runs Seira's scripts for an engine", () => {
   it("keeps the executable when the package has no alias", () => {
     expect(ownNodeCommand(STORE_EXE, env, () => false)).toBe(STORE_EXE);
     expect(ownNodeCommand(STORE_EXE, {}, () => true)).toBe(STORE_EXE);
+  });
+
+  it("finds an alias by listing its folder, because stat cannot follow the alias", () => {
+    const folder = mkdtempSync(join(tmpdir(), "seira-alias-"));
+    try {
+      writeFileSync(join(folder, "Seira-Desktop.exe"), "");
+      expect(aliasPresent(join(folder, STORE_ALIAS))).toBe(true);
+      expect(aliasPresent(join(folder, "other.exe"))).toBe(false);
+      expect(aliasPresent(join(folder, "missing", STORE_ALIAS))).toBe(false);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 
   it.each([
