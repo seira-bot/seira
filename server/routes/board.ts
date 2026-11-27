@@ -12,6 +12,8 @@ export interface BoardRouteDeps {
   visibleFor: (auth: RequestAuth) => VisibleSet;
   closures: BoardClosures;
   closerName: (auth: RequestAuth) => string;
+  /** Moves a todo to Done by hand; the Board keeps no closure record for a todo card. */
+  closeTodo?: (todoId: string, by: { kind: "person"; name: string }, reason?: string) => void;
   now?: () => number;
 }
 
@@ -37,7 +39,9 @@ export function createBoardRoutes(deps: BoardRouteDeps): RouteHandler {
       if (!card) return json(res, 404, { error: "no such card" });
       if (card.column !== "needs-you") return json(res, 409, { error: "only a card in Needs you can be moved to Done" });
       if (!atLeast(visible.level(card.botId), "chat")) return json(res, 403, { error: "you cannot chat with this card's bot" });
-      deps.closures.close(card.id, { kind: "person", name: deps.closerName(auth) }, parsed.data.reason);
+      const by = { kind: "person" as const, name: deps.closerName(auth) };
+      if (card.kind === "todo" && card.todoId && deps.closeTodo) deps.closeTodo(card.todoId, by, parsed.data.reason);
+      else deps.closures.close(card.id, by, parsed.data.reason);
       return json(res, 200, { ok: true });
     }
     if (path !== "/api/board") return PASS;
