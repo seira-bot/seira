@@ -32,7 +32,9 @@ The server starts with one admin and one department, Sales.
 - The run blocks every address except the server's own, and fails if the app
   asks for another one. Only a favicon request to a search site is ignored.
 
-Each step saves a PNG: `remote-*`, `local-*` and `browser-*`.
+Each step saves a PNG: `remote-*`, `local-*` and `browser-*`. The menu is closed or
+fading in the `*-department-menu.png` files. The check reads the menu's text while it
+is open, so trust the text check and not that picture.
 
 ## What it does not prove
 
