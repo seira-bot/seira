@@ -33,6 +33,6 @@ function composioPart(grants: Record<string, ConnectorToolGrant> | undefined): s
 function scopesPart(scopes: ConnectorScopes | undefined): string {
   if (!scopes || !Object.hasOwn(scopes.apps, GITHUB_APP_SLUG)) return describeConnectorScopes(scopes);
   const apps = without(scopes.apps);
-  if (Object.keys(apps).length === 0) return "";
+  if (Object.keys(apps).length === 0) return " This bot may use no other connected app.";
   return describeConnectorScopes({ ...scopes, apps, ...(scopes.accounts ? { accounts: without(scopes.accounts) } : {}) });
 }

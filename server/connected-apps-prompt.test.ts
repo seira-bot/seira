@@ -42,7 +42,7 @@ describe("connectedAppsPrompt", () => {
       connectorTools: { github_app: { tools: "*" as const } },
       connectorScopes: { apps: { github_app: "write" } },
     }, READY);
-    expect(text).toBe("");
+    expect(text).toBe(" This bot may use no other connected app.");
     expect(text).not.toContain("No connected apps");
     expect(text).not.toContain("COMPOSIO_MANAGE_CONNECTIONS");
   });
