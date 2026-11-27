@@ -183,6 +183,16 @@ describe("needsInputQuestion", () => {
     expect(needsInputQuestion("")).toBeUndefined();
     expect(needsInputQuestion("Done.")).toBeUndefined();
   });
+
+  it.each(["none", "None.", "n/a", "N/A", "nothing", "-", "\u2014", "**none**", "not applicable", "no questions", "none\nDefault: continue"])(
+    "reads NEEDS INPUT: %j as no question", (answer) => {
+      expect(needsInputQuestion(`Finished the work.\nNEEDS INPUT: ${answer}`)).toBeUndefined();
+    });
+
+  it("keeps a real question that holds an empty-answer word", () => {
+    expect(needsInputQuestion("NEEDS INPUT: none of the accounts work, which one next?")).toBe("none of the accounts work, which one next?");
+    expect(needsInputQuestion("NEEDS INPUT: Is there nothing to merge?")).toBe("Is there nothing to merge?");
+  });
 });
 
 describe("RuntimeCoordinator: the requesting turn and its tree", () => {
