@@ -51,9 +51,10 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
           ...(localOrigin ? { preload: join(root, "electron/preload.cjs"), additionalArguments: [`--seira-local-origin=${localOrigin}`] } : {}),
         },
       });
-      win.webContents.on("console-message", (event) => { if (event.level === "error") errors.push(`${name}: ${event.message}`); });
+      win.webContents.on("console-message", (event) => { if (event.level === "error") { errors.push(`${name}: ${event.message}`); console.error(`${name} console: ${event.message}`); } });
       win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
-      await win.loadURL(url);
+      await win.loadURL(url).catch((error) => console.error(`${name}: ${error.message}`));
+      console.error(`${name}: at ${win.webContents.getURL()}`);
       const evaluate = (code) => win.webContents.executeJavaScript(code);
       const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), (await win.webContents.capturePage()).toPNG());
       const until = async (check, description) => {
