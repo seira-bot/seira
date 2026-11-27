@@ -851,7 +851,7 @@ describe("assigned issues", () => {
   it("stale AC-12: a stalled linked pull request does not keep a claim past its deadline", async () => {
     const fake = fakeApi({
       issues: [{ number: 102, labels: ["P2", "claimed: human"], assignees: ["alice"] }],
-      events: { 102: [labeledAt("claimed: human", ago(100))] },
+      events: { 102: [labeledAt("claimed: human", ago(150))] },
       linked: { 102: [{ number: 9, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }] },
     });
     await sweepAt(fake);
