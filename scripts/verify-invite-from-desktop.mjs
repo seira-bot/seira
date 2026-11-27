@@ -69,7 +69,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
           }
         }
       };
-      const shot = async (file) => { await new Promise((resolve) => setTimeout(resolve, 500)); writeFileSync(join(shots, `${name}-${file}.png`), await capture()); };
+      const shot = async (file, wait = 500) => { await new Promise((resolve) => setTimeout(resolve, wait)); writeFileSync(join(shots, `${name}-${file}.png`), await capture()); };
       const until = async (check, description) => {
         for (let attempt = 0; attempt < 400; attempt++) {
           if (await check()) return;
@@ -87,6 +87,11 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
         await until(() => has("[data-settings-page]"), "Settings navigation");
       };
       const openDepartmentMenu = async () => {
+        if (await has("[data-settings-page]")) {
+          await evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+          await until(async () => !(await has("[data-settings-page]")), "Settings closed");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
         await until(() => evaluate("[...document.querySelectorAll('*')].some((el) => el.children.length === 0 && el.textContent.trim() === 'Sales')"), "department Sales in the sidebar");
         await evaluate(`(() => { const label = [...document.querySelectorAll('*')].find((el) => el.children.length === 0 && el.textContent.trim() === 'Sales'); label.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 160 })); })()`);
         await until(() => has('[role="menu"][aria-label="Sales"]'), "department menu");
@@ -130,7 +135,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     await invitesFromPeople("remote", remote);
     assert.match(await remote.openDepartmentMenu(), /Invite to this department/);
     checks.push("remote: the department menu has Invite to this department");
-    await remote.shot("department-menu");
+    await remote.shot("department-menu", 0);
     remote.win.close();
 
     // LOCAL: the desktop app's own computer.
@@ -140,12 +145,10 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     assert.equal(await local.has('[data-settings-page="people"]'), false, "no People on the app's own computer");
     checks.push("local: no People in the Settings navigation");
     await local.shot("settings-nav");
-    await local.evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
-    await local.until(async () => !(await local.has("[data-settings-page]")), "Settings closed");
     const localMenu = await local.openDepartmentMenu();
     assert.doesNotMatch(localMenu, /Invite to this department/);
     checks.push("local: the department menu has no invite entry");
-    await local.shot("department-menu");
+    await local.shot("department-menu", 0);
     local.win.close();
 
     // BROWSER: the server's own page, no preload.
