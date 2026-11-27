@@ -600,6 +600,32 @@ describe("people who sign in", () => {
     expect(fx.order).toEqual(["access"]);
   });
 
+  it("treats a grant with nothing left as no access: no card says the whole team, and Undo of a role change keeps it empty", async () => {
+    const fx = fixture({ people: {} });
+    const NOTHING = { departments: [], bots: [] };
+    fx.grants["ann@acme.com"] = { ...NOTHING };
+    await fx.set("people.signIn", { email: "ann@acme.com", role: "admin" });
+    expect(fx.cards().at(-1)!.card.subtitle).toContain("Change ann@acme.com as admin.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect((await fx.set("people.signIn", { email: "ann@acme.com", role: "user" })).body.error)
+      .toBe("ann@acme.com would see nothing. Name what ann@acme.com should see, or give the whole team.");
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com"] });
+    expect(fx.grants["ann@acme.com"]).toEqual(NOTHING);
+    expect(fx.routeCalls).toEqual([]);
+  });
+
+  it("refuses an Undo that would give more than nothing back to a person whose grant had nothing left", async () => {
+    const fx = fixture({ people: {} });
+    fx.grants["ann@acme.com"] = { departments: [], bots: [] };
+    await fx.set("people.signIn", { email: "ann@acme.com", sees: { departments: ["Sales"] } });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("ann@acme.com can sign in and sees only: Sales.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(await fx.undo()).toMatchObject({ claimed: true, state: "invalid", error: expect.stringMatching(/^ann@acme\.com saw nothing before this change, so Undo cannot set that back\. Choose what ann@acme\.com sees in Settings → /) });
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "chat" }], bots: [] });
+    expect(lists(fx)!.members).toContain("ann@acme.com");
+  });
+
   it("refuses the only admin's removal, an unknown department or bot, an empty choice and a domain with bots", async () => {
     const fx = fixture({ people: {} });
     const refused = async (value: unknown) => (await fx.set("people.signIn", value)).body.error;
@@ -659,6 +685,24 @@ describe("people who sign in", () => {
       expect(fx.grants["@corp.test"]).toEqual(SALES_ONLY);
     });
 
+    it("keeps the level a person has through their @domain when the bot names a department without one", async () => {
+      const SALES_VIEW = { departments: [{ name: "Sales", level: "view" }], bots: [] };
+      const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test"] }, { "@corp.test": SALES_VIEW });
+      await fx.set("people.signIn", { email: "new@corp.test" });
+      expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("new@corp.test can sign in and sees only: Sales (view only).");
+      await fx.set("people.signIn", { email: "pat@corp.test", sees: { departments: ["Sales", "General"] } });
+      expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("pat@corp.test can sign in and sees only: Sales (view only), General.");
+      await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+      expect(fx.grants["pat@corp.test"]).toEqual({ departments: [{ name: "Sales", level: "view" }, { name: "", level: "chat" }], bots: [] });
+    });
+
+    it("refuses to invite a person who would see nothing because their @domain's grant has nothing left", async () => {
+      const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test"] }, { "@corp.test": { departments: [], bots: [] } });
+      expect((await fx.set("people.signIn", { email: "new@corp.test" })).body.error)
+        .toBe("new@corp.test would see nothing. Name what new@corp.test should see, or give the whole team.");
+      expect(fx.cards()).toEqual([]);
+    });
+
     it("refuses Apply as stale when the @domain's role or access changed after the card was shown", async () => {
       const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test"] }, { "@corp.test": SALES_ONLY });
       await fx.set("people.signIn", { email: "new@corp.test" });
@@ -676,12 +720,33 @@ describe("people who sign in", () => {
       expect(fx.routeCalls).toEqual([]);
     });
 
-    it("says on an @domain's card that addresses with their own entry keep their own role and access", async () => {
+    it("names the role rule and the access rule apart on an @domain's card", async () => {
       const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test", "lee@corp.test"] });
       await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["Sales"] } });
       const card = fx.cards().at(-1)!.card;
       expect(card.appSettingRequest.consequence).toBe("Anyone with an address at @corp.test can sign in, not only one person.");
-      expect(card.subtitle).toContain("Addresses at @corp.test that have their own entry keep their own role and access.");
+      expect(card.subtitle).toContain("Change @corp.test as user, sees only Sales. 1 address at @corp.test is on the list on its own and keeps its own role. Everyone at @corp.test sees what is named above.");
+
+      const mixed = withDomain({ admins: ["boss@acme.com", "lee@corp.test"], members: ["@corp.test", "kim@corp.test"] }, { "kim@corp.test": SALES_ONLY, "zed@corp.test": SALES_ONLY });
+      await mixed.set("people.signIn", { email: "@corp.test", sees: { departments: ["General"] } });
+      expect(mixed.cards().at(-1)!.card.subtitle).toContain("2 addresses at @corp.test are on the list on their own and keep their own role. "
+        + "2 addresses at @corp.test have access of their own and keep it; everyone else at @corp.test sees what is named above.");
+    });
+
+    it("refuses an @domain card's Apply as stale once an address under it gets its own entry or access", async () => {
+      const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test"] });
+      await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["Sales"] } });
+      fx.grants["pat@corp.test"] = SALES_ONLY;
+      const granted = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+      expect(granted.status).toBe(409);
+      expect(fx.cards().at(-1)!.card.appSettingRequest).toMatchObject({ result: "stale" });
+
+      await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["General"] } });
+      (fx.cfg as { signIn?: { members: string[] } }).signIn!.members.push("kim@corp.test");
+      const listed = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+      expect(listed.status).toBe(409);
+      expect(fx.cards().at(-1)!.card.appSettingRequest).toMatchObject({ result: "stale" });
+      expect(fx.routeCalls).toEqual([]);
     });
   });
 

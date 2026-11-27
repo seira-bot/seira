@@ -24,8 +24,10 @@ type Level = "view" | "chat";
 /** A department or bot by name (a bot also by id), with the level it keeps when none is given: chat for a new one. */
 type Item = string | { name: string; level: Level };
 type Sees = "whole team" | { departments?: Item[]; bots?: Item[] };
+/** Addresses at an @domain with a list entry of their own, and with access of their own: the two rules are apart. */
+type Under = { onList: number; withAccess: number };
 /** `effective`: only on the value `current` gives (Undo writes it back), never on a bot's: the schema refuses the field. */
-type Person = { email: string; role?: Role; sees?: Sees; effective?: { role: Role; sees: Sees } };
+type Person = { email: string; role?: Role; sees?: Sees; effective?: { role: Role; sees: Sees; under?: Under } };
 /** What a person holds once the names are resolved; a department's name is "" for General. */
 interface Held { departments: Array<{ name: string; level: Level }>; bots: Array<{ id: string; name: string; level: Level }> }
 
@@ -67,6 +69,14 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     const domain = domainOf(entry);
     return domain ? grantOf(domain) : undefined;
   };
+  /** The access the server gives this entry now: its own grant, else its @domain's; none means the whole team. */
+  const effectiveGrant = (entry: string): AccessGrant | undefined => grantOf(entry) ?? domainGrant(entry);
+  /** A grant with nothing left in it (what it named was deleted) shows nothing, never the whole team. */
+  const isEmpty = (grant: AccessGrant) => !grant.departments.length && !grant.bots.length;
+  const heldOf = (grant: AccessGrant): Held => ({
+    departments: grant.departments.map((one) => ({ name: one.name, level: one.level })),
+    bots: grant.bots.map((one) => ({ id: one.id, name: deps.bots().find((bot) => bot.id === one.id)?.name ?? one.id, level: one.level })),
+  });
   /** The sign-in lists once `entry` has `role`. */
   const listsWith = (entry: string, role: Role) => {
     const rest = (list: string[]) => list.filter((one) => !same(one, entry));
@@ -74,7 +84,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     return { admins: [...rest(admins), ...(role === "admin" ? [entry] : [])], members: [...rest(members), ...(role === "user" ? [entry] : [])] };
   };
   /** Addresses at an @domain that have a list entry or access of their own: the domain's rule does not decide for them. */
-  const listedUnder = (domain: string): { onList: number; withAccess: number } => {
+  const listedUnder = (domain: string): Under => {
     const under = (one: string) => !one.startsWith("@") && one.trim().toLowerCase().endsWith(domain);
     const { admins, members } = lists();
     return { onList: [...admins, ...members].filter(under).length, withAccess: Object.keys(deps.people?.grants() ?? {}).filter(under).length };
@@ -87,10 +97,10 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
   };
 
   /** The departments and bots a `sees` names, by the names or ids the bot gave; a string says what does not exist. An item with
-   * no level keeps the one it has in the person's grant now. */
+   * no level keeps the one the person has now, from their own grant or their @domain's, so a name alone never widens it. */
   const resolve = (sees: Sees, entry: string): Held | string => {
     if (sees === WHOLE_TEAM) return { departments: [], bots: [] };
-    const grant = grantOf(entry);
+    const grant = effectiveGrant(entry);
     const known = deps.sections();
     const held: Held = { departments: [], bots: [] };
     for (const item of sees.departments ?? []) {
@@ -109,6 +119,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     }
     return held.departments.length || held.bots.length ? held : "Choose at least one department or bot, or give the whole team.";
   };
+  /** `shown`: the access the person ends with; null is the whole team, an empty one is nothing. */
   interface Made { entry: string; before: Role; role: Role; access: "keep" | Held | null; shown: Held | null }
   const empty = (held: Held) => !held.departments.length && !held.bots.length;
 
@@ -120,12 +131,20 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     if (!entry) return { refusal: "Enter an email address or @domain." };
     const before = roleOf(entry);
     const role = value.role ?? (before === "none" ? "user" : before);
-    const asked = role === "none" || value.sees === undefined ? null : resolve(value.sees, entry);
+    const restoring = value.effective !== undefined;
+    // Undo of a person whose grant had nothing left: the access route cannot store an empty grant, so only an unchanged one
+    // can be kept; anything else would give them more than they had.
+    const nothing = typeof value.sees === "object" && !value.sees.departments?.length && !value.sees.bots?.length;
+    const own = grantOf(entry);
+    if (restoring && nothing && role !== "none" && !(own && isEmpty(own))) {
+      return { refusal: `${entry} saw nothing before this change, so Undo cannot set that back. Choose what ${entry} sees in ${placePath("members")}.` };
+    }
+    const sees = restoring && nothing ? undefined : value.sees;
+    const asked = role === "none" || sees === undefined ? null : resolve(sees, entry);
     if (typeof asked === "string") return { refusal: asked };
     if (entry.startsWith("@") && role === "admin") return { refusal: `A bot cannot make a whole @domain an admin. The person does that in ${placePath("members")}.` };
     if (entry.startsWith("@") && asked?.bots.length) return { refusal: "To give access to chosen bots, invite each person by their own address." };
     const domain = domainOf(entry);
-    const restoring = value.effective !== undefined;
     if (role === "none" && before === "none") {
       return { refusal: domain && signsInAs(entry) !== "none"
         ? `${entry} is not on the list on their own: everyone at ${domain} may sign in. Remove ${domain} to stop that.`
@@ -133,8 +152,12 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     }
     if (before === "admin" && role !== "admin" && lists().admins.length <= 1) return { refusal: "This is the only admin. The server needs one admin, so make someone else an admin first." };
     const access: "keep" | Held | null = role === "none" ? null : asked === null ? "keep" : empty(asked) ? null : asked;
+    // What the card names: the access the person ends with, their @domain's when they keep none of their own.
+    const kept = effectiveGrant(entry);
+    const shown = access === "keep" ? (kept ? heldOf(kept) : null) : access;
     // Undo writes back the entries as they were, so only a new change has to give what its card says.
     if (!restoring) {
+      if (role === "user" && shown && empty(shown)) return { refusal: `${entry} would see nothing. Name what ${entry} should see, or give the whole team.` };
       const after = domain ? signsInAs(entry, listsWith(entry, role)) : role;
       if (role === "none" && after !== "none") return { refusal: `${entry} would still sign in, because everyone at ${domain} may sign in. Remove ${domain} first.` };
       if (role === "user" && after === "admin") return { refusal: `${entry} would still sign in as an admin, because everyone at ${domain} is an admin. Change ${domain} first.` };
@@ -145,15 +168,21 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         return { refusal: `Some addresses at ${entry} are on the list on their own and would still sign in. Remove them first, or remove ${entry} in ${placePath("members")}.` };
       }
     }
-    const grant = grantOf(entry);
     const sameSet = <T>(a: T[], b: T[], key: (one: T) => string) => a.length === b.length && a.every((one) => b.some((other) => key(other) === key(one)));
-    const sameAccess = asked !== null && (empty(asked) ? !grant : Boolean(grant)
-      && sameSet(asked.departments, grant!.departments, (one) => `${one.name}:${one.level}`) && sameSet(asked.bots, grant!.bots, (one) => `${one.id}:${one.level}`));
+    const sameAccess = asked !== null && (empty(asked) ? !own : Boolean(own)
+      && sameSet(asked.departments, own!.departments, (one) => `${one.name}:${one.level}`) && sameSet(asked.bots, own!.bots, (one) => `${one.id}:${one.level}`));
     if (role === before && (asked === null || sameAccess)) return { refusal: `${entry} already has this.` };
-    // What the card names: the access the person ends with, their @domain's when they keep none of their own.
-    const kept = grant ?? domainGrant(entry);
-    const shown = access === "keep" ? (kept ? resolve(asSees(kept), entry) : null) : access;
-    return { entry, before, role, access, shown: typeof shown === "string" ? null : shown };
+    return { entry, before, role, access, shown };
+  };
+  /** Sign-in and access follow two rules: an own list entry decides the role, an own grant decides what they see. A bot never
+   * leaves an @domain an admin, so an own entry keeps its own role once the change applies. */
+  const apart = (domain: string): string => {
+    const { onList, withAccess } = listedUnder(domain);
+    const role = !onList ? ""
+      : onList === 1 ? ` 1 address at ${domain} is on the list on its own and keeps its own role.` : ` ${onList} addresses at ${domain} are on the list on their own and keep their own role.`;
+    const kept = withAccess === 1 ? ` 1 address at ${domain} has access of its own and keeps it;` : ` ${withAccess} addresses at ${domain} have access of their own and keep it;`;
+    const sees = withAccess ? `${kept} everyone else at ${domain} sees what is named above.` : onList ? ` Everyone at ${domain} sees what is named above.` : "";
+    return role + sees;
   };
   const scopeWords = (held: Held | null): string =>
     held ? names([...held.departments.map((one) => `${one.name || GENERAL}${one.level === "view" ? " (view only)" : ""}`), ...held.bots.map((one) => `${one.name}${one.level === "view" ? " (view only)" : ""}`)]) : "";
@@ -168,7 +197,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         role: z.enum(["user", "admin", "none"]).optional(),
         sees: z.union([z.literal(WHOLE_TEAM), z.object({ departments: z.array(item).max(200).optional(), bots: z.array(item).max(200).optional() }).strict()]).optional(),
       }).strict()),
-      allowed: `{"email": an address or @domain, "role"?: "user" | "admin" | "none" (none removes the person), "sees"?: "${WHOLE_TEAM}" | {"departments"?: [name or {"name","level"}], "bots"?: [name or {"name","level"}]}} with level "view" or "chat" (a name alone keeps the level the person has, or chat for a new item). A new person is a user who sees the whole team; a person already on the list keeps their role and access unless you name them`,
+      allowed: `{"email": an address or @domain, "role"?: "user" | "admin" | "none" (none removes the person), "sees"?: "${WHOLE_TEAM}" | {"departments"?: [name or {"name","level"}], "bots"?: [name or {"name","level"}]}} with level "view" or "chat" (a name alone keeps the level the person has now, also one from their @domain, or chat for a new item). A new person is a user who sees the whole team, or what their @domain sees; a person already on the list keeps their role and access unless you name them`,
       read: () => {
         const blocked = unavailable();
         if (blocked) return blocked;
@@ -182,15 +211,17 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const { entry, before, role } = made;
         if (role === "none") return { change: `Remove ${entry}; they can no longer sign in` };
         const link = before === "none" && deps.people?.publicUrl() ? ` They sign in at ${deps.people.publicUrl()}.` : "";
-        const scope = scopeWords(made.shown) ? `, sees only ${scopeWords(made.shown)}` : role === "user" ? ", sees the whole team" : "";
-        const own = entry.startsWith("@") ? listedUnder(entry) : null;
-        const apart = own && (own.onList || own.withAccess) ? ` Addresses at ${entry} that have their own entry keep their own role and access.` : "";
-        return { change: `${before === "none" ? "Invite" : "Change"} ${entry} as ${role}${scope}.${link}${apart}` };
+        // An admin sees everything whatever their grant says, so only a user's card names what they see.
+        const scope = role === "admin" ? "" : made.shown === null ? ", sees the whole team" : empty(made.shown) ? ", sees nothing" : `, sees only ${scopeWords(made.shown)}`;
+        return { change: `${before === "none" ? "Invite" : "Change"} ${entry} as ${role}${scope}.${link}${entry.startsWith("@") ? apart(entry) : ""}` };
       },
       current: (value: Person) => {
         const entry = accessEntry(value.email);
         if (!entry) return undefined;
-        const effective = { role: entry.startsWith("@") ? roleOf(entry) : signsInAs(entry), sees: asSees(grantOf(entry) ?? domainGrant(entry)) };
+        // The domain card's note counts the addresses under it, so a change to them makes its Apply stale too.
+        const effective = entry.startsWith("@")
+          ? { role: roleOf(entry), sees: seesNow(entry), under: listedUnder(entry) }
+          : { role: signsInAs(entry), sees: asSees(effectiveGrant(entry)) };
         return { email: entry, role: roleOf(entry), sees: seesNow(entry), effective } satisfies Person;
       },
       confirm: (value: Person): Consequence | null => {
@@ -199,6 +230,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const params = { who: made.entry };
         if (made.role === "none") return { code: "personOut", params };
         if (made.role === "admin") return { code: "adminIn", params };
+        if (made.shown && empty(made.shown)) return null;
         const sees = scopeWords(made.shown);
         if (made.entry.startsWith("@")) return { code: "domainIn", params };
         return sees ? { code: "chosenIn", params: { ...params, sees } } : { code: "wholeIn", params };
