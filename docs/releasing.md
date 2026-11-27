@@ -322,6 +322,10 @@ gh run list --repo seira-bot/seira --workflow msstore-publish.yml --limit 1
   also stops when Partner Center already has a submission in progress,
   because the upload tool deletes that submission. Finish or delete that
   submission in Partner Center, then run the workflow again.
+- The `publish` job installs the `msstore` tool from the `microsoft/msstore-cli`
+  release `v0.4.4`. It checks the SHA-256 of the archive against a digest in the
+  workflow, and stops on a mismatch, before any step reads a credential. A new
+  tool version needs a new URL and a new digest from the release.
 - The `publish` job uploads the package with the `msstore` tool, sets the
   What's new text of each listing, commits the submission, and waits until the
   commit ends. Microsoft then certifies the submission. This can take hours.
