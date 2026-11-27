@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { RoutineRun, RoutineSchedule } from "@/lib/routines";
+import * as calendar from "./automation-calendar";
 import {
-  gridHours, monthCells, moveSchedule, occurrencesIn, scheduleSentenceAfterMove, shortSchedule,
+  gridHours, monthCells, moveSchedule, occurrencesIn, shortSchedule,
   type CalendarAutomation, type CalendarStart,
 } from "./automation-calendar";
 
@@ -178,6 +179,10 @@ describe("moveSchedule", () => {
     expect(moveSchedule({ type: "daily", time: "09:00", weekdays: [1, 5] }, monday9, at(2026, 11, 26, 9))).toEqual({ type: "daily", time: "09:00", weekdays: [4, 5] });
   });
 
+  it("refuses a drop on a weekday the schedule already uses", () => {
+    expect(moveSchedule({ type: "daily", time: "09:00", weekdays: [1, 5] }, monday9, at(2026, 11, 27, 9))).toBeNull();
+  });
+
   it("sets the new time of a one-time schedule", () => {
     expect(moveSchedule({ type: "once", at: monday9 }, monday9, at(2026, 11, 30, 11, 15))).toEqual({ type: "once", at: at(2026, 11, 30, 11, 15) });
   });
@@ -196,7 +201,7 @@ describe("shortSchedule", () => {
   it("gives structured parts for the ghost card and the toast", () => {
     expect(shortSchedule({ type: "daily", time: "10:30", weekdays: ALL })).toEqual({ days: "all", time: "10:30" });
     expect(shortSchedule({ type: "daily", time: "10:00", weekdays: [2] })).toEqual({ days: [2], time: "10:00" });
-    expect(scheduleSentenceAfterMove({ type: "daily", time: "10:00", weekdays: [3, 1] })).toEqual({ days: [1, 3], time: "10:00" });
+    expect(shortSchedule({ type: "daily", time: "10:00", weekdays: [3, 1] })).toEqual({ days: [1, 3], time: "10:00" });
     expect(shortSchedule({ type: "once", at: at(2026, 11, 30, 8, 5) })).toEqual({ days: [1], time: "08:05", date: at(2026, 11, 30) });
     expect(shortSchedule({ type: "interval", everyMinutes: 30, anchorAt: 0 })).toBeNull();
   });
@@ -217,5 +222,12 @@ describe("timing", () => {
     const started = performance.now();
     month();
     expect(performance.now() - started).toBeLessThan(50);
+  });
+});
+
+describe("exports", () => {
+  it("has one name for the short schedule phrase", () => {
+    expect(Object.keys(calendar)).not.toContain("scheduleSentenceAfterMove");
+    expect(Object.keys(calendar)).toContain("shortSchedule");
   });
 });

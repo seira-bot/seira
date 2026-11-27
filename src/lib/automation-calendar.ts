@@ -216,9 +216,11 @@ export function moveSchedule(schedule: RoutineSchedule, fromAt: number, toAt: nu
   const target = new Date(toAt);
   const minutes = keepMinutes ? schedule.time.split(":")[1] ?? "00" : String(target.getMinutes()).padStart(2, "0");
   const time = `${String(target.getHours()).padStart(2, "0")}:${minutes}`;
+  const fromDay = new Date(fromAt).getDay();
+  if (schedule.weekdays.length !== 7 && fromDay !== target.getDay() && schedule.weekdays.includes(target.getDay())) return null;
   const weekdays = schedule.weekdays.length === 7
     ? schedule.weekdays
-    : [...new Set(schedule.weekdays.map((day) => (day === new Date(fromAt).getDay() ? target.getDay() : day)))].sort((left, right) => left - right);
+    : schedule.weekdays.map((day) => (day === fromDay ? target.getDay() : day)).sort((left, right) => left - right);
   if (time === schedule.time && weekdays.join(",") === [...schedule.weekdays].sort((left, right) => left - right).join(",")) return null;
   return { type: "daily", time, weekdays };
 }
@@ -240,5 +242,3 @@ export function shortSchedule(schedule: RoutineSchedule): SchedulePhrase | null 
   if (schedule.type !== "daily") return null;
   return { days: schedule.weekdays.length === 7 ? "all" : [...schedule.weekdays].sort((left, right) => left - right), time: schedule.time };
 }
-
-export const scheduleSentenceAfterMove = shortSchedule;
