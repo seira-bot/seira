@@ -48,7 +48,7 @@ export function skipRefusal(routine: Skippable, at: number, now: number): string
   return null;
 }
 
-type SkipHost = { listRoutines(): Routine[]; adopt(apply: (held: { routines: Routine[] }) => Routine[]): void };
+export type SkipHost = { listRoutines(): Routine[]; adopt(apply: (held: { routines: Routine[] }) => Routine[]): void };
 
 export function setOccurrenceSkip(host: SkipHost, id: string, at: number, skip: boolean, now: number): { routine: Routine } | { error: string } | null {
   const seen = host.listRoutines().find((candidate) => candidate.id === id);
