@@ -21,7 +21,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
-function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean; resumes?: boolean; threadRefusal?: (threadId: string, mode: string) => string | null } = {}) {
+function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: boolean; group?: boolean; window?: boolean; pictureRefusal?: string; patchRefusal?: string; automated?: boolean; resumes?: boolean; threadRefusal?: (threadId: string, mode: string) => string | null; people?: { place?: "desktop" | "team" | "cloud-home" | "server"; email?: boolean; accessRefusal?: string } } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "app-settings-"));
   dirs.push(dataDir);
   const bots: BotRecord[] = [
@@ -30,12 +30,15 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
   ];
   const cfg = { language: "en", rooms: { turnTimeoutMinutes: 30 }, mcp: {}, threads: { maxConcurrentPerBot: 3 }, openai: { key: OPENAI_KEY }, anthropic: { url: "https://api.anthropic.com" },
     instances: { "openai-compat-gw": { driver: "openai-compat", displayName: "Gateway", config: { key: GATEWAY_KEY, url: "https://gw.example/v1" } } } } as unknown as AppConfig;
+  if (options.people) (cfg as { signIn?: unknown }).signIn = { admins: ["boss@acme.com"], members: ["ann@acme.com"] };
+  const grants: Record<string, { departments: Array<{ name: string; level: string }>; bots: Array<{ id: string; level: string }> }> = {};
   const engineCalls: unknown[] = [];
   const engines = [{ instanceId: "claude", name: "Claude", working: true }, { instanceId: "openai-compat-gw", name: "Gateway", working: true }];
   const botPatches: Array<{ botId: string; body: Record<string, unknown> }> = [];
   const threads: Record<string, Record<string, string>> = { kiwi: { "t-kiwi": "full", "t-kiwi-2": "full" }, clive: { "t-clive": "ask", "t-clive-2": "ask" } };
   const routeCalls: unknown[] = [];
   const saved: Record<string, unknown>[] = [];
+  const order: string[] = [];
   const messages: Array<Record<string, any>> = [];
   const windowValues = new Map<string, unknown>(options.window === false ? [] : [["appearance.skin", "daylight"]]);
   const store = {
@@ -59,6 +62,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
     saveConfig: async (patch) => {
       if (patch.anthropic && typeof patch.anthropic === "object" && (patch.anthropic as { url?: string }).url === "https://refused.example") return "the provider refused it";
       saved.push(patch);
+      order.push("lists");
       Object.assign(cfg, patch);
       return null;
     },
@@ -80,7 +84,17 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
       Object.assign(threads[botId]!, modes);
       return null;
     },
-    call: async (route, method, path, body) => { routeCalls.push({ route, method, path, body }); return null; },
+    call: async (route, method, path, body) => {
+      routeCalls.push({ route, method, path, body });
+      order.push("access");
+      if (route === "departmentAccess" && options.people?.accessRefusal) return options.people.accessRefusal;
+      if (route === "departmentAccess") {
+        const entry = String(body?.entry);
+        if (body?.access) grants[entry] = body.access as never;
+        else delete grants[entry];
+      }
+      return null;
+    },
     read: async (_route, path) => (path === "/api/skills-library" ? { skills: [{ name: "notes", enabled: false, everyBot: false }] } : null),
     paused: () => [],
     pinBot: async (botId, pinned) => { (bots.find((bot) => bot.id === botId) as { pinned?: boolean }).pinned = pinned || undefined; return null; },
@@ -100,6 +114,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
     },
     removeEngine: async (instanceId) => { engineCalls.push({ remove: instanceId }); engines.splice(engines.findIndex((engine) => engine.instanceId === instanceId), 1); return null; },
     imageReady: (provider) => provider === "openai",
+    people: { place: () => options.people?.place ?? "server", emailSignIn: () => options.people?.email !== false, publicUrl: () => "https://team.example.org", grants: () => grants as never },
   });
   const clock = { at: 1_700_000_000_000 };
   const resumed: Array<{ threadId: string; messageId: string; text: string }> = [];
@@ -137,7 +152,7 @@ function fixture(options: { owner?: boolean; verdict?: SettingsVerdict; guest?: 
     return { posted, applied: await resolve(String(card.requestId), "allow"), requestId: String(card.requestId) };
   };
   const decisions = async () => { await flushDecisionLog(dataDir); return readDecisions(dataDir, 100); };
-  return { host, build, threads, cfg, saved, messages, cards, waiting, resolve, setAndApply, decisions, clock, resumed, verdict, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles };
+  return { host, build, threads, cfg, saved, messages, cards, waiting, resolve, setAndApply, decisions, clock, resumed, verdict, credentialCards, windowValues, bots, turn, set, undo, dataDir, engineCalls, botPatches, routeCalls, engines, pictureFiles, grants, order };
 }
 
 describe("a set to the value the setting already has", () => {
@@ -434,7 +449,7 @@ describe("owner-only tier", () => {
     const { host, set, turn, cards, saved, routeCalls } = fixture();
     const got = await host.handle({ action: "get", id: "vault.logins" }, turn);
     expect(JSON.parse(String(got.body.text))).toMatchObject({ tier: "owner-only", change: "only the person, in Settings → Vault" });
-    for (const id of ["cloud.account", "vault.logins", "phone.pairing", "data.backups", "people.signIn", "remote.domain", "remote.httpsAddress"]) {
+    for (const id of ["cloud.account", "vault.logins", "phone.pairing", "data.backups", "remote.domain", "remote.httpsAddress"]) {
       const refused = await set(id, "on");
       expect(refused.status, id).toBe(403);
       expect(refused.body.error, id).toMatch(/ is changed only by the person, in Settings → .+\. Tell them where in one line; do not try another way\.$/);
@@ -455,6 +470,132 @@ describe("owner-only tier", () => {
     expect(fx.windowValues.get("remote.relay")).toBe(true);
     expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
     expect(fx.windowValues.get("remote.relay")).toBe(false);
+  });
+});
+
+describe("people who sign in", () => {
+  const lists = (fx: ReturnType<typeof fixture>) => (fx.cfg as { signIn?: { admins: string[]; members: string[] } }).signIn;
+
+  it("invites a person as a user of the whole team only after the admin taps Apply", async () => {
+    const fx = fixture({ people: {} });
+    const posted = await fx.set("people.signIn", { email: "New@Acme.com" });
+    expect(String(posted.body.text)).toContain("Nothing has changed yet");
+    expect(lists(fx)!.members).toEqual(["ann@acme.com"]);
+    const card = fx.cards().at(-1)!.card;
+    expect(card.appSettingRequest).toMatchObject({ settingId: "people.signIn", consequence: "new@acme.com can sign in and sees the whole team." });
+    expect(card.subtitle).toBe("Invite new@acme.com as user, sees the whole team. They sign in at https://team.example.org.");
+    expect(fx.routeCalls).toEqual([]);
+    await fx.resolve(String(card.requestId), "allow");
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com", "new@acme.com"] });
+    expect(fx.routeCalls).toEqual([]);
+  });
+
+  it("gives a person chosen departments and bots through the access route, and Undo sets the earlier state back", async () => {
+    const fx = fixture({ people: {} });
+    await fx.set("people.signIn", { email: "pat@acme.com", sees: { departments: ["sales"], bots: ["Clive"] } });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("pat@acme.com can sign in and sees only: Sales, Clive.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(lists(fx)!.members).toContain("pat@acme.com");
+    expect(fx.routeCalls).toEqual([{ route: "departmentAccess", method: "PUT", path: "/api/department-access", body: {
+      entry: "pat@acme.com", admitBots: true, access: { departments: [{ name: "Sales", level: "chat" }], bots: [{ id: "clive", level: "chat" }] } } }]);
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(lists(fx)!.members).not.toContain("pat@acme.com");
+    expect(fx.grants["pat@acme.com"]).toBeUndefined();
+  });
+
+  it("changes only what is named: a person keeps their role when the bot changes their access", async () => {
+    const fx = fixture({ people: {} });
+    await fx.set("people.signIn", { email: "ann@acme.com", sees: { departments: ["Sales"] } });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(fx.saved).toEqual([]);
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "chat" }], bots: [] });
+    const again = await fx.set("people.signIn", { email: "ann@acme.com", sees: { departments: ["Sales"] } });
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe("ann@acme.com already has this.");
+  });
+
+  it("makes a person an admin with a card that says what an admin can do, and drops their limits", async () => {
+    const fx = fixture({ people: {} });
+    fx.grants["ann@acme.com"] = { departments: [{ name: "Sales", level: "chat" }], bots: [] };
+    await fx.set("people.signIn", { email: "ann@acme.com", role: "admin" });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("ann@acme.com can sign in as an admin and change every setting on this server.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com", "ann@acme.com"], members: [] });
+    expect(fx.grants["ann@acme.com"]).toBeUndefined();
+  });
+
+  it("removes a person and their limits, and Undo brings both back", async () => {
+    const fx = fixture({ people: {} });
+    fx.grants["ann@acme.com"] = { departments: [{ name: "Sales", level: "chat" }], bots: [] };
+    await fx.set("people.signIn", { email: "ann@acme.com", role: "none" });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("ann@acme.com can no longer sign in. Anyone who is signed in now is signed out.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: [] });
+    expect(fx.grants["ann@acme.com"]).toBeUndefined();
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com"] });
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "chat" }], bots: [] });
+  });
+
+  it("writes nothing when the one who taps Apply is no admin", async () => {
+    const fx = fixture({ people: {} });
+    await fx.set("people.signIn", { email: "new@acme.com" });
+    const denied = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow", false);
+    expect(denied.status).toBe(403);
+    expect(lists(fx)!.members).toEqual(["ann@acme.com"]);
+    expect(fx.routeCalls).toEqual([]);
+    expect(fx.saved).toEqual([]);
+  });
+
+  it("saves a new person's limits before the list lets them in, and a removal or promotion after the list", async () => {
+    const fx = fixture({ people: {} });
+    await fx.set("people.signIn", { email: "pat@acme.com", sees: { bots: ["Clive"] } });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(fx.order).toEqual(["access", "lists"]);
+    fx.order.length = 0;
+    await fx.set("people.signIn", { email: "pat@acme.com", role: "none" });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(fx.order).toEqual(["lists", "access"]);
+  });
+
+  it("leaves the sign-in lists as they were when the access change is refused", async () => {
+    const fx = fixture({ people: { accessRefusal: "That bot is shared with too many people already." } });
+    await fx.set("people.signIn", { email: "pat@acme.com", sees: { bots: ["Clive"] } });
+    const applied = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(JSON.stringify(applied.body)).toContain("That bot is shared with too many people already.");
+    expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com"] });
+    expect(fx.order).toEqual(["access"]);
+  });
+
+  it("refuses the only admin's removal, an unknown department or bot, an empty choice and a domain with bots", async () => {
+    const fx = fixture({ people: {} });
+    const refused = async (value: unknown) => (await fx.set("people.signIn", value)).body.error;
+    expect(await refused({ email: "boss@acme.com", role: "none" })).toMatch(/^This is the only admin\./);
+    expect(await refused({ email: "x@acme.com", sees: { departments: ["Nope"] } })).toBe("No department is named Nope.");
+    expect(await refused({ email: "x@acme.com", sees: { bots: ["Nobody"] } })).toBe("No bot is named Nobody. Use list_bots for the names.");
+    expect(await refused({ email: "x@acme.com", sees: {} })).toBe("Choose at least one department or bot, or give the whole team.");
+    expect(await refused({ email: "@acme.com", sees: { bots: ["Clive"] } })).toBe("To give access to chosen bots, invite each person by their own address.");
+    expect(await refused({ email: "not an address" })).toBe("Enter an email address or @domain.");
+    expect(fx.cards()).toEqual([]);
+    expect([lists(fx), fx.routeCalls]).toEqual([{ admins: ["boss@acme.com"], members: ["ann@acme.com"] }, []]);
+  });
+
+  it("refuses on the app's own computer, a Team, My Cloud and a server with no email sign-in, with a plain reason and no card", async () => {
+    for (const people of [{ place: "desktop" }, { place: "team" }, { place: "cloud-home" }, { email: false }] as const) {
+      const fx = fixture({ people });
+      const refused = await fx.set("people.signIn", { email: "new@acme.com" });
+      expect(refused.status).toBe(409);
+      expect(String(refused.body.error)).not.toMatch(/Settings →|\/api|signIn|cfg/);
+      expect(fx.cards()).toEqual([]);
+      expect(fx.routeCalls).toEqual([]);
+    }
+  });
+
+  it("reads as counts, never as addresses", async () => {
+    const fx = fixture({ people: {} });
+    const got = await fx.host.handle({ action: "get", id: "people.signIn" }, fx.turn);
+    expect(JSON.stringify(got.body)).not.toMatch(/@acme\.com/);
+    expect(JSON.stringify(got.body)).toContain("1 admin, 1 other entry");
   });
 });
 
