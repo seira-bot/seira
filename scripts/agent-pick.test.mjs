@@ -71,7 +71,7 @@ function makeWorld({ issues = [], prs = [], windowLabel = true, events = {}, com
     assignees: each.assignees.map((login) => ({ login })),
   });
   const page = (items, query) => {
-    const number = Number(/page=(\d+)/.exec(query)?.[1] ?? 1);
+    const number = Number(/(?:^|&)page=(\d+)/.exec(query)?.[1] ?? 1);
     return items.slice((number - 1) * 100, number * 100);
   };
   const notFound = () => Object.assign(new Error("not found"), { status: 404 });
