@@ -52,7 +52,7 @@ export function todoActivity(todo: Todo, ctx: Context): ActivityItem[] {
   const maker = makerName(todo.madeBy, bots);
   const items: ActivityItem[] = [{
     key: "made", at: todo.createdAt, botId: todo.madeBy.kind === "bot" ? todo.madeBy.botId : undefined,
-    text: todo.source ? t("board.activity.madeFromChat", { name: maker }) : t("board.activity.made", { name: maker }),
+    text: todo.source?.messageId ? t("board.activity.madeFromChat", { name: maker }) : t("board.activity.made", { name: maker }),
   }];
   if (todo.pickedBy) items.push({ key: "picked", botId: todo.pickedBy.botId, text: t("board.activity.picked", { picker: nameOf(todo.pickedBy.botId), bot: bot?.name ?? "", reason: todo.pickedBy.reason }) });
   if (todo.startedAt) items.push({ key: "started", at: todo.startedAt, botId: todo.botId, text: t("board.activity.started", { bot: bot?.name ?? "" }) });

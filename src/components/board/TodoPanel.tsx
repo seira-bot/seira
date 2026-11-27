@@ -155,7 +155,7 @@ export function TodoPanel({ card, todo, bots, picker, todos, cards, onClose, onO
           <button type="button" onClick={() => setWhen(null)} className={PANEL_ACTION}>{t("board.newTodo.cancel")}</button>
         </div>
       )}
-      {todo.source && <SourceBlock who={maker} todo={todo} onOpen={openMessage} />}
+      {todo.source?.messageId && <SourceBlock who={maker} todo={todo} onOpen={openMessage} />}
       {todo.routineId && <RoutineBlock routine={routine} runs={state.routineRuns} />}
       {todo.note && <Block label={t("todo.fields.note")} text={todo.note} />}
       {question && <Block label={t("board.panel.asked")} text={question} />}
