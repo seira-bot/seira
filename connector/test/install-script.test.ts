@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { CONNECTOR_IMAGE } from "../src/protocol.ts";
 import { APPARMOR_PROFILE, LABELS, LEGACY_LABELS, NAMES, PATHS, SECCOMP_FILE } from "../src/settings.ts";
 
 const SCRIPT = join(import.meta.dirname, "..", "install.sh");
@@ -147,6 +148,55 @@ describe("install.sh", () => {
     const odd = run(["MB-1A2B;reboot"]);
     expect(odd.stderr).toContain("That code doesn't look right. Copy the install command from Seira again.");
     expect(odd.calls).toEqual([]);
+  });
+
+  describe("the connector image Seira fills in", () => {
+    const REFUSAL = "The connector image is not one Seira publishes, or it does not name a full digest. Copy the install command from Seira again.";
+    const digest = `@sha256:${"1".repeat(64)}`;
+    const refused = (image: string, env: Record<string, string> = {}) => {
+      const result = run(["MB-1A2B-3C4D"], { env: { SEIRA_CONNECTOR_IMAGE: image, ...env } });
+      return result.stderr.includes(REFUSAL) && result.calls.length === 0;
+    };
+
+    it.skipIf(!posix)("starts only an image of Seira's own repositories that is named by a full digest", () => {
+      // The current name and the name before the rename: the same two the connector accepts for its own update.
+      for (const image of [`ghcr.io/seira-bot/seira-connector${digest}`, `ghcr.io/milind-soni/mausbot-connector${digest}`]) {
+        expect(refused(image), image).toBe(false);
+        expect(CONNECTOR_IMAGE.test(image), image).toBe(true);
+      }
+    });
+
+    it.skipIf(!posix)("refuses a tag, another owner or name, and a digest that is not 64 lowercase hex digits, before it touches Docker", () => {
+      const refusedImages = [
+        "ghcr.io/seira-bot/seira-connector:latest", "ghcr.io/seira-bot/seira-connector:v0.1.194", "ghcr.io/seira-bot/seira-connector",
+        `ghcr.io/someone-else/seira-connector${digest}`, `ghcr.io/seira-bots/seira-connector${digest}`, `ghcr.io/seira-bot/seira-connector-evil${digest}`,
+        `ghcr.io/seira-bot/seira${digest}`, `docker.io/seira-bot/seira-connector${digest}`,
+        `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(63)}`, `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(65)}`,
+        `ghcr.io/seira-bot/seira-connector@sha256:${"A".repeat(64)}`, `ghcr.io/seira-bot/seira-connector@sha256:${"g".repeat(64)}`,
+        `ghcr.io/seira-bot/seira-connector${digest} --privileged`, `ghcr.io/seira-bot/seira-connector${digest};reboot`,
+        `ghcr.io/seira-bot/seira-connector${digest}${digest}`, `ghcr.io/seira-bot/seira-connector${digest}\nghcr.io/evil/x`,
+        `ghcr.io/seira-bot/seira-connector:v0.1.194${digest}`, "seira-connector:e2e",
+      ];
+      for (const image of refusedImages) {
+        expect(refused(image), image).toBe(true);
+        // The connector's own check agrees with the installer on each of them.
+        expect(CONNECTOR_IMAGE.test(image), image).toBe(false);
+      }
+    });
+
+    it.skipIf(!posix)("takes a local image only when the run says so with SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE=1, and then says so", () => {
+      expect(refused("seira-connector:e2e")).toBe(true);
+      expect(refused("seira-connector:e2e", { SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE: "yes" })).toBe(true);
+      const local = run(["MB-1A2B-3C4D"], { env: { SEIRA_CONNECTOR_IMAGE: "seira-connector:e2e", SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE: "1" } });
+      expect(local.stderr).not.toContain(REFUSAL);
+      expect(local.stdout).toContain("without checking it (SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE=1)");
+    });
+
+    it("keeps the image check before the first thing the installer changes, and out of uninstall", () => {
+      expect(script).toContain("check_connector_image\n}");
+      expect(script.indexOf("need_settings\n")).toBeLessThan(script.indexOf("check_os\n  check_arch"));
+      expect(run(["uninstall"], { env: { SEIRA_CONNECTOR_IMAGE: "" } }).stderr).not.toContain(REFUSAL);
+    });
   });
 
   it("starts a customer-run connector with its mode and the updater's folder, and only where Seira is already installed", () => {

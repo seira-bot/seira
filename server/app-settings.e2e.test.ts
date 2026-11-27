@@ -2,7 +2,7 @@
 // The bot is on Full access and the fixture is a single-person desktop: a safe value in a clean conversation applies at once
 // with Undo; a value with lasting effects, or a conversation another person wrote into, waits for a tap on a card.
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchVerificationServer, verificationServerArgs, verificationServerEnvironment, type VerificationServer } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const SECRET = "sk-test-123";
 const XAI_URL = "https://example.test/v1";
@@ -35,8 +36,7 @@ const api = async (method: string, path: string, body?: unknown, status = 200, t
 const config = () => JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
 const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=200`)).messages as any[];
 const settingCards = async (threadId: string) => (await messages(threadId)).filter((message) => message.card?.appSettingRequest);
-const providerTurns = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-  ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const providerTurns = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
 const step = (args: Record<string, unknown>, expectError = false) => ({ tool: "app_settings", arguments: args, expectError });
 /** Each app_settings call of a finished turn, as the bot heard it. */
 const results = (turn: any) => turn.evidence.filter((entry: any) => entry.step).map((entry: any) => ({

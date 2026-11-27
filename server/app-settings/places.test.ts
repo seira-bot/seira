@@ -75,7 +75,15 @@ describe("UI map search", () => {
 
   it("limits what it returns and names where a control shows only on one kind of place", () => {
     expect(findUiPlaces("sidebar", 3)).toHaveLength(3);
-    expect(findUiPlaces("invite someone")[0]).toContain("Only on admins of a team or shared server.");
+    expect(findUiPlaces("invite someone")[0]).toContain("Only on admins of a Team Cloud.");
+  });
+
+  it("names a server in the desktop window for People, and never the app's own computer", () => {
+    for (const id of ["page:people", "members"]) {
+      const place: SettingsPlace = SETTINGS_PLACES.find((one) => one.id === id)!;
+      expect(place.path, id).toMatch(/^Settings → People/);
+      expect(place.only, id).toMatch(/Team Cloud.*self-hosted server.*Connect to a server.*never the desktop app's own computer/);
+    }
   });
 
   it("holds an entry for each area the issue names", () => {

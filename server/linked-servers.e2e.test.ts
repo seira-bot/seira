@@ -7,6 +7,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { decodeInvite, encodeInvite } from "./host/linked-servers-store.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 type Fixture = Awaited<ReturnType<typeof launchVerificationServer>>;
 type Json = Record<string, unknown>;
@@ -33,8 +34,7 @@ function place(fixture: Fixture) {
     url, dataDir, api, call,
     cli: (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<Json>,
     plan(botId: string, ...turns: unknown[]) { (plans[botId] ??= { turns: [] }).turns.push(...turns); writeFileSync(planPath, JSON.stringify(plans)); },
-    providerTurns: (): Array<{ botId: string; permissionMode?: string; approval?: { behavior: string } }> => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [],
+    providerTurns: (): Array<{ botId: string; permissionMode?: string; approval?: { behavior: string } }> => readJsonLines(`${planPath}.evidence.jsonl`),
     messages: async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as Message[],
     links: async () => (await api("GET", "/api/linked-servers")).servers as LinkRow[],
     /** Approval cards that wait for an answer in any conversation of this bot. */

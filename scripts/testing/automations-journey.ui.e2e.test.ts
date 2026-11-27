@@ -3,7 +3,7 @@
 // screenshot. Run with SEIRA_UI_E2E=1; SEIRA_AUTOMATIONS_JOURNEY_SHOTS=DIR keeps the screenshots there.
 import { type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -17,6 +17,7 @@ import { launchRestartableServer, type RestartableServer } from "../../server/te
 import { runControlSeira } from "../control-seira.ts";
 import { agentBrowser, ensureUiBrowser, sessionEnv, type UiHandle } from "./control-seira-ui.ts";
 import { mountPreview } from "./preview-fixture.ts";
+import { readJsonLines } from "../../server/testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SHOTS = process.env.SEIRA_AUTOMATIONS_JOURNEY_SHOTS || join(ROOT, ".seira-scratch", "automations-journey");
@@ -525,8 +526,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
       { key: "chat", match: [""], repeat: true, steps: [], reply: "OK." },
     ];
     writeFileSync(cloud.planPath, JSON.stringify({ [scout]: { script }, [ledger]: { script } }));
-    const turns = () => existsSync(`${cloud.planPath}.evidence.jsonl`)
-      ? readFileSync(`${cloud.planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const turns = () => readJsonLines(`${cloud.planPath}.evidence.jsonl`);
     const state = async () => ({ ...(await api("GET", "/api/routines")), ...(await api("GET", "/api/webhooks")) }) as { routines: any[]; runs: any[]; webhooks: any[] };
 
     app = await openApp({ url: cloud.url, port: cloud.port, dataDir: cloud.dataDir, logPath: cloud.logPath }, { shots, bots: { Scout: scout, Ledger: ledger }, proxyHeaders: cloud.owner });

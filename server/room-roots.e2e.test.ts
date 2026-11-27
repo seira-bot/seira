@@ -13,6 +13,7 @@ import { freePortBlock } from "./testing/ports.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
 import { withAnswer } from "./testing/your-computer.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const RERUN_NOTE = "Seira restarted while your previous turn here was running";
@@ -24,8 +25,7 @@ const SETTLED = "Your downstream room requests have settled.";
 const GOAL_RUN_ENDED = "The goal run this step belonged to ended with the restart.";
 const INTERRUPTED_LINE = "turn interrupted — Seira restarted";
 
-const jsonl = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string): any[] => readJsonLines(path);
 
 type Row = Record<string, any>;
 interface RuntimeDb {

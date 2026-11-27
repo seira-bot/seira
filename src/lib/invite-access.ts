@@ -3,6 +3,7 @@ import { useStore } from "@/state/store";
 import { useOwnerOrAdmin } from "./use-owner-or-admin";
 import { readMembership } from "./membership";
 import { teamOfConfig } from "@/state/team-chats";
+import { pageIsThisComputer } from "./companion-bridge";
 import type { BotVisibility } from "../../shared/wire";
 
 export interface InviteEnvironment {
@@ -23,10 +24,10 @@ export function readInviteEnvironment(): Promise<InviteEnvironment | null> {
   return environment;
 }
 
-export function mayInviteHere(input: { admin: boolean | null; desktop: boolean; config: unknown; environment: InviteEnvironment | null }): boolean {
+export function mayInviteHere(input: { admin: boolean | null; here: boolean; config: unknown; environment: InviteEnvironment | null }): boolean {
   const config = (input.config ?? null) as { cloudHome?: unknown } | null;
   return input.admin === true
-    && !input.desktop
+    && !input.here
     && config !== null
     && config.cloudHome !== true
     && teamOfConfig(config) === null
@@ -46,7 +47,7 @@ export function useMayInvite(): boolean {
     void readInviteEnvironment().then((found) => { if (alive) setEnv(found); });
     return () => { alive = false; };
   }, []);
-  return mayInviteHere({ admin, desktop: typeof window !== "undefined" && Boolean(window.ogb), config: state.config, environment: env });
+  return mayInviteHere({ admin, here: pageIsThisComputer(), config: state.config, environment: env });
 }
 
 /** Whether a bot is shared with only some people, so that inviting this entry has to add it to them. */

@@ -1,19 +1,18 @@
 // A webhook automation's private address, end to end on a real server with the scripted engine: the bot that owns it gets
 // it when it creates the automation and on request, so it can set up the sending app itself; a Chief of Staff that reaches
 // it does too; a teammate, a Chief with another audience and a run an outside event started do not; the transcript masks it.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 type Entry = { step?: { tool: string }; response: any };
 
 it("gives the address to the owning bot and its Chief, never to a teammate, another audience or an outside event's run", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const turns = () => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    : [];
+  const turns = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${fixture.info.url}${path}`, {
       method, headers: { "content-type": "application/json", origin: fixture.info.url },

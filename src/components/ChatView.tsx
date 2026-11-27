@@ -7,9 +7,9 @@ import { AlertTriangle, ChevronRight, Monitor, RefreshCw, Square, Webhook } from
 import { WorkingDots } from "@/components/WorkingIndicator";
 import { ChatBusyContext, CopyButton, MESSAGE_ROW, MessageActions, messageActionClass, ReplyAction } from "@/components/MessageActions";
 import { ReactAction, ReactionChips } from "@/components/Reactions";
-import { replyAndCopy, useBotMessageMenu, userMessageMenu } from "@/components/message-menu";
+import { replyAndCopy, useBotMessageMenu, userMessageMenu, userSaveItems } from "@/components/message-menu";
 import { forkMessageItem, ForkLinks } from "@/components/ForkMessage";
-import { savesToTeamMemory, TEAM_MEMORY_ITEM, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
+import { savesToTeamMemory, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { localSystemVoiceActive } from "@/lib/local-voice";
 import { computerStartLine, useScreensWhile } from "@/lib/computer-start";
@@ -79,7 +79,7 @@ import { DataResultChip } from "./DataResultChip"; import { PublishedPageCard } 
 import { ThreadRefText } from "./ThreadRefs"; import { WatchScreenButton } from "./WatchScreenButton";
 import { optionsCardRow } from "./OptionsCardRow";
 import { MessageBoundary } from "./MessageBoundary";
-import { RichMessageRow, UserLineNote, richRowKind } from "./RichMessageRow"; import { SetupOffer } from "./SetupOffer"; import { SavedStepsChip } from "./SavedStepsChip";
+import { RichMessageRow, UserLineNote, richRowKind } from "./RichMessageRow"; import { TodoChips, useTodoChips } from "./todo/TodoChips"; import { SetupOffer } from "./SetupOffer"; import { SavedStepsChip } from "./SavedStepsChip";
 import { Composer } from "./Composer";
 import { ChatErrorBanner, ChatNotice } from "./ChatErrorBanner";
 import { ThreadContextWarning } from "./ContextWarning";
@@ -354,7 +354,7 @@ const Bubble = memo(function Bubble({
   const text = user ? rawText : stripLeakedSystemHarnessMessages(rawText);
   const botMenu = useBotMessageMenu({
     text,
-    botId, threadId,
+    botId, threadId, todo: { threadId, botId, who: user ? undefined : botName, at: message.at, user },
     messageId: message.id,
     voiceId,
     tts,
@@ -445,7 +445,7 @@ const Bubble = memo(function Bubble({
             menu={[
               ...(advanced ? [] : replyAndCopy(() => onReply(message), visibleText)),
               ...userMessageMenu({
-                messageId: message.id, save: botMenu.filter((item) => item.key === TEAM_MEMORY_ITEM),
+                messageId: message.id, save: userSaveItems(botMenu),
                 onEdit: !speaker && message.kind === "text" && !webhookView && !hasAttachments && !message.id.startsWith("optimistic-")
                   ? () => onStartEdit(message.id) : undefined,
                 pin: remoteClient ? undefined : { pinned, onToggle: togglePin },
@@ -659,7 +659,7 @@ const MessagesList = memo(function MessagesList({
   onReply: (message: Message) => void;
 }) {
   const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, dispatch, canReact, simple = false, advanced = false } = useChatRows(), busy = use(ChatBusyContext);
-  const messages = useLiveTranscript(threadId, saved, transcript);
+  const messages = useLiveTranscript(threadId, saved, transcript); const todoChips = useTodoChips();
   // A finished turn keeps the bot's progress lines and folds only its tool steps under "Worked for", in both modes.
   const items = useMemo(() => groupTranscript(messages), [messages, locale]);
   const { liveStart, traces } = useAdvancedTurns({ advanced, busy, showToolCalls, items, messages });
@@ -799,7 +799,7 @@ const MessagesList = memo(function MessagesList({
             {newDay && <DaySeparator at={m.at} today={today} simple={simple} />}
             {divider}
             {m.automation && <AutomationCaption message={m} line={m.automation} botId={botId} />}{m.inbox && <InboxCaption message={m} />}
-            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{(m.teamSuggestion || m.teamIntro) && <TeamBlocks message={m} botId={botId} threadId={threadId} />}{m.bugOffer && m.role !== "user" && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
+            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<TodoChips messageId={m.id} chips={todoChips} end={m.role === "user"} /><PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{(m.teamSuggestion || m.teamIntro) && <TeamBlocks message={m} botId={botId} threadId={threadId} />}{m.bugOffer && m.role !== "user" && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
           </div>
         );
       })}

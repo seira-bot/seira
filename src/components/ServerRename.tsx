@@ -19,7 +19,7 @@ export function ServerRename({ id, name, onRename, onDone, maxLength = 60, ariaL
     setBusy(true); setSaid(null);
     void onRename(id, next).then((outcome) => {
       setBusy(false);
-      if (outcome === "saved") { onDone(); return; }
+      if (outcome === "saved" || outcome === "gone") { onDone(); return; }
       setSaid(outcome === "taken" || outcome === "name" ? outcome : "failed");
     });
   };

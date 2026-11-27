@@ -96,6 +96,7 @@
     "f11f221876276f81"
   ],
   "connector/install.sh": [
+    "6d94dacf1986c064",
     "cd2688167a09acd1"
   ],
   "connector/src/adopted-home.ts": [
@@ -127,18 +128,15 @@
     "d00a235713a5fdc9"
   ],
   "connector/test/audit.test.ts": [
-    "42fb565ed9d13522",
-    "89325fb38d02f613"
+    "42fb565ed9d13522"
   ],
   "connector/test/customer-run.test.ts": [
     "341d92eb194021c1",
     "5711e191bb986e7a",
-    "68ff2dfddd1cddf6",
     "6b00ae3f3d797e67",
     "7810ca8bf65ebb95",
     "a1bfcdf69fd3c3db",
     "ba43d67b66719b07",
-    "e2d79e40821a1b6b",
     "fceab757e7b0d66b"
   ],
   "connector/test/home-health-headers.test.ts": [
@@ -153,6 +151,7 @@
     "a5de405bf719e2d5"
   ],
   "connector/test/install-script.test.ts": [
+    "12f9b9ee3eaa4028",
     "3de6f484494db6ae",
     "d48101fd9e244823"
   ],
@@ -162,11 +161,11 @@
   "connector/test/protocol.test.ts": [
     "0a5ad6a1c8c469bc",
     "42fb565ed9d13522",
+    "50a5b18d29394391",
     "a907841d4b80a80d",
     "b40d108d46ec16ce",
     "b5daf609ab5fde11",
-    "b5fbf290d1d3d900",
-    "cbd3c66e6dd9615c"
+    "b5fbf290d1d3d900"
   ],
   "connector/test/update-runner.test.ts": [
     "02ade7b3e1d8a588",

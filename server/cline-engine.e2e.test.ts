@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("offers configured Cline to Chief team setup and runs a Cline specialist in the isolated server", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true }, ["cline"]);
@@ -21,7 +22,7 @@ it("offers configured Cline to Chief team setup and runs a Cline specialist in t
     writeFileSync(plan, JSON.stringify({ [chief.id]: { turns: [{ steps: [{ tool: "list_team_setup", arguments: {} }], reply: "Catalog checked" }] } }));
     await cli("send", "--bot", chief.id, "--task", chief.activeTaskId, "--text", "Check the team catalog");
     expect((await cli("wait", "--bot", chief.id, "--task", chief.activeTaskId, "--timeout", "25")).status).toBe("settled");
-    const turn = JSON.parse(readFileSync(`${plan}.evidence.jsonl`, "utf8").trim().split("\n").at(-1)!);
+    const turn = readJsonLines(`${plan}.evidence.jsonl`).at(-1)!;
     const call = turn.evidence.find((entry: any) => entry.step?.tool === "list_team_setup");
     const catalog = JSON.parse(call.response.result.content[0].text);
     expect(catalog.instances).toContainEqual(expect.objectContaining({ instanceId: "cline", driverKind: "clineAgent", state: "available",

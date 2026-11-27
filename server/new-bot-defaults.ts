@@ -54,6 +54,7 @@ export const botDefaultsProfileSchema = z.preprocess(withoutRetiredFields, profi
   toolScope: z.custom<ToolScope>((value) => value !== undefined && parseToolScope(value).ok, "Invalid tool selection")
     .transform((value) => { const parsed = parseToolScope(value); return parsed.ok ? parsed.scope! : value; }).nullable().optional(),
   parkDirectMessages: z.boolean().optional(),
+  startsTodos: z.enum(["manual", "auto"]).transform((value) => (value === "manual" ? "manual" as const : undefined)).optional(),
   voiceNotes: z.boolean({ error: "voiceNotes must be true or false" }).optional(),
   voiceNoteEveryReply: z.boolean({ error: "voiceNoteEveryReply must be true, false or null" }).nullable().optional(),
   /** At creation, so a copy of a bot kept off the helper model is off it from its first moment. */
