@@ -350,8 +350,12 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
     }
   }, [filePath, entry, message?.messageId, message?.threadId, name]);
 
-  const outsideWorkspace = failureCode === "outside_workspace"; // Retrying can't move a file into the folder or make it smaller.
+  const outsideWorkspace = isOutsideWorkspaceFailure(failureCode); // Retrying can't move a file into the folder or make it smaller.
   return { state, reason, savedTo, outsideWorkspace, retryable: state === "failed" && !outsideWorkspace && failureCode !== "file_too_large", folder, save };
+}
+
+export function isOutsideWorkspaceFailure(code: unknown): boolean {
+  return code === "outside_workspace";
 }
 
 export function saveFailureText(save: { reason: string; outsideWorkspace: boolean }): string {
