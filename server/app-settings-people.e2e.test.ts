@@ -48,6 +48,11 @@ const start = async (key: string, steps: unknown[]) => {
   writeFileSync(planPath, JSON.stringify(plans));
   await api("POST", `/api/bots/${bot.id}/messages`, { threadId: bot.threadId, text: `${key}: please change who signs in.` }, 202);
 };
+/** The turn Seira resumes the bot with once a card is answered: its own plan, so the next request does not wait behind it. */
+const hears = (key: string, heard: string) => {
+  plans[bot.id]!.script.push({ key, match: [heard], steps: [], reply: `Done: ${key}`, timeoutMs: 20_000 });
+  writeFileSync(planPath, JSON.stringify(plans));
+};
 const finished = async (key: string) => {
   let turn: any;
   await expect.poll(() => (turn = providerTurns().find((candidate) => candidate.planKey === key)) !== undefined, { timeout: 30_000 }).toBe(true);
@@ -102,6 +107,7 @@ it("a server with a mail server address on this machine says it signs people in 
 });
 
 it("a bot's invite waits on a card and changes nothing, a phone without admin rights cannot apply it, and the owner's phone applies it", async () => {
+  hears("INVITE-HEARD", "The user applied the change: People who sign in");
   await start("INVITE", [invite({ email: NEWCOMER, sees: { departments: ["General"] } })]);
   const turn = await finished("INVITE");
   const [asked] = results(turn);
@@ -118,6 +124,7 @@ it("a bot's invite waits on a card and changes nothing, a phone without admin ri
   expect(await grants()).toEqual({});
 
   expect(await respond(card.requestId, ownerDevice)).toMatchObject({ ok: true });
+  await finished("INVITE-HEARD");
   expect((await signIn()).members).toEqual([NEWCOMER]);
   expect((await grants())[NEWCOMER]).toEqual({ departments: [{ name: "", level: "chat" }], bots: [] });
 }, 90_000);

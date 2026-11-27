@@ -12,6 +12,9 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const fixtureFlag = "--seira-invite-from-desktop-fixture";
 const GUEST = "guest@corp.test";
+// A value as a JavaScript literal for code the page runs: JSON, with the characters that can end a script or a line escaped.
+const UNSAFE = { "<": "\\u003C", ">": "\\u003E", "/": "\\u002F", "\u2028": "\\u2028", "\u2029": "\\u2029" };
+const literal = (value) => JSON.stringify(value).replace(/[<>/\u2028\u2029]/g, (one) => UNSAFE[one]);
 
 if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   const { app, BrowserWindow, ipcMain, session } = await import("electron");
@@ -79,8 +82,8 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
         console.error(String(await evaluate("document.body.innerText")).slice(0, 1500));
         throw new Error(`${name}: timed out: ${description}`);
       };
-      const clickButton = (label, within = "document") => evaluate(`(() => { const el = [...${within}.querySelectorAll('button')].find((one) => one.textContent.trim() === ${JSON.stringify(label)}); if (!el) throw new Error('No button ${label}'); el.click(); })()`);
-      const has = (selector) => evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      const clickButton = (label, within = "document") => evaluate(`(() => { const el = [...${within}.querySelectorAll('button')].find((one) => one.textContent.trim() === ${literal(label)}); if (!el) throw new Error('No button ' + ${literal(label)}); el.click(); })()`);
+      const has = (selector) => evaluate(`Boolean(document.querySelector(${literal(selector)}))`);
       await until(() => has('button[aria-label="Settings"]'), "app shell with the Settings button");
       const openSettings = async () => {
         await evaluate(`document.querySelector('button[aria-label="Settings"]').click()`);
@@ -98,7 +101,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
         await shot(file, 0);
         return evaluate(`document.querySelector('[role="menu"][aria-label="Sales"]').textContent`);
       };
-      const setInput = (selector, value) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      const setInput = (selector, value) => evaluate(`(() => { const el = document.querySelector(${literal(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${literal(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
       return { win, evaluate, shot, until, clickButton, has, openSettings, openDepartmentMenu, setInput };
     };
 
@@ -124,7 +127,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       await window.shot("invite-ready");
       await window.clickButton("Done", "document.querySelector('[data-invite-dialog]')");
       await window.until(async () => !(await window.has("[data-invite-dialog]")), "the dialog closed");
-      await window.until(() => window.evaluate(`document.body.innerText.includes(${JSON.stringify(GUEST)})`), "the new person's row");
+      await window.until(() => window.evaluate(`document.body.innerText.includes(${literal(GUEST)})`), "the new person's row");
       checks.push(`${name}: the row for ${GUEST} is in the list`);
       await window.shot("row-added");
     };
