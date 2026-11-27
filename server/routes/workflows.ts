@@ -54,6 +54,7 @@ export function startLinkRefusal(
 ): { status: number; error: string } | null {
   const { workflowId } = body && typeof body === "object" ? body as { workflowId?: unknown } : {};
   const next = typeof workflowId === "string" ? workflows?.get(workflowId) : null;
+  if (typeof workflowId === "string" && workflowId && !next) return { status: 404, error: "no such workflow" };
   const old = current === undefined ? null : workflows?.get(current);
   if ((next && !workflowVisible(next, visible)) || (old && !workflowVisible(old, visible))) return { status: 404, error: "no such workflow" };
   const bots = [...workflowBotIds(old?.steps), ...workflowBotIds(next?.steps)];
@@ -73,8 +74,9 @@ function hiddenBot(steps: unknown, visible: VisibleSet, botName: (botId: string)
 export function workflowTargetHidden(body: unknown, visible: VisibleSet, workflows: WorkflowHost | null): string | null {
   if (visible.everything || !body || typeof body !== "object") return null;
   const { workflowId } = body as { workflowId?: unknown };
-  const workflow = typeof workflowId === "string" ? workflows?.get(workflowId) : null;
-  return workflow && !workflowVisible(workflow, visible) ? "no such workflow" : null;
+  if (typeof workflowId !== "string" || !workflowId) return null;
+  const workflow = workflows?.get(workflowId);
+  return workflow && workflowVisible(workflow, visible) ? null : "no such workflow";
 }
 
 export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {

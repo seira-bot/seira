@@ -92,6 +92,10 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     connectedApps: deps.connectedApps,
     botState: deps.botState,
     ...(deps.workflowCopy ? { workflowCopy: deps.workflowCopy } : {}),
+    botAccessRefusal: (botId, app) => {
+      const bot = deps.store.bot(botId);
+      return bot && !botMayWatchApp(bot, app) ? `${bot.name} can't watch ${appLabel(app)}. Give ${bot.name} access to ${appLabel(app)} first.` : null;
+    },
     runs: {
       enqueue: (input) => deps.routines().enqueueWebhook(input),
       merge: (triggerId, eventId, sameConversation, merge) => deps.routines().mergeIntoQueuedRun(triggerId, eventId, sameConversation, merge),

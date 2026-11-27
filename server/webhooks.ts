@@ -301,7 +301,7 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   if (groupId) clean.groupId = groupId;
   if (typeof input.maxPendingRuns === "number") clean.maxPendingRuns = input.maxPendingRuns;
   if (input.sameConversation) clean.sameConversation = true;
-  if (typeof input.workflowId === "string" && input.workflowId.trim()) clean.workflowId = input.workflowId.trim();
+  if (typeof input.workflowId === "string" && input.workflowId) clean.workflowId = input.workflowId;
   return clean;
 }
 
@@ -482,8 +482,8 @@ export class WebhookManager {
   create(input: JsonValue): CreatedWebhook {
     this.assertWritable();
     const parsed = parseTriggerInput(withLinkedDefaults(input));
-    const linked = typeof parsed.workflowId === "string" && parsed.workflowId.trim()
-      ? this.linkFields(parsed.workflowId.trim(), { runOn: parsed.runOn === "cloud" ? "cloud" : "seira", sameConversation: parsed.sameConversation, delivery: parsed.delivery })
+    const linked = typeof parsed.workflowId === "string" && parsed.workflowId
+      ? this.linkFields(parsed.workflowId, { runOn: parsed.runOn === "cloud" ? "cloud" : "seira", sameConversation: parsed.sameConversation, delivery: parsed.delivery })
       : null;
     const clean = cleanInput(linked ? { ...parsed, prompt: linked.prompt, botId: linked.botId } : parsed);
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
@@ -553,7 +553,7 @@ export class WebhookManager {
       maxPendingRuns: patch.maxPendingRuns === undefined ? trigger.maxPendingRuns : patch.maxPendingRuns,
       sameConversation: patch.sameConversation ?? trigger.sameConversation,
     });
-    const linkTo = typeof patch.workflowId === "string" ? patch.workflowId.trim() : patch.rewriteWorkflow ? trigger.workflowId : undefined;
+    const linkTo = typeof patch.workflowId === "string" ? patch.workflowId : patch.rewriteWorkflow ? trigger.workflowId : undefined;
     if (linkTo) Object.assign(clean, this.linkFields(linkTo, clean));
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);

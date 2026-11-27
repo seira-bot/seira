@@ -585,6 +585,29 @@ describe("app event that runs a workflow", () => {
     expect(await triggers.update(trigger.id, { workflowId: null, enabled: false })).not.toHaveProperty("workflowId");
   });
 
+  it("refuses to link an app trigger to a workflow whose first bot cannot watch the app", async () => {
+    const triggers = manager({ workflowCopy: () => copy, botAccessRefusal: (botId, app) => (botId === "ana" ? `Ana can't watch ${app}.` : null) });
+    await expect(triggers.create(link)).rejects.toMatchObject({ status: 403, message: "Ana can't watch gmail." });
+    expect(triggers.list()).toHaveLength(0);
+    const plain = await triggers.create({ ...link, botId: "ben", prompt: "Read it", workflowId: undefined });
+    await expect(triggers.update(plain.id, { workflowId: "wf-1" })).rejects.toMatchObject({ status: 403 });
+    expect(triggers.get(plain.id)).not.toHaveProperty("workflowId");
+  });
+
+  it("switches an app trigger off when the new first bot cannot watch the app", async () => {
+    let current = copy;
+    const blocked = new Set<string>();
+    const triggers = manager({ workflowCopy: () => current, botAccessRefusal: (botId) => (blocked.has(botId) ? "Ben can't watch Gmail." : null) });
+    const trigger = await triggers.create(link);
+    expect(trigger.enabled).toBe(true);
+    blocked.add("ben");
+    current = { ...copy, prompt: "Do these steps in order:\n1. Ben: Write", botId: "ben" };
+    expect(await triggers.update(trigger.id, { rewriteWorkflow: true })).toMatchObject({ botId: "ben", workflowId: "wf-1", enabled: false });
+    await expect(triggers.update(trigger.id, { enabled: true })).rejects.toMatchObject({ status: 403 });
+    blocked.clear();
+    expect(await triggers.update(trigger.id, { enabled: true })).toMatchObject({ enabled: true, workflowId: "wf-1" });
+  });
+
   it("starts a workflow run from an event, and joins a burst into one run", async () => {
     const own = new RoutineManager({ file: join(dir, "routines-wf.json"), botState: () => "busy", createTask: () => ({ threadId: "thread-run" }), startTurn: async () => {}, workflowCopy: () => copy });
     try {

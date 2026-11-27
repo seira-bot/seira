@@ -14,7 +14,7 @@ import { RoutineManager } from "../routines.ts";
 import { WebhookManager } from "../webhooks.ts";
 import { workflowCopy } from "../workflows/routine-link.ts";
 import { PASS, type RouteContext } from "./table.ts";
-import { createWorkflowRoutes, startLinkRefusal } from "./workflows.ts";
+import { createWorkflowRoutes, startLinkRefusal, workflowTargetHidden } from "./workflows.ts";
 
 const BOB: Viewer = { kind: "member", email: "bob@example.test" };
 const bots = [
@@ -194,6 +194,18 @@ describe("who may change an automation", () => {
     r.add("old", "pub", "hr");
     expect(startLinkRefusal({ workflowId: "open" }, "old", auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
     expect(startLinkRefusal({ workflowId: "open" }, undefined, auth, r.host, r.visible, r.deps)).toBeNull();
+  });
+
+  it("refuses a workflow id that does not resolve", async () => {
+    const r = rig();
+    r.add("secret", "pub", "hr");
+    expect(startLinkRefusal({ workflowId: "gone" }, undefined, auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
+    expect(startLinkRefusal({ workflowId: " secret " }, undefined, auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
+    expect(startLinkRefusal({ workflowId: "secret" }, undefined, auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
+    expect(startLinkRefusal({}, undefined, auth, r.host, r.visible, r.deps)).toBeNull();
+    expect(workflowTargetHidden({ workflowId: " secret " }, r.visible, r.host)).toBe("no such workflow");
+    expect(() => r.webhook({ workflowId: " secret " })).toThrow();
+    expect(r.webhooks.list()).toHaveLength(0);
   });
 
   it("refuses a person with view access only", async () => {

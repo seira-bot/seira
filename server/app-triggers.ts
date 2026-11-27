@@ -67,6 +67,8 @@ export interface AppTriggerManagerOptions {
   botState: (botId: string) => "ready" | "busy" | "missing";
   /** The step copy and bots of a workflow, for an automation that runs it. */
   workflowCopy?: WorkflowCopyLookup;
+  /** Why this bot may not watch this app, or null when it may. */
+  botAccessRefusal?: (botId: string, app: string) => string | null;
   runs: {
     enqueue(input: { webhookId: string; webhookName: string; prompt: string; botId: string; runOn: RoutineRunOn; deliveryId: string; receivedAt: number; eventSource: "app"; sameConversation?: boolean; workflowId?: string }): { id: string };
     merge(triggerId: string, eventId: string, sameConversation: boolean, merge: (prompt: string) => string | null): { id: string } | null;
@@ -297,6 +299,8 @@ export class AppTriggerManager {
     const linked = input.workflowId === undefined ? null : this.linkFields(input.workflowId, input.runOn ?? "seira", input.sameConversation === true);
     const prompt = linked?.prompt ?? input.prompt.trim();
     const botId = linked?.botId ?? input.botId;
+    const linkedRefusal = linked ? this.options.botAccessRefusal?.(botId, input.app.trim().toLowerCase()) : null;
+    if (linkedRefusal) throw new AppTriggerError(linkedRefusal, 403);
     if (!name) throw new AppTriggerError("An automation needs a name.");
     if (prompt.length > PROMPT_MAX) throw new AppTriggerError(`Instructions can be at most ${PROMPT_MAX} characters.`);
     if (this.options.botState(botId) === "missing") throw new AppTriggerError("That bot no longer exists.", 404);
@@ -359,6 +363,12 @@ export class AppTriggerManager {
     if (!name) throw new AppTriggerError("An automation needs a name.");
     const linkTo = typeof patch.workflowId === "string" ? patch.workflowId : patch.rewriteWorkflow ? trigger.workflowId : undefined;
     const linked = linkTo === undefined ? null : this.linkFields(linkTo, patch.runOn ?? trigger.runOn, patch.sameConversation ?? trigger.sameConversation === true);
+    const watchRefusal = linked ? this.options.botAccessRefusal?.(linked.botId, trigger.app) ?? null : null;
+    const enablesLinked = patch.enabled === true && !trigger.enabled && !linked && trigger.workflowId !== undefined;
+    const enableRefusal = enablesLinked ? this.options.botAccessRefusal?.(trigger.botId, trigger.app) ?? null : null;
+    if (enableRefusal) throw new AppTriggerError(enableRefusal, 403);
+    const keepOff = watchRefusal !== null && typeof patch.workflowId !== "string";
+    if (watchRefusal && !keepOff) throw new AppTriggerError(watchRefusal, 403);
     if (patch.prompt !== undefined && patch.prompt.trim().length > PROMPT_MAX) throw new AppTriggerError(`Instructions can be at most ${PROMPT_MAX} characters.`);
     const filter = patch.filter === undefined ? trigger.filter : cleanFilter(patch.filter);
     const reconfigure = patch.filter !== undefined || patch.config !== undefined || patch.restoreConfig !== undefined;
@@ -382,7 +392,7 @@ export class AppTriggerManager {
         prompt: linked ? linked.prompt : patch.prompt === undefined ? trigger.prompt : patch.prompt.trim(),
         ...(linked ? { botId: linked.botId, workflowId: linked.workflowId } : {}),
         runOn: patch.runOn ?? trigger.runOn,
-        enabled: patch.enabled ?? trigger.enabled,
+        enabled: keepOff ? false : patch.enabled ?? trigger.enabled,
         config,
         updatedAt: this.now(),
       });
@@ -392,7 +402,7 @@ export class AppTriggerManager {
       if (patch.workflowId === null) delete trigger.workflowId;
       if (patch.sameConversation === true) trigger.sameConversation = true;
       else if (patch.sameConversation === false) delete trigger.sameConversation;
-      if (patch.enabled === false) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");
+      if (patch.enabled === false || keepOff) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");
       try {
         if (reconfigure && (!previous || JSON.stringify(config) !== previousConfig)) {
           trigger.remote = { state: "pending" };

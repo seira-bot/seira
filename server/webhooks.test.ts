@@ -876,7 +876,7 @@ describe("webhook that runs a workflow", () => {
     expect(patched).not.toHaveProperty("workflowId");
     expect(patched).toMatchObject({ prompt: webhook.prompt, botId: webhook.botId, deliveryCount: 1 });
     expect(reloaded.update(webhook.id, { rewriteWorkflow: true })).not.toHaveProperty("workflowId");
-    expect(reloaded.update(webhook.id, { workflowId: "wf-1" })).toMatchObject({ workflowId: "wf-1", botId: "ana", deliveryCount: 1 });
+    expect(reloaded.update(webhook.id, { workflowId: "wf-1", runOn: "seira" })).toMatchObject({ workflowId: "wf-1", botId: "ana", deliveryCount: 1 });
   });
 
   it("copies the steps again when they change", () => {
