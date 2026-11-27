@@ -181,7 +181,6 @@ describe("who may change an automation", () => {
   it("refuses a person who cannot see every bot", async () => {
     const r = rig();
     r.add("secret", "pub", "hr");
-    r.routine({ workflowId: "wf-none" as string } as never).id;
     expect((await r.call("POST", "/api/workflows/secret/switch", { enabled: true })).status).toBe(404);
 
     const hidden = r.routine({ name: "Hal's", botId: "hr" });
