@@ -50,7 +50,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     const checks = [];
     const open = async (name, localOrigin) => {
       const win = new BrowserWindow({
-        show: false, width: 1280, height: 860,
+        show: true, width: 1280, height: 860,
         webPreferences: {
           contextIsolation: true, sandbox: true, nodeIntegration: false,
           ...(localOrigin ? { preload: join(root, "electron/preload.cjs"), additionalArguments: [`--seira-local-origin=${localOrigin}`] } : {}),
