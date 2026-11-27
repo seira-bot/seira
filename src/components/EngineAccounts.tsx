@@ -39,6 +39,8 @@ const COPY: Record<AccountGroup, Record<"title" | "add" | "removeBody", LocaleKe
   chatgpt: { title: "accounts.chatgpt", add: "accounts.addChatgpt", removeBody: "accounts.removeBodyChatgpt" },
 };
 
+export const accountGroupTitle = (group: AccountGroup): string => t(COPY[group].title);
+
 /** What an account's menu offers. Only accounts added here can be removed; each provider's first account stays, and
  * the built-in rows (Claude, Codex, ChatGPT plan) can be hidden instead. */
 export function accountActions(group: AccountGroup, instance: InstanceInfo): { signOut: boolean; remove: boolean; hide: boolean } {

@@ -182,7 +182,7 @@ export function ProviderMovePicker({ off, onBack, onDone }: { off: ProviderOff; 
         <span>{t("model.simple.back")}</span>
       </button>
       <div className={MENU_SEPARATOR} role="separator" />
-      <p className={MENU_LABEL}>{t("provider.moveTo", { count })}</p>
+      <p className="px-2 pb-1 pt-1.5 text-[13px] font-medium leading-5 text-ink">{t("provider.moveTo", { count })}</p>
       {both && <p className={MENU_LABEL}>{t("provider.moveSameProvider", { provider })}</p>}
       {same.map(row)}
       {both && <>

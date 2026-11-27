@@ -10,7 +10,7 @@ import type { LocaleKey } from "@/locales";
 import { ApiKeyEngineManage, EngineSetup, EngineUpdateNotice, EngineWarningNotice, isApiKeyEngine } from "./EngineSetup";
 import { AppCopyNotice } from "./EngineAppCopy";
 import { forgetAppCopySwitches } from "@/state/engine-install";
-import { AccountsCard, AddAccount, accountGroupOf, accountsReady, type AccountGroup } from "./EngineAccounts";
+import { AccountsCard, AddAccount, accountGroupOf, accountGroupTitle, accountsReady, type AccountGroup } from "./EngineAccounts";
 import { ProviderMenu, ProviderOffStatus } from "./ProviderMenu";
 import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import type { ProviderUse } from "../../shared/provider-uses";
@@ -428,17 +428,18 @@ function ProviderRow({ instance, ready, open, onToggle, compact, children }: {
   instance: InstanceInfo; ready: boolean; open: boolean; onToggle: () => void; compact: boolean; children: ReactNode;
 }) {
   const status = simpleStatus(instance, ready);
+  const group = accountGroupOf(instance);
   return <>
     <div data-simple-engine={instance.instanceId} className={cn("flex items-center gap-3 px-4", compact && !ready && !status.tone ? "min-h-11 py-1.5" : "min-h-16 py-3")}>
       <SettingsMark><InstanceProviderMark instance={instance} size={18} subtle /></SettingsMark>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[14px] leading-5 text-ink">{instance.displayName}</span>
+        <span className="truncate text-[14px] leading-5 text-ink">{group ? accountGroupTitle(group) : instance.displayName}</span>
         {!(compact && !ready && !status.tone) && <span className="truncate text-[13px] leading-[18px] text-ink-secondary"><StatusDot tone={status.tone} />{status.text}</span>}
       </span>
       <button type="button" aria-expanded={open} className="ui-button ml-3 shrink-0" onClick={onToggle}>
         {t(open ? "common.close" : ready ? "settings.simple.ai.manage" : "settings.simple.ai.setUp")}
       </button>
-      {accountGroupOf(instance) === null && <ProviderMenu instance={instance} />}
+      {group === null && <ProviderMenu instance={instance} />}
     </div>
     {open && <div data-provider-fold={instance.instanceId} className="pb-4 pl-[60px] pr-4 pt-3">{children}</div>}
   </>;
