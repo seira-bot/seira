@@ -328,7 +328,7 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       if (change.kind === "bedrock") return { change: `Add the engine "${change.name}" (Claude on Amazon Bedrock), AWS profile ${change.awsProfile} in ${change.awsRegion}, model ${change.model}` };
       return { change: `Add the engine "${change.name ?? LOCAL_SERVER[change.kind].name}" (${LOCAL_SERVER[change.kind].name} on ${change.url})` };
     },
-    confirm: (change: EngineChange) => {
+    confirm: (change: EngineChange): Consequence | null => {
       if (change.kind === "openai-compat") return { code: "keyTo", params: { service: CREDENTIAL_TARGETS[change.keyFrom].label, host: hostOf(change.url) } };
       // A local server is local by its address, not by its kind: one at another address receives every conversation sent to it.
       if ((change.kind === "ollama" || change.kind === "lmstudio") && !isLoopbackHost(hostOf(change.url))) return { code: "dataTo", params: { provider: hostOf(change.url) } };
