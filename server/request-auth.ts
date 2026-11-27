@@ -503,6 +503,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET", "POST"], path: /^\/api\/workflows$/ },
   { methods: ["GET", "PATCH", "DELETE"], path: /^\/api\/workflows\/[\w-]+$/ },
   { methods: ["GET"], path: /^\/api\/workflows\/[\w-]+\/runs$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/from-start$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/[\w-]+\/switch$/ },
   { methods: ["GET"], path: /^\/api\/workflow-runs\/[\w-]+$/ },
   { methods: ["POST"], path: /^\/api\/workflow-runs\/[\w-]+\/steps\/[\w-]+\/run-again$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/workflow-draft$/ },

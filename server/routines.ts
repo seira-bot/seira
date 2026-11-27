@@ -771,6 +771,8 @@ export class RoutineManager {
     eventSource?: "app" | "wait"; sameConversation?: boolean; byPerson?: boolean;
     /** Where the run reports, instead of the event's own results chat. */
     resultsThreadId?: string;
+    /** The workflow whose steps the run executes; the event text is the first step's input. */
+    workflowId?: string;
   }): { id: string } {
     this.assertWritable();
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
@@ -778,11 +780,14 @@ export class RoutineManager {
     if (this.options.botState(input.botId) === "missing") {
       throw new PublicError("The assigned bot no longer exists", 410);
     }
+    const copy = input.workflowId === undefined ? null : this.options.workflowCopy?.(input.workflowId);
+    if (input.workflowId !== undefined && (!copy || "code" in copy)) throw new PublicError(copy && "code" in copy ? copy.message : "The workflow this runs is gone", 409);
     const run: RoutineRun = {
       id: randomUUID(), routineId: input.webhookId, routineName: input.webhookName, prompt: input.prompt, target: "bot",
       botId: input.botId, runOn: input.runOn, scheduledFor: input.receivedAt, status: "queued", manual: false,
       triggerSource: "webhook", webhookId: input.webhookId, deliveryId: input.deliveryId, attachments: [], createdAt: this.now(),
       resultsThreadId: input.resultsThreadId ?? this.options.eventResultsThread?.(input), ...(input.eventSource ? { eventSource: input.eventSource } : {}), ...(input.sameConversation ? { sameConversation: true } : {}), ...(input.byPerson ? { byPerson: true } : {}),
+      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
     };
     this.commitEvent(run, input.deliveryId, () => { this.runs.push(run); });
     return cloneRun(run);

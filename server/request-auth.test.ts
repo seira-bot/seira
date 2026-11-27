@@ -204,7 +204,7 @@ describe("scopes", () => {
       ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
       ["GET", "/api/workflows"], ["POST", "/api/workflows"], ["GET", "/api/workflows/w1"], ["PATCH", "/api/workflows/w1"], ["DELETE", "/api/workflows/w1"],
-      ["GET", "/api/workflows/w1/runs"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
+      ["GET", "/api/workflows/w1/runs"], ["POST", "/api/workflows/from-start"], ["POST", "/api/workflows/w1/switch"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
       ["GET", "/api/threads/t/messages/m/workflow-draft"],
       ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],
