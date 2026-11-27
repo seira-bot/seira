@@ -49,6 +49,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     });
     const checks = [];
     const open = async (name, localOrigin) => {
+      console.error(`${name}: opening`);
       const win = new BrowserWindow({
         show: false, width: 1280, height: 860,
         webPreferences: {
@@ -132,7 +133,8 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     assert.match(await remote.openDepartmentMenu(), /Invite to this department/);
     checks.push("remote: the department menu has Invite to this department");
     await remote.shot("department-menu");
-    remote.win.destroy();
+    remote.win.close();
+    console.error("remote: closed");
 
     // LOCAL: the desktop app's own computer.
     const local = await open("local", serverOrigin);
@@ -146,13 +148,13 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     assert.doesNotMatch(localMenu, /Invite to this department/);
     checks.push("local: the department menu has no invite entry");
     await local.shot("department-menu");
-    local.win.destroy();
+    local.win.close();
 
     // BROWSER: the server's own page, no preload.
     const browser = await open("browser", null);
     assert.equal(await browser.evaluate("typeof window.ogb"), "undefined");
     await invitesFromPeople("browser", browser);
-    browser.win.destroy();
+    browser.win.close();
 
     assert.deepEqual(blocked, [], "unexpected external request attempted");
     const receipt = { passed: true, checks, consoleErrors: errors.slice(0, 20) };
