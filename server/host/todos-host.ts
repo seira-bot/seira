@@ -447,7 +447,7 @@ export interface TodoLauncherDeps {
   /** The server would start a turn for this bot in this conversation now. */
   admits(botId: string, threadId: string): boolean;
   /** Holds the first line behind the bot's other work: what a person's own message gets when the bot is busy. */
-  queue(botId: string, threadId: string, text: string, options: Omit<TurnOptions, "threadId" | "userMessage" | "onDispatchError"> & { prompt: string }): void;
+  queue(botId: string, threadId: string, text: string, options: Omit<TurnOptions, "threadId" | "userMessage" | "onDispatchError"> & { prompt: string; rowId: string }): void;
   botName(botId: string): string | undefined;
 }
 
@@ -469,14 +469,15 @@ export function createTodoLauncher(deps: TodoLauncherDeps) {
       trigger: (maker ? { kind: "bot", botId: maker } : { kind: "routine", label: "Todo" }) as UsageTrigger,
       ...(peerAsk ? { peerAsk } : {}),
     };
-    if (!deps.admits(botId, task.threadId)) {
-      if (!launch.force) throw new Error("The bot has no room for this work right now.");
-      deps.queue(botId, task.threadId, launch.line, { ...base, prompt: launch.prompt });
-      return;
-    }
+    const admitted = deps.admits(botId, task.threadId);
+    if (!admitted && !launch.force) throw new Error("The bot has no room for this work right now.");
     const line = deps.store.appendMessage(task.threadId, {
       role: "user", kind: "text", text: launch.line, fromTodo: todo.id, automated: true, ...(peerAsk ? { peerAsk } : {}),
     });
+    if (!admitted) {
+      deps.queue(botId, task.threadId, launch.line, { ...base, prompt: launch.prompt, rowId: line.id });
+      return;
+    }
     await deps.startTurn(botId, launch.prompt, { ...base, threadId: task.threadId, userMessage: line, onDispatchError: launch.onFailed });
   };
 }

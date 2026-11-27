@@ -265,11 +265,13 @@ describe("launch provenance", () => {
   });
 
   it("queues behind the bot's work for Start now and refuses an automatic start without room", async () => {
-    const { launch, queued, calls, deny } = launcher();
+    const { launch, queued, calls, lines, deny } = launcher();
     deny();
     await expect(launch(record({ kind: "person", name: "R" }), input())).rejects.toThrow();
+    expect(lines).toHaveLength(0);
     await launch(record({ kind: "person", name: "R" }), input({ force: true }));
-    expect(queued).toHaveLength(1);
+    expect(lines).toEqual([expect.objectContaining({ role: "user", text: "Do it", fromTodo: "td" })]);
+    expect(queued).toEqual([["atlas", "th1", "Do it", expect.objectContaining({ prompt: "Do it\n\nReply.", rowId: "line1", unattended: true })]]);
     expect(calls).toHaveLength(0);
   });
 });
