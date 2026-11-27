@@ -83,7 +83,7 @@ describe("the new Automations switch", () => {
     fixture.state = state({ config: { features: { newAutomations: true } } });
     const container = mount(page());
     await settle();
-    act(() => { (container.querySelector("[aria-label='Next']") as HTMLElement).click(); });
+    act(() => { (container.querySelector("[aria-label='Next dates']") as HTMLElement).click(); });
     act(() => { (container.querySelector("[data-occurrence]") as HTMLElement).click(); });
     expect(container.querySelector("[aria-label='Automation']")).not.toBeNull();
     expect(container.querySelector("[data-occurrence-context]")).not.toBeNull();
