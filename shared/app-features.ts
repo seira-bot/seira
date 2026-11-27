@@ -335,7 +335,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",
-    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
+    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done, by column or by bot. New todo adds work for one bot or for any bot: when the bot is free, at a time, or on chosen days each week. The Board's menu picks the bot that gives open todos to a bot. Open a card to answer, start it now, stop the work, move it to Done, open its conversation or make a follow-up todo.",
     tools: ["board_close", "todo_add", "todo_list", "todo_assign", "todo_update"],
     releaseNotes: ["board", "boardDone"],
   },
