@@ -6,7 +6,7 @@
 // which is what makes a room turn eligible at all. The setting itself is
 // switched with PATCH /api/config: the fixture's environment is sealed, so
 // SEIRA_ROOM_SESSIONS never reaches it (that override is unit-tested).
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
