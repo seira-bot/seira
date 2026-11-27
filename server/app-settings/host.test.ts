@@ -604,7 +604,7 @@ describe("people who sign in", () => {
     const fx = fixture({ people: {} });
     const refused = async (value: unknown) => (await fx.set("people.signIn", value)).body.error;
     expect(await refused({ email: "boss@acme.com", role: "none" })).toMatch(/^This is the only admin\./);
-    expect(await refused({ email: "x@acme.com", sees: { departments: ["Nope"] } })).toBe("No department is named Nope.");
+    expect(await refused({ email: "x@acme.com", sees: { departments: ["Nope"] } })).toBe("No department is named Nope. The departments are: General, Sales.");
     expect(await refused({ email: "x@acme.com", sees: { bots: ["Nobody"] } })).toBe("No bot is named Nobody. Use list_bots for the names.");
     expect(await refused({ email: "x@acme.com", sees: {} })).toBe("Choose at least one department or bot, or give the whole team.");
     expect(await refused({ email: "@acme.com", sees: { bots: ["Clive"] } })).toBe("To give access to chosen bots, invite each person by their own address.");
@@ -622,6 +622,25 @@ describe("people who sign in", () => {
       expect(fx.cards()).toEqual([]);
       expect(fx.routeCalls).toEqual([]);
     }
+  });
+
+  it("refuses to make a whole @domain an admin, and says a domain invite lets anyone at it in", async () => {
+    const fx = fixture({ people: {} });
+    const refused = await fx.set("people.signIn", { email: "@acme.com", role: "admin" });
+    expect(refused.status).toBe(409);
+    expect(String(refused.body.error)).toMatch(/^A bot cannot make a whole @domain an admin\. The person does that in Settings → People/);
+    expect(fx.cards()).toEqual([]);
+    await fx.set("people.signIn", { email: "@acme.com" });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("Anyone with an address at @acme.com can sign in, not only one person.");
+    await fx.set("people.signIn", { email: "@other.com", sees: { departments: ["Sales"] } });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("Anyone with an address at @other.com can sign in, not only one person.");
+  });
+
+  it("gives no bot or department name to a get, which runs before any check", async () => {
+    const fx = fixture({ people: {} });
+    const got = await fx.host.handle({ action: "get", id: "people.signIn" }, fx.turn);
+    expect(JSON.stringify(got.body)).not.toMatch(/Kiwi|Clive|Sales|acme/);
+    expect(JSON.stringify(got.body)).toContain("roles");
   });
 
   it("reads as counts, never as addresses", async () => {

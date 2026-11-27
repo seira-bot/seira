@@ -297,6 +297,7 @@
   "server.appSettings.confirm.chosenIn": "{who} can sign in and sees only: {sees}.",
   "server.appSettings.confirm.adminIn": "{who} can sign in as an admin and change every setting on this server.",
   "server.appSettings.confirm.personOut": "{who} can no longer sign in. Anyone who is signed in now is signed out.",
+  "server.appSettings.confirm.domainIn": "Anyone with an address at {who} can sign in, not only one person.",
   "server.mcp.askedRemove": "Asked to remove MCP server {name}",
   "server.mcp.card.turnOn": "Turn on {name}?",
   "server.mcp.card.change": "Change {name}?",

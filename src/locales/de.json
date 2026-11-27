@@ -172,6 +172,7 @@
   "server.appSettings.confirm.chosenIn": "{who} kann sich anmelden und sieht nur: {sees}.",
   "server.appSettings.confirm.adminIn": "{who} kann sich als Admin anmelden und jede Einstellung auf diesem Server ändern.",
   "server.appSettings.confirm.personOut": "{who} kann sich nicht mehr anmelden. Wer jetzt angemeldet ist, wird abgemeldet.",
+  "server.appSettings.confirm.domainIn": "Jeder mit einer Adresse bei {who} kann sich anmelden, nicht nur eine Person.",
   "server.mcp.askedRemove": "Entfernen von MCP-Server {name} angefragt",
   "server.mcp.card.turnOn": "{name} einschalten?",
   "server.mcp.card.change": "{name} ändern?",

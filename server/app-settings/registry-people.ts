@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { AccessGrant } from "../../shared/department-access.ts";
 import { accessEntry } from "../department-access.ts";
 import type { Consequence } from "./confirm.ts";
+import { placePath } from "./places.ts";
 import { withoutKeys, type RegistryDeps, type SettingEntry, type WritableSpec } from "./registry.ts";
 
 /** What the people entry needs to know of this place. */
@@ -69,7 +70,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     for (const item of sees.departments ?? []) {
       const asked = typeof item === "string" ? item : item.name;
       const found = same(asked, GENERAL) ? "" : known.find((one) => same(one, asked));
-      if (found === undefined) return `No department is named ${asked}.`;
+      if (found === undefined) return `No department is named ${asked}. The departments are: ${names([GENERAL, ...known])}.`;
       if (held.departments.some((one) => one.name === found)) continue;
       held.departments.push({ name: found, level: typeof item === "string" ? grant?.departments.find((one) => one.name === found)?.level ?? "chat" : item.level });
     }
@@ -95,6 +96,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     const role = value.role ?? (before === "none" ? "user" : before);
     const asked = role === "none" || value.sees === undefined ? null : resolve(value.sees, entry);
     if (typeof asked === "string") return { refusal: asked };
+    if (entry.startsWith("@") && role === "admin") return { refusal: `A bot cannot make a whole @domain an admin. The person does that in ${placePath("members")}.` };
     if (entry.startsWith("@") && asked?.bots.length) return { refusal: "To give access to chosen bots, invite each person by their own address." };
     if (role === "none" && before === "none") return { refusal: `${entry} is not on the list.` };
     if (before === "admin" && role !== "admin" && lists().admins.length <= 1) return { refusal: "This is the only admin. The server needs one admin, so make someone else an admin first." };
@@ -128,7 +130,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const { admins, members } = lists();
         return `${admins.length} admin${admins.length === 1 ? "" : "s"}, ${members.length} other ${members.length === 1 ? "entry" : "entries"}; the Settings window lists them`;
       },
-      more: () => ({ roles: ["user", "admin", "none"], departments: [GENERAL, ...deps.sections()], bots: deps.bots().map((one) => one.name) }),
+      more: () => ({ roles: ["user", "admin", "none"] }),
       describe: (value: Person) => {
         const made = plan(value);
         if ("refusal" in made) return made;
@@ -149,6 +151,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         if (made.role === "none") return { code: "personOut", params };
         if (made.role === "admin") return { code: "adminIn", params };
         const sees = scopeWords(made.shown);
+        if (made.entry.startsWith("@")) return { code: "domainIn", params };
         return sees ? { code: "chosenIn", params: { ...params, sees } } : { code: "wholeIn", params };
       },
       write: async (value: Person) => {

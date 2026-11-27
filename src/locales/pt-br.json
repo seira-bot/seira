@@ -280,6 +280,7 @@
   "server.appSettings.confirm.chosenIn": "{who} poderá entrar e verá apenas: {sees}.",
   "server.appSettings.confirm.adminIn": "{who} poderá entrar como administrador e mudar todas as configurações deste servidor.",
   "server.appSettings.confirm.personOut": "{who} não poderá mais entrar. Quem está conectado agora será desconectado.",
+  "server.appSettings.confirm.domainIn": "Qualquer pessoa com um endereço em {who} poderá entrar, não só uma pessoa.",
   "server.mcp.askedRemove": "Pediu para remover o servidor MCP {name}",
   "server.mcp.card.turnOn": "Ligar {name}?",
   "server.mcp.card.change": "Alterar {name}?",

@@ -3434,6 +3434,7 @@
   "server.appSettings.confirm.chosenIn": "{who} зможе увійти і побачить лише: {sees}.",
   "server.appSettings.confirm.adminIn": "{who} зможе увійти як адміністратор і змінювати будь-які налаштування цього сервера.",
   "server.appSettings.confirm.personOut": "{who} більше не зможе увійти. Той, хто зараз увійшов, буде виведений з облікового запису.",
+  "server.appSettings.confirm.domainIn": "Будь-хто з адресою в {who} зможе увійти, а не лише одна особа.",
   "native.connect.empty": "Введіть адресу сервера або вставте його посилання.",
   "native.connect.codeOnly": "Це код прив'язки. Введіть також адресу сервера, наприклад {example}.",
   "native.connect.emailCode": "Це код входу з листа. Для прив'язки потрібен 12-символьний код, наприклад 7KQ2-M9XD-H4TP.",

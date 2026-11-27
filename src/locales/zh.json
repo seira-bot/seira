@@ -9956,6 +9956,7 @@
   "server.appSettings.confirm.chosenIn": "{who} 可以登录，并且只能看到：{sees}。",
   "server.appSettings.confirm.adminIn": "{who} 可以以管理员身份登录，并更改此服务器上的所有设置。",
   "server.appSettings.confirm.personOut": "{who} 将无法再登录。目前已登录的人会被退出登录。",
+  "server.appSettings.confirm.domainIn": "任何拥有 {who} 地址的人都可以登录，而不只是一个人。",
   "announcements.title": "公告",
   "announcements.new": "新公告",
   "room.members.far.place": "位于 {place}",

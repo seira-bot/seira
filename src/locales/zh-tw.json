@@ -10008,6 +10008,7 @@
   "server.appSettings.confirm.chosenIn": "{who} 可以登入，並且只能看到：{sees}。",
   "server.appSettings.confirm.adminIn": "{who} 可以以管理員身分登入，並變更此伺服器上的所有設定。",
   "server.appSettings.confirm.personOut": "{who} 將無法再登入。目前已登入的人會被登出。",
+  "server.appSettings.confirm.domainIn": "任何擁有 {who} 位址的人都可以登入，而不只是一個人。",
   "announcements.title": "公告",
   "announcements.new": "新公告",
   "composer.command.burstDesc": "同時執行一項工作的多個部分，再彙整結果",

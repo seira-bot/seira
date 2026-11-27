@@ -6498,6 +6498,7 @@
   "server.appSettings.confirm.chosenIn": "{who} сможет войти и увидит только: {sees}.",
   "server.appSettings.confirm.adminIn": "{who} сможет войти как администратор и менять любые настройки этого сервера.",
   "server.appSettings.confirm.personOut": "{who} больше не сможет войти. Тот, кто сейчас вошёл, будет выведен из аккаунта.",
+  "server.appSettings.confirm.domainIn": "Любой человек с адресом в {who} сможет войти, а не только один человек.",
   "native.connect.empty": "Введите адрес сервера или вставьте его ссылку.",
   "native.connect.codeOnly": "Это код сопряжения. Введите также адрес сервера, например {example}.",
   "native.connect.emailCode": "Это код входа из письма. Для сопряжения нужен 12-символьный код, например 7KQ2-M9XD-H4TP.",
