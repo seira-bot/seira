@@ -553,19 +553,23 @@ export class WebhookManager {
       maxPendingRuns: patch.maxPendingRuns === undefined ? trigger.maxPendingRuns : patch.maxPendingRuns,
       sameConversation: patch.sameConversation ?? trigger.sameConversation,
     });
-    const linkTo = typeof patch.workflowId === "string" ? patch.workflowId : patch.rewriteWorkflow ? trigger.workflowId : undefined;
+    const settingsEdit = patch.workflowId !== undefined || patch.rewriteWorkflow || patch.botId !== undefined || patch.prompt !== undefined
+      || patch.runOn !== undefined || patch.delivery !== undefined || patch.sameConversation !== undefined;
+    const linkTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : settingsEdit ? trigger.workflowId : undefined;
     if (linkTo) Object.assign(clean, this.linkFields(linkTo, clean));
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
+    const unlinked = patch.workflowId === null && trigger.workflowId !== undefined;
     if (patch.workflowId === null) delete trigger.workflowId;
+    if (unlinked) trigger.enabled = false;
     if (placeCleared) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
     if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;
     if (clean.maxPendingRuns === undefined) delete trigger.maxPendingRuns;
     if (!clean.sameConversation) delete trigger.sameConversation;
-    if (patch.enabled === false) {
+    if (patch.enabled === false || unlinked) {
       this.options.cancelQueued?.(trigger.id, "The webhook was paused before this delivery started");
     }
     this.save();

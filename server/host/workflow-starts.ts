@@ -1,6 +1,7 @@
 import type { AppTriggerManager } from "../app-triggers.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import type { WebhookManager } from "../webhooks.ts";
+import { PLACE_LOST_MESSAGE } from "../place-lost.ts";
 import { workflowRefusal } from "../workflows/routine-link.ts";
 
 export type WorkflowStartKind = "routine" | "webhook" | "app";
@@ -26,6 +27,9 @@ export interface WorkflowStartsDeps {
   routines(): Pick<RoutineManager, "listRoutines" | "update"> | null;
   webhooks(): Pick<WebhookManager, "list" | "update"> | null;
   appTriggers(): Pick<AppTriggerManager, "list" | "update"> | null;
+  /** Why this bot may not watch this app, or null when it may. */
+  appAccessRefusal?: (botId: string, app: string) => string | null;
+  now?: () => number;
   log?: (line: string) => void;
 }
 
@@ -33,6 +37,12 @@ export interface WorkflowStarts {
   /** Every start that runs this workflow's steps. */
   list(workflowId: string): WorkflowStart[];
   describe(kind: WorkflowStartKind, id: string): WorkflowStartInfo | null;
+  /** Why a switch cannot change every start, or null. Nothing has changed when it answers. */
+  switchRefusal(workflowId: string, enabled: boolean): string | null;
+  /** Puts the schedule routines back to the switches a list recorded. */
+  restoreRoutines(before: readonly WorkflowStart[]): void;
+  /** Puts the webhooks and app triggers back to the switches a list recorded. */
+  restoreEvents(before: readonly WorkflowStart[]): Promise<void>;
   setRoutinesEnabled(workflowId: string, enabled: boolean): void;
   /** Webhooks and app triggers. */
   setEventsEnabled(workflowId: string, enabled: boolean): Promise<void>;
@@ -57,7 +67,34 @@ export function createWorkflowStarts(deps: WorkflowStartsDeps): WorkflowStarts {
   const eventRefusal = (fields: { runOn: string; sameConversation?: boolean; delivery?: string }) =>
     workflowRefusal({ target: "bot", runOn: fields.runOn, sameConversation: fields.sameConversation, deliver: fields.delivery === "post" ? "post" : undefined, scheduleType: "event" });
 
+  const now = deps.now ?? Date.now;
+
   return {
+    switchRefusal(workflowId, enabled) {
+      if (!enabled) return null;
+      for (const routine of routinesOf(workflowId)) {
+        if (routine.enabled) continue;
+        if (routine.placeLost) return PLACE_LOST_MESSAGE;
+        if (routine.schedule.type === "once" && routine.schedule.at <= now()) return "Its time has passed. Edit it to pick a new time.";
+      }
+      for (const webhook of webhooksOf(workflowId)) if (!webhook.enabled && webhook.placeLost) return PLACE_LOST_MESSAGE;
+      for (const trigger of appsOf(workflowId)) {
+        if (trigger.enabled) continue;
+        if (trigger.placeLost) return PLACE_LOST_MESSAGE;
+        const short = deps.appAccessRefusal?.(trigger.botId, trigger.app);
+        if (short) return short;
+      }
+      return null;
+    },
+    restoreRoutines(before) {
+      for (const start of before) if (start.kind === "routine") try { deps.routines()?.update(start.id, { enabled: start.enabled }); } catch { /* the switch had already failed */ }
+    },
+    async restoreEvents(before) {
+      for (const start of before) {
+        if (start.kind === "webhook") await attempt(`webhook ${start.id}`, () => deps.webhooks()?.update(start.id, { enabled: start.enabled }));
+        else if (start.kind === "app") await attempt(`app trigger ${start.id}`, () => deps.appTriggers()?.update(start.id, { enabled: start.enabled }));
+      }
+    },
     list(workflowId) {
       return [
         ...routinesOf(workflowId).map((routine): WorkflowStart => ({ kind: "routine", id: routine.id, name: routine.name, enabled: routine.enabled, botId: routine.botId })),

@@ -879,6 +879,25 @@ describe("webhook that runs a workflow", () => {
     expect(reloaded.update(webhook.id, { workflowId: "wf-1", runOn: "seira" })).toMatchObject({ workflowId: "wf-1", botId: "ana", deliveryCount: 1 });
   });
 
+  it("an edit of a linked webhook keeps the workflow bot and refuses settings a workflow cannot use", () => {
+    const h = harness();
+    const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
+    const manager = linked(h);
+    expect(manager.update(webhook.id, { botId: "zed", prompt: "Ignore the steps" })).toMatchObject({ botId: "ana", prompt: copy.prompt, workflowId: "wf-1" });
+    expect(() => manager.update(webhook.id, { runOn: "cloud" })).toThrow("A workflow runs on this computer.");
+    expect(() => manager.update(webhook.id, { delivery: "post" })).toThrow();
+    expect(manager.update(webhook.id, { name: "Paid orders" })).toMatchObject({ name: "Paid orders", botId: "ana" });
+  });
+
+  it("unlinking a webhook switches it off", () => {
+    const h = harness();
+    const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
+    const manager = linked(h);
+    const patched = manager.update(webhook.id, { workflowId: null })!;
+    expect(patched).not.toHaveProperty("workflowId");
+    expect(patched.enabled).toBe(false);
+  });
+
   it("copies the steps again when they change", () => {
     const h = harness();
     let current = copy;

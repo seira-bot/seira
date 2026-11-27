@@ -1,3 +1,4 @@
+import { MAX_EVENT_CHARS } from "../app-events.ts";
 import {
   WORKFLOW_FRAME_OUTPUT_CHARS,
   WORKFLOW_STEP_OUTPUT_CHARS,
@@ -462,7 +463,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
         start: fromEvent
           ? { kind: routineRun.eventSource === "app" ? "app" : "webhook", id: routineRun.webhookId! }
           : { kind: routineRun.manual ? "manual" : "schedule", id: routineRun.routineId },
-        ...(fromEvent && routineRun.prompt ? { event: routineRun.prompt.slice(0, WORKFLOW_STEP_OUTPUT_CHARS) } : {}),
+        ...(fromEvent && routineRun.prompt ? { event: routineRun.prompt.slice(0, MAX_EVENT_CHARS) } : {}),
         botIds: botIdsOf(graph), startStepId: startSteps(graph)[0]!.id, threads: { [routineRun.botId]: threadId }, stepRuns: [], createdAt: now, updatedAt: now,
       };
       saveRun(run);

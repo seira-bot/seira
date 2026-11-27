@@ -3,7 +3,7 @@ import { routineVisible, workflowRunVisible, workflowVisible, type VisibleSet } 
 import type { WorkflowHost } from "../host/workflow-host.ts";
 import type { WorkflowStarts } from "../host/workflow-starts.ts";
 import { WORKFLOW_ROUTINE_REFUSAL, type WorkflowRoutineEdits } from "../host/workflow-routine-edits.ts";
-import type { RequestAuth } from "../request-auth.ts";
+import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import { publicErrorText } from "../public-error.ts";
 import { problemBody, validateWorkflowInput } from "../workflows/validate.ts";
@@ -99,15 +99,17 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
     const linkedTo = (workflowId: string) => deps.routines()?.listRoutines().filter((routine) => routine.workflowId === workflowId) ?? [];
     const refused = (linked: readonly Routine[]) => linked.some((routine) => deps.routineEdits.refusal(auth, routine) !== null);
     const shownName = (id: string) => (visible.bot(id) ? deps.botName(id) : undefined);
+    const eventsOf = (workflowId: string) => deps.starts()?.list(workflowId).filter((start) => start.kind !== "routine") ?? [];
     const needsFor = (workflow: Workflow, linked: readonly Routine[]) =>
-      host.creator(workflow.id) === deps.routineEdits.writer(auth) && linked.every((routine) => deps.routineNeeds(auth, routine.id) === "chat") ? "chat" : "edit";
-    const routineBots = (linked: readonly Routine[]) => linked.flatMap((routine) => [routine.botId, ...(routine.workflowBotIds ?? [])]);
+      eventsOf(workflow.id).length === 0 && host.creator(workflow.id) === deps.routineEdits.writer(auth) && linked.every((routine) => deps.routineNeeds(auth, routine.id) === "chat") ? "chat" : "edit";
+    const routineBots = (linked: readonly Routine[], workflowId = "") =>
+      [...linked.flatMap((routine) => [routine.botId, ...(routine.workflowBotIds ?? [])]), ...eventsOf(workflowId).map((start) => start.botId)];
     const save = (body: unknown, current: Workflow | null, write: (input: WorkflowInput) => Workflow | null, status: number, linked: readonly Routine[] = []) => {
       const checked = validateWorkflowInput(body, { botName: shownName });
       if (!checked.ok) return json(res, 400, problemBody(checked.problems));
       if (hiddenBot(checked.value.steps, visible, deps.botName)) return json(res, 404, { error: "no such bot" });
       const needed = current ? needsFor(current, linked) : "chat";
-      const short = deps.botsRefusal(auth, [...workflowBotIds(current?.steps), ...workflowBotIds(checked.value.steps), ...routineBots(linked)], needed);
+      const short = deps.botsRefusal(auth, [...workflowBotIds(current?.steps), ...workflowBotIds(checked.value.steps), ...routineBots(linked, current?.id)], needed);
       if (short) return json(res, 403, { error: short });
       if (current && checked.value.ifUpdatedAt !== undefined && checked.value.ifUpdatedAt < current.updatedAt) {
         return json(res, 409, { error: "This workflow was changed somewhere else. Reload it and try again.", code: "workflow_changed" });
@@ -129,6 +131,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       const starts = deps.starts();
       if (!starts) return json(res, 503, { error: "Workflows are unavailable." });
       if ((kind !== "routine" && kind !== "webhook" && kind !== "app") || typeof id !== "string") return json(res, 400, { error: "Choose what to turn into steps." });
+      if (kind !== "routine" && !ownerOrAdmin(auth)) return json(res, 403, { error: "Only an admin can change this." });
       const info = starts.describe(kind, id);
       if (!info || (info.routine ? !routineVisible(info.routine, visible) : !visible.bot(info.botId))) return json(res, 404, { error: "no such automation" });
       if (info.routine) {
@@ -173,12 +176,17 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       if (starts.list(workflow.id).length === 0) return json(res, 409, { error: "Choose what starts it first." });
       const linked = linkedTo(workflow.id);
       if (refused(linked)) return json(res, 403, { error: WORKFLOW_ROUTINE_REFUSAL });
-      const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked)], needsFor(workflow, linked));
+      const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked, workflow.id)], needsFor(workflow, linked));
       if (short) return json(res, 403, { error: short });
+      const blocked = starts.switchRefusal(workflow.id, enabled);
+      if (blocked) return json(res, 409, { error: blocked });
+      const before = starts.list(workflow.id);
       try {
         deps.routineEdits.edit(auth, linked, () => starts.setRoutinesEnabled(workflow.id, enabled));
         await starts.setEventsEnabled(workflow.id, enabled);
       } catch (error) {
+        deps.routineEdits.edit(auth, linked, () => starts.restoreRoutines(before));
+        await starts.restoreEvents(before);
         return json(res, 409, { error: publicErrorText(error, "switch an automation", "This could not be switched.") });
       }
       return json(res, 200, { starts: starts.list(workflow.id) });
@@ -192,7 +200,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       const linked = linkedTo(workflow.id);
       if (refused(linked)) return json(res, 403, { error: WORKFLOW_ROUTINE_REFUSAL });
       if (method === "DELETE") {
-        const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked)], needsFor(workflow, linked));
+        const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked, workflow.id)], needsFor(workflow, linked));
         if (short) return json(res, 403, { error: short });
       }
       if (method === "DELETE") return deps.routineEdits.edit(auth, linked, () => host.remove(workflow.id)) ? json(res, 200, { ok: true }) : json(res, 404, { error: "no such workflow" });
@@ -219,6 +227,27 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
     const old = host.run(runId!);
     if (!old || !workflowRunVisible(old, visible)) return json(res, 404, { error: "no such run" });
     if (old.status === "active") return json(res, 409, { error: "This run is still going." });
+    const origin = old.start;
+    if (origin?.kind === "webhook" || origin?.kind === "app") {
+      const info = deps.starts()?.describe(origin.kind, origin.id);
+      if (!info) return json(res, 409, { error: "The automation that started this run is gone." });
+      if (!visible.bot(info.botId)) return json(res, 404, { error: "no such run" });
+      if (info.workflowId !== old.workflowId) return json(res, 409, { error: "This automation now runs another workflow." });
+      if (!info.enabled) return json(res, 409, { error: "This automation's start is off. Turn it on first." });
+      const workflow = shown(old.workflowId);
+      if (!workflow) return json(res, 404, { error: "no such workflow" });
+      const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), info.botId], "chat");
+      if (short) return json(res, 403, { error: short });
+      if (old.stepRuns.find((step) => step.stepId === stepId)?.status !== "failed") return json(res, 409, { error: "Only a failed step can run again." });
+      const step = workflow.steps.find((candidate) => candidate.id === stepId);
+      if (!step || step.kind === "note") return json(res, 409, { error: "That step is no longer in the workflow." });
+      try {
+        const started = host.runAgainFromEvent(old.runId, stepId!, origin.id, workflow);
+        return started ? json(res, 201, { run: started }) : json(res, 409, { error: "The automation can't run now." });
+      } catch (error) {
+        return json(res, 409, { error: publicErrorText(error, "run an automation again", "The run could not start.") });
+      }
+    }
     const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === old.routineId);
     if (!routine || !routineVisible(routine, visible)) return json(res, 404, { error: "no such routine" });
     if (routine.workflowId !== old.workflowId) return json(res, 409, { error: "This routine now runs another workflow." });

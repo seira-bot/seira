@@ -361,13 +361,16 @@ export class AppTriggerManager {
     const placeCleared = placeLostAs(AppTriggerError, () => placeConfirmed(trigger.placeLost, patch));
     const name = patch.name === undefined ? trigger.name : patch.name.trim().slice(0, NAME_MAX);
     if (!name) throw new AppTriggerError("An automation needs a name.");
-    const linkTo = typeof patch.workflowId === "string" ? patch.workflowId : patch.rewriteWorkflow ? trigger.workflowId : undefined;
+    const settingsEdit = patch.workflowId !== undefined || patch.rewriteWorkflow || patch.prompt !== undefined
+      || patch.runOn !== undefined || patch.sameConversation !== undefined;
+    const linkTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : settingsEdit ? trigger.workflowId : undefined;
     const linked = linkTo === undefined ? null : this.linkFields(linkTo, patch.runOn ?? trigger.runOn, patch.sameConversation ?? trigger.sameConversation === true);
     const watchRefusal = linked ? this.options.botAccessRefusal?.(linked.botId, trigger.app) ?? null : null;
     const enablesLinked = patch.enabled === true && !trigger.enabled && !linked && trigger.workflowId !== undefined;
     const enableRefusal = enablesLinked ? this.options.botAccessRefusal?.(trigger.botId, trigger.app) ?? null : null;
     if (enableRefusal) throw new AppTriggerError(enableRefusal, 403);
-    const keepOff = watchRefusal !== null && typeof patch.workflowId !== "string";
+    const keepOff = watchRefusal !== null && patch.rewriteWorkflow === true && typeof patch.workflowId !== "string";
+    const unlinked = patch.workflowId === null && trigger.workflowId !== undefined;
     if (watchRefusal && !keepOff) throw new AppTriggerError(watchRefusal, 403);
     if (patch.prompt !== undefined && patch.prompt.trim().length > PROMPT_MAX) throw new AppTriggerError(`Instructions can be at most ${PROMPT_MAX} characters.`);
     const filter = patch.filter === undefined ? trigger.filter : cleanFilter(patch.filter);
@@ -392,7 +395,7 @@ export class AppTriggerManager {
         prompt: linked ? linked.prompt : patch.prompt === undefined ? trigger.prompt : patch.prompt.trim(),
         ...(linked ? { botId: linked.botId, workflowId: linked.workflowId } : {}),
         runOn: patch.runOn ?? trigger.runOn,
-        enabled: keepOff ? false : patch.enabled ?? trigger.enabled,
+        enabled: keepOff || unlinked ? false : patch.enabled ?? trigger.enabled,
         config,
         updatedAt: this.now(),
       });
@@ -402,7 +405,7 @@ export class AppTriggerManager {
       if (patch.workflowId === null) delete trigger.workflowId;
       if (patch.sameConversation === true) trigger.sameConversation = true;
       else if (patch.sameConversation === false) delete trigger.sameConversation;
-      if (patch.enabled === false || keepOff) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");
+      if (patch.enabled === false || keepOff || unlinked) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");
       try {
         if (reconfigure && (!previous || JSON.stringify(config) !== previousConfig)) {
           trigger.remote = { state: "pending" };
@@ -449,6 +452,14 @@ export class AppTriggerManager {
     if (!entry || this.triggers.some((trigger) => trigger.id === id)) return null;
     if (this.options.botState(entry.trigger.botId) === "missing") throw new AppTriggerError("The assigned bot no longer exists.", 410);
     const trigger: StoredTrigger = { ...structuredClone(entry.trigger), remote: { state: "pending" }, updatedAt: this.now() };
+    if (trigger.workflowId !== undefined) {
+      try {
+        Object.assign(trigger, this.linkFields(trigger.workflowId, trigger.runOn, trigger.sameConversation === true));
+        if (this.options.botAccessRefusal?.(trigger.botId, trigger.app)) trigger.enabled = false;
+      } catch {
+        trigger.enabled = false;
+      }
+    }
     await this.exclusive(async () => {
       try { await this.bind(trigger); await this.applyEnabled(trigger.remote.triggerId); }
       catch (error) { this.markRemoteFailure(trigger, error); }
@@ -477,8 +488,10 @@ export class AppTriggerManager {
       }
     }
     const eventId = `test_${randomUUID()}`;
+    const stop = this.workflowStop(trigger);
+    if (stop.reason) throw new AppTriggerError(stop.reason, 403);
     const run = this.options.runs.enqueue({
-      webhookId: trigger.id, webhookName: trigger.name, botId: trigger.botId, runOn: trigger.runOn, deliveryId: eventId, receivedAt: this.now(),
+      webhookId: trigger.id, webhookName: trigger.name, botId: stop.botId, runOn: trigger.runOn, deliveryId: eventId, receivedAt: this.now(),
       eventSource: "app", sameConversation: trigger.sameConversation, ...(trigger.workflowId === undefined ? {} : { workflowId: trigger.workflowId }),
       prompt: triggerEventPrompt(trigger, eventBlock(trigger, { id: eventId, receivedAt: this.now(), test: true, data })),
     });
@@ -539,6 +552,22 @@ export class AppTriggerManager {
     }
   }
 
+  /** Why this trigger's events must not start its workflow now: the first bot cannot watch the app. Also the bot to run. */
+  private workflowStop(trigger: StoredTrigger): { reason: string | null; botId: string } {
+    if (trigger.workflowId === undefined) return { reason: null, botId: trigger.botId };
+    const copy = this.options.workflowCopy?.(trigger.workflowId);
+    const botId = copy && !("code" in copy) ? copy.botId : trigger.botId;
+    return { reason: this.options.botAccessRefusal?.(botId, trigger.app) ?? null, botId };
+  }
+
+  private switchOff(trigger: StoredTrigger): void {
+    trigger.enabled = false;
+    trigger.updatedAt = this.now();
+    this.options.runs.cancelQueued(trigger.id, "The automation was switched off because its first bot cannot watch this app");
+    this.save();
+    this.emitTrigger(trigger);
+  }
+
   private handle(event: BrokerEvent): void {
     if (event.kind === "account_expired") {
       const accountId = event.event.data?.connected_account_id;
@@ -557,6 +586,12 @@ export class AppTriggerManager {
       }
       if (this.options.botState(trigger.botId) === "missing") {
         this.record(trigger, event, "rejected", { reason: "its bot was deleted" });
+        continue;
+      }
+      const stop = this.workflowStop(trigger);
+      if (stop.reason) {
+        this.switchOff(trigger);
+        this.record(trigger, event, "rejected", { reason: stop.reason });
         continue;
       }
       if (!matchesFilter(trigger.app, trigger.filter, data)) {
@@ -579,7 +614,7 @@ export class AppTriggerManager {
           continue;
         }
         runId = this.options.runs.enqueue({
-          webhookId: trigger.id, webhookName: trigger.name, prompt: triggerEventPrompt(trigger, block), botId: trigger.botId,
+          webhookId: trigger.id, webhookName: trigger.name, prompt: triggerEventPrompt(trigger, block), botId: stop.botId,
           runOn: trigger.runOn, deliveryId: event.id, receivedAt: event.receivedAt, eventSource: "app",
           sameConversation: trigger.sameConversation, ...(trigger.workflowId === undefined ? {} : { workflowId: trigger.workflowId }),
         }).id;

@@ -608,6 +608,43 @@ describe("app event that runs a workflow", () => {
     expect(await triggers.update(trigger.id, { enabled: true })).toMatchObject({ enabled: true, workflowId: "wf-1" });
   });
 
+  it("an app event does not reach a first bot without access after restore", async () => {
+    let current = copy;
+    const blocked = new Set<string>();
+    const triggers = manager({ workflowCopy: () => current, botAccessRefusal: (botId) => (blocked.has(botId) ? "Ben can't watch Gmail." : null) });
+    const trigger = await triggers.create(link);
+    expect(await triggers.remove(trigger.id)).toBe(true);
+    blocked.add("ben");
+    current = { ...copy, botId: "ben", prompt: "Do these steps in order:\n1. Ben: Write" };
+    const restored = (await triggers.restore(trigger.id))!;
+    expect(restored).toMatchObject({ botId: "ben", workflowId: "wf-1", enabled: false });
+    await expect(triggers.update(trigger.id, { enabled: true })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("switches an app trigger off and starts no run when an event arrives for a bot without access", async () => {
+    let current = copy;
+    const blocked = new Set<string>();
+    const enqueued: unknown[] = [];
+    const triggers = manager({ workflowCopy: () => current, botAccessRefusal: (botId) => (blocked.has(botId) ? "Ben can't watch Gmail." : null), runs: {
+      enqueue: (input) => { enqueued.push(input); return { id: "run" }; }, merge: () => null, receipt: () => null, pending: () => 0, cancelQueued: () => {},
+    } });
+    const trigger = await triggers.create(link);
+    blocked.add("ben");
+    current = { ...copy, botId: "ben" };
+    await broker.deliver(trigger.remote.triggerId!, { subject: "Order #1", sender: "a@acme.com" }, "msg_a");
+    await drain(triggers);
+    expect(enqueued).toHaveLength(0);
+    expect(triggers.get(trigger.id)).toMatchObject({ enabled: false, workflowId: "wf-1" });
+  });
+
+  it("unlinking an app trigger switches it off", async () => {
+    const triggers = manager({ workflowCopy: () => copy });
+    const trigger = await triggers.create(link);
+    const patched = (await triggers.update(trigger.id, { workflowId: null }))!;
+    expect(patched).not.toHaveProperty("workflowId");
+    expect(patched.enabled).toBe(false);
+  });
+
   it("starts a workflow run from an event, and joins a burst into one run", async () => {
     const own = new RoutineManager({ file: join(dir, "routines-wf.json"), botState: () => "busy", createTask: () => ({ threadId: "thread-run" }), startTurn: async () => {}, workflowCopy: () => copy });
     try {

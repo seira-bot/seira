@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";
-import type { Workflow, WorkflowInput } from "../../shared/workflows.ts";
+import type { Workflow, WorkflowInput, WorkflowRun } from "../../shared/workflows.ts";
 import { VisibleSet, type Viewer } from "../bot-visibility.ts";
 import { createWorkflowStarts } from "../host/workflow-starts.ts";
 import type { WorkflowHost } from "../host/workflow-host.ts";
@@ -23,6 +23,7 @@ const bots = [
 ];
 const names: Record<string, string> = { pub: "Pia", hr: "Hal" };
 const auth = { kind: "loopback", scopes: ["admin", "client"] } as RequestAuth;
+const member = { kind: "session", via: "cookie", scopes: ["client"] } as unknown as RequestAuth;
 const position = { x: 0, y: 0 };
 const botStep = (id: string, botId: string) => ({ id, kind: "bot" as const, botId, instruction: "Do the work.", position });
 
@@ -33,10 +34,13 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function rig(over: { levels?: Record<string, BotAccessLevel> } = {}) {
+function rig(over: { levels?: Record<string, BotAccessLevel>; appRefusal?: string } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "wfs-"));
   dirs.push(dir);
   const flows = new Map<string, Workflow>();
+  const workflowRuns = new Map<string, WorkflowRun>();
+  const again: string[] = [];
+  const apps: Array<{ id: string; name: string; enabled: boolean; botId: string; app: string; workflowId?: string }> = [];
   let made = 0;
   const add = (id: string, ...botIds: string[]) => {
     const flow: Workflow = {
@@ -58,13 +62,18 @@ function rig(over: { levels?: Record<string, BotAccessLevel> } = {}) {
     create: (input: WorkflowInput) => { const flow = { ...input, id: `new-${++made}`, createdAt: 9, updatedAt: 9 } as Workflow; flows.set(flow.id, flow); return flow; },
     remove: (id: string) => flows.delete(id),
     runs: () => [],
+    run: (id: string) => workflowRuns.get(id) ?? null,
+    runAgainFromEvent: (runId: string, stepId: string, startId: string) => { again.push(`${runId} ${stepId} ${startId}`); return { id: "run-new" }; },
   } as unknown as WorkflowHost;
   const routines = new RoutineManager({
     file: join(dir, "routines.json"), botState: () => "busy", createTask: () => ({ threadId: "thread" }), startTurn: async () => {}, workflowCopy: lookup,
   });
   closers.push(() => routines.close());
   const webhooks = new WebhookManager({ file: join(dir, "webhooks.json"), botState: () => "ready", enqueue: () => ({ id: "run" }), workflowCopy: lookup });
-  const starts = createWorkflowStarts({ routines: () => routines, webhooks: () => webhooks, appTriggers: () => ({ list: () => [], update: async () => null }) });
+  const starts = createWorkflowStarts({ routines: () => routines, webhooks: () => webhooks, appTriggers: () => ({
+    list: () => apps as never,
+    update: async (id: string, patch: { enabled?: boolean }) => { const found = apps.find((candidate) => candidate.id === id); if (found && patch.enabled !== undefined) found.enabled = patch.enabled; return null; },
+  }), appAccessRefusal: () => over.appRefusal ?? null });
   const visible = new VisibleSet(bots, [], BOB);
   const botsRefusal = (_auth: RequestAuth, ids: readonly string[], needed: "chat" | "edit") =>
     (ids.some((id) => !atLeast(over.levels?.[id] ?? "edit", needed)) ? "You can't change this bot." : null);
@@ -74,10 +83,10 @@ function rig(over: { levels?: Record<string, BotAccessLevel> } = {}) {
     botsRefusal, routineNeeds: () => "chat" as const,
   };
   const routes = createWorkflowRoutes(deps);
-  async function call(method: string, path: string, body?: unknown) {
+  async function call(method: string, path: string, body?: unknown, who: RequestAuth = auth) {
     const sent: { status?: number; body?: any } = {};
     const context = {
-      req: {} as RouteContext["req"], res: {} as RouteContext["res"], url: new URL(`http://x${path}`), path, method, auth,
+      req: {} as RouteContext["req"], res: {} as RouteContext["res"], url: new URL(`http://x${path}`), path, method, auth: who,
       json: ((_res: unknown, status: number, value: unknown) => { sent.status = status; sent.body = value; }) as unknown as RouteContext["json"],
       readBody: (async () => body) as unknown as RouteContext["readBody"],
     } as RouteContext;
@@ -88,7 +97,7 @@ function rig(over: { levels?: Record<string, BotAccessLevel> } = {}) {
     name: "Morning news", prompt: "Summarize the news", botId: "pub", schedule: { type: "interval", everyMinutes: 60, anchorAt: Date.parse("2026-11-27T08:00:00Z") }, ...over,
   } as never);
   const webhook = (over: Record<string, unknown> = {}) => webhooks.create({ name: "Orders", prompt: "Check the order", botId: "pub", ...over }).webhook;
-  return { flows, add, host, routines, webhooks, starts, visible, deps, call, routine, webhook, botsRefusal };
+  return { flows, add, host, workflowRuns, again, apps, routines, webhooks, starts, visible, deps, call, routine, webhook, botsRefusal };
 }
 
 describe("one switch for every start of an automation", () => {
@@ -219,5 +228,64 @@ describe("who may change an automation", () => {
     expect(r.flows.size).toBe(1);
     expect(startLinkRefusal({ workflowId: "wf-1" }, undefined, auth, r.host, r.visible, r.deps)).toEqual({ status: 403, error: "You can't change this bot." });
     expect(await r.call("GET", "/api/other")).toMatchObject({ out: PASS });
+  });
+});
+
+describe("starts that are not schedules", () => {
+  it("a member cannot change steps that an admin's webhook runs", async () => {
+    const r = rig({ levels: { pub: "chat" } });
+    r.add("wf-1", "pub");
+    r.add("wf-2", "pub");
+    r.webhook({ workflowId: "wf-1" });
+    const blocked = await r.call("DELETE", "/api/workflows/wf-1", undefined, member);
+    expect(blocked).toMatchObject({ status: 403, body: { error: "You can't change this bot." } });
+    expect(r.flows.has("wf-1")).toBe(true);
+    expect((await r.call("DELETE", "/api/workflows/wf-2", undefined, member)).status).toBe(200);
+    expect((await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member)).status).toBe(200);
+  });
+
+  it("a member with access can switch and a member without access cannot", async () => {
+    const r = rig();
+    r.add("wf-1", "pub");
+    r.routine({ workflowId: "wf-1" });
+    expect((await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member)).status).toBe(200);
+    const low = rig({ levels: { pub: "view" } });
+    low.add("wf-1", "pub");
+    low.routine({ workflowId: "wf-1" });
+    expect((await low.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member)).status).toBe(403);
+    const plain = low.webhook({ name: "Plain" });
+    expect((await low.call("POST", "/api/workflows/from-start", { kind: "webhook", id: plain.id }, member)).status).toBe(403);
+  });
+
+  it("a refused switch changes no start", async () => {
+    const r = rig({ appRefusal: "Pia can't watch Gmail. Give Pia access to Gmail first." });
+    r.add("wf-1", "pub");
+    const routine = r.routine({ workflowId: "wf-1" });
+    r.routines.update(routine.id, { enabled: false });
+    r.apps.push({ id: "app-1", name: "Mail", enabled: false, botId: "pub", app: "gmail", workflowId: "wf-1" });
+    const refused = await r.call("POST", "/api/workflows/wf-1/switch", { enabled: true });
+    expect(refused).toMatchObject({ status: 409, body: { error: "Pia can't watch Gmail. Give Pia access to Gmail first." } });
+    expect(r.routines.listRoutines()[0]!.enabled).toBe(false);
+    expect(r.apps[0]!.enabled).toBe(false);
+  });
+
+  it("run again from here works for a webhook run", async () => {
+    const r = rig();
+    r.add("wf-1", "pub", "pub");
+    const hook = r.webhook({ workflowId: "wf-1" });
+    const flow = r.flows.get("wf-1")!;
+    const old: WorkflowRun = {
+      runId: "run-old", workflowId: "wf-1", routineId: hook.id, workflowName: flow.name, status: "failed", graph: { steps: flow.steps, connections: flow.connections },
+      botIds: ["pub"], startStepId: "s1", start: { kind: "webhook", id: hook.id }, threads: {}, createdAt: 1, updatedAt: 2,
+      stepRuns: [{ stepId: "s1", status: "done" }, { stepId: "s2", status: "failed" }],
+    };
+    r.workflowRuns.set("run-old", old);
+    const path = "/api/workflow-runs/run-old/steps/s2/run-again";
+    expect(await r.call("POST", path)).toMatchObject({ status: 201, body: { run: { id: "run-new" } } });
+    expect(r.again).toEqual([`run-old s2 ${hook.id}`]);
+    r.webhooks.update(hook.id, { enabled: false });
+    expect(await r.call("POST", path)).toMatchObject({ status: 409, body: { error: "This automation's start is off. Turn it on first." } });
+    r.webhooks.remove(hook.id);
+    expect(await r.call("POST", path)).toMatchObject({ status: 409, body: { error: "The automation that started this run is gone." } });
   });
 });

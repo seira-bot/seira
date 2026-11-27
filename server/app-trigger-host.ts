@@ -85,6 +85,10 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     if (managedComposioBrokerOff()) return { available: false as const, reason: "off" as const };
     return mode === "managed" && deps.access() ? { available: true as const } : { available: false as const, reason: "unavailable" as const };
   };
+  const accessRefusal = (botId: string, app: string): string | null => {
+    const bot = deps.store.bot(botId);
+    return bot && !botMayWatchApp(bot, app) ? `${bot.name} can't watch ${appLabel(app)}. Give ${bot.name} access to ${appLabel(app)} first.` : null;
+  };
   const manager = new AppTriggerManager({
     file: deps.file,
     broker,
@@ -92,10 +96,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     connectedApps: deps.connectedApps,
     botState: deps.botState,
     ...(deps.workflowCopy ? { workflowCopy: deps.workflowCopy } : {}),
-    botAccessRefusal: (botId, app) => {
-      const bot = deps.store.bot(botId);
-      return bot && !botMayWatchApp(bot, app) ? `${bot.name} can't watch ${appLabel(app)}. Give ${bot.name} access to ${appLabel(app)} first.` : null;
-    },
+    botAccessRefusal: accessRefusal,
     runs: {
       enqueue: (input) => deps.routines().enqueueWebhook(input),
       merge: (triggerId, eventId, sameConversation, merge) => deps.routines().mergeIntoQueuedRun(triggerId, eventId, sameConversation, merge),
@@ -255,6 +256,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
 
   return {
     manager,
+    accessRefusal,
     routes,
     internalRoutes,
     submit,

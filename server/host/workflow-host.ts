@@ -60,6 +60,8 @@ export interface WorkflowHost {
   run(runId: string): WorkflowRun | null;
   /** Starts the routine again at a failed step. Throws, after it has cancelled the new run, when the run cannot be prepared. */
   runAgain(runId: string, stepId: string, routine: Routine, workflow: Workflow): RoutineRun | null;
+  /** Starts a new run for a webhook or an app trigger with the event of an earlier run, at a failed step. */
+  runAgainFromEvent(runId: string, stepId: string, startId: string, workflow: Workflow): RoutineRun | null;
   copyFor: WorkflowCopyLookup;
   start: NonNullable<WorkflowRoutineOptions["startWorkflow"]>;
   routineRunChanged(run: RoutineRun): void;
@@ -196,6 +198,28 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       const routines = deps.routines();
       if (!old || !routines) return null;
       const started = routines.runNow(routine.id);
+      if (!started) return null;
+      try {
+        runner.prepareFrom(started, old, stepId, workflow);
+      } catch (error) {
+        void routines.cancelRun(started.id).catch(() => {});
+        throw error;
+      }
+      return started;
+    },
+    runAgainFromEvent(runId, stepId, startId, workflow) {
+      const old = store.run(runId);
+      const routines = deps.routines();
+      if (!old || !routines) return null;
+      const prior = routines.listRuns().find((candidate) => candidate.id === runId);
+      const event = prior?.prompt ?? old.event;
+      if (!event || !prior) return null;
+      const queued = routines.enqueueWebhook({
+        webhookId: startId, webhookName: prior.routineName, prompt: event, botId: prior.botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
+        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}),
+        ...(prior.resultsThreadId ? { resultsThreadId: prior.resultsThreadId } : {}),
+      });
+      const started = routines.listRuns().find((candidate) => candidate.id === queued.id) ?? null;
       if (!started) return null;
       try {
         runner.prepareFrom(started, old, stepId, workflow);

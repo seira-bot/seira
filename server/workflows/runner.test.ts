@@ -147,6 +147,15 @@ describe("a workflow run fired by an event", () => {
     expect(r.run().event).toBe("APP-EVENT mail from Ada");
   });
 
+  it("the first step gets the whole event text", async () => {
+    const r = rig();
+    r.store.putWorkflow(twoSteps());
+    const text = `EVENT-START ${"x".repeat(30_000)} EVENT-END`;
+    await r.runner.start(r.routineRun("run-1", eventRun({ prompt: text })), "t-ana", () => {});
+    expect(r.run().event).toBe(text);
+    expect(r.last().prompt).toContain("EVENT-END");
+  });
+
   it("records which start fired", async () => {
     const hook = rig();
     hook.store.putWorkflow(twoSteps());
