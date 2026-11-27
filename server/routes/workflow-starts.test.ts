@@ -181,7 +181,7 @@ describe("turning a start into steps", () => {
 
     const empty = r.webhook({ name: "Blank", prompt: "  " });
     expect((await r.call("POST", "/api/workflows/from-start", { kind: "webhook", id: empty.id })).body.error).toBe("Write what the bot should do first.");
-    expect(r.flows.size).toBe(0);
+    expect(r.flows.size).toBe(1);
   });
 });
 

@@ -44,7 +44,7 @@ function rig(over: Partial<WorkflowHostDeps> = {}) {
   const state = { startTurn: undefined as undefined | ((botId: string) => Promise<unknown>), failUpdate: false };
   const deps: WorkflowHostDeps = {
     dataDir: dir,
-    store: { bot: (id: string) => ({ name: ({ ana: "Ana", ben: "Ben" } as Record<string, string>)[id] }) as never, patchTask: ((...args: unknown[]) => { patched.push(args); }) as never },
+    store: { bot: (id: string) => ({ name: ({ ana: "Ana", ben: "Ben" } as Record<string, string>)[id] }) as never, patchTask: ((...args: unknown[]) => { patched.push(args); }) as never, taskByThread: (() => null) as never },
     routines: () => ({
       listRoutines: () => routineRows,
       listRuns: () => runRows,
@@ -52,12 +52,13 @@ function rig(over: Partial<WorkflowHostDeps> = {}) {
       enqueueWebhook: ((input: unknown) => { enqueued.push(input); return { id: "run-2" }; }) as never,
       cancelRun: async (id: string) => { cancelled.push(id); return null; },
       update: ((id: string, patch: unknown) => { if (state.failUpdate) throw new Error("nope"); updates.push([id, patch]); return null; }) as never,
+      bindStepThread: (() => {}) as never,
       workflowRunState: ((runId: string, s: string, detail?: string) => { states.push([runId, s, detail]); return runRows.find((row) => row.id === runId) ?? null; }) as never,
     }),
     routineHooks: () => ({ createTask: ((...args: unknown[]) => { created.push(args); return { threadId: "t-new" }; }) as never, interruptTurn: async () => {} }),
     botState: () => "ready",
     startTurn: async (botId, text, opts) => { turns.push({ botId, text, opts }); return state.startTurn?.(botId); },
-    reports: { postStep: ((_run: unknown, stepId: string, text: string, written: () => void) => { posts.push({ stepId, text }); written(); }) as never },
+    reports: { postStep: ((_run: unknown, stepId: string, text: string, written: () => void) => { posts.push({ stepId, text }); written(); }) as never, runSettled: (() => {}) as never },
     emit: (frame) => frames.push(frame),
     now: () => now,
     log: (line) => logs.push(line),
