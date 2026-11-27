@@ -28,7 +28,8 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   // The page asks these once at start and waits for the answer, so each one needs an answer.
   for (const channel of ["home:page", "home:updating", "update:offered", "desktop-crash-reports:read"]) ipcMain.on(channel, (event) => { event.returnValue = false; });
   for (const channel of ["desktop-analytics:read", "desktop-language:read"]) ipcMain.on(channel, (event) => { event.returnValue = null; });
-  for (const channel of ["desktop:skin", "workspaces:line", "desktop-notices:state", "workspaces:places", "workspaces:look", "window:state", "text-size:get", "rail:offer", "window-frame:state", "updates-consent:state"]) ipcMain.handle(channel, () => null);
+  for (const channel of ["desktop:skin", "workspaces:line", "desktop-notices:state", "workspaces:places", "workspaces:look", "text-size:get", "rail:offer", "window-frame:state", "updates-consent:state"]) ipcMain.handle(channel, () => null);
+  ipcMain.handle("window:state", () => ({ maximized: false, fullScreen: false }));
   ipcMain.handle("sharing:state", () => ({ enabled: false, folders: [], terminal: false, computer: false, connected: false }));
   ipcMain.handle("update:get-state", () => ({ status: "idle" }));
   ipcMain.handle("companion:state", () => ({ running: false, enabled: false, devices: [], bind: null, publicUrl: null }));
@@ -73,7 +74,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       };
       const clickButton = (label, within = "document") => evaluate(`(() => { const el = [...${within}.querySelectorAll('button')].find((one) => one.textContent.trim() === ${JSON.stringify(label)}); if (!el) throw new Error('No button ${label}'); el.click(); })()`);
       const has = (selector) => evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
-      await until(async () => { if (await has("[data-seira-welcome-later]")) await evaluate("document.querySelector('[data-seira-welcome-later]').click()"); return has('button[aria-label="Settings"]'); }, "app shell with the Settings button");
+      await until(() => has('button[aria-label="Settings"]'), "app shell with the Settings button");
       const openSettings = async () => {
         await evaluate(`document.querySelector('button[aria-label="Settings"]').click()`);
         await until(() => has("[data-settings-page]"), "Settings navigation");
@@ -169,7 +170,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     return response.json();
   };
   try {
-    await api("PUT", "/api/config", { signIn: { admins: ["owner@corp.test"], members: [] } });
+    await api("PUT", "/api/config", { signIn: { admins: ["owner@corp.test"], members: [] }, onboarding: { completedAt: new Date().toISOString(), version: 99 } });
     const { bot } = await api("POST", "/api/bots", { name: "Helper" });
     await api("POST", "/api/sidebar-sections", { name: "Sales", botIds: [bot.id] });
     const probe = await fetch(fixture.info.url, { redirect: "manual" });
