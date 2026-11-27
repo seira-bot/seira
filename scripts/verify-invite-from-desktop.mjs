@@ -152,10 +152,11 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   const { launchVerificationServer } = await import("./control-seira.ts");
   const output = mkdtempSync(join(tmpdir(), "seira-invite-desktop-"));
   const shots = process.env.SEIRA_INVITE_SHOTS ?? join(output, "shots");
-  for (const dir of ["home", "user-data", "ui"]) mkdirSync(join(output, dir));
+  for (const dir of ["home", "user-data"]) mkdirSync(join(output, dir));
   mkdirSync(shots, { recursive: true });
-  await build({ root, logLevel: "error", build: { outDir: join(output, "ui"), emptyOutDir: true } });
-  const fixture = await launchVerificationServer({ ...process.env, SEIRA_SIGNIN_SMTP_URL: "smtp://127.0.0.1:9" }, undefined, undefined, undefined, undefined, undefined, [], join(output, "ui"));
+  const ui = process.env.SEIRA_INVITE_UI ?? join(output, "ui");
+  if (!process.env.SEIRA_INVITE_UI) await build({ root, logLevel: "error", build: { outDir: ui, emptyOutDir: true } });
+  const fixture = await launchVerificationServer({ ...process.env, SEIRA_SIGNIN_SMTP_URL: "smtp://127.0.0.1:9" }, undefined, undefined, undefined, undefined, undefined, [], ui);
   const api = async (method, path, body) => {
     const response = await fetch(fixture.info.url + path, { method, headers: { "content-type": "application/json", origin: fixture.info.url }, ...(body ? { body: JSON.stringify(body) } : {}) });
     assert.ok(response.ok, `${method} ${path} answered ${response.status}`);
@@ -165,6 +166,8 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     await api("PUT", "/api/config", { signIn: { admins: ["owner@corp.test"], members: [] } });
     const { bot } = await api("POST", "/api/bots", { name: "Helper" });
     await api("POST", "/api/sidebar-sections", { name: "Sales", botIds: [bot.id] });
+    const probe = await fetch(fixture.info.url, { redirect: "manual" });
+    console.log(`probe ${probe.status} ${probe.headers.get("content-type")} ${probe.headers.get("location") ?? ""}`);
     console.log(JSON.stringify({ server: fixture.info.url, evidence: output, shots }));
     const electron = createRequire(import.meta.url)("electron");
     const child = spawn(electron, [fileURLToPath(import.meta.url), fixtureFlag, fixture.info.url, output, shots], {
@@ -182,6 +185,6 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     assert.equal(code, 0, `Electron check failed; inspect ${join(output, "electron.log")}`);
   } finally {
     await fixture.close();
-    for (const dir of ["home", "user-data", "ui"]) rmSync(join(output, dir), { recursive: true, force: true });
+    for (const dir of ["home", "user-data", ...(process.env.SEIRA_INVITE_UI ? [] : ["ui"])]) rmSync(join(output, dir), { recursive: true, force: true });
   }
 }
