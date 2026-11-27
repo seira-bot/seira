@@ -3,7 +3,7 @@
 // Run: xvfb-run -a node scripts/verify-invite-from-desktop.mjs   (see docs/verification/invite-from-desktop.md)
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -155,7 +155,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   for (const dir of ["home", "user-data"]) mkdirSync(join(output, dir));
   mkdirSync(shots, { recursive: true });
   const ui = process.env.SEIRA_INVITE_UI ?? join(output, "ui");
-  if (!process.env.SEIRA_INVITE_UI) await build({ root, logLevel: "error", build: { outDir: ui, emptyOutDir: true } });
+  if (!existsSync(join(ui, "index.html"))) await build({ root, logLevel: "error", build: { outDir: ui, emptyOutDir: true } });
   const fixture = await launchVerificationServer({ ...process.env, SEIRA_SIGNIN_SMTP_URL: "smtp://127.0.0.1:9" }, undefined, undefined, undefined, undefined, undefined, [], ui);
   const api = async (method, path, body) => {
     const response = await fetch(fixture.info.url + path, { method, headers: { "content-type": "application/json", origin: fixture.info.url }, ...(body ? { body: JSON.stringify(body) } : {}) });
