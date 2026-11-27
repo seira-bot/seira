@@ -4619,7 +4619,7 @@ describe("a routine linked to a workflow", () => {
       runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
       mayDraft: () => false, drafted: () => {},
     });
-    const ben = { id: "ben", name: "Ben", modelSelection: { instanceId: "claude" } };
+    const ben = { id: "ben", name: "Ben" };
     for (const threadId of [own, "step-ben"]) {
       expect(gate.confines(threadId)).toBe(true);
       expect(gate.refusesRoute(ben, threadId, "POST", "/api/internal/memory")).toBe(true);
@@ -4640,7 +4640,7 @@ describe("a routine linked to a workflow", () => {
       mayDraft: () => false, drafted: () => {},
     });
     const send = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "COMPOSIO_MULTI_EXECUTE_TOOL", arguments: { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: {} }] } } };
-    expect(gate.refusesConnectorCall({ id: "ben", name: "Ben", modelSelection: { instanceId: "claude" } }, "step-ben", send)).toBe(true);
+    expect(gate.refusesConnectorCall({ id: "ben", name: "Ben" }, "step-ben", send)).toBe(true);
   });
 
   it("gives a step its own access on a run that has none, and never loosens a run that has it", async () => {

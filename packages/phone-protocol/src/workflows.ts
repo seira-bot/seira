@@ -37,7 +37,7 @@ export type WorkflowProblemCode =
   | "workflow_loop" | "workflow_note_connected" | "workflow_branch_not_check" | "workflow_branch_missing"
   | "workflow_duplicate_branch" | "workflow_too_many_outgoing" | "workflow_bot_missing"
   | "workflow_instruction_missing" | "workflow_question_missing" | "workflow_wait_range" | "workflow_text_too_long"
-  | "workflow_no_start" | "workflow_many_starts" | "workflow_start_not_bot" | "workflow_changed" | "workflow_step_setting";
+  | "workflow_no_start" | "workflow_many_starts" | "workflow_start_not_bot" | "workflow_changed";
 export interface WorkflowProblem { code: WorkflowProblemCode; stepId?: string; connectionId?: string; message: string }
 
 export type WorkflowStepStatus = "waiting" | "running" | "done" | "failed" | "skipped" | "not_run";

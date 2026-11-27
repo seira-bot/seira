@@ -77,10 +77,10 @@ export function validateWorkflowInput(body: unknown, facts: WorkflowFacts): Work
     else {
       const chosen = loadModelSelection(own.modelSelection);
       if (chosen) own.modelSelection = chosen;
-      else add("workflow_step_setting", `${label(step)}: choose a model that exists.`, { stepId: step.id });
+      else add("workflow_shape", SHAPE_MESSAGE, { stepId: step.id });
     }
     if (own.access === null || own.access === undefined) delete own.access;
-    else if (own.access !== "read-and-draft") add("workflow_step_setting", `${label(step)}: choose a valid access for this step.`, { stepId: step.id });
+    else if (own.access !== "read-and-draft") add("workflow_shape", SHAPE_MESSAGE, { stepId: step.id });
   }
   for (const step of value.steps) {
     if (step.kind === "bot" && !step.instruction.trim()) add("workflow_instruction_missing", `${label(step)}: tell the bot what to do in this step.`, { stepId: step.id });
