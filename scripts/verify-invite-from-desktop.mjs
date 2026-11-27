@@ -25,6 +25,9 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     app.commandLine.appendSwitch("no-sandbox");
     app.commandLine.appendSwitch("disable-dev-shm-usage");
   }
+  // The page asks these once at start and waits for the answer, so each one needs an answer.
+  for (const channel of ["home:page", "home:updating", "update:offered", "desktop-crash-reports:read"]) ipcMain.on(channel, (event) => { event.returnValue = false; });
+  for (const channel of ["desktop-analytics:read", "desktop-language:read"]) ipcMain.on(channel, (event) => { event.returnValue = null; });
   ipcMain.handle("sharing:state", () => ({ enabled: false, folders: [], terminal: false, computer: false, connected: false }));
   ipcMain.handle("update:get-state", () => ({ status: "idle" }));
   ipcMain.handle("companion:state", () => ({ running: false, enabled: false, devices: [], bind: null, publicUrl: null }));
@@ -52,10 +55,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
         },
       });
       win.webContents.on("console-message", (event) => { if (event.level === "error") { errors.push(`${name}: ${event.message}`); console.error(`${name} console: ${event.message}`); } });
-      win.webContents.on("render-process-gone", (_e, details) => console.error(`${name}: renderer gone ${details.reason} ${details.exitCode}`));
-      win.webContents.on("did-navigate", (_e, target) => console.error(`${name}: navigated ${target}`));
-      for (const event of ["did-start-loading", "did-stop-loading", "did-finish-load", "dom-ready", "destroyed", "unresponsive", "preload-error", "did-start-navigation"]) win.webContents.on(event, (...args) => console.error(`${name}: ${event} ${event === "preload-error" ? args.slice(1).join(" ") : ""}`));
-      win.on("closed", () => console.error(`${name}: window closed`));
+      win.webContents.on("render-process-gone", (_e, details) => console.error(`${name}: renderer gone ${details.reason}`));
       win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
       await win.loadURL(url).catch((error) => console.error(`${name}: ${error.message}`));
       console.error(`${name}: at ${win.webContents.getURL()}`);
