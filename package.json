@@ -85,6 +85,7 @@
     "package:prepare": "node scripts/crash-report-build.mjs && pnpm build && pnpm build:server && pnpm build:companion && pnpm build:updater && pnpm build:ssh2 && pnpm build:android-tools && pnpm build:cloudflared && pnpm build:browser && pnpm build:duckdb && pnpm crash-report:symbols",
     "package:mac": "pnpm package:prepare && pnpm build:speech && pnpm build:cua && electron-builder --mac --publish never",
     "package:win": "pnpm package:prepare && pnpm build:cua:win && pnpm build:job-fence && electron-builder --win --publish never",
+    "package:appx": "pnpm package:prepare && pnpm build:cua:win && pnpm build:job-fence && electron-builder --win appx --x64 --publish never",
     "package:linux": "pnpm package:prepare && pnpm build:cua:linux && electron-builder --linux --x64 --publish never",
     "package:arch": "pnpm package:prepare && pnpm build:cua:linux && electron-builder --linux pacman --x64 --publish never",
     "package:linux:offline": "pnpm package:prepare && pnpm build:cua:linux:offline && electron-builder --linux --x64 --publish never",
