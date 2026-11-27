@@ -10,7 +10,7 @@ import type { LocaleKey } from "@/locales";
 import { ApiKeyEngineManage, EngineSetup, EngineUpdateNotice, EngineWarningNotice, isApiKeyEngine } from "./EngineSetup";
 import { AppCopyNotice } from "./EngineAppCopy";
 import { forgetAppCopySwitches } from "@/state/engine-install";
-import { AccountsCard, AddAccount, accountGroupOf, accountsReady, type AccountGroup } from "./EngineAccounts";
+import { AccountsCard, AddAccount, accountGroupOf, accountGroupTitle, accountsReady, type AccountGroup } from "./EngineAccounts";
 import { ProviderMenu, ProviderOffStatus } from "./ProviderMenu";
 import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import type { ProviderUse } from "../../shared/provider-uses";
@@ -424,15 +424,15 @@ function simpleStatus(instance: InstanceInfo, ready: boolean): { tone: "success"
 
 /** One provider: its mark in the 32 px slot, the status under the name, and one Set up / Manage that opens its fold
  * inside the same card. */
-function ProviderRow({ instance, ready, open, onToggle, compact, children }: {
-  instance: InstanceInfo; ready: boolean; open: boolean; onToggle: () => void; compact: boolean; children: ReactNode;
+function ProviderRow({ instance, title, ready, open, onToggle, compact, children }: {
+  instance: InstanceInfo; title: string; ready: boolean; open: boolean; onToggle: () => void; compact: boolean; children: ReactNode;
 }) {
   const status = simpleStatus(instance, ready);
   return <>
     <div data-simple-engine={instance.instanceId} className={cn("flex items-center gap-3 px-4", compact && !ready && !status.tone ? "min-h-11 py-1.5" : "min-h-16 py-3")}>
       <SettingsMark><InstanceProviderMark instance={instance} size={18} subtle /></SettingsMark>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[14px] leading-5 text-ink">{instance.displayName}</span>
+        <span className="truncate text-[14px] leading-5 text-ink">{title}</span>
         {!(compact && !ready && !status.tone) && <span className="truncate text-[13px] leading-[18px] text-ink-secondary"><StatusDot tone={status.tone} />{status.text}</span>}
       </span>
       <button type="button" aria-expanded={open} className="ui-button ml-3 shrink-0" onClick={onToggle}>
@@ -444,8 +444,9 @@ function ProviderRow({ instance, ready, open, onToggle, compact, children }: {
   </>;
 }
 
-function SimpleEngines({ rows, isReady, renderEngine, more, accountsOnly = false }: {
+function SimpleEngines({ rows, titleOf, isReady, renderEngine, more, accountsOnly = false }: {
   rows: InstanceInfo[];
+  titleOf: (instance: InstanceInfo) => string;
   isReady: (instance: InstanceInfo) => boolean;
   renderEngine: (instance: InstanceInfo, bare?: boolean) => ReactNode;
   more: { id: string; open: boolean; onToggle: () => void };
@@ -459,7 +460,7 @@ function SimpleEngines({ rows, isReady, renderEngine, more, accountsOnly = false
   const others = rows.filter((instance) => !featured.includes(instance));
   const row = (instance: InstanceInfo, compact: boolean) => {
     const open = opened === instance.instanceId;
-    return <ProviderRow key={instance.instanceId} instance={instance} ready={isReady(instance)} open={open} compact={compact}
+    return <ProviderRow key={instance.instanceId} instance={instance} title={titleOf(instance)} ready={isReady(instance)} open={open} compact={compact}
       onToggle={() => setOpened(open ? null : instance.instanceId)}>{renderEngine(instance, true)}</ProviderRow>;
   };
   return (
@@ -479,7 +480,8 @@ function SimpleEngines({ rows, isReady, renderEngine, more, accountsOnly = false
   );
 }
 
-/** A provider's accounts share one card, which takes the place of its first account. */
+/** A provider's accounts share one card, which takes the place of its first account and, with two or more accounts,
+ * the provider's name. */
 function groupedAccounts(listed: InstanceInfo[]) {
   const groups = new Map<AccountGroup, InstanceInfo[]>();
   for (const instance of listed) {
@@ -490,21 +492,25 @@ function groupedAccounts(listed: InstanceInfo[]) {
     const group = accountGroupOf(instance);
     return group && groups.get(group)?.[0] === instance ? group : null;
   };
-  return { groups, groupOf, rows: listed.filter((instance) => !accountGroupOf(instance) || groupOf(instance)) };
+  const titleOf = (instance: InstanceInfo) => {
+    const group = groupOf(instance);
+    return group && groups.get(group)!.length > 1 ? accountGroupTitle(group) : instance.displayName;
+  };
+  return { groups, groupOf, titleOf, rows: listed.filter((instance) => !accountGroupOf(instance) || groupOf(instance)) };
 }
 
 /** The chat's AI sign-in card: Simple Providers with only the accounts a person signs in to (Claude, ChatGPT or Codex,
  * Antigravity), for an owner or admin. */
 export function AiSignInSettings() {
   const { state } = useStore();
-  const { groups, groupOf, rows } = groupedAccounts(state.instances.filter((instance) => accountGroupOf(instance) !== null || (instance.driverKind === "antigravityAgent" && !instance.readOnly)));
+  const { groups, groupOf, titleOf, rows } = groupedAccounts(state.instances.filter((instance) => accountGroupOf(instance) !== null || (instance.driverKind === "antigravityAgent" && !instance.readOnly)));
   const isReady = (instance: InstanceInfo) => { const group = groupOf(instance); return group ? accountsReady(groups.get(group)!) : engineReady(instance); };
   const renderEngine = (instance: InstanceInfo, bare = false) => {
     const group = groupOf(instance);
     return group ? <AccountsCard group={group} accounts={groups.get(group)!} bare={bare} /> : <EngineRow instance={instance} bare={bare} />;
   };
   return <AdminOnly><div data-ai-sign-in="">
-    <SimpleEngines rows={rows} isReady={isReady} renderEngine={renderEngine} accountsOnly more={{ id: "ai-sign-in-more", open: false, onToggle: () => {} }} />
+    <SimpleEngines rows={rows} titleOf={titleOf} isReady={isReady} renderEngine={renderEngine} accountsOnly more={{ id: "ai-sign-in-more", open: false, onToggle: () => {} }} />
   </div></AdminOnly>;
 }
 
@@ -513,7 +519,7 @@ export function EnginesSettings({ simple = false, more }: { simple?: boolean; mo
   // Leaving Settings ends the "now uses the copy Seira installed" lines.
   useEffect(() => forgetAppCopySwitches, []);
   const listed = state.instances.filter((i) => i.readOnly || i.cli !== undefined || i.cliDefault !== undefined || i.snapshot.state === "unavailable" || isApiKeyEngine(i) || i.claudeEndpoint !== undefined || i.claudeBedrock !== undefined || i.codexEndpoint !== undefined);
-  const { groups, groupOf, rows } = groupedAccounts(listed);
+  const { groups, groupOf, titleOf, rows } = groupedAccounts(listed);
   // A hidden ordinary Claude instance takes its card, and the endpoint section inside it, away. A hosted
   // workspace lists every engine read-only and refuses instance changes, so there the section has no Add.
   const hostedWorkspace = rows.length > 0 && rows.every((instance) => instance.readOnly);
@@ -529,7 +535,7 @@ export function EnginesSettings({ simple = false, more }: { simple?: boolean; mo
   };
 
   if (simple && more) return <>
-    <SimpleEngines rows={rows} isReady={isReady} renderEngine={renderEngine} more={more} />
+    <SimpleEngines rows={rows} titleOf={titleOf} isReady={isReady} renderEngine={renderEngine} more={more} />
     {orphanEndpoints && <div className="px-4"><ClaudeEndpoints /><ClaudeBedrockEndpoints /></div>}
     {orphanCodexEndpoints && <div className="px-4"><CodexEndpoints /></div>}
   </>;

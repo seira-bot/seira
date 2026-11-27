@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { approvalModeFor, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
-import { normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
+import { accountLimit, normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
 import { isCallLanguage, isCallSpeed } from "../../shared/call-voice.ts";
 import { isBotLiveVoice } from "../../shared/live-call.ts";
 import { normalizeOutboundPolicy } from "../../shared/outbound.ts";
@@ -45,7 +45,7 @@ import { refusalBody, userError } from "../user-errors.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import type { ModelSelectionCheck } from "./bots-create.ts";
 import { GITHUB_APP_SLUG } from "../../shared/github-app.ts";
-import { githubAllowedFor, type GithubBotSwitches } from "../github/policy.ts";
+import { githubAllowedFor, githubGrantWidens, githubSwitchesAfter, type GithubBotSwitches } from "../github/policy.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotPatchRouteDeps {
@@ -638,13 +638,26 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         }
         patch.alwaysAllow = alwaysAllow;
       }
-      const githubGrantChanged = (body.connectorTools !== undefined &&
-          JSON.stringify(existingBot?.connectorTools?.[GITHUB_APP_SLUG] ?? null) !== JSON.stringify((patch as Pick<Partial<BotRecord>, "connectorTools">).connectorTools?.[GITHUB_APP_SLUG] ?? null)) ||
-        (body.connectorScopes !== undefined &&
-          (existingBot?.connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null) !== ((patch as Pick<Partial<BotRecord>, "connectorScopes">).connectorScopes?.apps?.[GITHUB_APP_SLUG] ?? null));
-      const githubReopened = !!existingBot && deps.githubGrantedTo?.(existingBot.id) === true &&
-        !githubAllowedFor(existingBot) && githubAllowedFor({ ...existingBot, ...(patch as GithubBotSwitches) });
-      if ((githubGrantChanged || githubReopened) && deps.ownsGithubConnection?.(auth) !== true) {
+      // The effective GitHub access after the store normalizes the patch, compared with the bot as it is now.
+      // A shell can forge an Origin header, so none of these checks looks at it.
+      const githubChange = (current: BotRecord | null | undefined) => {
+        if (!current) return { owned: true, idle: true, widened: false };
+        const after = githubSwitchesAfter(current, patch as GithubBotSwitches);
+        const widened = githubGrantWidens(current, after);
+        const reopened = deps.githubGrantedTo?.(current.id) === true && !githubAllowedFor(current) && githubAllowedFor(after);
+        const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+        const touched = reopened ||
+          (body.connectorTools !== undefined && !same(current.connectorTools?.[GITHUB_APP_SLUG], after.connectorTools?.[GITHUB_APP_SLUG])) ||
+          (body.connectorScopes !== undefined && !(same(current.connectorScopes?.apps?.[GITHUB_APP_SLUG], after.connectorScopes?.apps?.[GITHUB_APP_SLUG]) &&
+            same(accountLimit(current.connectorScopes, GITHUB_APP_SLUG), accountLimit(after.connectorScopes, GITHUB_APP_SLUG))));
+        return {
+          owned: !touched || deps.ownsGithubConnection?.(auth) === true,
+          idle: !(widened || reopened) || auth.kind !== "loopback" || DESKTOP_MANAGED || !store.bots.some((candidate) => candidate.busy || activeGroupTurnForBot(candidate.id)),
+          widened: widened || reopened,
+        };
+      };
+      const githubNow = githubChange(existingBot);
+      if (!githubNow.owned) {
         return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
       }
       // Known gap: outside the packaged desktop, loopback is the owner, so these loosenings are one curl from
@@ -652,8 +665,8 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       const loosened: string[] = [];
       const trustPatch = patch as Pick<Partial<BotRecord>, "outbound" | "connectorScopes" | "fallback">;
       if (body.outbound !== undefined && trustPatch.outbound?.policy === "allow" && existingBot?.outbound?.policy !== "allow") loosened.push("outbound");
-      if (githubReopened) {
-        if (auth.kind === "loopback" && !DESKTOP_MANAGED && store.bots.some((candidate) => candidate.busy)) {
+      if (githubNow.widened) {
+        if (!githubNow.idle) {
           return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
         }
         loosened.push("github");
@@ -724,6 +737,14 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         if (toolScopeWidens(freshBrowserBot?.toolScope, patch.toolScope) && auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin && store.bots.some((candidate) => candidate.busy)) {
           return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
         }
+      }
+      // The owner and idle checks run again on the bot as it is now: the awaits above can yield, and a bot can start working or change in that gap.
+      const githubFresh = githubChange(freshBrowserBot);
+      if (!githubFresh.owned) {
+        return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
+      }
+      if (!githubFresh.idle) {
+        return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
       }
       if (body.connectorScopes !== undefined && widensConnectorScopes(freshBrowserBot?.connectorScopes, trustPatch.connectorScopes) &&
           auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin &&

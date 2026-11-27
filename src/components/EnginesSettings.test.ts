@@ -461,6 +461,19 @@ describe("Settings → AI in Simple mode", () => {
     expect(simple()).not.toContain('data-simple-engine="kimi"');
     expect(simple(true)).toContain('data-simple-engine="kimi"');
   });
+
+  it("names a card of several accounts after the provider, not after its first account", () => {
+    fixture.instances = [
+      engine("claude-one", "claudeAgent", true, { displayName: "Claude - 1" }),
+      engine("claude-two", "claudeAgent", true, { displayName: "Claude - 2" }),
+    ];
+    const html = simple();
+    expect(rows(html)).toEqual(["claude-one"]);
+    expect(html).toMatch(/data-simple-engine="claude-one"[\s\S]*?text-ink">Claude<\/span>/);
+    expect(html).not.toContain(">Claude - 1</span>");
+    fixture.instances = [engine("claude-one", "claudeAgent", true, { displayName: "Claude - 1" })];
+    expect(simple()).toMatch(/data-simple-engine="claude-one"[\s\S]*?text-ink">Claude - 1<\/span>/);
+  });
 });
 
 describe("Settings → Engines → custom Claude endpoints", () => {

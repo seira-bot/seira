@@ -15,7 +15,7 @@ import type { InstanceConfig } from "../contracts.ts";
 import { BUILT_IN_DRIVERS } from "../drivers/builtIn.ts";
 import type { ProviderRegistry } from "../harness/registry.ts";
 import { endpointDisplayUrl, isAddedEndpoint, localServerAlreadyAdded } from "../openai-compat-endpoints.ts";
-import type { RequestAuth } from "../request-auth.ts";
+import { isLoopbackHost, type RequestAuth } from "../request-auth.ts";
 import { callRoute, type RouteReply } from "../routes/call-route.ts";
 import type { RouteHandler } from "../routes/table.ts";
 import type { BotRecord, Store } from "../store.ts";
@@ -331,7 +331,12 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       if (change.kind === "bedrock") return { change: `Add the engine "${change.name}" (Claude on Amazon Bedrock), AWS profile ${change.awsProfile} in ${change.awsRegion}, model ${change.model}` };
       return { change: `Add the engine "${change.name ?? LOCAL_SERVER[change.kind].name}" (${LOCAL_SERVER[change.kind].name} on ${change.url})` };
     },
-    confirm: (change: EngineChange) => (change.kind === "openai-compat" ? { code: "keyTo", params: { service: CREDENTIAL_TARGETS[change.keyFrom].label, host: hostOf(change.url) } } : null),
+    confirm: (change: EngineChange): Consequence | null => {
+      if (change.kind === "openai-compat") return { code: "keyTo", params: { service: CREDENTIAL_TARGETS[change.keyFrom].label, host: hostOf(change.url) } };
+      // A local server is local by its address, not by its kind: one at another address receives every conversation sent to it.
+      if ((change.kind === "ollama" || change.kind === "lmstudio") && !isLoopbackHost(hostOf(change.url))) return { code: "dataTo", params: { provider: hostOf(change.url) } };
+      return null;
+    },
     write: async (change: EngineChange | EngineKeep) => {
       if (change.kind === "keep") {
         for (const { instanceId } of deps.engines()) {

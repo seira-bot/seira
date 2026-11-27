@@ -12,7 +12,7 @@ import { ChatGptPlanStatus } from "./ChatGptPlanStatus";
 import { EngineCard, engineReady, providerName, type EngineCardSummary } from "./EngineLibrary";
 import { CommandRow, EngineSetup, EngineUpdateNotice, EngineWarningNotice } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
-import { ProviderOffItems, useProviderOff } from "./ProviderMenu";
+import { ProviderMenuBody, ProviderOffItems, useProviderOff } from "./ProviderMenu";
 import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import type { ProviderUse } from "../../shared/provider-uses";
 
@@ -38,6 +38,8 @@ const COPY: Record<AccountGroup, Record<"title" | "add" | "removeBody", LocaleKe
   claude: { title: "accounts.claude", add: "accounts.addClaude", removeBody: "accounts.removeBodyClaude" },
   chatgpt: { title: "accounts.chatgpt", add: "accounts.addChatgpt", removeBody: "accounts.removeBodyChatgpt" },
 };
+
+export const accountGroupTitle = (group: AccountGroup): string => t(COPY[group].title);
 
 /** What an account's menu offers. Only accounts added here can be removed; each provider's first account stays, and
  * the built-in rows (Claude, Codex, ChatGPT plan) can be hidden instead. */
@@ -80,7 +82,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
   const [removeBlocked, setRemoveBlocked] = useState<ProviderUse[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const { signOut: canSignOut, remove: canRemove, hide: canHide } = accountActions(group, instance);
-  const off = useProviderOff(instance);
+  const off = useProviderOff(instance, { hide: canHide });
   const usedBy = state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId || bot.fallback?.some((backup) => backup.instanceId === instance.instanceId)).length;
 
   useEffect(() => {
@@ -131,11 +133,12 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
         {busy || off.busy ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={16} />}
       </button>
       {open && (
-        <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[220px] overflow-hidden text-[13px]", MENU_SHEET)}>
+        <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[260px] overflow-hidden text-[13px]", MENU_SHEET)}>
+          <ProviderMenuBody off={off} onDone={() => setOpen(false)}>{(choose) => <>
           <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); onRename(); }}>{t("accounts.rename")}</button>
           {canSignOut && <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
-          {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} />}
-          {canRemove && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
+          {(canHide || canRemove) && <ProviderOffItems off={off} onDone={() => setOpen(false)} onChoose={choose} />}
+          </>}</ProviderMenuBody>
         </div>
       )}
       {(off.blocked.length > 0 || removeBlocked.length > 0) && (
