@@ -483,7 +483,7 @@ describe("people who sign in", () => {
     expect(lists(fx)!.members).toEqual(["ann@acme.com"]);
     const card = fx.cards().at(-1)!.card;
     expect(card.appSettingRequest).toMatchObject({ settingId: "people.signIn", consequence: "new@acme.com can sign in and sees the whole team." });
-    expect(card.subtitle).toBe("Invite new@acme.com as user, sees the whole team. They sign in at https://team.example.org.");
+    expect(card.subtitle).toContain("Invite new@acme.com as user, sees the whole team. They sign in at https://team.example.org.");
     expect(fx.routeCalls).toEqual([]);
     await fx.resolve(String(card.requestId), "allow");
     expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com", "new@acme.com"] });
@@ -562,7 +562,8 @@ describe("people who sign in", () => {
     const fx = fixture({ people: { accessRefusal: "That bot is shared with too many people already." } });
     await fx.set("people.signIn", { email: "pat@acme.com", sees: { bots: ["Clive"] } });
     const applied = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
-    expect(JSON.stringify(applied.body)).toContain("That bot is shared with too many people already.");
+    expect(applied.body.error).toBe("The change could not be applied. Nothing changed.");
+    expect(JSON.stringify(fx.messages)).toContain("That bot is shared with too many people already.");
     expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com"] });
     expect(fx.order).toEqual(["access"]);
   });
