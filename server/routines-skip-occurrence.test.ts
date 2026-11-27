@@ -86,7 +86,6 @@ describe("skipping one occurrence of a routine", () => {
   it("does not run a skipped time that the scheduler finds due, even when nextRunAt was not moved", async () => {
     const h = harness();
     const routine = h.daily();
-    Object.assign(h.manager.listRoutines()[0], {});
     (h.manager as any).routines[0].skippedOccurrences = [NINE];
     h.at(NINE + 1_000); await h.manager.tick();
     expect(h.started).toEqual([]);
