@@ -111,6 +111,12 @@ describe("the pages", () => {
     expect(ids(fullContext({ plan: false }))).not.toContain("plan");
   });
 
+  it("AC-E1 shows People on a connected server's page in the desktop window, and AC-E3 not on the desktop app's own computer", () => {
+    expect(ids(fullContext({ desktop: true, here: false, admin: true, cloud: false }))).toContain("people");
+    expect(ids(fullContext({ desktop: true, here: true, admin: true, cloud: false }))).not.toContain("people");
+    expect(ids(fullContext({ desktop: true, here: false, admin: false, cloud: false }))).not.toContain("people");
+  });
+
   it("offers a team's member none of the installation's admin pages, and a team's admin all of them", () => {
     for (const page of ["ai", "desktops", "usage", "transfer", "data"] as const) {
       expect(ids(PEOPLE["a team member"])).not.toContain(page);
