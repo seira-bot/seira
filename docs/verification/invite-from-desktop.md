@@ -43,4 +43,4 @@ is open, so trust the text check and not that picture.
 - That a person receives or opens the invite link. No mail is sent.
 - The wording of the dialog in other languages, or the layout on a phone.
 - The server rules for who may invite. `server/app-settings-people.e2e.test.ts`
-  and `src/components/settings/PeoplePage.dom.test.ts` cover those.
+  and `src/components/settings/pages/PeoplePage.dom.test.ts` cover those.
