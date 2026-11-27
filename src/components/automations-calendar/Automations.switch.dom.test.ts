@@ -23,6 +23,7 @@ const { TriggersPage } = await import("../TriggersPage");
 const { AutomationPanel } = await import("../automations/AutomationPanel");
 const { NewAutomation } = await import("../automations/NewAutomation");
 const { automationsFrom } = await import("@/lib/automations");
+const { t } = await import("@/lib/i18n");
 const { addDays, atLocalTime, startOfDay, startOfWeek } = await import("@/lib/routine-calendar");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -134,13 +135,13 @@ describe("a slot to the routine editor", () => {
     return atLocalTime(addDays(monday, 1), "10:00");
   };
   const press = (container: ParentNode | Document, text: string) => act(() => { ([...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLElement).click(); });
-  const chooseRepeat = (container: HTMLElement) => (container.querySelector("select[aria-label='Repeat']") as HTMLSelectElement | null)?.value;
+  const pressedRepeat = () => document.querySelector("[role=group][aria-label='Repeat'] [aria-pressed=true]")?.textContent;
 
   it.each([
-    ["Once", "none"],
-    ["Every Tuesday at 10:00", "weekly"],
-    ["Every day at 10:00", "daily"],
-  ])("opens Set it up yourself with 10:00 and %s as the start value", async (label, repeat) => {
+    ["Once", "routines.repeat.once"],
+    ["Every Tuesday at 10:00", "routines.repeat.weekly"],
+    ["Every day at 10:00", "routines.repeat.daily"],
+  ])("opens Set it up yourself with 10:00 and %s as the start value", async (label, repeatKey) => {
     fixture.state = state({ config: { features: { newAutomations: true } } });
     const container = mount(page());
     await settle();
@@ -151,7 +152,7 @@ describe("a slot to the routine editor", () => {
     press(document, "Continue");
     await settle();
     expect((document.querySelector("input[type=time]") as HTMLInputElement).value).toBe("10:00");
-    expect(chooseRepeat(document.body)).toBe(repeat);
+    expect(pressedRepeat()).toBe(t(repeatKey));
   });
 });
 
