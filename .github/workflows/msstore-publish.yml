@@ -9,7 +9,7 @@ name: msstore publish
 # - The `gate` job runs scripts/release-gate.mjs on that SHA. A run that the gate flags waits for the `release-approval` environment.
 # - The `build` job has no secret. It builds the Store package and checks it with scripts/check-appx.mjs.
 # - The `publish` job uses the `microsoft-store` environment and runs only after the gate, the approval and the build.
-#   Only that job reads the four MSSTORE_* secrets. It runs no code of the repository. It stops when a secret is missing
+#   Only that job reads the four MSSTORE_* credentials. It runs no code of the repository. It stops when a secret is missing
 #   or when Partner Center already holds a submission in progress, because `msstore publish` deletes that submission.
 # scripts/ci-workflow.test.ts holds these rules.
 
