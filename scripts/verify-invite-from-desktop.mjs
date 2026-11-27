@@ -39,7 +39,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     session.defaultSession.webRequest.onBeforeRequest((request, callback) => {
       const target = new URL(request.url);
       const allowed = target.origin === serverOrigin || target.protocol === "devtools:" || target.protocol === "data:" || target.protocol === "blob:";
-      if (!allowed) blocked.push(target.origin);
+      if (!allowed) { blocked.push(target.origin); console.error(`blocked ${request.url}`); }
       callback({ cancel: !allowed });
     });
     const checks = [];
@@ -52,6 +52,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
         },
       });
       win.webContents.on("console-message", (event) => { if (event.level === "error") errors.push(`${name}: ${event.message}`); });
+      win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
       await win.loadURL(url);
       const evaluate = (code) => win.webContents.executeJavaScript(code);
       const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), (await win.webContents.capturePage()).toPNG());
