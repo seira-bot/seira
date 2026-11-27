@@ -406,13 +406,19 @@ describe("msstore publish workflow", () => {
     for (const name of text.match(/secrets\.[A-Z_]+/g)!) expect(SECRETS).toContain(name.slice("secrets.".length));
   });
 
-  it("checks the credentials and Partner Center before the upload, and installs the pinned msstore tool between", () => {
-    const names = stepsOf(publish!).map((step) => step.name ?? step.uses);
+  it("checks the digest of the msstore tool before every step that reads a Store credential, then the credentials and Partner Center before the upload", () => {
+    const steps = stepsOf(publish!);
+    const names = steps.map((step) => step.name ?? step.uses);
     const at = (name: string) => names.findIndex((each) => each?.startsWith(name));
-    expect(at("Check the package")).toBeLessThan(at("Check the credentials and Partner Center"));
-    expect(at("Check the credentials and Partner Center")).toBeLessThan(at("Install the msstore tool"));
-    expect(at("Install the msstore tool")).toBeLessThan(at("Upload the package"));
+    expect(at("Check the package")).toBeLessThan(at("Install the msstore tool"));
+    expect(at("Install the msstore tool")).toBeLessThan(at("Check the credentials and Partner Center"));
+    expect(at("Check the credentials and Partner Center")).toBeLessThan(at("Upload the package"));
     expect(at("Upload the package")).toBeLessThan(at("Set What's new"));
+    // Every step that reads a MSSTORE_* secret comes after the digest gate.
+    const gate = at("Install the msstore tool");
+    const readers = steps.flatMap((step, index) => (JSON.stringify(step).includes("secrets.MSSTORE_") ? [index] : []));
+    expect(readers.length).toBeGreaterThanOrEqual(3);
+    for (const index of readers) expect(index).toBeGreaterThan(gate);
     expect(text).not.toContain("microsoft-store-apppublisher");
     const install = find(publish!, "Install the msstore tool");
     expect(install.env).toEqual({
