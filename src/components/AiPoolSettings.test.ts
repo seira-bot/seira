@@ -186,28 +186,52 @@ describe("AiPoolSettings", () => {
       expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
     });
 
-    it("does not turn on while the billing of a member is unknown, and says which", () => {
+    it("turns a saved pool on without a member whose billing is unknown, and says which", async () => {
       fixture.instances.push(paidKey(), engine("mystery", "Mystery", "codex", { access: undefined }));
       fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex, { instanceId: "mystery", model: "mystery-m" }] } };
+      fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
       click(render().toggle);
-      expect(fixture.api).not.toHaveBeenCalled();
+      await flush();
       expect(fixture.values[REVIEW]).toBeNull();
-      expect(render().html).toContain("Pay-per-use status is unknown for Mystery");
+      expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
+      expect(render().html).toContain("Pay-per-use status is unknown, so the pool leaves out Mystery.");
     });
 
-    it("does not turn on a saved pool whose AI is gone, even when the rest are plans", () => {
+    it("drops saved AIs that are gone or hidden and turns on with the rest", async () => {
       fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex, { instanceId: "gone", model: "m" }] } };
+      fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
       click(render().toggle);
-      expect(fixture.api).not.toHaveBeenCalled();
-      expect(render().html).toContain("Pay-per-use status is unknown for gone");
+      await flush();
+      expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, codex] } });
+      expect(render().html).not.toContain("Pay-per-use status is unknown");
     });
 
-    it("leaves an AI that does not report its billing out of the suggested list", async () => {
-      fixture.instances.push(engine("mystery", "Mystery", "codex", { access: undefined }));
+    it("fills the pool again from the ready AIs when the saved AIs are all hidden", async () => {
+      fixture.config = { aiPool: { enabled: false, mode: "even", members: [{ instanceId: "hiddenClaude", model: "m" }, { instanceId: "hiddenOpenCode", model: "m" }] } };
       fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [] } });
       click(render().toggle);
       await flush();
       expect((sent().aiPool.members as { instanceId: string }[]).map((m) => m.instanceId)).toEqual(["claude", "codex", "gemini"]);
+      expect(render().html).not.toContain("hiddenClaude");
+    });
+
+    it("leaves a ready AI that does not report its billing out of the suggested list, and says which", async () => {
+      fixture.instances.push(engine("go", "OpenCode", "opencodeGo", { access: undefined }));
+      fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [] } });
+      click(render().toggle);
+      await flush();
+      expect((sent().aiPool.members as { instanceId: string }[]).map((m) => m.instanceId)).toEqual(["claude", "codex", "gemini"]);
+      expect(render().html).toContain("Pay-per-use status is unknown, so the pool leaves out OpenCode.");
+    });
+
+    it("names a left-out AI and still asks first when a pay-per-use AI is ready", () => {
+      fixture.instances.push(paidKey(), engine("go", "OpenCode", "opencodeGo", { access: undefined }));
+      click(render().toggle);
+      expect(fixture.api).not.toHaveBeenCalled();
+      const html = render().html;
+      expect(html).toContain("Include pay-per-use AIs?");
+      expect(html).toContain("Plans: Claude, Codex, Gemini.");
+      expect(html).toContain("Pay-per-use status is unknown, so the pool leaves out OpenCode.");
     });
 
     it("shows the new list when the AIs change while the question is open, and saves only what was shown", async () => {
@@ -231,16 +255,20 @@ describe("AiPoolSettings", () => {
       expect(fixture.api).not.toHaveBeenCalled();
     });
 
-    it("offers no choice on a list that has become unknown", () => {
+    it("names an AI whose billing turns unknown while the question is open, and saves only what it shows", async () => {
       fixture.instances.push(paidKey());
       fixture.config = { aiPool: { enabled: false, mode: "even", members: [claude, codex, key] } };
       click(render().toggle);
       expect(button(render(), "Include pay per use")).toBeDefined();
       fixture.instances = fixture.instances.map((instance) => (instance.instanceId === "codex" ? { ...instance, access: undefined } : instance));
-      expect(render().html).toContain("Pay-per-use status is unknown for Codex");
-      expect(render().html).not.toContain("Include pay-per-use AIs?");
-      expect(button(render(), "Include pay per use")).toBeUndefined();
+      const html = render().html;
+      expect(html).toContain("Pay-per-use status is unknown, so the pool leaves out Codex.");
+      expect(html).toContain("Plans: Claude.");
       expect(fixture.api).not.toHaveBeenCalled();
+      fixture.api.mockResolvedValueOnce({ aiPool: { enabled: true, mode: "even", members: [claude, key] } });
+      click(button(render(), "Include pay per use"));
+      await flush();
+      expect(sent()).toEqual({ aiPool: { enabled: true, mode: "even", members: [claude, key] } });
     });
   });
 
