@@ -2,15 +2,13 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 
-import { BOTS_FILE } from "./registry-store.ts";
+import { BOTS_FILE, isListOfRecords } from "./registry-store.ts";
 
 /** bots.json or groups.json is there, and it does not read as a list. */
 export class UnreadableBotsError extends Error {}
 
-/** A list of bots: every element is an object (not a list) with an `id` that is a text that is not empty. Other fields are the work of the migrations. */
-export function isListOfBots(value: unknown): value is Array<{ id: string }> {
-  return Array.isArray(value) && value.every((bot) => typeof bot === "object" && bot !== null && !Array.isArray(bot) && typeof (bot as { id?: unknown }).id === "string" && (bot as { id: string }).id !== "");
-}
+/** A list of bots: every element is an object (not a list) with an `id` that is a text that is not empty. */
+export const isListOfBots = isListOfRecords;
 
 /** Keeps the bytes of the file under a name of their own, once for each content. A file that cannot be read has no copy. */
 export function keepUnreadableBots(file = BOTS_FILE): string | undefined {

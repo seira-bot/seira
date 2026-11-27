@@ -14,6 +14,11 @@ import type { BotRecord, GroupRecord } from "./store.ts";
 export const BOTS_FILE = join(DATA_DIR, "bots.json");
 export const GROUPS_FILE = join(DATA_DIR, "groups.json");
 
+/** A list of records: every element is an object (not a list) with an `id` that is a text that is not empty. Other fields are the work of the migrations. */
+export function isListOfRecords(value: unknown): value is Array<{ id: string }> {
+  return Array.isArray(value) && value.every((item) => typeof item === "object" && item !== null && !Array.isArray(item) && typeof (item as { id?: unknown }).id === "string" && (item as { id: string }).id !== "");
+}
+
 export type RegistryOwner = { kind: "bot" | "group"; id: string };
 
 /**
@@ -99,10 +104,10 @@ export class JsonRegistry implements RegistryStore {
   loadGroups(): GroupRecord[] {
     flushWritesBehind(GROUPS_FILE);
     tightenRegistryFile(GROUPS_FILE);
-    const text = readFileSync(GROUPS_FILE, "utf8"), groups = JSON.parse(text) as GroupRecord[];
-    if (!Array.isArray(groups)) throw new TypeError("groups.json is not a list");
+    const text = readFileSync(GROUPS_FILE, "utf8"), groups: unknown = JSON.parse(text);
+    if (!isListOfRecords(groups)) throw new TypeError("groups.json is not a list of rooms");
     this.groupsFile.loaded(text);
-    return groups;
+    return groups as GroupRecord[];
   }
 
   writeBots(bots: readonly BotRecord[], current: boolean): void {
