@@ -73,7 +73,7 @@ describe("the new Automations switch", () => {
     expect(container.querySelector("[data-automations-calendar]")).not.toBeNull();
     expect(container.querySelector("[aria-label='All departments']")).not.toBeNull();
     expect(container.querySelector("[aria-label='All bots']")).not.toBeNull();
-    const views = [...container.querySelectorAll("[aria-label='View'] button")].map((item) => item.textContent);
+    const views = [...container.querySelectorAll("[aria-label='Show as'] button")].map((item) => item.textContent);
     expect(views).toEqual(expect.arrayContaining(["List", "Calendar"]));
     expect([...container.querySelectorAll("button")].some((item) => item.textContent === "New")).toBe(true);
     expect(container.querySelectorAll("[data-rail-row]")).toHaveLength(10);
@@ -83,6 +83,7 @@ describe("the new Automations switch", () => {
     fixture.state = state({ config: { features: { newAutomations: true } } });
     const container = mount(page());
     await settle();
+    act(() => { (container.querySelector("[aria-label='Next']") as HTMLElement).click(); });
     act(() => { (container.querySelector("[data-occurrence]") as HTMLElement).click(); });
     expect(container.querySelector("[aria-label='Automation']")).not.toBeNull();
     expect(container.querySelector("[data-occurrence-context]")).not.toBeNull();
