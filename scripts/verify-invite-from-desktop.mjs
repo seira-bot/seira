@@ -21,7 +21,10 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   app.setPath("userData", join(output, "user-data"));
   app.setPath("sessionData", join(output, "user-data"));
   app.commandLine.appendSwitch("disable-background-networking");
-  if (process.env.SEIRA_ELECTRON_NO_SANDBOX === "1") app.commandLine.appendSwitch("no-sandbox");
+  if (process.env.SEIRA_ELECTRON_NO_SANDBOX === "1") {
+    app.commandLine.appendSwitch("no-sandbox");
+    app.commandLine.appendSwitch("disable-dev-shm-usage");
+  }
   ipcMain.handle("sharing:state", () => ({ enabled: false, folders: [], terminal: false, computer: false, connected: false }));
   ipcMain.handle("update:get-state", () => ({ status: "idle" }));
   ipcMain.handle("companion:state", () => ({ running: false, enabled: false, devices: [], bind: null, publicUrl: null }));
