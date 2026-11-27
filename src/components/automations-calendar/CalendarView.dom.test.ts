@@ -43,6 +43,7 @@ const fire = (element: Element, type: string, init: MouseEventInit = {}) => act(
 const byText = (container: ParentNode, selector: string, text: string) => [...container.querySelectorAll(selector)].find((candidate) => candidate.textContent?.includes(text))!;
 const card = (container: ParentNode, key: string) => container.querySelector(`[data-occurrence="${key}"]`) as HTMLElement | null;
 const cards = (container: ParentNode) => [...container.querySelectorAll<HTMLElement>("[data-occurrence]")];
+const nextWeek = (container: ParentNode) => click(container.querySelector("[aria-label='Next dates']")!);
 const slot = (container: ParentNode, when: number) => container.querySelector(`[data-slot-at="${when}"]`)!;
 
 beforeEach(() => { window.innerWidth = 1280; });
@@ -79,6 +80,7 @@ describe("cards", () => {
   it("shows one fixed-height card per time with the name, up to three bots and the time", () => {
     const four = automation("Round", [schedule("r1", { type: "daily", time: "10:00", weekdays: [1] })], { stepBotIds: ["b1", "b2", "b3", "b4"] });
     const { container } = mount([four]);
+    nextWeek(container);
     const found = cards(container);
     expect(found).toHaveLength(1);
     expect(found[0]!.style.height).toBe("36px");
@@ -201,6 +203,7 @@ describe("Day, Week and Month", () => {
 describe("empty slots and the empty calendar", () => {
   it("asks for a new automation at the hour of a slot", () => {
     const { container, onNew } = mount([weekly]);
+    nextWeek(container);
     click(slot(container, at(2026, 12, 1, 10)));
     expect(onNew).toHaveBeenCalledWith(at(2026, 12, 1, 10));
   });
@@ -230,6 +233,7 @@ describe("limit resets", () => {
 describe("keyboard names", () => {
   it("makes cards and slots buttons named with the automation, the day and the time", () => {
     const { container } = mount([weekly]);
+    nextWeek(container);
     const found = cards(container)[0]!;
     expect(found.tagName).toBe("BUTTON");
     expect(found.getAttribute("aria-label")).toMatch(/^Weekly sales check, .*Monday.*, 10:00$/);
@@ -240,6 +244,7 @@ describe("keyboard names", () => {
 });
 
 describe("dragging a card", () => {
+  const mountNext = (list: CalendarAutomation[]) => { const mounted = mount(list); nextWeek(mounted.container); return mounted; };
   const key = `Weekly sales check|r-weekly|${at(2026, 11, 30, 10)}`;
   const pointerdown = (element: Element) => fire(element, "pointerdown", { clientX: 10, clientY: 10, button: 0 });
   const dragTo = (container: ParentNode, when: number) => fire(slot(container, when), "pointermove", { clientX: 200, clientY: 200 });
@@ -247,7 +252,7 @@ describe("dragging a card", () => {
   const settle = async () => { await act(async () => { await Promise.resolve(); }); };
 
   it("shows a ghost card with the name and the new schedule over the slot", () => {
-    const { container } = mount([weekly]);
+    const { container } = mountNext([weekly]);
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 1, 14));
     const ghost = container.querySelector("[data-ghost]")!;
@@ -256,7 +261,7 @@ describe("dragging a card", () => {
   });
 
   it("changes that start's schedule on drop, says so with Undo, and Undo restores it", async () => {
-    const { container, saveSchedule } = mount([weekly]);
+    const { container, saveSchedule } = mountNext([weekly]);
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 1, 14));
     drop();
@@ -271,7 +276,7 @@ describe("dragging a card", () => {
   });
 
   it("changes nothing when the card drops on its own slot", async () => {
-    const { container, saveSchedule } = mount([weekly]);
+    const { container, saveSchedule } = mountNext([weekly]);
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 11, 30, 10));
     expect(container.querySelector("[data-ghost]")).toBeNull();
@@ -295,7 +300,7 @@ describe("dragging a card", () => {
   });
 
   it("opens the panel on a click without movement", () => {
-    const { container, onOpen } = mount([weekly]);
+    const { container, onOpen } = mountNext([weekly]);
     const target = card(container, key)!;
     pointerdown(target);
     drop();
@@ -313,7 +318,7 @@ describe("dragging a card", () => {
   });
 
   it("returns the card and says it could not move when the save fails", async () => {
-    const { container, saveSchedule } = mount([weekly]);
+    const { container, saveSchedule } = mountNext([weekly]);
     saveSchedule.mockRejectedValueOnce(new Error("offline"));
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 1, 14));
