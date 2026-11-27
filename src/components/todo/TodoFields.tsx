@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { TodoDraft, TodoRepeat, TodoStart } from "../../../shared/todo";
 import { TODO_NOTE_CHARS, TODO_TITLE_CHARS } from "../../../shared/todo";
 import { t } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 import { weekdayNames } from "@/lib/todo-labels";
 import type { Bot } from "@/state/store";
 import { Select } from "../Select";
