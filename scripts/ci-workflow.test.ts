@@ -610,7 +610,7 @@ describe("CI workflows", () => {
       expect(flow.permissions, file).toEqual({ contents: "read" });
       for (const [id, job] of Object.entries(flow.jobs)) {
         if (file === CLAIMS && id === "claims") {
-          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write", "pull-requests": "write" });
+          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write", "pull-requests": "read" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
           continue;
         }
