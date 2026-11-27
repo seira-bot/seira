@@ -96,4 +96,18 @@ describe("useMentionTools", () => {
     await settle();
     expect(latest.map((row) => row.name)).toEqual(["GitHub"]);
   });
+
+  it("keeps the GitHub row when the Composio app list cannot be read (AC-05)", async () => {
+    fixture.apps.mockResolvedValue({ services: { gmail: { connected: true } }, authoritative: false });
+    fixture.api.mockImplementation(async (path: string) => {
+      if (path === "/api/email") return { state: "off" };
+      if (path === "/api/github-app") return { enabled: true, connected: true, accounts: [], pending: [], bots: { scout: { repos: [], askBeforeBigChanges: true, ownBranchesOnly: true } } };
+      return { servers: [] };
+    });
+    const github = { id: "scout", composio: undefined, connectorScopes: undefined, connectorTools: undefined };
+    const Github = () => { latest = useMentionTools(github, true); return null; };
+    flushSync(() => root.render(createElement(Github)));
+    await settle();
+    expect(latest.map((row) => row.name)).toEqual(["GitHub"]);
+  });
 });

@@ -40,6 +40,8 @@ type Loaded = {
   servers: McpEntry[];
 };
 
+const NO_COMPOSIO_APPS: ConnectorInventory = { services: {}, authoritative: true };
+
 /** The tools of a bot for the @ list. Loads while the list is open and keeps the last answer for the bot. */
 export function useMentionTools(bot: ToolBot | undefined, active: boolean): MentionChoice[] {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -67,7 +69,8 @@ export function useMentionTools(bot: ToolBot | undefined, active: boolean): Ment
   const composio = bot?.composio, connectorScopes = bot?.connectorScopes, connectorTools = bot?.connectorTools;
   return useMemo(() => {
     if (!botId || !loaded || loaded.botId !== botId) return [];
-    const apps = botAppsFrom({ id: botId, composio, connectorScopes, connectorTools }, loaded.inventory, loaded.cards, loaded.email, github).apps;
+    const inventory = loaded.inventory?.authoritative ? loaded.inventory : NO_COMPOSIO_APPS;
+    const apps = botAppsFrom({ id: botId, composio, connectorScopes, connectorTools }, inventory, loaded.cards, loaded.email, github).apps;
     return mentionToolChoices(apps, loaded.servers);
   }, [botId, loaded, composio, connectorScopes, connectorTools, github]);
 }
