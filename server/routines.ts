@@ -14,8 +14,7 @@ import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import { intervalAllowsOccurrence, intervalHasRestrictions, isSameLocalDay, latestIntervalOccurrence } from "./routine-intervals.ts";
 import { limitResetOccurrence, mergeScheduleUpdate, nextOccurrence, RoutineScheduleError, type RoutineSchedule, type RoutineScheduleInput } from "./routine-schedules.ts";
-import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts";
-import { nextUnskippedOccurrence, occurrenceSkipped, skipRefusal, withoutPastSkips, withSkip } from "./routine-skip-occurrence.ts";
+import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts"; import { nextAfterSkips, occurrenceSkipped } from "./routine-skip-occurrence.ts";
 import {
   ROUTINE_HANDOFF_WAIT, isRoutineProblemRun, type RoutineAccess, type RoutineCheck, type RoutineContextAttachment, type RoutineDelivery, type RoutineIntervalWindow, type RoutineRetryCause,
   type RoutineHoldCause, type RoutineRunReport, type RoutineRunStatus, type RoutineRunTrigger,
@@ -82,9 +81,7 @@ export interface Routine extends RoutineTroubleCode {
   checkTrouble?: string;
   wakeAt?: number;
   skippedRuns?: number;
-  lastSkippedAt?: number;
-  /** Future occurrences the person chose to skip, oldest first. */
-  skippedOccurrences?: number[];
+  lastSkippedAt?: number; skippedOccurrences?: number[];
   failureStreak?: number;
   /** Its newest runs in a row whose cloud computer did not start, while its scheduled runs are spaced out for it. */
   noStartStreak?: number;
@@ -646,8 +643,7 @@ export class RoutineManager {
         // updatedAt doubles as the confirmation cards' optimistic revision: keep it monotonic within one ms.
         updatedAt: Math.max(now, routine.updatedAt + 1),
       });
-      if (patch.enabled !== undefined) delete routine.heldFor;
-      if (scheduleChanged) delete routine.skippedOccurrences;
+      if (patch.enabled !== undefined) delete routine.heldFor; if (scheduleChanged) delete routine.skippedOccurrences;
       if (placeCleared) delete routine.placeLost;
       for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver", "workflowId", "workflowBotIds"] as const) if (!clean[key]) delete routine[key];
       if (!clean.checks) for (const key of ["checks", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt"] as const) delete routine[key];
@@ -960,33 +956,6 @@ export class RoutineManager {
     });
     this.emitRoutine(routine);
     return this.routineWithHealth(routine);
-  }
-
-  skipOccurrence(id: string, at: number): { routine: Routine } | { error: string } | null {
-    const routine = this.routines.find((candidate) => candidate.id === id);
-    if (!routine) return null;
-    const now = this.now(), error = skipRefusal(routine, at, now);
-    if (error) return { error };
-    this.commitMutation(() => {
-      routine.skippedOccurrences = withSkip(routine.skippedOccurrences, at, now);
-      if (at === routine.nextRunAt) routine.nextRunAt = nextUnskippedOccurrence(routine.schedule, at, routine.skippedOccurrences);
-    });
-    this.emitRoutine(routine);
-    return { routine: this.routineWithHealth(routine) };
-  }
-
-  unskipOccurrence(id: string, at: number): { routine: Routine } | null {
-    const routine = this.routines.find((candidate) => candidate.id === id);
-    if (!routine) return null;
-    if (!routine.skippedOccurrences?.includes(at)) return { routine: this.routineWithHealth(routine) };
-    const now = this.now();
-    this.commitMutation(() => {
-      const left = routine.skippedOccurrences!.filter((value) => value !== at);
-      if (left.length) routine.skippedOccurrences = left; else delete routine.skippedOccurrences;
-      if (at > now && routine.enabled && (routine.nextRunAt === null || at < routine.nextRunAt)) routine.nextRunAt = at;
-    });
-    this.emitRoutine(routine);
-    return { routine: this.routineWithHealth(routine) };
   }
 
   private timedSchedule(schedule: RoutineSchedule, routineId?: string, ranFor?: number): RoutineSchedule {
@@ -1416,9 +1385,7 @@ export class RoutineManager {
   private advancePastOccurrence(routine: Routine, now: number, occurrence: number) {
     if (routine.schedule.type === "limit_reset" && routine.schedule.repeat === "every_reset") routine.schedule = this.timedSchedule(routine.schedule, routine.id, occurrence);
     routine.nextRunAt =
-      runsOnce(routine.schedule) ? null : nextUnskippedOccurrence(routine.schedule, Math.max(now, occurrence), routine.skippedOccurrences);
-    const left = withoutPastSkips(routine.skippedOccurrences, now);
-    if (left) routine.skippedOccurrences = left; else delete routine.skippedOccurrences;
+      runsOnce(routine.schedule) ? null : nextAfterSkips(routine, Math.max(now, occurrence), now);
     // Not a definition edit: bumping updatedAt here would stale a pending confirmation card.
     if (runsOnce(routine.schedule)) {
       routine.enabled = false;
