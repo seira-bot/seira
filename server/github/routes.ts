@@ -11,10 +11,11 @@ import {
 } from "../../shared/github-app.ts";
 import type { AppConfig } from "../config.ts";
 import { githubAppEnabled } from "./flag.ts";
-import { isLoopbackHost, isProxied, type RequestAuth } from "../request-auth.ts";
+import { isLoopbackHost, isProxied, requestSource, type RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
 import { GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";
 import { canConnect, isConnectionOwner, requesterKey, requesterLabel } from "./owner.ts";
+import { githubPolicyWidens } from "./policy.ts";
 import { githubBotPolicySchema, type GithubStore, type GithubStoreData } from "./store.ts";
 
 export const GITHUB_RETURN_PATH = "/github/return";
@@ -27,6 +28,8 @@ export interface GithubRouteDeps {
   broker: GithubBrokerClient;
   botExists(botId: string): boolean;
   botVisible(auth: RequestAuth, botId: string): boolean;
+  desktopManaged: boolean;
+  anyBotBusy(): boolean;
   now?: () => number;
   listenerTimeoutMs?: number;
 }
@@ -44,6 +47,8 @@ function resultPage(ok: boolean): string {
 
 const remoteBrowser = (req: IncomingMessage, auth: RequestAuth) =>
   auth.kind === "session" && (isProxied(req) || !isLoopbackHost(req.headers.host));
+
+const BUSY_WIDEN_REFUSAL = "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle.";
 
 export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
   const { store, broker } = deps;
@@ -264,6 +269,11 @@ export function createGithubRoutes(deps: GithubRouteDeps): RouteHandler {
         if (seen.has(key)) continue;
         seen.add(key);
         policy.repos.push({ installationId: repo.installationId, repositoryId: repo.repositoryId, fullName: known.fullName, level: repo.level });
+      }
+      // Outside the packaged desktop a loopback caller is the owner, and a bot's own shell can forge any header.
+      if (auth.kind === "loopback" && !deps.desktopManaged && githubPolicyWidens(data.bots[botId], policy)) {
+        if (deps.anyBotBusy()) return json(res, 409, { error: BUSY_WIDEN_REFUSAL });
+        console.warn(`bot ${botId}: GitHub access widened by ${requestSource(req)} through the local API with no paired session`);
       }
       store.update((next) => { next.bots[botId] = policy; });
       return json(res, 200, statusFor(auth));

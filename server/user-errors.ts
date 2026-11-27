@@ -1,6 +1,7 @@
 import { PAIRING_INPUT_PROBLEM_TEXT } from "../shared/pairing-code.ts";
 import { redactParams } from "../shared/redact.ts";
 import { formatServerText, type ServerErrorBody, type ServerTextParams } from "../shared/server-text.ts";
+import { PublicError, unstatused } from "./public-error.ts";
 
 /** The client translates by key and falls back to this English, which the server keeps sending for older clients. */
 export const USER_ERROR = {
@@ -244,7 +245,7 @@ export function userError(key: UserErrorKey, params?: ServerTextParams): UserErr
 
 export function userErrorThrown(key: UserErrorKey, params?: ServerTextParams): Error {
   const { error, ...fields } = userError(key, params);
-  return Object.assign(new Error(error), fields);
+  return Object.assign(unstatused(new PublicError(error)), fields);
 }
 
 export function userErrorFields(value: unknown): Pick<ServerErrorBody, "errorKey" | "errorParams"> {

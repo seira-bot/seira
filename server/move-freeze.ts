@@ -12,6 +12,7 @@ import type { CalendarCallManager } from "./calendar-calls.ts";
 import type { RoutineManager } from "./routines.ts";
 import type { WaitManager } from "./waits.ts";
 import type { WebhookManager } from "./webhooks.ts";
+import { PublicError } from "./public-error.ts";
 
 export const MOVED_REFUSAL = "This bot lives on My Cloud now.";
 /** Why a frozen copy refuses, naming the server of the person's own its bots moved to (`place`), else My Cloud. */
@@ -107,7 +108,7 @@ export function createMoveFreeze({ dataDir, exportOnly = false }: { dataDir: str
     },
     assertTurns(): void {
       const said = refusal();
-      if (said) throw Object.assign(new Error(said), { status: 409, code: "moved" });
+      if (said) throw Object.assign(new PublicError(said, 409), { code: "moved" });
     },
     /** Why a frozen server refuses this request, or null when it takes it. */
     refuses(method: string, path: string): string | null {

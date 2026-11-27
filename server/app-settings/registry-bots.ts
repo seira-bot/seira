@@ -7,6 +7,7 @@ import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile.ts";
 import { TOOL_GROUP_LABELS, TOOL_GROUPS, type ToolGroup } from "../../shared/tool-groups.ts";
 import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../../shared/wire.ts";
 import type { BotRecord } from "../store.ts";
+import type { Consequence } from "./confirm.ts";
 import { withoutKeys, type RegistryDeps, type SettingEntry, type WritableSpec } from "./registry.ts";
 
 const botId = z.string().regex(/^[\w-]{1,120}$/);
@@ -19,6 +20,9 @@ const APPROVAL: Record<Exclude<ApprovalMode, "custom">, { label: string; effect:
   full: { label: "Full access", effect: (name) => `Let ${name} act without asking` },
 };
 const approvalName = (mode: ApprovalMode) => (mode === "custom" ? "Custom" : APPROVAL[mode].label);
+const AUTONOMY: readonly ApprovalMode[] = ["ask", "edits", "auto", "full"];
+type ThreadMode = Exclude<ApprovalMode, "custom">;
+const threadMode = z.enum(["ask", "edits", "auto", "full"]);
 
 const COMPUTER = {
   auto: "pick its own computer", cloud: "use a cloud desktop", vm: "use a private desktop on this computer",
@@ -56,35 +60,60 @@ const toolGroups = z.array(z.enum(TOOL_GROUPS)).max(TOOL_GROUPS.length).optional
 const offNow = (one: BotRecord): ToolGroup[] => TOOL_GROUPS.filter((group) => one.toolsOff?.includes(group));
 const groupNames = (groups: readonly ToolGroup[]) => groups.map((group) => TOOL_GROUP_LABELS[group]).join(", ");
 
-export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
+/** `full`: the instructions in whole, for the card the owner reads before Apply. */
+const changeLine = (one: BotRecord, value: Record<string, unknown>, full: boolean) => `${one.name}: ${Object.keys(value).filter((field) => field !== "botId")
+  .map((field) => `${OTHER[field as OtherField].label} ${field === "soul" && full ? `"${String(value.soul)}"` : OTHER[field as OtherField].shown(value[field] as never)}`).join("; ")}`;
+
+export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchBot" | "threadModes" | "setThreadModes" | "threadModeRefusal">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const bot = (id: string) => deps.bots().find((candidate) => candidate.id === id);
   const missing = (id: string) => ({ refusal: `No bot has the id ${id}. Use list_bots for the ids.` });
   const everyBot = (line: (one: BotRecord) => string) => () => deps.bots().map((one) => `${one.name}: ${line(one)}`).join("; ");
   /** A per-bot entry: `effect` names the change for the card, or refuses it, once the bot is known to exist; `was` is the
    * same bot's value before it, for Undo. */
-  const perBot = <V extends { botId: string }>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value"> & {
-    value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V; patch(one: BotRecord, value: V): Record<string, unknown>;
+  const perBot = <V extends { botId: string }, R extends { botId: string } = V>(spec: Omit<WritableSpec, "current" | "write" | "describe" | "value" | "confirm" | "review"> & {
+    value: z.ZodType<V>; effect(one: BotRecord, value: V): { change: string } | { refusal: string }; was(one: BotRecord, value: V): V | R; patch(one: BotRecord, value: V): Record<string, unknown>;
+    confirm?(value: V): Consequence | null; write?(one: BotRecord, value: V | R): Promise<string | null>;
+    review?(one: BotRecord, value: V): { before: string; after: string } | null;
   }) => writable({
-    ...spec, current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
+    ...spec,
+    review: spec.review ? (value: V) => { const one = bot(value.botId); return one ? spec.review!(one, value) : null; } : undefined,
+    current: (value: V) => { const one = bot(value.botId); return one ? spec.was(one, value) : undefined; },
     describe: (value: V) => { const one = bot(value.botId); return one ? spec.effect(one, value) : missing(value.botId); },
-    write: (value: V) => { const one = bot(value.botId); return one ? deps.patchBot(one.id, spec.patch(one, value)) : Promise.resolve(missing(value.botId).refusal); },
+    write: (value: V | R) => { const one = bot(value.botId); return !one ? Promise.resolve(missing(value.botId).refusal) : spec.write ? spec.write(one, value) : deps.patchBot(one.id, spec.patch(one, value as V)); },
   });
 
   return [
-    perBot({
+    perBot<{ botId: string; mode: ThreadMode }, { botId: string; mode: ThreadMode; threads: Record<string, ThreadMode> }>({
       id: "bots.approvalModes", label: "Approval mode", help: "What one bot may do without asking you, on every one of its conversations.", where: "bot-settings",
       synonyms: ["permissions", "full access", "approve", "ask", "approval", "autonomy", "approve for me", "auto-accept edits"],
-      value: forBot({ mode: z.enum(["ask", "edits", "auto", "full"]) }),
+      value: forBot({ mode: threadMode }),
       allowed: '{"botId","mode"} with mode ask (Ask for approval), edits (Auto-accept edits), auto (Approve for me) or full (Full access). Custom is chosen only in the desktop app',
       read: everyBot((one) => approvalName(approvalModeFor(one))),
       effect: (one, { mode }) => {
+        if (Object.values(deps.threadModes(one.id)).includes("custom")) return { refusal: `${one.name} has a conversation on Custom approval, which is changed only in the desktop app, in ${one.name}'s Settings. Tell the user where.` };
         if (approvalModeFor(one) === "custom") return { refusal: `${one.name} is on Custom approval, which is changed only in the desktop app, in ${one.name}'s Settings. Tell the user where.` };
         // The route takes Approve for me on this computer's own desktop only with the warning its Settings dialog shows.
         if (mode === "auto" && one.computer === "local") return { refusal: `Approve for me while ${one.name} uses this computer's own desktop needs a warning only ${one.name}'s Settings shows. Tell the user to choose it there.` };
         return { change: `${APPROVAL[mode].effect(one.name)} (${APPROVAL[mode].label})` };
       },
-      was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as Exclude<ApprovalMode, "custom"> }),
+      was: (one, { botId }) => ({ botId, mode: approvalModeFor(one) as ThreadMode, threads: Object.fromEntries(Object.entries(deps.threadModes(botId)).filter(([, mode]) => mode !== "custom")) as Record<string, ThreadMode> }),
+      confirm: ({ botId, mode }) => {
+        const one = bot(botId);
+        if (!one) return null;
+        const rank = (value: ApprovalMode) => AUTONOMY.indexOf(value);
+        const raises = rank(mode) > rank(approvalModeFor(one))
+          || Object.values(deps.threadModes(botId)).some((now) => rank(mode) > rank(now));
+        return raises ? { code: "autonomyUp", params: { bot: one.name } } : null;
+      },
       patch: (_one, { mode }) => ({ approvalMode: mode, applyToAllThreads: true }),
+      write: async (one, value) => {
+        if (!("threads" in value)) return deps.patchBot(one.id, { approvalMode: value.mode, applyToAllThreads: true });
+        for (const [threadId, mode] of Object.entries(value.threads)) {
+          const refusal = deps.threadModeRefusal(one.id, threadId, mode);
+          if (refusal) return refusal;
+        }
+        return (await deps.patchBot(one.id, { approvalMode: value.mode })) ?? deps.setThreadModes(one.id, value.threads);
+      },
     }),
     perBot({
       id: "bots.name", label: "Bot name", help: "A bot's name, as the sidebar and chats show it.", where: "bot-settings", synonyms: ["rename", "name", "call", "bot name"],
@@ -136,6 +165,11 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
       read: everyBot((one) => (offNow(one).length ? `off: ${groupNames(offNow(one))}` : "all on")),
       effect: (one, { turnOff = [], turnOn = [] }) => ({ change: `${one.name}: ${[turnOff.length ? `turn off ${groupNames(turnOff)}` : "", turnOn.length ? `turn on ${groupNames(turnOn)}` : ""].filter(Boolean).join("; ")}` }),
       was: (one, { botId }) => ({ botId, turnOff: offNow(one), turnOn: TOOL_GROUPS.filter((group) => !offNow(one).includes(group)) }),
+      confirm: ({ botId, turnOn = [] }) => {
+        const one = bot(botId);
+        const back = one ? turnOn.filter((group) => offNow(one).includes(group)) : [];
+        return one && back.length ? { code: "toolsOn", params: { bot: one.name, groups: groupNames(back) } } : null;
+      },
       patch: (one, { turnOff = [], turnOn = [] }) => ({ toolsOff: TOOL_GROUPS.filter((group) => turnOff.includes(group) || (offNow(one).includes(group) && !turnOn.includes(group))) }),
     }),
     perBot({
@@ -145,9 +179,18 @@ export function botEntries(deps: Pick<RegistryDeps, "bots" | "engines" | "patchB
         .refine((value) => Object.keys(value).length > 1, "name at least one setting besides botId"),
       allowed: `{"botId", ...one or more of ${(Object.keys(OTHER) as OtherField[]).join(", ")}}`,
       read: () => "use get on a bot's own fields through list_bots",
-      effect: (one, value) => ({ change: `${one.name}: ${(Object.keys(value) as Array<OtherField | "botId">).filter((field) => field !== "botId")
-        .map((field) => `${OTHER[field as OtherField].label} ${OTHER[field as OtherField].shown(value[field as OtherField] as never)}`).join("; ")}` }),
+      effect: (one, value) => ({ change: changeLine(one, value, false) }),
+      review: (one, value) => (value.soul === undefined ? null : { before: one.soul ?? "", after: changeLine(one, value, true) }),
       was: (one, value) => ({ botId: one.id, ...Object.fromEntries(Object.keys(value).filter((field) => field !== "botId").map((field) => [field, OTHER[field as OtherField].was(one)])) }),
+      confirm: ({ botId, computer, soul, browser, composio }) => {
+        const one = bot(botId);
+        if (!one) return null;
+        const params = { bot: one.name };
+        if (computer === "local" && one.computer !== "local") return { code: "thisComputer", params };
+        if (browser === true && one.browser === false) return { code: "browserOn", params };
+        if (composio === true && one.composio === false) return { code: "appsOn", params };
+        return soul !== undefined && soul !== (one.soul ?? "") ? { code: "botRule", params } : null;
+      },
       patch: (_one, { botId: _id, computer, ...rest }) => ({ ...rest, ...(computer ? { computer: computer === "auto" ? null : computer } : {}) }),
     }),
   ];

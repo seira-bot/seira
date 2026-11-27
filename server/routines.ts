@@ -43,6 +43,7 @@ import { startRoutineWork, type WorkflowRoutineOptions } from "./routine-dispatc
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
 import { resolveRoutineResultsThread, routineRunDefinition, type ResultsThreadAllocation } from "./routine-run-definition.ts";
+import { PublicError } from "./public-error.ts";
 
 export type { RoutineContextAttachment, RoutineIntervalWindow, RoutineRunStatus, RoutineRunTrigger };
 export { intervalHasRestrictions } from "./routine-intervals.ts";
@@ -775,7 +776,7 @@ export class RoutineManager {
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
     if (existing) return existing;
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned bot no longer exists"), { status: 410 });
+      throw new PublicError("The assigned bot no longer exists", 410);
     }
     const run: RoutineRun = {
       id: randomUUID(), routineId: input.webhookId, routineName: input.webhookName, prompt: input.prompt, target: "bot",
@@ -805,7 +806,7 @@ export class RoutineManager {
     const previousReceipts = this.webhookRunReceipts;
     const receipts = previousReceipts.filter((receipt) => receipt.acceptedAt >= this.now() - EVENT_RETRY_WINDOW_MS);
     // Never evict a promised retry identity to admit fresh work.
-    if (receipts.length >= MAX_EVENT_RECEIPTS) throw Object.assign(new Error("Webhook retry history is full; try again later"), { status: 429 });
+    if (receipts.length >= MAX_EVENT_RECEIPTS) throw new PublicError("Webhook retry history is full; try again later", 429);
     receipts.push({ webhookId: run.webhookId!, deliveryId, runId: run.id, acceptedAt: this.now() });
     const previousRuns = this.runs.slice();
     apply();
@@ -1450,7 +1451,7 @@ export class RoutineManager {
 
   private applyResultsInput(routine: Routine, value: RoutineInput["resultsThreadId"]) {
     if (routine.target !== "bot") {
-      if (value != null) throw Object.assign(new Error("Results threads are only available for bot routines"), { status: 400 });
+      if (value != null) throw new PublicError("Results threads are only available for bot routines", 400);
       delete routine.resultsThreadId;
       return;
     }
@@ -1465,7 +1466,7 @@ export class RoutineManager {
       return () => this.options.discardResultsThread?.(routine.botId, destination.threadId);
     }
     if (typeof value !== "string" || !value.trim() || !this.options.isResultsThread?.(routine.botId, value.trim())) {
-      throw Object.assign(new Error("Choose a visible results thread belonging to this bot"), { status: 400 });
+      throw new PublicError("Choose a visible results thread belonging to this bot", 400);
     }
     routine.resultsThreadId = value.trim();
   }
@@ -1502,7 +1503,7 @@ export class RoutineManager {
   }
 
   private assertWritable(): void {
-    if (this.unreadable) throw Object.assign(new Error("Saved routines could not be read. Repair routines.json before changing them."), { status: 503 });
+    if (this.unreadable) throw new PublicError("Saved routines could not be read. Repair routines.json before changing them.", 503);
   }
 
   /** Rolls memory back when the write fails, so a retry never mistakes an uncommitted action for a durable one. */

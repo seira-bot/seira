@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 
+import { cn } from "@/lib/cn";
 import { openExternalLink } from "@/lib/app-links";
 import {
   dismissGithubManageLink, GITHUB_CARD, githubBotsUsing, githubOwnerName, githubRepoCount, openGithubConnect,
@@ -54,6 +55,7 @@ export function GithubCard({ onChange }: {
   const owner = githubOwnerName(status);
   const editable = status.canEdit && (status.ownedByYou || !status.connected);
   const description = t("github.description");
+  const summary = `${status.accounts.map((account) => account.login).join(", ")} · ${githubRepoCount(status.accounts.reduce((sum, account) => sum + (account.repositoryCount ?? account.repositories.length), 0))}`;
 
   const connect = async () => {
     if (busy) return;
@@ -107,9 +109,9 @@ export function GithubCard({ onChange }: {
           </div>
           <p className="truncate text-[13px] leading-[18px] text-ink-secondary" title={description}>{description}</p>
         </div>
-        {editable && (
-          <button type="button" disabled={busy !== null} onClick={() => void connect()} aria-label={status.connected ? undefined : t("github.connectAria")} className={pill}>
-            {busy === "connect" ? <Loader2 size={14} className="animate-spin" /> : status.connected ? t("github.addAccount") : t("connectors.action.connect")}
+        {editable && !status.connected && (
+          <button type="button" disabled={busy !== null} onClick={() => void connect()} aria-label={t("github.connectAria")} className={pill}>
+            {busy === "connect" ? <Loader2 size={14} className="animate-spin" /> : t("connectors.action.connect")}
           </button>
         )}
       </div>
@@ -121,6 +123,9 @@ export function GithubCard({ onChange }: {
           </a>
         )}
         {waiting?.codeEntry && <GithubCodeForm />}
+        {status.connected && status.accounts.length > 0 && (
+          <p data-github-summary className="mt-1.5 truncate text-[12px] leading-5 text-ink" title={summary}>{summary}</p>
+        )}
         {status.connected && (
           <div data-app-bots="github_app" className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-ink-secondary">
             <span className="min-w-0 truncate" title={usedBy.length ? usedByLabel : undefined}>{usedBy.length ? usedByLabel : t("apps.usedByNone")}</span>
@@ -136,28 +141,8 @@ export function GithubCard({ onChange }: {
             )}
           </div>
         )}
-        {status.connected && (
+        {status.connected && status.pending.length > 0 && (
           <div className="mt-1.5 space-y-0.5">
-            {status.ownedByYou && <div className="text-[12px] leading-5 text-ink-tertiary">{t("github.connectedByYou")}</div>}
-            {status.accounts.map((account) => (
-              <div key={account.installationId} data-github-account={account.login} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
-                <span className="min-w-0 truncate text-ink">
-                  {account.login}
-                  <span className="text-ink-secondary"> · {githubRepoCount(account.repositoryCount ?? account.repositories.length)}</span>
-                </span>
-                {status.ownedByYou && (
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => setLeaving(account)}
-                    aria-label={t("github.disconnectAria", { login: account.login })}
-                    className="ms-auto shrink-0 rounded-full px-2 text-[12px] font-medium leading-5 text-ink-secondary transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
-                  >
-                    {t("connectors.disconnect")}
-                  </button>
-                )}
-              </div>
-            ))}
             {status.pending.map((request, index) => (
               <div key={`${request.login ?? "waiting"}:${index}`} data-github-pending className="flex min-w-0 flex-col text-[12px] leading-5">
                 <span className="min-w-0 truncate text-ink">
@@ -180,20 +165,48 @@ export function GithubCard({ onChange }: {
             <button type="button" onClick={dismissGithubManageLink} aria-label={t("common.close")} className="shrink-0 rounded-full px-1.5 text-ink-tertiary hover:text-ink">×</button>
           </p>
         )}
-        <details className="mt-1 text-[12px] text-ink-secondary">
-          <summary className="cursor-pointer">{t("github.access")}</summary>
-          <p className="mt-2 leading-relaxed">{t("github.accessHint")}</p>
-          <p className="mt-2 leading-relaxed">{t("github.accessOwnerOnly")}</p>
-          {bots.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {bots.map((bot) => (
-                <button key={bot.id} type="button" onClick={() => manageBot(bot.id)} className="rounded-lg bg-control px-2.5 py-1.5 text-ink hover:bg-raised-hover">
-                  {t("github.manageBot", { name: bot.name })}
-                </button>
+        {status.connected && (
+          <details data-github-manage className="mt-1 text-[12px] text-ink-secondary">
+            <summary className="cursor-pointer">{t("github.manage")}</summary>
+            <div className="mt-2 space-y-0.5">
+              {status.accounts.map((account) => (
+                <div key={account.installationId} data-github-account={account.login} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
+                  <span className="min-w-0 truncate text-ink">
+                    {account.login}
+                    <span className="text-ink-secondary"> · {githubRepoCount(account.repositoryCount ?? account.repositories.length)}</span>
+                  </span>
+                  {status.ownedByYou && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => setLeaving(account)}
+                      aria-label={t("github.disconnectAria", { login: account.login })}
+                      className="ms-auto shrink-0 rounded-full px-2 text-[12px] font-medium leading-5 text-ink-secondary transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                    >
+                      {t("connectors.disconnect")}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
-          )}
-        </details>
+            {editable && (
+              <button type="button" disabled={busy !== null} onClick={() => void connect()} className={cn(pill, "mt-2")}>
+                {busy === "connect" ? <Loader2 size={14} className="animate-spin" /> : t("github.addAccount")}
+              </button>
+            )}
+            <p className="mt-2 leading-relaxed">{t("github.accessHint")}</p>
+            <p className="mt-2 leading-relaxed">{t("github.accessOwnerOnly")}</p>
+            {bots.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {bots.map((bot) => (
+                  <button key={bot.id} type="button" onClick={() => manageBot(bot.id)} className="rounded-lg bg-control px-2.5 py-1.5 text-ink hover:bg-raised-hover">
+                    {t("github.manageBot", { name: bot.name })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </details>
+        )}
       </div>
       <ConfirmDialog
         open={leaving !== null}

@@ -418,6 +418,14 @@ describe("AccessSection per-app scopes", () => {
     expect(html).not.toContain("not connected");
   });
 
+  it("names the native GitHub app GitHub in the per-app tools list (AC-10)", () => {
+    fixture.apps = { phase: "ready", connectedSlugs: ["github_app", "gmail"], apps: [app("github_app", "GitHub"), app("gmail", "Gmail")] };
+    const html = render(makeBot({ connectorTools: { github_app: { tools: "*" }, gmail: { tools: "*" } } }));
+    expect(html).toMatch(/<span class="min-w-0 flex-1 truncate text-\[13px\] text-ink">GitHub</);
+    expect(html).not.toMatch(/>github_app</);
+    expect(html).toMatch(/font-mono text-\[13px\] text-ink">gmail</);
+  });
+
   it("shows no scope rows until the account list is known", () => {
     const html = render(makeBot({ connectorScopes: { apps: { gmail: "write" } } }));
     expect(html).not.toContain("Limit this bot to specific apps");

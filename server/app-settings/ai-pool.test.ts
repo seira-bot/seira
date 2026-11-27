@@ -52,7 +52,7 @@ function fixture(options: { owner?: boolean; guest?: boolean; pool?: Pool; engin
   } as unknown as RegistryDeps);
   const host = createAppSettings({
     store: store as never, dataDir, entries,
-    turnOwner: () => (options.owner === false ? null : "owner"),
+    asker: () => (options.owner === false ? { kind: "refused", code: "not-owner" } : { kind: "clean" }),
     guestDriven: () => options.guest === true,
     requestCredential: async () => ({ status: 500, body: {} }),
     connectorThread: () => null,

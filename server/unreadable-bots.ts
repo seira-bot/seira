@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 
-import { BOTS_FILE } from "./registry-store.ts";
+import { BOTS_FILE, isListOfRecords } from "./registry-store.ts";
 
-/** bots.json is there, and it does not read as a list of bots. */
+/** bots.json or groups.json is there, and it does not read as a list. */
 export class UnreadableBotsError extends Error {}
+
+/** A list of bots: every element is an object (not a list) with an `id` that is a text that is not empty. */
+export const isListOfBots = isListOfRecords;
 
 /** Keeps the bytes of the file under a name of their own, once for each content. A file that cannot be read has no copy. */
 export function keepUnreadableBots(file = BOTS_FILE): string | undefined {
@@ -21,14 +25,26 @@ export function keepUnreadableBots(file = BOTS_FILE): string | undefined {
 
 /** The message names the error code only: the text of a parse error quotes the file. */
 export function refuseUnreadableBots(cause: unknown, file = BOTS_FILE): never {
-  const code = (cause as NodeJS.ErrnoException | undefined)?.code;
+  const code = (cause as NodeJS.ErrnoException | undefined)?.code, name = basename(file);
   const copy = keepUnreadableBots(file);
   throw new UnreadableBotsError([
-    `The server did not start: bots.json cannot be read (${code ? `error ${code}` : "the content is not a list of bots"}).`,
+    `The server did not start: ${name} cannot be read (${code ? `error ${code}` : `the content is not a list of ${name === "groups.json" ? "rooms" : "bots"}`}).`,
     "The server did not change the file.",
     copy ? `A copy is at ${copy}.` : "No copy could be made.",
-    "Restore bots.json, fix its permissions, or move it away, then start the server again.",
+    `Restore ${name}, fix its permissions, or move it away, then start the server again.`,
   ].join(" "));
+}
+
+/** The bots that bots.json lists, or undefined when there is no file. A file that does not read as a list stops the start. */
+export function loadBotsOrRefuse<T>(load: () => unknown, file = BOTS_FILE): T[] | undefined {
+  try {
+    const loaded = load();
+    if (!isListOfBots(loaded)) throw new TypeError("bots.json is not a list of bots");
+    return loaded as T[];
+  } catch (error) {
+    if (existsSync(file)) refuseUnreadableBots(error, file);
+    return undefined;
+  }
 }
 
 /** A refusal is one plain line and exit code 1, never a stack trace. */

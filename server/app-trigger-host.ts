@@ -16,6 +16,7 @@ import { PASS, type RouteContext, type RouteHandler } from "./routes/table.ts";
 import { listTriggers, triggerTarget } from "./trigger-tools.ts";
 import { addressFor } from "./webhook-address.ts";
 import type { WebhookManager } from "./webhooks.ts";
+import { publicErrorText } from "./public-error.ts";
 
 type Bot = RosterMember & {
   color: string; composio?: boolean;
@@ -165,7 +166,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       }
       return PASS;
     } catch (error) {
-      return json(res, status(error), { error: error instanceof Error ? error.message : String(error) });
+      return json(res, status(error), { error: publicErrorText(error, "app trigger request", "The automation request could not be finished.") });
     }
   };
 
@@ -178,7 +179,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       try {
         return json(res, 200, await catalog(context.from, url.searchParams.get("app") ?? undefined, url.searchParams.get("search") ?? undefined));
       } catch (error) {
-        return json(res, 200, { error: `The events could not be listed: ${error instanceof Error ? error.message : String(error)}` });
+        return json(res, 200, { error: `The events could not be listed: ${publicErrorText(error, "GET internal trigger events", "the event service could not be reached.")}` });
       }
     }
     const target = triggerTarget(context.from, url.searchParams.get("forBotId") ?? undefined, (id) => deps.store.bot(id));
@@ -216,7 +217,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
         tool: applied.action === "create" ? "create_trigger" : "manage_trigger", summary: applied.summary });
       return json(res, 201, applied);
     } catch (error) {
-      return json(res, status(error), { error: error instanceof Error ? error.message : String(error) });
+      return json(res, status(error), { error: publicErrorText(error, "app trigger request", "The automation request could not be finished.") });
     }
   }
 

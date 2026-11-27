@@ -19,6 +19,7 @@ import {
   type ConnectedAccountResponse,
   type AuthConfigMap,
 } from "./composio-project.ts";
+import { PublicError } from "./public-error.ts";
 
 const sessionResponseSchema = z.object({
   session_id: z.string().min(1),
@@ -198,8 +199,8 @@ export async function prepareProjectSession(
   options: { reuseEarlierUser?: boolean } = {},
 ): Promise<{ apiKey: string; userId: string; sessionId: string }> {
   const trimmed = apiKey.trim();
-  if (!trimmed) throw new Error("Enter a Composio project API key");
-  if (!trimmed.startsWith("ak_")) throw new Error("Composio project API keys start with ak_");
+  if (!trimmed) throw new PublicError("Enter a Composio project API key");
+  if (!trimmed.startsWith("ak_")) throw new PublicError("Composio project API keys start with ak_");
 
   // A Session names its auth configs at creation, so the project's are read before deciding to reuse it.
   const authConfigs = knownAuthConfigs ?? (await projectAuthConfigs(trimmed)).configs;

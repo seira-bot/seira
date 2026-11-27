@@ -3,6 +3,7 @@ import type { Reactor } from "../reactions.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { Message } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface ReactionRouteDeps {
   react(input: {
@@ -28,7 +29,7 @@ export function createReactionRoutes(deps: ReactionRouteDeps): RouteHandler {
     } catch (error) {
       const { status, code } = error as { status?: unknown; code?: unknown };
       if (typeof status !== "number") throw error;
-      return json(res, status, { error: error instanceof Error ? error.message : String(error), ...(typeof code === "string" ? { code } : {}) });
+      return json(res, status, { error: publicErrorText(error, "POST reaction"), ...(typeof code === "string" ? { code } : {}) });
     }
   };
 }

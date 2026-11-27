@@ -2,10 +2,11 @@ import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { flushWritesBehind, writesBehindSettled } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
 import type { ModelSelection } from "./contracts.ts";
 import { RESTART_EXIT_CODE } from "./restart.ts";
-import { flushAtCleanExit, flushLaterSaves, SAVE_LATER_MAX_MS, waitingSaves } from "./save-batch.ts";
+import { batchSaves, flushAtCleanExit, flushLaterSaves, SAVE_LATER_MAX_MS, waitingSaves } from "./save-batch.ts";
 import { Store, type BotRecord } from "./store.ts";
 
 const selection = (): ModelSelection => ({ instanceId: "claude", model: "claude-sonnet-5" });
@@ -18,8 +19,9 @@ describe("what bots.json holds, and when", () => {
     rmSync(DATA_DIR, { recursive: true, force: true });
     vi.useFakeTimers();
   });
-  afterEach(() => {
+  afterEach(async () => {
     flushLaterSaves();
+    await writesBehindSettled();
     vi.useRealTimers();
   });
 
@@ -42,6 +44,7 @@ describe("what bots.json holds, and when", () => {
     expect(waitingSaves()).toBe(1);
     await vi.advanceTimersByTimeAsync(SAVE_LATER_MAX_MS);
     expect(waitingSaves()).toBe(0);
+    await writesBehindSettled();
     expect(written()).not.toBe(before);
     for (const bot of bots) {
       const task = onDisk(bot.id).tasks!.find((candidate) => candidate.threadId === bot.threadId)!;
@@ -49,6 +52,7 @@ describe("what bots.json holds, and when", () => {
     }
     const once = written();
     await vi.advanceTimersByTimeAsync(10 * SAVE_LATER_MAX_MS);
+    await writesBehindSettled();
     expect(written(), "one write for the lot").toBe(once);
   });
 
@@ -110,6 +114,44 @@ describe("what bots.json holds, and when", () => {
     turnEnd(store, bot.id, bot.threadId);
     flushLaterSaves();
     expect(new Store(selection).taskByThread(bot.id, bot.threadId)?.usage?.turns).toBe(2);
+  });
+
+  // A turn's start and each runtime event run as one pass (server/save-batch.ts batchSaves). Its bookkeeping is taken
+  // whole at the end of the pass and lands a moment later, off the event loop; nothing ever reads a half pass or an
+  // older pass over a newer save.
+  it("writes a pass's bookkeeping behind: the file keeps the pass before until it lands", async () => {
+    const store = new Store(selection);
+    const bot = store.createBot({ name: "Seira" }, { seedMessages: false }), threadId = bot.threadId;
+    const before = written();
+    batchSaves(() => {
+      store.setResumeCursor(bot.id, "claude", { sessionId: "s-1" }, threadId);
+      store.markTaskDispatched(bot.id, threadId, "claude");
+    });
+    expect(written(), "the pass returns before the write").toBe(before);
+    expect(onDisk(bot.id).tasks![0]!.resumeCursors).not.toHaveProperty("claude");
+    await writesBehindSettled();
+    expect(onDisk(bot.id).tasks![0]).toMatchObject({ resumeCursors: { claude: { sessionId: "s-1" } }, lastInstanceId: "claude" });
+  });
+
+  it("lets a save that must be on disk at once win over a pass still on its way", async () => {
+    const store = new Store(selection);
+    const bot = store.createBot({ name: "Seira" }, { seedMessages: false }), threadId = bot.threadId;
+    batchSaves(() => store.setResumeCursor(bot.id, "claude", { sessionId: "s-1" }, threadId));
+    store.patchBot(bot.id, { name: "Renamed" });
+    expect(onDisk(bot.id)).toMatchObject({ name: "Renamed", tasks: [{ resumeCursors: { claude: { sessionId: "s-1" } } }] });
+    await writesBehindSettled();
+    expect(onDisk(bot.id).name, "the older pass never lands over it").toBe("Renamed");
+  });
+
+  it("finishes a pass's write at any exit, a fatal one too, and before a fresh load reads the file", () => {
+    const store = new Store(selection);
+    const bot = store.createBot({ name: "Seira" }, { seedMessages: false }), threadId = bot.threadId;
+    batchSaves(() => store.setResumeCursor(bot.id, "claude", { sessionId: "s-1" }, threadId));
+    flushAtCleanExit(1);
+    flushWritesBehind(); // what the exit handler of server/atomic.ts runs at every exit
+    expect(onDisk(bot.id).tasks![0]!.resumeCursors).toEqual({ claude: { sessionId: "s-1" } });
+    batchSaves(() => store.setResumeCursor(bot.id, "claude", { sessionId: "s-2" }, threadId));
+    expect(new Store(selection).taskByThread(bot.id, threadId)?.resumeCursors).toEqual({ claude: { sessionId: "s-2" } });
   });
 
   it("names the changed thread on each bookkeeping event, so its frame can carry that thread alone", () => {

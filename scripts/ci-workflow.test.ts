@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { VITEST_SHARDS, VITEST_WORKERS } from "./ci-scope.mjs";
@@ -52,6 +53,8 @@ const MILESTONES = "milestones.yml";
 const SMOKE = "server-image-smoke.yml";
 // Uploads the desktop snap to the Snap Store from the `snap-store` environment, when a release is published.
 const SNAP = "snap-publish.yml";
+// Submits the Windows Store package to the Microsoft Store from the `microsoft-store` environment, when a release is published.
+const MSSTORE = "msstore-publish.yml";
 // Artifact-only candidate build of the patched Windows browser engine. It never publishes and has no secret.
 const VENDOR = "browser-vendor-windows.yml";
 const image = workflows.get(IMAGE)!;
@@ -238,9 +241,356 @@ describe("snap publish workflow", () => {
   });
 });
 
+describe("msstore publish workflow", () => {
+  const flow = workflows.get(MSSTORE)!;
+  const text = texts.get(MSSTORE)!;
+  const { redispatch, commit, gate, approval, build, publish } = flow.jobs as Record<string, Job>;
+  const find = (job: Job, name: string) => stepsOf(job).find((step) => step.name === name)!;
+  const check = find(commit!, "Find the commit of the tag");
+  const RUN_IF = `!cancelled() && github.event_name == 'workflow_dispatch' && ${MAIN_REF} && needs.commit.result == 'success'`;
+  const SECRETS = ["MSSTORE_TENANT_ID", "MSSTORE_SELLER_ID", "MSSTORE_CLIENT_ID", "MSSTORE_CLIENT_SECRET"];
+  const folders: string[] = [];
+  afterEach(() => {
+    for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
+  });
+  const tempFolder = (prefix: string) => {
+    const folder = mkdtempSync(join(tmpdir(), prefix));
+    folders.push(folder);
+    return folder;
+  };
+
+  const runCommit = (env: { ref?: string; tag?: string; position?: string; release?: string | null; sha?: string }) => {
+    const sha = env.sha ?? "a".repeat(40);
+    const dir = tempFolder("msstore-commit-");
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const tag = env.tag ?? "v1.2.3";
+    const lsRemote = sha === "" ? "exit 0" : `printf '%s\\trefs/tags/${tag}\\n' ${sha}; exit 0`;
+    writeFileSync(join(bin, "git"), `#!/bin/bash\n[ "$1" = ls-remote ] && { ${lsRemote}; }\nexit 1\n`, { mode: 0o755 });
+    const release = env.release === undefined ? "false\\tfalse" : env.release;
+    writeFileSync(join(bin, "gh"), [
+      "#!/bin/bash",
+      'case "$2" in',
+      `  */compare/*) echo "${env.position ?? "behind"}" ;;`,
+      release === null ? "  */releases/tags/*) exit 1 ;;" : `  */releases/tags/*) printf '${release}\\n' ;;`,
+      "esac", "",
+    ].join("\n"), { mode: 0o755 });
+    const out = join(dir, "out");
+    const result = spawnSync("bash", ["-c", check.run!], {
+      encoding: "utf8",
+      env: {
+        PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_OUTPUT: out, GITHUB_STEP_SUMMARY: join(dir, "sum"),
+        REF: env.ref ?? "refs/heads/main", TAG: tag, GH_TOKEN: "x",
+      },
+    });
+    const written = existsSync(out) ? readFileSync(out, "utf8") : "";
+    return { status: result.status, output: result.stdout + result.stderr, written };
+  };
+
+  // The inline Node scripts run for real. A fake `fetch`, loaded with --import, serves scripted answers and records each request.
+  const FAKE_FETCH = [
+    'import { appendFileSync, readFileSync } from "node:fs";',
+    'const rules = JSON.parse(readFileSync(process.env.FAKE_RULES, "utf8"));',
+    "const counts = new Map();",
+    "globalThis.fetch = async (url, init = {}) => {",
+    '  const method = init.method ?? "GET";',
+    '  appendFileSync(process.env.FAKE_LOG, JSON.stringify({ method, url: String(url), body: init.body ? String(init.body) : null, auth: init.headers?.Authorization ?? null }) + "\\n");',
+    "  const index = rules.findIndex((rule) => rule.method === method && String(url).endsWith(rule.suffix));",
+    '  if (index === -1) return new Response("no rule", { status: 404 });',
+    "  const seen = counts.get(index) ?? 0;",
+    "  counts.set(index, seen + 1);",
+    "  const answers = rules[index].answers;",
+    "  const answer = answers[Math.min(seen, answers.length - 1)];",
+    '  return new Response(answer.body === undefined ? "" : JSON.stringify(answer.body), { status: answer.status ?? 200 });',
+    "};",
+    "",
+  ].join("\n");
+
+  interface Rule { method: string; suffix: string; answers: { status?: number; body?: unknown }[] }
+  interface Seen { method: string; url: string; body: string | null; auth: string | null }
+  const inlineScript = (step: Step) => step.run!.split("<<'EOF'\n")[1]!.split("\nEOF")[0]!;
+  const runInline = (step: Step, env: Record<string, string>, rules: Rule[]) => {
+    const dir = tempFolder("msstore-inline-");
+    const script = join(dir, "script.mjs");
+    const fake = join(dir, "fake-fetch.mjs");
+    const log = join(dir, "requests.log");
+    const summary = join(dir, "summary.md");
+    writeFileSync(script, inlineScript(step));
+    writeFileSync(fake, FAKE_FETCH);
+    writeFileSync(join(dir, "rules.json"), JSON.stringify(rules));
+    const result = spawnSync(process.execPath, [script], {
+      encoding: "utf8",
+      timeout: 30_000,
+      env: {
+        PATH: process.env.PATH, NODE_OPTIONS: `--import ${pathToFileURL(fake).href}`,
+        FAKE_RULES: join(dir, "rules.json"), FAKE_LOG: log, GITHUB_STEP_SUMMARY: summary, ...env,
+      },
+    });
+    const seen: Seen[] = existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line) as Seen) : [];
+    return {
+      status: result.status, output: result.stdout + result.stderr, seen,
+      summary: existsSync(summary) ? readFileSync(summary, "utf8") : "",
+    };
+  };
+
+  const secretEnv = { MSSTORE_TENANT_ID: "tenant-1", MSSTORE_SELLER_ID: "seller-1", MSSTORE_CLIENT_ID: "client-1", MSSTORE_CLIENT_SECRET: "test-secret", PRODUCT_ID: "PRODUCT1" };
+  const TOKEN: Rule = { method: "POST", suffix: "/oauth2/token", answers: [{ body: { access_token: "tok-1" } }] };
+  const APPLICATION = (pending: unknown): Rule => ({ method: "GET", suffix: "/applications/PRODUCT1", answers: [{ body: pending === null ? { id: "PRODUCT1" } : { id: "PRODUCT1", pendingApplicationSubmission: pending } }] });
+  const checkStep = find(publish!, "Check the credentials and Partner Center");
+  const commitStep = find(publish!, "Set What's new, commit and wait");
+
+  it("starts on a published release and by hand, with a tag only", () => {
+    expect(Object.keys(flow.on).sort()).toEqual(["release", "workflow_dispatch"]);
+    expect(flow.on.release).toEqual({ types: ["published"] });
+    const inputs = (flow.on.workflow_dispatch as { inputs: Record<string, { required: boolean; type: string }> }).inputs;
+    expect(Object.keys(inputs)).toEqual(["tag"]);
+    expect(inputs.tag).toMatchObject({ required: true, type: "string" });
+    expect(flow.concurrency).toEqual({ group: "msstore-publish", "cancel-in-progress": false });
+  });
+
+  it("starts the run on main for a release, and skips a draft and a prerelease", () => {
+    expect(redispatch!.if).toContain("github.event_name == 'release'");
+    expect(redispatch!.if).toContain("!github.event.release.draft");
+    expect(redispatch!.if).toContain("!github.event.release.prerelease");
+    expect(redispatch!.permissions).toEqual({ actions: "write", contents: "read" });
+    expect(redispatch!.environment).toBeUndefined();
+    expect(runs(redispatch!).join("\n")).toContain('gh workflow run msstore-publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"');
+  });
+
+  it("runs the release gate on the commit of the tag, and asks a person to approve a flagged run", () => {
+    expect(commit!.if).toBe("github.event_name == 'workflow_dispatch'");
+    expect(gate!.needs).toBe("commit");
+    expect(find(gate!, "Run the release gate").env?.SHA).toBe("${{ needs.commit.outputs.sha }}");
+    expect(find(gate!, "Run the release gate").run).toContain('--tag "$TAG" --sha "$SHA"');
+    expect(approval!.needs).toBe("gate");
+  });
+
+  it("builds and submits only on main, after the gate passed or after an approval in this attempt", () => {
+    expect(build!.needs).toEqual(["commit", "gate", "approval"]);
+    expect(build!.if).toBe(`\${{ ${RUN_IF} && ${GATE_CLEAR} }}`);
+    expect(publish!.needs).toEqual(["commit", "gate", "approval", "build"]);
+    expect(publish!.if).toBe(`\${{ ${RUN_IF} && needs.build.result == 'success' && ${GATE_CLEAR} }}`);
+    for (const job of [build!, publish!]) expect(job.if).not.toContain("'skipped'");
+  });
+
+  it("builds the commit SHA with no secret, checks the Store package and uploads one artifact", () => {
+    expect(build!["runs-on"]).toBe("windows-2025");
+    expect(build!.environment).toBeUndefined();
+    expect(JSON.stringify(build)).not.toContain("secrets.");
+    const checkout = stepsOf(build!).find((step) => step.uses?.startsWith("actions/checkout@"))!;
+    expect(checkout.with?.ref).toBe("${{ needs.commit.outputs.sha }}");
+    expect(text).not.toContain("refs/tags/${{");
+    expect(find(build!, "Check the version").run).toContain('"$(git rev-parse HEAD)" = "$SHA"');
+    expect(find(build!, "Check the version").run).toContain('[ "$TAG" = "v$version" ]');
+    const commands = runs(build!).join("\n");
+    expect(commands).toContain("pnpm package:appx");
+    expect(commands).toContain("node scripts/check-appx.mjs");
+    expect(commands).toContain("seira-job-fence.exe");
+    expect(commands).toContain('node scripts/store-whats-new.mjs --version "$VERSION"');
+    expect(scripts["package:appx"]).toBe("pnpm package:prepare && pnpm build:cua:win && pnpm build:job-fence && electron-builder --win appx --x64 --publish never");
+    const uploads = stepsOf(build!).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.with).toMatchObject({ name: "msstore", "if-no-files-found": "error", "retention-days": 1 });
+    expect(find(build!, "Stage the Store package").run).toContain("SHA256SUMS-msstore.txt");
+    expect(build!.outputs).toEqual({ file: "${{ steps.stage.outputs.file }}", sha256: "${{ steps.stage.outputs.sha256 }}" });
+  });
+
+  it("submits only from the microsoft-store environment, runs no repository code and reads the four secrets in step env", () => {
+    expect(publish!.environment).toBe("microsoft-store");
+    expect(publish!.permissions).toEqual({ contents: "read" });
+    expect(stepsOf(publish!).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
+    const readers = stepsOf(publish!).filter((step) => JSON.stringify(step).includes("secrets."));
+    expect(readers.map((step) => step.name)).toEqual(["Check the credentials and Partner Center", "Upload the package", "Set What's new, commit and wait"]);
+    for (const name of SECRETS) expect(find(publish!, "Upload the package").env?.[name]).toBe(`\${{ secrets.${name} }}`);
+    expect(Object.keys(commitStep.env!).filter((name) => String(commitStep.env![name]).includes("secrets."))).toEqual(["MSSTORE_TENANT_ID", "MSSTORE_CLIENT_ID", "MSSTORE_CLIENT_SECRET"]);
+    for (const name of text.match(/secrets\.[A-Z_]+/g)!) expect(SECRETS).toContain(name.slice("secrets.".length));
+  });
+
+  it("checks the credentials and Partner Center before the upload, and installs the pinned msstore tool between", () => {
+    const names = stepsOf(publish!).map((step) => step.name ?? step.uses);
+    const at = (name: string) => names.findIndex((each) => each?.startsWith(name));
+    expect(at("Check the package")).toBeLessThan(at("Check the credentials and Partner Center"));
+    expect(at("Check the credentials and Partner Center")).toBeLessThan(at("microsoft/microsoft-store-apppublisher@"));
+    expect(at("microsoft/microsoft-store-apppublisher@")).toBeLessThan(at("Upload the package"));
+    expect(at("Upload the package")).toBeLessThan(at("Set What's new"));
+    const install = stepsOf(publish!).find((step) => step.uses?.startsWith("microsoft/microsoft-store-apppublisher@"))!;
+    expect(install.with).toEqual({ version: "v0.4.4" });
+    const upload = find(publish!, "Upload the package");
+    expect(upload.run).toContain("msstore reconfigure");
+    expect(upload.run).toContain('msstore publish "msstore/$FILE" -id "$PRODUCT_ID" --noCommit');
+    expect(upload.env?.PRODUCT_ID).toBe("9MVFVK4VTFDH");
+  });
+
+  it("allows a release that is published, not a prerelease, and in main", () => {
+    const result = runCommit({});
+    expect(result.status, result.output).toBe(0);
+    expect(result.written).toContain(`sha=${"a".repeat(40)}`);
+    expect(result.written).toContain("tag=v1.2.3");
+  });
+
+  it("rejects a run on a ref that is not main", () => {
+    for (const ref of ["refs/heads/ci/msstore-publish", "refs/tags/v1.2.3", "refs/pull/1/merge"]) {
+      const result = runCommit({ ref });
+      expect(result.status, ref).toBe(1);
+      expect(result.output).toContain("Run it from main");
+      expect(result.written).toBe("");
+    }
+  });
+
+  it("rejects a draft, a prerelease and a missing release", () => {
+    for (const release of ["true\\tfalse", "false\\ttrue", "true\\ttrue", null]) {
+      const result = runCommit({ release });
+      expect(result.status, String(release)).toBe(1);
+      expect(result.output).toContain("needs a published");
+      expect(result.written).toBe("");
+    }
+  });
+
+  it("rejects a commit that is not in the history of main, and a tag that does not exist", () => {
+    for (const position of ["ahead", "diverged"]) {
+      const result = runCommit({ position });
+      expect(result.status, position).toBe(1);
+      expect(result.output).toContain("not in the history of main");
+    }
+    const none = runCommit({ sha: "" });
+    expect(none.status).toBe(1);
+    expect(none.output).toContain("no commit for this tag");
+  });
+
+  it("rejects a tag that has the wrong shape", () => {
+    for (const tag of ["1.2.3", "v1.2", "v1.2.3-rc.1", "main"]) expect(runCommit({ tag }).status, tag).toBe(1);
+  });
+
+  it("stops with one message that names each missing secret and makes no request", () => {
+    const result = runInline(checkStep, { ...secretEnv, MSSTORE_SELLER_ID: "", MSSTORE_CLIENT_SECRET: "" }, [TOKEN]);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("MSSTORE_SELLER_ID, MSSTORE_CLIENT_SECRET");
+    expect(result.output).not.toContain("MSSTORE_TENANT_ID");
+    expect(result.output).toContain("Nothing was uploaded");
+    expect(result.output).toContain("docs/releasing.md");
+    expect(result.seen).toEqual([]);
+    const all = runInline(checkStep, { PRODUCT_ID: "PRODUCT1" }, [TOKEN]);
+    expect(all.status).toBe(1);
+    for (const name of SECRETS) expect(all.output).toContain(name);
+    expect(all.seen).toEqual([]);
+  });
+
+  it("stops before the upload when Partner Center already holds a submission, and changes nothing", () => {
+    const result = runInline(checkStep, secretEnv, [TOKEN, APPLICATION({ id: "S0" })]);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("already has a submission in progress");
+    expect(result.output).toContain("did not change it");
+    expect(result.seen.map((each) => `${each.method} ${each.url.split("/").slice(-2).join("/")}`)).toEqual(["POST oauth2/token", "GET applications/PRODUCT1"]);
+    expect(result.output).not.toContain("test-secret");
+    expect(result.output).not.toContain("tok-1");
+  });
+
+  it("passes when Partner Center holds no submission, and sends the token as a Bearer header", () => {
+    const result = runInline(checkStep, secretEnv, [TOKEN, APPLICATION(null)]);
+    expect(result.status, result.output).toBe(0);
+    expect(result.seen[0]!.url).toBe("https://login.microsoftonline.com/tenant-1/oauth2/token");
+    expect(result.seen[0]!.body).toBe("grant_type=client_credentials&client_id=client-1&client_secret=test-secret&resource=https%3A%2F%2Fmanage.devcenter.microsoft.com");
+    expect(result.seen[1]!.url).toBe("https://manage.devcenter.microsoft.com/v1.0/my/applications/PRODUCT1");
+    expect(result.seen[1]!.auth).toBe("Bearer tok-1");
+    expect(result.output).not.toContain("test-secret");
+    expect(result.output).not.toContain("tok-1");
+  });
+
+  it("fails with the status code and body when a call is refused, and never prints the secret", () => {
+    const result = runInline(checkStep, secretEnv, [{ method: "POST", suffix: "/oauth2/token", answers: [{ status: 401, body: { error: "invalid_client" } }] }]);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("401");
+    expect(result.output).toContain("invalid_client");
+    expect(result.output).not.toContain("test-secret");
+  });
+
+  const SUBMISSION = {
+    id: "S1",
+    pricing: { trialPeriod: "NoFreeTrial", priceId: "Free" },
+    applicationPackages: [{ fileName: "Seira.msix", fileStatus: "Uploaded" }],
+    listings: {
+      "en-us": { baseListing: { title: "Seira", description: "A description", releaseNotes: "old notes" } },
+      "id-id": { baseListing: { title: "Seira ID" } },
+    },
+  };
+  const NOTES = "- First change\n- Second change\n";
+  const SUBMISSION_URL = "/applications/PRODUCT1/submissions/S1";
+  const commitRules = (statuses: { status: string; statusDetails?: unknown }[]): Rule[] => [
+    TOKEN,
+    APPLICATION({ id: "S1" }),
+    { method: "GET", suffix: SUBMISSION_URL, answers: [{ body: SUBMISSION }] },
+    { method: "PUT", suffix: SUBMISSION_URL, answers: [{ body: SUBMISSION }] },
+    { method: "POST", suffix: `${SUBMISSION_URL}/commit`, answers: [{ body: { status: "CommitStarted" } }] },
+    { method: "GET", suffix: `${SUBMISSION_URL}/status`, answers: statuses.map((body) => ({ body })) },
+  ];
+  const runCommitStep = (rules: Rule[], extra: Record<string, string> = {}) => {
+    const file = join(tempFolder("msstore-notes-"), "whats-new.txt");
+    writeFileSync(file, NOTES);
+    const env = { ...secretEnv, NOTES_FILE: file, TAG: "v1.2.3", SHA: "b".repeat(40), POLL_SECONDS: "0.01", ...extra };
+    return runInline(commitStep, env, rules);
+  };
+
+  it("sets the release notes of each listing, keeps every other field, commits, and waits until the status leaves CommitStarted", () => {
+    const result = runCommitStep(commitRules([{ status: "CommitStarted" }, { status: "PreProcessing" }]));
+    expect(result.status, result.output).toBe(0);
+    const calls = result.seen.map((each) => `${each.method} ${each.url.split("/v1.0/my")[1] ?? "token"}`);
+    expect(calls).toEqual([
+      "POST token",
+      "GET /applications/PRODUCT1",
+      `GET ${SUBMISSION_URL}`,
+      `PUT ${SUBMISSION_URL}`,
+      `POST ${SUBMISSION_URL}/commit`,
+      `GET ${SUBMISSION_URL}/status`,
+      `GET ${SUBMISSION_URL}/status`,
+    ]);
+    const put = JSON.parse(result.seen.find((each) => each.method === "PUT")!.body!) as typeof SUBMISSION;
+    expect(put.pricing).toEqual(SUBMISSION.pricing);
+    expect(put.applicationPackages).toEqual(SUBMISSION.applicationPackages);
+    expect(put.listings["en-us"].baseListing).toEqual({ title: "Seira", description: "A description", releaseNotes: "- First change\n- Second change" });
+    expect(put.listings["id-id"].baseListing).toEqual({ title: "Seira ID", releaseNotes: "- First change\n- Second change" });
+    expect(result.summary).toContain("v1.2.3");
+    expect(result.summary).toContain("b".repeat(40));
+    expect(result.summary).toContain("S1");
+    expect(result.summary).toContain("PreProcessing");
+    expect(result.output).not.toContain("test-secret");
+    expect(result.output).not.toContain("tok-1");
+  });
+
+  it("fails and prints the status errors when the commit status becomes CommitFailed", () => {
+    const failed = { status: "CommitFailed", statusDetails: { errors: [{ code: "InvalidPackage", details: "The package is broken." }] } };
+    const result = runCommitStep(commitRules([{ status: "CommitStarted" }, failed]));
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("The package is broken.");
+    expect(result.output).toContain("InvalidPackage");
+    expect(result.summary).toBe("");
+  });
+
+  it("fails when the commit does not finish in time", () => {
+    const result = runCommitStep(commitRules([{ status: "CommitStarted" }]), { WAIT_MINUTES: "0.0001" });
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("did not finish in time");
+  });
+
+  it("fails and calls no update or commit when the upload made no submission", () => {
+    const result = runCommitStep([TOKEN, APPLICATION(null)]);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("made no submission");
+    expect(result.seen.filter((each) => each.method === "PUT" || each.url.endsWith("/commit"))).toEqual([]);
+  });
+
+  it("fails with the status code and body, and does not commit, when the update is refused", () => {
+    const refused: Rule = { method: "PUT", suffix: SUBMISSION_URL, answers: [{ status: 400, body: { code: "InvalidParameterValue" } }] };
+    const result = runCommitStep([...commitRules([{ status: "PreProcessing" }]).filter((rule) => rule.method !== "PUT"), refused]);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("400");
+    expect(result.output).toContain("InvalidParameterValue");
+    expect(result.seen.some((each) => each.url.endsWith("/commit"))).toBe(false);
+  });
+});
+
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
-    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
+  it("keeps the CI workflow, the milestones workflow, the Microsoft Store publish workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
+    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, MSSTORE, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
@@ -264,7 +614,7 @@ describe("CI workflows", () => {
           continue;
         }
         const grants = JSON.stringify(job.permissions ?? {});
-        if ((file === NPM || file === SNAP) && id === REDISPATCH) {
+        if ((file === NPM || file === SNAP || file === MSSTORE) && id === REDISPATCH) {
           expect(job.permissions, `${file} job ${id}`).toEqual({ actions: "write", contents: "read" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
           continue;
@@ -281,6 +631,10 @@ describe("CI workflows", () => {
         if (job.environment === undefined) continue;
         if (file === SNAP && id === "publish") {
           expect(job.environment, where).toBe("snap-store");
+          continue;
+        }
+        if (file === MSSTORE && id === "publish") {
+          expect(job.environment, where).toBe("microsoft-store");
           continue;
         }
         expect(["release", "release-approval"], where).toContain(job.environment);
@@ -315,7 +669,7 @@ describe("CI workflows", () => {
   });
 
   it("runs the release gate in a read-only job before every approval, with the reviewer list and no secret", () => {
-    for (const file of [NPM, IMAGE, MACOS, SNAP]) {
+    for (const file of [NPM, IMAGE, MACOS, SNAP, MSSTORE]) {
       const gate = workflows.get(file)!.jobs.gate!;
       expect(gate.permissions, file).toEqual({ contents: "read", "pull-requests": "read" });
       expect(gate.environment, file).toBeUndefined();
@@ -336,6 +690,7 @@ describe("CI workflows", () => {
     expect(texts.get(IMAGE)!.split(READ_TOKEN)).toHaveLength(2);
     expect(texts.get(NPM)!.split(READ_TOKEN)).toHaveLength(3);
     expect(texts.get(SNAP)!.split(READ_TOKEN)).toHaveLength(4);
+    expect(texts.get(MSSTORE)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
@@ -354,7 +709,7 @@ describe("CI workflows", () => {
       expect(count(texts.get(file)!), `${file} reads a secret outside a job`).toBe(inJobs);
       for (const [id, job] of jobs) {
         expect(job, `${file} job ${id} passes secrets on`).not.toHaveProperty("secrets");
-        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe(file === SNAP ? "snap-store" : "release");
+        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe(file === SNAP ? "snap-store" : file === MSSTORE ? "microsoft-store" : "release");
       }
     }
   });
@@ -374,8 +729,8 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads a secret only in the macOS package workflow, for the Apple signature, in the server image workflow and in the snap publish workflow", () => {
-    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml", IMAGE, SNAP]);
+  it("reads a secret only in the Microsoft Store publish workflow, in the macOS package workflow, for the Apple signature, in the server image workflow and in the snap publish workflow", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual([MSSTORE, "package-macos.yml", IMAGE, SNAP]);
   });
 
   it("drops the credentials of every checkout", () => {
@@ -1205,6 +1560,7 @@ describe("Release job conditions", () => {
     { file: NPM, job: "publish", first: "commit" },
     { file: IMAGE, job: "publish", first: "image" },
     { file: SNAP, job: "build", first: "commit" },
+    { file: MSSTORE, job: "build", first: "commit" },
   ];
 
   for (const flow of flows) {
@@ -1231,30 +1587,32 @@ describe("Release job conditions", () => {
     expect(evaluate(workflows.get(NPM)!.jobs.publish!.if!, { needs, github, inputs: {} })).toBe(false);
   });
 
-  it.each(cases)("snap-publish.yml job publish: $name", (each) => {
-    const needs: Record<string, unknown> = {
-      commit: { result: each.first ?? "success", outputs: {} },
-      build: { result: "success", outputs: {} },
-      gate: { result: each.gate ?? "success", outputs: { pass: each.pass } },
-      approval: { result: each.approval, outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt } },
-    };
-    const github = { run_attempt: each.attempt ?? 1, ref: each.ref ?? "refs/heads/main", event_name: "workflow_dispatch" };
-    expect(evaluate(workflows.get(SNAP)!.jobs.publish!.if!, { needs, github, inputs: {} })).toBe(each.runs);
-  });
+  for (const file of [SNAP, MSSTORE]) {
+    it.each(cases)(`${file} job publish: $name`, (each) => {
+      const needs: Record<string, unknown> = {
+        commit: { result: each.first ?? "success", outputs: {} },
+        build: { result: "success", outputs: {} },
+        gate: { result: each.gate ?? "success", outputs: { pass: each.pass } },
+        approval: { result: each.approval, outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt } },
+      };
+      const github = { run_attempt: each.attempt ?? 1, ref: each.ref ?? "refs/heads/main", event_name: "workflow_dispatch" };
+      expect(evaluate(workflows.get(file)!.jobs.publish!.if!, { needs, github, inputs: {} })).toBe(each.runs);
+    });
 
-  it("does not run the snap publish job when the build failed or was skipped", () => {
-    for (const result of ["failure", "skipped", "cancelled"]) {
-      const needs = { commit: { result: "success", outputs: {} }, build: { result, outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
-      const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "workflow_dispatch" };
-      expect(evaluate(workflows.get(SNAP)!.jobs.publish!.if!, { needs, github, inputs: {} }), result).toBe(false);
-    }
-  });
+    it(`does not run the ${file} publish job when the build failed or was skipped`, () => {
+      for (const result of ["failure", "skipped", "cancelled"]) {
+        const needs = { commit: { result: "success", outputs: {} }, build: { result, outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
+        const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "workflow_dispatch" };
+        expect(evaluate(workflows.get(file)!.jobs.publish!.if!, { needs, github, inputs: {} }), result).toBe(false);
+      }
+    });
 
-  it("never runs the snap build or publish job for a release event", () => {
-    const needs = { commit: { result: "success", outputs: {} }, build: { result: "success", outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
-    const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "release" };
-    for (const id of ["build", "publish"]) expect(evaluate(workflows.get(SNAP)!.jobs[id]!.if!, { needs, github, inputs: {} }), id).toBe(false);
-  });
+    it(`never runs the ${file} build or publish job for a release event`, () => {
+      const needs = { commit: { result: "success", outputs: {} }, build: { result: "success", outputs: {} }, gate: { result: "success", outputs: { pass: "true" } }, approval: { result: "skipped", outputs: {} } };
+      const github = { run_attempt: 1, ref: "refs/heads/main", event_name: "release" };
+      for (const id of ["build", "publish"]) expect(evaluate(workflows.get(file)!.jobs[id]!.if!, { needs, github, inputs: {} }), id).toBe(false);
+    });
+  }
 
   it.each([
     { pass: "false", asks: true },
@@ -1275,6 +1633,7 @@ describe("Release gate step", () => {
     { file: IMAGE, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }, { name: "commit", env: { TAG: "" } }] },
     { file: NPM, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
     { file: SNAP, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
+    { file: MSSTORE, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
     { file: MACOS, cases: [{ name: "tag", env: { REF: "v0.1.1" } }, { name: "branch", env: { REF: "main" } }] },
   ];
   const folders: string[] = [];

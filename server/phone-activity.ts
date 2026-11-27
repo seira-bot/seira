@@ -24,6 +24,7 @@ import {
 } from "../shared/phone-push.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { PUSH_DEVICE_KEY, type PhonePush } from "./phone-push.ts";
+import { PublicError } from "./public-error.ts";
 
 export const PHONE_ACTIVITY_FILE = "push-activity.json";
 export const MAX_ACTIVITY_PHONES = 50;
@@ -159,7 +160,7 @@ export class PhoneActivity {
     if (this.options.push.status() === "off") return "off";
     const previous = this.phones.find((phone) => phone.key === key);
     const others = this.phones.filter((phone) => phone.key !== key);
-    if (!previous && others.length >= MAX_ACTIVITY_PHONES) throw Object.assign(new Error("Too many phones"), { status: 409 });
+    if (!previous && others.length >= MAX_ACTIVITY_PHONES) throw new PublicError("Too many phones", 409);
     this.phones = [...others, { key, registration: input, updatedAt: this.now() }];
     this.persist();
     const environment = this.options.push.deviceOf(key)?.environment ?? "production";

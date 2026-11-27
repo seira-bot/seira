@@ -787,6 +787,7 @@ export function Composer({
             <PendingApprovalPanel
               key={approval.requestId}
               pending={approval}
+              threadId={threadId}
               botName={approvalBot?.name} asker={advanced && !group ? undefined : approvalBot}
               count={approvals.length}
               index={0}

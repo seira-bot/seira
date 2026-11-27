@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { GENERIC_PUBLIC_ERROR } from "./public-error.ts";
 import {
   Aes256Gcm,
   CipherSuite,
@@ -8407,7 +8408,8 @@ describe("harness HTTP API", () => {
     { mode: "batch", sizes: Array(5).fill(21 * 1024 * 1024) as number[], message: "Uploads are limited to 100 MiB per batch.", status: 200 },
     { mode: "changed", sizes: [1024], message: expect.stringContaining("changed while staging"), status: 200 },
     { mode: "stop", sizes: [1024], message: expect.stringContaining("turn has already ended"), status: 401 },
-    { mode: "disk", sizes: [1024], message: expect.stringMatching(/ENOTDIR|EEXIST/), status: 500 },
+    // A file-system error is internal: the reply is the generic text, and the detail stays in the server log.
+    { mode: "disk", sizes: [1024], message: GENERIC_PUBLIC_ERROR, status: 500 },
   ])("returns the correct browser upload result for $mode", async ({ mode, sizes, message, status }) => {
     const bot = (await api("POST", "/api/bots")).body.bot;
     const gate = join(home, "browser-upload-read-gate");
@@ -10587,7 +10589,7 @@ describe("harness HTTP API", () => {
 
     const rejected = await api("PUT", "/api/config", { composio: { apiKey: "ak_wrong" } });
     expect(rejected.status).toBe(400);
-    expect(rejected.body.error).toMatch(/invalid project key/i);
+    expect(rejected.body.error).toBe("Composio did not accept this key, or could not be reached. Check the key and try again.");
 
     const saved = await api("PUT", "/api/config?secretStorage=external", {
       composio: { apiKey: "ak_good" },

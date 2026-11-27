@@ -19,6 +19,7 @@ import { PASS, type RouteHandler } from "./routes/table.ts";
 import { parseJson, schemaIssue } from "./schema.ts";
 import type { Message, Store } from "./store.ts";
 import { bearerSecret, header, json, readRawBody, type IngressDoor } from "./webhook-ingress.ts";
+import { PublicError } from "./public-error.ts";
 
 /** How long a call waits by default before answering "working" with its thread id. Under the 60 s that Fly's proxy is reported
  * (community.fly.io, staff replies, 2022-2024) to allow a connection with no bytes: a dropped answer would lose the thread id. */
@@ -83,7 +84,7 @@ export interface BotApiHostDeps {
 /** `detail` is kept with the call for the person; the caller only ever gets `message`, so no engine error, path or
  * internal wording leaves through the door. */
 function fail(status: number, message: string, detail?: string): never {
-  throw Object.assign(new Error(message), { status, detail, forCaller: true });
+  throw Object.assign(new PublicError(message, status), { detail, forCaller: true });
 }
 
 /** Words written for a caller, or the fixed ones: an unexpected error's own text could name anything. */
@@ -195,7 +196,7 @@ export function createBotApiHost(deps: BotApiHostDeps) {
       markRunning(botId, threadId, false);
       if (opened) deps.discard?.(botId, threadId);
       const capped = z.object({ code: z.literal("spend_cap"), message: z.string(), resetsAt: z.number().optional() }).safeParse(error);
-      if (capped.success) throw Object.assign(new Error(capped.data.resetsAt === undefined ? CAPPED : `${CAPPED} Try again after ${new Date(capped.data.resetsAt).toISOString()}.`), { status: 429, forCaller: true, detail: capped.data.message, retryAt: capped.data.resetsAt });
+      if (capped.success) throw Object.assign(new PublicError(capped.data.resetsAt === undefined ? CAPPED : `${CAPPED} Try again after ${new Date(capped.data.resetsAt).toISOString()}.`, 429), { forCaller: true, detail: capped.data.message, retryAt: capped.data.resetsAt });
       const busy = z.object({ code: z.enum(["thread_busy", "thread_limit"]) }).safeParse(error).success;
       fail(busy ? 409 : 502, busy ? BUSY : COULD_NOT_ANSWER, error instanceof Error ? error.message : String(error));
     }

@@ -1,8 +1,12 @@
+import { flushWritesBehind } from "./atomic.ts";
 import { RESTART_EXIT_CODE } from "./restart.ts";
 
-// Whole-file saves asked for while one synchronous pass runs (one runtime event's delivery, a turn's start) are written
-// once when the pass returns, before anything else can run: the files hold what they would have held at every point
-// the server yields to the event loop, with one write instead of one per change.
+// Whole-file saves asked for while one synchronous pass runs (one runtime event's delivery, a turn's start) are taken
+// once when the pass returns, before anything else can run: one write instead of one per change, of what the file
+// holds at a point the server yields to the event loop, never half a pass. A save can write behind (server/atomic.ts
+// OwnedFile.deferWrites): the text is taken at the end of the pass and lands, synced, a few milliseconds later while the
+// server goes on. A newer write always wins over an older one, and every exit with handlers (a crash's too) finishes
+// it; only a kill or a power loss inside those milliseconds leaves the file at the pass before, still whole.
 
 let depth = 0;
 const pending = new Map<object, () => void>();
@@ -17,10 +21,11 @@ export function batchSaves<T>(run: () => T): T {
   }
 }
 
-/** Writes now, or once at the end of the running batch; `owner` keeps one pending write per file. */
-export function saveSoon(owner: object, write: () => void): void {
+/** Writes now, or once at the end of the running batch; `owner` keeps one pending write per file. `atPassEnd` is what
+ * the end of the batch runs instead of `write`: one that writes behind, as server/registry-store.ts passes. */
+export function saveSoon(owner: object, write: () => void, atPassEnd: () => void = write): void {
   if (depth === 0) write();
-  else pending.set(owner, write);
+  else pending.set(owner, atPassEnd);
 }
 
 function writePending(): void {
@@ -62,7 +67,7 @@ export function saveLater(owner: unknown, write: () => void): void {
     flushesAtExit = true;
     process.on("exit", flushAtCleanExit);
   }
-  laterTimer ??= setTimeout(flushLaterSaves, saveLaterDelayMs());
+  laterTimer ??= setTimeout(writeLater, saveLaterDelayMs());
 }
 
 /** A write still waiting for this file has nothing left to add: the file was just written whole, or is being loaded afresh. */
@@ -75,16 +80,24 @@ export const waitingSaves = (): number => later.size;
 /**
  * What waits is written when the process ends cleanly: a graceful shutdown (server/index.ts flushes before its exit),
  * a restart it asked for (75), or a plain exit (0). An exit after a fatal error (1 from an uncaught exception, 70 from
- * the crash guard) writes nothing: memory may hold half a change, and the file on disk is the last whole state, at most
- * SAVE_LATER_MAX_MS old. A kill (SIGKILL, or Windows' TerminateProcess, which is how the desktop app stops its server
+ * the crash guard) writes nothing that still waits here: memory may hold half a change. It still finishes a write behind
+ * (server/atomic.ts flushWritesBehind), whose text was taken whole before, so the file on disk is the last whole state,
+ * at most SAVE_LATER_MAX_MS old. A kill (SIGKILL, or Windows' TerminateProcess, which is how the desktop app stops its server
  * there) runs no handler at all, so the same holds.
  */
 export function flushAtCleanExit(code: number): void {
   if (code === 0 || code === RESTART_EXIT_CODE) flushLaterSaves();
 }
 
-/** Writes everything still waiting, now. Called before the process exits and before anything reads the files from disk. */
+/** Writes everything still waiting, now, and finishes every write behind: when it returns, the files on disk hold it,
+ * synced. Called before the process exits and before anything reads the files from disk. */
 export function flushLaterSaves(): void {
+  writeLater();
+  flushWritesBehind();
+}
+
+/** The timer's write: what waits is taken now, and a save that writes behind lands a moment later. */
+function writeLater(): void {
   if (laterTimer) clearTimeout(laterTimer);
   laterTimer = undefined;
   if (!later.size) return;
@@ -103,5 +116,5 @@ export function flushLaterSaves(): void {
   lastLaterWriteMs = performance.now() - started;
   laterFailures = failed ? laterFailures + 1 : 0;
   // After SAVE_LATER_RETRIES failures in a row the write waits for the file's next save or the exit, instead of a timer.
-  if (later.size && laterFailures <= SAVE_LATER_RETRIES) laterTimer = setTimeout(flushLaterSaves, SAVE_LATER_MAX_MS);
+  if (later.size && laterFailures <= SAVE_LATER_RETRIES) laterTimer = setTimeout(writeLater, SAVE_LATER_MAX_MS);
 }

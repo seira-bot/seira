@@ -34,7 +34,7 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; h
   };
   const host = createAppSettings({
     store: store as never, dataDir, entries: [],
-    turnOwner: () => (options.owner === false ? null : "owner"),
+    asker: () => (options.owner === false ? { kind: "refused", code: "not-owner" } : { kind: "clean" }),
     guestDriven: () => options.guest === true,
     requestCredential: async () => ({ status: 500, body: {} }),
     connectorThread: () => (options.group ? { group: { id: "g", name: "Room" } as never } : null),

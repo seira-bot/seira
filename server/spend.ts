@@ -6,6 +6,7 @@ import { SPEND_LIMIT_REFUSAL } from "../shared/setting-fixes.ts";
 import type { AppConfig } from "./config.ts";
 import { entitled } from "./enterprise.ts";
 import { CAP_WARN_PERCENT, measure, monthKeyOf, noteUsage, periodEnd, resetUsageTotalsForTests, usageTotals } from "./usage-caps.ts";
+import { PublicError } from "./public-error.ts";
 
 export interface SpendState {
   month: string;
@@ -53,9 +54,9 @@ export function assertWithinBudget(
   const state = spendState(cfg, dataDir, now, isEntitled);
   if (!state?.exceeded) return;
   throw Object.assign(
-    new Error(`${SPEND_LIMIT_REFUSAL} of $${usd(state.monthlyUsd)} — an admin can raise it under Settings → Spending`),
+    new PublicError(`${SPEND_LIMIT_REFUSAL} of $${usd(state.monthlyUsd)} — an admin can raise it under Settings → Spending`, 409),
     // When the month rolls over and work may start again: a Bot API caller is told it as Retry-After.
-    { status: 409, code: "spend_cap", resetsAt: periodEnd("month", now) },
+    { code: "spend_cap", resetsAt: periodEnd("month", now) },
   );
 }
 

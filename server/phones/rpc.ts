@@ -8,6 +8,7 @@ import { isPhoneToolName, isPhoneWrite, type PhonePlatform, type PhoneToolName }
 import { PHONE_INSTRUCTIONS, PHONE_NO_PHONE_TEXT } from "./instructions.ts";
 import type { PhoneJobOutcome } from "./jobs.ts";
 import { PHONE_TOOLS, phoneErrorResult, phoneOkResult, phoneToolCallProblem, type PhoneToolResult } from "./tools.ts";
+import { PublicError } from "../public-error.ts";
 
 export const PHONE_INTERNAL_MCP_PATH = "/api/internal/device/mcp";
 
@@ -36,7 +37,7 @@ export async function phoneRpc(
     deps.assertActive();
     return { tools: PHONE_TOOLS.filter((tool) => deps.authorize(tool.name).ok), instructions: PHONE_INSTRUCTIONS };
   }
-  if (request?.method !== "tools/call") throw Object.assign(new Error("unsupported device method"), { status: 400 });
+  if (request?.method !== "tools/call") throw new PublicError("unsupported device method", 400);
   const params = (request.params && typeof request.params === "object" ? request.params : {}) as { name?: unknown; arguments?: unknown };
   const args = params.arguments ?? {};
   const problem = phoneToolCallProblem(params.name, args);

@@ -28,6 +28,7 @@ import { useCloudPlan } from "../ProIntroduction";
 import { xResearchAction } from "@/lib/cloud-plan";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { useBotApps } from "./useBotApps";
+import { GITHUB_CARD } from "@/lib/github-app";
 import {
   classifyConnectorTool,
   connectorServiceAccess,
@@ -354,7 +355,9 @@ function ConnectorToolsGrants({
                 className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-control/60"
               >
                 {open ? <ChevronDown size={14} className="shrink-0 text-ink-secondary" /> : <ChevronRight size={14} className="shrink-0 text-ink-secondary" />}
-                <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">{slug}</span>
+                {slug === GITHUB_APP_SLUG
+                  ? <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{GITHUB_CARD.label}</span>
+                  : <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">{slug}</span>}
                 <span className="shrink-0 text-[12px] text-ink-secondary">
                   {!access.editable
                     ? t("botAccess.grants.custom")

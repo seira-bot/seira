@@ -34,7 +34,7 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; h
   };
   const host = createAppSettings({
     store: store as never, dataDir, entries: [],
-    turnOwner: () => (options.owner === false ? null : "owner"),
+    asker: () => (options.owner === false ? { kind: "refused", code: "not-owner" } : { kind: "clean" }),
     guestDriven: () => options.guest === true,
     requestCredential: async () => ({ status: 500, body: {} }),
     connectorThread: () => (options.group ? { group: { id: "g", name: "Room" } as never } : null),
@@ -125,7 +125,7 @@ describe("app_settings show_card", () => {
     }
   });
 
-  it("shows only in a turn the server counts as the owner's own (turnOwner), and never where a guest drives the thread", async () => {
+  it("shows only in a turn the server counts as the owner's own (asker), and never where a guest drives the thread", async () => {
     for (const options of [{ owner: false }, { guest: true }]) {
       const { show, messages } = fixture(options);
       expect((await show("other-computers")).status).toBe(403);

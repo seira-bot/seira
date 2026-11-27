@@ -296,10 +296,41 @@ certificate, or list the old and the new subject in `publisherName`.
 
 #### Microsoft Store (MSIX)
 
-The same workflow builds an MSIX package for the Microsoft Store. The file is
-`Seira-<version>-x64.appx`. It is in a separate artifact,
-`seira-<version>-windows-x64-store`, with `SHA256SUMS-windows-x64-store.txt`.
-Do not attach this package to the GitHub release.
+The `msstore publish` workflow (`.github/workflows/msstore-publish.yml`)
+submits each stable release to the Microsoft Store. It follows the pattern of
+the Snap workflow (see [Publish to the Snap Store](#publish-to-the-snap-store)).
+The manual path below stays as a fallback.
+
+```sh
+# Automatic: when a maintainer publishes the GitHub release (step 7), the
+# workflow starts itself again on main. A draft or a prerelease does not start it.
+# By hand, from main only:
+gh workflow run msstore-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
+gh run list --repo seira-bot/seira --workflow msstore-publish.yml --limit 1
+```
+
+- The `commit` job, the `gate` job and the `approval` job work like the ones of
+  the Snap workflow. Every later job uses the commit SHA, never the tag name.
+- The `build` job has no secret. It builds the package with `pnpm package:appx`
+  and runs the same package checks as the list below. It writes the What's new
+  text with `scripts/store-whats-new.mjs`: the English titles of the release
+  notes of the version, at most 1500 characters. It uses
+  `Bug fixes and improvements.` when the version has no release notes.
+- The `publish` job uses the `microsoft-store` environment and runs no code of
+  the repository. Only this job reads the four `MSSTORE_*` secrets.
+- The `publish` job stops, and uploads nothing, when a secret is missing. It
+  also stops when Partner Center already has a submission in progress,
+  because the upload tool deletes that submission. Finish or delete that
+  submission in Partner Center, then run the workflow again.
+- The `publish` job uploads the package with the `msstore` tool, sets the
+  What's new text of each listing, commits the submission, and waits until the
+  commit ends. Microsoft then certifies the submission. This can take hours.
+
+The same Windows package workflow (`package-windows.yml`) also builds an MSIX
+package for the Microsoft Store. The file is `Seira-<version>-x64.appx`. It is
+in a separate artifact, `seira-<version>-windows-x64-store`, with
+`SHA256SUMS-windows-x64-store.txt`. Use it for a manual upload. Do not attach
+this package to the GitHub release.
 
 ```sh
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64-store
@@ -327,8 +358,9 @@ Rules for the package:
 - `appx.identityName` and `appx.publisher` in `electron-builder.yml` hold the
   values from the Product identity page of the product in Partner Center. The
   Store rejects a package with other values. `scripts/check-appx.mjs` checks them.
-- Upload the package to Partner Center by hand. Submit each release as a new
-  submission of the same product.
+- The `msstore publish` workflow submits each stable release as a new
+  submission of the same product (see below). A manual upload in Partner
+  Center stays possible as a fallback.
 - The app does not update itself in this package. The Store delivers updates.
 - The app does not write a Windows Run entry in this package, because Windows
   redirects that write. A person turns on Open at login in Startup apps in
@@ -445,6 +477,7 @@ The command makes the draft release public and marks it as the latest release.
 - It runs `check` again after it publishes the release.
 - Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
 - It also starts the `snap publish` workflow (see [Publish to the Snap Store](#publish-to-the-snap-store)).
+- It also starts the `msstore publish` workflow (see [Microsoft Store (MSIX)](#microsoft-store-msix)).
 - A published release without the Windows assets makes installed Windows apps fail their update check.
 - It also breaks the `Seira-setup.exe` download link.
 - Do not publish with `gh release edit` or the GitHub web page.
@@ -638,6 +671,29 @@ credentials before the controls above are on `main`.
 5. Renew the credentials before they expire.
 
 Until the secret exists, a run fails at the upload step with a clear error.
+
+### One-time Microsoft Store setup
+
+The owner of the Partner Center account does this once. The workflow cannot do
+it. Do not add the secrets before the `msstore publish` workflow is on `main`.
+
+1. In Partner Center, open Account settings, then User management, then
+   Microsoft Entra applications. Create an application. Give it the role
+   Manager and no other role.
+2. Choose Add new key. Copy the key at once, because Partner Center shows it
+   one time. Write down the expiry date of the key. Renew the key before that
+   date.
+3. Write down the Tenant ID, the Client ID and the Seller ID of the account.
+4. In the repository settings, create the environment `microsoft-store`. Limit
+   its deployment branches to `main` only. Do not allow tags or other branches.
+   Add required reviewers if a person must approve each submission.
+5. Add four environment secrets to `microsoft-store`: `MSSTORE_TENANT_ID`,
+   `MSSTORE_SELLER_ID`, `MSSTORE_CLIENT_ID` and `MSSTORE_CLIENT_SECRET`. Do not
+   put them in a repository secret, a variable, an issue, or a log.
+
+The workflow stops when Partner Center already has a submission in progress.
+Until the secrets exist, a run fails in the `publish` job with a message that
+names each missing secret.
 
 ## macOS signing secrets
 
