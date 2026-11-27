@@ -5,3 +5,8 @@ export function startWorkflowFields(workflowId: string, lookup: WorkflowCopyLook
   const copy = linkWorkflow({ workflowId }, lookup)!;
   return { workflowId: copy.workflowId, prompt: copy.prompt, botId: copy.botId };
 }
+
+/** Every bot that writes in the workflow's steps. */
+export function startWorkflowBots(workflowId: string, lookup: WorkflowCopyLookup | undefined): string[] {
+  return [...new Set(linkWorkflow({ workflowId }, lookup)!.botIds)];
+}

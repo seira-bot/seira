@@ -14,7 +14,7 @@ import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
 import { PublicError } from "./public-error.ts";
 import type { WorkflowCopyLookup } from "./workflows/routine-link.ts";
-import { startWorkflowFields } from "./workflows/start-link.ts";
+import { startWorkflowBots, startWorkflowFields } from "./workflows/start-link.ts";
 
 export type WebhookTriggerInput = z.input<typeof triggerInputSchema>;
 export type WebhookVerificationSample = z.output<typeof verificationSampleSchema>;
@@ -490,6 +490,7 @@ export class WebhookManager {
     const clean = cleanInput(linked ? { ...parsed, prompt: linked.prompt, botId: linked.botId } : parsed);
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
+    if (clean.groupId && linked) this.assertWorkflowRoom(linked.workflowId, clean.groupId);
     const now = this.now();
     const secret = newSecret();
     const trigger: StoredWebhookTrigger = {
@@ -561,6 +562,8 @@ export class WebhookManager {
     if (linkTo) Object.assign(clean, this.linkFields(linkTo));
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
+    const linkedTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : trigger.workflowId;
+    if (clean.groupId && linkedTo) this.assertWorkflowRoom(linkedTo, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
     const unlinked = patch.workflowId === null && trigger.workflowId !== undefined;
     if (patch.workflowId === null) delete trigger.workflowId;
@@ -813,6 +816,17 @@ export class WebhookManager {
     return { threadId: outcome.threadId, deliveryId, duplicate: false };
   }
 
+  /** Every bot that writes in the steps must be in the room: a result is never posted for a bot that is not there. */
+  private assertWorkflowRoom(workflowId: string, groupId: string): void {
+    let bots: string[];
+    try {
+      bots = startWorkflowBots(workflowId, this.options.workflowCopy);
+    } catch (error) {
+      return fail(409, error instanceof Error ? error.message : "This webhook cannot run that workflow.");
+    }
+    for (const botId of bots) this.assertRoomMember(botId, groupId);
+  }
+
   private assertRoomMember(botId: string, groupId: string): void {
     const check = this.options.roomMember;
     if (!check) fail(503, "This server cannot check webhook room membership");
@@ -838,6 +852,7 @@ export class WebhookManager {
 
   /** run and thread-post deliveries: synchronous, one receipt, no awaits. Room triggers go through deliverRoom. */
   private dispatch(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson = false): WebhookReceiveResult {
+    if (trigger.workflowId !== undefined && trigger.groupId) this.assertWorkflowRoom(trigger.workflowId, trigger.groupId);
     const now = this.now();
     const admitted = this.admit(trigger, event, byPerson, now);
     if ("receipt" in admitted) return admitted.receipt;

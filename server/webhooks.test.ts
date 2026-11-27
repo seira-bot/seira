@@ -843,6 +843,24 @@ describe("webhook that runs a workflow", () => {
     expect(String(sent.prompt)).not.toContain("USER-CONFIGURED");
   });
 
+  it("a post webhook refuses a workflow whose bot is not in the room", () => {
+    const h = harness();
+    const outside = (ids: string[]) => new WebhookManager({
+      ...h.options,
+      workflowCopy: (id) => (id === "wf-1" ? copy : null),
+      roomMember: (botId) => (ids.includes(botId) ? { ok: false as const, status: 403, error: `${botId} isn't in this room. Add ${botId} to the room first.` } : { ok: true as const }),
+    });
+    expect(() => outside(["ben"]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" })).toThrow(expect.objectContaining({ status: 403, message: "ben isn't in this room. Add ben to the room first." }));
+    expect(outside(["ben"]).list()).toEqual([]);
+    const { webhook, secret } = outside([]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" });
+    expect(() => outside(["ben"]).update(webhook.id, { groupId: "room-2" })).toThrow(expect.objectContaining({ status: 403 }));
+    const later = outside(["ben"]);
+    expect(() => later.receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d1" })).toThrow(expect.objectContaining({ status: 403 }));
+    expect(h.queued).toEqual([]);
+    outside([]).receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d2" });
+    expect(h.queued).toHaveLength(1);
+  });
+
   it("refuses a workflow that is gone", () => {
     const h = harness();
     const manager = linked(h);
