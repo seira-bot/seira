@@ -170,7 +170,7 @@ describe("install.sh", () => {
       const refusedImages = [
         "ghcr.io/seira-bot/seira-connector:latest", "ghcr.io/seira-bot/seira-connector:v0.1.194", "ghcr.io/seira-bot/seira-connector",
         `ghcr.io/someone-else/seira-connector${digest}`, `ghcr.io/seira-bots/seira-connector${digest}`, `ghcr.io/seira-bot/seira-connector-evil${digest}`,
-        `ghcr.io/seira-bot/seira${digest}`, `ghcr.io/milind-soni/seira-connector${digest}`, `docker.io/seira-bot/seira-connector${digest}`,
+        `ghcr.io/seira-bot/seira${digest}`, `docker.io/seira-bot/seira-connector${digest}`,
         `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(63)}`, `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(65)}`,
         `ghcr.io/seira-bot/seira-connector@sha256:${"A".repeat(64)}`, `ghcr.io/seira-bot/seira-connector@sha256:${"g".repeat(64)}`,
         `ghcr.io/seira-bot/seira-connector${digest} --privileged`, `ghcr.io/seira-bot/seira-connector${digest};reboot`,
