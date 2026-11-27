@@ -18,8 +18,13 @@ export interface PeopleDeps {
 }
 
 type Role = "user" | "admin" | "none";
-type Sees = "whole team" | { departments?: string[]; bots?: string[] };
+type Level = "view" | "chat";
+/** A department or bot by name (a bot also by id), with the level it keeps when none is given: chat for a new one. */
+type Item = string | { name: string; level: Level };
+type Sees = "whole team" | { departments?: Item[]; bots?: Item[] };
 type Person = { email: string; role?: Role; sees?: Sees };
+/** What a person holds once the names are resolved; a department's name is "" for General. */
+interface Held { departments: Array<{ name: string; level: Level }>; bots: Array<{ id: string; name: string; level: Level }> }
 
 const WHOLE_TEAM = "whole team";
 const GENERAL = "General";
@@ -34,6 +39,8 @@ const REFUSALS = {
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const names = (list: readonly string[]) => list.join(", ");
 
+const item = z.union([z.string().trim().min(1).max(120), z.object({ name: z.string().trim().min(1).max(120), level: z.enum(["view", "chat"]) }).strict()]);
+
 export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "sections" | "saveConfig" | "call" | "people">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const lists = () => ({ admins: [...(deps.cfg().signIn?.admins ?? [])], members: [...(deps.cfg().signIn?.members ?? [])] });
   const roleOf = (entry: string): Role => {
@@ -43,7 +50,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
   const grantOf = (entry: string): AccessGrant | undefined => deps.people?.grants()[entry];
   const seesNow = (entry: string): Sees => {
     const grant = grantOf(entry);
-    return grant ? { departments: grant.departments.map((one) => one.name || GENERAL), bots: grant.bots.map((one) => one.id) } : WHOLE_TEAM;
+    return grant ? { departments: grant.departments.map((one) => ({ name: one.name || GENERAL, level: one.level })), bots: grant.bots.map((one) => ({ name: one.id, level: one.level })) } : WHOLE_TEAM;
   };
   const place = () => deps.people?.place() ?? "none";
   const unavailable = (): string | null => {
@@ -52,26 +59,32 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     return deps.people?.emailSignIn() ? null : REFUSALS.noEmail;
   };
 
-  /** The departments and bots a `sees` names, by the names or ids the bot gave; a string says what does not exist. */
-  const resolve = (sees: Sees): { departments: string[]; bots: Array<{ id: string; name: string }> } | string => {
+  /** The departments and bots a `sees` names, by the names or ids the bot gave; a string says what does not exist. An item with
+   * no level keeps the one it has in the person's grant now. */
+  const resolve = (sees: Sees, entry: string): Held | string => {
     if (sees === WHOLE_TEAM) return { departments: [], bots: [] };
+    const grant = grantOf(entry);
     const known = deps.sections();
-    const departments: string[] = [];
-    for (const asked of sees.departments ?? []) {
+    const held: Held = { departments: [], bots: [] };
+    for (const item of sees.departments ?? []) {
+      const asked = typeof item === "string" ? item : item.name;
       const found = same(asked, GENERAL) ? "" : known.find((one) => same(one, asked));
       if (found === undefined) return `No department is named ${asked}.`;
-      if (!departments.includes(found)) departments.push(found);
+      if (held.departments.some((one) => one.name === found)) continue;
+      held.departments.push({ name: found, level: typeof item === "string" ? grant?.departments.find((one) => one.name === found)?.level ?? "chat" : item.level });
     }
-    const bots: Array<{ id: string; name: string }> = [];
-    for (const asked of sees.bots ?? []) {
+    for (const item of sees.bots ?? []) {
+      const asked = typeof item === "string" ? item : item.name;
       const found = deps.bots().find((one) => one.id === asked) ?? deps.bots().find((one) => same(one.name, asked));
       if (!found) return `No bot is named ${asked}. Use list_bots for the names.`;
-      if (!bots.some((one) => one.id === found.id)) bots.push({ id: found.id, name: found.name });
+      if (held.bots.some((one) => one.id === found.id)) continue;
+      held.bots.push({ id: found.id, name: found.name, level: typeof item === "string" ? grant?.bots.find((one) => one.id === found.id)?.level ?? "chat" : item.level });
     }
-    return departments.length || bots.length ? { departments, bots } : "Choose at least one department or bot, or give the whole team.";
+    return held.departments.length || held.bots.length ? held : "Choose at least one department or bot, or give the whole team.";
   };
+  const empty = (held: Held) => !held.departments.length && !held.bots.length;
 
-  /** What the change makes true, or why it cannot be made. */
+  /** What the change makes true, or why it cannot be made. `access` is "keep" when the request names no access. */
   const plan = (value: Person) => {
     const blocked = unavailable();
     if (blocked) return { refusal: blocked };
@@ -79,21 +92,23 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     if (!entry) return { refusal: "Enter an email address or @domain." };
     const before = roleOf(entry);
     const role = value.role ?? (before === "none" ? "user" : before);
-    const sees = role === "user" ? value.sees ?? seesNow(entry) : WHOLE_TEAM;
-    const chosen = resolve(sees);
-    if (typeof chosen === "string") return { refusal: chosen };
-    if (entry.startsWith("@") && chosen.bots.length) return { refusal: "To give access to chosen bots, invite each person by their own address." };
+    const asked = role === "none" || value.sees === undefined ? null : resolve(value.sees, entry);
+    if (typeof asked === "string") return { refusal: asked };
+    if (entry.startsWith("@") && asked?.bots.length) return { refusal: "To give access to chosen bots, invite each person by their own address." };
     if (role === "none" && before === "none") return { refusal: `${entry} is not on the list.` };
     if (before === "admin" && role !== "admin" && lists().admins.length <= 1) return { refusal: "This is the only admin. The server needs one admin, so make someone else an admin first." };
     const grant = grantOf(entry);
-    const none = !chosen.departments.length && !chosen.bots.length;
-    const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((one) => b.includes(one));
-    const sameSees = none ? !grant : Boolean(grant) && sameSet(chosen.departments, grant!.departments.map((one) => one.name)) && sameSet(chosen.bots.map((one) => one.id), grant!.bots.map((one) => one.id));
-    if (role === before && (role !== "user" || sameSees)) return { refusal: `${entry} already has this.` };
-    return { entry, before, role, sees: role === "user" ? chosen : null };
+    const sameSet = <T>(a: T[], b: T[], key: (one: T) => string) => a.length === b.length && a.every((one) => b.some((other) => key(other) === key(one)));
+    const sameAccess = asked !== null && (empty(asked) ? !grant : Boolean(grant)
+      && sameSet(asked.departments, grant!.departments, (one) => `${one.name}:${one.level}`) && sameSet(asked.bots, grant!.bots, (one) => `${one.id}:${one.level}`));
+    if (role === before && (asked === null || sameAccess)) return { refusal: `${entry} already has this.` };
+    const access: "keep" | Held | null = role === "none" ? null : asked === null ? "keep" : empty(asked) ? null : asked;
+    // What the card names: the access the person ends with.
+    const shown = access === "keep" ? (grant ? resolve(seesNow(entry), entry) : null) : access;
+    return { entry, before, role, access, shown: typeof shown === "string" ? null : shown };
   };
-  const scopeWords = (chosen: { departments: string[]; bots: Array<{ id: string; name: string }> } | null): string =>
-    chosen && (chosen.departments.length || chosen.bots.length) ? names([...chosen.departments.map((one) => one || GENERAL), ...chosen.bots.map((one) => one.name)]) : "";
+  const scopeWords = (held: Held | null): string =>
+    held ? names([...held.departments.map((one) => `${one.name || GENERAL}${one.level === "view" ? " (view only)" : ""}`), ...held.bots.map((one) => `${one.name}${one.level === "view" ? " (view only)" : ""}`)]) : "";
 
   return [
     writable({
@@ -103,9 +118,9 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
       value: withoutKeys(z.object({
         email: z.string().trim().min(1).max(320),
         role: z.enum(["user", "admin", "none"]).optional(),
-        sees: z.union([z.literal(WHOLE_TEAM), z.object({ departments: z.array(z.string().trim().min(1).max(120)).max(200).optional(), bots: z.array(z.string().trim().min(1).max(120)).max(200).optional() }).strict()]).optional(),
+        sees: z.union([z.literal(WHOLE_TEAM), z.object({ departments: z.array(item).max(200).optional(), bots: z.array(item).max(200).optional() }).strict()]).optional(),
       }).strict()),
-      allowed: `{"email": an address or @domain, "role"?: "user" | "admin" | "none" (none removes the person), "sees"?: "${WHOLE_TEAM}" | {"departments"?: [names], "bots"?: [names]}}. A new person is a user who sees the whole team; a person already on the list keeps their role and access unless you name them`,
+      allowed: `{"email": an address or @domain, "role"?: "user" | "admin" | "none" (none removes the person), "sees"?: "${WHOLE_TEAM}" | {"departments"?: [name or {"name","level"}], "bots"?: [name or {"name","level"}]}} with level "view" or "chat" (a name alone keeps the level the person has, or chat for a new item). A new person is a user who sees the whole team; a person already on the list keeps their role and access unless you name them`,
       read: () => {
         const blocked = unavailable();
         if (blocked) return blocked;
@@ -119,7 +134,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const { entry, before, role } = made;
         if (role === "none") return { change: `Remove ${entry}; they can no longer sign in` };
         const link = before === "none" && deps.people?.publicUrl() ? ` They sign in at ${deps.people.publicUrl()}.` : "";
-        const scope = made.sees && scopeWords(made.sees) ? `, sees only ${scopeWords(made.sees)}` : role === "user" ? ", sees the whole team" : "";
+        const scope = scopeWords(made.shown) ? `, sees only ${scopeWords(made.shown)}` : role === "user" ? ", sees the whole team" : "";
         return { change: `${before === "none" ? "Invite" : "Change"} ${entry} as ${role}${scope}.${link}` };
       },
       current: (value: Person) => {
@@ -132,7 +147,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const params = { who: made.entry };
         if (made.role === "none") return { code: "personOut", params };
         if (made.role === "admin") return { code: "adminIn", params };
-        const sees = scopeWords(made.sees);
+        const sees = scopeWords(made.shown);
         return sees ? { code: "chosenIn", params: { ...params, sees } } : { code: "wholeIn", params };
       },
       write: async (value: Person) => {
@@ -141,7 +156,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const { entry, before, role } = made;
         const old = lists();
         const was = grantOf(entry);
-        const target = made.sees && (made.sees.departments.length || made.sees.bots.length) ? made.sees : null;
+        const { access } = made;
         const saveLists = async (): Promise<string | null> => {
           if (role === before) return null;
           const rest = (list: string[]) => list.filter((one) => !same(one, entry));
@@ -153,8 +168,8 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         const putAccess = async (access: Array<{ name: string; level: string }> | null, bots: Array<{ id: string; level: string }>): Promise<string | null> =>
           deps.call("departmentAccess", "PUT", "/api/department-access", { entry, admitBots: true, access: access ? { departments: access, bots } : null });
         const saveAccess = async (): Promise<string | null> => {
-          if (!target && !was) return null;
-          return putAccess(target ? target.departments.map((name) => ({ name, level: "chat" })) : null, target ? target.bots.map((one) => ({ id: one.id, level: "chat" })) : []);
+          if (access === "keep" || (access === null && !was)) return null;
+          return putAccess(access && access.departments.map((one) => ({ name: one.name, level: one.level })), access ? access.bots.map((one) => ({ id: one.id, level: one.level })) : []);
         };
         const restoreAccess = () => (was ? putAccess(was.departments.map((one) => ({ name: one.name, level: one.level })), was.bots.map((one) => ({ id: one.id, level: one.level }))) : putAccess(null, []));
         // A person who stays a user gets their limits before the list can let them in; anyone else leaves or gains power only
@@ -163,7 +178,7 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
           const refused = await saveAccess();
           if (refused) return refused;
           const listed = await saveLists();
-          if (listed && (target || was)) await restoreAccess();
+          if (listed && access !== "keep" && (access || was)) await restoreAccess();
           return listed;
         }
         const listed = await saveLists();

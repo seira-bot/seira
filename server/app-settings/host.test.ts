@@ -514,14 +514,46 @@ describe("people who sign in", () => {
     expect(again.body.error).toBe("ann@acme.com already has this.");
   });
 
-  it("makes a person an admin with a card that says what an admin can do, and drops their limits", async () => {
+  it("keeps a department's view level through a role change, and writes no access when only the role changes", async () => {
+    const fx = fixture({ people: {} });
+    fx.grants["ann@acme.com"] = { departments: [{ name: "Sales", level: "view" }], bots: [] };
+    await fx.set("people.signIn", { email: "ann@acme.com", role: "admin" });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    await fx.set("people.signIn", { email: "ann@acme.com", role: "user" });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(lists(fx)!.members).toContain("ann@acme.com");
+    expect(fx.routeCalls).toEqual([]);
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "view" }], bots: [] });
+  });
+
+  it("restores the exact earlier access, levels included, when Undo follows an access change", async () => {
+    const fx = fixture({ people: {} });
+    const earlier = { departments: [{ name: "Sales", level: "view" }], bots: [{ id: "clive", level: "view" }] };
+    fx.grants["ann@acme.com"] = JSON.parse(JSON.stringify(earlier));
+    await fx.set("people.signIn", { email: "ann@acme.com", sees: { departments: [{ name: "Sales", level: "chat" }] } });
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "chat" }], bots: [] });
+    expect(await fx.undo()).toEqual({ claimed: true, state: "undone" });
+    expect(fx.grants["ann@acme.com"]).toEqual(earlier);
+  });
+
+  it("keeps the level of a department already granted and gives a new one chat", async () => {
+    const fx = fixture({ people: {} });
+    fx.grants["ann@acme.com"] = { departments: [{ name: "Sales", level: "view" }], bots: [] };
+    await fx.set("people.signIn", { email: "ann@acme.com", sees: { departments: ["Sales", "General"] } });
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("ann@acme.com can sign in and sees only: Sales (view only), General.");
+    await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(fx.grants["ann@acme.com"]).toEqual({ departments: [{ name: "Sales", level: "view" }, { name: "", level: "chat" }], bots: [] });
+  });
+
+  it("makes a person an admin with a card that says what an admin can do, and leaves their access as it was", async () => {
     const fx = fixture({ people: {} });
     fx.grants["ann@acme.com"] = { departments: [{ name: "Sales", level: "chat" }], bots: [] };
     await fx.set("people.signIn", { email: "ann@acme.com", role: "admin" });
     expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("ann@acme.com can sign in as an admin and change every setting on this server.");
     await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
     expect(lists(fx)).toEqual({ admins: ["boss@acme.com", "ann@acme.com"], members: [] });
-    expect(fx.grants["ann@acme.com"]).toBeUndefined();
+    expect(fx.routeCalls).toEqual([]);
   });
 
   it("removes a person and their limits, and Undo brings both back", async () => {
