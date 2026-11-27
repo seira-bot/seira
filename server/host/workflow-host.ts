@@ -31,7 +31,7 @@ export interface WorkflowTurnOptions {
 export interface WorkflowHostDeps {
   dataDir: string;
   store: Pick<Store, "bot" | "patchTask">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "cancelRun" | "update" | "workflowRunState"> | null;
+  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState"> | null;
   routineHooks(): Pick<RoutineManagerOptions, "createTask" | "interruptTurn"> | null;
   botState(botId: string): "ready" | "busy" | "missing";
   startTurn(botId: string, text: string, opts: WorkflowTurnOptions): Promise<unknown>;
