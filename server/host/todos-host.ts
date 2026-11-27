@@ -130,8 +130,8 @@ export function createTodosHost(deps: TodosHostDeps) {
     if (!routineId) return;
     try {
       deps.routines()?.remove(routineId);
-    } catch {
-      // The routine is already gone.
+    } catch (error) {
+      if (error instanceof TodoError) throw error;
     }
   }
 
@@ -307,9 +307,10 @@ export function createTodosHost(deps: TodosHostDeps) {
   }
 
   function remove(id: string): void {
-    const gone = store.remove(id);
-    if (!gone) throw new TodoError(404, "That todo is gone.");
-    dropRoutine(gone.routineId);
+    const current = store.get(id);
+    if (!current) throw new TodoError(404, "That todo is gone.");
+    dropRoutine(current.routineId);
+    store.remove(id);
   }
 
   function restore(id: string): TodoRecord {
@@ -397,7 +398,7 @@ export function createTodosHost(deps: TodosHostDeps) {
     const bot = callerBot(caller);
     const todo = typeof args.todoId === "string" ? store.get(args.todoId) : undefined;
     if (!todo || !readable(todo)) throw new TodoError(404, "No todo has that id.");
-    if (todo.routineId && (typeof args.title === "string" || typeof args.note === "string")) throw new TodoError(403, "Only the person can change the text of a repeating todo.");
+    if (todo.repeat || todo.routineId) throw new TodoError(403, "A repeating todo can be changed only by the person.");
     if (!botMayChange(todo, bot)) throw new TodoError(403, "You may change only todos that are yours, that you made, or that you hand out as picker.");
     const by: TodoMaker = { kind: "bot", botId: bot.id };
     if (args.status !== undefined && args.status !== "done" && args.status !== "queued") throw new TodoError(400, "Status can be done or queued.");

@@ -291,6 +291,22 @@ describe("security: repeating todos and reach", () => {
     expect(() => host.botUpdate({ botId: "atlas", threadId: "t" }, { todoId: todo.id, title: "Other" })).toThrow(TodoError);
   });
 
+  it("refuses every bot change to a repeating todo, including done and result", () => {
+    const { host } = setup();
+    const todo = host.add([{ title: "Digest", botId: "atlas", repeat: { time: "08:00", weekdays: [] } }], person).todos[0]!;
+    for (const args of [{ status: "done" }, { status: "queued" }, { result: "x" }, { note: "n" }]) {
+      expect(() => host.botUpdate({ botId: "atlas", threadId: "t" }, { todoId: todo.id, ...args })).toThrow("A repeating todo can be changed only by the person.");
+    }
+  });
+
+  it("keeps the todo when the routine check refuses its removal", () => {
+    const routines: TodoRoutines = { create: () => ({ id: "r1" }), remove: () => { throw new TodoError(403, "No."); }, update: () => null };
+    const { host, store } = setup({ routines });
+    const todo = host.add([{ title: "Digest", botId: "atlas", repeat: { time: "08:00", weekdays: [] } }], person).todos[0]!;
+    expect(() => host.remove(todo.id)).toThrow("No.");
+    expect(store.get(todo.id)).toBeDefined();
+  });
+
   it("passes a refusal from the routine check on as the plain reason", () => {
     const refusing: TodoRoutines = { create: () => { throw new TodoError(403, "Not allowed here."); }, remove: () => true, update: () => null };
     expect(() => setup({ routines: refusing }).host.add([{ title: "x", botId: "atlas", repeat: { time: "09:00", weekdays: [] } }], person)).toThrow("Not allowed here.");

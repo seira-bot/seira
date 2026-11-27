@@ -15,6 +15,8 @@ export interface TodoRouteDeps {
   personName: (auth: RequestAuth) => string;
   /** Runs `work` so that any repeating job it makes is checked and recorded as this person's. */
   withPerson<T>(auth: RequestAuth, work: () => T): T;
+  /** Why this person may not change the repeating job of a todo; null when they may. */
+  routineRefusal(auth: RequestAuth, routineId: string): string | null;
 }
 
 const ITEM = /^\/api\/todos\/([\w-]+)(\/start|\/restore)?$/;
@@ -32,6 +34,11 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
   function seen(visible: VisibleSet, todo: TodoRecord | undefined): TodoRecord {
     if (!todo || !todoVisible(todo, viewerOf(visible))) throw new TodoError(404, "That todo is gone.");
     return todo;
+  }
+
+  function guardRoutine(auth: RequestAuth, routineId: string | undefined): void {
+    const refused = routineId ? deps.routineRefusal(auth, routineId) : null;
+    if (refused) throw new TodoError(403, refused);
   }
 
   function mayGive(visible: VisibleSet, botId: string): void {
@@ -76,6 +83,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         const gone = store.getDeleted(id!);
         if (gone && (!todoVisible(gone, viewerOf(visible)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
+        guardRoutine(auth, gone?.routineId);
         return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.restore(id!))) });
       }
       const current = seen(visible, store.get(id!));
@@ -86,6 +94,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
       }
       if (method === "DELETE") {
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
+        guardRoutine(auth, current.routineId);
         host.remove(current.id);
         return json(res, 200, { ok: true });
       }
@@ -94,6 +103,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         if (!body || typeof body !== "object" || Array.isArray(body)) throw new TodoError(400, "Send the change to make.");
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
         if (typeof body.botId === "string") mayGive(visible, body.botId);
+        guardRoutine(auth, current.routineId);
         return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.patch(current.id, body, person))) });
       }
       return json(res, 405, { error: "method not allowed" });

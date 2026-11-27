@@ -14,7 +14,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const BOTS: TodoBot[] = [{ id: "atlas", name: "Atlas" }, { id: "scout", name: "Scout" }];
 
-function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines } = {}) {
+function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines; routineRefusal?: string } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "todo-routes-"));
   dirs.push(dir);
   let n = 0;
@@ -30,6 +30,7 @@ function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level
   } as unknown as VisibleSet;
   const route = createTodoRoutes({
     store, host, runner: { startNow: async (id) => store.get(id)!, wake: () => {} }, visibleFor: () => visible, personName: () => "Rama",
+    routineRefusal: () => options.routineRefusal ?? null,
     withPerson: (auth, work) => { gated.push(auth.kind); return work(); },
   });
   const call = async (method: string, path: string, body: unknown = {}) => {
@@ -45,6 +46,19 @@ function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level
 }
 
 describe("todo routes", () => {
+  it("refuses to change or delete a todo whose repeating job the person may not edit (security)", async () => {
+    const { call, store } = setup({ routineRefusal: "Only people who can edit Atlas can change this." });
+    const added = await call("POST", "/api/todos", { todos: [{ title: "Digest", botId: "atlas", repeat: { time: "09:00", weekdays: [] } }] });
+    const id = added.body.todos[0].id;
+    for (const [method, body] of [["PATCH", { title: "Other" }], ["DELETE", {}]] as const) {
+      const refused = await call(method, `/api/todos/${id}`, body);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error).toContain("Only people who can edit");
+    }
+    expect(store.get(id)!.title).toBe("Digest");
+    expect(store.live()).toHaveLength(1);
+  });
+
   it("passes other paths on", async () => expect((await setup().call("GET", "/api/board")).out).toBe(PASS));
 
   it("adds, lists, patches, deletes and restores a todo (AC-02)", async () => {
