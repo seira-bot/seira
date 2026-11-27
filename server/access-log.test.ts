@@ -62,18 +62,43 @@ describe("access log (FR-373)", () => {
     expect(loggablePath("/api/health")).toBe("/api/health");
     expect(loggablePath("/api/bots/3f2a9c1e-77aa-4b21-9d0e-5c6f1a2b3c4d")).toBe("/api/bots/:id");
     expect(loggablePath("/api/bots/3f2a9c1e/messages")).toBe("/api/bots/:id/messages");
-    expect(loggablePath("/api/bots/3f2a9c1e/messages/guarded")).toBe("/api/bots/:id/messages/guarded");
+    expect(loggablePath("/api/bots/3f2a9c1e/computer")).toBe("/api/bots/:id/computer");
     expect(loggablePath("/api/bots/")).toBe("/api/bots");
     expect(loggablePath("/pair?x=1#y")).toBe("/pair");
     expect(loggablePath("/")).toBe("/");
   });
 
-  it("writes every template of the route list as itself", () => {
+  it("writes each template of the route list as itself or with :id for a word that some route reads as a name", () => {
     expect(ROUTE_TEMPLATES.length).toBeGreaterThan(100);
+    let same = 0;
     for (const template of ROUTE_TEMPLATES) {
       const concrete = template.replaceAll(":id", "Zk3-9fQ2vL0aXb7");
-      expect(loggablePath(concrete), concrete).toBe(template);
+      const written = loggablePath(concrete);
+      expect(written, concrete).not.toContain("Zk3-9fQ2vL0aXb7");
+      const want = template.split("/");
+      const got = written.split("/");
+      expect(got, concrete).toHaveLength(want.length);
+      got.forEach((part, i) => expect([want[i], ":id"], concrete).toContain(part));
+      if (written === template) same += 1;
     }
+    expect(same).toBeGreaterThan(ROUTE_TEMPLATES.length / 2);
+  });
+
+  it("writes :id for a word when another known route reads the same position as a name or an id", () => {
+    expect(ROUTE_TEMPLATES).toContain("/api/connectors/:id");
+    expect(ROUTE_TEMPLATES).toContain("/api/connectors/catalog");
+    expect(loggablePath("/api/connectors/catalog")).toBe("/api/connectors/:id");
+    expect(loggablePath("/api/connectors/Zk3-9fQ2vL0aXb7")).toBe("/api/connectors/:id");
+    expect(loggablePath("/api/bots/3f2a9c1e/messages/guarded")).toBe("/api/bots/:id/messages/:id");
+    expect(loggablePath("/api/bots/3f2a9c1e/messages/abc123def456/edit")).toBe("/api/bots/:id/messages/:id/edit");
+    expect(loggablePath("/api/bots/order")).toBe("/api/bots/:id");
+    expect(loggablePath("/api/bots/order/messages")).toBe("/api/bots/:id/messages");
+  });
+
+  it("keeps a word that no known route reads as a name or an id", () => {
+    expect(loggablePath("/api/health")).toBe("/api/health");
+    expect(loggablePath("/mcp-oauth/callback")).toBe("/mcp-oauth/callback");
+    expect(loggablePath("/api/bots/abc123def456/computer")).toBe("/api/bots/:id/computer");
   });
 
   it("takes a fixed word for a name in a variable position", () => {

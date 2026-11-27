@@ -39,7 +39,7 @@ for (const template of ROUTE_TEMPLATES) {
   node.end = true;
 }
 
-/** The route of the path, never the path. A fixed word of a known route stays, a name or an id in a variable position becomes :id, and what follows the last known part becomes <other>. A webhook path ends in <redacted>. The query string and the fragment are dropped, and a control character cannot start a second line. */
+/** The route of the path, never the path. Several known routes can share a prefix, and the route table does not say which one the server picks. So a word stays only when no known route reads that position as a name or an id. Any other part becomes :id, and what follows the last known part becomes <other>. A webhook path ends in <redacted>. The query string and the fragment are dropped, and a control character cannot start a second line. */
 export function loggablePath(rawUrl: string | undefined): string {
   const path = (rawUrl ?? "/").split(/[?#]/, 1)[0];
   const parts = path.split("/").slice(1);
@@ -47,15 +47,24 @@ export function loggablePath(rawUrl: string | undefined): string {
   if (parts[0] === "hooks" && parts[1]?.startsWith("wh_") && parts.length > 2) return "/hooks/:id/<redacted>";
   if (path === "" || path === "/") return "/";
   const shape: string[] = [];
-  let node = ROUTES;
+  let nodes = [ROUTES];
   for (const part of parts) {
-    const next = node.fixed.get(part) ?? node.id;
-    if (!next) break;
-    shape.push(node.fixed.has(part) ? part : ":id");
-    node = next;
+    const next: RouteNode[] = [];
+    let variable = false;
+    for (const node of nodes) {
+      const fixed = node.fixed.get(part);
+      if (fixed) next.push(fixed);
+      if (node.id) {
+        next.push(node.id);
+        variable = true;
+      }
+    }
+    if (next.length === 0) break;
+    shape.push(variable ? ":id" : part);
+    nodes = next;
   }
   if (shape.length === 0) return "<other>";
-  if (shape.length < parts.length || !node.end) shape.push("<other>");
+  if (shape.length < parts.length || !nodes.some((node) => node.end)) shape.push("<other>");
   const clean = `/${shape.join("/")}`.replace(/[^\x21-\x7e]/g, "?");
   return clean.length > MAX_PATH ? `${clean.slice(0, MAX_PATH)}...` : clean;
 }
