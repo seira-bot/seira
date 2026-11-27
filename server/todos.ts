@@ -89,7 +89,7 @@ export class TodoStore {
 
   #changed(): void {
     this.#save();
-    for (const listener of [...this.#listeners]) {
+    for (const listener of Array.from(this.#listeners)) {
       try {
         listener();
       } catch (error) {
