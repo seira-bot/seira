@@ -20,9 +20,27 @@ export interface FakeGithubRest {
 
 const sha = (text: string) => createHash("sha1").update(text).digest("hex");
 
-export function fakeGithubRest(repo: string, options: { files?: Record<string, string>; defaultBranch?: string } = {}): FakeGithubRest {
+/**
+ * `modes` gives a Git mode to a path of the start commit. A file with no mode has 100644. A path in `modes` that is not in
+ * `files` is an entry with no text: 120000 is a symbolic link and 160000 is a submodule.
+ */
+export function fakeGithubRest(repo: string, options: { files?: Record<string, string>; modes?: Record<string, string>; defaultBranch?: string } = {}): FakeGithubRest {
   const defaultBranch = options.defaultBranch ?? "main";
   const files = options.files ?? {};
+  const modes = options.modes ?? {};
+  const paths = [...new Set([...Object.keys(files), ...Object.keys(modes)])];
+  const rootTree = sha("tree0");
+  const folderSha = (folder: string) => (folder === "" ? rootTree : sha(`folder:${folder}`));
+  const folders = ["", ...new Set(paths.flatMap((path) => path.split("/").slice(0, -1).map((_, index, parts) => parts.slice(0, index + 1).join("/"))))];
+  const folderEntries = (folder: string) => {
+    const names = new Set(paths.filter((path) => folder === "" || path.startsWith(`${folder}/`)).map((path) => path.slice(folder === "" ? 0 : folder.length + 1).split("/")[0]!));
+    return [...names].map((name) => {
+      const full = folder === "" ? name : `${folder}/${name}`;
+      if (folders.includes(full)) return { path: name, mode: "040000", type: "tree", sha: folderSha(full) };
+      const mode = modes[full] ?? "100644";
+      return { path: name, mode, type: mode === "160000" ? "commit" : "blob", sha: sha(`entry:${full}`) };
+    });
+  };
   const branches = new Map<string, string>([[defaultBranch, sha("start")]]);
   const requests: FakeRestRequest[] = [];
   let failing: number | null = null;
@@ -72,7 +90,11 @@ export function fakeGithubRest(repo: string, options: { files?: Record<string, s
     }
     if (method === "PATCH" && (m = /^\/git\/refs\/heads\/(.+)$/u.exec(rel))) { branches.set(m[1]!, body.sha); return ok({ object: { sha: body.sha } }); }
     if (method === "DELETE" && (m = /^\/git\/refs\/heads\/(.+)$/u.exec(rel))) return branches.delete(m[1]!) ? new Response(null, { status: 204 }) : missing();
-    if (method === "GET" && /^\/git\/commits\/[0-9a-f]+$/u.test(rel)) return ok({ tree: { sha: sha("tree0") } });
+    if (method === "GET" && /^\/git\/commits\/[0-9a-f]+$/u.test(rel)) return ok({ tree: { sha: rootTree } });
+    if (method === "GET" && (m = /^\/git\/trees\/([0-9a-f]+)$/u.exec(rel))) {
+      const folder = folders.find((name) => folderSha(name) === m![1]);
+      return folder === undefined ? missing() : ok({ sha: m[1], tree: folderEntries(folder), truncated: false });
+    }
     if (method === "POST" && rel === "/git/blobs") return ok({ sha: sha(`blob${++counter}${body.content}`) }, 201);
     if (method === "POST" && rel === "/git/trees") return ok({ sha: sha(`tree${++counter}`) }, 201);
     if (method === "POST" && rel === "/git/commits") return ok({ sha: sha(`commit${++counter}${body.message}`) }, 201);
