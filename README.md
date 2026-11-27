@@ -40,7 +40,7 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
   </picture></a>
 </p>
 
-<p>If Seira helps you, a ⭐ on GitHub and an upvote on Product Hunt help other people find it.</p>
+<p>If Seira helps you, a ⭐ on GitHub and your support on Product Hunt help other people find it.</p>
 
 </div>
 
@@ -373,7 +373,7 @@ Chats and files stay on your computer. A bot sends your message to the AI servic
     </td>
     <td width="33%" valign="top">
       <h4>Product Hunt</h4>
-      Upvote or review Seira, so that more people find it.
+      Support or review Seira, so that more people find it.
       <br><br>
       <a href="https://www.producthunt.com/products/seira-bot?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-seira-bot"><img alt="Seira.bot on Product Hunt" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=light" width="200" height="43"></a>
     </td>
