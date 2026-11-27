@@ -12,12 +12,18 @@ import { saveWebhookCredential, webhookCredentialStore } from "@/lib/webhook-cre
 import { botInDepartment, filterableDepartments, GENERAL_DEPARTMENT } from "@/lib/department-filter";
 import { useStore } from "@/state/store";
 import { useAppTriggers } from "@/lib/app-triggers";
+import { calendarAutomations } from "@/lib/automation-calendar-source";
+import { useAdvancedMode } from "@/lib/interface-mode";
+import { newAutomationsEnabled } from "@/lib/feature-flags";
+import { useEngineLimits } from "@/lib/limit-resets";
 import { botIdsOf, startSteps } from "@/lib/workflow-graph";
 import { useWorkflows } from "@/state/workflows";
 import { AppEventEditor } from "./automations/AppEventEditor";
 import { useAllAutomationActions } from "./automations/app-actions";
 import { AutomationPanel } from "./automations/AutomationPanel";
 import { AutomationsCalendar } from "./automations/AutomationsCalendar";
+import { CalendarView } from "./automations-calendar/CalendarView";
+import { useCalendarActions } from "./automations-calendar/useCalendarActions";
 import { LimitWarnings } from "./automations/LimitWarnings";
 import { NewAutomation, type SetUpKind } from "./automations/NewAutomation";
 import { FixButton, StatusMark } from "./automations/parts";
@@ -52,6 +58,8 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   const [botFilter, setBotFilter] = useState(focus?.botId ?? "all");
   const [department, setDepartment] = useState("all");
   const [newText, setNewText] = useState<string | null>(null);
+  const [newSlot, setNewSlot] = useState<number | undefined>(undefined);
+  const [occurrence, setOccurrence] = useState<{ id: string; at: number; runId?: string } | null>(null);
   const { create: createWorkflow, failed: workflowFailed } = useCreateWorkflow(useCallback((created) => dispatch({ type: "showRoutines", view: "workflows", workflowId: created.id }), [dispatch]));
   const [editing, setEditing] = useState<{ kind: SetUpKind; id?: string; botId?: string; workflowId?: string } | null>(null);
   const routinesOnly = window.ogb?.remoteClient?.active === true;
@@ -81,6 +89,23 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   const showFilter = all.length >= FILTER_FROM && new Set(all.map((automation) => automation.botId)).size > 1;
   const listed = orderAutomations(all.filter((automation) => inDepartment(automation.botId) && (!showFilter || botFilter === "all" || automation.botId === botFilter)));
   const open = all.find((automation) => automation.id === openId) ?? null;
+  const newCalendar = newAutomationsEnabled(state.config);
+  const advanced = useAdvancedMode();
+  const engines = useEngineLimits();
+  const calendar = useCalendarActions(all);
+  const calendarAll = useMemo(() => newCalendar && view === "calendar"
+    ? calendarAutomations({ routines: state.routines, webhooks: routinesOnly ? [] : state.webhooks, appTriggers: appTriggers.triggers, runs: state.routineRuns, bots: state.bots, workflows: workflows.workflows })
+    : [], [newCalendar, view, state.routines, state.webhooks, appTriggers.triggers, state.routineRuns, state.bots, workflows.workflows, routinesOnly]);
+  const listedIds = new Set(listed.map((automation) => automation.id));
+  const calendarListed = calendarAll.filter((automation) => automation.draft
+    ? (activeDepartment === "all" && botFilter === "all") || (automation.stepBotIds.some(inDepartment) && (!showFilter || botFilter === "all" || automation.stepBotIds.includes(botFilter)))
+    : automation.starts.some((start) => listedIds.has(start.id)));
+  const calendarSelected = open ? calendarAll.find((automation) => automation.id === open.id || automation.starts.some((start) => start.id === open.id))?.id ?? null : null;
+  const openFromCalendar = (automationId: string, startId: string, picked?: { at: number; runId?: string }) => {
+    if (all.some((automation) => automation.id === startId)) { setOpenId(startId); setOccurrence(picked ? { id: startId, ...picked } : null); return; }
+    dispatch({ type: "showRoutines", view: "workflows", workflowId: calendarAll.find((automation) => automation.id === automationId)?.workflowId });
+  };
+  const closeNew = () => { setNewText(null); setNewSlot(undefined); };
   const sentenceOf = (automation: Automation) => {
     const workflow = automation.workflowId ? workflows.workflows.find((candidate) => candidate.id === automation.workflowId) : undefined;
     return automationSentence(automation, botName(automation.botId), workflow && { name: workflow.name, bots: botIdsOf(workflow).flatMap((id) => state.bots.find((bot) => bot.id === id)?.name ?? []) });
@@ -102,7 +127,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
                 {departments.hasGeneral && <option value={GENERAL_DEPARTMENT}>{t("automations.generalDepartment")}</option>}
               </Select>
             )}
-            {showFilter && view === "list" && (
+            {showFilter && (view === "list" || (newCalendar && view === "calendar")) && (
               <Select size="sm" aria-label={t("automations.allBots")} value={botFilter} onChange={(event) => setBotFilter(event.target.value)} className="max-w-[180px]">
                 <option value="all">{t("automations.allBots")}</option>
                 {departmentBots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
@@ -120,9 +145,12 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
           </ToolPageActions>
       </ToolPageHeader>
 
+      {calendar.error && newCalendar && view === "calendar" && <p role="alert" className="shrink-0 px-4 pt-3 text-[13px] text-danger">{calendar.error}</p>}
       {workflowFailed && view === "workflows" && <p role="alert" className="shrink-0 px-4 pt-3 text-[13px] text-danger">{t("workflow.save.failed")}</p>}
       <div className="relative flex min-h-0 flex-1">
-        {view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : view === "workflows" ? <WorkflowsView workflowId={focus?.workflowId} workflowRunId={focus?.workflowRunId}
+        {view === "calendar" && newCalendar ? <CalendarView automations={calendarListed} bots={visibleBots} engines={engines} advanced={advanced} selectedId={calendarSelected} busyId={calendar.busyId}
+          onOpen={openFromCalendar} onNew={(slotAt) => { setNewSlot(slotAt); setNewText(""); }} onToggle={(automation) => void calendar.toggle(automation)} saveSchedule={calendar.saveSchedule} />
+          : view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : view === "workflows" ? <WorkflowsView workflowId={focus?.workflowId} workflowRunId={focus?.workflowRunId}
           onUseInRoutine={(workflow) => { const start = startSteps(workflow)[0]; setEditing({ kind: "schedule", botId: start?.kind === "bot" ? start.botId : undefined, workflowId: workflow.id }); }} /> : (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
@@ -171,13 +199,13 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
         )}
         {open && view !== "workflows" && (
           <div className="absolute inset-y-0 right-0 z-30 flex shadow-2xl lg:static lg:shadow-none">
-            <AutomationPanel key={open.id} automation={open} sentence={sentenceOf(open)} onClose={() => setOpenId(null)} onDeleted={() => setOpenId(null)} onEdit={() => setEditing({ kind: open.kind, id: open.id })} />
+            <AutomationPanel key={open.id} automation={open} sentence={sentenceOf(open)} occurrence={occurrence?.id === open.id ? occurrence : undefined} onClose={() => setOpenId(null)} onDeleted={() => setOpenId(null)} onEdit={() => setEditing({ kind: open.kind, id: open.id })} />
           </div>
         )}
       </div>
 
       {newText !== null && (
-        <NewAutomation initialText={newText} onClose={() => setNewText(null)} onSetUpYourself={(kind, botId) => { setNewText(null); setEditing({ kind, botId }); }} onDrawWorkflow={workflows.unavailable ? undefined : () => void createWorkflow()} />
+        <NewAutomation initialText={newText} slotAt={newSlot} onClose={closeNew} onSetUpYourself={(kind, botId) => { closeNew(); setEditing({ kind, botId }); }} onDrawWorkflow={workflows.unavailable ? undefined : () => void createWorkflow()} />
       )}
       {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} initialWorkflowId={editing.workflowId} plain onClose={() => setEditing(null)} />}
       {editing?.kind === "webhook" && (editWebhook || !editing.id) && (
