@@ -192,13 +192,14 @@ async function writeTemp(path: string, data: string, options: AtomicWriteOptions
 /** Promises still on their way to the disk that no file waits on: an appended line's fsync, a dropped temp file's removal. */
 const settling = new Set<Promise<void>>();
 
-function settle(done: Promise<void>): void {
+/** Counts `done`, which must not reject, as a write on its way to the disk until it settles: see writesBehindSettled. */
+export function settleBehind(done: Promise<void>): void {
   settling.add(done);
   void done.then(() => settling.delete(done));
 }
 
 function discardTemp(tmp: string): void {
-  settle(unlink(tmp).catch(() => {}));
+  settleBehind(unlink(tmp).catch(() => {}));
 }
 
 const BEHIND_RETRY_MS = 1_000;
@@ -419,6 +420,6 @@ export function appendLine(path: string, line: string, mode: number): boolean {
       close(fd, () => resolve());
     });
   });
-  settle(synced);
+  settleBehind(synced);
   return true;
 }

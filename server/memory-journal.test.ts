@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { writesBehindSettled } from "./atomic.ts";
 import {
   BEFORE_CAP,
   DIFF_CAP,
@@ -129,6 +130,13 @@ describe("unifiedDiff", () => {
 });
 
 describe("journalMemoryWrite / readMemoryJournal", () => {
+  it("counts a queued row as a write on its way to the disk, so a test's cleanup waits for it", async () => {
+    const bot = freshBot();
+    const { entry } = journalMemoryWrite(bot, "memory/a.md", "one\n", { actor: "person", via: "ui" });
+    await writesBehindSettled();
+    expect(readFileSync(journalFile(bot), "utf8")).toContain(entry!.id);
+  });
+
   it("appends one 0600 row outside the workspace, newest first", async () => {
     const bot = freshBot();
     const first = journalMemoryWrite(bot, "memory/a.md", "one\n", { actor: "person", via: "ui" });
