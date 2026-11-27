@@ -112,6 +112,15 @@ describe("runProviderOff", () => {
     followBotModel: vi.fn(async (_bot: Bot): Promise<unknown> => undefined),
   });
 
+  it("only moves the bots when there is nothing to hide", async () => {
+    const calls = actions();
+    const { hide: _hide, ...moveOnly } = calls;
+    const result = await runProviderOff(x, planProviderOff("x", [bot("a", "x")], target), moveOnly);
+    expect(calls.persist).toHaveBeenCalledTimes(1);
+    expect(calls.hide).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ moveOnly: true, hidden: false, moved: [{ id: "a" }] });
+  });
+
   it("moves every bot, then their conversations, then hides", async () => {
     const calls = actions();
     const order: string[] = [];

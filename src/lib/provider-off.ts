@@ -34,6 +34,7 @@ export interface ProviderOffResult {
   moved: MovedBot[];
   stayed: Array<{ name: string; reason: string }>;
   hidden: boolean;
+  moveOnly?: true;
   error?: string;
 }
 
@@ -107,7 +108,7 @@ export function planProviderOff(instanceId: string, bots: readonly Bot[], target
 
 export interface ProviderOffActions {
   persist: (bot: Bot, patch: BotUpdatePatch) => Promise<unknown>;
-  hide: () => Promise<unknown>;
+  hide?: () => Promise<unknown>;
   followBotModel: (bot: Bot) => Promise<unknown>;
 }
 
@@ -128,6 +129,10 @@ export async function runProviderOff(instance: Pick<InstanceInfo, "instanceId" |
     moved, stayed, hidden: false,
   };
   if (stayed.length > 0) return result;
+  if (!actions.hide) {
+    result.moveOnly = true;
+    return result;
+  }
   try {
     await actions.hide();
     result.hidden = true;

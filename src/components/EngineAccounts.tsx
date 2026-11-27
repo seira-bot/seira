@@ -80,7 +80,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
   const [removeBlocked, setRemoveBlocked] = useState<ProviderUse[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const { signOut: canSignOut, remove: canRemove, hide: canHide } = accountActions(group, instance);
-  const off = useProviderOff(instance);
+  const off = useProviderOff(instance, { hide: canHide });
   const usedBy = state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId || bot.fallback?.some((backup) => backup.instanceId === instance.instanceId)).length;
 
   useEffect(() => {
@@ -135,8 +135,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
           <ProviderMenuBody off={off} onDone={() => setOpen(false)}>{(choose) => <>
           <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); onRename(); }}>{t("accounts.rename")}</button>
           {canSignOut && <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
-          {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} onChoose={choose} />}
-          {canRemove && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
+          {(canHide || canRemove) && <ProviderOffItems off={off} onDone={() => setOpen(false)} onChoose={choose} />}
           </>}</ProviderMenuBody>
         </div>
       )}

@@ -39,6 +39,8 @@ async function setHidden(instanceId: string, hidden: boolean, apply: (instances:
 
 export interface ProviderOff {
   instance: InstanceInfo;
+  /** Whether the provider is hidden after its bots move; an account that can be removed only moves them. */
+  hides: boolean;
   used: Bot[];
   choices: MoveChoice[];
   target: MoveTarget | null;
@@ -52,7 +54,7 @@ export interface ProviderOff {
 }
 
 /** Hide for a provider no bot uses; Move and hide for one that is in use. */
-export function useProviderOff(instance: InstanceInfo): ProviderOff {
+export function useProviderOff(instance: InstanceInfo, { hide = true }: { hide?: boolean } = {}): ProviderOff {
   const { state, dispatch, refreshInstances } = useStore();
   const { health } = useProviderOrder(state.instances);
   const persist = useBotSaver();
@@ -73,11 +75,11 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
       const result = await runProviderOff({ instanceId: instance.instanceId, displayName: engineDisplayName(instance) }, planProviderOff(instance.instanceId, state.bots, to), {
         persist,
         followBotModel: followBotModelRequest,
-        hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances).catch((cause) => {
+        ...(hide ? { hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances).catch((cause) => {
           const uses = blockedUses(cause);
           if (uses.length > 0) { refused = true; setBlocked(uses); }
           throw cause;
-        }),
+        }) } : {}),
       });
       if (!refused || result.moved.length > 0) rememberProviderOff(result);
       if (!result.hidden) await Promise.resolve(refreshInstances()).catch(() => {});
@@ -103,7 +105,7 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
       setBusy(false);
     }
   };
-  return { instance, used, choices, target, busy, error, blocked, dismissBlocked: () => setBlocked([]), hideAnyway: () => void hideAnyway(), run: (to) => void run(to) };
+  return { instance, hides: hide, used, choices, target, busy, error, blocked, dismissBlocked: () => setBlocked([]), hideAnyway: () => void hideAnyway(), run: (to) => void run(to) };
 }
 
 const ITEM = "ui-menu-row w-full text-left text-ink disabled:cursor-not-allowed disabled:opacity-50";
@@ -112,9 +114,10 @@ const NOTE = "px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary";
 /** The Hide part of a provider menu, in every menu that has one. With `onChoose`, a person who has more than one place to
  * move the bots to picks it in the picker that `onChoose` opens. */
 export function ProviderOffItems({ off, onDone, onChoose }: { off: ProviderOff; onDone: () => void; onChoose?: () => void }) {
-  const { used, target, busy } = off;
+  const { used, target, busy, hides } = off;
   const go = (action: () => void) => () => { onDone(); action(); };
   if (used.length === 0) {
+    if (!hides) return null;
     return <button type="button" role="menuitem" data-provider-hide disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(() => off.run())}>{t("engines.hide")}</button>;
   }
   const count = String(used.length);
@@ -122,14 +125,14 @@ export function ProviderOffItems({ off, onDone, onChoose }: { off: ProviderOff; 
   return <>
     <p data-provider-used className={NOTE}>{t("provider.usedBy", { count })}</p>
     {!target
-      ? <p data-provider-no-target className={NOTE}>{t("provider.noTarget")}</p>
+      ? <p data-provider-no-target className={NOTE}>{t(hides ? "provider.noTarget" : "provider.noTargetMove")}</p>
       : many
         ? <button type="button" role="menuitem" data-provider-move-choose aria-haspopup="menu" disabled={busy} className={cn(ITEM, "flex items-center gap-2")} onClick={onChoose}>
-          <span className="min-w-0 flex-1 truncate">{t("provider.moveAndHideChoose", { count })}</span>
+          <span className="min-w-0 flex-1 truncate">{t(hides ? "provider.moveAndHideChoose" : "provider.moveChoose", { count })}</span>
           <ChevronRight size={14} className="shrink-0 text-ink-tertiary rtl:-scale-x-100" aria-hidden="true" />
         </button>
         : <button type="button" role="menuitem" data-provider-move disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(() => off.run())}>
-          {t("provider.moveAndHide", { count, target: engineDisplayName(target.instance) })}
+          {t(hides ? "provider.moveAndHide" : "provider.move", { count, target: engineDisplayName(target.instance) })}
         </button>}
   </>;
 }
@@ -209,7 +212,10 @@ export function ProviderOffStatus({ className }: { className?: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   if (!result) return null;
   const text = result.error ? result.error
-    : result.stayed.length > 0 ? t("provider.partial", { moved: String(result.moved.length), stayed: String(result.stayed.length), name: result.name })
+    : result.stayed.length > 0 ? (result.moveOnly
+      ? t("provider.partialMove", { moved: String(result.moved.length), stayed: String(result.stayed.length) })
+      : t("provider.partial", { moved: String(result.moved.length), stayed: String(result.stayed.length), name: result.name }))
+    : result.moved.length > 0 && !result.hidden ? t("provider.moved", { count: String(result.moved.length), target: result.target ?? "" })
     : result.moved.length > 0 ? t("provider.movedHidden", { name: result.name, count: String(result.moved.length), target: result.target ?? "" })
     : t("provider.hidden", { name: result.name });
   const undo = async () => {
