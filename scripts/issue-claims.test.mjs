@@ -91,7 +91,7 @@ function fakeApi({
             .filter((each) => each.state === params.get("state"))
             .filter((each) => labels.every((name) => each.labels.includes(name)))
             .filter((each) => assignee === null || each.assignees.includes(assignee))
-            .map((each) => shape({ ...each, ...(listed[each.number] ?? {}) })),
+            .map((each) => shape({ ...each, ...listed[each.number] })),
         );
       }
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)$/.exec(route)) && method === "GET") return shape(find(match[1]));
