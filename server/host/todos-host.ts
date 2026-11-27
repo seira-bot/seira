@@ -364,8 +364,7 @@ export function createTodosHost(deps: TodosHostDeps) {
         title: item?.title as string,
         ...(typeof item?.note === "string" ? { note: item.note } : {}),
         ...(ref ? { botId: ref.id } : {}),
-        ...parseWhen(item?.when),
-        ...(item?.repeat ? { repeat: item.repeat as TodoRepeat } : {}),
+        ...parseWhen(typeof item?.afterIndex === "number" ? { afterIndex: item.afterIndex } : item?.when),
         source: { threadId: caller.threadId, botId: caller.botId },
       };
     });

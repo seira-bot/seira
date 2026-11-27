@@ -552,7 +552,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "todo_add",
     description:
-      "Write down todos on the Board: work for yourself, for a teammate, or for whichever bot fits. Each todo waits in its bot's queue and starts when that bot is free. A todo without assigneeBotId waits for the team's picker to give it to a bot. The person sees one card in this chat with Undo. Use it for work that should happen later or elsewhere, not for what you can do now.",
+      "Write down todos on the Board for yourself, a teammate, or the team's picker (omit assigneeBotId). Each waits in its bot's queue and starts when the bot is free. The person sees one card with Undo. For work that happens later or elsewhere, not for what you can do now. Repeating work is a routine request, not a todo.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -569,17 +569,8 @@ const TOOL_DEFINITIONS = [
               title: { type: "string", minLength: 1, maxLength: 120, description: "What to do, in one plain line." },
               note: { type: "string", maxLength: 2000, description: "More detail for the bot that does it." },
               assigneeBotId: { type: "string", description: "The bot that does it: its id or its name. Omit to let the picker choose." },
-              when: {
-                description: "\"free\" (default): as soon as the bot is free. An ISO date and time: not before then. {afterIndex}: after the todo at that place earlier in this list is done.",
-                anyOf: [{ type: "string" }, { type: "object", additionalProperties: false, properties: { afterIndex: { type: "integer", minimum: 0 } }, required: ["afterIndex"] }],
-              },
-              repeat: {
-                type: "object",
-                additionalProperties: false,
-                description: "Makes the todo repeat as a routine for the assigned bot.",
-                properties: { time: { type: "string", description: "HH:MM, local time." }, weekdays: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 }, description: "0 is Sunday. Empty means every day." } },
-                required: ["time"],
-              },
+              when: { type: "string", description: "\"free\" (default) or an ISO date and time: not before then." },
+              afterIndex: { type: "integer", minimum: 0, description: "Wait for the todo at this earlier place in this list." },
             },
             required: ["title"],
           },
