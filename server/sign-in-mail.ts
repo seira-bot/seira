@@ -95,10 +95,13 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
       const sender = from();
       transport ??= import("nodemailer").then(({ createTransport }) => createTransport(smtpOptions(options.url)));
       const code = String(randomInt(0, 100_000_000)).padStart(8, "0");
-      pending.set(email, { hash: digest(code), sentAt: now(), tries: 0 });
-      sentAt.set(quota, [...(sentAt.get(quota) ?? []), now()]);
-      sentAtAll.set(email, [...(sentAtAll.get(email) ?? []), now()]);
-      if (source) sentBySource.set(source, [...(sentBySource.get(source) ?? []), now()]);
+      // One reading of the clock: a failed send must remove exactly the entries this call added, while other sends are in flight.
+      const at = now();
+      const entry = { hash: digest(code), sentAt: at, tries: 0 };
+      pending.set(email, entry);
+      sentAt.set(quota, [...(sentAt.get(quota) ?? []), at]);
+      sentAtAll.set(email, [...(sentAtAll.get(email) ?? []), at]);
+      if (source) sentBySource.set(source, [...(sentBySource.get(source) ?? []), at]);
       try {
         await (await transport).sendMail({
           from: sender, to: email, subject: target ? `Your Seira sign-in code for ${target}` : "Your Seira sign-in code",
@@ -117,11 +120,12 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
           ].join("\n"),
         });
       } catch (error) {
-        pending.delete(email);
+        if (pending.get(email) === entry) pending.delete(email);
         for (const [map, key] of [[sentAt, quota], [sentAtAll, email], [sentBySource, source]] as const) {
           if (map === sentBySource && !source) continue;
           const times = map.get(key) ?? [];
-          times.pop();
+          const own = times.indexOf(at);
+          if (own >= 0) times.splice(own, 1);
           if (times.length) map.set(key, times);
           else map.delete(key);
         }

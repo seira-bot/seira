@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSignInMail, SIGNIN_CODE_TTL_MS, SIGNIN_CODES_PER_SOURCE, type MailMessage } from "./sign-in-mail.ts";
+import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TTL_MS, SIGNIN_CODES_PER_SOURCE, type MailMessage } from "./sign-in-mail.ts";
 
 const URL_ = "smtps://signin%40example.test:p%40ss@smtp.example.test:465";
 
@@ -47,5 +47,63 @@ describe("one source asking for codes to many addresses", () => {
     const { sent, mail } = setup();
     for (let i = 0; i < SIGNIN_CODES_PER_SOURCE + 5; i += 1) expect(await mail.send(`x${i}@example.test`)).toBe("sent");
     expect(sent).toHaveLength(SIGNIN_CODES_PER_SOURCE + 5);
+  });
+});
+
+describe("sends that run at the same time", () => {
+  /** A mail server that holds each send until the test settles it. */
+  function slowSetup() {
+    const held: { message: MailMessage; settle: (fail: boolean) => void }[] = [];
+    let clock = 0;
+    const mail = createSignInMail({
+      url: URL_,
+      now: () => clock,
+      transport: {
+        sendMail: (message: MailMessage) => new Promise<void>((resolve, reject) => {
+          held.push({ message, settle: (fail) => (fail ? reject(new Error("550 relay denied")) : resolve()) });
+        }),
+      },
+    });
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+    return { held, mail, flush, tick: (ms: number) => { clock += ms; } };
+  }
+
+  it("gives back only the slot of the send that failed, so the cap stays exact", async () => {
+    const { held, mail, flush, tick } = slowSetup();
+    const failing = mail.send("a@example.test", null, "203.0.113.7");
+    const failed = expect(failing).rejects.toThrow("550");
+    await flush();
+    tick(5 * 60_000);
+    const other = mail.send("b@example.test", null, "203.0.113.7");
+    await flush();
+    held[0]!.settle(true);
+    await failed;
+    held[1]!.settle(false);
+    expect(await other).toBe("sent");
+    // The failed send was asked for at minute 0 and the other at minute 5: at minute 10 only the other still counts.
+    tick(5 * 60_000);
+    const more: Promise<string>[] = [];
+    for (let i = 0; i < SIGNIN_CODES_PER_SOURCE; i += 1) {
+      more.push(mail.send(`x${i}@example.test`, null, "203.0.113.7"));
+      await flush();
+    }
+    for (const send of held.slice(2)) send.settle(false);
+    expect((await Promise.all(more)).filter((result) => result === "sent")).toHaveLength(SIGNIN_CODES_PER_SOURCE - 1);
+  });
+
+  it("keeps the code of a newer send to the same address when an older send fails", async () => {
+    const { held, mail, flush, tick } = slowSetup();
+    const older = mail.send("her@example.test", null, "203.0.113.7");
+    const olderFailed = expect(older).rejects.toThrow("550");
+    await flush();
+    tick(SIGNIN_CODE_RESEND_MS);
+    const newer = mail.send("her@example.test", null, "203.0.113.7");
+    await flush();
+    held[0]!.settle(true);
+    await olderFailed;
+    held[1]!.settle(false);
+    expect(await newer).toBe("sent");
+    const code = /^(\d{8})$/m.exec(held[1]!.message.text)![1]!;
+    expect(mail.check("her@example.test", code)).toBe("ok");
   });
 });
