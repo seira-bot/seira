@@ -1557,10 +1557,10 @@ describe("sweep budget", () => {
   it("stale AC-20: makes no call past the hard request limit and resumes safely", async () => {
     const fake = fakeApi({ issues: [pullItem(131, { created_at: ago(25) })] });
     const errors = [];
-    const failed = await sweepAt(fake, NOW, { error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 6, maxMs: 1e9 } });
+    const failed = await sweepAt(fake, NOW, { error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 5, maxMs: 1e9 } });
     expect(failed).toBeGreaterThanOrEqual(1);
     expect(errors).toEqual(["#131: The sweep request limit was reached.", "Stopped after 0 of 1 items: the sweep limit was reached."]);
-    expect(fake.state.calls).toHaveLength(6);
+    expect(fake.state.calls).toHaveLength(5);
     expect(fake.issue(131).labels).toEqual(["needs-review"]);
     expect(fake.posted(131)).toEqual([]);
     expect(await sweepAt(fake)).toBe(0);
