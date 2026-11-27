@@ -30,8 +30,7 @@ function setup(readable: (todo: { source?: { threadId: string } }) => boolean = 
     });
     return { out, ...sent };
   };
-  const internal = (path: string, body: unknown) => { const r = createInternalTodoRoutes({ host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => body, readable: readable as never, botName: () => undefined, postLine: () => {} }); return r; };
-  return { call, store, host, lines, internal };
+  return { call, store, host, lines };
 }
 
 describe("internal todo routes", () => {
