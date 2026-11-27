@@ -68,7 +68,7 @@ describe("planProviderOff model", () => {
   });
 
   it("applies the same rule to a backup", () => {
-    const plan = planProviderOff("claude-1", [bot("a", "z", { fallback: [{ instanceId: "claude-1", model: "opus", effort: "high" }] as Bot["fallback"] })], target);
+    const plan = planProviderOff("claude-1", [bot("a", "z", { fallback: [{ instanceId: "claude-1", model: "opus", effort: "high" }] as unknown as Bot["fallback"] })], target);
     expect(plan.rows[0]).toMatchObject({ patch: { fallback: [{ instanceId: "claude-2", model: "opus", effort: "high" }] } });
     const lacking = planProviderOff("claude-1", [bot("a", "z", { fallback: [{ instanceId: "claude-1", model: "haiku" }] })], target);
     expect(lacking.rows[0]).toMatchObject({ patch: { fallback: [{ instanceId: "claude-2", model: "sonnet" }] } });
