@@ -2,6 +2,7 @@ import { createServer, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { accessLogEnabled, formatAccessLine, loggablePath, withAccessLog } from "./access-log.ts";
+import { ROUTE_TEMPLATES } from "./access-log-routes.ts";
 
 let server: Server | undefined;
 afterEach(async () => {
@@ -61,16 +62,39 @@ describe("access log (FR-373)", () => {
     expect(loggablePath("/api/health")).toBe("/api/health");
     expect(loggablePath("/api/bots/3f2a9c1e-77aa-4b21-9d0e-5c6f1a2b3c4d")).toBe("/api/bots/:id");
     expect(loggablePath("/api/bots/3f2a9c1e/messages")).toBe("/api/bots/:id/messages");
-    expect(loggablePath("/api/rooms/room-42/members/someone%40example.org")).toBe("/api/rooms/:id/members/:id");
-    expect(loggablePath("/api/bots/")).toBe("/api/bots/");
+    expect(loggablePath("/api/bots/3f2a9c1e/messages/guarded")).toBe("/api/bots/:id/messages/guarded");
+    expect(loggablePath("/api/bots/")).toBe("/api/bots");
     expect(loggablePath("/pair?x=1#y")).toBe("/pair");
     expect(loggablePath("/")).toBe("/");
   });
 
-  it("never writes a segment that is not a fixed route word", () => {
-    const odd = ["Zk3-9fQ2vL0aXb7", "abc123def456", "user.name", "%2e%2e", "xyz"];
+  it("writes every template of the route list as itself", () => {
+    expect(ROUTE_TEMPLATES.length).toBeGreaterThan(100);
+    for (const template of ROUTE_TEMPLATES) {
+      const concrete = template.replaceAll(":id", "Zk3-9fQ2vL0aXb7");
+      expect(loggablePath(concrete), concrete).toBe(template);
+    }
+  });
+
+  it("takes a fixed word for a name in a variable position", () => {
+    expect(loggablePath("/api/bots/messages")).toBe("/api/bots/:id");
+    expect(loggablePath("/api/bots/messages/messages")).toBe("/api/bots/:id/messages");
+    expect(loggablePath("/api/bots/connectors/computer")).toBe("/api/bots/:id/computer");
+    expect(loggablePath("/api/bots/bots/bots")).toBe("/api/bots/:id/<other>");
+  });
+
+  it("takes a name for a fixed word in a fixed position", () => {
+    expect(loggablePath("/api/Zk3-9fQ2vL0aXb7")).toBe("/api/<other>");
+    expect(loggablePath("/api/bots/abc123def456/Zk3-9fQ2vL0aXb7")).toBe("/api/bots/:id/<other>");
+    expect(loggablePath("/api/bots/abc123def456/messages/Zk3-9fQ2vL0aXb7/more")).toBe("/api/bots/:id/messages/:id/<other>");
+    expect(loggablePath("/api/health/Zk3-9fQ2vL0aXb7/more")).toBe("/api/health/<other>");
+    expect(loggablePath("/api/bots/abc123def456/computer")).toBe("/api/bots/:id/computer");
+  });
+
+  it("never writes a segment that is not a fixed route word in its position", () => {
+    const odd = ["Zk3-9fQ2vL0aXb7", "abc123def456", "user.name", "%2e%2e", "xyz", "%0d%0a"];
     for (const segment of odd) {
-      for (const path of [`/api/bots/${segment}`, `/api/${segment}`, `/api/bots/${segment}/files/${segment}`, `/v1/${segment}`, `/mcp-oauth/${segment}`]) {
+      for (const path of [`/api/bots/${segment}`, `/api/${segment}`, `/api/bots/${segment}/files/${segment}`, `/api/bots/${segment}/${segment}`, `/mcp-oauth/${segment}`, `/hooks/${segment}`]) {
         expect(loggablePath(path), path).not.toContain(segment);
       }
     }
@@ -86,7 +110,7 @@ describe("access log (FR-373)", () => {
   it("keeps a path with an id out of the written line", async () => {
     const lines = await get({ SEIRA_ACCESS_LOG: "1" }, "/api/bots/Zk3-9fQ2vL0aXb7/threads/abc123def456?x=1");
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain(" GET /api/bots/:id/threads/:id 200 ");
+    expect(lines[0]).toContain(" GET /api/bots/:id/threads/<other> 200 ");
     expect(lines[0]).not.toContain("Zk3-9fQ2vL0aXb7");
     expect(lines[0]).not.toContain("abc123def456");
   });

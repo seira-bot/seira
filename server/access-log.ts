@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ROUTE_ROOTS, ROUTE_WORDS } from "./access-log-routes.ts";
+import { ROUTE_TEMPLATES } from "./access-log-routes.ts";
 
 export type AccessRoute = "local" | "tunnel";
 
@@ -18,15 +18,45 @@ export function accessLogEnabled(env: NodeJS.ProcessEnv): boolean {
   return env.SEIRA_ACCESS_LOG === "1";
 }
 
-/** The shape of the path, never the path. A name or an id becomes :id, a webhook path ends in <redacted>, and a path outside the known routes is <other>. The query string and the fragment are dropped, and a control character cannot start a second line. */
+interface RouteNode {
+  end: boolean;
+  fixed: Map<string, RouteNode>;
+  id?: RouteNode;
+}
+
+const newNode = (): RouteNode => ({ end: false, fixed: new Map() });
+const ROUTES = newNode();
+for (const template of ROUTE_TEMPLATES) {
+  let node = ROUTES;
+  for (const part of template.split("/").slice(1)) {
+    if (part === ":id") node = node.id ??= newNode();
+    else {
+      let next = node.fixed.get(part);
+      if (!next) node.fixed.set(part, (next = newNode()));
+      node = next;
+    }
+  }
+  node.end = true;
+}
+
+/** The route of the path, never the path. A fixed word of a known route stays, a name or an id in a variable position becomes :id, and what follows the last known part becomes <other>. A webhook path ends in <redacted>. The query string and the fragment are dropped, and a control character cannot start a second line. */
 export function loggablePath(rawUrl: string | undefined): string {
   const path = (rawUrl ?? "/").split(/[?#]/, 1)[0];
   const parts = path.split("/").slice(1);
-  const root = parts[0] ?? "";
+  if (parts.at(-1) === "") parts.pop();
   if (parts[0] === "hooks" && parts[1]?.startsWith("wh_") && parts.length > 2) return "/hooks/:id/<redacted>";
-  if (!ROUTE_ROOTS.has(root)) return path === "" || path === "/" ? "/" : "<other>";
-  const shape = `/${parts.map((part, index) => (index === 0 || part === "" || ROUTE_WORDS.has(part) ? part : ":id")).join("/")}`;
-  const clean = shape.replace(/[^\x21-\x7e]/g, "?");
+  if (path === "" || path === "/") return "/";
+  const shape: string[] = [];
+  let node = ROUTES;
+  for (const part of parts) {
+    const next = node.fixed.get(part) ?? node.id;
+    if (!next) break;
+    shape.push(node.fixed.has(part) ? part : ":id");
+    node = next;
+  }
+  if (shape.length === 0) return "<other>";
+  if (shape.length < parts.length || !node.end) shape.push("<other>");
+  const clean = `/${shape.join("/")}`.replace(/[^\x21-\x7e]/g, "?");
   return clean.length > MAX_PATH ? `${clean.slice(0, MAX_PATH)}...` : clean;
 }
 

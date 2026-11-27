@@ -111,7 +111,8 @@ fleet   many client workspaces on one Linux server, each its own account,
 
 --access-log  write one line for each request the server answers (time,
               method, route, status, duration), to see what reaches it. A name
-              or an id in the path is written as :id. Never the query string,
+              or an id in the path is written as :id, and a part that
+              matches no known route as <other>. Never the query string,
               cookies, headers or bodies. SEIRA_ACCESS_LOG=1
               does the same. Off by default.
 
