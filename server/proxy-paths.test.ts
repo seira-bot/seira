@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { APP_EXECUTION_ALIAS } from "../scripts/appx-manifest.mjs";
 import { ownNodeCommand, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
 
 describe("local computer proxy runtime path", () => {
@@ -67,7 +66,8 @@ describe("the program that runs Seira's scripts for an engine", () => {
   const GLOBAL_ALIAS = "C:\\Users\\pat\\AppData\\Local\\Microsoft\\WindowsApps\\seira-desktop.exe";
 
   it("names the alias the Store manifest declares", () => {
-    expect(STORE_ALIAS).toBe(APP_EXECUTION_ALIAS);
+    const manifest = readFileSync(join(SERVER_ROOT, "../scripts/appx-manifest.mjs"), "utf8");
+    expect(manifest).toContain(`export const APP_EXECUTION_ALIAS = ${JSON.stringify(STORE_ALIAS)};`);
   });
 
   it("starts a Store package through the alias in its package family folder", () => {
