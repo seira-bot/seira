@@ -13,8 +13,9 @@ as [SECURITY.md](SECURITY.md) explains.
 
 ## Take an issue
 
-An issue with the label `P2` or `P3` is open to people for 24 hours after triage.
+An issue with the label `P2` or `P3` is open only to people for 24 hours after triage.
 It has the label `human-window` during that time.
+After that time, you can still take it if nobody works on it.
 
 1. Comment `/take` on the issue. The comment must contain only that line.
 2. Open a draft pull request that says `Closes #<number>` within 72 hours.

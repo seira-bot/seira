@@ -839,7 +839,7 @@ describe("Issue claims workflow", () => {
     });
   });
 
-  it("keeps one run per issue and one for the sweep, and never cancels a run", () => {
+  it("keeps one run per issue and one for the sweep, and never cancels a running job", () => {
     expect(flow.concurrency).toEqual({ group: "issue-claims-${{ github.event.issue.number || 'sweep' }}", "cancel-in-progress": false });
   });
 

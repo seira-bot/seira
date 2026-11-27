@@ -4,7 +4,7 @@ name: Issue claims
 # - A P2 or P3 issue stays open to people for 24 hours. A claim holds for 72 hours without a draft pull request.
 # - The job runs scripts/issue-claims.mjs from main only. It installs no dependency and reads no secret.
 # - The job condition drops comments on pull requests, comments from bots and other labels before a runner starts.
-# - One run per issue, and one for the hourly sweep. A run that waits behind another is safe: the sweep repairs labels.
+# - One run per issue, and one for the hourly sweep. A newer event can replace a waiting run. The sweep repairs the labels.
 # scripts/ci-workflow.test.ts holds these rules.
 
 on:
