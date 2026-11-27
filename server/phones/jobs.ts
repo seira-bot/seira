@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { isPhoneWrite } from "../../shared/phone-apps.ts";
 import type { PhoneJobDelivery, PhoneJobOutcome } from "../../shared/phone-jobs.ts";
+import { PublicError } from "../public-error.ts";
 
 export { PHONE_JOB_CODES, phoneJobOutcome, type PhoneJobCode, type PhoneJobDelivery, type PhoneJobOutcome } from "../../shared/phone-jobs.ts";
 
@@ -22,7 +23,7 @@ type Job = {
   offline?: NodeJS.Timeout;
 };
 type Phone = { jobs: Map<string, Job>; wake?: () => void; polls: number };
-const failure = (message: string, status = 409) => Object.assign(new Error(message), { status });
+const failure = (message: string, status = 409) => new PublicError(message, status);
 
 /** In-memory rendezvous per phone key: one job in flight at a time, the newest poll wins, and a job whose delivery was never
  * leased is re-keyed and offered again. Requests always resolve with an outcome; none rejects. */

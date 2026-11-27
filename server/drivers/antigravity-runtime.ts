@@ -24,6 +24,7 @@ import {
   resolveAntigravityReleaseAsset,
   type AntigravityReleaseAsset,
 } from "./antigravity-release.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 const FREE_SPACE_MARGIN = 256 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 45 * 60_000;
@@ -69,6 +70,7 @@ export interface AntigravityRuntime {
 }
 
 export class AntigravitySetupError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status = 409;
 
   constructor(message: string) {

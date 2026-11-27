@@ -64,6 +64,27 @@ need_settings() {
   case "$CONNECTOR_IMAGE" in
     @*) fail "This installer was not downloaded from Seira. Copy the install command from Seira and run that." ;;
   esac
+  check_connector_image
+}
+
+# The connector runs as root with the Docker socket: only Seira's own image, named by a full SHA-256 digest, may start here.
+# The repositories are the ones the connector accepts for its own update (CONNECTOR_IMAGE in connector/src/protocol.ts).
+# SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE=1 is for a test run with an image built on this machine; it is never part of the install command.
+check_connector_image() {
+  if [ "${SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE:-}" = 1 ]; then
+    note "note: using the connector image $CONNECTOR_IMAGE without checking it (SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE=1)"
+    return
+  fi
+  refuse="The connector image is not one Seira publishes, or it does not name a full digest. Copy the install command from Seira again."
+  case "$CONNECTOR_IMAGE" in
+    ghcr.io/seira-bot/seira-connector@sha256:* | ghcr.io/milind-soni/mausbot-connector@sha256:*) ;;
+    *) fail "$refuse" ;;
+  esac
+  image_digest=${CONNECTOR_IMAGE#*@sha256:}
+  case "$image_digest" in
+    *[!0-9a-f]*) fail "$refuse" ;;
+  esac
+  [ "${#image_digest}" -eq 64 ] || fail "$refuse"
 }
 
 tty_available() {

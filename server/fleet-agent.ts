@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { dirname } from "node:path";
 import { defaultFleetDeps, executePlan, loadRegistry, markProvisioningFailed, planFleetAction, type FleetDeps, type FleetInput } from "./fleet-cli.ts";
 import { assertSlug, fleetLayout, fleetUser, openRouterModelIds, workspaceDataDir, type FleetLayout, type FleetWorkspace } from "./fleet.ts";
+import { PublicError } from "./public-error.ts";
 
 export interface FleetAgentOptions {
   socketPath: string;
@@ -38,7 +39,7 @@ export function readBody(req: IncomingMessage): Promise<Record<string, unknown>>
         // Keep draining so the 413 can still be sent, but stop holding bytes.
         tooLarge = true;
         chunks.length = 0;
-        return reject(Object.assign(new Error("request too large"), { status: 413 }));
+        return reject(new PublicError("request too large", 413));
       }
       chunks.push(chunk);
     });
@@ -51,7 +52,7 @@ export function readBody(req: IncomingMessage): Promise<Record<string, unknown>>
         const value: unknown = JSON.parse(text);
         resolve(value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
       } catch {
-        reject(Object.assign(new Error("body must be JSON"), { status: 400 }));
+        reject(new PublicError("body must be JSON", 400));
       }
     });
     req.on("error", reject);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { DataContext } from "../shared/data-context.ts";
+import { PublicError } from "./public-error.ts";
 
 export type { DataContext };
 
@@ -16,7 +17,7 @@ export function parseDataContext(value: unknown): DataContext | undefined {
   if (value === undefined || value === null) return undefined;
   const parsed = dataContextSchema.safeParse(value);
   if (!parsed.success) {
-    throw Object.assign(new Error("dataContext must name a Data card (c_<n>) with an optional draftSql of at most 100 KB"), { status: 400 });
+    throw new PublicError("dataContext must name a Data card (c_<n>) with an optional draftSql of at most 100 KB", 400);
   }
   return parsed.data;
 }

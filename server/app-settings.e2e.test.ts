@@ -1,5 +1,6 @@
 // A real server and the real injected agents proxy; only the provider's planning is scripted (room-handoff-agent).
-// The bot is on Full access, the default: changes apply at once with Undo, and no card waits on an answer.
+// The bot is on Full access and the fixture is a single-person desktop: a safe value in a clean conversation applies at once
+// with Undo; a value with lasting effects, or a conversation another person wrote into, waits for a tap on a card.
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ let dataDir: string;
 let planPath: string;
 let bot: { id: string; threadId: string };
 let ownerDevice: string;
+let clientDevice: string;
 const plans: Record<string, { script: unknown[] }> = {};
 
 const api = async (method: string, path: string, body?: unknown, status = 200, token?: string) => {
@@ -41,6 +43,8 @@ const results = (turn: any) => turn.evidence.filter((entry: any) => entry.step).
   args: entry.step.arguments, isError: Boolean(entry.response.error || entry.response.result?.isError),
   text: (entry.response.result?.content ?? []).map((part: any) => part.text).join("\n") || JSON.stringify(entry.response.error ?? null),
 }));
+const decisionsFor = async (settingId: string) => (await api("GET", "/api/decisions")).decisions
+  .filter((row: any) => row.tool === "app_settings" && row.summary.startsWith(`${settingId}:`)).map((row: any) => [row.decision, row.source, row.rule]);
 const idle = () => expect.poll(async () => (await api("GET", "/api/bots")).bots.every((one: any) => !one.busy), { timeout: 20_000 }).toBe(true);
 
 /** Scripts the turn whose text carries `key`, then sends that text to the bot as the owner. */
@@ -49,6 +53,13 @@ const start = async (key: string, steps: unknown[], timeoutMs = 20_000) => {
   writeFileSync(planPath, JSON.stringify(plans));
   await api("POST", `/api/bots/${bot.id}/messages`, { threadId: bot.threadId, text: `${key}: please change my settings.` }, 202);
 };
+/** Scripts the turn that hears a card's answer, whose text holds `heard`. */
+const hears = (key: string, heard: string) => {
+  plans[bot.id]!.script.push({ key, match: [heard], steps: [], reply: `Done: ${key}`, timeoutMs: 20_000 });
+  writeFileSync(planPath, JSON.stringify(plans));
+};
+const respond = (requestId: string, behavior: "allow" | "deny", token = ownerDevice, status = 200) =>
+  api("POST", `/api/threads/${bot.threadId}/respond`, { requestId, behavior }, status, token);
 const finished = async (key: string) => {
   let turn: any;
   await expect.poll(() => (turn = providerTurns().find((candidate) => candidate.planKey === key)) !== undefined, { timeout: 30_000 }).toBe(true);
@@ -87,6 +98,8 @@ beforeAll(async () => {
   // The owner's paired phone: an admin session, which saves a provider key as Settings does.
   const opened = await api("POST", "/api/auth/pairing", { label: "Owner phone", scopes: ["admin", "client"] });
   ownerDevice = (await api("POST", "/api/auth/pair", { code: opened.code })).token;
+  const second = await api("POST", "/api/auth/pairing", { label: "Second device", scopes: ["client"] });
+  clientDevice = (await api("POST", "/api/auth/pair", { code: second.code })).token;
 }, 90_000);
 
 afterAll(async () => {
@@ -116,19 +129,29 @@ it("a Full-access owner turn finds a safe setting, applies it with an applied ca
   expect((await settingCards(bot.threadId))[0].card.undone).toBe(true);
 }, 60_000);
 
-it("a Full-access owner turn changing a provider address applies it at once with no card to answer, and logs it", async () => {
+it("a provider address that would receive a saved key waits on a card, changes nothing before Apply, and Apply applies it with Undo and a logged answer", async () => {
+  hears("PROVIDER-HEARD", "The user applied the change: xAI address");
   await start("PROVIDER", [step({ action: "set", id: "providers.xai.url", value: XAI_URL })]);
-  expect(results(await finished("PROVIDER"))).toEqual([expect.objectContaining({ isError: false, text: `Changed xAI address from not set to ${XAI_URL}. The user can undo it from the card in the conversation.` })]);
-  expect(config().xai.url).toBe(XAI_URL);
-  const card = (await settingCards(bot.threadId)).find((one) => one.card.appSettingRequest.settingId === "providers.xai.url");
-  expect(card.card).toMatchObject({ title: "Changed xAI address", options: [], answered: "allow", autoApplied: true, appSettingRequest: { tier: "safe", after: XAI_URL } });
-  const decisions = (await api("GET", "/api/decisions")).decisions.filter((row: any) => row.tool === "app_settings" && row.summary.startsWith("providers.xai.url"));
-  expect(decisions.map((row: any) => [row.decision, row.source])).toEqual([["auto-approved", "app-settings"]]);
-  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.card.requestId })).toMatchObject({ ok: true, undone: true });
-  expect(config().xai?.url ?? "").toBe("");
-}, 60_000);
+  expect(results(await finished("PROVIDER"))).toEqual([expect.objectContaining({ isError: false,
+    text: expect.stringMatching(/^A card asking the user to apply this is in the conversation: .*Nothing has changed yet\./) })]);
+  expect(config().xai?.url ?? "", "nothing changed before the answer").toBe("");
+  const waiting = await newest("providers.xai.url");
+  expect(waiting).toMatchObject({ title: "Change xAI address?", options: ["Apply", "Not now"], appSettingRequest: { tier: "safe", after: XAI_URL, consequence: "Your saved key for xAI will be sent to example.test." } });
+  expect(waiting.autoApplied).toBeUndefined();
+  expect(waiting.appSettingRequest.expiresAt).toBeGreaterThan(Date.now());
+  expect(await decisionsFor("providers.xai.url")).toEqual([["card-shown", "app-settings", "settings:keyTo"]]);
 
-it("a Full-access bot adds an AI engine at once with a saved key it never sees, Undo removes it, and removing one is left to the person", async () => {
+  expect(await respond(waiting.requestId, "allow")).toMatchObject({ ok: true, outcome: "allowed-once" });
+  expect(config().xai.url).toBe(XAI_URL);
+  await finished("PROVIDER-HEARD");
+  const applied = await newest("providers.xai.url");
+  expect(applied).toMatchObject({ title: "Changed xAI address", options: [], answered: "allow", dismissed: true, autoApplied: true, appSettingRequest: { result: "applied", after: XAI_URL } });
+  expect((await decisionsFor("providers.xai.url")).map((row: any) => row[0]).sort()).toEqual(["card-shown", "user-approved"]);
+  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: waiting.requestId })).toMatchObject({ ok: true, undone: true });
+  expect(config().xai?.url ?? "").toBe("");
+}, 90_000);
+
+it("a Full-access bot adds an AI engine after the person applies its card, with a saved key it never sees, Undo removes it, and removing one is left to the person", async () => {
   const routerKey = "sk-or-v1-e2e-0123456789";
   await api("PUT", "/api/config", { openrouter: { key: routerKey } }, 200, ownerDevice);
   const engines = () => Object.entries(config().instances ?? {}).filter(([id]) => id.startsWith("openai-compat-")) as Array<[string, any]>;
@@ -140,7 +163,13 @@ it("a Full-access bot adds an AI engine at once with a saved key it never sees, 
   const added = await finished("ENGINE-ADD");
   const [inline, applied] = results(added);
   expect(inline).toMatchObject({ isError: true, text: expect.stringContaining("Never put a key or token in the value") });
-  expect(applied).toMatchObject({ isError: false, text: expect.stringMatching(/^Done: Add the engine "Gateway" \(OpenAI-compatible\) at https:\/\/gw\.example\.test\/v1, sending it your saved OpenRouter API key\./) });
+  expect(applied).toMatchObject({ isError: false, text: expect.stringMatching(/^A card asking the user to apply this is in the conversation: Add the engine "Gateway" \(OpenAI-compatible\) at https:\/\/gw\.example\.test\/v1, sending it your saved OpenRouter API key\. Nothing has changed yet/) });
+  expect(engines(), "no engine before the answer").toEqual([]);
+  const waiting = await newest("engines");
+  expect(waiting.appSettingRequest.consequence).toBe("Your saved key for OpenRouter API key will be sent to gw.example.test.");
+  hears("ENGINE-HEARD", "The user applied the change");
+  await respond(waiting.requestId, "allow");
+  await finished("ENGINE-HEARD");
   const [[engineId, engine]] = engines();
   expect(engine).toMatchObject({ driver: "openai-compat", displayName: "Gateway", config: { url: "https://gw.example.test/v1", key: routerKey } });
   expect((await api("GET", "/api/instances")).instances.map((instance: any) => instance.instanceId)).toContain(engineId);
@@ -213,6 +242,82 @@ it("a Full-access bot's own approval mode changes at once on every thread, and U
   expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: (await newest("bots.approvalModes")).requestId })).toMatchObject({ ok: true, undone: true });
   expect((await botNow()).approvalMode).toBe("full");
 }, 90_000);
+
+it("raising a bot's approval mode waits on a card that says it will do more without asking, and Apply puts the bot on Full access", async () => {
+  hears("RAISE-HEARD", "The user applied the change");
+  await start("RAISE", [
+    step({ action: "set", id: "bots.approvalModes", value: JSON.stringify({ botId: bot.id, mode: "ask" }) }),
+    step({ action: "set", id: "bots.approvalModes", value: JSON.stringify({ botId: bot.id, mode: "full" }) }),
+  ], 60_000);
+  const [lowered, raised] = results(await finished("RAISE"));
+  expect(lowered).toMatchObject({ isError: false, text: expect.stringMatching(/^Done: Make Setter ask you before each command/) });
+  expect(raised).toMatchObject({ isError: false, text: expect.stringMatching(/Nothing has changed yet/) });
+  expect((await botNow()).approvalMode, "lowering applied at once; raising waits").toBe("ask");
+  const [, waiting] = (await settingCards(bot.threadId)).filter((one) => one.card.appSettingRequest.settingId === "bots.approvalModes").slice(-2).map((one) => one.card);
+  expect(waiting).toMatchObject({ options: ["Apply", "Not now"], appSettingRequest: { consequence: "Setter will do more without asking you first." } });
+  expect(await decisionsFor("bots.approvalModes")).toContainEqual(["card-shown", "app-settings", "settings:autonomyUp"]);
+  await respond(waiting.requestId, "allow");
+  await finished("RAISE-HEARD");
+  expect((await botNow()).approvalMode).toBe("full");
+}, 90_000);
+
+it("Not now leaves the value as it was, ends the card as declined, logs the answer, and the bot hears it", async () => {
+  const address = "https://anthropic-proxy.example.test";
+  hears("DECLINE-HEARD", "The user declined the change to Anthropic address");
+  await start("DECLINE", [step({ action: "set", id: "providers.anthropic.url", value: address })]);
+  await finished("DECLINE");
+  const waiting = await newest("providers.anthropic.url");
+  expect(await respond(waiting.requestId, "deny")).toMatchObject({ ok: true, outcome: "rejected" });
+  await finished("DECLINE-HEARD");
+  expect(config().anthropic?.url ?? "").toBe("");
+  expect(await newest("providers.anthropic.url")).toMatchObject({ options: [], answered: "deny", appSettingRequest: { result: "declined" } });
+  expect((await decisionsFor("providers.anthropic.url")).map((row: any) => row[0]).sort()).toEqual(["card-shown", "user-denied"]);
+  expect(await respond(waiting.requestId, "allow"), "a settled card takes no second answer").toMatchObject({ alreadySettled: true });
+  expect(config().anthropic?.url ?? "").toBe("");
+}, 90_000);
+
+it("a session without admin rights cannot apply a waiting card: Apply is refused with 403 and the card stays open", async () => {
+  const address = "https://anthropic-proxy.example.test";
+  await start("NOT-ADMIN", [step({ action: "set", id: "providers.anthropic.url", value: address })]);
+  await finished("NOT-ADMIN");
+  const waiting = await newest("providers.anthropic.url");
+  const refused = await respond(waiting.requestId, "allow", clientDevice, 403);
+  expect(refused.error).toMatch(/^Only the owner applies this change/);
+  expect(config().anthropic?.url ?? "").toBe("");
+  const still = await newest("providers.anthropic.url");
+  expect(still).toMatchObject({ options: ["Apply", "Not now"] });
+  expect(still.answered).toBeUndefined();
+  hears("NOT-ADMIN-HEARD", "The user declined the change to Anthropic address");
+  await respond(waiting.requestId, "deny");
+  await finished("NOT-ADMIN-HEARD");
+}, 90_000);
+
+it("a session without admin rights cannot undo an applied settings card: Undo is refused with 403 and the value stays", async () => {
+  await start("CLIENT-UNDO", [step({ action: "set", id: "mcp.callTimeoutMinutes", value: "33" })]);
+  await finished("CLIENT-UNDO");
+  const card = await newest("mcp.callTimeoutMinutes");
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  const refused = await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 403, clientDevice);
+  expect(refused.error).toMatch(/^Undo this change from the desktop app/);
+  expect(config().mcp.callTimeoutMinutes).toBe(33);
+  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: card.requestId }, 200, ownerDevice)).toMatchObject({ ok: true, undone: true });
+}, 90_000);
+
+it("get ai.images lists the models and each provider's readiness with no key, and set refuses a model its provider does not have", async () => {
+  await start("IMAGES", [
+    step({ action: "get", id: "ai.images" }),
+    step({ action: "set", id: "ai.images", value: JSON.stringify({ primary: { provider: "openai", model: "no-such-image-model" } }) }, true),
+  ]);
+  const [read, refused] = results(await finished("IMAGES"));
+  const shown = JSON.parse(read.text);
+  expect(Object.keys(shown.models)).toEqual(expect.arrayContaining(["openai", "gemini", "xai"]));
+  expect(shown.models.openai.length).toBeGreaterThan(0);
+  expect(Object.keys(shown.ready)).toEqual(expect.arrayContaining(["openai", "codex", "custom"]));
+  expect(Object.values(shown.ready).every((ready) => typeof ready === "boolean")).toBe(true);
+  expect(read.text).not.toMatch(/sk-[\w-]{8,}/);
+  expect(refused).toMatchObject({ isError: true, text: expect.stringContaining(`no-such-image-model is not a openai image model. Use one of: ${shown.models.openai[0]}`) });
+  expect(config().imageGen?.primary?.model).not.toBe("no-such-image-model");
+}, 60_000);
 
 it("a bot gives itself and the person a picture from a file in its workspace, refuses a fake picture and a file outside, and Undo takes each back", async () => {
   const PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from("a picture")]);
@@ -366,6 +471,35 @@ it("a webhook's run may read a setting but not change it", async () => {
   const [read, refused] = results(await finished("WEBHOOK-RUN"));
   expect(read.isError).toBe(false);
   expect(JSON.parse(read.text)).toMatchObject({ id: "rooms.turnTimeoutMinutes", tier: "safe" });
-  expect(refused).toMatchObject({ isError: true, text: expect.stringMatching(/^Settings change only in the owner's own conversation\./) });
+  expect(refused).toMatchObject({ isError: true, text: expect.stringMatching(/^A routine, webhook or other automation can't change settings\. Nothing changed: /) });
   expect(config().rooms?.turnTimeoutMinutes).toBe(value);
 }, 60_000);
+
+it("a conversation another person wrote into waits on a card even for a safe setting, and Apply applies it", async () => {
+  plans[bot.id]!.script.push({ key: "OTHER-VOICE", match: ["OTHER-VOICE"], steps: [], reply: "Done: OTHER-VOICE", timeoutMs: 20_000 });
+  writeFileSync(planPath, JSON.stringify(plans));
+  await api("POST", `/api/bots/${bot.id}/messages`, { threadId: bot.threadId, text: "OTHER-VOICE: a line from a second device." }, 202, clientDevice);
+  await finished("OTHER-VOICE");
+  const earlier = config().rooms?.turnTimeoutMinutes;
+  hears("HISTORY-HEARD", "The user applied the change: Room turn timeout");
+  await start("HISTORY", [step({ action: "set", id: "rooms.turnTimeoutMinutes", value: "33" })]);
+  expect(results(await finished("HISTORY"))).toEqual([expect.objectContaining({ isError: false, text: expect.stringMatching(/Nothing has changed yet/) })]);
+  expect(config().rooms?.turnTimeoutMinutes).toBe(earlier);
+  const waiting = await newest("rooms.turnTimeoutMinutes");
+  expect(waiting).toMatchObject({ options: ["Apply", "Not now"], appSettingRequest: { tier: "safe", after: "33" } });
+  expect(waiting.autoApplied).toBeUndefined();
+  expect(waiting.appSettingRequest.consequence).toBeUndefined();
+  expect(waiting.appSettingRequest.privateReview).toBe(true);
+  expect(waiting.appSettingRequest).not.toHaveProperty("before");
+  const reviewPath = `/api/threads/${bot.threadId}/app-settings/${waiting.requestId}/review`;
+  const review = await api("POST", reviewPath, undefined, 200, ownerDevice);
+  expect(review.after).toBe("33");
+  if (earlier === undefined) expect(review.before).toMatch(/^\d+$/);
+  else expect(review.before).toBe(String(earlier));
+  expect((await api("POST", reviewPath, undefined, 403, clientDevice)).error).toBeTruthy();
+  await respond(waiting.requestId, "allow");
+  await finished("HISTORY-HEARD");
+  expect(config().rooms.turnTimeoutMinutes).toBe(33);
+  expect(await newest("rooms.turnTimeoutMinutes")).toMatchObject({ autoApplied: true, answered: "allow", appSettingRequest: { result: "applied" } });
+  expect(await api("POST", `/api/threads/${bot.threadId}/undo`, { requestId: waiting.requestId })).toMatchObject({ ok: true, undone: true });
+}, 90_000);

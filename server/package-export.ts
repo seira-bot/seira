@@ -32,6 +32,7 @@ import {
 } from "../shared/package-format.ts";
 import type { ServerTextParams } from "../shared/server-text.ts";
 import { USER_ERROR, userError, type UserErrorKey } from "./user-errors.ts";
+import { PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
 
 function portableKey(value: string, fallback: string, used: Set<string>): string {
   const stem = value
@@ -281,6 +282,7 @@ export type TeamExportSkipReason =
 export interface TeamExportSkip { part: string; reason: TeamExportSkipReason }
 
 export class TeamExportError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status = 400;
 }
 
@@ -699,7 +701,7 @@ export function createTeamPackageExport(input: TeamExportInput): TeamExportResul
     document = parsePackageDocument(redactedDocument, { trust: "file" });
   } catch (error) {
     if (error instanceof PackageFormatError && error.code === "too_large") throw teamExportRefusal("serverError.department.shareTooLarge");
-    throw new TeamExportError(error instanceof Error ? error.message : "This department could not be shared.");
+    throw withheld(new TeamExportError(error instanceof Error ? error.message : "This department could not be shared."));
   }
   const toRecord = (keys: ReadonlyMap<string, string>, include: (id: string) => boolean) =>
     Object.fromEntries([...keys].filter(([id]) => include(id)));
@@ -808,7 +810,7 @@ export function createLibraryPackageExport(input: LibraryExportInput): LibraryEx
     document = parsePackageDocument(redactedDocument, { trust: "file" });
   } catch (error) {
     if (error instanceof PackageFormatError && error.code === "too_large") throw teamExportRefusal("serverError.preset.tooLarge");
-    throw new TeamExportError(error instanceof Error ? error.message : "This preset could not be shared.");
+    throw withheld(new TeamExportError(error instanceof Error ? error.message : "This preset could not be shared."));
   }
   return {
     document,

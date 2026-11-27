@@ -8,6 +8,7 @@ import { AGENTS_ENV_HEADER, OWN_MCP_HTTP_PATH } from "../routes/own-mcp-http-pat
 import { TOOL_SCHEMA_PROFILE_ENV, toolSchemaProfileFor, type ToolSchemaProfileId } from "../tool-schema-profile.ts";
 import { AGENTS_MCP_ENV } from "./agents-mcp-env.ts";
 import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
+import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import { shareToolBudget, TOOL_LIMIT_ENV, TOOL_LIMIT_HEADER } from "../tool-count-limit.ts";
 import { agentsToolList } from "./agents-mcp.ts";
 
@@ -34,6 +35,7 @@ export function turnStdioMcpServers(turn: SendTurnInput, options: { schemaProfil
   add("browser", turn.integrations?.browser);
   add("data", turn.integrations?.data);
   add("email", turn.integrations?.email);
+  add(GITHUB_APP_MCP_SERVER, turn.integrations?.github);
   add("device", turn.integrations?.device);
   // Cua connections expose Cua Driver's own MCP server.
   add("computer", turn.integrations?.localComputer);
@@ -84,7 +86,7 @@ type NameValue = Array<{ name: string; value: string }>;
 export type AcpMcpServer = { name: string; command: string; args: string[]; env: NameValue }
   | { type: "http"; name: string; url: string; headers: NameValue };
 
-const HARNESS_KINDS = ["browser", "computer", "data", "email", "device"] as const;
+const HARNESS_KINDS = ["browser", "computer", "data", "email", "device", "github"] as const;
 
 /** Seira's own server behind a stdio proxy, as its HTTP endpoint on this server; null for any other server (the
  * person's, or one wrapped in a tool-selection gate). */

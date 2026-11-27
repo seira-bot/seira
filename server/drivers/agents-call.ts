@@ -20,9 +20,9 @@ import { dropBlankArguments } from "./agents-blank-arguments.ts";
 import { callResearchTool, RESEARCH_TOOL_NAMES } from "./agents-research-tools.ts";
 import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
 import { callMachineBudgetTool, callUsageLimitsTool, MACHINE_BUDGET_TOOL, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
-import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts"; import { callSuggestRepliesTool, SUGGEST_REPLIES_TOOL } from "./agents-suggest-replies-tool.ts";
+import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts"; import { callSuggestRepliesTool, SUGGEST_REPLIES_TOOL } from "./agents-suggest-replies-tool.ts"; import { callSuggestTasksTool, SUGGEST_TASKS_TOOL } from "./agents-suggest-tasks-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts"; import { callTodoTool } from "./agents-todo-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
@@ -49,14 +49,14 @@ export interface ToolCallResult {
   passthrough?: Json;
 }
 
-export function toolCallContextFromEnv(env: NodeJS.ProcessEnv): ToolCallContext {
+export function toolCallContextFromEnv(env: NodeJS.ProcessEnv, stop?: AbortSignal): ToolCallContext {
   const profile = catalogProfileFromEnv(env);
   return {
     botId: profile.botId,
     threadId: env.SEIRA_THREAD_ID ?? "",
     externalRuntime: env.SEIRA_EXTERNAL_RUNTIME === "1",
     sharedComputers: profile.sharedComputers,
-    client: harnessClientFromEnv(env),
+    client: harnessClientFromEnv(env, stop),
   };
 }
 
@@ -408,6 +408,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (name === THREAD_POST_TOOL) return callThreadPostTool(args, context);
   if (name === RENAME_THREAD_TOOL) return callRenameThreadTool(args, context);
   if (name === SUGGEST_REPLIES_TOOL) return callSuggestRepliesTool(args, context);
+  if (name === SUGGEST_TASKS_TOOL) return callSuggestTasksTool(args, context);
   if (name === "select_computer") {
     if (args.surface !== undefined && (typeof args.surface !== "string" || !["auto", "cloud", "vm", "local", "browser"].includes(args.surface))) {
       return { text: "Choose auto, cloud, vm, local or browser; omit surface to inspect connected choices.", isError: true };
@@ -492,6 +493,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     };
   }
   if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
+  if (name === "todo_add" || name === "todo_list" || name === "todo_assign" || name === "todo_update") return callTodoTool(name, args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);

@@ -5,6 +5,7 @@ import { IMAGE_DEFAULT_MODELS, IMAGE_PROVIDERS, looksLikeApiKey, supportsImageCo
 import { codexImageLogin, codexPlanMakesImages, renewCodexImageLogin, type CodexImageSource } from "./codex-image-login.ts";
 import type { InstanceConfigMap } from "./contracts.ts";
 import { decodeGeneratedImage } from "./generated-image.ts";
+import { PublicError } from "./public-error.ts";
 
 export const IMAGE_GENERATION_TIMEOUT_MS = 120_000;
 const MAX_UPSTREAM_RESPONSE_BYTES = 15 * 1024 * 1024;
@@ -167,7 +168,7 @@ const UNREACHED_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOS
 const NOT_STARTED_STATUSES = new Set([401, 402, 403, 429]);
 
 function fail(message: string, status: number, neverStarted = false): never {
-  throw Object.assign(new Error(message), { status, neverStarted });
+  throw Object.assign(new PublicError(message, status), { neverStarted });
 }
 
 export function shouldUseFallback(error: unknown): boolean {

@@ -1,7 +1,8 @@
 import { botAvatarUrlSchema } from "../shared/bot-avatar.ts";
+import { PublicError } from "./public-error.ts";
 
 function refuse(message: string): never {
-  throw Object.assign(new Error(message), { status: 400 });
+  throw new PublicError(message, 400);
 }
 
 /** The room PATCH's `avatarUrl` field, checked. An empty string or null clears the picture (key present, value undefined). */

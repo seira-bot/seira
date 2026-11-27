@@ -19,7 +19,7 @@ const deps = (overrides: { originIsUser?: boolean; written?: string[] } = {}) =>
   adminPersons: () => new Set([ADMIN]), originIsUser: () => overrides.originIsUser ?? true,
   ownerWrote: (id: string) => (overrides.written ?? [ROUTINE]).includes(id),
 });
-const owners = (turn: DesktopTurn, d = deps()) => cloudHomeLendingRefusal(desktopLendingTurn(turn, d)) === null;
+const owners = (turn: DesktopTurn, d: Parameters<typeof desktopLendingTurn>[1] = deps()) => cloudHomeLendingRefusal(desktopLendingTurn(turn, d)) === null;
 
 describe("whose turn may use the desktop owner's phones", () => {
   it("a line typed at this machine, with no person on it, is the owner's", () => {
@@ -102,6 +102,27 @@ describe("whose turn may use the desktop owner's phones", () => {
     expect(cloudHomeLendingRefusal(runTurn("webhook", { ownerStarted: true, ownerAuthored: true }))).toBe("not-owner");
     const none: CloudLendingTurn = desktopLendingTurn(base(), deps());
     expect(none.routineRun()).toBeNull();
+  });
+});
+
+describe("a request from this machine that is a service's", () => {
+  const service = { ...deps(), loopbackIsOwner: false };
+
+  it("AC-17 is not the owner's when the line has no person, though an admin session's line is", () => {
+    expect(owners(base(), service)).toBe(false);
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } })] }), service)).toBe(true);
+    expect(owners(base({ thread: [said("m1", { sender: { id: MEMBER } })] }), service)).toBe(false);
+  });
+
+  it("AC-17 does not take a loopback card answer as the owner's, but takes an admin session's", () => {
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } }), card({ kind: "loopback" })] }), service)).toBe(false);
+    expect(owners(base({ thread: [said("m1", { sender: { id: ADMIN } }), card({ kind: "session", name: "Me", person: ADMIN })] }), service)).toBe(true);
+  });
+
+  it("AC-17 keeps the loopback line as the owner's when the flag is true or absent", () => {
+    expect(owners(base(), { ...deps(), loopbackIsOwner: true })).toBe(true);
+    expect(owners(base(), deps())).toBe(true);
+    expect(owners(base({ thread: [said("m1"), card({ kind: "loopback" })] }), { ...deps(), loopbackIsOwner: true })).toBe(true);
   });
 });
 

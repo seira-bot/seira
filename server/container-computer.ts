@@ -68,6 +68,7 @@ export {
   CUA_EXECUTABLE,
   managedImageDockerfile,
 } from "./local-vm-image.ts";
+import { PublicError } from "./public-error.ts";
 
 // Its own group: a timeout also ends the docker CLI plugins and credential helpers it started.
 const run = execFileInGroupAsync;
@@ -881,31 +882,29 @@ export async function containerComputerAction(
   if (runner === sh && platform === process.platform) screenshotStatusCache.delete(target.key);
   const before = await containerComputerStatus(runner, platform, target);
   const runtime = before.runtime;
-  if (!runtime) throw Object.assign(new Error(before.problem ?? "No container runtime is installed"), { status: 409 });
-  if (!before.daemonUp) throw Object.assign(new Error(before.problem ?? `${runtime} is not running`), { status: 409 });
+  if (!runtime) throw new PublicError(before.problem ?? "No container runtime is installed", 409);
+  if (!before.daemonUp) throw new PublicError(before.problem ?? `${runtime} is not running`, 409);
 
   if (action === "run" && before.container !== "missing") {
-    throw Object.assign(new Error("A Local VM already exists; remove it before creating a replacement"), { status: 409 });
+    throw new PublicError("A Local VM already exists; remove it before creating a replacement", 409);
   }
   if (action === "run" && !before.image) {
-    throw Object.assign(new Error("Prepare the Cua desktop image before creating the Local VM"), { status: 409 });
+    throw new PublicError("Prepare the Cua desktop image before creating the Local VM", 409);
   }
   if (action === "run" && !before.create_supported) {
-    throw Object.assign(new Error(before.problem ?? "This runtime cannot create a per-bot Local VM"), { status: 409 });
+    throw new PublicError(before.problem ?? "This runtime cannot create a per-bot Local VM", 409);
   }
   if (action === "start" && !localVmResumable(before)) {
-    throw Object.assign(new Error(before.problem ?? "The Local VM is not stopped"), { status: 409 });
+    throw new PublicError(before.problem ?? "The Local VM is not stopped", 409);
   }
   if (action === "stop" && before.container !== "running") {
-    throw Object.assign(new Error("The Local VM is not running"), { status: 409 });
+    throw new PublicError("The Local VM is not running", 409);
   }
   if (action === "remove" && before.container === "missing") return before;
   if (action === "remove" && !before.managed) {
-    throw Object.assign(
-      new Error(
-        `The existing container named ${localVmContainerName(target)} was not created by Seira; remove it manually in ${runtime}`,
-      ),
-      { status: 409 },
+    throw new PublicError(
+      `The existing container named ${localVmContainerName(target)} was not created by Seira; remove it manually in ${runtime}`,
+      409,
     );
   }
 
@@ -972,7 +971,7 @@ export async function containerComputerFrame(
       : await containerComputerStatus(runner, platform, target);
   if (!status.ready || !status.runtime) {
     if (cacheable) screenshotStatusCache.delete(target.key);
-    throw Object.assign(new Error(status.problem ?? "The Local VM is not ready"), { status: 409 });
+    throw new PublicError(status.problem ?? "The Local VM is not ready", 409);
   }
   if (cacheable) screenshotStatusCache.set(target.key, { status, expiresAt: now + SCREENSHOT_STATUS_TTL_MS });
   try {
@@ -998,7 +997,7 @@ export async function containerComputerFrame(
     const data = stdout.trim();
     const checked = wholeScreenshot(Buffer.from(data, "base64"));
     if (!checked.ok) {
-      throw Object.assign(new Error("Cua Driver returned an incomplete screenshot"), { status: 502 });
+      throw new PublicError("Cua Driver returned an incomplete screenshot", 502);
     }
     return { png: data, format: checked.mime === "image/jpeg" ? "jpeg" : "png" };
   } catch (error) {
@@ -1071,13 +1070,13 @@ export async function containerExec(
   command: string,
   options: { timeoutSeconds?: number; runtime?: Runtime; exec?: ContainerExecRunner } = {},
 ): Promise<ContainerExecResult> {
-  if (!command.trim()) throw Object.assign(new Error("command is required"), { status: 400 });
-  if (command.length > 20_000) throw Object.assign(new Error("command is too long"), { status: 400 });
+  if (!command.trim()) throw new PublicError("command is required", 400);
+  if (command.length > 20_000) throw new PublicError("command is too long", 400);
   if (options.timeoutSeconds !== undefined && !Number.isFinite(options.timeoutSeconds)) {
-    throw Object.assign(new Error("timeout_seconds must be finite"), { status: 400 });
+    throw new PublicError("timeout_seconds must be finite", 400);
   }
   const runtime = options.runtime ?? (await containerRuntimeStatus()).runtime;
-  if (!runtime) throw Object.assign(new Error("No container runtime is available for the Local VM"), { status: 409 });
+  if (!runtime) throw new PublicError("No container runtime is available for the Local VM", 409);
   const seconds = Math.min(Math.max(Math.floor(options.timeoutSeconds ?? EXEC_DEFAULT_SECONDS), 1), EXEC_MAX_SECONDS);
   const result = await (options.exec ?? defaultExecRunner)(
     runtime,

@@ -1,3 +1,5 @@
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
+
 /** One thing the app offers, in the words the person sees. A bot reads this catalog (app_settings action=features)
  * to answer where something is and what it does, so a page, tab, agent tool, slash command or release note with
  * no entry is a gap the drift test reports. */
@@ -24,7 +26,7 @@ export interface AppFeature {
 export const APP_FEATURE_DOES_MAX = 240;
 
 /** Agent tools that no person sees or asks about by name. */
-export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies"]);
+export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies", "suggest_tasks"]);
 
 export const APP_FEATURES: readonly AppFeature[] = [
   {
@@ -77,9 +79,15 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "slash-menu",
     name: "The / list",
     place: "the chat box: type /",
-    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup and /burst. A skill runs for one message when its name follows the slash.",
-    slashCommands: ["goal", "learn", "setup", "burst"],
+    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup, /burst and /todo. A skill runs for one message when its name follows the slash. /todo adds a todo to the Board.",
+    slashCommands: ["goal", "learn", "setup", "burst", "todo"],
     tools: ["burst"],
+  },
+  {
+    id: "todo-from-message",
+    name: "Todo from a message",
+    place: "the Message actions menu of a message, or /todo in the chat box",
+    does: "Make a todo from selection and Make a todo from message put a todo on the Board, with the message as its source. A chip under the message shows its place. /todo adds one without a message.",
   },
   {
     id: "mention-menu",
@@ -138,7 +146,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Chats",
     place: "a conversation with a bot",
     does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat"],
+    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat", "taskSuggestions"],
   },
   {
     id: "skills",
@@ -172,7 +180,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "settings",
     name: "Settings",
     place: "the menu under the person's name at the bottom of the sidebar",
-    does: "Appearance, language, defaults for new bots, AI engines and keys. A bot reads and changes safe settings itself; the person changes the rest.",
+    does: "Appearance, language, defaults for new bots, AI engines and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
     tools: ["app_settings"],
     releaseNotes: ["updateCheckHonest", "uiMap", "placeCard"],
   },
@@ -187,8 +195,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The AI pool spreads work across several AIs: balance usage, take turns, or go in order. The AI menu has an AI pool choice. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
   },
   {
     id: "models",
@@ -224,6 +232,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Settings → Phone & devices → Alerts when the phone app is closed",
     does: "Wakes the closed phone app for approvals, questions, sign-ins and finished replies. Off until the person turns it on. The alert holds names and the kind of alert, never the message.",
     releaseNotes: ["phonePush"],
+  },
+  {
+    id: "paired-devices",
+    name: "Paired devices",
+    place: "Settings → Phone & devices → Paired",
+    does: "The phones and computers paired with this server. Rename gives a device its own name, so two of the same model are easy to tell apart. Revoke ends its access.",
+    releaseNotes: ["renameDevices"],
   },
   {
     id: "computers",
@@ -320,8 +335,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",
-    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
-    tools: ["board_close"],
+    does: "Shows all bot work in To do, Working, Needs you and Done, by column or by bot. New todo adds work for a bot, now, later or on chosen days. Open a card to answer, start, stop, finish or follow up.",
+    tools: ["board_close", "todo_add", "todo_list", "todo_assign", "todo_update"],
     releaseNotes: ["board", "boardDone"],
   },
   {
@@ -380,6 +395,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "The top centre of the screen while a bot works (a tray icon only when Linux has no X11 support); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
     releaseNotes: ["glance", "glanceWayland"],
+  },
+  {
+    id: "github-app",
+    name: "GitHub",
+    place: "Apps → GitHub, then Connect; each bot's repositories are under its Apps page",
+    does: "Sign in with GitHub and choose repositories, with no key to paste. Each bot gets its own repositories and a level in each: Read, Pull requests or Write. Merging and deleting branches can wait for your answer.",
+    tools: GITHUB_APP_TOOL_NAMES,
+    releaseNotes: ["githubNative"],
   },
 ];
 

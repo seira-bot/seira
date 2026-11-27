@@ -11,9 +11,16 @@ const VERB_WORDS: ReadonlyArray<readonly [ConnectorVerb, readonly string[]]> = [
   ["read", ["READ", "LIST", "GET", "SEARCH", "FIND", "FETCH", "QUERY", "SHOW", "VIEW", "RETRIEVE", "LOOKUP", "CHECK", "DESCRIBE", "BROWSE", "DOWNLOAD", "STATS"]],
 ];
 
+const NATIVE_TOOL_VERBS: Readonly<Record<string, ConnectorVerb>> = {
+  GITHUB_APP_COMMIT_FILES: "draft",
+  GITHUB_APP_MERGE_PULL: "modify",
+};
+
 /** The more-privileged class wins regardless of word order (GMAIL_CREATE_AND_SEND sends). */
 export function classifyConnectorTool(name: string): ConnectorVerb | null {
   if (!CONNECTOR_TOOL_NAME_PATTERN.test(name)) return null;
+  const native = NATIVE_TOOL_VERBS[name];
+  if (native) return native;
   const words = name.split("_");
   for (const [verb, markers] of VERB_WORDS) {
     if (words.some((word) => markers.includes(word))) return verb;

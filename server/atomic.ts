@@ -3,18 +3,25 @@
 // loss can leave it empty.
 import { randomUUID } from "node:crypto";
 import {
+  close,
   closeSync,
   constants,
+  fchmodSync,
   fstatSync,
+  fsync,
   fsyncSync,
+  ftruncateSync,
   lstatSync,
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   renameSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
+import { open, unlink } from "node:fs/promises";
 
 import { join } from "node:path";
 
@@ -57,8 +64,10 @@ export function writeFileAtomic(path: string, data: string | Uint8Array, options
   timeBlocking("saves", () => writeWhole(path, data, options));
 }
 
+const tempPathFor = (path: string): string => `${path}.${process.pid}.${randomUUID()}.tmp`;
+
 function writeWhole(path: string, data: string | Uint8Array, options: AtomicWriteOptions): void {
-  const tmp = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const tmp = tempPathFor(path);
   let fd: number | null = null;
   try {
     // Permissions go on the temp inode itself, so a broader-permission file is never visible before a chmod.
@@ -95,10 +104,10 @@ function processIsAlive(pid: number): boolean {
 
 /**
  * A crash or a kill between the temp file and the rename leaves `<file>.<pid>.<uuid>.tmp` behind (it holds a whole copy of
- * the file, souls and settings included). This removes those in `dir` for each of `files` when the process in the name is
- * gone. A temp file of a live process, and of this process (a save here is synchronous, so none is under way at the start
- * but a pid can come back in a container), stays; so does anything that is not a regular file. Returns the names removed.
- * One that cannot be removed stays for the next start.
+ * the file, souls and settings included), and so does an exit while a save writes behind. This removes those in `dir` for
+ * each of `files` when the process in the name is gone. A temp file of a live process, and of this process (none of its
+ * saves is under way at the start, but a pid can come back in a container), stays; so does anything that is not a
+ * regular file. Returns the names removed. One that cannot be removed stays for the next start.
  */
 export function removeDeadTempFiles(
   dir: string,
@@ -164,12 +173,79 @@ export function writeFileAtomicIfChanged(path: string, data: string, options: At
   return true;
 }
 
+/** The temp file of a whole-file write, written and synced on libuv's thread pool; the caller renames or discards it. */
+async function writeTemp(path: string, data: string, options: AtomicWriteOptions): Promise<string> {
+  const tmp = tempPathFor(path);
+  const handle = await open(tmp, "w", options.mode);
+  try {
+    await handle.writeFile(data);
+    if (options.durable !== false) await handle.sync();
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlink(tmp).catch(() => {});
+    throw error;
+  }
+  await handle.close();
+  return tmp;
+}
+
+/** Promises still on their way to the disk that no file waits on: an appended line's fsync, a dropped temp file's removal. */
+const settling = new Set<Promise<void>>();
+
+function settle(done: Promise<void>): void {
+  settling.add(done);
+  void done.then(() => settling.delete(done));
+}
+
+function discardTemp(tmp: string): void {
+  settle(unlink(tmp).catch(() => {}));
+}
+
+const BEHIND_RETRY_MS = 1_000;
+const BEHIND_RETRIES = 5;
+const behind = new Set<OwnedFile>();
+let flushesBehindAtExit = false;
+
+/**
+ * Finishes every write behind (OwnedFile.deferWrites) now, synchronously: the newest text asked for lands, synced, and
+ * no older one lands after it. `path` limits this to one file. Runs at every exit, a crash's included: each text was
+ * taken whole when it was asked for (at the end of a pass, server/save-batch.ts), so it never holds half a change. Only a
+ * kill or a power loss in the few milliseconds a write behind takes can lose it; the file then holds the state before.
+ */
+export function flushWritesBehind(path?: string): void {
+  for (const file of Array.from(behind)) {
+    if (path !== undefined && file.path !== path) continue;
+    try {
+      file.flush();
+    } catch (error) {
+      console.error("a save could not be finished; the next save of the file writes it", error);
+    }
+  }
+}
+
+/** Resolves once no write behind and no appended line is still on its way to the disk. */
+export async function writesBehindSettled(): Promise<void> {
+  for (;;) {
+    const running = [...Array.from(behind, (file) => file.running), ...settling].filter((done) => done !== undefined);
+    if (!running.length) return;
+    await Promise.allSettled(running);
+  }
+}
+
 /** A file only this process writes while it runs: a save whose text equals the last one written (or read at load) is
  * skipped without reading the disk back. */
 export class OwnedFile {
   private last: string | undefined;
   readonly path: string;
   private readonly options: AtomicWriteOptions;
+  /** The newest text asked for behind that no write has started on yet. */
+  private wanted: string | undefined;
+  private writing: { text: string; generation: number; done: Promise<void> } | undefined;
+  /** Every synchronous write moves this on: a write behind that started before one finds it changed and never lands. */
+  private generation = 0;
+  private deferring = false;
+  private failures = 0;
+  private retry: ReturnType<typeof setTimeout> | undefined;
 
   constructor(path: string, options: AtomicWriteOptions = {}) {
     this.path = path;
@@ -180,10 +256,169 @@ export class OwnedFile {
     this.last = text;
   }
 
+  get running(): Promise<void> | undefined {
+    return this.writing?.done;
+  }
+
   write(text: string): boolean {
+    if (this.deferring) return this.writeBehind(text);
+    this.dropBehind();
     if (text === this.last) return false;
     writeFileAtomic(this.path, text, this.options);
     this.last = text;
     return true;
   }
+
+  /**
+   * Writes of this file made while `run` runs return at once and reach the disk a moment later: the same temp file, fsync
+   * and rename as `write`, with the write and the fsync on libuv's thread pool, so the server goes on meanwhile. One write
+   * at a time, each of the newest text asked for; a synchronous `write` after it always wins. Until it lands the file holds
+   * the text before, whole.
+   */
+  deferWrites(run: () => void): void {
+    const was = this.deferring;
+    this.deferring = true;
+    try {
+      run();
+    } finally {
+      this.deferring = was;
+    }
+  }
+
+  /** Writes the newest text asked for behind now, synchronously; see flushWritesBehind. */
+  flush(): void {
+    const text = this.newest();
+    this.dropBehind();
+    if (text === undefined || text === this.last) return;
+    writeFileAtomic(this.path, text, this.options);
+    this.last = text;
+  }
+
+  /** The newest text asked for behind that a synchronous write has not superseded. */
+  private newest(): string | undefined {
+    return this.wanted ?? (this.writing?.generation === this.generation ? this.writing.text : undefined);
+  }
+
+  private writeBehind(text: string): boolean {
+    if (text === (this.newest() ?? this.last)) return false;
+    this.wanted = text;
+    behind.add(this);
+    if (!flushesBehindAtExit) {
+      flushesBehindAtExit = true;
+      process.on("exit", () => flushWritesBehind());
+    }
+    if (!this.writing && !this.retry) this.next();
+    return true;
+  }
+
+  private dropBehind(): void {
+    this.generation += 1;
+    this.wanted = undefined;
+    this.failures = 0;
+    if (this.retry) clearTimeout(this.retry);
+    this.retry = undefined;
+    if (!this.writing) behind.delete(this);
+  }
+
+  private next(): void {
+    const text = this.wanted;
+    if (text === undefined) {
+      if (!this.retry) behind.delete(this);
+      return;
+    }
+    this.wanted = undefined;
+    const generation = this.generation;
+    const done = writeTemp(this.path, text, this.options).then(
+      (tmp) => this.landed(tmp, text, generation),
+      (error: unknown) => this.failed(error, text, generation),
+    );
+    this.writing = { text, generation, done };
+  }
+
+  private landed(tmp: string, text: string, generation: number): void {
+    this.writing = undefined;
+    if (generation !== this.generation) {
+      discardTemp(tmp);
+    } else {
+      try {
+        timeBlocking("saves", () => renameWithRetry(tmp, this.path));
+      } catch (error) {
+        discardTemp(tmp);
+        this.failed(error, text, generation);
+        return;
+      }
+      this.last = text;
+      this.failures = 0;
+    }
+    this.next();
+  }
+
+  private failed(error: unknown, text: string, generation: number): void {
+    this.writing = undefined;
+    if (generation === this.generation) {
+      this.failures += 1;
+      console.error("a save failed; it is tried again", error);
+      this.wanted ??= text;
+      // After BEHIND_RETRIES failures in a row the text waits for the file's next save or the exit, instead of a timer.
+      if (this.failures <= BEHIND_RETRIES) {
+        this.retry = setTimeout(() => {
+          this.retry = undefined;
+          this.next();
+        }, BEHIND_RETRY_MS);
+        this.retry.unref?.();
+      }
+      return;
+    }
+    this.next();
+  }
+}
+
+/**
+ * Adds `line` and a newline to the end of `path` in one write (and a newline before it when the file does not end in
+ * one), so every reader, in this process or another, sees it at once; the fsync follows on libuv's thread pool. A crash
+ * cannot touch what the file held before, and a power loss before the fsync loses only this line. A write that fails
+ * part way is cut back off. Returns false, having changed nothing, when the name is a link, has more than one link,
+ * belongs to another user or cannot be opened, so the caller replaces the file whole, which writes no further than the
+ * name; and on Windows, which has no O_NOFOLLOW.
+ */
+export function appendLine(path: string, line: string, mode: number): boolean {
+  if (process.platform === "win32") return false;
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDWR | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, mode);
+  } catch {
+    return false; // a link (ELOOP), a folder, a file this process may not open: the whole-file write says what is wrong
+  }
+  let size = 0;
+  try {
+    const stat = fstatSync(fd);
+    const uid = process.getuid?.();
+    if (!stat.isFile() || stat.nlink !== 1 || (uid !== undefined && stat.uid !== uid)) {
+      closeSync(fd);
+      return false;
+    }
+    if ((stat.mode & 0o777 & ~mode) !== 0) fchmodSync(fd, mode);
+    size = stat.size;
+    const last = Buffer.alloc(1);
+    const lead = size > 0 && readSync(fd, last, 0, 1, size - 1) === 1 && last[0] !== 0x0a ? "\n" : "";
+    const bytes = Buffer.from(`${lead}${line}\n`);
+    timeBlocking("saves", () => {
+      for (let at = 0; at < bytes.length; ) at += writeSync(fd, bytes, at);
+    });
+  } catch (error) {
+    try {
+      ftruncateSync(fd, size);
+    } catch {
+    }
+    closeSync(fd);
+    throw error;
+  }
+  const synced = new Promise<void>((resolve) => {
+    fsync(fd, (error) => {
+      if (error) console.error("an appended line could not be synced to the disk", error);
+      close(fd, () => resolve());
+    });
+  });
+  settle(synced);
+  return true;
 }

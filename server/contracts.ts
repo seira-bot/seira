@@ -199,6 +199,8 @@ export interface SendTurnInput {
     data?: { command: string; args: string[]; env: Record<string, string> };
     /** The Email tools' MCP proxy: the harness holds the passwords and the per-bot verdict. */
     email?: { command: string; args: string[]; env: Record<string, string> };
+    /** The native GitHub tools' MCP proxy: the harness mints the repository token and applies the bot's policy. */
+    github?: { command: string; args: string[]; env: Record<string, string> };
     /** The paired phone's app tools' MCP proxy: the harness holds the jobs and the per-bot verdict. */
     device?: { command: string; args: string[]; env: Record<string, string> };
     /** dweb daemon tools; `url` is the dweb HTTP base. */
@@ -272,6 +274,8 @@ export interface ProviderAdapter {
     dataMcp?: boolean;
     /** The driver can mount the Email tools MCP. */
     emailMcp?: boolean;
+    /** The driver can mount the GitHub tools MCP. */
+    githubMcp?: boolean;
     /** The driver can mount the phone apps MCP. */
     deviceMcp?: boolean;
     /** The engine accepts images in the prompt (gates composer paste). */

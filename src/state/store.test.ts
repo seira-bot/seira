@@ -457,6 +457,17 @@ describe("Settings opened on the phone pairing", () => {
   });
 });
 
+describe("Settings opened at a block", () => {
+  it("keeps the block until any other Settings request, and clears it on close", () => {
+    expect(initialState.appSettingsAnchor).toBeNull();
+    const opened = reducer(initialState, { type: "toggleAppSettings", open: true, section: "ai", anchor: "ai-pool" });
+    expect(opened).toMatchObject({ appSettingsSection: "ai", appSettingsAnchor: "ai-pool" });
+    expect(reducer(opened, { type: "toggleAppSettings", open: true, section: "ai" }).appSettingsAnchor).toBeNull();
+    expect(reducer(opened, { type: "toggleAppSettings", open: false }).appSettingsAnchor).toBeNull();
+    expect(reducer(initialState, { type: "toggleAppSettings", open: false, anchor: "ai-pool" }).appSettingsAnchor).toBeNull();
+  });
+});
+
 describe("connector grants persistence", () => {
   const announcement = () => ({
     id: "bot-1",

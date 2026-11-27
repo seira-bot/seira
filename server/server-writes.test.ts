@@ -1,6 +1,8 @@
 // Whole-file saves of bots.json and routines.json: fewer writes, and at every point the server yields to the event loop
 // (where a crash or an exit can land) the files hold what one write per change would have left, except a routine run's
-// progress, which may lag by one window (server/routine-progress-save.ts).
+// progress, which may lag by one window (server/routine-progress-save.ts), and a pass's bots.json bookkeeping, which is
+// taken whole when the pass returns and lands a moment later (server/atomic.ts OwnedFile.deferWrites; any exit with
+// handlers finishes it).
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -11,6 +13,7 @@ vi.mock("node:fs", { spy: true });
 vi.resetModules();
 const fs = await import("node:fs");
 const { DATA_DIR } = await import("./config.ts");
+const { writesBehindSettled } = await import("./atomic.ts");
 const { batchSaves } = await import("./save-batch.ts");
 const { Store } = await import("./store.ts");
 const { RoutineManager } = await import("./routines.ts");
@@ -44,7 +47,7 @@ describe("bots.json saves", () => {
     expect(reads("bots.json")).toBe(before);
   });
 
-  it("land once per batch, and the file holds every change when the batch returns", () => {
+  it("land once per batch, taken whole when the batch returns and written behind", async () => {
     const store = new Store(selection);
     const bot = store.createBot({ name: "Pepper" });
     const writes = writesOf("bots.json");
@@ -58,8 +61,10 @@ describe("bots.json saves", () => {
       store.patchTask(bot.id, bot.threadId, { unread: true });
       expect(writesOf("bots.json")).toBe(writes);
     });
+    expect(writesOf("bots.json"), "the batch returns before the write").toBe(writes);
+    await writesBehindSettled();
     expect(writesOf("bots.json")).toBe(writes + 1);
-    // A crash here, with no exit handler run, starts from exactly this.
+    // A crash from here on, with or without an exit handler, starts from exactly this.
     const task = new Store(selection).taskByThread(bot.id, bot.threadId)!;
     expect(task).toMatchObject({ title: "Plan the offsite", askedAt: 1_000, unread: true, lastInstanceId: "claude", resumeCursors: { claude: "session-1" } });
     expect(task.usage).toMatchObject({ input: 10, output: 5, turns: 1 });
@@ -74,15 +79,19 @@ describe("bots.json saves", () => {
     });
   });
 
-  it("keep a change whose batched save failed, and the next save writes it", () => {
+  it("keep a change whose batched save failed, and write it again", async () => {
     const store = new Store(selection);
     const bot = store.createBot({ name: "Pepper" });
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(fs.renameSync).mockImplementationOnce(() => { throw Object.assign(new Error("disk full"), { code: "ENOSPC" }); });
     batchSaves(() => store.setTaskAskedAt(bot.id, bot.threadId, 2_000));
+    await writesBehindSettled();
     expect(error).toHaveBeenCalled();
     error.mockRestore();
-    expect(new Store(selection).taskByThread(bot.id, bot.threadId)?.askedAt).toBeUndefined();
+    const askedAtOnDisk = () => (JSON.parse(bots()) as Array<{ id: string; tasks?: Array<{ threadId: string; askedAt?: number }> }>)
+      .find((saved) => saved.id === bot.id)?.tasks?.find((task) => task.threadId === bot.threadId)?.askedAt;
+    expect(askedAtOnDisk(), "the file keeps the state before, whole").toBeUndefined();
+    expect(new Store(selection).taskByThread(bot.id, bot.threadId)?.askedAt, "a fresh load writes it first").toBe(2_000);
     store.setTaskAskedAt(bot.id, bot.threadId, 3_000);
     expect(new Store(selection).taskByThread(bot.id, bot.threadId)?.askedAt).toBe(3_000);
   });

@@ -51,7 +51,9 @@ test("NFR-054: the message filter refuses a message that holds a secret-shaped t
 test("NFR-054: the secret prefix list tracks shared/redact.ts", () => {
   const source = readFileSync(new URL("../shared/redact.ts", import.meta.url), "utf8");
   const block = /const KEY_PREFIXES: RegExp\[\] = \[([\s\S]*?)\n\];/.exec(source)[1];
-  assert.equal(block.split("\n").filter((line) => line.trim().startsWith("/")).length, SECRET_SAMPLES.length);
+  // The jwt shape has its own matcher (`JWT_TAIL`), not an entry in the list: it is found from its first dot.
+  const jwt = /^const JWT_TAIL = \//m.test(source) ? 1 : 0;
+  assert.equal(block.split("\n").filter((line) => line.trim().startsWith("/")).length + jwt, SECRET_SAMPLES.length);
 });
 
 test("NFR-054: plain engine messages still pass", () => {

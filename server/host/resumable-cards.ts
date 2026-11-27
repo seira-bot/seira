@@ -4,6 +4,7 @@ import type { Store } from "../store.ts";
 function decision(card: OptionCardData | undefined): { kind: string; request: { result?: unknown; resumed?: boolean } } | null {
   if (card?.teamSetupRequest) return { kind: "team setup decision", request: card.teamSetupRequest };
   if (card?.mcpRequest) return { kind: "MCP server decision", request: card.mcpRequest };
+  if (card?.appSettingRequest && (card.appSettingRequest.result !== undefined || !card.autoApplied)) return { kind: "settings change decision", request: card.appSettingRequest };
   return null;
 }
 

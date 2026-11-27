@@ -1,12 +1,13 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { json, readBody } from "../harness/http.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { Message } from "../store.ts";
 import { createReactionRoutes, type ReactionRouteDeps } from "./reactions.ts";
 import { dispatchRoutes } from "./table.ts";
+import { GENERIC_PUBLIC_ERROR, PublicError } from "../public-error.ts";
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -75,8 +76,24 @@ describe("POST /api/threads/:threadId/messages/:messageId/reactions", () => {
   });
 
   it("answers a refused delivery with its status and code", async () => {
-    const { send } = await fixture({ react: async () => { throw Object.assign(new Error("this workspace has reached its monthly spend limit"), { status: 409, code: "spend_cap" }); } });
+    const { send } = await fixture({ react: async () => { throw Object.assign(new PublicError("this workspace has reached its monthly spend limit", 409), { code: "spend_cap" }); } });
     expect(await send({ emoji: "👍" })).toEqual({ status: 409, body: { error: "this workspace has reached its monthly spend limit", code: "spend_cap" } });
+  });
+
+  it("keeps the status of an error that is not public, and replaces its text with the generic text", async () => {
+    const secret = "ENOENT: no such file or directory, open '/srv/data/private.json'";
+    const { send } = await fixture({ react: async () => { throw Object.assign(new Error(secret), { status: 409, code: "spend_cap", errorKey: "serverError.example" }); } });
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((line: unknown) => { logged.push(String(line)); });
+    try {
+      const reply = await send({ emoji: "👍" });
+      expect(reply.status).toBe(409);
+      expect(reply.body).toEqual({ error: GENERIC_PUBLIC_ERROR, code: "spend_cap" });
+      expect(JSON.stringify(reply.body)).not.toContain("private.json");
+      expect(logged.join("\n")).toContain("private.json");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("leaves every other path and method to the routes after it", async () => {
