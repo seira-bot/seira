@@ -25,6 +25,7 @@ import { placePath } from "./places.ts";
 import { botEntries } from "./registry-bots.ts";
 import { aiPoolEntries } from "./registry-ai-pool.ts";
 import { configEntries } from "./registry-config.ts";
+import { peopleEntries, type PeopleDeps } from "./registry-people.ts";
 import { pictureEntries } from "./registry-pictures.ts";
 import { windowEntries } from "./registry-window.ts";
 
@@ -70,7 +71,7 @@ interface OwnerOnly {
 export type SettingEntry = Base & (Writable | Secret | OwnerOnly);
 export type WritableEntry = Base & Writable;
 
-export type AppRoute = "starterAwake" | "skills";
+export type AppRoute = "starterAwake" | "skills" | "departmentAccess";
 export interface RegistryDeps {
   cfg(): AppConfig;
   /** PUT /api/config as Settings does; a refusal comes back as its text. */
@@ -108,6 +109,8 @@ export interface RegistryDeps {
   removeEngine(instanceId: string): Promise<string | null>;
   /** The signed-in AIs the AI pool can use, with the model each would run; never a key. `billing` is "unknown" when the AI does not say. */
   poolEngines?(): PoolEngine[];
+  /** What the people entry needs to know of this place; absent, it cannot invite. */
+  people?: PeopleDeps;
 }
 export interface PoolEngine {
   instanceId: string;
@@ -370,15 +373,13 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
       ["wallpaper", "background", "banner", "sidebar image", "picture"], () => "managed in Settings"),
     ownerOnly("account.organization", "Organization", "Joining or leaving a company's managed Seira; it signs in through the company's portal.", "organization",
       ["organization", "organisation", "company", "managed"], () => "managed in Settings"),
-    ownerOnly("people.signIn", "Who may sign in", "On a self-hosted server, the emails or @domains that may sign in, as admins or members. A change could lock someone out, or hand every setting to someone new.",
-      "members", ["people", "members", "invite", "roles", "admins", "sign in access"], () => "managed in Settings"),
     ownerOnly("remote.domain", "Custom domain", "The web address this self-hosted server answers on. Changing it can cut off the address the person is using right now.", "domain",
       ["domain", "custom domain", "dns", "public url"], () => cfg().customDomain ?? ""),
     ownerOnly("remote.httpsAddress", "HTTPS address", "This computer's public HTTPS address for paired devices; turning it off can cut off the device the person is using now.", "tailscale",
       ["https", "public address"], () => "managed in Settings"),
   ];
 
-  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...aiPoolEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
+  return [...safe, ...providers, engines, ...botEntries(deps, writable), ...aiPoolEntries(deps, writable), ...pictureEntries(deps, writable), ...configEntries(deps, writable), ...peopleEntries(deps, writable), ...windowEntries(windowPref), ...secret, ...owner];
 }
 
 export function findSettings(entries: readonly SettingEntry[], query: string, limit = 8): SettingEntry[] {
@@ -407,6 +408,7 @@ export function routeBackedRegistry(deps: {
   paused(): string[];
   browserEngine?: RegistryDeps["browserEngine"];
   imageReady?: RegistryDeps["imageReady"];
+  people?: RegistryDeps["people"];
   threadModeRefusal: RegistryDeps["threadModeRefusal"];
 }): SettingEntry[] {
   const auth: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
@@ -419,7 +421,7 @@ export function routeBackedRegistry(deps: {
     }
   };
   return createSettingsRegistry({
-    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady, threadModeRefusal: deps.threadModeRefusal,
+    cfg: deps.cfg, bots: () => deps.store.bots, sections: () => deps.store.sections, credentials: deps.credentials, window: deps.window, paused: deps.paused, browserEngine: deps.browserEngine, imageReady: deps.imageReady, people: deps.people, threadModeRefusal: deps.threadModeRefusal,
     saveConfig: (patch) => refusal(callRoute(deps.routes.config, { method: "PUT", path: "/api/config", body: patch, auth })),
     reorderBots: (botIds) => refusal(callRoute(deps.routes.botOrder, { method: "PUT", path: "/api/bots/order", body: { botIds }, auth })),
     pinBot: (botId, pinned) => refusal(callRoute(deps.routes.botPatch, { method: "PATCH", path: `/api/bots/${encodeURIComponent(botId)}`, body: { pinned }, auth })),

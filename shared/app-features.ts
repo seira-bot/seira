@@ -115,14 +115,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "people-access",
     name: "People and access",
-    place: "Settings → People; a department's menu, Invite to this department; a bot's menu, Invite to this bot",
-    does: "An admin invites a person by email or @domain, as admin or user. Access is the whole team, chosen departments or chosen bots, each Can chat or Can view. A user sees only what was chosen.",
+    place: "On a self-hosted server with email sign-in, in a browser or in the desktop app through Connect to a server: Settings → People, or Invite to this department / Invite to this bot in a department's or bot's menu. On a Team Cloud: People in the sidebar → Invite someone, which opens the team's People page on Seira Cloud. The desktop app's own computer has no invite: start a Team or run your own server",
+    does: "An admin invites a person by email or @domain, as admin or user, to the whole team, chosen departments or chosen bots. A bot can invite, change or remove a person when the admin asks; the admin taps Apply, also from a phone.",
     releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut"],
   },
   {
     id: "premium-key",
     name: "Premium key",
-    place: "Settings → People",
+    place: "Settings → People, on a self-hosted server",
     does: "A self-hosted server lets up to 5 people sign in by email for free. An admin adds a Premium key there for unlimited people. Every feature is the same on every plan.",
     releaseNotes: ["peopleLimit"],
   },
