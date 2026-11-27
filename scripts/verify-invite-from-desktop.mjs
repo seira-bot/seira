@@ -28,7 +28,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
   // The page asks these once at start and waits for the answer, so each one needs an answer.
   for (const channel of ["home:page", "home:updating", "update:offered", "desktop-crash-reports:read"]) ipcMain.on(channel, (event) => { event.returnValue = false; });
   for (const channel of ["desktop-analytics:read", "desktop-language:read"]) ipcMain.on(channel, (event) => { event.returnValue = null; });
-  for (const channel of ["desktop:skin", "workspaces:line", "desktop-notices:state", "workspaces:places", "workspaces:look", "text-size:get", "rail:offer", "window-frame:state", "updates-consent:state"]) ipcMain.handle(channel, () => null);
+  for (const channel of ["desktop:skin", "workspaces:line", "desktop-notices:state", "workspaces:places", "workspaces:look", "text-size:get", "rail:offer", "window-frame:state", "updates-consent:state", "call:active"]) ipcMain.handle(channel, () => null);
   ipcMain.handle("window:state", () => ({ maximized: false, fullScreen: false }));
   ipcMain.handle("sharing:state", () => ({ enabled: false, folders: [], terminal: false, computer: false, connected: false }));
   ipcMain.handle("update:get-state", () => ({ status: "idle" }));
@@ -49,7 +49,6 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     });
     const checks = [];
     const open = async (name, localOrigin) => {
-      console.error(`${name}: opening`);
       const win = new BrowserWindow({
         show: false, width: 1280, height: 860,
         webPreferences: {
@@ -60,9 +59,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       win.webContents.on("console-message", (event) => { if (event.level === "error") { errors.push(`${name}: ${event.message}`); console.error(`${name} console: ${event.message}`); } });
       win.webContents.on("render-process-gone", (_e, details) => console.error(`${name}: renderer gone ${details.reason}`));
       win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
-      for (const event of ["dom-ready", "did-finish-load", "did-stop-loading"]) win.webContents.once(event, () => console.error(`${name}: ${event}`));
       await Promise.race([win.loadURL(url), new Promise((_, reject) => setTimeout(() => reject(new Error(`${name}: the page did not load in 40 s`)), 40_000))]);
-      console.error(`${name}: at ${win.webContents.getURL()}`);
       const evaluate = (code) => win.webContents.executeJavaScript(code);
       const capture = async () => {
         for (let attempt = 0; ; attempt++) {
@@ -72,7 +69,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
           }
         }
       };
-      const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), await capture());
+      const shot = async (file) => { await new Promise((resolve) => setTimeout(resolve, 500)); writeFileSync(join(shots, `${name}-${file}.png`), await capture()); };
       const until = async (check, description) => {
         for (let attempt = 0; attempt < 400; attempt++) {
           if (await check()) return;
@@ -120,6 +117,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       checks.push(`${name}: copy-link control ${copy ? "shows" : "does not show"}`);
       await window.shot("invite-ready");
       await window.clickButton("Done", "document.querySelector('[data-invite-dialog]')");
+      await window.until(async () => !(await window.has("[data-invite-dialog]")), "the dialog closed");
       await window.until(() => window.evaluate(`document.body.innerText.includes(${JSON.stringify(GUEST)})`), "the new person's row");
       checks.push(`${name}: the row for ${GUEST} is in the list`);
       await window.shot("row-added");
@@ -134,7 +132,6 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     checks.push("remote: the department menu has Invite to this department");
     await remote.shot("department-menu");
     remote.win.close();
-    console.error("remote: closed");
 
     // LOCAL: the desktop app's own computer.
     const local = await open("local", serverOrigin);
@@ -144,6 +141,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     checks.push("local: no People in the Settings navigation");
     await local.shot("settings-nav");
     await local.evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await local.until(async () => !(await local.has("[data-settings-page]")), "Settings closed");
     const localMenu = await local.openDepartmentMenu();
     assert.doesNotMatch(localMenu, /Invite to this department/);
     checks.push("local: the department menu has no invite entry");
