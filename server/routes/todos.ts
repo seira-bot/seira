@@ -1,0 +1,103 @@
+import { TODO_DONE_WINDOW_MS, type TodoDraft, type TodoMaker, type TodoPatch } from "../../shared/todo.ts";
+import { atLeast } from "../../shared/bot-access.ts";
+import type { VisibleSet } from "../bot-visibility.ts";
+import { TodoError, type TodosHost } from "../host/todos-host.ts";
+import type { RequestAuth } from "../request-auth.ts";
+import type { TodoRunner } from "../todo-runner.ts";
+import { publicTodo, todoVisible, type TodoRecord, type TodoStore } from "../todos.ts";
+import { PASS, type RouteHandler } from "./table.ts";
+
+export interface TodoRouteDeps {
+  store: TodoStore;
+  host: TodosHost;
+  runner: Pick<TodoRunner, "startNow" | "wake">;
+  visibleFor: (auth: RequestAuth) => VisibleSet;
+  personName: (auth: RequestAuth) => string;
+}
+
+const ITEM = /^\/api\/todos\/([\w-]+)(\/start|\/restore)?$/;
+
+function viewerOf(visible: VisibleSet) {
+  return { bot: (botId: string) => visible.bot(botId), thread: (threadId: string) => visible.thread(threadId) };
+}
+
+/** GET and POST /api/todos, PATCH, DELETE and POST …/start and …/restore on one todo, and PUT /api/todos/picker.
+ * A todo the viewer cannot see looks like a missing one. */
+export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
+  const { store, host } = deps;
+  const mayChat = (visible: VisibleSet, botId: string | undefined) => !botId || atLeast(visible.level(botId), "chat");
+
+  function seen(visible: VisibleSet, todo: TodoRecord | undefined): TodoRecord {
+    if (!todo || !todoVisible(todo, viewerOf(visible))) throw new TodoError(404, "That todo is gone.");
+    return todo;
+  }
+
+  function mayGive(visible: VisibleSet, botId: string): void {
+    if (!visible.bot(botId)) throw new TodoError(400, "That bot is not on your team.");
+    if (!mayChat(visible, botId)) throw new TodoError(403, "You cannot give work to this bot.");
+  }
+
+  return async ({ req, res, path, method, auth, json, readBody }) => {
+    const isPicker = path === "/api/todos/picker";
+    const item = isPicker ? null : ITEM.exec(path);
+    if (path !== "/api/todos" && !isPicker && !item) return PASS;
+    const visible = deps.visibleFor(auth);
+    const person: TodoMaker = { kind: "person", name: deps.personName(auth) };
+    try {
+      if (path === "/api/todos") {
+        if (method === "GET") {
+          const cutoff = store.now() - TODO_DONE_WINDOW_MS;
+          const todos = store.live().filter((todo) => todoVisible(todo, viewerOf(visible)) && (todo.status !== "done" || (todo.finishedAt ?? todo.updatedAt) >= cutoff));
+          return json(res, 200, { todos: todos.map(publicTodo), picker: host.picker() });
+        }
+        if (method !== "POST") return json(res, 405, { error: "method not allowed" });
+        const body = (await readBody(req)) as { todos?: unknown } | null;
+        if (!Array.isArray(body?.todos)) throw new TodoError(400, "Send the todos to add.");
+        const drafts = body.todos as TodoDraft[];
+        for (const draft of drafts) {
+          if (draft?.botId) mayGive(visible, draft.botId);
+          if (draft?.source && !visible.thread(draft.source.threadId)) throw new TodoError(400, "You cannot see the message this todo comes from.");
+        }
+        const added = host.add(drafts, person);
+        return json(res, 200, { todos: added.todos.map(publicTodo) });
+      }
+      if (isPicker) {
+        if (method !== "PUT") return json(res, 405, { error: "method not allowed" });
+        const body = (await readBody(req)) as { botId?: unknown } | null;
+        if (!body || (body.botId !== null && typeof body.botId !== "string")) throw new TodoError(400, "Pick a bot, or nobody.");
+        if (typeof body.botId === "string" && !visible.bot(body.botId)) throw new TodoError(400, "That bot is not on your team.");
+        const picker = host.setPicker(body.botId);
+        return json(res, 200, { picker });
+      }
+      const [, id, action] = item!;
+      if (action === "/restore") {
+        if (method !== "POST") return json(res, 405, { error: "method not allowed" });
+        const gone = store.getDeleted(id!);
+        if (gone && (!todoVisible(gone, viewerOf(visible)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
+        return json(res, 200, { todo: publicTodo(host.restore(id!)) });
+      }
+      const current = seen(visible, store.get(id!));
+      if (action === "/start") {
+        if (method !== "POST") return json(res, 405, { error: "method not allowed" });
+        if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot start work for this bot.");
+        return json(res, 200, { todo: publicTodo(await deps.runner.startNow(current.id)) });
+      }
+      if (method === "DELETE") {
+        if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
+        host.remove(current.id);
+        return json(res, 200, { ok: true });
+      }
+      if (method === "PATCH") {
+        const body = (await readBody(req)) as TodoPatch | null;
+        if (!body || typeof body !== "object" || Array.isArray(body)) throw new TodoError(400, "Send the change to make.");
+        if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
+        if (typeof body.botId === "string") mayGive(visible, body.botId);
+        return json(res, 200, { todo: publicTodo(host.patch(current.id, body, person)) });
+      }
+      return json(res, 405, { error: "method not allowed" });
+    } catch (error) {
+      if (error instanceof TodoError) return json(res, error.status, { error: error.message });
+      throw error;
+    }
+  };
+}

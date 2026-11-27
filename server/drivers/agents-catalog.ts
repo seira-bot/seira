@@ -550,6 +550,87 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "todo_add",
+    description:
+      "Write down todos on the Board: work for yourself, for a teammate, or for whichever bot fits. Each todo waits in its bot's queue and starts when that bot is free. A todo without assigneeBotId waits for the team's picker to give it to a bot. The person sees one card in this chat with Undo. Use it for work that should happen later or elsewhere, not for what you can do now.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todos: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          description: "The todos to add, in order.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: { type: "string", minLength: 1, maxLength: 120, description: "What to do, in one plain line." },
+              note: { type: "string", maxLength: 2000, description: "More detail for the bot that does it." },
+              assigneeBotId: { type: "string", description: "The bot that does it: its id or its name. Omit to let the picker choose." },
+              when: {
+                description: "\"free\" (default): as soon as the bot is free. An ISO date and time: not before then. {afterIndex}: after the todo at that place earlier in this list is done.",
+                anyOf: [{ type: "string" }, { type: "object", additionalProperties: false, properties: { afterIndex: { type: "integer", minimum: 0 } }, required: ["afterIndex"] }],
+              },
+              repeat: {
+                type: "object",
+                additionalProperties: false,
+                description: "Makes the todo repeat as a routine for the assigned bot.",
+                properties: { time: { type: "string", description: "HH:MM, local time." }, weekdays: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 }, description: "0 is Sunday. Empty means every day." } },
+                required: ["time"],
+              },
+            },
+            required: ["title"],
+          },
+        },
+      },
+      required: ["todos"],
+    },
+  },
+  {
+    name: "todo_list",
+    description: "List todos on the Board you may read, first in line first. Filter by status or by the bot that does them.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["open", "queued", "working", "needs-you", "done"], description: "Only todos with this status." },
+        assigneeBotId: { type: "string", description: "Only todos of this bot: its id or its name." },
+      },
+    },
+  },
+  {
+    name: "todo_assign",
+    description: "Give a todo that waits (open or queued) to a bot, with a one-line reason. Use it as the team's picker to hand out open todos, or to hand your own todo to a teammate. Leave a todo alone when no bot fits.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todoId: { type: "string", description: "The todo's id from todo_list or the message you got." },
+        assigneeBotId: { type: "string", description: "The bot that gets it: its id or its name." },
+        reason: { type: "string", minLength: 1, maxLength: 200, description: "Why this bot fits, in one line." },
+      },
+      required: ["todoId", "assigneeBotId", "reason"],
+    },
+  },
+  {
+    name: "todo_update",
+    description: "Change a todo that is yours, that you made, or that you handed out: move it to done or back to the queue, rename it, change its note, or record its result.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todoId: { type: "string", description: "The todo's id." },
+        status: { type: "string", enum: ["done", "queued"], description: "done: finished. queued: back in its bot's queue." },
+        title: { type: "string", minLength: 1, maxLength: 120 },
+        note: { type: "string", maxLength: 2000 },
+        result: { type: "string", maxLength: 2000, description: "What came out of it, in one or two sentences." },
+      },
+      required: ["todoId"],
+    },
+  },
+  {
     name: "memory_log",
     description:
       "Write one line to today's log file, memory/log/YYYY-MM-DD.md, stamped with the time and this conversation: what happened, not what is true. Use it for events worth a trace — a deploy went out, a person decided something, a check failed — that should not shape future sessions. Logs are never loaded into your prompt; the person can read them, and session_search finds them later. A fact that should hold in every session goes to memory_update instead.",

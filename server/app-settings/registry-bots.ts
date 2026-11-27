@@ -51,6 +51,7 @@ const OTHER = {
   composio: { label: "Composio apps", value: z.boolean(), shown: onOff, was: (one: BotRecord) => on(one.composio) },
   xResearch: { label: "X research", value: z.boolean(), shown: onOff, was: (one: BotRecord) => set(one.xResearch) },
   parkDirectMessages: { label: "holding direct messages behind delegated work", value: z.boolean(), shown: onOff, was: (one: BotRecord) => set(one.parkDirectMessages) },
+  startsTodos: { label: "starting its todos", value: z.enum(["manual", "auto"]), shown: (kind: unknown) => (kind === "manual" ? "only when told to" : "on its own"), was: (one: BotRecord) => one.startsTodos ?? "auto" },
   cacheKeepWarm: { label: "keeping its cache warm", value: z.boolean().nullable(), shown: onOff, was: (one: BotRecord) => one.cacheKeepWarm ?? null },
   autoStartVps: { label: "starting its own server", value: z.boolean(), shown: onOff, was: (one: BotRecord) => set(one.autoStartVps) },
   computer: { label: "computer", value: z.enum(["auto", "cloud", "vm", "local", "browser", "off"]), shown: (kind: unknown) => COMPUTER[kind as keyof typeof COMPUTER], was: (one: BotRecord) => one.computer ?? "auto" },
