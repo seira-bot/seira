@@ -1,9 +1,11 @@
-import type { Workflow, WorkflowInput, WorkflowRun, WorkflowRunUpdate } from "../../shared/workflows.ts";
+import { WORKFLOW_LIMITS, type Workflow, type WorkflowInput, type WorkflowRun, type WorkflowRunUpdate } from "../../shared/workflows.ts";
 import { routineVisible, workflowRunVisible, workflowVisible, type VisibleSet } from "../bot-visibility.ts";
 import type { WorkflowHost } from "../host/workflow-host.ts";
+import type { WorkflowStarts } from "../host/workflow-starts.ts";
 import { WORKFLOW_ROUTINE_REFUSAL, type WorkflowRoutineEdits } from "../host/workflow-routine-edits.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
+import { publicErrorText } from "../public-error.ts";
 import { problemBody, validateWorkflowInput } from "../workflows/validate.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { PlaceLostError } from "../place-lost.ts";
@@ -12,7 +14,8 @@ export interface WorkflowRoutesDeps {
   visible(auth: RequestAuth): VisibleSet;
   botName(botId: string): string | undefined;
   workflows(): WorkflowHost | null;
-  routines(): Pick<RoutineManager, "listRoutines"> | null;
+  routines(): Pick<RoutineManager, "listRoutines" | "update"> | null;
+  starts(): WorkflowStarts | null;
   routineEdits: WorkflowRoutineEdits;
   /** Why this person may not do this much with these bots (Team Cloud levels); null when they may. */
   botsRefusal(auth: RequestAuth, botIds: readonly string[], needed: "chat" | "edit"): string | null;
@@ -40,6 +43,24 @@ export function workflowLinkRefusal(body: unknown, existing: Routine | undefined
   return bots.length ? deps.botsRefusal(auth, bots, deps.routineNeeds(auth, existing?.id)) : null;
 }
 
+/** For a webhook or app trigger save: a person who may not see or edit the bots of the workflow it links to, or the one it runs now, may not change the link. */
+export function startLinkRefusal(
+  body: unknown,
+  current: string | undefined,
+  auth: RequestAuth,
+  workflows: WorkflowHost | null,
+  visible: VisibleSet,
+  deps: Pick<WorkflowRoutesDeps, "botsRefusal">,
+): { status: number; error: string } | null {
+  const { workflowId } = body && typeof body === "object" ? body as { workflowId?: unknown } : {};
+  const next = typeof workflowId === "string" ? workflows?.get(workflowId) : null;
+  const old = current === undefined ? null : workflows?.get(current);
+  if ((next && !workflowVisible(next, visible)) || (old && !workflowVisible(old, visible))) return { status: 404, error: "no such workflow" };
+  const bots = [...workflowBotIds(old?.steps), ...workflowBotIds(next?.steps)];
+  const short = bots.length ? deps.botsRefusal(auth, bots, current === undefined ? "chat" : "edit") : null;
+  return short ? { status: 403, error: short } : null;
+}
+
 function hiddenBot(steps: unknown, visible: VisibleSet, botName: (botId: string) => string | undefined): boolean {
   if (visible.everything || !Array.isArray(steps)) return false;
   return steps.some((step) => {
@@ -62,7 +83,8 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
     const runMatch = /^\/api\/workflow-runs\/([\w-]+)$/.exec(path);
     const runsMatch = /^\/api\/workflows\/([\w-]+)\/runs$/.exec(path);
     const oneMatch = /^\/api\/workflows\/([\w-]+)$/.exec(path);
-    if (path !== "/api/workflows" && !again && !runMatch && !runsMatch && !oneMatch) return PASS;
+    const switchMatch = /^\/api\/workflows\/([\w-]+)\/switch$/.exec(path);
+    if (path !== "/api/workflows" && path !== "/api/workflows/from-start" && !again && !runMatch && !runsMatch && !oneMatch && !switchMatch) return PASS;
     const host = deps.workflows();
     if (!host) return json(res, 503, { error: "Workflows are unavailable." });
     const visible = deps.visible(auth);
@@ -95,6 +117,68 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       if (method === "GET") return json(res, 200, { workflows: host.list().filter((workflow) => workflowVisible(workflow, visible)) });
       if (method !== "POST") return json(res, 405, { error: "method not allowed" });
       return save(await readBody(req), null, (input) => host.create(input, deps.routineEdits.writer(auth)), 201);
+    }
+
+    if (path === "/api/workflows/from-start") {
+      if (method !== "POST") return json(res, 405, { error: "method not allowed" });
+      const asked = await readBody(req);
+      const { kind, id } = asked && typeof asked === "object" ? asked as { kind?: unknown; id?: unknown } : {};
+      const starts = deps.starts();
+      if (!starts) return json(res, 503, { error: "Workflows are unavailable." });
+      if ((kind !== "routine" && kind !== "webhook" && kind !== "app") || typeof id !== "string") return json(res, 400, { error: "Choose what to turn into steps." });
+      const info = starts.describe(kind, id);
+      if (!info || (info.routine ? !routineVisible(info.routine, visible) : !visible.bot(info.botId))) return json(res, 404, { error: "no such automation" });
+      if (info.routine) {
+        const noEdit = deps.routineEdits.refusal(auth, info.routine);
+        if (noEdit) return json(res, 403, { error: noEdit });
+      }
+      const short = deps.botsRefusal(auth, [info.botId], info.routine ? deps.routineNeeds(auth, info.routine.id) : "edit");
+      if (short) return json(res, 403, { error: short });
+      if (info.workflowId !== undefined) return json(res, 409, { error: "This already runs steps." });
+      if (info.refusal) return json(res, 409, { error: info.refusal });
+      const instruction = info.prompt.trim();
+      if (!instruction) return json(res, 409, { error: "Write what the bot should do first." });
+      const checked = validateWorkflowInput({
+        name: info.name.trim().slice(0, WORKFLOW_LIMITS.name) || "Steps",
+        steps: [{ id: "step-1", kind: "bot", botId: info.botId, instruction: instruction.slice(0, WORKFLOW_LIMITS.instruction), position: { x: 0, y: 0 } }],
+        connections: [],
+      }, { botName: shownName });
+      if (!checked.ok) return json(res, 400, problemBody(checked.problems));
+      const created = host.create(checked.value, deps.routineEdits.writer(auth));
+      try {
+        if (info.routine) {
+          const routines = deps.routines();
+          const linked = deps.routineEdits.edit(auth, [info.routine], () => routines?.update(info.routine!.id, { workflowId: created.id }));
+          if (!linked) throw new Error("no such automation");
+        } else await starts.linkEvent(kind, id, created.id);
+      } catch (error) {
+        host.remove(created.id);
+        return json(res, 409, { error: publicErrorText(error, "turn an automation into steps", "This could not be turned into steps.") });
+      }
+      return json(res, 201, { workflow: host.get(created.id) ?? created, start: starts.list(created.id).find((start) => start.kind === kind && start.id === id) ?? null });
+    }
+
+    if (switchMatch) {
+      if (method !== "POST") return json(res, 405, { error: "method not allowed" });
+      const workflow = shown(switchMatch[1]!);
+      if (!workflow) return json(res, 404, { error: "no such workflow" });
+      const starts = deps.starts();
+      if (!starts) return json(res, 503, { error: "Workflows are unavailable." });
+      const asked = await readBody(req);
+      const enabled = asked && typeof asked === "object" ? (asked as { enabled?: unknown }).enabled : undefined;
+      if (typeof enabled !== "boolean") return json(res, 400, { error: "Say whether to turn it on or off." });
+      if (starts.list(workflow.id).length === 0) return json(res, 409, { error: "Choose what starts it first." });
+      const linked = linkedTo(workflow.id);
+      if (refused(linked)) return json(res, 403, { error: WORKFLOW_ROUTINE_REFUSAL });
+      const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked)], needsFor(workflow, linked));
+      if (short) return json(res, 403, { error: short });
+      try {
+        deps.routineEdits.edit(auth, linked, () => starts.setRoutinesEnabled(workflow.id, enabled));
+        await starts.setEventsEnabled(workflow.id, enabled);
+      } catch (error) {
+        return json(res, 409, { error: publicErrorText(error, "switch an automation", "This could not be switched.") });
+      }
+      return json(res, 200, { starts: starts.list(workflow.id) });
     }
 
     if (oneMatch) {

@@ -12,9 +12,11 @@ export interface WebhookRouteDeps {
   webhooks: WebhookManager;
   ingress: () => { available: boolean; baseUrl: string; error?: string };
   visible: (auth: RequestAuth) => { everything: boolean; bot(id: string): boolean; group(id: string): boolean };
+  /** Why this person may not link this body's workflow, or change the one a webhook runs now; null when they may. */
+  workflowGate?: (auth: RequestAuth, body: unknown, current: string | undefined) => { status: number; error: string } | null;
 }
 
-export function createWebhookRoutes({ webhooks, ingress, visible }: WebhookRouteDeps): RouteHandler {
+export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }: WebhookRouteDeps): RouteHandler {
   const withCredential = (webhook: { endpointId: string }, secret: string) => {
     const status = ingress();
     return { ingress: status, credential: webhookCredential(status.baseUrl, webhook.endpointId, secret) };
@@ -28,6 +30,8 @@ export function createWebhookRoutes({ webhooks, ingress, visible }: WebhookRoute
     }
     if (path === "/api/webhooks" && method === "POST") {
       const body = await readBody(req);
+      const linkRefused = body && typeof body === "object" && !Array.isArray(body) && typeof body.workflowId === "string" ? workflowGate?.(auth, body, undefined) : null;
+      if (linkRefused) return json(res, linkRefused.status, { error: linkRefused.error });
       // Security: on a Team Cloud an admin may not see another person's own Seira; a webhook into it is answered
       // exactly as one into a bot that does not exist.
       if (body && typeof body === "object" && !Array.isArray(body) && !webhookVisible(body, visible(auth))) body.botId = randomUUID();
@@ -55,7 +59,10 @@ export function createWebhookRoutes({ webhooks, ingress, visible }: WebhookRoute
       return json(res, 200, { webhook: current.webhook, ...withCredential(current.webhook, current.secret) });
     }
     if (!match[2] && method === "PATCH") {
-      const webhook = webhooks.update(id, await readBody(req));
+      const body = await readBody(req);
+      const linkRefused = body && typeof body === "object" && !Array.isArray(body) && (typeof body.workflowId === "string" || body.workflowId === null) ? workflowGate?.(auth, body, known?.workflowId) : null;
+      if (linkRefused) return json(res, linkRefused.status, { error: linkRefused.error });
+      const webhook = webhooks.update(id, body);
       return webhook ? json(res, 200, { webhook }) : json(res, 404, { error: "no such webhook" });
     }
     if (!match[2] && method === "DELETE") {

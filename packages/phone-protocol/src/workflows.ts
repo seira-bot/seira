@@ -22,9 +22,10 @@ export type WorkflowBranch = "yes" | "no";
 /** `branch` only on a connection out of an AI check. */
 export interface WorkflowConnection { id: string; from: string; to: string; branch?: WorkflowBranch }
 export interface WorkflowGraph { steps: WorkflowStep[]; connections: WorkflowConnection[] }
-export interface Workflow extends WorkflowGraph { id: string; name: string; createdAt: number; updatedAt: number }
+/** `manual`: it runs only when a person starts it, so it has no start on purpose. */
+export interface Workflow extends WorkflowGraph { id: string; name: string; manual?: boolean; createdAt: number; updatedAt: number }
 /** `ifUpdatedAt`: refuse the change when the saved workflow is newer (another window changed it). */
-export interface WorkflowInput extends WorkflowGraph { name: string; ifUpdatedAt?: number }
+export interface WorkflowInput extends WorkflowGraph { name: string; manual?: boolean; ifUpdatedAt?: number }
 /** A workflow drawn from a finished reply, not saved yet. `omitted`: steps left out because the person may not use
  * their bot. `trimmed`: steps past the step limit. */
 export interface DrawnWorkflow { draft: WorkflowInput; omitted: number; trimmed: number }
@@ -62,6 +63,9 @@ export interface WorkflowStepRun {
   startedAt?: number;
   finishedAt?: number;
 }
+export type WorkflowRunStartKind = "schedule" | "manual" | "webhook" | "app";
+/** The start that fired a run: `id` is the routine, webhook or app trigger. */
+export interface WorkflowRunStart { kind: WorkflowRunStartKind; id: string }
 export type WorkflowRunStatus = "active" | "completed" | "failed" | "stopped";
 export interface WorkflowRun {
   /** The id of the routine run it belongs to. */
@@ -76,6 +80,10 @@ export interface WorkflowRun {
   startStepId: string;
   currentStepId?: string;
   fromRunId?: string;
+  /** The start that fired the run. Absent on a run made before starts were kept. */
+  start?: WorkflowRunStart;
+  /** The text of the event that fired the run. The first step receives it as its input. */
+  event?: string;
   /** What the start step receives on "Run again from here". */
   input?: { fromStepId: string; output: string };
   /** One chat per bot per run: bot id to thread id. */
