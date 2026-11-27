@@ -39,6 +39,7 @@ import { loadInstalledPackage, matchingRequestReceipt, rememberRequest } from ".
 import { applyHolds, holdCauses, type AppliedHolds } from "./routine-holds.ts";
 import { cancelUnfinishedRuns, interruptRunTurns } from "./routine-stops.ts";
 import { sanitizeInput, workflowLookupFor } from "./routine-input.ts";
+import { bindThread, isLiveThread, runOfThread, type StepThreads } from "./routine-step-threads.ts";
 import { startRoutineWork, type WorkflowRoutineOptions } from "./routine-dispatch.ts"; import { cloneRoutine, cloneRun } from "./routine-clone.ts";
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
@@ -143,10 +144,7 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   deliveryId?: string;
   sourceThreadId?: string;
   resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
-  /** A workflow run from a webhook that posts: its last step's result goes to the chat it reports to. */
-  postsResult?: true;
-  /** The chats a workflow run opened for its bot steps, each with the access its steps use there. */
-  stepThreads?: Record<string, { access?: RoutineAccess }>;
+  postsResult?: true; stepThreads?: StepThreads;
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -320,8 +318,6 @@ const WAKE_HORIZON_MS = 60 * 60_000;
 export const ROUTINE_RESTARTED = "Seira restarted while this routine was running";
 const MAX_RUNS = 2_000;
 const earliest = (...times: Array<number | null>): number | null => times.reduce<number | null>((first, at) => at === null ? first : first === null ? at : Math.min(first, at), null);
-const ownsThread = (run: RoutineRun, threadId: string): boolean => run.threadId === threadId || (run.stepThreads !== undefined && Object.hasOwn(run.stepThreads, threadId));
-
 export class RoutineManager {
   private readonly file: string; private readonly disk: OwnedFile;
   private readonly now: () => number;
@@ -529,32 +525,13 @@ export class RoutineManager {
     return removed;
   }
 
-  isActiveThread(threadId: string): boolean {
-    return this.runs.some(
-      (run) => ownsThread(run, threadId) && ["running", "waiting"].includes(run.status),
-    );
-  }
+  isActiveThread(threadId: string): boolean { return isLiveThread(this.runs, threadId); }
 
-  runForThread(threadId: string): RoutineRun | null {
-    const run = this.runs.findLast((candidate) => ownsThread(candidate, threadId) && ["running", "waiting"].includes(candidate.status)) ??
-      this.runs.findLast((candidate) => ownsThread(candidate, threadId));
-    if (!run) return null;
-    const own = run.stepThreads?.[threadId];
-    const copy = cloneRun(run);
-    if (own?.access !== undefined) copy.access = own.access;
-    return copy;
-  }
+  runForThread(threadId: string): RoutineRun | null { return runOfThread(this.runs, threadId); }
 
-  /** A chat a workflow run opened for a step: the run's limits cover it. Access only grows stricter. */
   bindStepThread(runId: string, threadId: string, access?: RoutineAccess): void {
-    const run = this.runs.find((candidate) => candidate.id === runId && candidate.workflowId !== undefined);
-    if (!run) return;
-    const threads = run.stepThreads ?? (run.stepThreads = {});
-    const known = threads[threadId];
-    const strict = access ?? run.access;
-    if (known && (known.access !== undefined || strict === undefined)) return;
-    threads[threadId] = strict === undefined ? {} : { access: strict };
-    this.saveLater();
+    const run = this.runs.find((candidate) => candidate.id === runId);
+    if (run && bindThread(run, threadId, access)) this.saveLater();
   }
 
   noteReport(id: string, report: RoutineRunReport | undefined): RoutineRun | null {
@@ -795,7 +772,6 @@ export class RoutineManager {
     resultsThreadId?: string;
     /** The workflow whose steps the run executes; the event text is the first step's input. */
     workflowId?: string;
-    /** The result of the last step goes to the chat the run reports to. */
     postsResult?: true;
   }): { id: string } {
     this.assertWritable();
