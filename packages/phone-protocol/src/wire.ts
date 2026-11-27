@@ -509,7 +509,7 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
   aside?: boolean;
   /** A user-role message that arrived through the server's HTTP API
    * ("api"), or a request a person spoke on a Live call ("call"). */
-  via?: "api" | "call"; /** A `via: "api"` line sent with a Bot API key its owner marked as acting for them: their request, at the bot's level. */ apiAsOwner?: true;
+  via?: "api" | "call"; /** A `via: "api"` line sent with a Bot API key its owner marked as acting for them: their request, at the bot's level. */ apiAsOwner?: true; /** A user line the server wrote to start a todo's work: that todo's id. */ fromTodo?: string;
   /** The Live call a "call" line was spoken on (LiveCallState.callId). Set
    * only on user messages with `via: "call"`; a turn's own messages point
    * at their request through `requestMessageId` instead. */

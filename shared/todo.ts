@@ -49,8 +49,11 @@ export interface Todo {
   /** A repeating todo is a routine; its runs show on the Board as routine cards. */
   routineId?: string;
   repeat?: TodoRepeat;
-  /** The bot's question, or why the work stopped, while the status is needs-you. */
+  /** The bot's own question while the status is needs-you. */
   question?: string;
+  /** Why the todo is in needs-you when its bot asked nothing. stopped: the work stopped TODO_MAX_ATTEMPTS times.
+   * unassigned: the bot picker gave it to no bot. */
+  stuck?: "stopped" | "unassigned";
   /** The bot's last reply, once done. */
   result?: string;
   /** How many times the work started. After TODO_MAX_ATTEMPTS the todo goes to needs-you. */
