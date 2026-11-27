@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Code2, Download, Eye, LoaderCircle, RotateCcw } from "lucide-react";
-import { isOutsideWorkspaceFailure, requestMessageFile, useLocalFileSave, type MessageAttachmentContext } from "./AttachmentPreview";
+import { requestMessageFile, useLocalFileSave, type MessageAttachmentContext } from "./AttachmentPreview";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { readTableResponse } from "./TableFilePreview";
 import { t } from "@/lib/i18n";
+import { isOutsideWorkspaceFailure } from "@/lib/server-error";
 
 export const MARKDOWN_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
 

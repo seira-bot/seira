@@ -33,7 +33,7 @@ import {
 } from "@/lib/composer-attachments";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { serverErrorText } from "@/lib/server-error";
+import { isOutsideWorkspaceFailure, serverErrorText } from "@/lib/server-error";
 import { CopyImageButton } from "./CopyImageButton";
 import { FilePreviewButton } from "./FilePreviewButton";
 import { chipNameAction, SaveIconButton, useHtmlPreview } from "./HtmlFilePreview";
@@ -352,10 +352,6 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
 
   const outsideWorkspace = isOutsideWorkspaceFailure(failureCode); // Retrying can't move a file into the folder or make it smaller.
   return { state, reason, savedTo, outsideWorkspace, retryable: state === "failed" && !outsideWorkspace && failureCode !== "file_too_large", folder, save };
-}
-
-export function isOutsideWorkspaceFailure(code: unknown): boolean {
-  return code === "outside_workspace";
 }
 
 export function saveFailureText(save: { reason: string; outsideWorkspace: boolean }): string {
