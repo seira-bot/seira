@@ -11,7 +11,7 @@ import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
 import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
 import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts"; import type { FolderAccessField, WireFolderAccess, WireFolderGrant } from "./folder-access.ts"; export type { WireFolderAccess, WireFolderGrant }; import type { UiPlaceField } from "./ui-place.ts";
-import type { SuggestedRepliesField } from "./suggested-replies.ts"; import type { TaskSuggestionsField } from "./task-suggestions.ts"; import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
+import type { SuggestedRepliesField } from "./suggested-replies.ts"; import type { TaskSuggestionsField } from "./task-suggestions.ts"; import type { TodoBatchField } from "./todo-batch.ts"; import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
 import type { AppEventAttempt, AppTrigger, AppTriggerRequestCardData, AppTriggerService } from "./app-triggers.ts";
@@ -339,6 +339,8 @@ export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccess
   toolsOff?: ToolGroup[];
   /** Queue direct-chat messages behind outstanding delegated work. */
   parkDirectMessages?: boolean;
+  /** "manual": its todos wait until a person presses Start now. Absent: it starts the next todo when it is free. */
+  startsTodos?: "manual";
   /** true after an edit/branch-switch rewound the visible conversation. */
   rewound?: boolean;
   pinned?: boolean;
@@ -436,7 +438,7 @@ export type CardAnswerer = (
 export const EXCERPT_SUMMARY_HEADER = "Historical excerpts in chronological order; newer corrections override older requests. These excerpts may omit earlier details.";
 
 /** One transcript line, serialized as stored. */
-export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, TeamSuggestionFields, WaitLineField, BugReportField, SuggestedRepliesField, TaskSuggestionsField, UiPlaceField {
+export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCardFields, TeamSuggestionFields, WaitLineField, BugReportField, SuggestedRepliesField, TaskSuggestionsField, TodoBatchField, UiPlaceField {
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";
@@ -979,6 +981,8 @@ export type ServerFrame =
   | { kind: "runtime"; event: RuntimeEvent }
   /** An MCP server was added, changed or removed: a list of them is stale. */
   | { kind: "mcp.changed" }
+  /** A todo was added, changed or removed: GET /api/todos is stale. */
+  | { kind: "todos" }
   /** `surface` names what the frame shows: the bot's desktop (`computer`) or its built-in browser. */
   | { kind: "screen"; botId: string; threadId: string; png: string; mime?: string; surface?: "browser" | "computer" }
   /** A bot's computer is being set up or woken for a turn; the chat shows
