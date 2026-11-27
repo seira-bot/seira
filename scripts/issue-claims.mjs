@@ -19,6 +19,7 @@ const NEEDS_REVIEW = "needs-review";
 const STALLED = "stalled";
 const MAINTAINERS_TEAM = "maintainers";
 const DAY = 24 * HOUR;
+const BOT_LOGIN = "github-actions[bot]";
 const WINDOW_HOURS = 24;
 const CLAIM_HOURS = 72;
 const WEEKEND_RELEASE_HOUR_UTC = 12;
@@ -223,7 +224,7 @@ export async function reconcile({ api, number, now, log = () => {} }) {
 
   if (desired === HUMAN_WINDOW && entering) {
     const comments = await listAll(api, `${issuePath(api, number)}/comments`);
-    if (comments.some((each) => String(each.body ?? "").includes(WINDOW_MARKER))) return;
+    if (comments.some((each) => hasMarker(each, WINDOW_MARKER))) return;
     const end = windowEnd(windowStart);
     await comment(
       api,
@@ -324,7 +325,7 @@ async function sweepClaim({ api, issue, now, log }) {
   }
   if (now.getTime() >= deadline.getTime() - WINDOW_HOURS * HOUR) {
     const comments = await listAll(api, `${issuePath(api, number)}/comments`);
-    const reminded = comments.some((each) => new Date(each.created_at).getTime() > claimedAt.getTime() && String(each.body ?? "").includes(REMINDER_MARKER));
+    const reminded = comments.some((each) => new Date(each.created_at).getTime() > claimedAt.getTime() && hasMarker(each, REMINDER_MARKER));
     if (reminded) return;
     await comment(api, number, `${mention} Still on it? Open a draft PR by ${formatUtc(deadline)}, or comment \`/untake\`.\n\n${REMINDER_MARKER}`);
     log(`#${number}: reminded`);
@@ -337,8 +338,10 @@ const once = (load) => {
   return () => (pending ??= load());
 };
 
+const hasMarker = (each, marker) => each.user?.login === BOT_LOGIN && String(each.body ?? "").includes(marker);
+
 function markerAfter(comments, marker, since) {
-  const found = comments.filter((each) => ms(each.created_at) > since && String(each.body ?? "").includes(marker));
+  const found = comments.filter((each) => ms(each.created_at) > since && hasMarker(each, marker));
   return found.length === 0 ? undefined : found.reduce((a, b) => (ms(b.created_at) >= ms(a.created_at) ? b : a));
 }
 
@@ -404,21 +407,24 @@ function pullData(api, pull) {
   };
 }
 
-async function lastAuthorActivity(data, author) {
+async function lastAuthorActivity(data, author, now) {
   const times = [];
   for (const each of await data.comments()) if (sameLogin(each.user?.login, author)) times.push(ms(each.created_at));
   for (const each of await data.reviews()) if (sameLogin(each.user?.login, author)) times.push(ms(each.submitted_at));
-  for (const each of await data.commits()) times.push(ms(each.commit?.committer?.date));
+  for (const each of await data.commits()) {
+    const date = ms(each.commit?.committer?.date);
+    if (date <= now.getTime() && (!each.author?.login || sameLogin(each.author.login, author))) times.push(date);
+  }
   for (const each of await data.events()) if (each.event === "head_ref_force_pushed" && sameLogin(each.actor?.login, author)) times.push(ms(each.created_at));
   const valid = times.filter(Number.isFinite);
   return valid.length === 0 ? null : Math.max(...valid);
 }
 
-async function idleSinceOf(pull, data, author) {
+async function idleSinceOf(pull, data, author, now) {
   if (pull.draft) {
     const converted = (await data.events()).filter((event) => event.event === "convert_to_draft").map((event) => ms(event.created_at));
     const start = converted.length === 0 ? ms(pull.created_at) : Math.max(...converted);
-    const activity = await lastAuthorActivity(data, author);
+    const activity = await lastAuthorActivity(data, author, now);
     return activity === null ? start : Math.max(start, activity);
   }
   const decisive = (await data.reviews()).filter(
@@ -431,7 +437,7 @@ async function idleSinceOf(pull, data, author) {
   const latest = decisive.reduce((a, b) => (ms(b.submitted_at) >= ms(a.submitted_at) ? b : a));
   if (latest.state !== "CHANGES_REQUESTED") return null;
   const submitted = ms(latest.submitted_at);
-  const activity = await lastAuthorActivity(data, author);
+  const activity = await lastAuthorActivity(data, author, now);
   return activity !== null && activity > submitted ? null : submitted;
 }
 
@@ -533,7 +539,7 @@ async function sweepStalled({ api, pull, data, now, log, idleSince }) {
 async function sweepPull({ api, pull, now, log }) {
   if (isBot(pull.user)) return;
   const data = pullData(api, pull);
-  const idleSince = await idleSinceOf(pull, data, pull.user.login);
+  const idleSince = await idleSinceOf(pull, data, pull.user.login, now);
   await sweepReview({ api, pull, data, now, log, waiting: idleSince !== null });
   await sweepStalled({ api, pull, data, now, log, idleSince });
 }

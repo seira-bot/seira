@@ -71,7 +71,7 @@ Maintainers give a first review within 24 hours after a pull request is ready.
 After 24 hours without a maintainer response, a bot adds `needs-review` and asks the maintainers.
 After 48 hours, the bot asks again.
 
-A pull request waits for its author when it is a draft or when a maintainer asked for changes.
+A pull request waits for its author when it is a draft or when a review asked for changes.
 After 7 days, a bot reminds the author.
 After 14 days, the issues that it closes become free for other people.
 The pull request gets the label `stalled` and stays open.

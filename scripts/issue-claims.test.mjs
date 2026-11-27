@@ -75,7 +75,7 @@ function fakeApi({ issues = [], events = {}, comments = {}, linked = {}, reviews
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(route))) return paged(events[match[1]] ?? []);
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments$/.exec(route))) {
         if (method === "GET") return paged(state.comments[match[1]] ?? []);
-        (state.comments[match[1]] ??= []).push({ body: body.body, created_at: NOW.toISOString(), fake: true });
+        (state.comments[match[1]] ??= []).push({ body: body.body, created_at: NOW.toISOString(), user: { login: "github-actions[bot]", type: "Bot" }, fake: true });
         return {};
       }
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/assignees\/([^/]+)$/.exec(route))) {
@@ -246,11 +246,21 @@ describe("labeled issue", () => {
     const fake = fakeApi({
       issues: [{ number: 5, labels: ["P3"] }],
       events: { 5: [labeledAt("P3", ago(1))] },
-      comments: { 5: [{ body: "Open for human contributors.\n\n<!-- issue-claims:window -->", created_at: ago(2) }] },
+      comments: { 5: [{ body: "Open for human contributors.\n\n<!-- issue-claims:window -->", created_at: ago(2), user: { login: "github-actions[bot]", type: "Bot" } }] },
     });
     await run(fake, labeled(5, "P3"));
     expect(fake.issue(5).labels).toContain("human-window");
     expect(fake.posted(5)).toEqual([]);
+  });
+
+  it("stale: a window marker pasted by a person does not stop the window comment", async () => {
+    const fake = fakeApi({
+      issues: [{ number: 5, labels: ["P3"] }],
+      events: { 5: [labeledAt("P3", ago(1))] },
+      comments: { 5: [{ body: "x\n\n<!-- issue-claims:window -->", created_at: ago(2), user: { login: "mallory", type: "User" } }] },
+    });
+    await run(fake, labeled(5, "P3"));
+    expect(fake.posted(5)).toHaveLength(1);
   });
 
   it("AC-01: starts the window at the first P2 or P3 label, not at the last one", async () => {
@@ -603,7 +613,7 @@ describe("sweep", () => {
       const fake = fakeApi({
         issues: [claimed()],
         events: claimEvents(48),
-        comments: { 60: [{ body: "old\n\n<!-- issue-claims:reminder -->", created_at: ago(60) }] },
+        comments: { 60: [{ body: "old\n\n<!-- issue-claims:reminder -->", created_at: ago(60), user: { login: "github-actions[bot]", type: "Bot" } }] },
       });
       await sweepAt(fake);
       expect(fake.posted(60)).toHaveLength(1);
@@ -696,7 +706,7 @@ const MARK = {
   stale: "<!-- issue-claims:stale-reminder -->",
 };
 const assignedEvent = (login, hours) => ({ event: "assigned", assignee: { login }, created_at: ago(hours) });
-const marked = (marker, hours, extra = {}) => ({ body: `text\n\n${marker}`, created_at: ago(hours), ...extra });
+const marked = (marker, hours, extra = {}) => ({ body: `text\n\n${marker}`, created_at: ago(hours), user: { login: "github-actions[bot]", type: "Bot" }, ...extra });
 const authorComment = (login, hours) => ({ body: "update", created_at: ago(hours), user: { login, type: "User" }, author_association: "CONTRIBUTOR" });
 const review = (login, state, hours, { type = "User", association = "NONE" } = {}) => ({
   user: { login, type },
@@ -793,6 +803,18 @@ describe("assigned issues", () => {
     const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(6))] }, comments: { 100: [marked(MARK.assign, 49)] } });
     await sweepAt(fake);
     expect(fake.issue(100).assignees).toEqual(["alice"]);
+  });
+
+  it("stale AC-01: a marker pasted by a person does not count, so the bot posts its own reminder and does not release", async () => {
+    const person = { user: { login: "mallory", type: "User" } };
+    const fake = fakeApi({
+      issues: [assigned()],
+      events: { 100: [assignedEvent("alice", days(8))] },
+      comments: { 100: [marked(MARK.assign, 60, person)] },
+    });
+    await sweepAt(fake);
+    expect(fake.issue(100).assignees).toEqual(["alice"]);
+    expect(fake.posted(100)).toHaveLength(1);
   });
 
   describe("AC-03 skips", () => {
@@ -923,6 +945,12 @@ describe("first review of a pull request", () => {
     expect(fake.writes()).toEqual([]);
   });
 
+  it("stale AC-04: a first-review marker pasted by a person does not stop the first ask", async () => {
+    const fake = fakeApi({ issues: [outside()], comments: { 110: [marked(MARK.review1, 3, { user: { login: "mallory", type: "User" } })] } });
+    await sweepAt(fake);
+    expect(asked(fake)).toHaveLength(1);
+  });
+
   it("stale AC-05: asks again 48 hours after ready and 24 hours after the first ask", async () => {
     const fake = fakeApi({ issues: [outside({ created_at: ago(49), labels: ["needs-review"] })], comments: { 110: [marked(MARK.review1, 25)] } });
     await sweepAt(fake);
@@ -1018,6 +1046,26 @@ describe("pull request that waits for its author", () => {
       { events: { 120: [{ event: "head_ref_force_pushed", actor: { login: author }, created_at: ago(days(2)) }] } },
     ]) {
       const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], ...extra }));
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    }
+  });
+
+  it("stale AC-07: a commit dated in the future does not move the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [{ commit: { committer: { date: ago(-48) } } }] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-07: a commit by another user does not move the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [{ author: { login: "rama" }, commit: { committer: { date: ago(days(2)) } } }] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-07: a commit with no author object still counts, and one by the author in another letter case counts", async () => {
+    for (const commit of [{ commit: { committer: { date: ago(days(2)) } } }, { author: { login: "CAROL" }, commit: { committer: { date: ago(days(2)) } } }]) {
+      const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [commit] } }));
       await sweepAt(fake);
       expect(fake.writes()).toEqual([]);
     }
