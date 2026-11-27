@@ -265,6 +265,9 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/secret-cards\/[\w-]+\/(?:resume|dismiss)$/ },
   // Nothing secret crosses this route, only "done" or "cancel".
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/sign-in-cards\/[\w-]+\/(?:done|cancel)$/ },
+  // A burst card: the handler shows it only to whoever sees the chat, and lets only whoever may answer the card act.
+  { method: "GET", path: /^\/api\/bursts\/[\w-]+$/ },
+  { method: "POST", path: /^\/api\/bursts\/[\w-]+\/(?:run|cancel|retry|edit)$/ },
 ];
 
 /** Sent by the companion itself, never a device: not in ALLOWED, so a phone is

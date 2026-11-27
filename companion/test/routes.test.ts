@@ -148,6 +148,11 @@ describe("what the app may do", () => {
     ["POST", "/api/bots/bot_123/secret-cards/msg_2/save"],
     ["POST", "/api/bots/bot_123/sign-in-cards/msg_3/done"],
     ["POST", "/api/bots/bot_123/sign-in-cards/msg_3/cancel"],
+    ["GET", "/api/bursts/burst_1"],
+    ["POST", "/api/bursts/burst_1/run"],
+    ["POST", "/api/bursts/burst_1/cancel"],
+    ["POST", "/api/bursts/burst_1/retry"],
+    ["POST", "/api/bursts/burst_1/edit"],
   ];
 
   for (const [method, path] of calls) {
@@ -367,6 +372,11 @@ describe("what it may not", () => {
     expect(allowed("GET", "/api/limit-resets/x")).toBe(false);
     expect(allowed("POST", "/api/limit-resets/release")).toBe(false);
     expect(allowed("POST", "/api/limit-resets/after-reset")).toBe(false);
+    expect(allowed("POST", "/api/bursts/burst_1")).toBe(false);
+    expect(allowed("GET", "/api/bursts/burst_1/run")).toBe(false);
+    expect(allowed("POST", "/api/bursts/burst_1/delete")).toBe(false);
+    expect(allowed("POST", "/api/bursts/../run")).toBe(false);
+    expect(allowed("POST", "/api/internal/bursts")).toBe(false);
   });
 
   it("lets a phone update Claude Code and change nothing else about engines", () => {
