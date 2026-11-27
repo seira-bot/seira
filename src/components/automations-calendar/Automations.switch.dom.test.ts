@@ -43,7 +43,7 @@ function mount(element: ReturnType<typeof createElement>) {
   return container;
 }
 const state = (extra: Record<string, unknown> = {}) => ({
-  hydrated: true, bots, sections: ["Sales", "Finance"], selectedId: "", routines: Array.from({ length: 10 }, (_, index) => routine(index)), webhooks: [], routineRuns: [], webhookAttempts: [],
+  hydrated: true, bots, groups: [], sections: ["Sales", "Finance"], selectedId: "", routines: Array.from({ length: 10 }, (_, index) => routine(index)), webhooks: [], routineRuns: [], webhookAttempts: [],
   routinesLoadState: "ready", routinesFocus: { view: "calendar" }, webhookIngress: { available: true }, ...extra,
 });
 const page = () => createElement(TriggersPage, { onBack: vi.fn(), onOpenRoom: vi.fn() });

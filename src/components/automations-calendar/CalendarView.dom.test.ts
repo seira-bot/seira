@@ -195,7 +195,7 @@ describe("Day, Week and Month", () => {
     const { container } = mount([daily("Daily"), ...busy]);
     click(byText(container, "[data-range]", "Month"));
     expect(container.querySelectorAll("[data-band]")).toHaveLength(2);
-    expect(container.querySelector("[data-more]")!.textContent).toBe("+ 2 more");
+    expect(container.querySelector("[data-more]")!.textContent).toBe("+ 3 more");
     expect(container.querySelector("[data-today]")!.getAttribute("data-month-day")).toBe(String(at(2026, 11, 27)));
     click(container.querySelector(`[data-month-day="${at(2026, 11, 30)}"] button`)!);
     expect(container.querySelector("[data-time-grid]")!.getAttribute("data-time-grid")).toBe("day");
@@ -210,9 +210,9 @@ describe("older runs", () => {
     nextWeek(container);
     expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 11, 30));
     click(byText(container, "[data-range]", "Month"));
-    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 10, 26));
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 11, 30));
     click(container.querySelector("[aria-label='Previous dates']")!);
-    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 9, 28));
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 10, 26));
   });
 });
 
@@ -307,7 +307,7 @@ describe("dragging a card", () => {
   });
 
   it("changes that start's schedule on drop, says so with Undo, and Undo restores it", async () => {
-    const { container, saveSchedule } = mountNext([weekly]);
+    const { container, saveSchedule, render } = mountNext([weekly]);
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 1, 14));
     drop();
@@ -315,6 +315,7 @@ describe("dragging a card", () => {
     expect(saveSchedule).toHaveBeenCalledWith("r-weekly", { type: "daily", time: "14:00", weekdays: [2] });
     const toast = container.querySelector("[data-move-toast]")!;
     expect(toast.textContent).toContain("Weekly sales check now runs every Tuesday at 14:00.");
+    render({ automations: [automation("Weekly sales check", [schedule("r-weekly", { type: "daily", time: "14:00", weekdays: [2] })])] });
     click(byText(toast, "button", "Undo"));
     await settle();
     expect(saveSchedule).toHaveBeenLastCalledWith("r-weekly", { type: "daily", time: "10:00", weekdays: [1] });

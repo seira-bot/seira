@@ -75,7 +75,7 @@ export function NewAutomation({ initialText = "", slotAt, onClose, onSetUpYourse
             </div>
             <div className="mt-5 flex items-center justify-between gap-2">
               <button type="button" onClick={() => setYourself(false)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink">{t("automations.newBox.back")}</button>
-              <button type="button" onClick={() => onSetUpYourself(kind, bot?.id ?? "", kind === "schedule" && slotAt !== undefined ? slotSchedule(slotAt, when) : undefined)} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
+              <button type="button" onClick={() => (kind === "schedule" && slotAt !== undefined ? onSetUpYourself(kind, bot?.id ?? "", slotSchedule(slotAt, when)) : onSetUpYourself(kind, bot?.id ?? ""))} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
             </div>
           </>
         ) : (
