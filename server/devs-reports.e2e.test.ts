@@ -139,8 +139,8 @@ it("makes one draft with the bot's report_bug summary and the facts, redacted, s
   expect(received).toHaveLength(1);
 
   const [report] = received;
-  expect(Object.keys(report!).sort()).toEqual(["appVersion", "description", "diagnostics", "installId", "platform", "source"]);
-  expect(report).toMatchObject({ source: "bot" });
+  expect(Object.keys(report!).sort()).toEqual(["appVersion", "description", "diagnostics", "installId", "platform", "source", "title"]);
+  expect(report).toMatchObject({ source: "bot", title: "Pictures never load" });
   expect(report!.installId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
   expect(report!.appVersion).toMatch(/^\d+\.\d+\.\d+/);
   expect(report!.platform).toMatch(/^(darwin|linux|win32) \w+, self-hosted server$/);

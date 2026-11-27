@@ -72,7 +72,7 @@ describe("a @devs report's payload", () => {
       problems: ["2026-10-27T09:29:00.000Z tool Bash failed: exit code 1"], log: [`2026-10-27T09:29:01.000Z error upstream 401 Bearer ${"z".repeat(30)}`],
       contactEmail: " Ada@Example.com ",
     }), []);
-    expect(Object.keys(payload).sort()).toEqual(["appVersion", "contact", "contactEmail", "description", "diagnostics", "installId", "platform", "source"]);
+    expect(Object.keys(payload).sort()).toEqual(["appVersion", "contact", "contactEmail", "description", "diagnostics", "installId", "platform", "source", "title"]);
     expect(payload).toMatchObject({ source: "bot", appVersion: "0.1.128", platform: "darwin arm64, desktop app", contactEmail: "ada@example.com", contact: "ada@example.com" });
     expect(payload.description.split("\n")[0]).toBe(`it broke, my key is «redacted ${ANTHROPIC.length} chars»`);
     expect(payload.description).toContain("Scout's summary: Sending froze");
@@ -124,5 +124,23 @@ describe("the person's address", () => {
     for (const bad of ["", "ada", "ada@", "@example.com", "ada@example", "a b@example.com", `${"a".repeat(250)}@example.com`, undefined, null]) {
       expect(contactAddress(bad), String(bad)).toBeUndefined();
     }
+  });
+});
+
+describe("a @devs report's title", () => {
+  const titleOf = (overrides: Partial<DevsReportInput>) => buildDevsReport(input(overrides), []).title;
+  const wentWrong = (text: string) => ({ by: "Scout", text: { wentWrong: text } });
+
+  it("takes the first sentence of the bot's summary, without hosts, URLs, addresses, account names or paths, and falls back to the person's words", () => {
+    expect(titleOf({ words: "send ke", summary: wentWrong("Sending a picture froze the composer. Steps follow.\nMore lines.") })).toBe("Sending a picture froze the composer");
+    const unsafe = titleOf({ summary: wentWrong("Login on https://app.example.com/a?token=1 and api.example.org:8443 failed for @ada, ada@example.com, 10.0.0.7 in /home/ada/x") });
+    expect(unsafe).toBe("Login on and failed for, in");
+    expect(unsafe).not.toMatch(/example|ada|10\.0|home|token/);
+    const long = titleOf({ summary: wentWrong("The composer froze after sending a very large picture from the clipboard while the bot was still answering a long question") })!;
+    expect(long.length).toBeLessThanOrEqual(80);
+    expect(long.endsWith("…")).toBe(true);
+    expect(titleOf({ words: "the button froze", summary: wentWrong("https://example.com/only-a-url") })).toBe("the button froze");
+    expect(titleOf({ words: "the button froze", summary: undefined })).toBe("the button froze");
+    expect(titleOf({ words: "see https://example.com", summary: undefined })).toBeUndefined();
   });
 });

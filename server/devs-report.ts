@@ -26,7 +26,8 @@ export interface DevsReportPayload {
   diagnostics: string;
   contactEmail?: string;
   contact?: string;
-  /** The issue's title; the relay takes up to 120 characters. Absent: the relay takes the description's first line. */
+  /** The issue's title, from the bot's summary (see `reportTitle`); the relay takes up to 120 characters. Absent: the relay
+   * takes the description's first line. */
   title?: string;
   /** What the relay groups reports by: one open issue per fingerprint, later reports become comments. */
   fingerprint?: ErrorFingerprint;
@@ -168,9 +169,43 @@ function diagnose(input: DevsReportInput, redact: (text: string) => string): str
   return firstChars(redact(lines.join("\n")), DEVS_REPORT_LIMITS.diagnostics);
 }
 
+const TITLE_MAX = 80;
+const TITLE_MIN = 8; // a shorter rest, such as "see", tells nothing
+const TITLE_UNSAFE: RegExp[] = [
+  /\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, // URLs with any scheme
+  /[^\s@]+@[^\s@]+/g, // email addresses
+  /(?<![\w])@[\w-]+/g, // account names: they would ping someone on a public issue
+  /(?<![\w.-])(?:[~/.]{1,2}\/|\/)[^\s]*/g, // file paths
+  /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, // IPv4 addresses
+  /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}(?::\d+)?(?:\/\S*)?/gi, // host-like words
+];
+
+/** One line for a public issue title: the first sentence of `text`, without URLs, host names, addresses, account names,
+ * paths or secrets, cut to about 80 characters. Empty when nothing safe is left. */
+function titleFrom(text: string | undefined, redact: (text: string) => string): string {
+  let line = (text ?? "").split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? "";
+  for (const unsafe of TITLE_UNSAFE) line = line.replace(unsafe, " ");
+  line = redact(line).replace(/«[^»]*»/g, " ").replace(/[\p{Cc}`*_#<>|]+/gu, " ").replace(/\s+/g, " ").replace(/\s+([,;:])/g, "$1").replace(/([,;:])(?:\s*[,;:])+/g, "$1").trim();
+  const end = line.search(/[.!?](?:\s|$)/);
+  if (end > 0) line = line.slice(0, end);
+  line = line.replace(/^[\s\-–—:;,.()[\]"']+|[\s\-–—:;,([\]"']+$/g, "");
+  if (line.length > TITLE_MAX) {
+    const cut = line.lastIndexOf(" ", TITLE_MAX - 1);
+    line = `${line.slice(0, cut > TITLE_MAX / 2 ? cut : TITLE_MAX - 1).trimEnd()}…`;
+  }
+  return line.length >= TITLE_MIN && /\p{L}{2}/u.test(line) ? line : "";
+}
+
+/** The issue title: the first sentence of the bot's summary, else the person's words, each cleaned as above. Absent when
+ * neither leaves a title, so the relay uses its own default. */
+export function reportTitle(input: Pick<DevsReportInput, "summary" | "words">, redact: (text: string) => string): string | undefined {
+  return titleFrom(input.summary?.text.wentWrong, redact) || titleFrom(input.words, redact) || undefined;
+}
+
 export function buildDevsReport(input: DevsReportInput, secrets: readonly string[] = environmentSecrets()): DevsReportPayload {
   const redact = (text: string) => redactReportText(text, secrets);
   const contact = contactAddress(input.contactEmail);
+  const title = reportTitle(input, redact);
   return {
     installId: input.installId,
     source: "bot",
@@ -178,6 +213,7 @@ export function buildDevsReport(input: DevsReportInput, secrets: readonly string
     appVersion: singleLine(input.appVersion),
     platform: singleLine(input.platform),
     diagnostics: diagnose(input, redact),
+    ...(title ? { title } : {}),
     ...(contact ? Object.fromEntries(CONTACT_FIELDS.map((name) => [name, contact])) : {}),
   };
 }
