@@ -480,7 +480,7 @@ import { assertModelVariantSupported, memberTurnSelection } from "./member-turn.
 import { WebhookManager } from "./webhooks.ts";
 import { tieAutomationsToBots } from "./bot-automations.ts"; import { WaitManager } from "./waits.ts"; import { cancelWaitFromCard, createWaitHost, waitContinuationCheck, waitRunChat, waitTurnRunId } from "./wait-host.ts"; import { continuedConversation } from "./routine-same-conversation.ts"; import { createWaitRoutes, findWaitPeer, handedAssignment, hostWaitRefusal, waitSourceRefusal, type WaitRouteContext } from "./routes/waits.ts";
 import type { WebhookTrigger } from "../shared/webhooks.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { AGENTS_NODE_FLAG, OWN_NODE, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { agentsProxyLaunch, agentsToolBridgeEnv, applyAgentsBridge, bridgedToolTitle, turnEngine } from "./agents-bridge-switch.ts"; import { serverTurnedOff } from "./drivers/agents-tool-groups.ts"; import { availableToolGroups, toolsOffPart } from "./tool-groups.ts"; import { agentsServerEnv, botDrivenConversation, COMPUTER_OFF_REFUSAL, computerPickRefusal, directTurnKind, roomSkillsRefusal, type TurnKind } from "./agents-turn.ts";
 import { harnessMcpTokenEnv } from "./harness-mcp-token.ts";
 import {
@@ -2386,7 +2386,7 @@ function dataIntegration(botId: string, turn: { threadId: string; generation: st
   }
   const token = mintInternalCapability({ botId, ...turn, kind: "data", depth: 0, skillAuthoring: false, createdBots: 0, openedThreads: 0 });
   return {
-    command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "data"], env: {
+    command: OWN_NODE, args: [SPAWNED_PROXIES.harnessMcp, "data"], env: {
       ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("data")]: token, SEIRA_HARNESS_URL: `http://127.0.0.1:${PORT}`,
     },
   };
@@ -2423,7 +2423,7 @@ function phoneIntegration(botId: string, threadId: string, generation: string) {
   if (process.env.SEIRA_ADB_PATH) env.SEIRA_ADB_PATH = process.env.SEIRA_ADB_PATH;
   if (process.env.SEIRA_RESOURCES_PATH) env.SEIRA_RESOURCES_PATH = process.env.SEIRA_RESOURCES_PATH;
   if (process.env.PH_ANDROID_SERIAL) env.PH_ANDROID_SERIAL = process.env.PH_ANDROID_SERIAL;
-  return { command: process.execPath, args: [phoneProxyPath], env };
+  return { command: OWN_NODE, args: [phoneProxyPath], env };
 }
 
 function setupConnectedApps(bot: Pick<BotRecord, "composio" | "connectorTools">, engine: boolean, mounted: boolean): SetupConnectedApps {

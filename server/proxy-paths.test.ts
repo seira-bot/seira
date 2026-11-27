@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { SERVER_ROOT, SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { APP_EXECUTION_ALIAS } from "../scripts/appx-manifest.mjs";
+import { ownNodeCommand, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
 
 describe("local computer proxy runtime path", () => {
   it("resolves an existing TypeScript entry in development", () => {
@@ -56,5 +57,37 @@ describe("harness MCP proxy runtime path", () => {
     const entryPoints = script.match(/const ENTRY_POINTS = \[([\s\S]*?)\];/)?.[1];
     expect(entryPoints).toMatch(/["']harness-mcp-proxy\.ts["']/);
     expect(entryPoints).not.toMatch(/["']browser-proxy\.ts["']/);
+  });
+});
+
+describe("the program that runs Seira's scripts for an engine", () => {
+  const STORE_EXE = "C:\\Program Files\\WindowsApps\\PTGLOBALRAYAORISWIJAYA.Seira_1.1.195.0_x64__abcdefghjk123\\app\\Seira.exe";
+  const env = { LOCALAPPDATA: "C:\\Users\\pat\\AppData\\Local" };
+  const FAMILY_ALIAS = "C:\\Users\\pat\\AppData\\Local\\Microsoft\\WindowsApps\\PTGLOBALRAYAORISWIJAYA.Seira_abcdefghjk123\\seira-desktop.exe";
+  const GLOBAL_ALIAS = "C:\\Users\\pat\\AppData\\Local\\Microsoft\\WindowsApps\\seira-desktop.exe";
+
+  it("names the alias the Store manifest declares", () => {
+    expect(STORE_ALIAS).toBe(APP_EXECUTION_ALIAS);
+  });
+
+  it("starts a Store package through the alias in its package family folder", () => {
+    expect(ownNodeCommand(STORE_EXE, env, () => true)).toBe(FAMILY_ALIAS);
+  });
+
+  it("uses the alias on the PATH folder when the family folder has none", () => {
+    expect(ownNodeCommand(STORE_EXE, env, (path) => path === GLOBAL_ALIAS)).toBe(GLOBAL_ALIAS);
+  });
+
+  it("keeps the executable when the package has no alias", () => {
+    expect(ownNodeCommand(STORE_EXE, env, () => false)).toBe(STORE_EXE);
+    expect(ownNodeCommand(STORE_EXE, {}, () => true)).toBe(STORE_EXE);
+  });
+
+  it.each([
+    "C:\\Users\\pat\\AppData\\Local\\Programs\\Seira\\Seira.exe",
+    "/opt/Seira/seira",
+    "/usr/bin/node",
+  ])("keeps %s, which any program may start", (execPath) => {
+    expect(ownNodeCommand(execPath, env, () => true)).toBe(execPath);
   });
 });
