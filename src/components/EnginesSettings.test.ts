@@ -471,6 +471,8 @@ describe("Settings → AI in Simple mode", () => {
     expect(rows(html)).toEqual(["claude-one"]);
     expect(html).toMatch(/data-simple-engine="claude-one"[\s\S]*?text-ink">Claude<\/span>/);
     expect(html).not.toContain(">Claude - 1</span>");
+    fixture.instances = [engine("claude-one", "claudeAgent", true, { displayName: "Claude - 1" })];
+    expect(simple()).toMatch(/data-simple-engine="claude-one"[\s\S]*?text-ink">Claude - 1<\/span>/);
   });
 });
 
