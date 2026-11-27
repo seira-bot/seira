@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check, Loader2, MoreHorizontal, Plus } from "lucide-react";
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
+import { forgetProviderOff } from "@/lib/provider-off";
 import { engineDisplayName } from "@/lib/engine-name";
 import { cn } from "@/lib/cn";
 import type { LocaleKey } from "@/locales";
@@ -110,6 +111,8 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
       // The response is the confirmed state: a second request could fail and leave a stale row.
       if (Array.isArray(instances)) dispatch({ type: "instances", instances });
       else await refreshInstances().catch(() => {});
+      // Undo of a move would point at an account that no longer exists.
+      if (action === "remove") forgetProviderOff(instance.instanceId);
     } catch (cause) {
       const uses = action === "remove" ? blockedUses(cause) : [];
       if (uses.length > 0) setRemoveBlocked(uses);

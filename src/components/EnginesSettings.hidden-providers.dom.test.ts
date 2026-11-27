@@ -43,6 +43,10 @@ vi.mock("@/state/store", async (original) => {
         return { instances: visible() };
       }
       const patch = /^\/api\/instances\/([\w.-]+)$/.exec(path);
+      if (patch && method === "DELETE") {
+        server.all = server.all.filter((instance) => instance.instanceId !== patch[1]);
+        return { instances: visible() };
+      }
       if (patch && method === "PATCH") {
         const { hidden } = JSON.parse(init!.body!) as { hidden?: boolean };
         if (hidden === false && server.refuseUnhide) throw new Error("provider settings are already being updated");
@@ -311,6 +315,22 @@ describe("Settings → AI → ChatGPT: the built-in account rows can be hidden",
     expect(server.persisted).toEqual([{ id: "w", patch: expect.objectContaining({ modelSelection: { instanceId: "codex", model: "gpt" } }) }]);
     expect(server.calls.filter((call) => call.method === "PATCH")).toEqual([]);
     expect(removeButton().disabled).toBe(false);
+  });
+
+  it("drops the Undo of a move once the moved account is removed", async () => {
+    const worker = { id: "w", name: "w", modelSelection: { instanceId: "chatgpt-work", model: "gpt" } } as Bot;
+    fixture.state = { ...fixture.state, bots: [{ ...worker }] };
+    await openCard();
+    await menuItems("chatgpt-work");
+    await click(container.querySelector("[data-provider-move]"));
+    expect(container.querySelector("[data-provider-undo]")).toBeTruthy();
+    const removeButton = [...container.querySelectorAll('[data-account="chatgpt-work"] button')].find((button) => button.textContent === "Remove");
+    await click(removeButton);
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "Remove").at(-1));
+    expect(server.calls).toContainEqual({ method: "DELETE", path: "/api/instances/chatgpt-work" });
+    expect(accounts()).toEqual(["codex", "chatgpt"]);
+    expect(container.querySelector("[data-provider-undo]")).toBeNull();
+    expect(container.querySelector("[data-provider-off-status]")).toBeNull();
   });
 
   it("counts an account a bot only keeps as a backup AI as in use", async () => {
