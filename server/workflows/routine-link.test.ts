@@ -148,7 +148,6 @@ describe("accepts every setting", () => {
   const save = (change: Record<string, unknown>) => sanitizeInput({ ...base, ...change } as never, 0, lookup);
 
   it.each([
-    ["a room goal", { target: "room-goal", groupId: "room-1" }, { target: "room-goal" }],
     ["a cloud desktop", { runOn: "cloud" }, { runOn: "cloud" }],
     ["delivery to the brief", { deliver: "brief" }, { deliver: "brief" }],
     ["the same conversation", { sameConversation: true }, { sameConversation: true }],
@@ -158,6 +157,14 @@ describe("accepts every setting", () => {
     ["checks", { checks: [ROUTINE_CHECKS[0]] }, { checks: [ROUTINE_CHECKS[0]] }],
   ])("saves %s on a workflow with two steps", (_name, change, kept) => {
     expect(save(change)).toMatchObject({ workflowId: "w1", workflowBotIds: ["ana", "ben"], botId: "ana", ...kept });
+  });
+});
+
+describe("a room goal", () => {
+  it("is refused on a workflow with steps, with plain words", () => {
+    const lookup = () => workflowCopy({ id: "w1", name: "M", createdAt: 1, updatedAt: 1, steps: [{ id: "a", kind: "bot", botId: "ana", instruction: "Go", position: at }], connections: [] }, botName);
+    expect(() => sanitizeInput({ name: "M", workflowId: "w1", prompt: "x", botId: "ana", target: "room-goal", groupId: "room-1", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 } } as never, 0, lookup))
+      .toThrow("A room goal can't run a workflow's steps. Use a bot routine instead.");
   });
 });
 

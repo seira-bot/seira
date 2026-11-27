@@ -8509,9 +8509,9 @@ routines = new RoutineManager(routineHooks = {
     }
     return groupIsWorking(group) || coordinator.busy ? "busy" : "ready";
   },
-  createTask: (botId, title, run) => {
+  createTask: (botId, title, run, modelSelection) => {
     // On a Cloud home the routine's writer opens a run's conversation; a webhook run is the owner's, but its payload never reaches the lent Mac.
-    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineThreadModel(run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks), undefined,
+    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineThreadModel(modelSelection ? { botId, modelSelection } : run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks), undefined,
       CLOUD_HOME && run ? (created) => threadStarters.set(created.threadId, run.triggerSource === "webhook" ? CLOUD_OWNER_KEY! : routineOpener(run.routineId)) : undefined);
     if (task && run?.triggerSource === "webhook") outsideLineage.mark(task.threadId);
     return task;

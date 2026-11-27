@@ -1,4 +1,5 @@
-import { ROUTINE_GOAL_RUN_LIMIT_MINUTES } from "./routines.ts";
+import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, type RoutineAccess } from "./routines.ts";
+import type { ModelSelection } from "./wire.ts";
 
 export const WORKFLOW_LIMITS = {
   steps: 50, connections: 100, name: 80, instruction: 20_000, question: 2_000, note: 2_000, waitMinutes: 43_200,
@@ -12,7 +13,8 @@ export const WORKFLOW_FRAME_OUTPUT_CHARS = 300;
 export interface WorkflowPosition { x: number; y: number }
 export interface WorkflowStepBase { id: string; position: WorkflowPosition }
 export type WorkflowStep =
-  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string })
+  /** `modelSelection` and `access` override the routine's own for this step only. */
+  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string; modelSelection?: ModelSelection; access?: RoutineAccess })
   | (WorkflowStepBase & { kind: "check"; question: string })
   | (WorkflowStepBase & { kind: "wait"; minutes: number })
   | (WorkflowStepBase & { kind: "post" })
@@ -35,7 +37,7 @@ export type WorkflowProblemCode =
   | "workflow_loop" | "workflow_note_connected" | "workflow_branch_not_check" | "workflow_branch_missing"
   | "workflow_duplicate_branch" | "workflow_too_many_outgoing" | "workflow_bot_missing"
   | "workflow_instruction_missing" | "workflow_question_missing" | "workflow_wait_range" | "workflow_text_too_long"
-  | "workflow_no_start" | "workflow_many_starts" | "workflow_start_not_bot" | "workflow_changed";
+  | "workflow_no_start" | "workflow_many_starts" | "workflow_start_not_bot" | "workflow_changed" | "workflow_step_setting";
 export interface WorkflowProblem { code: WorkflowProblemCode; stepId?: string; connectionId?: string; message: string }
 
 export type WorkflowStepStatus = "waiting" | "running" | "done" | "failed" | "skipped" | "not_run";

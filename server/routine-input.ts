@@ -61,6 +61,7 @@ export function sanitizeInput(input: RoutineInput, after: number, lookup?: Workf
   if (!botId) throw new Error("Choose a bot");
   const target = input.target ?? "bot";
   if (target !== "bot" && target !== "room-goal") throw new Error("Choose a valid routine target");
+  if (link && target === "room-goal") throw new Error("A room goal can't run a workflow's steps. Use a bot routine instead.");
   const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
   const runOn = currentRunOn(input.runOn ?? "seira");
   if (runOn !== "seira" && runOn !== "cloud") throw new Error("Choose where this routine runs");

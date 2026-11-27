@@ -131,7 +131,7 @@ export function recordsAnswer(bytes: Uint8Array, contentType: string): Uint8Arra
 export function createReadAndDraft(deps: ReadAndDraftDeps) {
   const runOf = (threadId: string): RoutineRun | null => {
     const run = deps.runFor(threadId);
-    return run?.access === "read-and-draft" && run.threadId === threadId ? run : null;
+    return run?.access === "read-and-draft" && (run.threadId === threadId || (run.stepThreads !== undefined && Object.hasOwn(run.stepThreads, threadId))) ? run : null;
   };
   /** This conversation is a read-and-draft run's own, finished or not. */
   const confines = (threadId: string): boolean => runOf(threadId) !== null;

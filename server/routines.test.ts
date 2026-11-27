@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import { isRoutineProblemRun, ROUTINE_CHECKS } from "../shared/routines.ts";
 import { ROUTINE_SUPERSEDED } from "./routine-execution.ts";
+import { createReadAndDraft } from "./read-and-draft.ts";
 import { loadRoutine } from "./routine-load.ts";
 import { noStartSpacing } from "./routine-no-start.ts";
 import { RUN_PROGRESS_WINDOW_MS } from "./routine-progress-save.ts";
@@ -4605,6 +4606,55 @@ describe("a routine linked to a workflow", () => {
     await h.manager.tick();
     expect(h.manager.workflowRunState(runId, "failed", "Ben could not start")).toMatchObject({ status: "failed", error: "Ben could not start" });
     expect(h.failed).toHaveLength(1);
+  });
+
+  it("read-and-draft access confines every step thread of the run", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create({ ...input, access: "read-and-draft" });
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    const own = h.manager.listRuns()[0]!.threadId!;
+    h.manager.bindStepThread(runId, "step-ben");
+    const gate = createReadAndDraft({
+      runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+      mayDraft: () => false, drafted: () => {},
+    });
+    const ben = { id: "ben", name: "Ben", modelSelection: { instanceId: "claude" } };
+    for (const threadId of [own, "step-ben"]) {
+      expect(gate.confines(threadId)).toBe(true);
+      expect(gate.refusesRoute(ben, threadId, "POST", "/api/internal/memory")).toBe(true);
+    }
+    expect(gate.confines("elsewhere")).toBe(false);
+    expect(h.manager.isActiveThread("step-ben")).toBe(true);
+    expect(new RoutineManager(h.options).runForThread("step-ben")).toMatchObject({ id: runId, access: "read-and-draft" });
+  });
+
+  it("a step thread of a read-and-draft run cannot use a write tool", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create({ ...input, access: "read-and-draft" });
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(runId, "step-ben");
+    const gate = createReadAndDraft({
+      runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+      mayDraft: () => false, drafted: () => {},
+    });
+    const send = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "COMPOSIO_MULTI_EXECUTE_TOOL", arguments: { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: {} }] } } };
+    expect(gate.refusesConnectorCall({ id: "ben", name: "Ben", modelSelection: { instanceId: "claude" } }, "step-ben", send)).toBe(true);
+  });
+
+  it("gives a step its own access on a run that has none, and never loosens a run that has it", async () => {
+    const { h, input } = setup();
+    const plain = h.manager.runNow(h.manager.create(input).id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(plain, "step-ben", "read-and-draft");
+    h.manager.bindStepThread(plain, "step-cat");
+    expect(h.manager.runForThread("step-ben")?.access).toBe("read-and-draft");
+    expect(h.manager.runForThread("step-cat")?.access).toBeUndefined();
+    const strict = h.manager.runNow(h.manager.create({ ...input, name: "Strict", access: "read-and-draft" }).id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(strict, "step-dee");
+    expect(h.manager.runForThread("step-dee")?.access).toBe("read-and-draft");
   });
 
   it("ignores a bot turn's events: only its workflow ends it", async () => {

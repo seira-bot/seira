@@ -11,7 +11,7 @@ import { askOf, waitingFor } from "../routine-waits.ts";
 import type { Routine, RoutineManager, RoutineManagerOptions, RoutineRun, RoutineRunOn } from "../routines.ts";
 import type { Store } from "../store.ts";
 import type { WorkflowStarts } from "./workflow-starts.ts";
-import { createWorkflowRunner, type StepResult, type StepTurn } from "../workflows/runner.ts";
+import { createWorkflowRunner, type StepResult, type StepThreadOptions, type StepTurn } from "../workflows/runner.ts";
 import { workflowCopy, type WorkflowCopyLookup } from "../workflows/routine-link.ts";
 import { openWorkflowStore } from "../workflows/store.ts";
 import { runnableProblem } from "../workflows/validate.ts";
@@ -30,12 +30,12 @@ export interface WorkflowTurnOptions {
 
 export interface WorkflowHostDeps {
   dataDir: string;
-  store: Pick<Store, "bot" | "patchTask">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState"> | null;
+  store: Pick<Store, "bot" | "patchTask" | "taskByThread">;
+  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState" | "bindStepThread"> | null;
   routineHooks(): Pick<RoutineManagerOptions, "createTask" | "interruptTurn"> | null;
   botState(botId: string): "ready" | "busy" | "missing";
   startTurn(botId: string, text: string, opts: WorkflowTurnOptions): Promise<unknown>;
-  reports: Pick<AutomationReports, "postStep">;
+  reports: Pick<AutomationReports, "postStep" | "runSettled">;
   /** The webhooks and app triggers that run a workflow: they keep the same step copy as a routine does. */
   starts?(): Pick<WorkflowStarts, "rewriteEvents" | "unlinkEvents"> | null;
   /** True once the app is closing: no new step turn starts. */
@@ -92,12 +92,16 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
     return () => clearTimeout(handle);
   };
 
-  const threadFor = (run: RoutineRun, botId: string): string | null => {
-    if (botId === run.botId && run.threadId) return run.threadId;
+  const threadFor = (run: RoutineRun, botId: string, options: StepThreadOptions): string | null => {
+    if (!options.own && botId === run.botId && run.threadId) return run.threadId;
+    if (options.reuse && deps.store.taskByThread(botId, options.reuse)) {
+      deps.store.patchTask(botId, options.reuse, { routineRunId: run.id, unread: false });
+      return options.reuse;
+    }
     const hooks = deps.routineHooks();
     if (!hooks) return null;
     const suffix = ` · ${new Date(run.startedAt ?? now()).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
-    const task = hooks.createTask(botId, `${run.routineName.slice(0, 80 - suffix.length).trimEnd()}${suffix}`, run);
+    const task = hooks.createTask(botId, `${run.routineName.slice(0, 80 - suffix.length).trimEnd()}${suffix}`, run, options.modelSelection);
     if (!task) return null;
     deps.store.patchTask(botId, task.threadId, { routineRunId: run.id, unread: false });
     return task.threadId;
@@ -132,9 +136,11 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
     botName,
     botState: deps.botState,
     threadFor,
+    bindThread: (run, threadId, access) => deps.routines()?.bindStepThread(run.id, threadId, access),
     startTurn,
     stopTurn: async (botId, threadId) => { await deps.routineHooks()?.interruptTurn?.(botId, threadId); },
     post: (run, stepId, text, onWritten) => deps.reports.postStep(run, stepId, text, () => onWritten()),
+    brief: (run, threadId) => deps.reports.runSettled({ ...run, threadId }),
     runState: (runId, state, detail) => deps.routines()?.workflowRunState(runId, state, detail) ?? null,
     routineRun: (runId) => deps.routines()?.listRuns().find((run) => run.id === runId) ?? null,
     routines: () => deps.routines()?.listRoutines() ?? [],
@@ -216,7 +222,7 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       if (!event || !prior) return null;
       const queued = routines.enqueueWebhook({
         webhookId: startId, webhookName: prior.routineName, prompt: event, botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
-        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}),
+        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}), ...(prior.postsResult ? { postsResult: true as const } : {}),
         ...(prior.resultsThreadId ? { resultsThreadId: prior.resultsThreadId } : {}),
       });
       const started = routines.listRuns().find((candidate) => candidate.id === queued.id) ?? null;

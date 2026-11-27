@@ -145,6 +145,8 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
   /** A workflow run from a webhook that posts: its last step's result goes to the chat it reports to. */
   postsResult?: true;
+  /** The chats a workflow run opened for its bot steps, each with the access its steps use there. */
+  stepThreads?: Record<string, { access?: RoutineAccess }>;
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -251,7 +253,7 @@ export interface RoutineManagerOptions extends WorkflowRoutineOptions {
   botState: (botId: string) => "ready" | "busy" | "missing";
   /** Why this bot takes no runs now, in the person's words (a Starter Cloud keeps only so many bots awake); null when it does. */ pausedText?: (botId: string) => string | null; /** The person paused this bot: its runs are let go quietly, not failed into To review. */ held?: (botId: string) => boolean; /** A reached usage cap (host/usage-cap-gate.ts): `capSkip` for a scheduled occurrence, which is counted on one `missed` row per cap and period and never switches the routine off; `capText` for a run already queued. */ capSkip?: (botId: string, routineId: string) => { behind: string; resetsAt: number; words(count: number): RoutineLine } | null; capText?: (botId: string, trigger: RoutineRunTrigger) => string | null;
   goalState?: (groupId: string | undefined, coordinatorBotId: string) => "ready" | "busy" | "missing";
-  createTask: (botId: string, title: string, run?: RoutineRun) => { threadId: string } | null;
+  createTask: (botId: string, title: string, run?: RoutineRun, modelSelection?: ModelSelection) => { threadId: string } | null;
   joinConversation?: (run: RoutineRun) => string | null;
   createGoalTask?: (groupId: string, title: string) => { threadId: string } | null;
   isResultsThread?: (botId: string, threadId: string) => boolean;
@@ -318,6 +320,8 @@ const WAKE_HORIZON_MS = 60 * 60_000;
 export const ROUTINE_RESTARTED = "Seira restarted while this routine was running";
 const MAX_RUNS = 2_000;
 const earliest = (...times: Array<number | null>): number | null => times.reduce<number | null>((first, at) => at === null ? first : first === null ? at : Math.min(first, at), null);
+const ownsThread = (run: RoutineRun, threadId: string): boolean => run.threadId === threadId || (run.stepThreads !== undefined && Object.hasOwn(run.stepThreads, threadId));
+
 export class RoutineManager {
   private readonly file: string; private readonly disk: OwnedFile;
   private readonly now: () => number;
@@ -527,14 +531,30 @@ export class RoutineManager {
 
   isActiveThread(threadId: string): boolean {
     return this.runs.some(
-      (run) => run.threadId === threadId && ["running", "waiting"].includes(run.status),
+      (run) => ownsThread(run, threadId) && ["running", "waiting"].includes(run.status),
     );
   }
 
   runForThread(threadId: string): RoutineRun | null {
-    const run = this.runs.findLast((candidate) => candidate.threadId === threadId && ["running", "waiting"].includes(candidate.status)) ??
-      this.runs.findLast((candidate) => candidate.threadId === threadId);
-    return run ? cloneRun(run) : null;
+    const run = this.runs.findLast((candidate) => ownsThread(candidate, threadId) && ["running", "waiting"].includes(candidate.status)) ??
+      this.runs.findLast((candidate) => ownsThread(candidate, threadId));
+    if (!run) return null;
+    const own = run.stepThreads?.[threadId];
+    const copy = cloneRun(run);
+    if (own?.access !== undefined) copy.access = own.access;
+    return copy;
+  }
+
+  /** A chat a workflow run opened for a step: the run's limits cover it. Access only grows stricter. */
+  bindStepThread(runId: string, threadId: string, access?: RoutineAccess): void {
+    const run = this.runs.find((candidate) => candidate.id === runId && candidate.workflowId !== undefined);
+    if (!run) return;
+    const threads = run.stepThreads ?? (run.stepThreads = {});
+    const known = threads[threadId];
+    const strict = access ?? run.access;
+    if (known && (known.access !== undefined || strict === undefined)) return;
+    threads[threadId] = strict === undefined ? {} : { access: strict };
+    this.saveLater();
   }
 
   noteReport(id: string, report: RoutineRunReport | undefined): RoutineRun | null {
