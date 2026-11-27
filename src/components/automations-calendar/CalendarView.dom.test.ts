@@ -14,7 +14,7 @@ import { CalendarView } from "./CalendarView";
 const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).getTime();
 const NOW = at(2026, 11, 27, 18, 40); // Friday
 const ALL = [0, 1, 2, 3, 4, 5, 6];
-const bot = (id: string, name: string): Bot => ({ id, threadId: `${id}-t`, name, title: "", description: "", color: "blue", notifications: false, unread: false, busy: false, messages: [], section: "" } as Bot);
+const bot = (id: string, name: string): Bot => ({ id, threadId: `${id}-t`, name, title: "", description: "", color: "blue", notifications: false, unread: false, busy: false, messages: [], section: "" } as unknown as Bot);
 const bots = [bot("b1", "Scout"), bot("b2", "Ledger"), bot("b3", "Atlas"), bot("b4", "Nova")];
 
 const schedule = (id: string, value: RoutineSchedule, extra: Partial<Extract<CalendarStart, { kind: "schedule" }>> = {}): CalendarStart => ({ id, kind: "schedule", schedule: value, enabled: true, ...extra });
