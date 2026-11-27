@@ -168,7 +168,7 @@ export function createTodosHost(deps: TodosHostDeps) {
     if (maker.kind === "bot" && depth >= TODO_MAX_DEPTH) {
       return { ...result, refused: ["This work is already several todos deep. Tell the person what is missing instead of adding more todos."] };
     }
-    prepared.forEach((item, index) => {
+    prepared.forEach((item) => {
       if (maker.kind === "bot") {
         const same = [...live, ...created].find((todo) => (todo.status === "open" || todo.status === "queued") && todo.botId === item.botId && sameTitle(todo.title, item.title));
         if (same) {
