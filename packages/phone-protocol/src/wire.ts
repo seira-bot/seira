@@ -338,9 +338,7 @@ export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccess
   /** Built-in tool groups turned off for this bot (shared/tool-groups.ts). Absent or empty: all on. */
   toolsOff?: ToolGroup[];
   /** Queue direct-chat messages behind outstanding delegated work. */
-  parkDirectMessages?: boolean;
-  /** "manual": its todos wait until a person presses Start now. Absent: it starts the next todo when it is free. */
-  startsTodos?: "manual";
+  parkDirectMessages?: boolean; /** "manual": its todos wait until a person presses Start now. Absent: it starts the next todo when it is free. */ startsTodos?: "manual";
   /** true after an edit/branch-switch rewound the visible conversation. */
   rewound?: boolean;
   pinned?: boolean;
@@ -980,9 +978,7 @@ export type ServerFrame =
   | { kind: "app-trigger.service"; service: AppTriggerService }
   | { kind: "runtime"; event: RuntimeEvent }
   /** An MCP server was added, changed or removed: a list of them is stale. */
-  | { kind: "mcp.changed" }
-  /** A todo was added, changed or removed: GET /api/todos is stale. */
-  | { kind: "todos" }
+  | { kind: "mcp.changed" } /** A todo was added, changed or removed: GET /api/todos is stale. */ | { kind: "todos" }
   /** `surface` names what the frame shows: the bot's desktop (`computer`) or its built-in browser. */
   | { kind: "screen"; botId: string; threadId: string; png: string; mime?: string; surface?: "browser" | "computer" }
   /** A bot's computer is being set up or woken for a turn; the chat shows
