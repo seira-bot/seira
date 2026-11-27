@@ -5,7 +5,7 @@
 // a question left for a day is mentioned in the person's inbox chat, on a fake clock. It proves what the engine was sent and
 // what each person sees, not a model's judgement.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -18,6 +18,7 @@ import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { startFakeHttpMcp, type FakeHttpMcp } from "./testing/fake-http-mcp-server.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ADA = { email: "ada@acme.test", role: "owner" as const };
 const MIRA = { email: "mira@acme.test", role: "member" as const };
@@ -41,8 +42,7 @@ let support: Bot, sales: Bot;
 let mirasChat = "";
 
 const planPath = () => join(team.home, "plan.json");
-const turns = (): Turn[] => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Turn) : [];
+const turns = (): Turn[] => readJsonLines<Turn>(`${planPath()}.evidence.jsonl`);
 const plan = (value: Record<string, unknown>) => writeFileSync(planPath(), JSON.stringify(value));
 const create = async (body: Record<string, unknown>) => {
   const created = await team.as(ada, "POST", "/api/bots", { visibility: "everyone", ...body });

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { removeTempDir } from "./cleanup.ts";
 import { ownTurnText, runRoomHandoffAgent } from "./room-handoff-agent.ts";
+import { readJsonLines } from "./json-lines.ts";
 
 async function withMcp(script: string, test: (run: () => Promise<string>, dir: string) => Promise<void>) {
   const dir = mkdtempSync(join(tmpdir(), "seira-handoff-process-"));
@@ -67,6 +68,6 @@ it("runs the script entry a turn was itself asked for, a one-shot entry once, an
   await expect(turn("JOB: build it")).resolves.toBe("job done");
   await expect(turn("JOB: build it")).rejects.toThrow("Unplanned fixture turn for fixture: JOB: build it");
   await expect(turn("LOOP")).resolves.toBe("looped");
-  const evidence = readFileSync(`${plan}.evidence.jsonl`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  const evidence = readJsonLines(`${plan}.evidence.jsonl`);
   expect(evidence.map((record) => record.planKey ?? (record.unplanned ? "unplanned" : null))).toEqual(["loop", "job", "unplanned", "loop"]);
 }));

@@ -1,11 +1,12 @@
 // Who may open a job on itself (start_thread), end to end on the scripted engine. Only a person's own request may: a
 // teammate's hand-off and a job the bot opened on itself finish their own work, so a chain can't grow outside the depth,
 // budget and stop of the request it serves. The tool's description says so; the server enforces it again here.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
 
@@ -33,8 +34,7 @@ it("opens threads on a bot only for a person's own request, never from a hand-of
         { key: "J2", match: ["J2-JOB"], steps: [open("Ledger A", "J2-SELF: check ledger A", false)], reply: "J2: opened Ledger A." },
       ] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const result = (key: string) => evidence().find((turn) => turn.planKey === key)?.evidence.find((entry: any) => entry.step?.tool === "start_thread")?.response.result;
     const titles = async () => ((await api("/api/bots")).bots.find((bot: any) => bot.id === books.id).tasks as any[]).map((task) => task.title);
 

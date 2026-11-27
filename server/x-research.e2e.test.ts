@@ -3,11 +3,12 @@
 // own treg key) and the Admin's relay (SEIRA_CLOUD_X_URL and SEIRA_CLOUD_X_TOKEN, as a Cloud home is wired). No external
 // service is reached.
 import { createServer, type Server } from "node:http";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 interface Seen { method: string; path: string; authorization: string | undefined; tregToken: string | undefined; idempotencyKey: string | undefined; body: unknown }
 const RELAY_PATH = "/api/cloud/services/x", PLAN_TOKEN = "seira_x_e2e_fixture", OWN_KEY = "treg_e2e_own_key";
@@ -70,8 +71,7 @@ async function withFixture(test: (f: any) => Promise<void>, options: { plan: boo
     request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;
   const planPath = join(session.info.dataDir, "room-plan.json");
   const turnFor = (botId: string) => {
-    const lines = existsSync(planPath + ".evidence.jsonl") ? readFileSync(planPath + ".evidence.jsonl", "utf8").trim().split("\n").filter(Boolean) : [];
-    return lines.map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId).at(-1);
+    return readJsonLines(planPath + ".evidence.jsonl").filter((entry: any) => entry.botId === botId).at(-1);
   };
   try {
     if (options.ownKey) await api("/api/config", { treg: { key: OWN_KEY } }, "PUT");

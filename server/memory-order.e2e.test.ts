@@ -1,11 +1,12 @@
 // A 2 GB Starter-sized machine that fits one turn at a time, on the fake engine: whose turn goes next, and what a stop does.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const GB = 1024 ** 3, MB = 1024 ** 2;
 
@@ -18,7 +19,7 @@ async function fixture(test: (f: any) => Promise<void>) {
   const api = (path: string, body?: unknown, method = "POST") => request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;
   const planPath = join(dataDir, "room-plan.json");
   /** The bots whose turns have ended, in the order they did. With room for one at a time that is the order they ran in. */
-  const ended = (): string[] => existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line).botId) : [];
+  const ended = (): string[] => readJsonLines(`${planPath}.evidence.jsonl`).map((row) => row.botId);
   const bot = async (name: string) => (await cli("new-bot", "--name", name, "--section", "Team")).bot;
   const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages as any[];
   try { await test({ session, dataDir, cli, api, planPath, ended, bot, messages, free }); }

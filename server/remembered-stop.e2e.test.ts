@@ -1,12 +1,13 @@
 // A stop the person made is remembered, end to end on the scripted engine. The person stops a teammate working on their
 // request; the bot that asked hears it stopped and tries to hand the same work back: refused, until the person asks
 // again. Then it goes through as usual.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
 
@@ -33,8 +34,7 @@ it("keeps a teammate the person stopped from getting the same request back, unti
         { key: "R2-WORK", match: ["R1-AGAIN"], reply: "R2-WORK: imap.example.test" },
       ] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const said = async (threadId: string, text: string) => ((await api(`/api/threads/${threadId}/messages`)).messages as any[]).some((row) => row.text === text);
     const step = (key: string) => evidence().find((turn) => turn.planKey === key)?.evidence.find((entry: any) => entry.step)?.response.result;
 

@@ -1,9 +1,10 @@
 // Real server + injected MCP tools; only the provider's planning is scripted. Ported from @AdityaUmale's test.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 // A Chief's level reached the teammate it handed work to and stopped there: Clive on Approve for me, Ada ran at auto,
 // and the work Ada handed Bea ran at Ask ("default").
@@ -12,8 +13,7 @@ it("carries a Chief's level down every hop it hands out, in threads and in a roo
   const { url, dataDir, logPath } = fixture.info;
   const planPath = join(dataDir, "room-plan.json");
   const plans: Record<string, { turns: any[] }> = {};
-  const providerTurns = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+  const providerTurns = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${url}${path}`, { method,
       headers: { "content-type": "application/json", origin: url },
