@@ -4,6 +4,7 @@
 import { z } from "zod";
 
 import type { AccessGrant } from "../../shared/department-access.ts";
+import { allowedScopes } from "../account-signin.ts";
 import { accessEntry } from "../department-access.ts";
 import type { Consequence } from "./confirm.ts";
 import { placePath } from "./places.ts";
@@ -23,7 +24,8 @@ type Level = "view" | "chat";
 /** A department or bot by name (a bot also by id), with the level it keeps when none is given: chat for a new one. */
 type Item = string | { name: string; level: Level };
 type Sees = "whole team" | { departments?: Item[]; bots?: Item[] };
-type Person = { email: string; role?: Role; sees?: Sees };
+/** `effective`: only on the value `current` gives (Undo writes it back), never on a bot's: the schema refuses the field. */
+type Person = { email: string; role?: Role; sees?: Sees; effective?: { role: Role; sees: Sees } };
 /** What a person holds once the names are resolved; a department's name is "" for General. */
 interface Held { departments: Array<{ name: string; level: Level }>; bots: Array<{ id: string; name: string; level: Level }> }
 
@@ -38,6 +40,8 @@ const REFUSALS = {
 } as const;
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** The @domain an address falls under; none for an @domain entry itself. */
+const domainOf = (entry: string): string | null => (entry.startsWith("@") ? null : entry.slice(entry.lastIndexOf("@")));
 const names = (list: readonly string[]) => list.join(", ");
 
 const item = z.union([z.string().trim().min(1).max(120), z.object({ name: z.string().trim().min(1).max(120), level: z.enum(["view", "chat"]) }).strict()]);
@@ -49,9 +53,31 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     return admins.some((one) => same(one, entry)) ? "admin" : members.some((one) => same(one, entry)) ? "user" : "none";
   };
   const grantOf = (entry: string): AccessGrant | undefined => deps.people?.grants()[entry];
-  const seesNow = (entry: string): Sees => {
-    const grant = grantOf(entry);
-    return grant ? { departments: grant.departments.map((one) => ({ name: one.name || GENERAL, level: one.level })), bots: grant.bots.map((one) => ({ name: one.id, level: one.level })) } : WHOLE_TEAM;
+  const asSees = (grant: AccessGrant | undefined): Sees =>
+    grant ? { departments: grant.departments.map((one) => ({ name: one.name || GENERAL, level: one.level })), bots: grant.bots.map((one) => ({ name: one.id, level: one.level })) } : WHOLE_TEAM;
+  const seesNow = (entry: string): Sees => asSees(grantOf(entry));
+  // Security invariant: what a card promises follows the rules the server enforces, not the entry alone. Sign-in admits an
+  // address by its own entry or its @domain, and an admin entry wins (account-signin allowedScopes); access is the address's
+  // own grant, else its @domain's (DepartmentAccess.forPerson).
+  const signsInAs = (address: string, list: { admins: string[]; members: string[] } = lists()): Role => {
+    const scopes = allowedScopes(address, list);
+    return scopes?.includes("admin") ? "admin" : scopes ? "user" : "none";
+  };
+  const domainGrant = (entry: string): AccessGrant | undefined => {
+    const domain = domainOf(entry);
+    return domain ? grantOf(domain) : undefined;
+  };
+  /** The sign-in lists once `entry` has `role`. */
+  const listsWith = (entry: string, role: Role) => {
+    const rest = (list: string[]) => list.filter((one) => !same(one, entry));
+    const { admins, members } = lists();
+    return { admins: [...rest(admins), ...(role === "admin" ? [entry] : [])], members: [...rest(members), ...(role === "user" ? [entry] : [])] };
+  };
+  /** Addresses at an @domain that have a list entry or access of their own: the domain's rule does not decide for them. */
+  const listedUnder = (domain: string): { onList: number; withAccess: number } => {
+    const under = (one: string) => !one.startsWith("@") && one.trim().toLowerCase().endsWith(domain);
+    const { admins, members } = lists();
+    return { onList: [...admins, ...members].filter(under).length, withAccess: Object.keys(deps.people?.grants() ?? {}).filter(under).length };
   };
   const place = () => deps.people?.place() ?? "none";
   const unavailable = (): string | null => {
@@ -98,16 +124,35 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     if (typeof asked === "string") return { refusal: asked };
     if (entry.startsWith("@") && role === "admin") return { refusal: `A bot cannot make a whole @domain an admin. The person does that in ${placePath("members")}.` };
     if (entry.startsWith("@") && asked?.bots.length) return { refusal: "To give access to chosen bots, invite each person by their own address." };
-    if (role === "none" && before === "none") return { refusal: `${entry} is not on the list.` };
+    const domain = domainOf(entry);
+    const restoring = value.effective !== undefined;
+    if (role === "none" && before === "none") {
+      return { refusal: domain && signsInAs(entry) !== "none"
+        ? `${entry} is not on the list on their own: everyone at ${domain} may sign in. Remove ${domain} to stop that.`
+        : `${entry} is not on the list.` };
+    }
     if (before === "admin" && role !== "admin" && lists().admins.length <= 1) return { refusal: "This is the only admin. The server needs one admin, so make someone else an admin first." };
+    const access: "keep" | Held | null = role === "none" ? null : asked === null ? "keep" : empty(asked) ? null : asked;
+    // Undo writes back the entries as they were, so only a new change has to give what its card says.
+    if (!restoring) {
+      const after = domain ? signsInAs(entry, listsWith(entry, role)) : role;
+      if (role === "none" && after !== "none") return { refusal: `${entry} would still sign in, because everyone at ${domain} may sign in. Remove ${domain} first.` };
+      if (role === "user" && after === "admin") return { refusal: `${entry} would still sign in as an admin, because everyone at ${domain} is an admin. Change ${domain} first.` };
+      if (role === "user" && access === null && domainGrant(entry)) {
+        return { refusal: `${entry} would see only what everyone at ${domain} sees, not the whole team. Name what ${entry} should see, or change ${domain} first.` };
+      }
+      if (!domain && role === "none" && listedUnder(entry).onList) {
+        return { refusal: `Some addresses at ${entry} are on the list on their own and would still sign in. Remove them first, or remove ${entry} in ${placePath("members")}.` };
+      }
+    }
     const grant = grantOf(entry);
     const sameSet = <T>(a: T[], b: T[], key: (one: T) => string) => a.length === b.length && a.every((one) => b.some((other) => key(other) === key(one)));
     const sameAccess = asked !== null && (empty(asked) ? !grant : Boolean(grant)
       && sameSet(asked.departments, grant!.departments, (one) => `${one.name}:${one.level}`) && sameSet(asked.bots, grant!.bots, (one) => `${one.id}:${one.level}`));
     if (role === before && (asked === null || sameAccess)) return { refusal: `${entry} already has this.` };
-    const access: "keep" | Held | null = role === "none" ? null : asked === null ? "keep" : empty(asked) ? null : asked;
-    // What the card names: the access the person ends with.
-    const shown = access === "keep" ? (grant ? resolve(seesNow(entry), entry) : null) : access;
+    // What the card names: the access the person ends with, their @domain's when they keep none of their own.
+    const kept = grant ?? domainGrant(entry);
+    const shown = access === "keep" ? (kept ? resolve(asSees(kept), entry) : null) : access;
     return { entry, before, role, access, shown: typeof shown === "string" ? null : shown };
   };
   const scopeWords = (held: Held | null): string =>
@@ -138,11 +183,15 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
         if (role === "none") return { change: `Remove ${entry}; they can no longer sign in` };
         const link = before === "none" && deps.people?.publicUrl() ? ` They sign in at ${deps.people.publicUrl()}.` : "";
         const scope = scopeWords(made.shown) ? `, sees only ${scopeWords(made.shown)}` : role === "user" ? ", sees the whole team" : "";
-        return { change: `${before === "none" ? "Invite" : "Change"} ${entry} as ${role}${scope}.${link}` };
+        const own = entry.startsWith("@") ? listedUnder(entry) : null;
+        const apart = own && (own.onList || own.withAccess) ? ` Addresses at ${entry} that have their own entry keep their own role and access.` : "";
+        return { change: `${before === "none" ? "Invite" : "Change"} ${entry} as ${role}${scope}.${link}${apart}` };
       },
       current: (value: Person) => {
         const entry = accessEntry(value.email);
-        return entry ? ({ email: entry, role: roleOf(entry), sees: seesNow(entry) } satisfies Person) : undefined;
+        if (!entry) return undefined;
+        const effective = { role: entry.startsWith("@") ? roleOf(entry) : signsInAs(entry), sees: asSees(grantOf(entry) ?? domainGrant(entry)) };
+        return { email: entry, role: roleOf(entry), sees: seesNow(entry), effective } satisfies Person;
       },
       confirm: (value: Person): Consequence | null => {
         const made = plan(value);
