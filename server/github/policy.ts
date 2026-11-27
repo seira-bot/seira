@@ -1,4 +1,4 @@
-import type { ConnectorScopes } from "../../shared/connector-scopes.ts";
+import { accountLimit, grantScopedApps, type ConnectorScopes } from "../../shared/connector-scopes.ts";
 import {
   GITHUB_APP_SLUG,
   GITHUB_APP_TOOL_RULES,
@@ -24,18 +24,39 @@ export function githubAllowedFor(bot: GithubBotSwitches): boolean {
 
 const SCOPE_RANK = { read: 1, write: 2 } as const;
 
-/** True when `after` lets the bot use more GitHub tools or a higher scope level than `before`. No tool record, or no scopes, already allows everything. */
+interface GithubAccess {
+  /** 0 = off, 1 = read, 2 = write. */
+  level: 0 | 1 | 2;
+  tools: "*" | Set<string>;
+  /** Connected-account ids the bot may name, or "*" for no account limit. */
+  accounts: "*" | Set<string>;
+}
+
+/** What a bot may do with GitHub, as the connector relay reads it. A bot that GitHub is switched off for has no access, whatever its lists say. */
+function githubAccess(bot: GithubBotSwitches): GithubAccess {
+  if (!githubAllowedFor(bot)) return { level: 0, tools: new Set(), accounts: new Set() };
+  const scopes = bot.connectorScopes;
+  const level = !scopes ? 2 : SCOPE_RANK[scopes.apps[GITHUB_APP_SLUG]!];
+  const grant = bot.connectorTools && Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG) ? bot.connectorTools[GITHUB_APP_SLUG] : undefined;
+  const tools = !bot.connectorTools || grant?.tools === "*" ? "*" : new Set(grant?.tools ?? []);
+  const accounts = accountLimit(scopes, GITHUB_APP_SLUG);
+  return { level, tools, accounts: accounts ? new Set(accounts) : "*" };
+}
+
+const widerThan = (was: "*" | Set<string>, now: "*" | Set<string>): boolean =>
+  now === "*" ? was !== "*" : was !== "*" && [...now].some((name) => !was.has(name));
+
+/** The switches a bot holds once `patch` is stored: the same steps as the store, so a check sees what the relay will see. */
+export function githubSwitchesAfter(before: GithubBotSwitches, patch: GithubBotSwitches): GithubBotSwitches {
+  const next = { ...before, ...patch };
+  if (patch.connectorScopes !== undefined) grantScopedApps(next);
+  return next;
+}
+
+/** True when `after` lets the bot do more with GitHub than `before`: a higher level, more tools, more accounts or no account limit, or GitHub switched back on. */
 export function githubGrantWidens(before: GithubBotSwitches, after: GithubBotSwitches): boolean {
-  const level = (bot: GithubBotSwitches) => !bot.connectorScopes ? 2 : Object.hasOwn(bot.connectorScopes.apps, GITHUB_APP_SLUG) ? SCOPE_RANK[bot.connectorScopes.apps[GITHUB_APP_SLUG]!] : 0;
-  if (level(after) > level(before)) return true;
-  const tools = (bot: GithubBotSwitches): "*" | Set<string> => {
-    if (!bot.connectorTools) return "*";
-    const grant = Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG) ? bot.connectorTools[GITHUB_APP_SLUG] : undefined;
-    return !grant ? new Set() : grant.tools === "*" ? "*" : new Set(grant.tools);
-  };
-  const was = tools(before), now = tools(after);
-  if (now === "*") return was !== "*";
-  return was !== "*" && [...now].some((name) => !was.has(name));
+  const was = githubAccess(before), now = githubAccess(after);
+  return now.level > was.level || widerThan(was.tools, now.tools) || widerThan(was.accounts, now.accounts);
 }
 
 const grantKey = (grant: Pick<GithubRepoGrant, "installationId" | "repositoryId">) => `${grant.installationId}:${grant.repositoryId}`;

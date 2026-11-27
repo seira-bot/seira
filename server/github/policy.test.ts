@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { githubBotBranchPrefix, type GithubBotPolicy, type GithubRepoLevel } from "../../shared/github-app.ts";
-import { decideGithubCall, githubGrantWidens, githubPolicyWidens } from "./policy.ts";
+import { decideGithubCall, githubGrantWidens, githubPolicyWidens, githubSwitchesAfter } from "./policy.ts";
 
 const prefix = githubBotBranchPrefix("ada");
 const policy = (level: GithubRepoLevel, over: Partial<GithubBotPolicy> = {}): GithubBotPolicy => ({
@@ -124,5 +124,37 @@ describe("githubGrantWidens", () => {
     expect(githubGrantWidens(level("write"), level("read"))).toBe(false);
     expect(githubGrantWidens({}, level("read"))).toBe(false);
     expect(githubGrantWidens({ connectorScopes: { apps: { gmail: "read" } } }, { connectorScopes: { apps: { gmail: "write" } } })).toBe(false);
+  });
+
+  it("treats GitHub switched off as no access, so switching it on widens", () => {
+    expect(githubGrantWidens({ ...tools("*"), composio: false }, tools("*"))).toBe(true);
+    expect(githubGrantWidens({ ...level("read"), composio: false }, level("read"))).toBe(true);
+    expect(githubGrantWidens({ ...tools("*"), composio: false }, { ...tools("*"), composio: false })).toBe(false);
+    expect(githubGrantWidens(tools("*"), { ...tools("*"), composio: false })).toBe(false);
+  });
+
+  it("compares the account limit: more accounts or no limit widens, fewer does not", () => {
+    const accounts = (ids: string[]) => ({ connectorScopes: { apps: { github_app: "write" as const }, accounts: { github_app: ids } } });
+    const open = { connectorScopes: { apps: { github_app: "write" as const } } };
+    expect(githubGrantWidens(accounts(["a"]), accounts(["a", "b"]))).toBe(true);
+    expect(githubGrantWidens(accounts(["a"]), accounts(["b"]))).toBe(true);
+    expect(githubGrantWidens(accounts(["a"]), open)).toBe(true);
+    expect(githubGrantWidens(accounts(["a"]), {})).toBe(true);
+    expect(githubGrantWidens(accounts(["a", "b"]), accounts(["b"]))).toBe(false);
+    expect(githubGrantWidens(open, accounts(["a"]))).toBe(false);
+  });
+
+  it("sees the grant the store adds when a scope switches GitHub on", () => {
+    const before = { connectorTools: { gmail: { tools: "*" as const } }, connectorScopes: { apps: { gmail: "read" as const } } };
+    const patch = { connectorScopes: { apps: { gmail: "read" as const, github_app: "write" as const } } };
+    // Raw merge: no github_app tool record, so GitHub looks switched off. The store grants it every tool.
+    expect(githubSwitchesAfter(before, patch).connectorTools).toEqual({ gmail: { tools: "*" }, github_app: { tools: "*" } });
+    expect(githubGrantWidens(before, githubSwitchesAfter(before, patch))).toBe(true);
+    expect(githubGrantWidens(before, { ...before, ...patch }), "a raw merge misses it").toBe(false);
+  });
+
+  it("does not add a grant when the patch leaves scopes alone", () => {
+    const before = { connectorTools: { gmail: { tools: "*" as const } }, connectorScopes: { apps: { gmail: "read" as const, github_app: "read" as const } } };
+    expect(githubSwitchesAfter(before, { composio: true }).connectorTools).toEqual({ gmail: { tools: "*" } });
   });
 });
