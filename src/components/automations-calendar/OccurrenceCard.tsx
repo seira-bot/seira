@@ -36,13 +36,17 @@ export function StepAvatars({ botIds, bots }: { botIds: readonly string[]; bots:
   );
 }
 
+export function RunStatusIcon({ status }: { status: ShownOccurrence["runStatus"] }) {
+  if (status === "done") return <Check size={12} aria-hidden="true" data-status-icon="done" className="shrink-0 text-success" />;
+  if (status === "failed") return <X size={12} aria-hidden="true" data-status-icon="failed" className="shrink-0 text-danger" />;
+  if (status === "running") return <Loader2 size={12} aria-hidden="true" data-status-icon="running" className="shrink-0 animate-spin text-ink-secondary motion-reduce:animate-none" />;
+  return <Minus size={12} aria-hidden="true" data-status-icon="skipped" className="shrink-0 text-ink-tertiary" />;
+}
+
 function StatusIcon({ occurrence }: { occurrence: ShownOccurrence }) {
   if (occurrence.kind === "missed") return <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-danger" />;
   if (occurrence.kind !== "past-run") return null;
-  if (occurrence.runStatus === "done") return <Check size={12} aria-hidden="true" className="shrink-0 text-success" />;
-  if (occurrence.runStatus === "failed") return <X size={12} aria-hidden="true" className="shrink-0 text-danger" />;
-  if (occurrence.runStatus === "running") return <Loader2 size={12} aria-hidden="true" className="shrink-0 animate-spin text-ink-secondary motion-reduce:animate-none" />;
-  return <Minus size={12} aria-hidden="true" className="shrink-0 text-ink-tertiary" />;
+  return <RunStatusIcon status={occurrence.runStatus} />;
 }
 
 /** One time a schedule start runs: fixed height, the name, the steps' bots and the time. */

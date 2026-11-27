@@ -6,7 +6,7 @@ import { automationsFrom, automationSentence, automationStatus, orderAutomations
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { ui } from "@/lib/ui-anchor";
-import { isRoutineProblemRun } from "@/lib/routines";
+import { isRoutineProblemRun, type RoutineSchedule } from "@/lib/routines";
 import { routineWakeLine } from "@/lib/routine-wake-line";
 import { saveWebhookCredential, webhookCredentialStore } from "@/lib/webhook-credentials";
 import { botInDepartment, filterableDepartments, GENERAL_DEPARTMENT } from "@/lib/department-filter";
@@ -60,8 +60,9 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   const [newText, setNewText] = useState<string | null>(null);
   const [newSlot, setNewSlot] = useState<number | undefined>(undefined);
   const [occurrence, setOccurrence] = useState<{ id: string; at: number; runId?: string } | null>(null);
+  const showAutomation = useCallback((id: string | null) => { setOccurrence(null); setOpenId(id); }, []);
   const { create: createWorkflow, failed: workflowFailed } = useCreateWorkflow(useCallback((created) => dispatch({ type: "showRoutines", view: "workflows", workflowId: created.id }), [dispatch]));
-  const [editing, setEditing] = useState<{ kind: SetUpKind; id?: string; botId?: string; workflowId?: string } | null>(null);
+  const [editing, setEditing] = useState<{ kind: SetUpKind; id?: string; botId?: string; workflowId?: string; schedule?: RoutineSchedule } | null>(null);
   const routinesOnly = window.ogb?.remoteClient?.active === true;
   const visibleBots = state.bots.filter((bot) => !bot.hidden);
   const team = useTeamPeople();
@@ -70,8 +71,8 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   useEffect(() => {
     setBotFilter(focus?.botId ?? "all");
     // "Open" from a chat card or a notice names the automation: open its panel.
-    if (focus?.routineId && focus.section !== "logs") setOpenId(focus.routineId);
-  }, [focus]);
+    if (focus?.routineId && focus.section !== "logs") showAutomation(focus.routineId);
+  }, [focus, showAutomation]);
   useEffect(() => { backButtonRef.current?.focus({ preventScroll: true }); }, []);
 
   const all = useMemo(() => automationsFrom({ routines: state.routines, webhooks: routinesOnly ? [] : state.webhooks, appTriggers: appTriggers.triggers, runs: state.routineRuns, bots: state.bots }),
@@ -150,7 +151,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
       <div className="relative flex min-h-0 flex-1">
         {view === "calendar" && newCalendar ? <CalendarView automations={calendarListed} bots={visibleBots} engines={engines} advanced={advanced} selectedId={calendarSelected} busyId={calendar.busyId}
           onOpen={openFromCalendar} onNew={(slotAt) => { setNewSlot(slotAt); setNewText(""); }} onToggle={(automation) => void calendar.toggle(automation)} saveSchedule={calendar.saveSchedule} />
-          : view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : view === "workflows" ? <WorkflowsView workflowId={focus?.workflowId} workflowRunId={focus?.workflowRunId}
+          : view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={showAutomation} onOpenRoom={onOpenRoom} /> : view === "workflows" ? <WorkflowsView workflowId={focus?.workflowId} workflowRunId={focus?.workflowRunId}
           onUseInRoutine={(workflow) => { const start = startSteps(workflow)[0]; setEditing({ kind: "schedule", botId: start?.kind === "bot" ? start.botId : undefined, workflowId: workflow.id }); }} /> : (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
@@ -174,12 +175,12 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
                       <li key={automation.id} data-automation={automation.id} data-automation-status={status.state} className={cn("relative flex items-start gap-3 px-4 py-3.5", openId === automation.id && "bg-raised/60")}>
                         <StatusMark status={status} className="mt-[5px]" />
                         <div className="min-w-0 flex-1">
-                          <button type="button" onClick={() => setOpenId(automation.id)} className="block text-left text-[15px] font-medium leading-snug text-ink after:absolute after:inset-0 hover:text-accent-text">{name || sentenceOf(automation)}</button>
+                          <button type="button" onClick={() => showAutomation(automation.id)} className="block text-left text-[15px] font-medium leading-snug text-ink after:absolute after:inset-0 hover:text-accent-text">{name || sentenceOf(automation)}</button>
                           {name && <div className="mt-0.5 text-[13px] text-ink">{sentenceOf(automation)}</div>}
                           {status.state === "needs-you"
                             ? <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-warning">{t("automations.needsYou", { reason: status.reason ?? "" })}<FixButton automation={automation} status={status} actions={actions} onEdit={() => setEditing({ kind: automation.kind, id: automation.id })} className="relative z-10" /></div>
                             : <div className="mt-0.5 text-[13px] text-ink-secondary">{statusLine(automation)}</div>}
-                          {problemLine && <button type="button" onClick={() => setOpenId(automation.id)} className="mt-1 flex items-baseline gap-2 text-left text-[13px] text-danger">
+                          {problemLine && <button type="button" onClick={() => showAutomation(automation.id)} className="mt-1 flex items-baseline gap-2 text-left text-[13px] text-danger">
                             <span aria-hidden="true" className="size-2 shrink-0 self-center rounded-full bg-danger" />
                             <span>{problemLine.when} {problemLine.mark} {problemLine.text}</span>
                           </button>}
@@ -199,19 +200,19 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
         )}
         {open && view !== "workflows" && (
           <div className="absolute inset-y-0 right-0 z-30 flex shadow-2xl lg:static lg:shadow-none">
-            <AutomationPanel key={open.id} automation={open} sentence={sentenceOf(open)} occurrence={occurrence?.id === open.id ? occurrence : undefined} onClose={() => setOpenId(null)} onDeleted={() => setOpenId(null)} onEdit={() => setEditing({ kind: open.kind, id: open.id })} />
+            <AutomationPanel key={open.id} automation={open} sentence={sentenceOf(open)} occurrence={occurrence?.id === open.id ? occurrence : undefined} onClose={() => showAutomation(null)} onDeleted={() => showAutomation(null)} onEdit={() => setEditing({ kind: open.kind, id: open.id })} />
           </div>
         )}
       </div>
 
       {newText !== null && (
-        <NewAutomation initialText={newText} slotAt={newSlot} onClose={closeNew} onSetUpYourself={(kind, botId) => { closeNew(); setEditing({ kind, botId }); }} onDrawWorkflow={workflows.unavailable ? undefined : () => void createWorkflow()} />
+        <NewAutomation initialText={newText} slotAt={newSlot} onClose={closeNew} onSetUpYourself={(kind, botId, schedule) => { closeNew(); setEditing({ kind, botId, schedule }); }} onDrawWorkflow={workflows.unavailable ? undefined : () => void createWorkflow()} />
       )}
-      {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} initialWorkflowId={editing.workflowId} plain onClose={() => setEditing(null)} />}
+      {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} initialWorkflowId={editing.workflowId} initialSchedule={editing.schedule} plain onClose={() => setEditing(null)} />}
       {editing?.kind === "webhook" && (editWebhook || !editing.id) && (
-        <WebhookEditor webhook={editWebhook} bots={visibleBots} initialBotId={editing.botId} onClose={() => setEditing(null)} onCredential={(credential, id) => { saveWebhookCredential(webhookCredentialStore(), id, credential); setOpenId(id); }} />
+        <WebhookEditor webhook={editWebhook} bots={visibleBots} initialBotId={editing.botId} onClose={() => setEditing(null)} onCredential={(credential, id) => { saveWebhookCredential(webhookCredentialStore(), id, credential); showAutomation(id); }} />
       )}
-      {editing?.kind === "app" && (editApp || !editing.id) && <AppEventEditor trigger={editApp} bots={visibleBots} initialBotId={editing.botId} onClose={() => setEditing(null)} onSaved={(trigger) => setOpenId(trigger.id)} />}
+      {editing?.kind === "app" && (editApp || !editing.id) && <AppEventEditor trigger={editApp} bots={visibleBots} initialBotId={editing.botId} onClose={() => setEditing(null)} onSaved={(trigger) => showAutomation(trigger.id)} />}
     </ToolPage>
   );
 }

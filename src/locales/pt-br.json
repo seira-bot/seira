@@ -12464,6 +12464,7 @@
   "automations.cal.more": "+ {count} mais",
   "automations.cal.moved": "{name} agora roda {when}.",
   "automations.cal.moveFailed": "Não foi possível mover {name}. Tente de novo.",
+  "automations.cal.undoFailed": "Não foi possível desfazer a mudança de {name}.",
   "automations.cal.undo": "Desfazer",
   "automations.cal.dismiss": "Fechar",
   "automations.cal.resetMark": "O limite de {engine} renova às {time}",

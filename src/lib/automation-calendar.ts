@@ -41,7 +41,7 @@ export const GRID_LAST_HOUR = 22;
 export const MONTH_CHIPS_PER_DAY = 3;
 const MONTH_WEEKS = 6;
 const RUN_TOLERANCE_MS = 60_000;
-const MAX_CRON_PER_DAY = 12;
+const MAX_CRON_PER_RANGE = 400;
 
 const runTime = (run: RoutineRun) => run.startedAt ?? run.scheduledFor ?? run.createdAt;
 
@@ -52,7 +52,7 @@ function runStatusOf(run: RoutineRun): OccurrenceRunStatus {
   return "failed";
 }
 
-function scheduledTimes(schedule: RoutineSchedule, from: number, to: number, start: Extract<CalendarStart, { kind: "schedule" }>): number[] {
+function scheduledTimes(schedule: RoutineSchedule, from: number, to: number, start: Extract<CalendarStart, { kind: "schedule" }>, upcoming = false): number[] {
   const since = start.createdAt ?? 0;
   const inRange = (at: number) => at >= from && at < to && at >= since;
   if (schedule.type === "once") return inRange(schedule.at) ? [schedule.at] : [];
@@ -66,15 +66,8 @@ function scheduledTimes(schedule: RoutineSchedule, from: number, to: number, sta
     return times;
   }
   if (schedule.type === "cron") {
-    const times: number[] = [];
-    for (let day = startOfDay(from); day < to; day = addDays(day, 1)) {
-      const end = Math.min(to, addDays(day, 1));
-      const upcoming = nextCronRuns(schedule, Math.max(day, from, since) - 1, MAX_CRON_PER_DAY);
-      if (!upcoming.length || upcoming[0]! >= to) break;
-      day = startOfDay(upcoming[0]!);
-      for (const at of upcoming) if (at < end && inRange(at)) times.push(at);
-    }
-    return times;
+    const floor = Math.max(from, since, upcoming ? start.nextRunAt ?? 0 : 0);
+    return nextCronRuns(schedule, floor - 1, MAX_CRON_PER_RANGE).filter(inRange);
   }
   const next = start.nextRunAt;
   return next != null && inRange(next) ? [next] : [];
@@ -106,7 +99,7 @@ export function occurrencesIn(automations: readonly CalendarAutomation[], from: 
       }
       if (automation.enabled && start.enabled && to > now) {
         const canMove = canMoveSchedule(start.schedule);
-        for (const at of scheduledTimes(start.schedule, Math.max(now, from), to, start)) {
+        for (const at of scheduledTimes(start.schedule, Math.max(now, from), to, start, true)) {
           if (at > now && !hasRun(at)) add(start.id, at, "scheduled", { canMove });
         }
       }
@@ -133,11 +126,11 @@ export interface GridHours {
   after: boolean;
 }
 
-export function gridHours(occurrences: readonly Pick<Occurrence, "at">[]): GridHours {
+export function gridHours(occurrences: readonly Pick<Occurrence, "at">[], extraTimes: readonly number[] = []): GridHours {
   let start = GRID_FIRST_HOUR;
   let end = GRID_LAST_HOUR;
-  for (const occurrence of occurrences) {
-    const hour = new Date(occurrence.at).getHours();
+  for (const at of [...occurrences.map((occurrence) => occurrence.at), ...extraTimes]) {
+    const hour = new Date(at).getHours();
     if (hour < start) start = hour;
     if (hour >= end) end = hour + 1;
   }
@@ -196,21 +189,25 @@ export function monthCells(automations: readonly CalendarAutomation[], monthAnch
     chipsByDay.set(day, list);
   }
 
-  const today = startOfDay(now);
-  const cells = days.map((day): MonthCell => {
-    const list = chipsByDay.get(day) ?? [];
-    return { day, inMonth: new Date(day).getMonth() === anchor.getMonth(), today: day === today, chips: list.slice(0, MONTH_CHIPS_PER_DAY), more: Math.max(0, list.length - MONTH_CHIPS_PER_DAY) };
-  });
   const bands = [...bandDays].map(([key, columns]): MonthBand => {
     const [automationId, startId, week] = key.split("|") as [string, string, string];
     return { key, automationId, startId, week: Number(week), fromColumn: Math.min(...columns), toColumn: Math.max(...columns) };
   }).sort((left, right) => left.week - right.week || left.key.localeCompare(right.key));
+  const today = startOfDay(now);
+  const cells = days.map((day, index): MonthCell => {
+    const list = chipsByDay.get(day) ?? [];
+    const weekBands = bands.filter((band) => band.week === Math.floor(index / 7));
+    const bandRows = weekBands.reduce((rows, band, row) => (band.fromColumn <= index % 7 && index % 7 <= band.toColumn ? row + 1 : rows), 0);
+    const room = Math.max(0, MONTH_CHIPS_PER_DAY - bandRows);
+    return { day, inMonth: new Date(day).getMonth() === anchor.getMonth(), today: day === today, chips: list.slice(0, room), more: Math.max(0, list.length - room) };
+  });
   return { cells, bands };
 }
 
-/** Returns the schedule after a drag, or null when the start cannot move or nothing changes. Dropping on an hour slot
- * keeps the original minutes unless `keepMinutes` is false. */
-export function moveSchedule(schedule: RoutineSchedule, fromAt: number, toAt: number, keepMinutes = true): RoutineSchedule | null {
+/** Returns the schedule after a drag, or null when the start cannot move, nothing changes, or the drop is at or before
+ * `now`. Dropping on an hour slot keeps the original minutes unless `keepMinutes` is false. */
+export function moveSchedule(schedule: RoutineSchedule, fromAt: number, toAt: number, keepMinutes = true, now?: number): RoutineSchedule | null {
+  if (now !== undefined && toAt <= now) return null;
   if (schedule.type === "once") return toAt === schedule.at ? null : { type: "once", at: toAt };
   if (schedule.type !== "daily") return null;
   const target = new Date(toAt);

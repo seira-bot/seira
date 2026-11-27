@@ -112,6 +112,33 @@ describe("occurrencesIn", () => {
     expect(times(list.filter((item) => item.startId === "reset"))).toEqual([at(2026, 11, 29, 6)]);
   });
 
+  it("shows a weekly cron start once in a week range", () => {
+    const starts = [schedule("cron", { type: "cron", expression: "0 10 * * 3", timeZone: "UTC" })];
+    const list = occurrencesIn([automation("a", starts)], at(2026, 11, 30), at(2026, 12, 7), NOW);
+    expect(list).toHaveLength(1);
+    expect(list[0]!.kind).toBe("scheduled");
+  });
+
+  it("shows a monthly cron start in a month range", () => {
+    const starts = [schedule("cron", { type: "cron", expression: "0 10 28 * *", timeZone: "UTC" })];
+    const grid = monthCells([automation("a", starts)], at(2026, 11, 15), NOW);
+    expect(grid.cells.flatMap((cell) => cell.chips)).toHaveLength(1);
+  });
+
+  it("keeps the later cards of a dense cron start", () => {
+    const starts = [schedule("cron", { type: "cron", expression: "*/30 * * * *", timeZone: "UTC" })];
+    const list = occurrencesIn([automation("a", starts)], at(2026, 11, 28), at(2026, 11, 29), NOW);
+    expect(list.length).toBe(48);
+    expect(list.some((item) => item.at >= at(2026, 11, 28, 6))).toBe(true);
+  });
+
+  it("starts a cron start no earlier than its next run", () => {
+    const starts = [schedule("cron", { type: "cron", expression: "0 10 * * *", timeZone: "UTC" }, { nextRunAt: at(2026, 11, 30, 0) })];
+    const list = occurrencesIn([automation("a", starts)], at(2026, 11, 28), at(2026, 12, 2), NOW);
+    expect(list.every((item) => item.at >= at(2026, 11, 30, 0))).toBe(true);
+    expect(list.length).toBeGreaterThan(0);
+  });
+
   it("sorts every occurrence by time", () => {
     const list = occurrencesIn([automation("a", [daily("s1", "15:00")]), automation("b", [daily("s2", "07:00")])], NOW, NOW + 3 * 86_400_000, NOW);
     expect(times(list)).toEqual([...times(list)].sort((left, right) => left - right));
@@ -128,6 +155,12 @@ describe("gridHours", () => {
     expect(gridHours([{ at: at(2026, 11, 28, 5, 30) }])).toEqual({ start: 5, end: 22, before: false, after: true });
     expect(gridHours([{ at: at(2026, 11, 28, 22, 0) }])).toEqual({ start: 7, end: 23, before: true, after: false });
     expect(gridHours([{ at: at(2026, 11, 28, 6, 59) }, { at: at(2026, 11, 28, 23, 30) }])).toEqual({ start: 6, end: 24, before: false, after: false });
+  });
+});
+
+describe("gridHours with extra times", () => {
+  it("grows the grid to show an extra time outside the window", () => {
+    expect(gridHours([], [at(2026, 11, 28, 5, 30), at(2026, 11, 28, 23, 10)])).toEqual({ start: 5, end: 24, before: false, after: false });
   });
 });
 
@@ -161,6 +194,15 @@ describe("monthCells", () => {
     expect(cell.chips.map((chip) => chip.automationId)).toEqual(["a0", "a1", "a2"]);
     expect(cell.more).toBe(2);
   });
+
+  it("shows fewer chips under a band and counts the hidden chips in more", () => {
+    const once = Array.from({ length: 3 }, (_, index) => automation(`o${index}`, [schedule("s", { type: "once", at: at(2026, 12, 1, 8 + index) })]));
+    const { cells, bands } = monthCells([automation("band", [daily("d", "10:30")]), ...once], anchor, NOW);
+    expect(bands.length).toBeGreaterThan(0);
+    const cell = cells.find((candidate) => candidate.day === at(2026, 12, 1))!;
+    expect(cell.chips).toHaveLength(2);
+    expect(cell.more).toBe(1);
+  });
 });
 
 describe("moveSchedule", () => {
@@ -185,6 +227,14 @@ describe("moveSchedule", () => {
 
   it("sets the new time of a one-time schedule", () => {
     expect(moveSchedule({ type: "once", at: monday9 }, monday9, at(2026, 11, 30, 11, 15))).toEqual({ type: "once", at: at(2026, 11, 30, 11, 15) });
+  });
+
+  it("refuses a drop at or before now for a one-time and a daily schedule", () => {
+    const future = at(2026, 11, 28, 9);
+    expect(moveSchedule({ type: "once", at: future }, future, NOW, true, NOW)).toBeNull();
+    expect(moveSchedule({ type: "once", at: future }, future, NOW - 3_600_000, true, NOW)).toBeNull();
+    expect(moveSchedule({ type: "daily", time: "09:00", weekdays: ALL }, future, at(2026, 11, 27, 9), true, NOW)).toBeNull();
+    expect(moveSchedule({ type: "once", at: future }, future, NOW + 3_600_000, true, NOW)).toEqual({ type: "once", at: NOW + 3_600_000 });
   });
 
   it("returns null for cron, limit reset, interval and an unchanged slot", () => {

@@ -12464,6 +12464,7 @@
   "automations.cal.more": "+ {count} more",
   "automations.cal.moved": "{name} now runs {when}.",
   "automations.cal.moveFailed": "Couldn't move {name}. Try again.",
+  "automations.cal.undoFailed": "Couldn't undo the move of {name}.",
   "automations.cal.undo": "Undo",
   "automations.cal.dismiss": "Close",
   "automations.cal.resetMark": "{engine} limit resets at {time}",

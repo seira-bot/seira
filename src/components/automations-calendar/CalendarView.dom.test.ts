@@ -9,6 +9,9 @@ import type { RoutineRun, RoutineSchedule } from "@/lib/routines";
 import type { Bot } from "@/state/store";
 import { CalendarView } from "./CalendarView";
 
+const loadRunsFrom = vi.hoisted(() => vi.fn());
+vi.mock("@/state/older-routine-runs", () => ({ useRoutineRunsFrom: (start: number) => loadRunsFrom(start) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).getTime();
@@ -46,7 +49,7 @@ const cards = (container: ParentNode) => [...container.querySelectorAll<HTMLElem
 const nextWeek = (container: ParentNode) => click(container.querySelector("[aria-label='Next dates']")!);
 const slot = (container: ParentNode, when: number) => container.querySelector(`[data-slot-at="${when}"]`)!;
 
-beforeEach(() => { window.innerWidth = 1280; });
+beforeEach(() => { window.innerWidth = 1280; loadRunsFrom.mockClear(); });
 afterEach(() => {
   if (root) act(() => root!.unmount());
   root = null;
@@ -200,6 +203,19 @@ describe("Day, Week and Month", () => {
   });
 });
 
+describe("older runs", () => {
+  it("asks for the runs from the first visible day of Week, the next Week and Month", () => {
+    const { container } = mount([weekly]);
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 11, 23));
+    nextWeek(container);
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 11, 30));
+    click(byText(container, "[data-range]", "Month"));
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 10, 26));
+    click(container.querySelector("[aria-label='Previous dates']")!);
+    expect(loadRunsFrom).toHaveBeenLastCalledWith(at(2026, 9, 28));
+  });
+});
+
 describe("empty slots and the empty calendar", () => {
   it("asks for a new automation at the hour of a slot", () => {
     const { container, onNew } = mount([weekly]);
@@ -220,7 +236,37 @@ describe("empty slots and the empty calendar", () => {
   });
 });
 
+describe("the picked card", () => {
+  it("rings no sibling after the rail opens another automation", () => {
+    const chain = automation("Chain", [schedule("c1", { type: "daily", time: "09:00", weekdays: [6] }), schedule("c2", { type: "daily", time: "15:00", weekdays: [6] })]);
+    const other = daily("Other");
+    const { container, render } = mount([chain, other], { selectedId: "Chain" });
+    click(cards(container).find((item) => item.getAttribute("data-occurrence")!.startsWith("Chain|c1"))!);
+    render({ selectedId: "Chain" });
+    expect(container.querySelector("[data-sibling]")).not.toBeNull();
+    render({ selectedId: "Other" });
+    expect(container.querySelector("[data-sibling]")).toBeNull();
+    expect(container.querySelector("[data-selected]")).toBeNull();
+  });
+});
+
+describe("a run chip's mark", () => {
+  it("shows the mark of its own status", () => {
+    const app = automation("Invoices", [{ id: "a1", kind: "app", app: "gmail" }], { runs: [run("a1", at(2026, 11, 27, 9), "failed"), run("a1", at(2026, 11, 27, 10), "completed"), run("a1", at(2026, 11, 27, 11), "running")] });
+    const { container } = mount([app]);
+    const mark = (hour: number) => card(container, `Invoices|a1|${at(2026, 11, 27, hour)}`)!.querySelector("[data-status-icon]")!.getAttribute("data-status-icon");
+    expect([mark(9), mark(10), mark(11)]).toEqual(["failed", "done", "running"]);
+  });
+});
+
 describe("limit resets", () => {
+  it("grows the grid to show a reset mark outside the usual hours", () => {
+    const late = { engine: "claude", name: "Claude", resetsAt: at(2026, 11, 28, 23, 30), usedPercent: 90, blocked: false } as unknown as EngineLimit;
+    const { container } = mount([weekly], { engines: [late], advanced: true });
+    expect(container.querySelectorAll("[data-reset-mark]")).toHaveLength(1);
+    expect((container.querySelector("[data-day-column]") as HTMLElement).style.height).toBe(`${(24 - 7) * 40}px`);
+  });
+
   const engine = { engine: "claude", name: "Claude", resetsAt: at(2026, 11, 28, 15, 0), usedPercent: 90, blocked: false } as unknown as EngineLimit;
   it("shows a mark in the hour column only while Advanced is on", () => {
     const on = mount([weekly], { engines: [engine], advanced: true });
@@ -319,6 +365,7 @@ describe("dragging a card", () => {
 
   it("returns the card and says it could not move when the save fails", async () => {
     const { container, saveSchedule } = mountNext([weekly]);
+    const before = cards(container).map((item) => item.getAttribute("data-occurrence"));
     saveSchedule.mockRejectedValueOnce(new Error("offline"));
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 1, 14));
@@ -327,7 +374,107 @@ describe("dragging a card", () => {
     const toast = container.querySelector("[data-move-toast]")!;
     expect(toast.textContent).toContain("Couldn't move Weekly sales check. Try again.");
     expect(toast.textContent).not.toContain("Undo");
-    expect(card(container, key)).not.toBeNull();
+    expect(cards(container).map((item) => item.getAttribute("data-occurrence"))).toEqual(before);
+    expect(card(container, key)!.getAttribute("aria-label")).toContain("10:00");
     expect(container.querySelector("[data-ghost]")).toBeNull();
+  });
+
+  it("gives no ghost and saves nothing for a drop on a slot that is already past", async () => {
+    const { container, saveSchedule } = mount([daily("Daily")]);
+    const future = `Daily|r-Daily|${at(2026, 11, 28, 9)}`;
+    expect(slot(container, at(2026, 11, 27, 10)).hasAttribute("data-slot-past")).toBe(true);
+    expect(slot(container, at(2026, 11, 28, 10)).hasAttribute("data-slot-past")).toBe(false);
+    pointerdown(card(container, future)!);
+    dragTo(container, at(2026, 11, 27, 10));
+    expect(container.querySelector("[data-ghost]")).toBeNull();
+    drop();
+    await settle();
+    expect(saveSchedule).not.toHaveBeenCalled();
+    expect(container.querySelector("[data-move-toast]")).toBeNull();
+  });
+
+  it("picks the slot under a card that sits over it", async () => {
+    const over = at(2026, 12, 1, 14);
+    const other = automation("Other", [schedule("r-other", { type: "daily", time: "14:00", weekdays: [2] })]);
+    const { container, saveSchedule } = mountNext([weekly, other]);
+    const sitting = card(container, `Other|r-other|${over}`)!;
+    const original = document.elementsFromPoint;
+    document.elementsFromPoint = () => [sitting, slot(container, over)];
+    try {
+      pointerdown(card(container, key)!);
+      fire(sitting, "pointermove", { clientX: 200, clientY: 200 });
+      expect(container.querySelector("[data-ghost]")).not.toBeNull();
+      drop();
+      await settle();
+    } finally {
+      document.elementsFromPoint = original;
+    }
+    expect(saveSchedule).toHaveBeenCalledWith("r-weekly", { type: "daily", time: "14:00", weekdays: [2] });
+  });
+
+  it("ignores a second drag of the same start while its save runs", async () => {
+    const { container, saveSchedule } = mountNext([weekly]);
+    let finish: () => void = () => {};
+    saveSchedule.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 1, 14));
+    drop();
+    await settle();
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 2, 16));
+    expect(container.querySelector("[data-ghost]")).toBeNull();
+    drop();
+    await settle();
+    expect(saveSchedule).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 2, 16));
+    expect(container.querySelector("[data-ghost]")).not.toBeNull();
+    drop();
+  });
+
+  it("runs one Undo at a time, says so when Undo fails, and drops Undo when the schedule changed since", async () => {
+    const { container, saveSchedule, render } = mountNext([weekly]);
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 1, 14));
+    drop();
+    await settle();
+    let finish: () => void = () => {};
+    saveSchedule.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const undo = () => byText(container.querySelector("[data-move-toast]")!, "button", "Undo") as HTMLButtonElement;
+    const moved = automation("Weekly sales check", [schedule("r-weekly", { type: "daily", time: "14:00", weekdays: [2] })]);
+    render({ automations: [moved] });
+    click(undo());
+    click(undo());
+    expect(saveSchedule).toHaveBeenCalledTimes(2);
+    expect(undo().disabled).toBe(true);
+    finish();
+    await settle();
+    expect(container.querySelector("[data-move-toast]")).toBeNull();
+
+    render({ automations: [weekly] });
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 1, 14));
+    drop();
+    await settle();
+    render({ automations: [moved] });
+    saveSchedule.mockRejectedValueOnce(new Error("offline"));
+    click(undo());
+    await settle();
+    expect(container.querySelector("[data-move-toast]")!.textContent).toContain("Couldn't undo the move of Weekly sales check.");
+  });
+
+  it("drops Undo without saving when the schedule is no longer the moved one", async () => {
+    const { container, saveSchedule, render } = mountNext([weekly]);
+    pointerdown(card(container, key)!);
+    dragTo(container, at(2026, 12, 1, 14));
+    drop();
+    await settle();
+    render({ automations: [automation("Weekly sales check", [schedule("r-weekly", { type: "daily", time: "08:00", weekdays: [3] })])] });
+    click(byText(container.querySelector("[data-move-toast]")!, "button", "Undo"));
+    await settle();
+    expect(saveSchedule).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-move-toast]")).toBeNull();
   });
 });

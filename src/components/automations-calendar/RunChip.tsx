@@ -1,10 +1,10 @@
 import type { CSSProperties } from "react";
-import { Check, Webhook, X } from "lucide-react";
+import { Webhook } from "lucide-react";
 
 import type { CalendarStart } from "@/lib/automation-calendar";
 import { cn } from "@/lib/cn";
 import { ServiceIcon } from "../ServiceIcon";
-import { emphasisClass, type CardLook } from "./OccurrenceCard";
+import { emphasisClass, RunStatusIcon, type CardLook } from "./OccurrenceCard";
 import { clock, occurrenceLabel } from "./phrases";
 import type { ShownOccurrence } from "./model";
 
@@ -51,7 +51,7 @@ export function RunChip({ occurrence, name, start, look, showName, style, onOpen
       )}
       >
       <AppMark start={start} />
-      {failed ? <X size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" className="text-success" />}
+      <RunStatusIcon status={occurrence.runStatus} />
       <span>{clock(occurrence.at)}</span>
       {showName && <span className="min-w-0 truncate text-ink">{name}</span>}
     </button>

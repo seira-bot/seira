@@ -6,7 +6,8 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
 import { useStore, type Bot } from "@/state/store";
-import { slotChoices } from "../automations-calendar/phrases";
+import type { RoutineSchedule } from "@/lib/routines";
+import { slotChoices, slotSchedule } from "../automations-calendar/phrases";
 import { Select } from "../Select";
 
 export type SetUpKind = "schedule" | "webhook" | "app";
@@ -26,8 +27,8 @@ export function NewAutomation({ initialText = "", slotAt, onClose, onSetUpYourse
   slotAt?: number;
   onClose: () => void;
   onDrawWorkflow?: () => void;
-  /** The bot this box would have asked, so the editor starts with it chosen. */
-  onSetUpYourself: (kind: SetUpKind, botId: string) => void;
+  /** The bot this box would have asked, so the editor starts with it chosen. A slot's time choice comes as `schedule` for a schedule. */
+  onSetUpYourself: (kind: SetUpKind, botId: string, schedule?: RoutineSchedule) => void;
 }) {
   const { state, dispatch } = useStore();
   const bots = state.bots.filter((bot) => !bot.hidden);
@@ -74,7 +75,7 @@ export function NewAutomation({ initialText = "", slotAt, onClose, onSetUpYourse
             </div>
             <div className="mt-5 flex items-center justify-between gap-2">
               <button type="button" onClick={() => setYourself(false)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink">{t("automations.newBox.back")}</button>
-              <button type="button" onClick={() => onSetUpYourself(kind, bot?.id ?? "")} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
+              <button type="button" onClick={() => onSetUpYourself(kind, bot?.id ?? "", kind === "schedule" && slotAt !== undefined ? slotSchedule(slotAt, when) : undefined)} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
             </div>
           </>
         ) : (

@@ -1,6 +1,7 @@
 import type { SchedulePhrase, ShownOccurrenceLike } from "./model";
 import { intlLocale, t } from "@/lib/i18n";
 import { startOfDay } from "@/lib/routine-calendar";
+import type { RoutineSchedule } from "@/lib/routines";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -37,4 +38,11 @@ export function slotChoices(at: number): SlotChoice[] {
     { id: "weekly", label: t("automations.cal.new.weekly", { day: weekdayName(day), time }), phrase: schedulePhrase({ days: [day], time }) },
     { id: "daily", label: t("automations.cal.new.daily", { time }), phrase: schedulePhrase({ days: "all", time }) },
   ];
+}
+
+/** The schedule a slot choice stands for. */
+export function slotSchedule(at: number, choice: SlotChoice["id"]): RoutineSchedule {
+  if (choice === "once") return { type: "once", at };
+  const day = new Date(at).getDay();
+  return { type: "daily", time: clock(at), weekdays: choice === "daily" ? [0, 1, 2, 3, 4, 5, 6] : [day] };
 }

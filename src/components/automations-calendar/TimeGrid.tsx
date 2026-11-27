@@ -16,6 +16,7 @@ import type { MoveDrag } from "./useCalendarMove";
 export const HOUR_HEIGHT = 40;
 const GUTTER = 56;
 const DAY_CARD_WIDTH = 560;
+const HOUR_MS = 3_600_000;
 
 export interface GridMove {
   drag: MoveDrag | null;
@@ -66,7 +67,7 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
           </div>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto select-none" data-cal-scroll="">
+      <div className={cn("min-h-0 flex-1 overflow-auto select-none", move.drag && "[&_[data-occurrence]]:pointer-events-none")} data-cal-scroll="">
         {hours.before && note(t("automations.cal.before", { time: `${String(GRID_FIRST_HOUR).padStart(2, "0")}:00` }), "top")}
         <div className="grid" style={columns}>
           <div className="relative" style={{ height }} data-hour-column="">
@@ -92,9 +93,10 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
                 {rows.map((hour, index) => {
                   const at = atLocalTime(day, `${String(hour).padStart(2, "0")}:00`);
                   const label = t("automations.cal.slot", { when: `${longDay(at)}, ${clock(at)}` });
+                  const past = at + HOUR_MS <= now;
                   return (
-                    <button key={hour} type="button" data-slot-at={at} aria-label={label} title={label} onClick={() => onSlot(at)}
-                      className="group absolute inset-x-0.5 z-[1] flex h-[38px] items-center justify-center rounded-md text-accent-text hover:bg-accent/10 focus-visible:bg-accent/10" style={{ top: index * HOUR_HEIGHT }}>
+                    <button key={hour} type="button" data-slot-at={at} data-slot-past={past ? "" : undefined} aria-label={label} title={label} onClick={() => onSlot(at)}
+                      className={cn("group absolute inset-x-0.5 z-[1] flex h-[38px] items-center justify-center rounded-md text-accent-text hover:bg-accent/10 focus-visible:bg-accent/10", move.drag && past && "pointer-events-none")} style={{ top: index * HOUR_HEIGHT }}>
                       <Plus size={14} aria-hidden="true" className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
                     </button>
                   );
@@ -111,9 +113,9 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
                   if (occurrence.kind === "app-run") {
                     return <RunChip key={occurrence.key} occurrence={occurrence} name={name} start={automation?.starts.find((start) => start.id === occurrence.startId)} look={look} showName={oneColumn} style={{ top: style.top, left: 3 }} onOpen={open} />;
                   }
-                  const cannotMove = occurrence.kind === "scheduled" && !occurrence.canMove;
+                  const reason = occurrence.kind !== "scheduled" ? undefined : occurrence.paused ? "automations-cal-paused" : !occurrence.canMove ? "automations-cal-cannot-move" : undefined;
                   return <OccurrenceCard key={occurrence.key} occurrence={occurrence} name={name} stepBotIds={automation?.stepBotIds ?? []} bots={bots} look={look} oneColumn={oneColumn} style={style}
-                    describedBy={cannotMove ? "automations-cal-cannot-move" : undefined} onOpen={open} onPress={occurrence.canMove ? (event) => move.begin(occurrence, event) : undefined} />;
+                    describedBy={reason} onOpen={open} onPress={occurrence.canMove ? (event) => move.begin(occurrence, event) : undefined} />;
                 })}
                 {ghostHere && dragged && (
                   <div data-ghost="" className={cn("pointer-events-none absolute z-[4] flex flex-col justify-center overflow-hidden rounded-lg border-[1.5px] border-dashed border-accent bg-accent/20 px-2 text-left text-ink shadow-lg")}
@@ -130,6 +132,7 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
         {hours.after && note(t("automations.cal.after", { time: `${GRID_LAST_HOUR}:00` }), "bottom")}
       </div>
       <span id="automations-cal-cannot-move" hidden>{t("automations.cal.cannotMove")}</span>
+      <span id="automations-cal-paused" hidden>{t("automations.cal.state.paused")}</span>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { intlLocale, t } from "@/lib/i18n";
 import { resetMarkers, type EngineLimit } from "@/lib/limit-resets";
 import type { RoutineSchedule } from "@/lib/routines";
 import { addDays, calendarRangeLabel, startOfDay, startOfWeek } from "@/lib/routine-calendar";
+import { useRoutineRunsFrom } from "@/state/older-routine-runs";
 import type { Bot } from "@/state/store";
 import { SeiraCharacter } from "../seira-character";
 import { CalendarRail } from "./CalendarRail";
@@ -25,7 +26,7 @@ const NARROW = 640;
 const runIdOf = (automation: CalendarAutomation | undefined, occurrence: ShownOccurrence) => automation?.runs.find((run) => run.routineId === occurrence.startId
   && (run.scheduledFor === occurrence.at || (run.startedAt ?? run.scheduledFor ?? run.createdAt) === occurrence.at))?.id;
 
-/** The Automations calendar: the rail of automations, then Day, Week or Month. It reads and never fetches; the page gives it everything. */
+/** The Automations calendar: the rail of automations, then Day, Week or Month. The page gives it the automations; it only asks for older runs when the range reaches before the loaded ones. */
 export function CalendarView({ automations, bots, engines, advanced, selectedId, busyId, now: fixedNow, onOpen, onNew, onToggle, saveSchedule }: {
   automations: readonly CalendarAutomation[];
   bots: readonly Bot[];
@@ -52,6 +53,8 @@ export function CalendarView({ automations, bots, engines, advanced, selectedId,
     return () => window.clearInterval(timer);
   }, [fixedNow]);
 
+  useEffect(() => { setPicked((current) => (current && current.automationId !== selectedId ? null : current)); }, [selectedId]);
+
   const byId = useMemo(() => new Map(automations.map((automation) => [automation.id, automation])), [automations]);
   const days = useMemo(() => {
     if (range === "day") return [anchor];
@@ -59,10 +62,12 @@ export function CalendarView({ automations, bots, engines, advanced, selectedId,
     return Array.from({ length: 7 }, (_, index) => addDays(first, index));
   }, [range, anchor]);
   const last = days.at(-1)!;
+  const rangeStart = range === "month" ? startOfWeek(new Date(new Date(anchor).getFullYear(), new Date(anchor).getMonth(), 1).getTime()) : days[0]!;
+  useRoutineRunsFrom(rangeStart);
   const occurrences = useMemo(() => (range === "month" ? [] : shownOccurrences(automations, days[0]!, addDays(last, 1), now)), [range, automations, days, last, now]);
-  const hours = useMemo(() => gridHours(occurrences), [occurrences]);
-  const month = useMemo(() => (range === "month" ? shownMonth(automations, anchor, now) : null), [range, automations, anchor, now]);
   const resets = useMemo(() => (advanced && range !== "month" ? resetMarkers(engines, days[0]!, addDays(last, 1), now) : []), [advanced, engines, range, days, last, now]);
+  const hours = useMemo(() => gridHours(occurrences, resets.map((mark) => mark.at)), [occurrences, resets]);
+  const month = useMemo(() => (range === "month" ? shownMonth(automations, anchor, now) : null), [range, automations, anchor, now]);
 
   const move = useCalendarMove({
     find: (occurrence) => {
@@ -70,6 +75,7 @@ export function CalendarView({ automations, bots, engines, advanced, selectedId,
       return start?.kind === "schedule" ? { name: byId.get(occurrence.automationId)!.name, schedule: start.schedule } : null;
     },
     save: saveSchedule,
+    now,
   });
 
   const activePick = selectedId !== null ? picked : null;
@@ -94,7 +100,7 @@ export function CalendarView({ automations, bots, engines, advanced, selectedId,
   return (
     <div data-automations-calendar="" className="flex min-h-0 min-w-0 flex-1">
       <CalendarRail automations={automations} selectedId={selectedId} busyId={busyId} onHover={setHoverId}
-        onOpen={(automation) => onOpen(automation.id, automation.starts[0]?.id ?? automation.id)} onToggle={onToggle} />
+        onOpen={(automation) => { setPicked(null); onOpen(automation.id, automation.starts[0]?.id ?? automation.id); }} onToggle={onToggle} />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-auto min-h-[52px] shrink-0 flex-wrap items-center gap-1.5 border-b border-hairline/40 bg-app px-3 py-1.5 sm:px-4">
           <button type="button" onClick={() => setAnchor(startOfDay(now))} className="h-8 rounded-lg border border-hairline/50 px-3 text-[13px] font-medium text-ink hover:bg-raised">{t("routines.today")}</button>

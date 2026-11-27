@@ -23,6 +23,7 @@ const { TriggersPage } = await import("../TriggersPage");
 const { AutomationPanel } = await import("../automations/AutomationPanel");
 const { NewAutomation } = await import("../automations/NewAutomation");
 const { automationsFrom } = await import("@/lib/automations");
+const { addDays, atLocalTime, startOfDay, startOfWeek } = await import("@/lib/routine-calendar");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,6 +63,8 @@ describe("the new Automations switch", () => {
     const container = mount(page());
     await settle();
     expect(container.querySelector("[data-automations-calendar]")).toBeNull();
+    expect(container.querySelector("[aria-label='Schedule view']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Calendar range']")).toBeNull();
     expect(container.querySelector("[aria-label='All bots']")).toBeNull();
     expect(container.querySelector("[aria-label='All departments']")).not.toBeNull();
   });
@@ -77,6 +80,33 @@ describe("the new Automations switch", () => {
     expect(views).toEqual(expect.arrayContaining(["List", "Calendar"]));
     expect([...container.querySelectorAll("button")].some((item) => item.textContent === "New")).toBe(true);
     expect(container.querySelectorAll("[data-rail-row]")).toHaveLength(10);
+  });
+
+  it("changes the cards and the rail when the bot filter changes", async () => {
+    fixture.state = state({ config: { features: { newAutomations: true } } });
+    const container = mount(page());
+    await settle();
+    act(() => { (container.querySelector("[aria-label='Next dates']") as HTMLElement).click(); });
+    const owners = () => new Set([...container.querySelectorAll("[data-occurrence]")].map((item) => Number(item.getAttribute("data-automation-id")!.split("-")[1]) % 2));
+    expect(owners()).toEqual(new Set([0, 1]));
+    const select = container.querySelector("select[aria-label='All bots']") as HTMLSelectElement;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "bot-a");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.querySelectorAll("[data-rail-row]")).toHaveLength(5);
+    expect(owners()).toEqual(new Set([1]));
+  });
+
+  it("sends the enable request for the rail switch of an automation", async () => {
+    fixture.state = state({ config: { features: { newAutomations: true } } });
+    const container = mount(page());
+    await settle();
+    fixture.api.mockResolvedValue({ routine: { ...routine(0), enabled: false } });
+    act(() => { (container.querySelector("[data-rail-row='routine-0'] [role=switch]") as HTMLElement).click(); });
+    await settle();
+    expect(fixture.api).toHaveBeenCalledWith("/api/routines/routine-0", { method: "PATCH", body: JSON.stringify({ enabled: false }) });
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "routinePatched" }));
   });
 
   it("opens the same panel as the List for a card, with the date and time", async () => {
@@ -95,6 +125,33 @@ describe("the new Automations switch", () => {
     await settle();
     act(() => { (container.querySelector("[data-slot-at]") as HTMLElement).click(); });
     expect(document.body.textContent).toContain("When should it run?");
+  });
+});
+
+describe("a slot to the routine editor", () => {
+  const nextTuesdayTen = () => {
+    const monday = startOfWeek(addDays(startOfDay(Date.now()), 7));
+    return atLocalTime(addDays(monday, 1), "10:00");
+  };
+  const press = (container: ParentNode | Document, text: string) => act(() => { ([...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLElement).click(); });
+  const chooseRepeat = (container: HTMLElement) => (container.querySelector("select[aria-label='Repeat']") as HTMLSelectElement | null)?.value;
+
+  it.each([
+    ["Once", "none"],
+    ["Every Tuesday at 10:00", "weekly"],
+    ["Every day at 10:00", "daily"],
+  ])("opens Set it up yourself with 10:00 and %s as the start value", async (label, repeat) => {
+    fixture.state = state({ config: { features: { newAutomations: true } } });
+    const container = mount(page());
+    await settle();
+    act(() => { (container.querySelector("[aria-label='Next dates']") as HTMLElement).click(); });
+    act(() => { (container.querySelector(`[data-slot-at="${nextTuesdayTen()}"]`) as HTMLElement).click(); });
+    act(() => { ([...document.querySelectorAll("[role=radiogroup] button")].find((item) => item.textContent?.startsWith(label)) as HTMLElement).click(); });
+    press(document, "Set it up yourself");
+    press(document, "Continue");
+    await settle();
+    expect((document.querySelector("input[type=time]") as HTMLInputElement).value).toBe("10:00");
+    expect(chooseRepeat(document.body)).toBe(repeat);
   });
 });
 
