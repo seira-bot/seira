@@ -11780,7 +11780,7 @@
   "settings.aiPool.paidModeEven": "A pay-per-use AI is used only when no plan AI has usage left.",
   "settings.aiPool.paidModeTurns": "A pay-per-use AI is used only when no plan AI can take the turn.",
   "settings.aiPool.paidModeInOrder": "A pay-per-use AI is used at its place in the list, so put it last to use it last.",
-  "settings.aiPool.billingUnknown": "Pay-per-use status is unknown for {names}, so the pool stays off. Wait for the AI to load, or take it out of the list.",
+  "settings.aiPool.leftOut": "Pay-per-use status is unknown, so the pool leaves out {names}. To use one anyway, add it to the list.",
   "settings.aiPool.reviewChanged": "The AIs changed while you were choosing. Check the list again.",
   "settings.aiPool.signedOut": "Signed out",
   "settings.aiPool.unknown": "Usage not shown",

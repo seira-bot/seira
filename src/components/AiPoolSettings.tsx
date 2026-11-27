@@ -104,46 +104,44 @@ export function AiPoolSettings() {
     void save(pool);
   };
   const nameOf = (members: readonly ModelSelection[]) => members.map((member) => state.instances.find((instance) => instance.instanceId === member.instanceId)?.displayName ?? member.instanceId).join(", ");
-  /** What turning the pool on would use, read from the AIs as they are now. The owner sees this exact list before anything is saved. */
+  const leftOutNote = (unknown: readonly ModelSelection[]) => unknown.length > 0 ? t("settings.aiPool.leftOut", { names: nameOf(unknown) }) : "";
+  /** What turning the pool on would use, read from the AIs as they are now. The owner sees this exact list before anything is saved.
+   * A saved AI that is gone or hidden is dropped. An AI whose pay-per-use status is unknown is left out and named, never used. */
   const reviewOf = (): PaidReview => {
-    const kept = value.members.length >= 2;
-    const members = kept ? value.members : suggestPoolMembers(state.instances, limits, now);
+    const listed = value.members.filter((member) => state.instances.some((instance) => instance.instanceId === member.instanceId));
+    const kept = listed.length >= 2;
+    const members = kept ? listed : suggestPoolMembers(state.instances, limits, now);
     const billing = (member: ModelSelection) => memberBilling(member, state.instances);
     const plans = members.filter((member) => billing(member) === "plan");
     const unknown = members.filter((member) => billing(member) === "unknown");
     const paid = kept ? members.filter((member) => billing(member) === "paid") : suggestPaidMembers(state.instances, plans);
-    return { plans, paid, unknown, all: kept ? members : [...plans, ...paid] };
+    return { plans, paid, unknown, all: kept ? members.filter((member) => billing(member) !== "unknown") : [...plans, ...paid] };
+  };
+  const turnOn = (members: ModelSelection[], unknown: readonly ModelSelection[]) => {
+    if (members.length < 2) setNeedsSecond(true);
+    else change({ ...value, enabled: true, members });
+    setNotice(leftOutNote(unknown));
   };
   const toggle = () => {
     if (value.enabled) return change({ ...value, enabled: false });
     const next = reviewOf();
     setNotice("");
     setNeedsSecond(false);
-    setReview(null);
-    if (next.unknown.length > 0) {
-      setReview(null);
-      return setNotice(t("settings.aiPool.billingUnknown", { names: nameOf(next.unknown) }));
-    }
     if (next.paid.length > 0) return setReview(next);
-    if (next.plans.length < 2) return setNeedsSecond(true);
-    change({ ...value, enabled: true, members: next.plans });
+    setReview(null);
+    turnOn(next.plans, next.unknown);
   };
   const decide = (includePaid: boolean) => {
     if (!review) return;
     const next = reviewOf();
-    if (next.unknown.length > 0 || next.paid.length === 0) {
-      setReview(null);
-      return setNotice(next.unknown.length > 0 ? t("settings.aiPool.billingUnknown", { names: nameOf(next.unknown) }) : t("settings.aiPool.reviewChanged"));
-    }
-    const members = includePaid ? next.all : next.plans;
     setReview(null);
-    if (members.length < 2) return setNeedsSecond(true);
-    change({ ...value, enabled: true, members });
+    if (next.paid.length === 0) return setNotice(t("settings.aiPool.reviewChanged"));
+    turnOn(includePaid ? next.all : next.plans, next.unknown);
   };
   /** While the question is open it is read again on every render: if the AIs change, the owner sees the new list before choosing. */
   const shown = review ? reviewOf() : null;
-  const reviewOpen = shown !== null && shown.unknown.length === 0 && shown.paid.length > 0;
-  const reviewNote = shown && !reviewOpen ? (shown.unknown.length > 0 ? t("settings.aiPool.billingUnknown", { names: nameOf(shown.unknown) }) : t("settings.aiPool.reviewChanged")) : "";
+  const reviewOpen = shown !== null && shown.paid.length > 0;
+  const reviewNote = !shown ? "" : reviewOpen ? leftOutNote(shown.unknown) : t("settings.aiPool.reviewChanged");
   const setMembers = (members: ModelSelection[]) => {
     if (members.length >= 2) return change({ ...value, members });
     change({ ...value, enabled: false, members });

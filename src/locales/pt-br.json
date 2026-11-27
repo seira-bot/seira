@@ -11779,7 +11779,7 @@
   "settings.aiPool.paidModeEven": "Uma IA de pagamento por uso só é usada quando nenhuma IA de plano tem uso restante.",
   "settings.aiPool.paidModeTurns": "Uma IA de pagamento por uso só é usada quando nenhuma IA de plano pode assumir a vez.",
   "settings.aiPool.paidModeInOrder": "Uma IA de pagamento por uso é usada na sua posição da lista; coloque-a por último para usá-la por último.",
-  "settings.aiPool.billingUnknown": "Não se sabe se {names} cobra por uso, então o pool continua desligado. Espere a IA carregar ou tire-a da lista.",
+  "settings.aiPool.leftOut": "Não se sabe se cobram por uso, então o pool deixa de fora {names}. Para usar uma mesmo assim, adicione-a à lista.",
   "settings.aiPool.reviewChanged": "As IAs mudaram enquanto você escolhia. Confira a lista de novo.",
   "settings.aiPool.signedOut": "Desconectada",
   "settings.aiPool.unknown": "Uso não exibido",
