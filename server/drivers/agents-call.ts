@@ -22,7 +22,7 @@ import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
 import { callMachineBudgetTool, callUsageLimitsTool, MACHINE_BUDGET_TOOL, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
 import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts"; import { callSuggestRepliesTool, SUGGEST_REPLIES_TOOL } from "./agents-suggest-replies-tool.ts"; import { callSuggestTasksTool, SUGGEST_TASKS_TOOL } from "./agents-suggest-tasks-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts"; import { callTodoTool } from "./agents-todo-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
@@ -493,6 +493,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     };
   }
   if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
+  if (name === "todo_add" || name === "todo_list" || name === "todo_assign" || name === "todo_update") return callTodoTool(name, args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);

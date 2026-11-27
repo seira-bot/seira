@@ -110,3 +110,12 @@ describe("the fixture's @devs reports", () => {
     expect(childEnv({}).SEIRA_BUG_REPORT_URL).toBe(closed);
   });
 });
+
+describe("a fixture with email sign-in on", () => {
+  it("lets a mail server on this machine cross, and nothing else", () => {
+    expect(childEnv({ SEIRA_SIGNIN_SMTP_URL: "smtp://127.0.0.1:9" })).toMatchObject({ SEIRA_SIGNIN_SMTP_URL: "smtp://127.0.0.1:9" });
+    for (const url of ["smtp://mail.example.com:25", "smtp://localhost:25", "smtp://127.0.0.1", "smtp://127.0.0.1:25/x", "smtp://user:pw@127.0.0.1:25", ""]) {
+      expect(childEnv({ SEIRA_SIGNIN_SMTP_URL: url }), url).not.toHaveProperty("SEIRA_SIGNIN_SMTP_URL");
+    }
+  });
+});

@@ -20,7 +20,7 @@ import { FakeDocker } from "./fake-docker.ts";
 
 const digest = (letter: string) => `ghcr.io/milind-soni/openmausbot@sha256:${letter.repeat(64)}`;
 const CLOUD_HOME = `ghcr.io/milind-soni/openmausbot-cloud-home@sha256:${"c".repeat(64)}`;
-const CONNECTOR = `ghcr.io/milind-soni/mausbot-connector@sha256:${"1".repeat(64)}`;
+const CONNECTOR = `ghcr.io/seira-bot/seira-connector@sha256:${"1".repeat(64)}`;
 const RUNNING = "ghcr.io/milind-soni/openmausbot:v0.1.151";
 const NEXT = digest("b");
 const OLDER = digest("a");
@@ -430,7 +430,7 @@ describe("a customer-run server: the home its owner installed", () => {
 describe("a customer-run server: replacing the connector", () => {
   it("is refused, even for the server's own root, when the new image is older than the one running or names no version", async () => {
     const fixture = await server();
-    const [now, newer, old, unnamed] = ["1", "2", "3", "4"].map((letter) => `ghcr.io/milind-soni/mausbot-connector@sha256:${letter.repeat(64)}`);
+    const [now, newer, old, unnamed] = ["1", "2", "3", "4"].map((letter) => `ghcr.io/seira-bot/seira-connector@sha256:${letter.repeat(64)}`);
     for (const [ref, version] of [[now, "v0.1.152"], [newer, "v0.1.153"], [old, "v0.1.140"], [unnamed, null]] as const) {
       fixture.docker.publish(ref!, version);
       await fixture.docker.pull(ref!);

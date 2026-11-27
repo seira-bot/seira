@@ -376,6 +376,9 @@ export const ROUTE_TEMPLATES: readonly string[] = `
 /api/internal/thread-title
 /api/internal/threads
 /api/internal/threads/:id/close
+/api/internal/todos
+/api/internal/todos/assign
+/api/internal/todos/update
 /api/internal/tool-result
 /api/internal/tool-timing
 /api/internal/trigger-events
@@ -579,6 +582,11 @@ export const ROUTE_TEMPLATES: readonly string[] = `
 /api/threads/:id/undo
 /api/time-zone
 /api/today
+/api/todos
+/api/todos/:id
+/api/todos/:id/restore
+/api/todos/:id/start
+/api/todos/picker
 /api/tts
 /api/tts/prepare
 /api/tts/speak

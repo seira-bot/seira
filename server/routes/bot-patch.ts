@@ -380,6 +380,10 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         if (typeof body.parkDirectMessages !== "boolean") return json(res, 400, { error: "parkDirectMessages must be true or false" });
         patch.parkDirectMessages = body.parkDirectMessages;
       }
+      if (body.startsTodos !== undefined) {
+        if (body.startsTodos !== "manual" && body.startsTodos !== "auto") return json(res, 400, { error: "startsTodos must be manual or auto" });
+        patch.startsTodos = body.startsTodos === "manual" ? "manual" : undefined;
+      }
       // Omitted keeps the selection; null restores all enabled servers; [] mounts none.
       let requestedMcpServers = existingBot?.mcpServers;
       if (Object.hasOwn(body, "toolScope")) {

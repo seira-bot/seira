@@ -50,6 +50,7 @@ const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!]
 const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
 const MILESTONES = "milestones.yml";
+const CLAIMS = "issue-claims.yml";
 const SMOKE = "server-image-smoke.yml";
 // Uploads the desktop snap to the Snap Store from the `snap-store` environment, when a release is published.
 const SNAP = "snap-publish.yml";
@@ -589,8 +590,8 @@ describe("msstore publish workflow", () => {
 });
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the milestones workflow, the Microsoft Store publish workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
-    expect(files).toEqual([VENDOR, "ci.yml", MILESTONES, MSSTORE, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
+  it("keeps the CI workflow, the issue claims workflow, the milestones workflow, the Microsoft Store publish workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
+    expect(files).toEqual([VENDOR, "ci.yml", CLAIMS, MILESTONES, MSSTORE, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
@@ -598,16 +599,21 @@ describe("CI workflows", () => {
     expect(workflow.on.push).toEqual({ branches: ["main"] });
     expect(workflow.on.merge_group).toEqual({ types: ["checks_requested"] });
     for (const [file, flow] of workflows) {
-      for (const trigger of ["pull_request_target", "workflow_run", "issue_comment"]) {
+      for (const trigger of ["pull_request_target", "workflow_run", ...(file === CLAIMS ? [] : ["issue_comment"])]) {
         expect(flow.on, `${file} uses ${trigger}`).not.toHaveProperty(trigger);
       }
     }
   });
 
-  it("gives every workflow a read-only token, and write access only to a job behind the release environment, except the milestones job", () => {
+  it("gives every workflow a read-only token, and write access only to a job behind the release environment, except the milestones job and the issue claims job", () => {
     for (const [file, flow] of workflows) {
       expect(flow.permissions, file).toEqual({ contents: "read" });
       for (const [id, job] of Object.entries(flow.jobs)) {
+        if (file === CLAIMS && id === "claims") {
+          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write" });
+          expect(job.environment, `${file} job ${id}`).toBeUndefined();
+          continue;
+        }
         if (file === MILESTONES && id === "milestones") {
           expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write", "pull-requests": "write" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
@@ -685,7 +691,7 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS attach step once to upload to the release and the milestones step once to call the GitHub API", () => {
+  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS attach step once to upload to the release, the milestones step once to call the GitHub API and the issue claims step once to call the GitHub API", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
     expect(texts.get(IMAGE)!.split(READ_TOKEN)).toHaveLength(2);
     expect(texts.get(NPM)!.split(READ_TOKEN)).toHaveLength(3);
@@ -693,6 +699,7 @@ describe("CI workflows", () => {
     expect(texts.get(MSSTORE)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
+    expect(texts.get(CLAIMS)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
       const text = (file === IMAGE ? original.replace(LOGIN, "") : original).replaceAll(READ_TOKEN, "");
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
@@ -810,6 +817,60 @@ describe("Milestones workflow", () => {
       "sparse-checkout-cone-mode": false,
     });
     expect(steps[1]!.run).toBe("node scripts/milestones.mjs");
+    expect(steps[1]!.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
+  });
+
+  it("reads no secret and installs no dependency", () => {
+    for (const forbidden of ["secrets.", "pnpm", "npm install", "npm ci"]) expect(text).not.toContain(forbidden);
+  });
+});
+
+describe("Issue claims workflow", () => {
+  const flow = workflows.get(CLAIMS)!;
+  const text = texts.get(CLAIMS)!;
+  const job = flow.jobs.claims!;
+
+  it("starts on a new comment, a label, the hourly sweep and a manual start only", () => {
+    expect(flow.on).toEqual({
+      issue_comment: { types: ["created"] },
+      issues: { types: ["labeled"] },
+      schedule: [{ cron: "17 * * * *" }],
+      workflow_dispatch: null,
+    });
+  });
+
+  it("keeps one run per issue and one for the sweep, and never cancels a running job", () => {
+    expect(flow.concurrency).toEqual({ group: "issue-claims-${{ github.event.issue.number || 'sweep' }}", "cancel-in-progress": false });
+  });
+
+  it("has one job on a GitHub-hosted runner, with a timeout, no environment and no needs", () => {
+    expect(Object.keys(flow.jobs)).toEqual(["claims"]);
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job).toHaveProperty("timeout-minutes");
+    expect(job.environment).toBeUndefined();
+    expect(job.needs).toBeUndefined();
+  });
+
+  it("starts no runner for a comment on a pull request, a comment from a bot or a comment that does not start with a command", () => {
+    for (const part of [
+      "!github.event.issue.pull_request",
+      "github.event.comment.user.type != 'Bot'",
+      "startsWith(github.event.comment.body, '/take')",
+      "startsWith(github.event.comment.body, '/untake')",
+    ]) expect(job.if).toContain(part);
+  });
+
+  it("checks out main without credentials and only the script, then runs the script with the read token in env", () => {
+    const steps = stepsOf(job);
+    expect(steps).toHaveLength(2);
+    expect(steps[0]!.uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
+    expect(steps[0]!.with).toEqual({
+      ref: "main",
+      "persist-credentials": false,
+      "sparse-checkout": "scripts/issue-claims.mjs",
+      "sparse-checkout-cone-mode": false,
+    });
+    expect(steps[1]!.run).toBe("node scripts/issue-claims.mjs");
     expect(steps[1]!.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
   });
 

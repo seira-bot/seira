@@ -88,25 +88,25 @@ const spot = () => host.querySelector<HTMLElement>("[data-spot]");
 
 describe("a place card in chat", () => {
   it("is drawn as a card row, not as the bot's text", () => {
-    expect(richRowKind(row("board.new-task"))).toBe("widget");
+    expect(richRowKind(row("board.new-todo"))).toBe("widget");
   });
 
   it("takes the label and the position from the UI map, not from the row text", () => {
-    show(row("board.new-task", "LIES: click the red button"));
-    const card = host.querySelector("[data-ui-place-card='board.new-task']")!;
-    expect(card.textContent).toContain("New task");
+    show(row("board.new-todo", "LIES: click the red button"));
+    const card = host.querySelector("[data-ui-place-card='board.new-todo']")!;
+    expect(card.textContent).toContain("New todo");
     expect(card.querySelector("[data-ui-place-position]")!.textContent).toBe("top right of the Board page, a filled button");
     expect(host.textContent).not.toContain("LIES");
     expect(openButton()!.textContent).toBe("Open it");
   });
 
   it("shows no steps while the button is offered", () => {
-    show(row("board.new-task"));
+    show(row("board.new-todo"));
     expect(host.querySelector("[data-ui-place-steps]")).toBeNull();
   });
 
   it.each([
-    ["board.new-task", "showBoard", ["ui", "board.new-task"]],
+    ["board.new-todo", "showBoard", ["ui", "board.new-todo"]],
     ["automations.page", "showRoutines", ["tour", "automations-page"]],
     ["apps.search", "togglePlugins", ["ui", "apps.search"]],
   ] as const)("%s: opens its page, then spotlights the right element; the app never clicks it", async (id, actionType, [attr, value]) => {
@@ -162,7 +162,7 @@ describe("a place card in chat", () => {
 
   // The actions of these places change `activeView`, and the page replaces the chat page: the card is gone before the control is.
   it.each([
-    ["board.new-task", "showBoard", "board", ["ui", "board.new-task"]],
+    ["board.new-todo", "showBoard", "board", ["ui", "board.new-todo"]],
     ["automations.page", "showRoutines", "routines", ["tour", "automations-page"]],
     ["automations.workflows", "showRoutines", "routines", ["ui", "automations.workflows"]],
   ] as const)("%s: the spotlight stays over the page change that unmounts the card", async (id, actionType, view, [attr, value]) => {
@@ -183,20 +183,20 @@ describe("a place card in chat", () => {
 
   it("says the control is not there on a page that replaced the chat, where the card is gone", async () => {
     pages.board = [];
-    show(row("board.new-task"));
+    show(row("board.new-todo"));
     flushSync(() => openButton()!.click());
     expect(openButton()).toBeNull();
     await vi.waitFor(() => expect(host.querySelector("[data-ui-place-lost]")).not.toBeNull(), { timeout: 4000 });
     expect(spot()).toBeNull();
-    expect(host.textContent).toContain("Click New task, at the top right of the page");
+    expect(host.textContent).toContain("Click New todo, at the top right of the page");
     flushSync(() => host.querySelector<HTMLButtonElement>("[data-spot-done]")!.click());
     expect(host.querySelector("[data-ui-place-lost]")).toBeNull();
   });
 
   it("drops the answer of an older look when the person asked again", () => {
-    const first = reducer(initialState, { type: "lookForPlace", id: "board.new-task" });
+    const first = reducer(initialState, { type: "lookForPlace", id: "board.new-todo" });
     const second = reducer(first, { type: "lookForPlace", id: "files.upload" });
-    const late = reducer(second, { type: "placeLookResult", nonce: first.placeLook!.nonce, phase: "spot", anchor: { attr: "ui", value: "board.new-task" } });
+    const late = reducer(second, { type: "placeLookResult", nonce: first.placeLook!.nonce, phase: "spot", anchor: { attr: "ui", value: "board.new-todo" } });
     expect(late.placeLook).toMatchObject({ id: "files.upload", phase: "looking" });
   });
 

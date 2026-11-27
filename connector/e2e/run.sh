@@ -20,7 +20,8 @@ ADMIN="http://127.0.0.1:$PORT"
 CODE="MB-E2E-$(openssl rand -hex 4 | tr a-f A-F)"
 SECRET=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')
 if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::add-mask::$SECRET"; fi
-INSTALL_ENV=(SEIRA_ADMIN_URL="$ADMIN" SEIRA_CONNECTOR_IMAGE="$CONNECTOR_IMAGE" SEIRA_UPDATE_WAIT_S=90)
+# The image is a local build, not a published digest: this run says so, as install.sh requires.
+INSTALL_ENV=(SEIRA_ADMIN_URL="$ADMIN" SEIRA_CONNECTOR_IMAGE="$CONNECTOR_IMAGE" SEIRA_ALLOW_LOCAL_CONNECTOR_IMAGE=1 SEIRA_UPDATE_WAIT_S=90)
 
 step() { printf '\n== %s\n' "$*"; }
 fail() {
