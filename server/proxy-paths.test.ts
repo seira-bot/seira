@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { aliasTarget, ownNodeCommand, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
+import { aliasTarget, isOwnNode, ownNode, SERVER_ROOT, SPAWNED_PROXIES, STORE_ALIAS } from "./proxy-paths.ts";
 
 describe("local computer proxy runtime path", () => {
   it("resolves an existing TypeScript entry in development", () => {
@@ -71,28 +71,62 @@ describe("the program that runs Seira's scripts for an engine", () => {
   });
 
   it("starts a Store package through the alias in its package family folder", () => {
-    expect(ownNodeCommand(STORE_EXE, env, (path) => (path === FAMILY_ALIAS ? STORE_EXE : null))).toBe(FAMILY_ALIAS);
+    expect(ownNode(STORE_EXE, env, (path) => (path === FAMILY_ALIAS ? STORE_EXE : null))).toBe(FAMILY_ALIAS);
   });
 
   it("matches the alias target without regard to letter case", () => {
-    expect(ownNodeCommand(STORE_EXE, env, () => STORE_EXE.toLowerCase())).toBe(FAMILY_ALIAS);
+    expect(ownNode(STORE_EXE, env, () => STORE_EXE.toLowerCase())).toBe(FAMILY_ALIAS);
   });
 
   it("keeps the executable when the alias leads to another program", () => {
-    expect(ownNodeCommand(STORE_EXE, env, () => "C:\\Users\\pat\\AppData\\Local\\Temp\\other.exe")).toBe(STORE_EXE);
-    expect(ownNodeCommand(STORE_EXE, env, () => STORE_EXE.replace("1.1.195.0", "1.1.194.0"))).toBe(STORE_EXE);
+    expect(ownNode(STORE_EXE, env, () => "C:\\Users\\pat\\AppData\\Local\\Temp\\other.exe")).toBe(STORE_EXE);
+    expect(ownNode(STORE_EXE, env, () => STORE_EXE.replace("1.1.195.0", "1.1.194.0"))).toBe(STORE_EXE);
   });
 
   it("keeps the executable when the package has no alias", () => {
-    expect(ownNodeCommand(STORE_EXE, env, () => null)).toBe(STORE_EXE);
-    expect(ownNodeCommand(STORE_EXE, {}, () => STORE_EXE)).toBe(STORE_EXE);
+    expect(ownNode(STORE_EXE, env, () => null)).toBe(STORE_EXE);
+    expect(ownNode(STORE_EXE, {}, () => STORE_EXE)).toBe(STORE_EXE);
   });
 
   it("never uses the alias folder on the PATH, which any package or program may fill", () => {
     const asked: string[] = [];
-    ownNodeCommand(STORE_EXE, env, (path) => (asked.push(path), null));
+    ownNode(STORE_EXE, env, (path) => (asked.push(path), null));
     expect(asked).toEqual([FAMILY_ALIAS]);
     expect(asked).not.toContain(GLOBAL_ALIAS);
+  });
+
+  it("reads the alias again for each launch, so an alias changed later is not used", () => {
+    let leadsTo = STORE_EXE;
+    const target = () => leadsTo;
+    expect(ownNode(STORE_EXE, env, target)).toBe(FAMILY_ALIAS);
+    leadsTo = "C:\\Users\\pat\\AppData\\Local\\Temp\\other.exe";
+    expect(ownNode(STORE_EXE, env, target)).toBe(STORE_EXE);
+  });
+
+  it("is computed when a launch is built, never kept in a module constant", () => {
+    const kept = /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*ownNode\(/m;
+    const offenders = readdirSync(SERVER_ROOT, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts") && !file.includes("node_modules"))
+      .filter((file) => kept.test(readFileSync(join(SERVER_ROOT, file), "utf8")));
+    expect(offenders).toEqual([]);
+  });
+
+  it("knows its own commands by the executable and by the alias path", () => {
+    expect(isOwnNode(STORE_EXE, STORE_EXE, env)).toBe(true);
+    expect(isOwnNode(FAMILY_ALIAS, STORE_EXE, env)).toBe(true);
+    expect(isOwnNode(GLOBAL_ALIAS, STORE_EXE, env)).toBe(false);
+    expect(isOwnNode("C:\\Windows\\System32\\cmd.exe", STORE_EXE, env)).toBe(false);
+  });
+
+  it("reads the target of a link", () => {
+    const folder = mkdtempSync(join(tmpdir(), "seira-alias-"));
+    try {
+      writeFileSync(join(folder, "Seira.exe"), "");
+      symlinkSync(join(folder, "Seira.exe"), join(folder, STORE_ALIAS));
+      expect(aliasTarget(join(folder, STORE_ALIAS))).toBe(join(folder, "Seira.exe"));
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 
   it("reads no target for a plain file", () => {
@@ -111,6 +145,6 @@ describe("the program that runs Seira's scripts for an engine", () => {
     "/opt/Seira/seira",
     "/usr/bin/node",
   ])("keeps %s, which any program may start", (execPath) => {
-    expect(ownNodeCommand(execPath, env, () => execPath)).toBe(execPath);
+    expect(ownNode(execPath, env, () => execPath)).toBe(execPath);
   });
 });
