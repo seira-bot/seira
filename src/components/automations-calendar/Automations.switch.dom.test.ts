@@ -120,6 +120,22 @@ describe("the new Automations switch", () => {
     expect(container.querySelector("[data-occurrence-context]")).not.toBeNull();
   });
 
+  it("drops the date and time of a card when the List opens the same automation", async () => {
+    fixture.state = state({ config: { features: { newAutomations: true } } });
+    const container = mount(page());
+    await settle();
+    act(() => { (container.querySelector("[aria-label='Next dates']") as HTMLElement).click(); });
+    const first = container.querySelector("[data-occurrence]") as HTMLElement;
+    const id = first.getAttribute("data-automation-id")!;
+    act(() => { first.click(); });
+    expect(container.querySelector("[data-occurrence-context]")).not.toBeNull();
+    fixture.state = state({ config: { features: { newAutomations: true } }, routinesFocus: { view: "list" } });
+    act(() => root!.render(page()));
+    act(() => { (container.querySelector(`[data-automation='${id}'] button`) as HTMLElement).click(); });
+    expect(container.querySelector("[aria-label='Automation']")).not.toBeNull();
+    expect(container.querySelector("[data-occurrence-context]")).toBeNull();
+  });
+
   it("opens the New box with the slot's day and time for an empty slot", async () => {
     fixture.state = state({ config: { features: { newAutomations: true } } });
     const container = mount(page());

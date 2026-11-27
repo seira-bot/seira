@@ -303,6 +303,7 @@ describe("dragging a card", () => {
     dragTo(container, at(2026, 12, 1, 14));
     const ghost = container.querySelector("[data-ghost]")!;
     expect(ghost.textContent).toBe("Weekly sales checkevery Tuesday at 14:00");
+    expect(container.querySelector("[data-cal-scroll]")!.className).toContain("pointer-events-none");
     expect(container.querySelector(`[data-day-column="${at(2026, 12, 1)}"] [data-ghost]`)).not.toBeNull();
   });
 
@@ -427,7 +428,7 @@ describe("dragging a card", () => {
     drop();
     await settle();
     expect(saveSchedule).toHaveBeenCalledTimes(1);
-    finish();
+    await act(async () => { finish(); });
     await settle();
     pointerdown(card(container, key)!);
     dragTo(container, at(2026, 12, 2, 16));
@@ -450,7 +451,7 @@ describe("dragging a card", () => {
     click(undo());
     expect(saveSchedule).toHaveBeenCalledTimes(2);
     expect(undo().disabled).toBe(true);
-    finish();
+    await act(async () => { finish(); });
     await settle();
     expect(container.querySelector("[data-move-toast]")).toBeNull();
 
