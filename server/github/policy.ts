@@ -22,6 +22,22 @@ export function githubAllowedFor(bot: GithubBotSwitches): boolean {
   return true;
 }
 
+const SCOPE_RANK = { read: 1, write: 2 } as const;
+
+/** True when `after` lets the bot use more GitHub tools or a higher scope level than `before`. No tool record, or no scopes, already allows everything. */
+export function githubGrantWidens(before: GithubBotSwitches, after: GithubBotSwitches): boolean {
+  const level = (bot: GithubBotSwitches) => !bot.connectorScopes ? 2 : Object.hasOwn(bot.connectorScopes.apps, GITHUB_APP_SLUG) ? SCOPE_RANK[bot.connectorScopes.apps[GITHUB_APP_SLUG]!] : 0;
+  if (level(after) > level(before)) return true;
+  const tools = (bot: GithubBotSwitches): "*" | Set<string> => {
+    if (!bot.connectorTools) return "*";
+    const grant = Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG) ? bot.connectorTools[GITHUB_APP_SLUG] : undefined;
+    return !grant ? new Set() : grant.tools === "*" ? "*" : new Set(grant.tools);
+  };
+  const was = tools(before), now = tools(after);
+  if (now === "*") return was !== "*";
+  return was !== "*" && [...now].some((name) => !was.has(name));
+}
+
 const grantKey = (grant: Pick<GithubRepoGrant, "installationId" | "repositoryId">) => `${grant.installationId}:${grant.repositoryId}`;
 
 export function githubPolicyWidens(before: GithubBotPolicy | undefined, after: GithubBotPolicy | null): boolean {

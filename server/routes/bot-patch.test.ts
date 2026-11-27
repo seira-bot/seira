@@ -703,6 +703,48 @@ describe("PATCH /api/bots/:id github_app grants", () => {
     expect(store.bot(bot.id)?.composio).toBe(true);
   });
 
+  it("refuses a local caller widening a GitHub grant while a bot is busy, whatever its Origin", async () => {
+    const before = { connectorTools: { github_app: { tools: ["GITHUB_APP_GET_FILE"] } }, connectorScopes: scopes as ConnectorScopes };
+    const widenings: Array<Record<string, unknown>> = [
+      { connectorTools: { github_app: { tools: "*" } } },
+      { connectorTools: null },
+      { connectorScopes: { apps: { github_app: "write" } } },
+      { connectorScopes: null },
+    ];
+    for (const body of widenings) {
+      for (const headers of [{} as Record<string, string>, { origin: "http://localhost:5173" }]) {
+        const { store, bot, patch } = fixture({ ownsGithubConnection: () => true });
+        store.patchBot(bot.id, before);
+        const worker = store.createBot({ name: "Worker" });
+        store.patchBot(worker.id, { busy: true });
+
+        const refused = await patch(bot.id, body, { headers });
+
+        expect(refused.status, JSON.stringify([body, headers])).toBe(409);
+        expect(store.bot(bot.id)).toMatchObject(before);
+        store.patchBot(worker.id, { busy: false });
+        expect((await patch(bot.id, body, { headers })).status, JSON.stringify([body, headers])).toBe(200);
+      }
+    }
+  });
+
+  it("lets a local caller narrow or keep a GitHub grant while a bot is busy", async () => {
+    const { store, bot, patch } = fixture({ ownsGithubConnection: () => true });
+    store.patchBot(bot.id, { connectorTools: { github_app: { tools: "*" } }, connectorScopes: { apps: { github_app: "write" } } as ConnectorScopes });
+    const worker = store.createBot({ name: "Worker" });
+    store.patchBot(worker.id, { busy: true });
+
+    for (const body of [
+      { connectorScopes: { apps: { github_app: "write" } } },
+      { connectorTools: { github_app: { tools: "*" } } },
+      { connectorScopes: { apps: { github_app: "read" } } },
+      { connectorTools: {} },
+    ]) {
+      expect((await patch(bot.id, body, { headers: { origin: "http://localhost:5173" } })).status, JSON.stringify(body)).toBe(200);
+    }
+    expect(store.bot(bot.id)).toMatchObject({ connectorTools: {}, connectorScopes: { apps: { github_app: "read" } } });
+  });
+
   it("stops the owner-less clearing of a github_app scope too", async () => {
     const { store, bot, patch } = fixture({ ownsGithubConnection: () => false });
     store.patchBot(bot.id, { connectorScopes: scopes as ConnectorScopes });

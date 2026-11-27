@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { githubBotBranchPrefix, type GithubBotPolicy, type GithubRepoLevel } from "../../shared/github-app.ts";
-import { decideGithubCall, githubPolicyWidens } from "./policy.ts";
+import { decideGithubCall, githubGrantWidens, githubPolicyWidens } from "./policy.ts";
 
 const prefix = githubBotBranchPrefix("ada");
 const policy = (level: GithubRepoLevel, over: Partial<GithubBotPolicy> = {}): GithubBotPolicy => ({
@@ -99,5 +99,30 @@ describe("githubPolicyWidens", () => {
     expect(githubPolicyWidens({ ...before, askBeforeBigChanges: false, ownBranchesOnly: false }, before)).toBe(false);
     expect(githubPolicyWidens(before, null)).toBe(false);
     expect(githubPolicyWidens(undefined, null)).toBe(false);
+  });
+});
+
+describe("githubGrantWidens", () => {
+  const tools = (names: string[] | "*") => ({ connectorTools: { github_app: { tools: names } } });
+  const level = (value: "read" | "write") => ({ connectorScopes: { apps: { github_app: value } } });
+
+  it("is true for more tools or a higher level", () => {
+    expect(githubGrantWidens(tools(["A"]), tools("*"))).toBe(true);
+    expect(githubGrantWidens(tools(["A"]), tools(["A", "B"]))).toBe(true);
+    expect(githubGrantWidens({ connectorTools: {} }, tools(["A"]))).toBe(true);
+    expect(githubGrantWidens(tools(["A"]), {})).toBe(true);
+    expect(githubGrantWidens(level("read"), level("write"))).toBe(true);
+    expect(githubGrantWidens({ connectorScopes: { apps: {} } }, level("read"))).toBe(true);
+    expect(githubGrantWidens(level("read"), {})).toBe(true);
+  });
+
+  it("is false for the same grant, fewer tools, a lower level, or another app", () => {
+    expect(githubGrantWidens(tools("*"), tools("*"))).toBe(false);
+    expect(githubGrantWidens(tools(["A", "B"]), tools(["B"]))).toBe(false);
+    expect(githubGrantWidens(tools("*"), tools(["A"]))).toBe(false);
+    expect(githubGrantWidens(tools(["A"]), { connectorTools: {} })).toBe(false);
+    expect(githubGrantWidens(level("write"), level("read"))).toBe(false);
+    expect(githubGrantWidens({}, level("read"))).toBe(false);
+    expect(githubGrantWidens({ connectorScopes: { apps: { gmail: "read" } } }, { connectorScopes: { apps: { gmail: "write" } } })).toBe(false);
   });
 });

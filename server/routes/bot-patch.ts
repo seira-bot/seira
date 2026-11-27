@@ -45,7 +45,7 @@ import { refusalBody, userError } from "../user-errors.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import type { ModelSelectionCheck } from "./bots-create.ts";
 import { GITHUB_APP_SLUG } from "../../shared/github-app.ts";
-import { githubAllowedFor, type GithubBotSwitches } from "../github/policy.ts";
+import { githubAllowedFor, githubGrantWidens, type GithubBotSwitches } from "../github/policy.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotPatchRouteDeps {
@@ -652,7 +652,9 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       const loosened: string[] = [];
       const trustPatch = patch as Pick<Partial<BotRecord>, "outbound" | "connectorScopes" | "fallback">;
       if (body.outbound !== undefined && trustPatch.outbound?.policy === "allow" && existingBot?.outbound?.policy !== "allow") loosened.push("outbound");
-      if (githubReopened) {
+      // A shell can forge an Origin header, so the busy check for a GitHub grant never looks at it.
+      const githubWidened = !!existingBot && githubGrantWidens(existingBot, { ...existingBot, ...(patch as GithubBotSwitches) });
+      if (githubReopened || githubWidened) {
         if (auth.kind === "loopback" && !DESKTOP_MANAGED && store.bots.some((candidate) => candidate.busy)) {
           return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
         }
@@ -724,6 +726,11 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         if (toolScopeWidens(freshBrowserBot?.toolScope, patch.toolScope) && auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin && store.bots.some((candidate) => candidate.busy)) {
           return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
         }
+      }
+      if (freshBrowserBot && githubGrantWidens(freshBrowserBot, { ...freshBrowserBot, ...(patch as GithubBotSwitches) }) &&
+          auth.kind === "loopback" && !DESKTOP_MANAGED &&
+          store.bots.some((candidate) => candidate.busy || activeGroupTurnForBot(candidate.id))) {
+        return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
       }
       if (body.connectorScopes !== undefined && widensConnectorScopes(freshBrowserBot?.connectorScopes, trustPatch.connectorScopes) &&
           auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin &&
