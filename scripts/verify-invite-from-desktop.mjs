@@ -1,6 +1,6 @@
 // The real app shell in three Electron windows against one disposable fake-engine server with email sign-in on:
 // a connected server in the desktop window, the desktop app's own computer, and a plain browser page.
-// Run: xvfb-run -a node scripts/verify-invite-from-desktop.mjs   (see docs/verification/invite-from-desktop.md)
+// Run: xvfb-run -a -s "-screen 0 1600x1000x24" node scripts/verify-invite-from-desktop.mjs   (see docs/verification/invite-from-desktop.md)
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
