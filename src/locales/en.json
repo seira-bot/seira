@@ -12216,6 +12216,7 @@
   "github.memberNote": "{owner} connected GitHub. Only {owner} can change it.",
   "github.ownerFallback": "The person who connected it",
   "github.access": "Bot access",
+  "github.manage": "Manage",
   "github.accessHint": "A bot can use only the repositories you give it, at the level you choose: Read, Pull requests or Write.",
   "github.accessOwnerOnly": "Only the person who connected GitHub can give a bot access.",
   "github.manageBot": "Manage {name}’s access",

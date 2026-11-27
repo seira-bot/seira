@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Bot } from "@/state/store";
 import type { MentionChoice } from "@/components/MentionMenu";
 import { loadAppCards, botAppsFrom, type BotApp } from "@/components/bot-settings/useBotApps";
+import { useGithubApp } from "./github-app";
+import { GITHUB_APP_SLUG } from "../../shared/github-app";
 import { preloadConnectedApps, type ConnectorInventory } from "./connected-apps";
 import type { ToolkitCard } from "../../shared/toolkit-card";
 import type { EmailStatus } from "../../shared/email";
@@ -13,7 +15,8 @@ const squash = (name: string) => name.toLowerCase().replace(/[\s_-]+/g, "");
 
 /** Apps the bot may use, then the MCP servers that are on for it; an app and a server of one name make one row, the app's. */
 export function mentionToolChoices(apps: readonly BotApp[], servers: readonly McpEntry[]): MentionChoice[] {
-  const usable = apps.filter((app) => app.scope !== null);
+  const native = apps.some((app) => app.slug === GITHUB_APP_SLUG && app.scope !== null);
+  const usable = apps.filter((app) => app.scope !== null && !(native && app.slug === "github"));
   const taken = new Set(usable.flatMap((app) => [squash(app.slug), squash(app.label)]));
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
   const appRows: MentionChoice[] = usable.map((app) => ({
@@ -41,6 +44,7 @@ type Loaded = {
 export function useMentionTools(bot: ToolBot | undefined, active: boolean): MentionChoice[] {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const botId = bot?.id;
+  const github = useGithubApp({ load: active && Boolean(botId) }).status;
   useEffect(() => {
     if (!botId || !active) return;
     let cancelled = false;
@@ -63,7 +67,7 @@ export function useMentionTools(bot: ToolBot | undefined, active: boolean): Ment
   const composio = bot?.composio, connectorScopes = bot?.connectorScopes, connectorTools = bot?.connectorTools;
   return useMemo(() => {
     if (!botId || !loaded || loaded.botId !== botId) return [];
-    const apps = botAppsFrom({ composio, connectorScopes, connectorTools }, loaded.inventory, loaded.cards, loaded.email).apps;
+    const apps = botAppsFrom({ id: botId, composio, connectorScopes, connectorTools }, loaded.inventory, loaded.cards, loaded.email, github).apps;
     return mentionToolChoices(apps, loaded.servers);
-  }, [botId, loaded, composio, connectorScopes, connectorTools]);
+  }, [botId, loaded, composio, connectorScopes, connectorTools, github]);
 }
