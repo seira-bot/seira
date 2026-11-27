@@ -36,6 +36,7 @@ import {
   type FailedComposerSend,
 } from "@/lib/drafts";
 import { DEVS_CHOICE, MentionMenu, teammateChoices, type MentionChoice } from "./MentionMenu"; import { useTeammates } from "@/state/team-people"; import { hiddenFromSidebar, useViewerEmail } from "@/lib/default-bot"; import { useMayAct } from "./SharedQueueLine";
+import { todoSlashCommand, useTodoCommand } from "./todo/TodoCommand";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { MentionTextarea } from "./MentionTextarea";
 import { ComposerAttachments, pathForFile } from "./ComposerAttachments";
@@ -327,6 +328,7 @@ export function Composer({
       label: "/setup",
       description: t("composer.command.setupDesc"),
     }, { kind: "command", id: "burst", label: "/burst", description: t("composer.command.burstDesc") });
+    if (builtIns) available.push(todoSlashCommand());
     available.push(...skillSlashCommands(slashSkills));
     return available.filter((command) => slashCommandMatches(command, slash.query));
   }, [slash, dismissedSlashAt, group, bot, canLearn, state.instances, locale, slashSkills]);
@@ -508,6 +510,7 @@ export function Composer({
   };
 
   const hasContent = Boolean(effectiveText.trim()) || attachments.length > 0;
+  const todo = useTodoCommand({ text, bots, botId: group ? undefined : bot?.id, groupId: group?.id, threadId, onDone: () => { editText(""); picks.clear(); } });
   const onCall = useOnCall();
   const media = useLiveMedia();
   const callTarget = group?.id ?? bot?.id;
@@ -553,6 +556,7 @@ export function Composer({
   };
   const send = (followUp: FollowUp | undefined = followUpFor(false)) => {
     if (locked || attachmentPending) return;
+    if (todo.run()) return;
     if (
       attachments.some((attachment) => attachment.kind === "image") &&
       !imageTargetsSupport(effectiveText, effectiveChannelMode)
@@ -824,7 +828,7 @@ export function Composer({
             else if (bot) dispatch({ type: "cancelQueued", botId: bot.id, threadId, queueId });
           }}
           onEdit={locked ? undefined : editQueued}
-        /><TeamAudienceLabel bot={bot} group={group} />
+        /><TeamAudienceLabel bot={bot} group={group} />{todo.preview}
         <div className="relative">
           {/* Plain canvas behind the composer and the strip below it. Simple mode starts it at the composer's top edge
               and fades the transcript out above it; Advanced starts at its middle. */}

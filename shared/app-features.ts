@@ -79,9 +79,15 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "slash-menu",
     name: "The / list",
     place: "the chat box: type /",
-    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup and /burst. A skill runs for one message when its name follows the slash.",
-    slashCommands: ["goal", "learn", "setup", "burst"],
+    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup, /burst and /todo. A skill runs for one message when its name follows the slash. /todo adds a todo to the Board.",
+    slashCommands: ["goal", "learn", "setup", "burst", "todo"],
     tools: ["burst"],
+  },
+  {
+    id: "todo-from-message",
+    name: "Todo from a message",
+    place: "the Message actions menu of a message, or /todo in the chat box",
+    does: "Make a todo from selection and Make a todo from message put a todo on the Board, with the message as its source. A chip under the message shows its place. /todo adds one without a message.",
   },
   {
     id: "mention-menu",
