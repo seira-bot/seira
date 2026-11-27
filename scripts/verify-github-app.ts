@@ -268,7 +268,7 @@ try {
     await owner.page.reload();
     await owner.openBot();
     await owner.page.getByText("Per-app tools", { exact: true }).waitFor();
-    await owner.page.locator("button[aria-expanded]", { hasText: "github_app" }).click();
+    await owner.page.locator("button[aria-expanded]", { hasText: "GitHub" }).click();
     const block = owner.page.locator('[data-github-block="summary"]');
     await block.waitFor();
     await contains(block, "octo-user/notes", "first repository");
