@@ -150,7 +150,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
           const routines = deps.routines();
           const linked = deps.routineEdits.edit(auth, [info.routine], () => routines?.update(info.routine!.id, { workflowId: created.id }));
           if (!linked) throw new Error("no such automation");
-        } else await starts.linkEvent(kind, id, created.id);
+        } else if (kind !== "routine") await starts.linkEvent(kind, id, created.id);
       } catch (error) {
         host.remove(created.id);
         return json(res, 409, { error: publicErrorText(error, "turn an automation into steps", "This could not be turned into steps.") });

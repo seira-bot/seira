@@ -9,6 +9,7 @@ import { eventCount } from "./app-events.ts";
 import { brokerClient } from "./app-trigger-broker.ts";
 import { AppTriggerManager, type AppTriggerManagerOptions } from "./app-triggers.ts";
 import { RoutineManager } from "./routines.ts";
+import { WebhookManager } from "./webhooks.ts";
 import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 
 let dir = "";
@@ -562,5 +563,51 @@ describe("an app-triggers file an earlier version saved", () => {
     expect(readFileSync(file, "utf8")).toContain('"maus"');
     const reloaded = manager();
     expect(reloaded.list()).toMatchObject([{ id: trigger.id, runOn: "seira" }]);
+  });
+});
+
+describe("app event that runs a workflow", () => {
+  const copy = { workflowId: "wf-1", prompt: "This routine runs the workflow \"Flow\". Do these steps in order:\n1. Ana: Read the mail", botId: "ana", botIds: ["ana", "ben"] };
+  const link = { botId: "ignored", name: "Mail", prompt: "", app: "gmail", event: "GMAIL_NEW_GMAIL_MESSAGE", workflowId: "wf-1" };
+
+  it("copies steps to webhook and app trigger prompt", async () => {
+    let current = copy;
+    const triggers = manager({ workflowCopy: () => current });
+    const trigger = await triggers.create(link);
+    expect(trigger).toMatchObject({ workflowId: "wf-1", botId: "ana", prompt: copy.prompt });
+    const hooks = new WebhookManager({ file: join(dir, "webhooks.json"), botState: () => "ready", enqueue: () => ({ id: "run" }), workflowCopy: () => current });
+    const hook = hooks.create({ name: "Orders", workflowId: "wf-1" }).webhook;
+    expect(hook).toMatchObject({ workflowId: "wf-1", botId: "ana", prompt: copy.prompt });
+
+    current = { ...copy, prompt: "Do these steps in order:\n1. Ben: Write", botId: "ben" };
+    expect(await triggers.update(trigger.id, { rewriteWorkflow: true })).toMatchObject({ prompt: current.prompt, botId: "ben", workflowId: "wf-1" });
+    expect(hooks.update(hook.id, { rewriteWorkflow: true })).toMatchObject({ prompt: current.prompt, botId: "ben" });
+    expect(await triggers.update(trigger.id, { workflowId: null, enabled: false })).not.toHaveProperty("workflowId");
+  });
+
+  it("starts a workflow run from an event, and joins a burst into one run", async () => {
+    const own = new RoutineManager({ file: join(dir, "routines-wf.json"), botState: () => "busy", createTask: () => ({ threadId: "thread-run" }), startTurn: async () => {}, workflowCopy: () => copy });
+    try {
+      const triggers = manager({ workflowCopy: () => copy, runs: {
+        enqueue: (input) => own.enqueueWebhook(input),
+        merge: (triggerId, eventId, same, merge) => own.mergeIntoQueuedRun(triggerId, eventId, same, merge),
+        receipt: (triggerId, eventId) => own.webhookRunReceipt(triggerId, eventId),
+        pending: (triggerId) => own.activeWebhookRunCount(triggerId),
+        cancelQueued: (triggerId, message) => own.cancelQueuedWebhook(triggerId, message),
+      } });
+      const trigger = await triggers.create(link);
+      await broker.deliver(trigger.remote.triggerId!, { subject: "Order #1", sender: "a@acme.com" }, "msg_a");
+      await broker.deliver(trigger.remote.triggerId!, { subject: "Order #2", sender: "b@acme.com" }, "msg_b");
+      await drain(triggers);
+      const runs = own.listRuns().filter((run) => run.routineId === trigger.id);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"], botId: "ana", triggerSource: "webhook", eventSource: "app", webhookId: trigger.id });
+      expect(eventCount(runs[0]!.prompt)).toBe(2);
+      expect(runs[0]!.prompt).toContain("Order #2");
+      expect(runs[0]!.prompt).not.toContain("Do these steps");
+      expect(runs[0]!.prompt).not.toContain("USER-CONFIGURED");
+    } finally {
+      own.close();
+    }
   });
 });

@@ -483,7 +483,7 @@ export class WebhookManager {
     this.assertWritable();
     const parsed = parseTriggerInput(withLinkedDefaults(input));
     const linked = typeof parsed.workflowId === "string" && parsed.workflowId.trim()
-      ? this.linkFields(parsed.workflowId.trim(), { runOn: parsed.runOn ?? "seira", sameConversation: parsed.sameConversation, delivery: parsed.delivery })
+      ? this.linkFields(parsed.workflowId.trim(), { runOn: parsed.runOn === "cloud" ? "cloud" : "seira", sameConversation: parsed.sameConversation, delivery: parsed.delivery })
       : null;
     const clean = cleanInput(linked ? { ...parsed, prompt: linked.prompt, botId: linked.botId } : parsed);
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
