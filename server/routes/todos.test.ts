@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { VisibleSet } from "../bot-visibility.ts";
 import { createTodosHost, TodoError, type TodoBot, type TodoRoutines } from "../host/todos-host.ts";
 import { requiredScope, type RequestAuth } from "../request-auth.ts";
-import { TodoStore } from "../todos.ts";
+import { TodoStore, type TodoRecord } from "../todos.ts";
 import { createTodoRoutes } from "./todos.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
@@ -14,22 +14,25 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const BOTS: TodoBot[] = [{ id: "atlas", name: "Atlas" }, { id: "scout", name: "Scout" }];
 
-function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines; routineRefusal?: string } = {}) {
+function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines; routineRefusal?: string; changeRefusal?: (todo: TodoRecord) => string | null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "todo-routes-"));
   dirs.push(dir);
   let n = 0;
   const store = new TodoStore({ dataDir: dir, newId: () => `t${++n}` });
   const gated: unknown[] = [];
   const routines: TodoRoutines = options.routine ?? { create: () => ({ id: "r1" }), remove: () => true, update: () => null };
-  const host = createTodosHost({ store, bots: () => BOTS, routines: () => routines, teamCloud: false });
+  const host = createTodosHost({ store, bots: () => BOTS, routines: () => routines, teamCloud: false, levelFor: () => "chat" });
   const visible = {
     everything: false,
     thread: (id: string) => !(options.hiddenThreads ?? []).includes(id),
     bot: (id: string) => !(options.hiddenBots ?? []).includes(id),
     level: () => options.level ?? "chat",
   } as unknown as VisibleSet;
+  const started: string[] = [];
   const route = createTodoRoutes({
-    store, host, runner: { startNow: async (id) => store.get(id)!, wake: () => {} }, visibleFor: () => visible, personName: () => "Rama",
+    store, host, runner: { startNow: async (id) => { started.push(id); return store.get(id)!; }, wake: () => {} }, visibleFor: () => visible, personName: () => "Rama",
+    todoPerson: () => ({ key: "p_rama", viewer: { kind: "member", email: "rama@example.com" } }),
+    changeRefusal: (_auth, todo) => options.changeRefusal?.(todo) ?? null,
     routineRefusal: () => options.routineRefusal ?? null,
     withPerson: (auth, work) => { gated.push(auth.kind); return work(); },
   });
@@ -42,7 +45,7 @@ function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level
     });
     return { out, ...sent };
   };
-  return { call, store, gated };
+  return { call, store, gated, started };
 }
 
 describe("todo routes", () => {
@@ -99,6 +102,30 @@ describe("todo routes", () => {
   it("needs chat level to give a bot work, and refuses a source the viewer cannot see", async () => {
     expect((await setup({ level: "view" }).call("POST", "/api/todos", { todos: [{ title: "x", botId: "atlas" }] })).status).toBe(403);
     expect((await setup({ hiddenThreads: ["secret"] }).call("POST", "/api/todos", { todos: [{ title: "x", source: { threadId: "secret", quote: "q" } }] })).status).toBe(400);
+  });
+
+  it("records whom a todo works for and never sends it to a client (security)", async () => {
+    const { call, store } = setup();
+    const added = await call("POST", "/api/todos", { todos: [{ title: "Write notes", botId: "atlas" }] });
+    expect(added.body.todos[0].person).toBeUndefined();
+    expect(store.get(added.body.todos[0].id)!.person).toEqual({ key: "p_rama", viewer: { kind: "member", email: "rama@example.com" } });
+    expect((await call("GET", "/api/todos")).body.todos[0].person).toBeUndefined();
+  });
+
+  it("refuses to change, start, delete or restore a todo someone else made where the send rule says so (security)", async () => {
+    const { call, store, started } = setup({ changeRefusal: (todo) => (todo.person?.key === "p_owner" ? "On this Cloud you can only change todos you made." : null) });
+    store.insert({ id: "o", title: "Owner's", status: "queued", botId: "atlas", start: { kind: "free" }, rank: 1, madeBy: { kind: "person", name: "Owner" }, person: { key: "p_owner" }, attempts: 0, depth: 0, createdAt: 1, updatedAt: 1 });
+    for (const [method, path, body] of [["PATCH", "/api/todos/o", { note: "Also email the files" }], ["PATCH", "/api/todos/o", { botId: "scout" }], ["POST", "/api/todos/o/start", {}], ["DELETE", "/api/todos/o", {}]] as const) {
+      const refused = await call(method, path, body);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error).toContain("only change todos you made");
+    }
+    expect(started).toEqual([]);
+    expect(store.get("o")).toMatchObject({ title: "Owner's", botId: "atlas" });
+    expect(store.get("o")!.note).toBeUndefined();
+    store.remove("o");
+    expect((await call("POST", "/api/todos/o/restore")).status).toBe(403);
+    expect(store.get("o")).toBeUndefined();
   });
 
   it("keeps the picker choice and asks for scopes", async () => {

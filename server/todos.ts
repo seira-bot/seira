@@ -3,6 +3,15 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { TODO_DONE_WINDOW_MS, TODO_UNDO_MS, type Todo } from "../shared/todo.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import type { Viewer } from "./bot-visibility.ts";
+
+/** Whom a todo works for: the person who wrote it, or the person of the conversation a bot made it in. */
+export interface TodoPerson {
+  /** The key its conversation opens as (a thread starter): it decides who reads the work and whether it is confined. */
+  key?: string;
+  /** A person's own todo: who wrote it. Any bot that gets the todo must be one this person may chat with. */
+  viewer?: Viewer;
+}
 
 /** A stored todo: the public fields plus what only the server needs. */
 export interface TodoRecord extends Todo {
@@ -12,6 +21,8 @@ export interface TodoRecord extends Todo {
   offeredAt?: number;
   /** The last time the work on this todo showed life; the lease counts from here. */
   leaseAt?: number;
+  /** Absent on a todo stored before it was recorded: it then counts as nobody's, which may do the least. */
+  person?: TodoPerson;
 }
 
 interface TodoMeta {
@@ -33,7 +44,7 @@ export interface TodoBotInfo {
 
 const FILE = "todos.json";
 
-const INTERNAL_KEYS = ["deletedAt", "offeredIn", "offeredAt", "leaseAt"] as const;
+const INTERNAL_KEYS = ["deletedAt", "offeredIn", "offeredAt", "leaseAt", "person"] as const;
 
 export function publicTodo(record: TodoRecord): Todo {
   const todo: Record<string, unknown> = { ...record };

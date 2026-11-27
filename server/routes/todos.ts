@@ -4,7 +4,7 @@ import type { VisibleSet } from "../bot-visibility.ts";
 import { TodoError, type TodosHost } from "../host/todos-host.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { TodoRunner } from "../todo-runner.ts";
-import { publicTodo, todoVisible, type TodoRecord, type TodoStore } from "../todos.ts";
+import { publicTodo, todoVisible, type TodoPerson, type TodoRecord, type TodoStore } from "../todos.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface TodoRouteDeps {
@@ -17,6 +17,11 @@ export interface TodoRouteDeps {
   withPerson<T>(auth: RequestAuth, work: () => T): T;
   /** Why this person may not change the repeating job of a todo; null when they may. */
   routineRefusal(auth: RequestAuth, routineId: string): string | null;
+  /** Whom a todo this person writes works for: who they are, and the key its conversation opens as. */
+  todoPerson(auth: RequestAuth): TodoPerson;
+  /** Why this person may not change, start, delete or restore this todo; null when they may. The same rule as writing
+   * in a conversation: on a Cloud a guest touches only their own. */
+  changeRefusal(auth: RequestAuth, todo: TodoRecord): string | null;
 }
 
 const ITEM = /^\/api\/todos\/([\w-]+)(\/start|\/restore)?$/;
@@ -38,6 +43,11 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
 
   function guardRoutine(auth: RequestAuth, routineId: string | undefined): void {
     const refused = routineId ? deps.routineRefusal(auth, routineId) : null;
+    if (refused) throw new TodoError(403, refused);
+  }
+
+  function guardChange(auth: RequestAuth, todo: TodoRecord): void {
+    const refused = deps.changeRefusal(auth, todo);
     if (refused) throw new TodoError(403, refused);
   }
 
@@ -67,7 +77,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
           if (draft?.botId) mayGive(visible, draft.botId);
           if (draft?.source && !visible.thread(draft.source.threadId)) throw new TodoError(400, "You cannot see the message this todo comes from.");
         }
-        const added = deps.withPerson(auth, () => host.add(drafts, person));
+        const added = deps.withPerson(auth, () => host.add(drafts, person, { person: deps.todoPerson(auth) }));
         return json(res, 200, { todos: added.todos.map(publicTodo) });
       }
       if (isPicker) {
@@ -83,6 +93,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         const gone = store.getDeleted(id!);
         if (gone && (!todoVisible(gone, viewerOf(visible)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
+        if (gone) guardChange(auth, gone);
         guardRoutine(auth, gone?.routineId);
         return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.restore(id!))) });
       }
@@ -90,10 +101,12 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
       if (action === "/start") {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot start work for this bot.");
+        guardChange(auth, current);
         return json(res, 200, { todo: publicTodo(await deps.runner.startNow(current.id)) });
       }
       if (method === "DELETE") {
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
+        guardChange(auth, current);
         guardRoutine(auth, current.routineId);
         host.remove(current.id);
         return json(res, 200, { ok: true });
@@ -102,6 +115,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         const body = (await readBody(req)) as TodoPatch | null;
         if (!body || typeof body !== "object" || Array.isArray(body)) throw new TodoError(400, "Send the change to make.");
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
+        guardChange(auth, current);
         if (typeof body.botId === "string") mayGive(visible, body.botId);
         guardRoutine(auth, current.routineId);
         return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.patch(current.id, body, person))) });

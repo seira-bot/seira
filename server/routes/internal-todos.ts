@@ -1,12 +1,14 @@
 import type { Todo } from "../../shared/todo.ts";
 import { TodoError, type TodosHost } from "../host/todos-host.ts";
-import { publicTodo, type TodoRecord } from "../todos.ts";
+import { publicTodo, type TodoPerson, type TodoRecord } from "../todos.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface InternalTodoDeps {
   host: TodosHost;
   from: { id: string };
   fromThreadId: string;
+  /** Whom the calling conversation works for: a todo the bot adds opens its own conversation as them. */
+  person?: () => TodoPerson;
   /** The caller's body, read only while its turn still holds the capability. */
   readBody(): Promise<unknown>;
   /** Whether the calling turn may read this todo: on a Team Cloud, only what the conversations it may read hold. */
@@ -42,7 +44,7 @@ export function createInternalTodoRoutes(deps: InternalTodoDeps): RouteHandler {
       if (method !== "POST") return json(res, 405, { error: "method not allowed" });
       const body = (await deps.readBody()) as Record<string, unknown> | null;
       if (path === "/api/internal/todos") {
-        const added = deps.host.botAdd(caller, body?.todos);
+        const added = deps.host.botAdd(caller, body?.todos, deps.person?.());
         const fresh = added.todos.map(publicTodo);
         if (fresh.length) deps.postLine(caller.threadId, batchLine(fresh, deps.botName), fresh.map((todo) => todo.id));
         return json(res, 200, {
