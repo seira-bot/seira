@@ -46,7 +46,7 @@ describe("rewriteManifest", () => {
     expect(count(out, "windows.startupTask")).toBe(1);
     expect(count(out, "<Extensions>")).toBe(1);
     expect(out).toContain(
-      '<desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension></Extensions>',
+      '<desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension>',
     );
   });
 
