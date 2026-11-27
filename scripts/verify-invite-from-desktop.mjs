@@ -54,6 +54,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       win.webContents.on("console-message", (event) => { if (event.level === "error") { errors.push(`${name}: ${event.message}`); console.error(`${name} console: ${event.message}`); } });
       win.webContents.on("render-process-gone", (_e, details) => console.error(`${name}: renderer gone ${details.reason} ${details.exitCode}`));
       win.webContents.on("did-navigate", (_e, target) => console.error(`${name}: navigated ${target}`));
+      for (const event of ["did-start-loading", "did-stop-loading", "did-finish-load", "dom-ready", "destroyed", "unresponsive", "preload-error", "did-start-navigation"]) win.webContents.on(event, (...args) => console.error(`${name}: ${event} ${event === "preload-error" ? args.slice(1).join(" ") : ""}`));
       win.on("closed", () => console.error(`${name}: window closed`));
       win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
       await win.loadURL(url).catch((error) => console.error(`${name}: ${error.message}`));
