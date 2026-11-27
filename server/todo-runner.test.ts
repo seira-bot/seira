@@ -101,12 +101,12 @@ describe("turn end", () => {
     expect(store.get(id)).toMatchObject({ status: "needs-you", stuck: "stopped" });
   });
 
-  it("releases a working todo whose lease ran out", async () => {
+  it("releases a todo whose lease ran out and starts it again", async () => {
     const { runner, store, id, clock, state } = await working();
     state.busy = false;
     clock.now += 60 * 60_000;
     await runner.tick();
-    expect(store.get(id)!.status).not.toBe("working");
+    expect(store.get(id)!.attempts).toBe(2);
   });
 });
 
