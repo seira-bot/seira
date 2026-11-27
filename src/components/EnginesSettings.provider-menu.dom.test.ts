@@ -279,6 +279,11 @@ describe("Move and hide picker", () => {
     await act(async () => { root.render(createElement(ProviderMenu, { instance: server.all[0]! })); });
     await click(container.querySelector('button[aria-haspopup="menu"]'));
   };
+  const click = async (target: Element | null | undefined) => {
+    expect(target).toBeTruthy();
+    await act(async () => { (target as HTMLElement).click(); });
+    await act(async () => { await new Promise((done) => setTimeout(done, 0)); });
+  };
   const picker = () => item("[data-provider-move-picker]");
 
   it("offers a picker with the other account of the same provider first, then the other AI", async () => {
