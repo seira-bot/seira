@@ -98,6 +98,24 @@ client scope only. Nothing touches live app data.
 - **Not the owner's turn.** A webhook's run can `get` a setting, but its `set`
   is refused with the automation line and the setting stays as it was.
 
+## Inviting a person from a phone
+
+`server/app-settings-people.e2e.test.ts` has its own fixture, with email
+sign-in on and one person on the admin list:
+
+```sh
+pnpm exec vitest run server/app-settings-people.e2e.test.ts
+```
+
+A scripted Full-access turn asks to add `new@corp.test` to the team with
+General at chat level. It proves the phone answer path:
+
+- The card waits and the sign-in list and the grants are as they were.
+- Apply from a paired session with the client scope only gives 403.
+- Apply from the paired owner phone adds the person and the General grant.
+- Undo from the same phone removes both.
+- A whole `@corp.test` domain as an admin is refused at once, with no card.
+
 ## Limits
 
 The scripted engine stands in for the model. This recipe does not show whether
