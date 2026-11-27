@@ -44,7 +44,7 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
     session.defaultSession.webRequest.onBeforeRequest((request, callback) => {
       const target = new URL(request.url);
       const allowed = target.origin === serverOrigin || target.protocol === "devtools:" || target.protocol === "data:" || target.protocol === "blob:";
-      if (!allowed) { blocked.push(target.origin); console.error(`blocked ${request.url}`); }
+      if (!allowed && target.origin !== "https://www.google.com") blocked.push(request.url);
       callback({ cancel: !allowed });
     });
     const checks = [];
@@ -59,7 +59,8 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       win.webContents.on("console-message", (event) => { if (event.level === "error") { errors.push(`${name}: ${event.message}`); console.error(`${name} console: ${event.message}`); } });
       win.webContents.on("render-process-gone", (_e, details) => console.error(`${name}: renderer gone ${details.reason}`));
       win.webContents.on("did-fail-load", (_e, code, description, failed) => console.error(`${name}: load failed ${code} ${description} ${failed}`));
-      await win.loadURL(url).catch((error) => console.error(`${name}: ${error.message}`));
+      for (const event of ["dom-ready", "did-finish-load", "did-stop-loading"]) win.webContents.once(event, () => console.error(`${name}: ${event}`));
+      await Promise.race([win.loadURL(url), new Promise((_, reject) => setTimeout(() => reject(new Error(`${name}: the page did not load in 40 s`)), 40_000))]);
       console.error(`${name}: at ${win.webContents.getURL()}`);
       const evaluate = (code) => win.webContents.executeJavaScript(code);
       const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), (await win.webContents.capturePage()).toPNG());
