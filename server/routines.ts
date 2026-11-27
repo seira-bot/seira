@@ -143,6 +143,8 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   deliveryId?: string;
   sourceThreadId?: string;
   resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
+  /** A workflow run from a webhook that posts: its last step's result goes to the chat it reports to. */
+  postsResult?: true;
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -773,6 +775,8 @@ export class RoutineManager {
     resultsThreadId?: string;
     /** The workflow whose steps the run executes; the event text is the first step's input. */
     workflowId?: string;
+    /** The result of the last step goes to the chat the run reports to. */
+    postsResult?: true;
   }): { id: string } {
     this.assertWritable();
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
@@ -787,7 +791,7 @@ export class RoutineManager {
       botId: input.botId, runOn: input.runOn, scheduledFor: input.receivedAt, status: "queued", manual: false,
       triggerSource: "webhook", webhookId: input.webhookId, deliveryId: input.deliveryId, attachments: [], createdAt: this.now(),
       resultsThreadId: input.resultsThreadId ?? this.options.eventResultsThread?.(input), ...(input.eventSource ? { eventSource: input.eventSource } : {}), ...(input.sameConversation ? { sameConversation: true } : {}), ...(input.byPerson ? { byPerson: true } : {}),
-      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
+      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(input.postsResult ? { postsResult: true as const } : {}), ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
     };
     this.commitEvent(run, input.deliveryId, () => { this.runs.push(run); });
     return cloneRun(run);

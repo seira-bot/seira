@@ -62,30 +62,6 @@ export function linkWorkflow(input: Pick<RoutineInput, "workflowId">, lookup: Wo
   return found;
 }
 
-export interface WorkflowRoutineFields {
-  target: string;
-  runOn: string;
-  deliver?: unknown;
-  sameConversation?: boolean;
-  modelSelection?: unknown;
-  scheduleType: string;
-  access?: unknown;
-  checks?: unknown;
-}
-
-/** Why a routine with these fields cannot run a workflow, in a person's words; null when it can. */
-export function workflowRefusal(fields: WorkflowRoutineFields): string | null {
-  if (fields.target === "room-goal") return "A workflow runs its own bots, not a channel.";
-  if (fields.runOn === "cloud") return "A workflow runs on this computer.";
-  if (fields.deliver != null) return "A workflow posts its results with a Post results step.";
-  if (fields.sameConversation) return "A workflow opens new chats for each run.";
-  if (fields.modelSelection) return "Each bot in a workflow uses its own model.";
-  if (fields.scheduleType === "limit_reset") return "A workflow can't continue a chat after a usage limit.";
-  if (fields.access === "read-and-draft") return "A workflow can't use read-only access.";
-  if (fields.checks) return "A workflow can't use checks.";
-  return null;
-}
-
 /** The lookup an edit of a routine uses: the copy it already holds, unless the edit names a workflow or asks for a rewrite. */
 export function workflowLookupFor(
   patch: { workflowId?: string | null; rewriteWorkflow?: true },

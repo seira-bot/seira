@@ -79,6 +79,8 @@ export interface WebhookManagerOptions {
     byPerson?: boolean;
     /** The workflow whose steps the run executes. */
     workflowId?: string;
+    /** The result of the last step goes to the webhook's chat. */
+    postsResult?: true;
   }) => { id: string };
   /** The step copy and bots of a workflow, for a webhook that runs it. */
   workflowCopy?: WorkflowCopyLookup;
@@ -483,7 +485,7 @@ export class WebhookManager {
     this.assertWritable();
     const parsed = parseTriggerInput(withLinkedDefaults(input));
     const linked = typeof parsed.workflowId === "string" && parsed.workflowId
-      ? this.linkFields(parsed.workflowId, { runOn: parsed.runOn === "cloud" ? "cloud" : "seira", sameConversation: parsed.sameConversation, delivery: parsed.delivery })
+      ? this.linkFields(parsed.workflowId)
       : null;
     const clean = cleanInput(linked ? { ...parsed, prompt: linked.prompt, botId: linked.botId } : parsed);
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
@@ -556,7 +558,7 @@ export class WebhookManager {
     const settingsEdit = patch.workflowId !== undefined || patch.rewriteWorkflow || patch.botId !== undefined || patch.prompt !== undefined
       || patch.runOn !== undefined || patch.delivery !== undefined || patch.sameConversation !== undefined;
     const linkTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : settingsEdit ? trigger.workflowId : undefined;
-    if (linkTo) Object.assign(clean, this.linkFields(linkTo, clean));
+    if (linkTo) Object.assign(clean, this.linkFields(linkTo));
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
@@ -577,9 +579,9 @@ export class WebhookManager {
     return publicTrigger(trigger);
   }
 
-  private linkFields(workflowId: string, fields: { runOn: RoutineRunOn; sameConversation?: boolean; delivery?: "run" | "post" }): { workflowId: string; prompt: string; botId: string } {
+  private linkFields(workflowId: string): { workflowId: string; prompt: string; botId: string } {
     try {
-      return startWorkflowFields(workflowId, this.options.workflowCopy, { runOn: fields.runOn, sameConversation: fields.sameConversation, posts: fields.delivery === "post" });
+      return startWorkflowFields(workflowId, this.options.workflowCopy);
     } catch (error) {
       return fail(409, error instanceof Error ? error.message : "This webhook cannot run that workflow.");
     }
@@ -683,7 +685,7 @@ export class WebhookManager {
 
   /** A room post synthesizes audio, so only that branch is a Promise; every other delivery stays synchronous. */
   private deliver(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson: boolean, secret: string): WebhookReceiveResult | Promise<WebhookReceiveResult> {
-    return trigger.delivery === "post" && trigger.groupId ? this.deliverRoom(trigger, event, byPerson, secret) : this.dispatch(trigger, event, byPerson);
+    return trigger.delivery === "post" && trigger.groupId && trigger.workflowId === undefined ? this.deliverRoom(trigger, event, byPerson, secret) : this.dispatch(trigger, event, byPerson);
   }
 
   private rejectAttempt(trigger: StoredWebhookTrigger, event: WebhookEvent, error: unknown): void {
@@ -696,7 +698,7 @@ export class WebhookManager {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     // A room delivery synthesizes voice and stores images asynchronously; the test route stays synchronous.
-    if (trigger.delivery === "post" && trigger.groupId) fail(400, "a room webhook posts through its webhook URL, not the test button");
+    if (trigger.delivery === "post" && trigger.groupId && trigger.workflowId === undefined) fail(400, "a room webhook posts through its webhook URL, not the test button");
     const eventName = trigger.eventTypes?.[0] ?? "seira.test";
     // Run now is the person's own test: like a schedule's, it runs while paused.
     return this.dispatch(trigger, {
@@ -840,7 +842,7 @@ export class WebhookManager {
     const admitted = this.admit(trigger, event, byPerson, now);
     if ("receipt" in admitted) return admitted.receipt;
     const { deliveryId } = admitted;
-    if (trigger.delivery === "post") {
+    if (trigger.delivery === "post" && trigger.workflowId === undefined) {
       // Never fall through to a task run.
       if (!this.options.post) fail(503, "This server cannot post webhook messages to chat");
       const threadId = this.options.resolvePostThread?.(trigger, false);
@@ -872,7 +874,7 @@ export class WebhookManager {
       deliveryId,
       receivedAt: now,
       sameConversation: trigger.sameConversation,
-      ...(trigger.workflowId === undefined ? {} : { workflowId: trigger.workflowId }),
+      ...(trigger.workflowId === undefined ? {} : { workflowId: trigger.workflowId, ...(trigger.delivery === "post" ? { postsResult: true } : {}) }),
       ...(byPerson ? { byPerson: true } : {}),
     });
     this.deliveries.push({ key: `${trigger.endpointId}:${deliveryId}`, runId: run.id, at: now });

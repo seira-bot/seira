@@ -8,7 +8,7 @@ import type { ModelSelection } from "../shared/wire.ts";
 import type { Routine, RoutineInput } from "./routines.ts";
 import { userErrorThrown } from "./user-errors.ts";
 import { currentRunOn } from "../electron/legacy-names.mjs";
-import { linkWorkflow, workflowRefusal, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
+import { linkWorkflow, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
 
 export { workflowLookupFor } from "./workflows/routine-link.ts";
 
@@ -96,8 +96,6 @@ export function sanitizeInput(input: RoutineInput, after: number, lookup?: Workf
   if (checks && (target !== "bot" || runsOnce(schedule))) throw userErrorThrown("serverError.routine.checksRepeat");
   if (input.access != null && input.access !== "read-and-draft") throw userErrorThrown("serverError.routine.access");
   if (input.deliver != null && (input.deliver !== "brief" || target !== "bot")) throw userErrorThrown("serverError.routine.deliver");
-  const refused = link ? workflowRefusal({ target, runOn, deliver: input.deliver, sameConversation, modelSelection, scheduleType: schedule.type, access: input.access, checks }) : null;
-  if (refused) throw new Error(refused);
   return {
     name,
     prompt,

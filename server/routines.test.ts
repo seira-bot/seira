@@ -4522,21 +4522,17 @@ describe("a routine linked to a workflow", () => {
     expect(h.manager.listRuns()[0]).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"], target: "bot", status: "running", prompt: copy.prompt });
   });
 
-  it("refuses a workflow that is gone, and settings a workflow cannot honour", () => {
+  it("refuses a workflow that is gone", () => {
     const { h, input, gone } = setup();
-    expect(() => h.manager.create({ ...input, runOn: "cloud" as never })).toThrow("A workflow runs on this computer.");
     gone();
     expect(() => h.manager.create(input)).toThrow("That workflow is gone. Choose another one.");
   });
 
-  it("refuses read-only access, whose fence covers one chat only", () => {
+  it("accepts read-only access, checks and a cloud computer", () => {
     const { h, input } = setup();
-    expect(() => h.manager.create({ ...input, access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
-  });
-
-  it("refuses checks", () => {
-    const { h, input } = setup();
-    expect(() => h.manager.create({ ...input, checks: [ROUTINE_CHECKS[0]!] })).toThrow("A workflow can't use checks.");
+    expect(h.manager.create({ ...input, access: "read-and-draft" })).toMatchObject({ workflowId: "wf-1", access: "read-and-draft" });
+    expect(h.manager.create({ ...input, checks: [ROUTINE_CHECKS[0]!] })).toMatchObject({ workflowId: "wf-1", checks: [ROUTINE_CHECKS[0]] });
+    expect(h.manager.create({ ...input, runOn: "cloud" as never })).toMatchObject({ workflowId: "wf-1", runOn: "cloud" });
   });
 
   it("keeps the copy when the routine is updated, and drops the link on null", () => {
@@ -4565,21 +4561,17 @@ describe("a routine linked to a workflow", () => {
     expect(() => h.manager.update(routine.id, { workflowId: "wf-1" })).toThrow("That workflow is gone. Choose another one.");
   });
 
-  it("refuses a setting a workflow cannot honour on a routine that is already linked", () => {
+  it("accepts a setting on a routine that is already linked", () => {
     const { h, input } = setup();
     const routine = h.manager.create(input);
-    expect(() => h.manager.update(routine.id, { access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
+    expect(h.manager.update(routine.id, { access: "read-and-draft" })).toMatchObject({ workflowId: "wf-1", access: "read-and-draft" });
   });
 
-  it("loses its link at load when it holds a setting a workflow refuses", () => {
+  it("keeps its link at load when it holds any setting", () => {
     const schedule = { type: "interval" as const, everyMinutes: 60, anchorAt: start };
     const linked = { id: "r1", name: "Morning", prompt: copy.prompt, target: "bot", botId: "ana", runOn: "seira", enabled: true, schedule, durationMinutes: 30, attachments: [], workflowId: "wf-1", workflowBotIds: ["ana", "ben"], createdAt: 1, updatedAt: 1, nextRunAt: null } as unknown as Routine;
-    expect(loadRoutine(linked, start)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
-    for (const change of [{ access: "read-and-draft" }, { checks: [ROUTINE_CHECKS[0]!] }, { runOn: "cloud" }, { sameConversation: true }, { deliver: "brief" }]) {
-      const loaded = loadRoutine({ ...linked, ...change } as unknown as Routine, start)!;
-      expect(loaded, JSON.stringify(change)).not.toHaveProperty("workflowId");
-      expect(loaded).not.toHaveProperty("workflowBotIds");
-      expect(loaded.prompt).toBe(copy.prompt);
+    for (const change of [{}, { access: "read-and-draft" }, { checks: [ROUTINE_CHECKS[0]!] }, { runOn: "cloud" }, { sameConversation: true }, { deliver: "brief" }]) {
+      expect(loadRoutine({ ...linked, ...change } as unknown as Routine, start), JSON.stringify(change)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
     }
   });
 

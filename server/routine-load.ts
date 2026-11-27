@@ -14,7 +14,6 @@ import { MAX_DATE_MS } from "./routine-intervals.ts";
 import { loadSchedule } from "./routine-schedules.ts";
 import { loadSkips } from "./routine-skips.ts";
 import type { Routine, RoutineGoalStatus, RoutinePackageStamp, RoutineRequestCommit, RoutineRequestReceipt, RoutineRun, RoutineTarget } from "./routines.ts";
-import { workflowRefusal } from "./workflows/routine-link.ts";
 
 const persistedSourceThreadId = z.string().trim().min(1).optional().catch(undefined);
 
@@ -127,10 +126,6 @@ export function loadRoutine(routine: Routine, now: number): Routine | null {
   delete loaded.failureStreak;
   delete loaded.noStartStreak;
   const checked = withCheckFields(withoutUndefined(loaded, ["timeoutMinutes", "runOnStartup", "modelSelection", "installedPackage", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt", "heldFor", "workflowId", "workflowBotIds"]));
-  if (checked.workflowId !== undefined && workflowRefusal({ ...checked, scheduleType: checked.schedule.type }) !== null) {
-    delete checked.workflowId;
-    delete checked.workflowBotIds;
-  }
   return checked;
 }
 

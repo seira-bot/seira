@@ -143,7 +143,6 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       const short = deps.botsRefusal(auth, [info.botId], info.routine ? deps.routineNeeds(auth, info.routine.id) : "edit");
       if (short) return json(res, 403, { error: short });
       if (info.workflowId !== undefined) return json(res, 409, { error: "This already runs steps." });
-      if (info.refusal) return json(res, 409, { error: info.refusal });
       const instruction = info.prompt.trim();
       if (!instruction) return json(res, 409, { error: "Write what the bot should do first." });
       const checked = validateWorkflowInput({
