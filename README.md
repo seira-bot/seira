@@ -359,23 +359,31 @@ Chats and files stay on your computer. A bot sends your message to the AI servic
 
 <table>
   <tr>
-    <td width="33%" valign="top">
-      <h4>Discord</h4>
-      Ask questions, show your bots, and meet other users.
-      <br><br>
-      <a href="https://discord.gg/wAAgETJpFS"><img alt="Join the Seira Discord server" src="docs/assets/badges/discord.svg"></a>
-    </td>
-    <td width="33%" valign="top">
-      <h4>WhatsApp channel</h4>
-      Get new releases and tips on your phone.
-      <br><br>
-      <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="docs/assets/badges/whatsapp.svg"></a>
-    </td>
-    <td width="33%" valign="top">
+    <td width="50%" valign="top">
+      <img src="docs/assets/community/producthunt.svg" alt="" width="40" height="40">
       <h4>Product Hunt</h4>
-      Support or review Seira, so that more people find it.
-      <br><br>
-      <a href="https://www.producthunt.com/products/seira-bot?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-seira-bot"><img alt="Seira.bot on Product Hunt" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=light" width="200" height="43"></a>
+      <p>Like Seira? Your support or a review helps more people find it.</p>
+      <a href="https://www.producthunt.com/products/seira-bot?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-seira-bot"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=dark"><img alt="Seira.bot on Product Hunt" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=light" width="220" height="48"></picture></a>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/community/discord.svg" alt="" width="40" height="40">
+      <h4>Discord</h4>
+      <p>Ask questions, show your bots, and meet other users.</p>
+      <a href="https://discord.gg/wAAgETJpFS"><b>Join the server →</b></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/community/whatsapp.svg" alt="" width="40" height="40">
+      <h4>WhatsApp channel</h4>
+      <p>Get new releases and tips on your phone.</p>
+      <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><b>Follow the channel →</b></a>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/community/linkedin.svg" alt="" width="40" height="40">
+      <h4>LinkedIn</h4>
+      <p>Tell your network about Seira in one click.</p>
+      <a href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.producthunt.com%2Fproducts%2Fseira-bot"><b>Share on LinkedIn →</b></a>
     </td>
   </tr>
 </table>
