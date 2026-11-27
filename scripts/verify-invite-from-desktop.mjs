@@ -63,13 +63,21 @@ if (process.versions.electron && process.argv.includes(fixtureFlag)) {
       await Promise.race([win.loadURL(url), new Promise((_, reject) => setTimeout(() => reject(new Error(`${name}: the page did not load in 40 s`)), 40_000))]);
       console.error(`${name}: at ${win.webContents.getURL()}`);
       const evaluate = (code) => win.webContents.executeJavaScript(code);
-      const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), (await win.webContents.capturePage()).toPNG());
+      const capture = async () => {
+        for (let attempt = 0; ; attempt++) {
+          try { return (await win.webContents.capturePage()).toPNG(); } catch (error) {
+            if (attempt >= 20) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+        }
+      };
+      const shot = async (file) => writeFileSync(join(shots, `${name}-${file}.png`), await capture());
       const until = async (check, description) => {
         for (let attempt = 0; attempt < 400; attempt++) {
           if (await check()) return;
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
-        writeFileSync(join(shots, `${name}-failure.png`), (await win.webContents.capturePage()).toPNG());
+        writeFileSync(join(shots, `${name}-failure.png`), await capture());
         console.error(String(await evaluate("document.body.innerText")).slice(0, 1500));
         throw new Error(`${name}: timed out: ${description}`);
       };
