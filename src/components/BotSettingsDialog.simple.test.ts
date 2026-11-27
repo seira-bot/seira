@@ -625,6 +625,19 @@ describe("the Bot settings page", () => {
     expect(segment(settingsPage(makeBot({ replyStyle: "conversational" })), "data-reply-style").value).toBe("conversational");
   });
 
+  it("chooses how the bot starts todos from two pills, On its own by default, with a hint that names the bot", () => {
+    const rendered = settingsPage(makeBot());
+    const starts = segment(rendered, "data-starts-todos");
+    expect(starts.options.map((option) => [option.value, option.label])).toEqual([["auto", "On its own"], ["manual", "When I say"]]);
+    expect(starts.value).toBe("auto");
+    expect(rendered.html).toContain("Scout starts the next todo when free.");
+    starts.onChange("manual");
+    expect(patch).toHaveBeenLastCalledWith({ startsTodos: "manual" });
+    const manual = settingsPage(makeBot({ startsTodos: "manual" }));
+    expect(segment(manual, "data-starts-todos").value).toBe("manual");
+    expect(manual.html).toContain("Scout waits until you press Start on a todo.");
+  });
+
   it("turns this bot's notifications off and on, asking the system for permission only when turning them on", async () => {
     const notify = await import("@/lib/notify");
     const permission = vi.spyOn(notify, "requestNotificationPermission").mockResolvedValue("granted");
