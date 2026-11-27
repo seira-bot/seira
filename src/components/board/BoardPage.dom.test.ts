@@ -225,7 +225,7 @@ describe("the Board page", () => {
     await mount(); await settle();
     expect($("[data-board-empty]")!.textContent).toContain("Work you hand to bots shows up here.");
     expect($("[data-board-column]")).toBeNull();
-    expect([...document.querySelectorAll("button")].filter((one) => one.textContent?.includes("New todo"))).toHaveLength(2);
+    expect([...document.querySelectorAll("button")].filter((one) => one.textContent?.includes("New todo"))).toHaveLength(1);
   });
 
   it("filters by bot", async () => {
