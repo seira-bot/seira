@@ -65,10 +65,17 @@ export function parseMarker(body) {
   return match ? { kind: match[1], agent: match[2] } : null;
 }
 
+// Anyone can comment on a public issue. Only bots and accounts with a link to the repository can claim or release.
+const OUTSIDE = new Set(["NONE", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN"]);
+
+export const trustedComment = (comment) =>
+  comment.user?.type === "Bot" || !OUTSIDE.has(comment.author_association ?? "NONE");
+
 export function activeClaims(comments) {
   const ordered = [...comments].sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || a.id - b.id);
   const active = [];
   for (const comment of ordered) {
+    if (!trustedComment(comment)) continue;
     const parsed = parseMarker(comment.body);
     if (!parsed) continue;
     const index = active.findIndex((claim) => sameAgent(claim.agent, parsed.agent));

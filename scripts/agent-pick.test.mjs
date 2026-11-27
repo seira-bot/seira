@@ -43,6 +43,8 @@ const claimComment = (id, agent, at, kind = "claim") => ({
   id,
   created_at: at.toISOString(),
   body: kind === "claim" ? claimText(agent) : releaseText(agent),
+  user: { type: "Bot" },
+  author_association: "NONE",
 });
 
 const pr = (number, login, closes = [], extra = {}) => ({
@@ -94,7 +96,13 @@ function makeWorld({ issues = [], prs = [], windowLabel = true, events = {}, com
         if (failComments.includes(Number(m[1]))) throw new Error("GitHub call failed: GET (exit 1)");
         return page(world.comments[m[1]] ?? [], query);
       }
-      const created = { id: world.nextId++, created_at: new Date(NOW.getTime() + ++world.tick).toISOString(), body: body.body };
+      const created = {
+        id: world.nextId++,
+        created_at: new Date(NOW.getTime() + ++world.tick).toISOString(),
+        body: body.body,
+        user: { type: "Bot" },
+        author_association: "NONE",
+      };
       (world.comments[m[1]] ??= []).push(created);
       world.afterComment?.(Number(m[1]), world);
       return { id: created.id };
@@ -277,6 +285,18 @@ describe("claim comments", () => {
       claimComment(2, "a", ago(2), "release"),
     ]);
     expect(claims.map((claim) => claim.agent)).toEqual(["b"]);
+  });
+
+  it("AC-04 ignores a marker from an account outside the repository", () => {
+    const outside = (id, agent, at, extra) => ({ ...claimComment(id, agent, at), user: { type: "User" }, ...extra });
+    const claims = activeClaims([
+      outside(1, "spoof", ago(3), { author_association: "NONE" }),
+      outside(2, "spoof2", ago(3), { author_association: "FIRST_TIME_CONTRIBUTOR" }),
+      outside(3, "spoof3", ago(3), { author_association: undefined }),
+      outside(4, "rama-session", ago(2), { author_association: "MEMBER" }),
+      claimComment(5, "seira-lagus", ago(1)),
+    ]);
+    expect(claims.map((claim) => claim.agent)).toEqual(["rama-session", "seira-lagus"]);
   });
 
   it("AC-08 puts the earliest claim first", () => {
