@@ -37,5 +37,6 @@ export function skipRefusal(routine: Skippable, at: number, now: number): string
   if (!routine.enabled) return "This routine is off.";
   if (at <= now) return "That time has already passed.";
   if (nextOccurrence(routine.schedule, at - 1) !== at) return "The routine does not run at that time.";
+  if (!occurrenceSkipped(routine, at) && (withoutPastSkips(routine.skippedOccurrences, now)?.length ?? 0) >= MAX_SKIPPED_OCCURRENCES) return "Too many times are skipped already. Undo one first.";
   return null;
 }

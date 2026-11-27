@@ -77,6 +77,12 @@ describe("skipRefusal", () => {
     expect(skipRefusal(routine(daily), at + 1, NOW)).toMatch(/does not run/);
     expect(skipRefusal(routine(daily, { enabled: false }), at, NOW)).toMatch(/off/);
   });
+
+  it("refuses a new skip when the list is full, and allows a time that is already skipped", () => {
+    const full = Array.from({ length: 50 }, (_, index) => at + (index + 1) * 24 * HOUR);
+    expect(skipRefusal(routine(daily, { skippedOccurrences: full }), at, NOW)).toMatch(/Too many/);
+    expect(skipRefusal(routine(daily, { skippedOccurrences: full }), full[0]!, NOW)).toBeNull();
+  });
 });
 
 describe("routineSkipBody", () => {
