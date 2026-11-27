@@ -314,7 +314,7 @@ describe("workflow routes", () => {
     const { host, visible } = fixture();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ workflowId: "open" }, visible, host)).toBeNull();
-    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBeNull();
+    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ name: "plain" }, visible, host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, new VisibleSet(bots, [], { kind: "all" }), host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, null)).toBeNull();

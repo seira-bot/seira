@@ -75,7 +75,8 @@ export function workflowTargetHidden(body: unknown, visible: VisibleSet, workflo
   if (visible.everything || !body || typeof body !== "object") return null;
   const { workflowId } = body as { workflowId?: unknown };
   if (typeof workflowId !== "string" || !workflowId) return null;
-  const workflow = workflows?.get(workflowId);
+  if (!workflows) return null;
+  const workflow = workflows.get(workflowId);
   return workflow && workflowVisible(workflow, visible) ? null : "no such workflow";
 }
 
