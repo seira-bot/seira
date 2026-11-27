@@ -77,11 +77,11 @@ describe("the Added N todos card", () => {
     fixture.todos = [todoOf("a", { status: "queued" }), todoOf("b", { status: "open" }), todoOf("c", { status: "working" })];
     await draw(batch(["a", "b", "c"]));
     await click("Undo");
-    expect(fixture.deleteTodo.mock.calls.map((call) => call[0])).toEqual(["a", "b"]);
+    expect(fixture.deleteTodo.mock.calls.map((call) => (call as string[])[0])).toEqual(["a", "b"]);
     expect(container.querySelector("[data-todo-batch-undone]")?.textContent).toBe("You removed these 2 todos.");
     expect(button("Undo")).toBeUndefined();
     await click("Bring them back");
-    expect(fixture.restoreTodo.mock.calls.map((call) => call[0])).toEqual(["a", "b"]);
+    expect(fixture.restoreTodo.mock.calls.map((call) => (call as string[])[0])).toEqual(["a", "b"]);
     expect(container.querySelector("[data-todo-bring-back]")).toBeNull();
   });
 

@@ -17,7 +17,7 @@ const bots = [{ id: "felix", name: "Felix" }, { id: "rhea", name: "Rhea" }, { id
 let container: HTMLDivElement, root: Root, ran: boolean | null, done: ReturnType<typeof vi.fn>;
 
 function Probe({ text, botId, groupId }: { text: string; botId?: string; groupId?: string }) {
-  const todo = useTodoCommand({ text, bots, botId, groupId, threadId: "t1", onDone: done });
+  const todo = useTodoCommand({ text, bots, botId, groupId, threadId: "t1", onDone: done as () => void });
   return createElement("div", null, todo.preview, createElement("button", { "data-run": "", onClick: () => { ran = todo.run(); } }));
 }
 const draw = async (props: { text: string; botId?: string; groupId?: string }) => { await act(async () => root.render(createElement(Probe, props))); };
