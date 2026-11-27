@@ -12,7 +12,7 @@ import { ChatGptPlanStatus } from "./ChatGptPlanStatus";
 import { EngineCard, engineReady, providerName, type EngineCardSummary } from "./EngineLibrary";
 import { CommandRow, EngineSetup, EngineUpdateNotice, EngineWarningNotice } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
-import { ProviderOffItems, useProviderOff } from "./ProviderMenu";
+import { ProviderMenuBody, ProviderOffItems, useProviderOff } from "./ProviderMenu";
 import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import type { ProviderUse } from "../../shared/provider-uses";
 
@@ -131,11 +131,13 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
         {busy || off.busy ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={16} />}
       </button>
       {open && (
-        <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[220px] overflow-hidden text-[13px]", MENU_SHEET)}>
+        <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[260px] overflow-hidden text-[13px]", MENU_SHEET)}>
+          <ProviderMenuBody off={off} onDone={() => setOpen(false)}>{(choose) => <>
           <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); onRename(); }}>{t("accounts.rename")}</button>
           {canSignOut && <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
-          {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} />}
+          {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} onChoose={choose} />}
           {canRemove && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
+          </>}</ProviderMenuBody>
         </div>
       )}
       {(off.blocked.length > 0 || removeBlocked.length > 0) && (
