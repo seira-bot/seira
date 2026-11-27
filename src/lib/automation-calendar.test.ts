@@ -34,7 +34,7 @@ describe("occurrencesIn", () => {
   it("gives nothing in the future for a paused automation or a paused start", () => {
     const range = [WEEK, WEEK + 7 * 86_400_000] as const;
     expect(occurrencesIn([automation("a", [daily("s", "09:00")], { enabled: false })], ...range, NOW)).toEqual([]);
-    expect(occurrencesIn([automation("a", [{ ...schedule("s", { type: "daily", time: "09:00", weekdays: ALL }), enabled: false }])], ...range, NOW)).toEqual([]);
+    expect(occurrencesIn([automation("a", [{ id: "s", kind: "schedule", schedule: { type: "daily", time: "09:00", weekdays: ALL }, enabled: false }])], ...range, NOW)).toEqual([]);
   });
 
   it("shows a past run of a schedule start as a past run with its status", () => {
