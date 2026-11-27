@@ -153,7 +153,7 @@ describe("a slot to the routine editor", () => {
   const press = (container: ParentNode | Document, text: string) => act(() => { ([...container.querySelectorAll("button")].find((item) => item.textContent === text) as HTMLElement).click(); });
   const pressedRepeat = () => document.querySelector("[role=group][aria-label='Repeat'] [aria-pressed=true]")?.textContent;
 
-  it.each([
+  it.each<[string, "routines.repeat.once" | "routines.repeat.weekly" | "routines.repeat.daily"]>([
     ["Once", "routines.repeat.once"],
     ["Every Tuesday at 10:00", "routines.repeat.weekly"],
     ["Every day at 10:00", "routines.repeat.daily"],
