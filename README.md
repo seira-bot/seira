@@ -33,7 +33,14 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
   <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><b>Android app</b></a>
 </p>
 
-<p>If Seira helps you, a ⭐ on GitHub helps other people find it.</p>
+<p>
+  <a href="https://www.producthunt.com/products/seira-bot?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-seira-bot"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=dark">
+    <img alt="Seira.bot on Product Hunt" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=light" width="250" height="54">
+  </picture></a>
+</p>
+
+<p>If Seira helps you, a ⭐ on GitHub and an upvote on Product Hunt help other people find it.</p>
 
 </div>
 
@@ -348,11 +355,34 @@ No. The desktop app and the npm server connect apps for you. Your own Composio k
 Chats and files stay on your computer. A bot sends your message to the AI service that it uses. A bot uses your computer only after you allow it. Commands and file edits show as cards that you allow or deny.
 </details>
 
+## Community
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h4>Discord</h4>
+      Ask questions, show your bots, and meet other users.
+      <br><br>
+      <a href="https://discord.gg/wAAgETJpFS"><img alt="Join the Seira Discord server" src="docs/assets/badges/discord.svg"></a>
+    </td>
+    <td width="33%" valign="top">
+      <h4>WhatsApp channel</h4>
+      Get new releases and tips on your phone.
+      <br><br>
+      <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="docs/assets/badges/whatsapp.svg"></a>
+    </td>
+    <td width="33%" valign="top">
+      <h4>Product Hunt</h4>
+      Upvote or review Seira, so that more people find it.
+      <br><br>
+      <a href="https://www.producthunt.com/products/seira-bot?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-seira-bot"><img alt="Seira.bot on Product Hunt" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1331852&amp;theme=light" width="200" height="43"></a>
+    </td>
+  </tr>
+</table>
+
 ## Contributing
 
 Issues and pull requests are welcome.
-Ask questions and meet other users on the [Seira Discord server](https://discord.gg/wAAgETJpFS).
-Follow the [Seira channel on WhatsApp](https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G) for new releases and tips.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands.
 - The [code guide](docs/contributing.md) holds the code rules, and [DESIGN.md](DESIGN.md) holds the design rules.
