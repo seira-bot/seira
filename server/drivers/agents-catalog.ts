@@ -552,7 +552,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "todo_add",
     description:
-      "Write down todos on the Board for yourself, a teammate, or the team's picker (omit assigneeBotId). Each waits in its bot's queue and starts when the bot is free. The person sees one card with Undo. For work that happens later or elsewhere, not for what you can do now. Repeating work is a routine request, not a todo.",
+      "Write down todos on the Board for yourself, a teammate, or the team's picker (omit assigneeBotId). Each waits in its bot's queue and starts when the bot is free. The person sees one card with Undo. For work that happens later or elsewhere, not for what you can do now. Work that repeats is not a todo.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
