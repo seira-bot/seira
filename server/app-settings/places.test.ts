@@ -80,7 +80,7 @@ describe("UI map search", () => {
 
   it("names a server in the desktop window for People, and never the app's own computer", () => {
     for (const id of ["page:people", "members"]) {
-      const place = SETTINGS_PLACES.find((one) => one.id === id)!;
+      const place: SettingsPlace = SETTINGS_PLACES.find((one) => one.id === id)!;
       expect(place.path, id).toMatch(/^Settings → People/);
       expect(place.only, id).toMatch(/Team Cloud.*self-hosted server.*Connect to a server.*never the desktop app's own computer/);
     }

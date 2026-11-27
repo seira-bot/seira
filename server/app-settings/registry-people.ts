@@ -82,10 +82,11 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     }
     return held.departments.length || held.bots.length ? held : "Choose at least one department or bot, or give the whole team.";
   };
+  interface Made { entry: string; before: Role; role: Role; access: "keep" | Held | null; shown: Held | null }
   const empty = (held: Held) => !held.departments.length && !held.bots.length;
 
   /** What the change makes true, or why it cannot be made. `access` is "keep" when the request names no access. */
-  const plan = (value: Person) => {
+  const plan = (value: Person): { refusal: string } | Made => {
     const blocked = unavailable();
     if (blocked) return { refusal: blocked };
     const entry = accessEntry(value.email);
