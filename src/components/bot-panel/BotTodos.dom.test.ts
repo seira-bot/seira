@@ -21,7 +21,7 @@ import { BotTodos } from "./BotTodos";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const bot = { id: "rhea", name: "Rhea", color: "red", threadId: "rhea-main", tasks: [] } as unknown as Bot;
-const card = (id: string, patch: Partial<BoardCard>): BoardCard => ({
+const card = (id: string, patch: Partial<BoardCard> = {}): BoardCard => ({
   id: `todo:${id}`, kind: "todo", column: "todo", state: "queued", title: `Todo ${id}`, botId: "rhea", todoId: id, group: "next", place: 1, createdAt: 1, updatedAt: 1, ...patch,
 });
 let root: Root;
@@ -36,7 +36,7 @@ beforeEach(() => {
   resetBoardForTest(); resetTodosForTest(); dispatch.mockClear();
   server.cards = [
     card("n", { column: "working", state: "running", group: undefined, place: undefined }),
-    card("u"),
+    card("u", {}),
     card("l", { group: "scheduled", place: undefined }),
     card("x", { botId: "other" }),
   ];
