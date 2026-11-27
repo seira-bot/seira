@@ -15,7 +15,7 @@ vi.mock("@/lib/power", () => ({ showToast: fixture.toast }));
 vi.mock("@/lib/board-focus", () => ({ requestBoardCard: fixture.request }));
 vi.mock("../Select", () => ({ Select: (props: Record<string, unknown>) => createElement("select", props) }));
 
-import { closeTodoDialog, openTodoDialog } from "./todo-dialog-state";
+import { closeTodoDialog } from "./todo-dialog-state";
 import { todoMenuItems } from "./todo-menu";
 import { TodoDialogHost } from "./TodoDialog";
 
