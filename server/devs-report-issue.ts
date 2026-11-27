@@ -1,11 +1,10 @@
 import { homedir } from "node:os";
 
 import { BUG_REPORT_ISSUE_FORM, BUG_REPORT_ISSUE_MAX_URL } from "../shared/devs-report-issue.ts";
-import type { DevsReportPayload } from "./devs-report.ts";
+import { GENERIC_REPORT_TITLE, cleanTitle, redactReportText, type DevsReportPayload } from "./devs-report.ts";
 
 export const MAX_ISSUE_URL = BUG_REPORT_ISSUE_MAX_URL;
 const TITLE_MAX = 80;
-const DEFAULT_TITLE = "Bug report from Seira";
 const NO_WORDS = "(no words besides @devs)";
 const CUT = "\n…";
 
@@ -50,14 +49,19 @@ function largest(size: number, fits: (n: number) => boolean): number {
   return low;
 }
 
-/** The issue's title: the report's own, else the description's first line, else a fixed one. */
+/** The issue's title, one value for the draft, the relay and the issue form: the report's own, else the description's
+ * first line cleaned as the title rules say, else a fixed one. The relay never gets to pick a title from the description. */
 export function bugReportTitle(payload: DevsReportPayload, home = homedir()): string {
   const own = [payload.installId, payload.contactEmail, payload.contact].filter((value): value is string => Boolean(value));
-  const clean = (text: string) => tidy(text, own, home);
-  const words = clean(payload.description).trim().split("\n").map((line) => line.trim()).find(Boolean) ?? "";
-  const named = payload.title ? clean(payload.title).replace(/\s+/g, " ").trim() : "";
-  return named ? clipText(named, TITLE_MAX).trimEnd() : !words || words === NO_WORDS ? DEFAULT_TITLE : clipText(words, TITLE_MAX).trimEnd();
+  const named = payload.title ? tidy(payload.title, own, home).replace(/\s+/g, " ").trim() : "";
+  if (named) return clipText(named, TITLE_MAX).trimEnd();
+  const words = payload.description.trim().split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+  const clean = words === NO_WORDS ? "" : cleanTitle(tidy(words, own, home), { redact: (text) => redactReportText(text), names: own });
+  return clean ? clipText(clean, TITLE_MAX).trimEnd() : GENERIC_REPORT_TITLE;
 }
+
+/** The payload with its final title stored in it, so what the relay files is what the person saw. */
+export const withFinalTitle = (payload: DevsReportPayload, home = homedir()): DevsReportPayload => ({ ...payload, title: bugReportTitle(payload, home) });
 
 export function bugReportIssueUrl(payload: DevsReportPayload, home = homedir()): string {
   const own = [payload.installId, payload.contactEmail, payload.contact].filter((value): value is string => Boolean(value));

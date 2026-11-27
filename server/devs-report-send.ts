@@ -8,7 +8,7 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl } from "./devs-report-issue.ts";
+import { bugReportIssueUrl, withFinalTitle } from "./devs-report-issue.ts";
 import { cloudSignedHeaders } from "./cloud-signed-headers.ts";
 
 export const BUG_REPORT_SERVICE = "https://bugs.seira.bot/api/bug-reports";
@@ -84,7 +84,9 @@ export const devsReportSender = (endpoint: string | null, fetcher: typeof fetch 
   return outcome.ok && "id" in outcome ? { ...outcome, noReply: true } : outcome;
 };
 
-export async function sendDevsReport(endpoint: string, payload: DevsReportPayload, fetcher: typeof fetch = fetch): Promise<SendOutcome> {
+export async function sendDevsReport(endpoint: string, report: DevsReportPayload, fetcher: typeof fetch = fetch): Promise<SendOutcome> {
+  // One final title, the one the draft and the issue form show: a report an older version queued has none, and the relay must not take the description's first line.
+  const payload = withFinalTitle(report);
   let answer = await post(endpoint, payload, fetcher);
   // An address the endpoint will not take must not cost the person their report.
   if (answer?.status === 400 && /contact/i.test(sentence(answer.body.error)) && (payload.contactEmail || payload.contact)) {

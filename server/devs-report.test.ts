@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDevsReport, contactAddress, DEVS_REPORT_LIMITS, environmentSecrets, redactReportText, withoutContact, type DevsReportInput } from "./devs-report.ts";
+import { buildDevsReport, cleanTitle, contactAddress, DEVS_REPORT_LIMITS, environmentSecrets, GENERIC_REPORT_TITLE, ownHostNames, redactReportText, withoutContact, type DevsReportInput } from "./devs-report.ts";
 
 const ANTHROPIC = `sk-ant-${"a".repeat(40)}`;
 const GITHUB = `ghp_${"b".repeat(36)}`;
@@ -141,6 +141,48 @@ describe("a @devs report's title", () => {
     expect(long.endsWith("…")).toBe(true);
     expect(titleOf({ words: "the button froze", summary: wentWrong("https://example.com/only-a-url") })).toBe("the button froze");
     expect(titleOf({ words: "the button froze", summary: undefined })).toBe("the button froze");
-    expect(titleOf({ words: "see https://example.com", summary: undefined })).toBeUndefined();
+    expect(titleOf({ words: "see https://example.com", summary: undefined })).toBe("Bug report from Seira");
+  });
+
+  it("drops Windows and UNC paths, IPv6 addresses, local and one-label hosts and ports", () => {
+    const cases: Array<[string, string]> = [
+      ["The export failed in C:\\Users\\Ada Lovelace\\Documents\\plan.xlsx today", "The export failed in today"],
+      ["The export failed in C:/Users/ada/plan.xlsx today", "The export failed in today"],
+      ["The sync failed for \\\\fileserver\\team share\\plan.xlsx today", "The sync failed for today"],
+      ["Connecting to [2001:db8::7334]:8443 timed out every time", "Connecting to timed out every time"],
+      ["Connecting to fe80::1ff:fe23:4567:890a timed out every time", "Connecting to timed out every time"],
+      ["Opening localhost:3000 shows a blank page", "Opening shows a blank page"],
+      ["Opening http://localhost:3000/a shows a blank page", "Opening shows a blank page"],
+      ["Reaching nas-office:5000 shows a blank page", "Reaching shows a blank page"],
+      ["Reaching nas.local shows a blank page", "Reaching shows a blank page"],
+    ];
+    for (const [text, expected] of cases) expect(titleOf({ summary: wentWrong(text) }), text).toBe(expected);
+  });
+
+  it("drops the names of the people it is told about and this machine's host name", () => {
+    const redact = (text: string) => redactReportText(text, []);
+    expect(cleanTitle("Ada Lovelace says the composer froze", { redact, names: ["Ada Lovelace"] })).toBe("says the composer froze");
+    expect(cleanTitle("Budi cannot send pictures from the composer", { redact, names: ["Budi"] })).toBe("cannot send pictures from the composer");
+    expect(cleanTitle("Sync stopped on atlas-box overnight", { redact, names: ["atlas-box"] })).toBe("Sync stopped on overnight");
+    expect(ownHostNames("my-laptop-4.home.arpa")).toEqual(["my-laptop-4.home.arpa", "my-laptop-4"]);
+  });
+
+  it("uses the fixed generic title when nothing safe is left, never an empty one", () => {
+    for (const text of ["C:\\Users\\ada", "\\\\fileserver\\share", "[::1]:8080", "localhost:3000", "@ada", "ada@example.com", "ok", ""]) {
+      expect(titleOf({ words: text, summary: undefined }), text).toBe(GENERIC_REPORT_TITLE);
+    }
+    expect(buildDevsReport(input({ words: "", summary: undefined }), []).title).toBe("Bug report from Seira");
+  });
+
+  it("redacts secrets on the original text before any other title rule", () => {
+    // A rule that cuts a host-like piece out of a secret would leave a rest that redaction cannot know.
+    const held = "Zq9xK2mP.rTzwab9";
+    const payload = buildDevsReport(input({ words: "", summary: wentWrong(`The key ${held} was refused by the relay`) }), [held]);
+    expect(payload.title).toBe("The key was refused by the relay");
+    expect(payload.description).not.toContain(held);
+    expect(payload.description).toContain(`«redacted ${held.length} chars»`);
+    expect(JSON.stringify(payload)).not.toMatch(/Zq9|rTzwab|wab9/);
+    const withKey = buildDevsReport(input({ words: "", summary: wentWrong(`Auth failed with ${ANTHROPIC} again`) }), []);
+    expect(withKey.title).toBe("Auth failed with again");
   });
 });

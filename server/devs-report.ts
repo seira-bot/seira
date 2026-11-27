@@ -1,6 +1,8 @@
 // What one @devs report carries to the Seira team's endpoint (POST /api/bug-reports on the Cloud origin): the person's
 // message, the bot's summary when it wrote one, and facts the server gathers itself. Never the conversation, never a
 // file. Everything passes redactReportText, and every field stays inside the endpoint's limits.
+import { hostname } from "node:os";
+
 import type { ErrorFingerprint } from "../shared/bug-offer.ts";
 import { withoutCitationMarkers } from "../src/lib/citations.ts";
 import { isSecretName, mask, redactSecretsInText } from "./redact.ts";
@@ -169,37 +171,56 @@ function diagnose(input: DevsReportInput, redact: (text: string) => string): str
   return firstChars(redact(lines.join("\n")), DEVS_REPORT_LIMITS.diagnostics);
 }
 
+/** The title of a report whose words leave nothing safe to show on a public issue. */
+export const GENERIC_REPORT_TITLE = "Bug report from Seira";
 const TITLE_MAX = 80;
 const TITLE_MIN = 8; // a shorter rest, such as "see", tells nothing
 const TITLE_UNSAFE: RegExp[] = [
   /\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, // URLs with any scheme
+  /(?<![\w])[a-z]:[\\/](?:[^\s"'<>|:*?\\/]+(?: [^\s"'<>|:*?\\/]+)*[\\/])*[^\s"'<>|:*?\\/]*/gi, // Windows paths (C:\... and C:/...); a folder may hold single spaces
+  /\\\\[^\s\\/]+(?:[\\/](?:[^\s"'<>|:*?\\/]+(?: [^\s"'<>|:*?\\/]+)*[\\/])*[^\s"'<>|:*?\\/]*)?/g, // UNC paths (\\host\share); a folder may hold single spaces
   /[^\s@]+@[^\s@]+/g, // email addresses
   /(?<![\w])@[\w-]+/g, // account names: they would ping someone on a public issue
+  /(?<![\w.-])(?:~|\.{1,2})\\\S*/g, // paths with a back slash
   /(?<![\w.-])(?:[~/.]{1,2}\/|\/)[^\s]*/g, // file paths
   /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, // IPv4 addresses
+  /(?<![\w:])(?:\[[\da-f:.%]+\](?::\d+)?|(?:[\da-f]{0,4}:){2,7}[\da-f]{0,4}(?![\w:]))/gi, // IPv6 addresses
+  /\blocalhost\b(?::\d+)?/gi, // this machine
   /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}(?::\d+)?(?:\/\S*)?/gi, // host-like words
+  /\b[a-z][a-z0-9-]*:\d{2,5}\b/gi, // a host of one label with a port
 ];
 
-/** One line for a public issue title: the first sentence of `text`, without URLs, host names, addresses, account names,
- * paths or secrets, cut to about 80 characters. Empty when nothing safe is left. */
-function titleFrom(text: string | undefined, redact: (text: string) => string): string {
-  let line = (text ?? "").split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? "";
+/** This machine's own host name, whole and first label: no public title names it. */
+export function ownHostNames(name = hostname()): string[] {
+  return [name, name.split(".")[0] ?? ""].filter((part) => part.length >= 4);
+}
+
+/** One line for a public issue title: `text` with secrets redacted first, then its first line (and, by default, first
+ * sentence) without URLs, host names, addresses, paths, account names or the given names, cut to `max` characters.
+ * Empty when nothing safe is left. */
+export function cleanTitle(text: string | undefined, options: { redact: (text: string) => string; names?: readonly string[]; max?: number; sentence?: boolean }): string {
+  const max = options.max ?? TITLE_MAX;
+  // Secrets go first, on the original text: another rule that cuts into a secret would leave a piece redaction cannot know.
+  let line = options.redact(text ?? "").split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? "";
+  line = line.replace(/«[^»]*»/g, " ");
   for (const unsafe of TITLE_UNSAFE) line = line.replace(unsafe, " ");
-  line = redact(line).replace(/«[^»]*»/g, " ").replace(/[\p{Cc}`*_#<>|]+/gu, " ").replace(/\s+/g, " ").replace(/\s+([,;:])/g, "$1").replace(/([,;:])(?:\s*[,;:])+/g, "$1").trim();
-  const end = line.search(/[.!?](?:\s|$)/);
+  const names = [...new Set([...(options.names ?? []), ...ownHostNames()].map((name) => name.trim()).filter((name) => name.length >= 2 && name.toLowerCase() !== "seira"))].sort((a, b) => b.length - a.length);
+  for (const name of names) line = line.replace(new RegExp(`(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "giu"), " ");
+  line = line.replace(/[\p{Cc}`*_#<>|]+/gu, " ").replace(/\s+/g, " ").replace(/\s+([,;:])/g, "$1").replace(/([,;:])(?:\s*[,;:])+/g, "$1").trim();
+  const end = options.sentence === false ? -1 : line.search(/[.!?](?:\s|$)/);
   if (end > 0) line = line.slice(0, end);
   line = line.replace(/^[\s\-–—:;,.()[\]"']+|[\s\-–—:;,([\]"']+$/g, "");
-  if (line.length > TITLE_MAX) {
-    const cut = line.lastIndexOf(" ", TITLE_MAX - 1);
-    line = `${line.slice(0, cut > TITLE_MAX / 2 ? cut : TITLE_MAX - 1).trimEnd()}…`;
+  if (line.length > max) {
+    const cut = line.lastIndexOf(" ", max - 1);
+    line = `${line.slice(0, cut > max / 2 ? cut : max - 1).trimEnd()}…`;
   }
   return line.length >= TITLE_MIN && /\p{L}{2}/u.test(line) ? line : "";
 }
 
-/** The issue title: the first sentence of the bot's summary, else the person's words, each cleaned as above. Absent when
- * neither leaves a title, so the relay uses its own default. */
-export function reportTitle(input: Pick<DevsReportInput, "summary" | "words">, redact: (text: string) => string): string | undefined {
-  return titleFrom(input.summary?.text.wentWrong, redact) || titleFrom(input.words, redact) || undefined;
+/** The issue title: the first sentence of the bot's summary, else the person's words, each cleaned as above; the fixed
+ * generic title when neither leaves one, so the relay never falls back to the description's first line. */
+export function reportTitle(input: Pick<DevsReportInput, "summary" | "words">, redact: (text: string) => string, names: readonly string[] = []): string {
+  return cleanTitle(input.summary?.text.wentWrong, { redact, names }) || cleanTitle(input.words, { redact, names }) || GENERIC_REPORT_TITLE;
 }
 
 export function buildDevsReport(input: DevsReportInput, secrets: readonly string[] = environmentSecrets()): DevsReportPayload {
@@ -213,7 +234,7 @@ export function buildDevsReport(input: DevsReportInput, secrets: readonly string
     appVersion: singleLine(input.appVersion),
     platform: singleLine(input.platform),
     diagnostics: diagnose(input, redact),
-    ...(title ? { title } : {}),
+    title,
     ...(contact ? Object.fromEntries(CONTACT_FIELDS.map((name) => [name, contact])) : {}),
   };
 }

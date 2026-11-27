@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { isBugReportIssueUrl } from "../shared/devs-report-issue.ts";
 import { buildDevsReport, type DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl, conversationDiagnostics, MAX_ISSUE_URL } from "./devs-report-issue.ts";
+import { bugReportIssueUrl, bugReportTitle, conversationDiagnostics, MAX_ISSUE_URL, withFinalTitle } from "./devs-report-issue.ts";
 
 const INSTALL = "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e";
 const PAYLOAD: DevsReportPayload = {
@@ -43,15 +43,33 @@ describe("the prefilled issue form for a @devs report", () => {
     }, home);
     const query = fields(url);
     expect(query.get("what-happened")).toBe("It broke in ~/work and ~/work and ~/work");
-    expect(query.get("title")).toBe("It broke in ~/work and ~/work and ~/work");
+    expect(query.get("title")).toBe("It broke in and and");
     expect(query.get("logs")).toBe("a ~/x\nb ~\\AppData\nc ~/AppData\nd ~\ne /srv/boxes/y");
   });
 
   it("titles the issue from the person's first words, at most 80 characters", () => {
-    expect(fields(bugReportIssueUrl({ ...PAYLOAD, description: `${"a".repeat(120)}\nmore` })).get("title")).toBe("a".repeat(80));
+    expect(fields(bugReportIssueUrl({ ...PAYLOAD, description: `${"a".repeat(120)}\nmore` })).get("title")).toBe(`${"a".repeat(79)}…`);
     for (const description of ["(no words besides @devs)\n\nWhat they wrote: @devs", "", "  \n\n"]) {
       expect(fields(bugReportIssueUrl({ ...PAYLOAD, description })).get("title"), description).toBe("Bug report from Seira");
     }
+  });
+
+  it("takes the payload's own title as it is: one final title for the form and for the relay", () => {
+    const own = { ...PAYLOAD, title: "Pictures never load" };
+    expect(bugReportTitle(own)).toBe("Pictures never load");
+    expect(fields(bugReportIssueUrl(own)).get("title")).toBe("Pictures never load");
+    expect(withFinalTitle(own).title).toBe("Pictures never load");
+    expect(withFinalTitle(withFinalTitle(PAYLOAD)).title).toBe(withFinalTitle(PAYLOAD).title);
+  });
+
+  it("cleans the description's first line for a report that has no title, and never leaves the title empty", () => {
+    const unsafe: Array<[string, string]> = [["It broke in C:\\Users\\ada\\work", "It broke in"], ["It broke on \\\\fileserver\\share\\a.docx", "It broke on"],
+      ["It broke at [2001:db8::1]:8080", "It broke at"], ["It broke at localhost:3000", "It broke at"], ["It broke on laptop-ada:8443", "It broke on"]];
+    for (const [description, title] of unsafe) expect(bugReportTitle({ ...PAYLOAD, description }), description).toBe(title);
+    for (const description of ["C:\\Users\\ada\\work", "https://example.com/a", "ada@example.com", "\\\\fileserver\\share"]) {
+      expect(bugReportTitle({ ...PAYLOAD, description }), description).toBe("Bug report from Seira");
+    }
+    expect(bugReportTitle({ ...PAYLOAD, title: "   " })).toBe("The calendar never syncs");
   });
 
   it("keeps the whole address within the limit and cuts the logs at a line end", () => {
