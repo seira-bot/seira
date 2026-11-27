@@ -49,10 +49,45 @@ describe("access log (FR-373)", () => {
     expect(Number(/ (\d+)ms /.exec(line)?.[1])).toBe(13);
   });
 
-  it("keeps a path on one line and hides a webhook secret", () => {
+  it("keeps a path on one line and hides a webhook path", () => {
     expect(loggablePath("/a\r\nforged line?x=1")).not.toMatch(/[\r\n ]/);
-    expect(loggablePath("/hooks/wh_abc/topsecret?x=1")).toBe("/hooks/wh_abc/<redacted>");
+    expect(loggablePath("/api/\r\nforged line")).not.toMatch(/[\r\n ]/);
+    expect(loggablePath("/hooks/wh_abc/topsecret?x=1")).toBe("/hooks/:id/<redacted>");
     expect(loggablePath(undefined)).toBe("/");
-    expect(loggablePath(`/${"a".repeat(500)}`).length).toBeLessThan(210);
+    expect(loggablePath(`/api/${"bots/".repeat(100)}`).length).toBeLessThan(210);
+  });
+
+  it("writes the shape of a known route and :id for each name or id", () => {
+    expect(loggablePath("/api/health")).toBe("/api/health");
+    expect(loggablePath("/api/bots/3f2a9c1e-77aa-4b21-9d0e-5c6f1a2b3c4d")).toBe("/api/bots/:id");
+    expect(loggablePath("/api/bots/3f2a9c1e/messages")).toBe("/api/bots/:id/messages");
+    expect(loggablePath("/api/rooms/room-42/members/someone%40example.org")).toBe("/api/rooms/:id/members/:id");
+    expect(loggablePath("/api/bots/")).toBe("/api/bots/");
+    expect(loggablePath("/pair?x=1#y")).toBe("/pair");
+    expect(loggablePath("/")).toBe("/");
+  });
+
+  it("never writes a segment that is not a fixed route word", () => {
+    const odd = ["Zk3-9fQ2vL0aXb7", "abc123def456", "user.name", "%2e%2e", "xyz"];
+    for (const segment of odd) {
+      for (const path of [`/api/bots/${segment}`, `/api/${segment}`, `/api/bots/${segment}/files/${segment}`, `/v1/${segment}`, `/mcp-oauth/${segment}`]) {
+        expect(loggablePath(path), path).not.toContain(segment);
+      }
+    }
+  });
+
+  it("writes <other> for a path outside the known routes, and no part of it", () => {
+    expect(loggablePath("/unknown-area/Zk3-9fQ2vL0aXb7")).toBe("<other>");
+    expect(loggablePath("/Zk3-9fQ2vL0aXb7")).toBe("<other>");
+    expect(loggablePath("*")).toBe("<other>");
+    expect(loggablePath("http://host.example/api/bots")).toBe("<other>");
+  });
+
+  it("keeps a path with an id out of the written line", async () => {
+    const lines = await get({ SEIRA_ACCESS_LOG: "1" }, "/api/bots/Zk3-9fQ2vL0aXb7/threads/abc123def456?x=1");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(" GET /api/bots/:id/threads/:id 200 ");
+    expect(lines[0]).not.toContain("Zk3-9fQ2vL0aXb7");
+    expect(lines[0]).not.toContain("abc123def456");
   });
 });

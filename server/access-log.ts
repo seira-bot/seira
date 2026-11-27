@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { ROUTE_ROOTS, ROUTE_WORDS } from "./access-log-routes.ts";
 
 export type AccessRoute = "local" | "tunnel";
 
@@ -17,11 +18,16 @@ export function accessLogEnabled(env: NodeJS.ProcessEnv): boolean {
   return env.SEIRA_ACCESS_LOG === "1";
 }
 
-/** The path alone. The query string, the fragment and a webhook secret never reach a log line, and a control character cannot start a second line. */
+/** The shape of the path, never the path. A name or an id becomes :id, a webhook path ends in <redacted>, and a path outside the known routes is <other>. The query string and the fragment are dropped, and a control character cannot start a second line. */
 export function loggablePath(rawUrl: string | undefined): string {
-  const path = (rawUrl ?? "/").split(/[?#]/, 1)[0].replace(/^(\/hooks\/wh_[^/]*\/).*$/, "$1<redacted>");
-  const clean = path.replace(/[^\x21-\x7e]/g, "?");
-  return clean.length > MAX_PATH ? `${clean.slice(0, MAX_PATH)}...` : clean || "/";
+  const path = (rawUrl ?? "/").split(/[?#]/, 1)[0];
+  const parts = path.split("/").slice(1);
+  const root = parts[0] ?? "";
+  if (parts[0] === "hooks" && parts[1]?.startsWith("wh_") && parts.length > 2) return "/hooks/:id/<redacted>";
+  if (!ROUTE_ROOTS.has(root)) return path === "" || path === "/" ? "/" : "<other>";
+  const shape = `/${parts.map((part, index) => (index === 0 || part === "" || ROUTE_WORDS.has(part) ? part : ":id")).join("/")}`;
+  const clean = shape.replace(/[^\x21-\x7e]/g, "?");
+  return clean.length > MAX_PATH ? `${clean.slice(0, MAX_PATH)}...` : clean;
 }
 
 export function formatAccessLine(entry: AccessEntry): string {

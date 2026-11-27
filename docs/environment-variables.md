@@ -23,7 +23,8 @@ To find what still uses the old prefix on a server, start it and search its log 
 ## Access log
 
 `SEIRA_ACCESS_LOG=1` (or `seira serve --access-log`) makes the server write one line for each request it answers:
-time, method, path, status, duration and the way in (`local` or `tunnel`). The query string, cookies, headers and bodies
+time, method, route, status, duration and the way in (`local` or `tunnel`). The route is the shape of the path: a name or
+an id is written as `:id`, and a path outside the known routes as `<other>`. The query string, cookies, headers and bodies
 are never written. It is off unless you set it.
 
 ## Premium key
