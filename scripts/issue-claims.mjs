@@ -25,7 +25,7 @@ const WINDOW_HOURS = 24;
 const CLAIM_HOURS = 72;
 const WEEKEND_RELEASE_HOUR_UTC = 12;
 
-export const SWEEP_LIMITS = { maxRequests: 600, maxMs: 4 * 60_000 };
+export const SWEEP_LIMITS = { maxRequests: 600, hardRequests: 900, maxMs: 4 * 60_000 };
 
 export function parseCommand(body) {
   const text = String(body ?? "").trim();
@@ -96,10 +96,7 @@ export function createApi({ token, repository, fetch: fetchImpl = globalThis.fet
     "User-Agent": "seira-issue-claims",
   };
 
-  let requests = 0;
-
   async function call(method, path, body) {
-    requests += 1;
     const response = await fetchImpl(`${API}${path}`, {
       method,
       headers: body === undefined ? headers : { ...headers, "Content-Type": "application/json" },
@@ -119,9 +116,6 @@ export function createApi({ token, repository, fetch: fetchImpl = globalThis.fet
 
   return {
     repository,
-    get requests() {
-      return requests;
-    },
     rest: (method, path, body) => call(method, path, body),
     async graphql(query, variables) {
       const answer = await call("POST", "/graphql", { query, variables });
@@ -208,7 +202,7 @@ async function activePulls(api, number) {
   const nodes = references?.nodes ?? [];
   return {
     numbers: nodes.filter((node) => node.state === "OPEN" && !(node.labels?.nodes ?? []).some((label) => label.name === STALLED)).map((node) => node.number),
-    complete: !references?.pageInfo?.hasNextPage,
+    complete: references?.pageInfo?.hasNextPage === false,
   };
 }
 
@@ -340,6 +334,19 @@ async function sweepClaim({ api, issue, now, log }) {
   const mention = logins.map((each) => `@${each}`).join(" ");
 
   if (now.getTime() >= deadline.getTime()) {
+    const latest = await readIssue(api, number);
+    const latestLogins = loginsOf(latest);
+    const unchanged =
+      latest.state === "open" &&
+      namesOf(latest).includes(CLAIMED_HUMAN) &&
+      latestLogins.length === logins.length &&
+      latestLogins.every((login) => logins.some((each) => sameLogin(each, login)));
+    const renewed = unchanged && (await claimTimeOf(api, number))?.getTime() !== claimedAt.getTime();
+    if (!unchanged || renewed) {
+      log(`#${number}: held, issue changed`);
+      return;
+    }
+    if (await hasOpenPull(api, number)) return;
     await api.rest("DELETE", `${issuePath(api, number)}/assignees`, { assignees: logins });
     await removeLabel(api, number, CLAIMED_HUMAN);
     await addLabel(api, number, AGENT_READY);
@@ -369,15 +376,18 @@ function markerAfter(comments, marker, since) {
   return found.length === 0 ? undefined : found.reduce((a, b) => (ms(b.created_at) >= ms(a.created_at) ? b : a));
 }
 
-async function sweepAssignment({ api, issue, now, log }) {
-  const number = issue.number;
-  const logins = loginsOf(issue);
-  const events = await readEvents(api, number);
+function assignedAtOf(events, logins) {
   const times = events
     .filter((event) => event.event === "assigned" && logins.some((login) => sameLogin(login, event.assignee?.login)))
     .map((event) => ms(event.created_at));
-  if (times.length === 0) return false;
-  const assignedAt = Math.max(...times);
+  return times.length === 0 ? null : Math.max(...times);
+}
+
+async function sweepAssignment({ api, issue, now, log }) {
+  const number = issue.number;
+  const logins = loginsOf(issue);
+  const assignedAt = assignedAtOf(await readEvents(api, number), logins);
+  if (assignedAt === null) return false;
   const current = now.getTime();
   if (current < assignedAt + 5 * DAY) return false;
   if (await hasOpenPull(api, number)) return false;
@@ -405,7 +415,7 @@ async function sweepAssignment({ api, issue, now, log }) {
     latestLogins.every((login) => logins.some((each) => sameLogin(each, login))) &&
     !latestLabels.includes(CLAIMED_HUMAN) &&
     !latestLabels.includes(CLAIMED_AGENT);
-  if (!unchanged) {
+  if (!unchanged || assignedAtOf(await readEvents(api, number), logins) !== assignedAt) {
     log(`#${number}: held, issue changed`);
     return false;
   }
@@ -446,7 +456,7 @@ function pullData(api, pull) {
       const nodes = references?.nodes ?? [];
       return {
         issues: nodes.filter((node) => node.state === "OPEN" && sameLogin(node.repository?.nameWithOwner, api.repository)),
-        complete: !references?.pageInfo?.hasNextPage,
+        complete: references?.pageInfo?.hasNextPage === false,
       };
     }),
   };
@@ -525,9 +535,22 @@ async function sweepReview({ api, pull, data, now, log, waiting }) {
   }
 }
 
-async function freeIssue({ api, issue, author, prNumber, now, log }) {
+async function freeIssue({ api, issue, author, prNumber, idleSince, now, log }) {
   const number = issue.number;
   const fresh = await readIssue(api, number);
+  if (fresh.state !== "open") {
+    log(`#${number}: held, issue changed`);
+    return;
+  }
+  const renewed = (await readEvents(api, number)).some(
+    (event) =>
+      ms(event.created_at) > idleSince &&
+      ((event.event === "assigned" && sameLogin(event.assignee?.login, author)) || (event.event === "labeled" && event.label?.name === CLAIMED_HUMAN)),
+  );
+  if (renewed) {
+    log(`#${number}: held, claim renewed`);
+    return;
+  }
   const active = await activePulls(api, number);
   if (!active.complete || active.numbers.some((each) => each !== prNumber)) {
     log(`#${number}: held, other active pull request`);
@@ -602,7 +625,7 @@ async function sweepStalled({ api, pull, data, now, log, idleSince }) {
     log(`#${number}: held, linked issues incomplete`);
     return;
   }
-  for (const issue of freshLinked.issues) await freeIssue({ api, issue, author, prNumber: number, now, log });
+  for (const issue of freshLinked.issues) await freeIssue({ api, issue, author, prNumber: number, idleSince, now, log });
   await addLabel(api, number, STALLED);
   await comment(api, number, `@${author} This pull request had no update for 14 days, so it no longer holds its linked issues. The pull request stays open. Push a change to continue.`);
   log(`#${number}: stalled`);
@@ -616,16 +639,35 @@ async function sweepPull({ api, pull, now, log }) {
   await sweepStalled({ api, pull, data, now, log, idleSince });
 }
 
-export async function sweep({ api, now, log = () => {}, error = (line) => console.error(line), limits = SWEEP_LIMITS, clock = () => Date.now() }) {
+export async function sweep({
+  api: source,
+  now,
+  log = () => {},
+  error = (line) => console.error(line),
+  limits = SWEEP_LIMITS,
+  clock = () => Date.now(),
+  offset = Math.floor(now.getTime() / HOUR),
+}) {
   const started = clock();
-  const base = api.requests ?? 0;
+  let requests = 0;
+  const counted = (run) => async (...args) => {
+    if (requests >= limits.hardRequests) {
+      const stop = new Error("The sweep request limit was reached.");
+      stop.stopped = true;
+      throw stop;
+    }
+    requests += 1;
+    return run(...args);
+  };
+  const api = { repository: source.repository, rest: counted(source.rest), graphql: counted(source.graphql) };
   const open = await listAll(api, `/repos/${api.repository}/issues?state=open`);
   let failed = 0;
-  for (const [done, issue] of open.entries()) {
-    if ((api.requests ?? 0) - base >= limits.maxRequests || clock() - started >= limits.maxMs) {
+  for (let done = 0; done < open.length; done += 1) {
+    if (requests >= limits.maxRequests || clock() - started >= limits.maxMs) {
       error(`Stopped after ${done} of ${open.length} items: the sweep limit was reached.`);
       return failed + 1;
     }
+    const issue = open[(offset + done) % open.length];
     try {
       if (issue.pull_request) {
         await sweepPull({ api, pull: issue, now, log });
@@ -642,6 +684,10 @@ export async function sweep({ api, now, log = () => {}, error = (line) => consol
       error(`#${issue.number}: ${cause.message}`);
       if (cause.rateLimited) {
         error("Stopped: GitHub rate limit.");
+        return failed + 1;
+      }
+      if (cause.stopped) {
+        error(`Stopped after ${done} of ${open.length} items: the sweep limit was reached.`);
         return failed + 1;
       }
     }

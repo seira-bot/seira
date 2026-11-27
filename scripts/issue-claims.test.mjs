@@ -42,6 +42,7 @@ function fakeApi({
   commits = {},
   pullCloses = {},
   incomplete = {},
+  absent = {},
   listed = {},
   cannotAssign = [],
   dropAssign = [],
@@ -71,9 +72,6 @@ function fakeApi({
   const posted = (number) => (state.comments[number] ?? []).filter((each) => each.fake).map((each) => each.body);
   const api = {
     repository: REPO,
-    get requests() {
-      return state.calls.length;
-    },
     async rest(method, path, body) {
       state.calls.push({ method, path, body });
       const failure = failOn?.(method, path);
@@ -97,7 +95,7 @@ function fakeApi({
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)$/.exec(route)) && method === "GET") return shape(find(match[1]));
       if ((match = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/reviews$/.exec(route))) return paged(pick(reviews, "reviews", match[1]));
       if ((match = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/commits$/.exec(route))) return paged(pick(commits, "commits", match[1]));
-      if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(route))) return paged(events[match[1]] ?? []);
+      if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(route))) return paged(pick(events, "events", match[1]));
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments$/.exec(route))) {
         if (method === "GET") return paged(state.comments[match[1]] ?? []);
         (state.comments[match[1]] ??= []).push({ body: body.body, created_at: NOW.toISOString(), user: { login: "github-actions[bot]", type: "Bot" }, fake: true });
@@ -134,11 +132,12 @@ function fakeApi({
       state.calls.push({ method: "POST", path: "/graphql", variables });
       if (query.includes("pullRequest(")) {
         const nodes = pick(pullCloses, "pullCloses", variables.number);
-        const pageInfo = { hasNextPage: (incomplete.pullCloses ?? []).includes(variables.number) };
-        return { repository: { pullRequest: { closingIssuesReferences: { pageInfo, nodes } } } };
+        const pageInfo = (absent.pageInfo ?? []).includes(variables.number) ? undefined : { hasNextPage: (incomplete.pullCloses ?? []).includes(variables.number) };
+        const references = (absent.references ?? []).includes(variables.number) ? undefined : { pageInfo, nodes };
+        return { repository: { pullRequest: { closingIssuesReferences: references } } };
       }
       const nodes = pick(linked, "linked", variables.number);
-      const pageInfo = { hasNextPage: (incomplete.linked ?? []).includes(variables.number) };
+      const pageInfo = (absent.pageInfo ?? []).includes(variables.number) ? undefined : { hasNextPage: (incomplete.linked ?? []).includes(variables.number) };
       return { repository: { issue: { closedByPullRequestsReferences: { pageInfo, nodes } } } };
     },
   };
@@ -558,7 +557,7 @@ describe("comments that do nothing", () => {
 });
 
 describe("sweep", () => {
-  const sweepAt = (fake, now = NOW) => sweep({ api: fake.api, now, error: () => {} });
+  const sweepAt = (fake, now = NOW, options = {}) => sweep({ api: fake.api, offset: 0, now, error: () => {}, ...options });
 
   it("AC-04: replaces human-window with agent-ready when the first P2 or P3 label is 24 hours old", async () => {
     const fake = fakeApi({
@@ -719,7 +718,7 @@ describe("sweep", () => {
       failOn: (method, path) => (method === "POST" && path.includes("/issues/70/labels") ? 500 : undefined),
     });
     const errors = [];
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line) });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
     expect(failed).toBe(1);
     expect(errors).toEqual([`#70: failed with HTTP 500`]);
     expect(fake.issue(71).labels).toContain("agent-ready");
@@ -752,7 +751,7 @@ const pullItem = (number, extra = {}) => ({
   ...extra,
 });
 const openIssue = (number) => ({ number, state: "OPEN", repository: { nameWithOwner: REPO } });
-const sweepAt = (fake, now = NOW) => sweep({ api: fake.api, now, error: () => {} });
+const sweepAt = (fake, now = NOW, options = {}) => sweep({ api: fake.api, offset: 0, now, error: () => {}, ...options });
 
 describe("assigned issues", () => {
   const assigned = (extra = {}) => ({ number: 100, labels: ["P0"], assignees: ["alice"], ...extra });
@@ -813,7 +812,7 @@ describe("assigned issues", () => {
       comments: { 100: [marked(MARK.assign, 49)] },
     });
     const lines = [];
-    await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+    await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
     expect(fake.issue(100).assignees).toEqual([]);
     expect(fake.issue(100).labels).toEqual(["P0", "agent-ready"]);
     expect(fake.posted(100)).toEqual(["@alice @bob We unassigned this issue because no draft PR came in for 7 days. The issue is free again."]);
@@ -915,22 +914,22 @@ describe("assigned issues", () => {
       expect(fake.posted(100)).toEqual([]);
     };
 
-    it("stale AC-02: holds the release when the issue got another assignee after the list was read", async () => {
+    it("stale AC-18: holds the release when the issue got another assignee after the list was read", async () => {
       const fake = fakeApi({ issues: [assigned({ assignees: ["alice", "bob"] })], listed: { 100: { assignees: ["alice"] } }, ...due });
       const lines = [];
-      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
       noRelease(fake);
       expect(fake.issue(100).assignees).toEqual(["alice", "bob"]);
       expect(lines).toContain("#100: held, issue changed");
     });
 
-    it("stale AC-02: holds the release when the assignee left after the list was read", async () => {
+    it("stale AC-18: holds the release when the assignee left after the list was read", async () => {
       const fake = fakeApi({ issues: [assigned({ assignees: [] })], listed: { 100: { assignees: ["alice"] } }, ...due });
       await sweepAt(fake);
       noRelease(fake);
     });
 
-    it("stale AC-02: holds the release when the issue got a claim label after the list was read", async () => {
+    it("stale AC-18: holds the release when the issue got a claim label after the list was read", async () => {
       for (const current of [{ labels: ["P0", "claimed: agent"] }, { labels: ["P0", "claimed: human"] }]) {
         const fake = fakeApi({ issues: [assigned(current)], listed: { 100: { labels: ["P0"] } }, ...due });
         await sweepAt(fake);
@@ -938,7 +937,7 @@ describe("assigned issues", () => {
       }
     });
 
-    it("stale AC-02: holds the release when a linked pull request shows up on the second read", async () => {
+    it("stale AC-18: holds the release when a linked pull request shows up on the second read", async () => {
       const fake = fakeApi({
         issues: [assigned()],
         linked: { 100: (index) => (index === 0 ? [] : [{ number: 9, state: "OPEN" }]) },
@@ -950,7 +949,7 @@ describe("assigned issues", () => {
       expect(fake.issue(100).assignees).toEqual(["alice"]);
     });
 
-    it("stale AC-02: counts an incomplete list of linked pull requests as active work", async () => {
+    it("stale AC-19: counts an incomplete list of linked pull requests as active work", async () => {
       const closedOnly = [{ number: 9, state: "CLOSED" }, { number: 10, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }];
       const fake = fakeApi({
         issues: [assigned()],
@@ -965,6 +964,79 @@ describe("assigned issues", () => {
       await takeBy(other, 101);
       expect(other.issue(101).assignees).toEqual([]);
       expect(other.posted(101)).toEqual(["@alice Someone already works on this issue. Please pick another one."]);
+    });
+
+    it("stale AC-18: holds the release when a newer assigned event shows up for the same assignee", async () => {
+      const fake = fakeApi({
+        issues: [assigned()],
+        events: { 100: (index) => (index === 0 ? [assignedEvent("alice", days(8))] : [assignedEvent("alice", days(8)), assignedEvent("alice", 1)]) },
+        comments: { 100: [marked(MARK.assign, 49)] },
+      });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      noRelease(fake);
+      expect(fake.issue(100).assignees).toEqual(["alice"]);
+      expect(lines).toContain("#100: held, issue changed");
+    });
+
+    it("stale AC-19: does not release or take an issue when the link data has no page info", async () => {
+      const fake = fakeApi({ issues: [assigned(), { number: 101, labels: ["P2"] }], absent: { pageInfo: [100, 101] }, ...due });
+      await sweepAt(fake);
+      noRelease(fake);
+      await takeBy(fake, 101);
+      expect(fake.issue(101).assignees).toEqual([]);
+      expect(fake.posted(101)).toEqual(["@alice Someone already works on this issue. Please pick another one."]);
+    });
+  });
+
+  describe("claim release checks", () => {
+    const claimed = (extra = {}) => ({ number: 102, labels: ["P2", "claimed: human"], assignees: ["alice"], ...extra });
+    const claimEvents = { 102: [labeledAt("claimed: human", ago(150))] };
+    const kept = (fake) => {
+      expect(fake.writes().some((call) => call.method === "DELETE")).toBe(false);
+      expect(fake.posted(102)).toEqual([]);
+    };
+
+    it("stale AC-18: releases a due claim when nothing changed", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents });
+      await sweepAt(fake);
+      expect(fake.issue(102).assignees).toEqual([]);
+    });
+
+    it("stale AC-18: holds the claim release when the claim label was set again", async () => {
+      const fake = fakeApi({
+        issues: [claimed()],
+        events: { 102: (index) => (index === 0 ? claimEvents[102] : [...claimEvents[102], labeledAt("claimed: human", ago(100))]) },
+      });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      kept(fake);
+      expect(lines).toContain("#102: held, issue changed");
+    });
+
+    it("stale AC-18: holds the claim release when the claim label is gone on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed({ labels: ["P2"] })], listed: { 102: { labels: ["P2", "claimed: human"] } }, events: claimEvents });
+      await sweepAt(fake);
+      kept(fake);
+    });
+
+    it("stale AC-18: holds the claim release when the assignee set changed on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: ["alice", "bob"] })], listed: { 102: { assignees: ["alice"] } }, events: claimEvents });
+      await sweepAt(fake);
+      kept(fake);
+      expect(fake.issue(102).assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("stale AC-18: holds the claim release when a linked pull request shows up on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents, linked: { 102: (index) => (index === 0 ? [] : [{ number: 9, state: "OPEN" }]) } });
+      await sweepAt(fake);
+      kept(fake);
+    });
+
+    it("stale AC-19: does not release a claim when the link data has no page info", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents, absent: { pageInfo: [102] } });
+      await sweepAt(fake);
+      kept(fake);
     });
   });
 });
@@ -1033,7 +1105,7 @@ describe("first review of a pull request", () => {
     expect(fake.writes()).toEqual([]);
   });
 
-  it("stale AC-04: an unapproved bot review does not stop the first ask", async () => {
+  it("stale AC-17: an unapproved bot review does not stop the first ask", async () => {
     const fake = fakeApi({ issues: [outside()], reviews: { 110: [review("other-app[bot]", "CHANGES_REQUESTED", 20, { type: "Bot" })] } });
     await sweepAt(fake);
     expect(fake.issue(110).labels).toEqual(["needs-review"]);
@@ -1179,13 +1251,13 @@ describe("pull request that waits for its author", () => {
     expect(fake.posted(120)).toHaveLength(1);
   });
 
-  it("stale AC-08: counts a CHANGES_REQUESTED review from the other approved bot", async () => {
+  it("stale AC-17: counts a CHANGES_REQUESTED review from the other approved bot", async () => {
     const fake = fakeApi(base({ issues: [waiting({ draft: false })], reviews: { 120: [review("Seira-Raskreia[bot]", "CHANGES_REQUESTED", days(8), { type: "Bot" })] } }));
     await sweepAt(fake);
     expect(fake.posted(120).filter((body) => body.includes(MARK.stale))).toHaveLength(1);
   });
 
-  it("stale AC-08: a CHANGES_REQUESTED review from an unapproved bot does not make it wait", async () => {
+  it("stale AC-17: a CHANGES_REQUESTED review from an unapproved bot does not make it wait", async () => {
     const fake = fakeApi(
       base({
         issues: [waiting({ draft: false })],
@@ -1267,7 +1339,7 @@ describe("pull request that waits for its author", () => {
     it("stale AC-10: labels the pull request, frees the issue and posts both texts", async () => {
       const fake = stalledSetup();
       const lines = [];
-      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
       expect(fake.issue(120).labels).toContain("stalled");
       expect(fake.issue(80).assignees).toEqual([]);
       expect(fake.issue(80).labels).toEqual(["P2", "agent-ready"]);
@@ -1320,10 +1392,10 @@ describe("pull request that waits for its author", () => {
       expect(fake.issue(80).assignees).toEqual(["carol"]);
     });
 
-    it("stale AC-10: holds everything when the list of linked issues is incomplete", async () => {
+    it("stale AC-19: holds everything when the list of linked issues is incomplete", async () => {
       const fake = stalledSetup({ incomplete: { pullCloses: [120] }, comments: {} });
       const lines = [];
-      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
       expect(fake.writes()).toEqual([]);
       expect(lines).toContain("#120: held, linked issues incomplete");
       const released = stalledSetup({ incomplete: { pullCloses: [120] } });
@@ -1332,10 +1404,10 @@ describe("pull request that waits for its author", () => {
       expect(released.issue(80).assignees).toEqual(["carol"]);
     });
 
-    it("stale AC-10: holds the release when the author pushed a commit before the release", async () => {
+    it("stale AC-18: holds the release when the author pushed a commit before the release", async () => {
       const fake = stalledSetup({ commits: { 120: (index) => (index === 0 ? [] : [{ commit: { committer: { date: ago(1) } } }]) } });
       const lines = [];
-      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
       expect(fake.issue(120).labels).toEqual([]);
       expect(fake.issue(80).assignees).toEqual(["carol"]);
       expect(fake.posted(80)).toEqual([]);
@@ -1343,7 +1415,7 @@ describe("pull request that waits for its author", () => {
       expect(lines).toContain("#120: held, pull request changed");
     });
 
-    it("stale AC-10: keeps an issue that has another active pull request", async () => {
+    it("stale AC-18: keeps an issue that has another active pull request", async () => {
       const fake = stalledSetup({ linked: { 80: [{ number: 120, state: "OPEN" }, { number: 121, state: "OPEN" }] } });
       await sweepAt(fake);
       expect(fake.issue(80).assignees).toEqual(["carol"]);
@@ -1351,7 +1423,31 @@ describe("pull request that waits for its author", () => {
       expect(fake.issue(120).labels).toContain("stalled");
     });
 
-    it("stale AC-10: resumes after a failure and posts the free text once", async () => {
+    it("stale AC-18: keeps an issue when the author was assigned again after the pull request went idle", async () => {
+      const fake = stalledSetup({ events: { 80: [assignedEvent("carol", 1)] } });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+      expect(fake.posted(80)).toEqual([]);
+      expect(lines).toContain("#80: held, claim renewed");
+    });
+
+    it("stale AC-18: makes no write to a linked issue that is closed on the second read", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, state: "closed", labels: ["P2", "claimed: human"], assignees: ["carol"] }, waiting({ created_at: ago(days(20)) })] });
+      await sweepAt(fake);
+      expect(fake.writes().filter((call) => call.path.includes("/issues/80/"))).toEqual([]);
+    });
+
+    it("stale AC-19: holds the release when the link data has no references", async () => {
+      const fake = stalledSetup({ absent: { references: [120] } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+      const reminder = stalledSetup({ absent: { references: [120] }, comments: {} });
+      await sweepAt(reminder);
+      expect(reminder.writes()).toEqual([]);
+    });
+
+    it("stale AC-18: resumes after a failure and posts the free text once", async () => {
       let broken = true;
       const fake = stalledSetup({
         issues: [
@@ -1363,7 +1459,7 @@ describe("pull request that waits for its author", () => {
         failOn: (method, path) => (broken && method === "DELETE" && path.endsWith("/issues/81/assignees") ? 500 : undefined),
       });
       const errors = [];
-      expect(await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line) })).toBe(1);
+      expect(await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) })).toBe(1);
       expect(errors).toEqual(["#120: failed with HTTP 500"]);
       expect(fake.issue(120).labels).not.toContain("stalled");
       expect(fake.issue(81).assignees).toEqual(["carol"]);
@@ -1384,7 +1480,7 @@ describe("pull request that waits for its author", () => {
     it("stale AC-11: removes stalled after author activity that follows the label", async () => {
       const fake = fakeApi({ issues: [stalled()], events: labeledEvent, comments: { 120: [authorComment(author, 24)] }, pullCloses: closes });
       const lines = [];
-      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
       expect(fake.issue(120).labels).toEqual([]);
       expect(fake.posted(120)).toEqual([]);
       expect(lines).toContain("#120: stalled label removed");
@@ -1419,7 +1515,7 @@ describe("pull request sweep limits", () => {
       failOn: (method, path) => (path.includes("/pulls/131/reviews") ? 500 : undefined),
     });
     const errors = [];
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line) });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
     expect(failed).toBe(1);
     expect(errors).toEqual(["#131: failed with HTTP 500"]);
     expect(fake.issue(132).labels).toContain("needs-review");
@@ -1437,28 +1533,60 @@ describe("sweep budget", () => {
   const three = () => fakeApi({ issues: [131, 132, 133].map((number) => pullItem(number, { created_at: ago(25) })) });
   const untouched = (fake, numbers) => numbers.every((number) => !fake.state.calls.some((call) => call.path.includes(`/${number}`)));
 
-  it("stale AC-15: stops at an item boundary when the request limit is reached", async () => {
+  it("stale AC-20: stops at an item boundary when the request limit is reached", async () => {
     const fake = three();
     const errors = [];
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 3, maxMs: 1e9 } });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 3, hardRequests: 1e9, maxMs: 1e9 } });
     expect(failed).toBeGreaterThanOrEqual(1);
     expect(errors).toEqual(["Stopped after 1 of 3 items: the sweep limit was reached."]);
     expect(fake.issue(131).labels).toContain("needs-review");
     expect(untouched(fake, [132, 133])).toBe(true);
   });
 
-  it("stale AC-15: stops at an item boundary when the time limit is reached", async () => {
+  it("stale AC-20: stops at an item boundary when the time limit is reached", async () => {
     const fake = three();
     const errors = [];
     let reads = 0;
     const clock = () => (reads++ < 2 ? 0 : 1e9);
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 1e9, maxMs: 1000 }, clock });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 1e9, maxMs: 1000 }, clock });
     expect(failed).toBeGreaterThanOrEqual(1);
     expect(errors).toEqual(["Stopped after 1 of 3 items: the sweep limit was reached."]);
     expect(untouched(fake, [132, 133])).toBe(true);
   });
 
-  it("stale AC-15: stops at once on a rate limit", async () => {
+  it("stale AC-20: makes no call past the hard request limit and resumes safely", async () => {
+    const fake = fakeApi({ issues: [pullItem(131, { created_at: ago(25) })] });
+    const errors = [];
+    const failed = await sweepAt(fake, NOW, { error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 6, maxMs: 1e9 } });
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(errors).toEqual(["#131: The sweep request limit was reached.", "Stopped after 0 of 1 items: the sweep limit was reached."]);
+    expect(fake.state.calls).toHaveLength(6);
+    expect(fake.issue(131).labels).toEqual(["needs-review"]);
+    expect(fake.posted(131)).toEqual([]);
+    expect(await sweepAt(fake)).toBe(0);
+    expect(fake.posted(131)).toHaveLength(1);
+    expect(fake.issue(131).labels).toEqual(["needs-review"]);
+  });
+
+  it("stale AC-20: visits the items in a rotated order", async () => {
+    const fake = three();
+    await sweepAt(fake, NOW, { offset: 1 });
+    const first = fake.state.calls.find((call, index) => index > 0 && /\/13\d/.test(call.path));
+    expect(first.path).toContain("/132");
+  });
+
+  it("stale AC-20: different offsets make progress on different items under a soft limit", async () => {
+    const limits = { maxRequests: 3, hardRequests: 1e9, maxMs: 1e9 };
+    const touched = async (offset) => {
+      const fake = three();
+      await sweepAt(fake, NOW, { offset, limits, error: () => {} });
+      return [131, 132, 133].filter((number) => fake.issue(number).labels.includes("needs-review"));
+    };
+    expect(await touched(0)).toEqual([131]);
+    expect(await touched(1)).toEqual([132]);
+  });
+
+  it("stale AC-20: stops at once on a rate limit", async () => {
     const fake = three();
     const rest = fake.api.rest;
     fake.api.rest = async (method, path, body) => {
@@ -1470,7 +1598,7 @@ describe("sweep budget", () => {
       return rest(method, path, body);
     };
     const errors = [];
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line) });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
     expect(failed).toBeGreaterThanOrEqual(1);
     expect(errors).toEqual(["#131: failed with HTTP 403", "Stopped: GitHub rate limit."]);
     expect(untouched(fake, [132, 133])).toBe(true);
@@ -1572,7 +1700,7 @@ describe("createApi", () => {
 
   const failing = (status, headers = {}) => async () => ({ ok: false, status, headers: new Headers(headers) });
 
-  it("stale AC-15: marks a rate limit error", async () => {
+  it("stale AC-20: marks a rate limit error", async () => {
     for (const [status, headers] of [
       [403, { "x-ratelimit-remaining": "0" }],
       [403, { "retry-after": "30" }],
@@ -1583,25 +1711,14 @@ describe("createApi", () => {
     }
   });
 
-  it("stale AC-15: does not mark another failure as a rate limit", async () => {
+  it("stale AC-20: does not mark another failure as a rate limit", async () => {
     for (const fetch of [failing(403), failing(403, { "x-ratelimit-remaining": "12" }), failing(500), async () => ({ ok: false, status: 403 })]) {
       const api = createApi({ token: "t0ken", repository: REPO, fetch });
       await expect(api.rest("GET", "/x")).rejects.toSatisfy((error) => !error.rateLimited);
     }
   });
 
-  it("stale AC-15: counts every request", async () => {
-    let fail = false;
-    const fetch = async () => (fail ? { ok: false, status: 500 } : { ok: true, status: 200, json: async () => [] });
-    const api = createApi({ token: "t0ken", repository: REPO, fetch });
-    expect(api.requests).toBe(0);
-    await api.rest("GET", "/x");
-    fail = true;
-    await api.rest("GET", "/x").catch(() => {});
-    expect(api.requests).toBe(2);
-  });
-
-  it("stale AC-15: marks a GraphQL rate limit error", async () => {
+  it("stale AC-20: marks a GraphQL rate limit error", async () => {
     const answer = (errors) => async () => ({ ok: true, status: 200, json: async () => ({ errors }) });
     const limited = createApi({ token: "t0ken", repository: REPO, fetch: answer([{ type: "RATE_LIMITED" }]) });
     await expect(limited.graphql("query {}", {})).rejects.toMatchObject({ rateLimited: true });
