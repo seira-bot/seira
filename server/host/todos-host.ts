@@ -120,7 +120,8 @@ export function createTodosHost(deps: TodosHostDeps) {
     if (!routines) throw new TodoError(409, "Repeating todos are not available on this server.");
     try {
       return routines.create({ name: todo.title, prompt: routinePrompt(todo), botId, schedule: { type: "daily", time: todo.repeat!.time, weekdays: todo.repeat!.weekdays } }).id;
-    } catch {
+    } catch (error) {
+      if (error instanceof TodoError) throw error;
       throw new TodoError(400, "That repeat did not work. Check the time and the days.");
     }
   }
@@ -354,6 +355,7 @@ export function createTodosHost(deps: TodosHostDeps) {
   function botAdd(caller: BotCaller, raw: unknown): TodoAddResult {
     const bot = callerBot(caller);
     const list = Array.isArray(raw) ? raw : [];
+    if (list.some((item: Record<string, unknown>) => item?.repeat)) throw new TodoError(403, "You cannot add a repeating todo. Ask for a repeating job with the routine request tool, so the person can confirm it.");
     const drafts = list.map((item: Record<string, unknown>): TodoDraft => {
       const ref = typeof item?.assigneeBotId === "string" && item.assigneeBotId.trim() ? resolveBotRef(item.assigneeBotId) : undefined;
       if (ref && ref.id !== bot.id && deps.reachable && !deps.reachable(bot.id, ref.id)) throw new TodoError(403, `${ref.name} is in a place you cannot hand work to. Tell the person instead.`);
@@ -375,10 +377,11 @@ export function createTodosHost(deps: TodosHostDeps) {
     return store.live().filter((todo) => (!status || todo.status === status) && (!bot || todo.botId === bot.id) && readable(todo)).sort((a, b) => a.rank - b.rank || a.createdAt - b.createdAt);
   }
 
-  function botAssign(caller: BotCaller, args: { todoId?: unknown; assigneeBotId?: unknown; reason?: unknown }): TodoRecord {
+  function botAssign(caller: BotCaller, args: { todoId?: unknown; assigneeBotId?: unknown; reason?: unknown }, readable: (todo: TodoRecord) => boolean = () => true): TodoRecord {
     const bot = callerBot(caller);
     const todo = typeof args.todoId === "string" ? store.get(args.todoId) : undefined;
-    if (!todo) throw new TodoError(404, "No todo has that id.");
+    if (!todo || !readable(todo)) throw new TodoError(404, "No todo has that id.");
+    if (todo.repeat || todo.routineId) throw new TodoError(403, "A repeating todo can be given to a bot only by the person.");
     if (typeof args.assigneeBotId !== "string") throw new TodoError(400, "Say which bot gets the todo.");
     const target = resolveBotRef(args.assigneeBotId);
     const reason = typeof args.reason === "string" ? args.reason.replace(/\s+/g, " ").trim().slice(0, REASON_CHARS) : "";
@@ -390,10 +393,11 @@ export function createTodosHost(deps: TodosHostDeps) {
     return updated!;
   }
 
-  function botUpdate(caller: BotCaller, args: { todoId?: unknown; status?: unknown; title?: unknown; note?: unknown; result?: unknown }): TodoRecord {
+  function botUpdate(caller: BotCaller, args: { todoId?: unknown; status?: unknown; title?: unknown; note?: unknown; result?: unknown }, readable: (todo: TodoRecord) => boolean = () => true): TodoRecord {
     const bot = callerBot(caller);
     const todo = typeof args.todoId === "string" ? store.get(args.todoId) : undefined;
-    if (!todo) throw new TodoError(404, "No todo has that id.");
+    if (!todo || !readable(todo)) throw new TodoError(404, "No todo has that id.");
+    if (todo.routineId && (typeof args.title === "string" || typeof args.note === "string")) throw new TodoError(403, "Only the person can change the text of a repeating todo.");
     if (!botMayChange(todo, bot)) throw new TodoError(403, "You may change only todos that are yours, that you made, or that you hand out as picker.");
     const by: TodoMaker = { kind: "bot", botId: bot.id };
     if (args.status !== undefined && args.status !== "done" && args.status !== "queued") throw new TodoError(400, "Status can be done or queued.");

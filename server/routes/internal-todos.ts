@@ -51,8 +51,8 @@ export function createInternalTodoRoutes(deps: InternalTodoDeps): RouteHandler {
           refused: added.refused,
         });
       }
-      if (path === "/api/internal/todos/assign") return json(res, 200, { todo: view(publicTodo(deps.host.botAssign(caller, body ?? {})), deps.botName) });
-      if (path === "/api/internal/todos/update") return json(res, 200, { todo: view(publicTodo(deps.host.botUpdate(caller, body ?? {})), deps.botName) });
+      if (path === "/api/internal/todos/assign") return json(res, 200, { todo: view(publicTodo(deps.host.botAssign(caller, body ?? {}, deps.readable)), deps.botName) });
+      if (path === "/api/internal/todos/update") return json(res, 200, { todo: view(publicTodo(deps.host.botUpdate(caller, body ?? {}, deps.readable)), deps.botName) });
       return json(res, 404, { error: "no such route" });
     } catch (error) {
       if (error instanceof TodoError) return json(res, error.status, { error: error.message });

@@ -273,3 +273,35 @@ describe("launch provenance", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("security: repeating todos and reach", () => {
+  const caller = { botId: "atlas", threadId: "th" };
+
+  it("refuses a repeat from a bot and tells it to use the routine request tool", () => {
+    const { host, made, store } = setup();
+    expect(() => host.botAdd(caller, [{ title: "Daily", assigneeBotId: "atlas", repeat: { time: "09:00", weekdays: [] } }])).toThrow(/routine request tool/);
+    expect(made).toEqual([]);
+    expect(store.live()).toEqual([]);
+  });
+
+  it("does not let a bot give a repeating todo to another bot or change its text", () => {
+    const { host } = setup();
+    const todo = host.add([{ title: "Digest", botId: "atlas", repeat: { time: "08:00", weekdays: [] } }], person).todos[0]!;
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" })).toThrow(TodoError);
+    expect(() => host.botUpdate({ botId: "atlas", threadId: "t" }, { todoId: todo.id, title: "Other" })).toThrow(TodoError);
+  });
+
+  it("passes a refusal from the routine check on as the plain reason", () => {
+    const refusing: TodoRoutines = { create: () => { throw new TodoError(403, "Not allowed here."); }, remove: () => true, update: () => null };
+    expect(() => setup({ routines: refusing }).host.add([{ title: "x", botId: "atlas", repeat: { time: "09:00", weekdays: [] } }], person)).toThrow("Not allowed here.");
+  });
+
+  it("answers 'no such todo' for a todo the caller may not read, in assign and update", () => {
+    const { host } = setup();
+    const todo = host.add([{ title: "Secret" }], person).todos[0]!;
+    const none = () => false;
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }, none)).toThrow("No todo has that id.");
+    expect(() => host.botUpdate({ botId: "chief", threadId: "t" }, { todoId: todo.id, status: "done" }, none)).toThrow("No todo has that id.");
+    expect(host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }, () => true).botId).toBe("scout");
+  });
+});

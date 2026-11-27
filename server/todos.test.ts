@@ -59,6 +59,7 @@ describe("TodoStore", () => {
     store.remove("a");
     clock.now += TODO_UNDO_MS + 1;
     expect(store.restore("a")).toBeUndefined();
+    store.live();
     expect(store.everything()).toEqual([]);
   });
 

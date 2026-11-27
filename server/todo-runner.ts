@@ -41,6 +41,8 @@ export interface TodoRunnerDeps {
   /** Sends one message in the bot's own picker conversation, making the conversation when `threadId` is absent or gone. */
   askPicker(input: { botId: string; threadId?: string; text: string; onThread(threadId: string): void }): Promise<void>;
   startsTodosOf(botId: string): "manual" | undefined;
+  /** May the picker conversation read the conversation this todo came from? Absent: yes. */
+  pickerMayRead?(botId: string, threadId: string | undefined, todo: TodoRecord): boolean;
 }
 
 export const TODO_INSTRUCTION =
@@ -166,9 +168,16 @@ export function createTodoRunner(deps: TodoRunnerDeps) {
 
   async function offerOpenTodos(): Promise<void> {
     const botId = deps.host.picker();
-    if (!botId || !deps.botReady(botId)) return;
-    const open = store.live().filter((todo) => todo.status === "open" && todo.offeredAt === undefined).sort((a, b) => a.createdAt - b.createdAt);
-    if (!open.length) return;
+    if (!botId) return;
+    const pickerThread = store.pickerThread(botId);
+    const fresh = store.live().filter((todo) => todo.status === "open" && todo.offeredAt === undefined).sort((a, b) => a.createdAt - b.createdAt);
+    const open: TodoRecord[] = [];
+    for (const todo of fresh) {
+      if (deps.pickerMayRead && !deps.pickerMayRead(botId, pickerThread, todo)) {
+        store.update(todo.id, (one) => { if (one.status !== "open") return false; one.status = "needs-you"; one.stuck = "unassigned"; });
+      } else open.push(todo);
+    }
+    if (!open.length || !deps.botReady(botId)) return;
     const ids = open.map((todo) => todo.id);
     const text = pickerMessage(open, deps.bots());
     const mark = (threadId: string) => {
@@ -301,6 +310,7 @@ export interface TodosRuntimeDeps {
     onChange(listener: (change: { type: string }) => void): () => void;
   };
   routines(): TodoRoutines | null;
+  pickerMayRead?: TodoRunnerDeps["pickerMayRead"];
   startTurn: TodoLauncherDeps["startTurn"];
   admits: TodoLauncherDeps["admits"];
   queue: TodoLauncherDeps["queue"];
@@ -335,6 +345,7 @@ export function createTodosRuntime(deps: TodosRuntimeDeps) {
     },
     launch,
     lastReply,
+    pickerMayRead: deps.pickerMayRead,
     startsTodosOf: (botId) => deps.store.bots.find((bot) => bot.id === botId)?.startsTodos,
     askPicker: async ({ botId, threadId, text, onThread }) => {
       const id = threadId && deps.store.taskByThread(botId, threadId) ? threadId : deps.store.createTask(botId, PICKER_THREAD_TITLE, false)?.threadId;

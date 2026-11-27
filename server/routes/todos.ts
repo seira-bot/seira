@@ -13,6 +13,8 @@ export interface TodoRouteDeps {
   runner: Pick<TodoRunner, "startNow" | "wake">;
   visibleFor: (auth: RequestAuth) => VisibleSet;
   personName: (auth: RequestAuth) => string;
+  /** Runs `work` so that any repeating job it makes is checked and recorded as this person's. */
+  withPerson<T>(auth: RequestAuth, work: () => T): T;
 }
 
 const ITEM = /^\/api\/todos\/([\w-]+)(\/start|\/restore)?$/;
@@ -58,7 +60,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
           if (draft?.botId) mayGive(visible, draft.botId);
           if (draft?.source && !visible.thread(draft.source.threadId)) throw new TodoError(400, "You cannot see the message this todo comes from.");
         }
-        const added = host.add(drafts, person);
+        const added = deps.withPerson(auth, () => host.add(drafts, person));
         return json(res, 200, { todos: added.todos.map(publicTodo) });
       }
       if (isPicker) {
@@ -74,7 +76,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         const gone = store.getDeleted(id!);
         if (gone && (!todoVisible(gone, viewerOf(visible)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
-        return json(res, 200, { todo: publicTodo(host.restore(id!)) });
+        return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.restore(id!))) });
       }
       const current = seen(visible, store.get(id!));
       if (action === "/start") {
@@ -92,7 +94,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
         if (!body || typeof body !== "object" || Array.isArray(body)) throw new TodoError(400, "Send the change to make.");
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot change this bot's todos.");
         if (typeof body.botId === "string") mayGive(visible, body.botId);
-        return json(res, 200, { todo: publicTodo(host.patch(current.id, body, person)) });
+        return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.patch(current.id, body, person))) });
       }
       return json(res, 405, { error: "method not allowed" });
     } catch (error) {
