@@ -238,10 +238,45 @@ describe("starts that are not schedules", () => {
     r.add("wf-2", "pub");
     r.webhook({ workflowId: "wf-1" });
     const blocked = await r.call("DELETE", "/api/workflows/wf-1", undefined, member);
-    expect(blocked).toMatchObject({ status: 403, body: { error: "You can't change this bot." } });
+    expect(blocked).toMatchObject({ status: 403, body: { error: "Only an admin can change an automation that a webhook or app starts." } });
     expect(r.flows.has("wf-1")).toBe(true);
     expect((await r.call("DELETE", "/api/workflows/wf-2", undefined, member)).status).toBe(200);
-    expect((await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member)).status).toBe(200);
+    expect((await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member)).status).toBe(403);
+  });
+
+  it("a member cannot switch a workflow that an admin's webhook uses", async () => {
+    const r = rig();
+    r.add("wf-1", "pub");
+    const hook = r.webhook({ workflowId: "wf-1" });
+    const refused = await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false }, member);
+    expect(refused).toMatchObject({ status: 403, body: { error: "Only an admin can change an automation that a webhook or app starts." } });
+    expect(r.webhooks.list().find((candidate) => candidate.id === hook.id)!.enabled).toBe(true);
+    expect((await r.call("POST", "/api/workflows/wf-1/switch", { enabled: false })).status).toBe(200);
+  });
+
+  it("a member cannot change a workflow that an admin's app trigger uses", async () => {
+    const r = rig();
+    r.add("wf-1", "pub");
+    r.apps.push({ id: "app-1", name: "Mail", enabled: true, botId: "pub", app: "gmail", workflowId: "wf-1" });
+    const refused = await r.call("PATCH", "/api/workflows/wf-1", { name: "Other", steps: [], connections: [] }, member);
+    expect(refused).toMatchObject({ status: 403, body: { error: "Only an admin can change an automation that a webhook or app starts." } });
+    expect((await r.call("DELETE", "/api/workflows/wf-1", undefined, member)).status).toBe(403);
+    expect(r.flows.has("wf-1")).toBe(true);
+  });
+
+  it("run again from here refuses an app run whose first bot cannot watch the app", async () => {
+    const r = rig({ appRefusal: "Pia can't watch Gmail. Give Pia access to Gmail first." });
+    r.add("wf-1", "pub", "pub");
+    r.apps.push({ id: "app-1", name: "Mail", enabled: true, botId: "pub", app: "gmail", workflowId: "wf-1" });
+    const flow = r.flows.get("wf-1")!;
+    r.workflowRuns.set("run-old", {
+      runId: "run-old", workflowId: "wf-1", routineId: "app-1", workflowName: flow.name, status: "failed", graph: { steps: flow.steps, connections: flow.connections },
+      botIds: ["pub"], startStepId: "s1", start: { kind: "app", id: "app-1" }, threads: {}, createdAt: 1, updatedAt: 2,
+      stepRuns: [{ stepId: "s1", status: "done" }, { stepId: "s2", status: "failed" }],
+    });
+    const refused = await r.call("POST", "/api/workflow-runs/run-old/steps/s2/run-again");
+    expect(refused).toMatchObject({ status: 403, body: { error: "Pia can't watch Gmail. Give Pia access to Gmail first." } });
+    expect(r.again).toEqual([]);
   });
 
   it("a member with access can switch and a member without access cannot", async () => {

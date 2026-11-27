@@ -39,6 +39,8 @@ export interface WorkflowStarts {
   describe(kind: WorkflowStartKind, id: string): WorkflowStartInfo | null;
   /** Why a switch cannot change every start, or null. Nothing has changed when it answers. */
   switchRefusal(workflowId: string, enabled: boolean): string | null;
+  /** Why a run for this start may not go to this bot, or null. Only an app start can refuse. */
+  runRefusal(kind: WorkflowStartKind, id: string, botId: string): string | null;
   /** Puts the schedule routines back to the switches a list recorded. */
   restoreRoutines(before: readonly WorkflowStart[]): void;
   /** Puts the webhooks and app triggers back to the switches a list recorded. */
@@ -85,6 +87,10 @@ export function createWorkflowStarts(deps: WorkflowStartsDeps): WorkflowStarts {
         if (short) return short;
       }
       return null;
+    },
+    runRefusal(kind, id, botId) {
+      const trigger = kind === "app" ? deps.appTriggers()?.list().find((candidate) => candidate.id === id) : undefined;
+      return trigger ? deps.appAccessRefusal?.(botId, trigger.app) ?? null : null;
     },
     restoreRoutines(before) {
       for (const start of before) if (start.kind === "routine") try { deps.routines()?.update(start.id, { enabled: start.enabled }); } catch { /* the switch had already failed */ }

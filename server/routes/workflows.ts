@@ -6,6 +6,7 @@ import { WORKFLOW_ROUTINE_REFUSAL, type WorkflowRoutineEdits } from "../host/wor
 import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import { publicErrorText } from "../public-error.ts";
+import { workflowCopy } from "../workflows/routine-link.ts";
 import { problemBody, validateWorkflowInput } from "../workflows/validate.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { PlaceLostError } from "../place-lost.ts";
@@ -98,6 +99,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
 
     const linkedTo = (workflowId: string) => deps.routines()?.listRoutines().filter((routine) => routine.workflowId === workflowId) ?? [];
     const refused = (linked: readonly Routine[]) => linked.some((routine) => deps.routineEdits.refusal(auth, routine) !== null);
+    const ADMIN_ONLY = "Only an admin can change an automation that a webhook or app starts.";
     const shownName = (id: string) => (visible.bot(id) ? deps.botName(id) : undefined);
     const eventsOf = (workflowId: string) => deps.starts()?.list(workflowId).filter((start) => start.kind !== "routine") ?? [];
     const needsFor = (workflow: Workflow, linked: readonly Routine[]) =>
@@ -174,6 +176,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       const enabled = asked && typeof asked === "object" ? (asked as { enabled?: unknown }).enabled : undefined;
       if (typeof enabled !== "boolean") return json(res, 400, { error: "Say whether to turn it on or off." });
       if (starts.list(workflow.id).length === 0) return json(res, 409, { error: "Choose what starts it first." });
+      if (eventsOf(workflow.id).length > 0 && !ownerOrAdmin(auth)) return json(res, 403, { error: ADMIN_ONLY });
       const linked = linkedTo(workflow.id);
       if (refused(linked)) return json(res, 403, { error: WORKFLOW_ROUTINE_REFUSAL });
       const short = deps.botsRefusal(auth, [...workflowBotIds(workflow.steps), ...routineBots(linked, workflow.id)], needsFor(workflow, linked));
@@ -197,6 +200,7 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       if (!workflow) return json(res, 404, { error: "no such workflow" });
       if (method === "GET") return json(res, 200, { workflow });
       if (method !== "DELETE" && method !== "PATCH") return json(res, 405, { error: "method not allowed" });
+      if (eventsOf(workflow.id).length > 0 && !ownerOrAdmin(auth)) return json(res, 403, { error: ADMIN_ONLY });
       const linked = linkedTo(workflow.id);
       if (refused(linked)) return json(res, 403, { error: WORKFLOW_ROUTINE_REFUSAL });
       if (method === "DELETE") {
@@ -241,8 +245,11 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       if (old.stepRuns.find((step) => step.stepId === stepId)?.status !== "failed") return json(res, 409, { error: "Only a failed step can run again." });
       const step = workflow.steps.find((candidate) => candidate.id === stepId);
       if (!step || step.kind === "note") return json(res, 409, { error: "That step is no longer in the workflow." });
+      const firstBot = workflowCopy(workflow, deps.botName).botId;
+      const noWatch = deps.starts()?.runRefusal(origin.kind, origin.id, firstBot);
+      if (noWatch) return json(res, 403, { error: noWatch });
       try {
-        const started = host.runAgainFromEvent(old.runId, stepId!, origin.id, workflow);
+        const started = host.runAgainFromEvent(old.runId, stepId!, origin.id, workflow, firstBot);
         return started ? json(res, 201, { run: started }) : json(res, 409, { error: "The automation can't run now." });
       } catch (error) {
         return json(res, 409, { error: publicErrorText(error, "run an automation again", "The run could not start.") });

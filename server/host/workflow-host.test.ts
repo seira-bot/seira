@@ -340,8 +340,8 @@ describe("running again from a step", () => {
     r.turns[1]!.opts.onSettled({ ok: false, text: "boom" });
     const second = r.run({ id: "run-2", workflowId: made.id, routineId: "hook-1", webhookId: "hook-1", triggerSource: "webhook", prompt: "EVENT order 42", threadId: "t-ana" });
     r.runRows.push(row);
-    expect(r.host.runAgainFromEvent("run-1", "b", "hook-1", made)).toBe(second);
-    expect(r.enqueued[0]).toMatchObject({ webhookId: "hook-1", prompt: "EVENT order 42", workflowId: made.id });
+    expect(r.host.runAgainFromEvent("run-1", "b", "hook-1", made, "ben")).toBe(second);
+    expect(r.enqueued[0]).toMatchObject({ botId: "ben", webhookId: "hook-1", prompt: "EVENT order 42", workflowId: made.id });
     expect(r.host.run("run-2")).toMatchObject({ startStepId: "b", fromRunId: "run-1" });
   });
 

@@ -61,7 +61,7 @@ export interface WorkflowHost {
   /** Starts the routine again at a failed step. Throws, after it has cancelled the new run, when the run cannot be prepared. */
   runAgain(runId: string, stepId: string, routine: Routine, workflow: Workflow): RoutineRun | null;
   /** Starts a new run for a webhook or an app trigger with the event of an earlier run, at a failed step. */
-  runAgainFromEvent(runId: string, stepId: string, startId: string, workflow: Workflow): RoutineRun | null;
+  runAgainFromEvent(runId: string, stepId: string, startId: string, workflow: Workflow, botId: string): RoutineRun | null;
   copyFor: WorkflowCopyLookup;
   start: NonNullable<WorkflowRoutineOptions["startWorkflow"]>;
   routineRunChanged(run: RoutineRun): void;
@@ -207,7 +207,7 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       }
       return started;
     },
-    runAgainFromEvent(runId, stepId, startId, workflow) {
+    runAgainFromEvent(runId, stepId, startId, workflow, botId) {
       const old = store.run(runId);
       const routines = deps.routines();
       if (!old || !routines) return null;
@@ -215,7 +215,7 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       const event = prior?.prompt ?? old.event;
       if (!event || !prior) return null;
       const queued = routines.enqueueWebhook({
-        webhookId: startId, webhookName: prior.routineName, prompt: event, botId: prior.botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
+        webhookId: startId, webhookName: prior.routineName, prompt: event, botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
         receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}),
         ...(prior.resultsThreadId ? { resultsThreadId: prior.resultsThreadId } : {}),
       });
