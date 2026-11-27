@@ -317,7 +317,7 @@ export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" |
   hidden?: boolean;
   section?: string;
   pinnedMessageId?: string;
-  chiefOfStaff?: boolean;
+  chiefOfStaff?: boolean; startsTodos?: import("../../shared/todo").StartsTodos;
   managedSections?: string[];
   createdBy?: string; reportsTo?: string;
   composio?: boolean;
