@@ -451,6 +451,7 @@ import type { BrowserEngineKind } from "./browser/config.ts";
 import { botThreadLimitText, botThreadsHost, maxConcurrentBotThreads, maxConcurrentChildThreads } from "./bot-thread-limits.ts"; import { createBrowserSeats } from "./host/browser-seats.ts"; import { createBrowserHost } from "./host/browser.ts"; import { createCloudPlanTier } from "./host/cloud-plan-tier.ts";
 import { createScreenFrameSource, rememberTurnFrame, type ScreenCapture } from "./screen-frame-source.ts";
 import { screenFrameHash, screenSurfaceForTool, screenTouchingTool, settledFrameIsNews } from "./screen-frame-gate.ts";
+import { routineSkipBody } from "./routine-skip-occurrence.ts";
 import { asSchedule, RoutineRequestService } from "./routine-requests.ts"; import { ownerSpokeOnly } from "./cloud-routine-level.ts"; import { routineRunCard, routineRunFallbackText } from "./routine-run-card.ts";
 import { activeRoutinesContext } from "./active-routines-context.ts";
 import { createRefusedHandoffs } from "./host/refused-handoffs.ts"; import { automationContextText, createAutomationReports, newestAutomationLines, routineRunNeedsReview } from "./automation-reports.ts"; import { createAutomationDestinations } from "./automation-destinations.ts"; import { createTeamRoutines } from "./host/team-routines.ts"; import { botOwner } from "../shared/bot-owner.ts"; import { forgetMember } from "./bot-owners.ts"; import { createProactive } from "./host/proactive.ts"; import { createFirstHourHooks, startFirstHour, welcomeDonePatch } from "./host/first-hour-host.ts"; import { greetingMessage } from "./host/first-hour.ts"; import { READ_AND_DRAFT_PARTS, READ_AND_DRAFT_REFUSAL, READ_AND_DRAFT_TOOLS, recordsAnswer } from "./read-and-draft.ts"; import { createPresenceRoutes } from "./routes/presence.ts"; import { needsYouNow } from "./today.ts"; import { createTeamPresenceHost } from "./host/team-presence-host.ts";
@@ -14257,6 +14258,17 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const run = routines!.runNow(routineMatch[1]);
       if (run && (CLOUD_HOME ? cloudOwnerSession(auth) : ownerOrAdmin(auth))) ownerStartedRoutineRuns.add(run.id);
       return run ? json(res, 201, { run }) : json(res, 404, { error: "no such routine" });
+    }
+    routineMatch = path.match(/^\/api\/routines\/([\w-]+)\/skip$/);
+    if (routineMatch && method === "POST") {
+      const parsed = routineSkipBody.safeParse(await readBody(req));
+      if (!parsed.success) return json(res, 400, { error: "Send the time to skip and whether to skip it." });
+      const existing = routines!.listRoutines().find((candidate) => candidate.id === routineMatch![1]);
+      if (existing && !routineVisible(existing, visible)) return json(res, 404, { error: "no such routine" });
+      const refused = routineBodyRefusal(parsed.data, existing); if (refused) return json(res, refused.status, { error: refused.error });
+      const result = parsed.data.skip ? routines!.skipOccurrence(routineMatch[1], parsed.data.at) : routines!.unskipOccurrence(routineMatch[1], parsed.data.at);
+      if (!result) return json(res, 404, { error: "no such routine" });
+      return "error" in result ? json(res, 400, { error: result.error }) : json(res, 200, { routine: routineForViewer(result.routine, visible) });
     }
     routineMatch = path.match(/^\/api\/routines\/([\w-]+)$/);
     if (routineMatch && method === "PATCH") {
