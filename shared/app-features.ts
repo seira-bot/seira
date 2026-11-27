@@ -182,7 +182,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the menu under the person's name at the bottom of the sidebar",
     does: "Appearance, language, defaults for new bots, AI engines and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
     tools: ["app_settings"],
-    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard"],
+    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard", "botSettings"],
   },
   {
     id: "text-size",
@@ -196,7 +196,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse", "moveHideTarget"],
   },
   {
     id: "models",
@@ -337,7 +337,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Board in the sidebar, above Automations",
     does: "Shows all bot work in To do, Working, Needs you and Done, by column or by bot. New todo adds work for a bot, now, later or on chosen days. Open a card to answer, start, stop, finish or follow up.",
     tools: ["board_close", "todo_add", "todo_list", "todo_assign", "todo_update"],
-    releaseNotes: ["board", "boardDone"],
+    releaseNotes: ["board", "boardDone", "boardTodos"],
   },
   {
     id: "inbox",
@@ -381,7 +381,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "The Seira app",
     place: "the whole app",
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
-    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon"],
+    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon", "storeTools"],
   },
   {
     id: "crash-reports",
