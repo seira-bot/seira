@@ -563,7 +563,7 @@ describe("people who sign in", () => {
     await fx.set("people.signIn", { email: "pat@acme.com", sees: { bots: ["Clive"] } });
     const applied = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
     expect(applied.body.error).toBe("The change could not be applied. Nothing changed.");
-    expect(JSON.stringify(fx.messages)).toContain("That bot is shared with too many people already.");
+    expect(fx.cards().at(-1)!.card.appSettingRequest.result).toBe("failed");
     expect(lists(fx)).toEqual({ admins: ["boss@acme.com"], members: ["ann@acme.com"] });
     expect(fx.order).toEqual(["access"]);
   });
