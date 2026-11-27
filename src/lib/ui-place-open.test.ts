@@ -8,7 +8,7 @@ const place = (id: string) => uiPlaceById(id)!;
 
 describe("uiPlaceById", () => {
   it("finds a mapped id and nothing else", () => {
-    expect(uiPlaceById("board.new-task")?.label).toBe("New task");
+    expect(uiPlaceById("board.new-todo")?.label).toBe("New todo");
     expect(uiPlaceById("nope")).toBeUndefined();
     expect(uiPlaceById("__proto__")).toBeUndefined();
     expect(uiPlaceById("constructor")).toBeUndefined();
@@ -19,7 +19,7 @@ describe("uiPlaceById", () => {
 
 describe("anchorOf", () => {
   it("uses the data-ui id, or the data-tour anchor the entry names", () => {
-    expect(anchorOf(place("board.new-task"))).toEqual({ attr: "ui", value: "board.new-task" });
+    expect(anchorOf(place("board.new-todo"))).toEqual({ attr: "ui", value: "board.new-todo" });
     expect(anchorOf(place("automations.page"))).toEqual({ attr: "tour", value: "automations-page" });
   });
 });
@@ -37,7 +37,7 @@ describe("placeChain", () => {
 
 describe("openActions", () => {
   it("opens the page or panel a place sits in", () => {
-    expect(openActions(place("board.new-task"))).toEqual([{ type: "showBoard" }]);
+    expect(openActions(place("board.new-todo"))).toEqual([{ type: "showBoard" }]);
     expect(openActions(place("automations.calendar"))).toEqual([{ type: "showRoutines", view: "calendar" }]);
     expect(openActions(place("automations.page"))).toEqual([{ type: "showRoutines" }]);
     expect(openActions(place("workflow.palette"))).toEqual([{ type: "showRoutines", view: "workflows" }]);
@@ -74,7 +74,7 @@ describe("placeMode and placeSteps", () => {
   });
 
   it("offers a button for a place that every mode shows", () => {
-    expect(placeMode(place("board.new-task"), false)).toEqual({ button: true });
+    expect(placeMode(place("board.new-todo"), false)).toEqual({ button: true });
   });
 });
 

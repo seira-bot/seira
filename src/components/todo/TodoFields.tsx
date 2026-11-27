@@ -59,6 +59,16 @@ export function draftFromFields(values: TodoFieldValues, now = new Date()): Pick
   return { title, ...(note ? { note } : {}), ...(values.botId ? { botId: values.botId } : {}), start, ...(repeat ? { repeat } : {}) };
 }
 
+/** The start rule a "free", "tomorrow" or "at" choice describes; null for a time that has passed or is not valid. */
+export function startFromWhen(when: TodoWhen, now = new Date()): TodoStart | null {
+  if (when.kind === "tomorrow") return { kind: "at", at: tomorrowMorning(now) };
+  if (when.kind === "at") {
+    const at = new Date(when.at).getTime();
+    return Number.isFinite(at) && at > now.getTime() ? { kind: "at", at } : null;
+  }
+  return when.kind === "free" ? { kind: "free" } : null;
+}
+
 function localInputValue(at: number): string {
   const date = new Date(at);
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -87,7 +97,6 @@ export function TodoFields({ values, onChange, bots, picker, autoFocus = false, 
   useEffect(() => { if (autoFocus) title.current?.focus(); }, [autoFocus]);
   const set = (patch: Partial<TodoFieldValues>) => onChange({ ...values, ...patch });
   const pickerBot = picker ? bots.find((bot) => bot.id === picker) : undefined;
-  const names = weekdayNames("narrow");
   const when = values.when;
 
   return (
@@ -104,38 +113,7 @@ export function TodoFields({ values, onChange, bots, picker, autoFocus = false, 
             {bots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
           </Select>
         </label>
-        <label className="flex min-w-0 items-center gap-2 text-[13px] text-ink-secondary">
-          {t("todo.fields.when")}
-          <Select data-todo-when="" value={when.kind} onChange={(event) => set({ when: whenFor(event.target.value as TodoWhen["kind"], when) })} className="min-w-36">
-            <option value="free">{t("todo.when.free")}</option>
-            <option value="tomorrow">{t("todo.fields.tomorrow")}</option>
-            <option value="at">{t("todo.fields.pickTime")}</option>
-            <option value="repeat">{t("todo.fields.repeats")}</option>
-          </Select>
-        </label>
-        {when.kind === "at" && (
-          <input type="datetime-local" value={when.at} aria-label={t("todo.fields.time")} className={FIELD}
-            onChange={(event) => set({ when: { ...when, at: event.target.value } })} />
-        )}
-        {when.kind === "repeat" && (
-          <>
-            <input type="time" value={when.time} aria-label={t("todo.fields.time")} className={FIELD}
-              onChange={(event) => set({ when: { ...when, time: event.target.value } })} />
-            <div role="group" aria-label={t("todo.fields.days")} className="flex gap-1">
-              {MONDAY_FIRST.map((day) => {
-                const on = when.weekdays.includes(day);
-                return (
-                  <button key={day} type="button" aria-pressed={on} data-todo-day={day}
-                    onClick={() => set({ when: { ...when, weekdays: on ? when.weekdays.filter((one) => one !== day) : [...when.weekdays, day] } })}
-                    className={cn("size-8 rounded-full text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus motion-reduce:transition-none",
-                      on ? "bg-ink/[0.14] text-ink" : "text-ink-secondary hover:bg-ink/[0.06]")}>
-                    {names[day]}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
+        <TodoWhenFields when={when} onChange={(next) => set({ when: next })} />
       </div>
       <textarea dir="auto" rows={2} value={values.note} maxLength={TODO_NOTE_CHARS} aria-label={t("todo.fields.note")}
         placeholder={t("todo.fields.notePlaceholder")} className={cn(FIELD, "h-auto min-h-9 w-full resize-y py-2")}
@@ -147,5 +125,46 @@ export function TodoFields({ values, onChange, bots, picker, autoFocus = false, 
       )}
       {when.kind === "repeat" && <p className="text-[12px] text-ink-tertiary">{t("todo.fields.repeatHint")}</p>}
     </div>
+  );
+}
+
+/** The start rule control: a menu of rules, and the time or days a rule needs. */
+export function TodoWhenFields({ when, onChange, allowRepeat = true }: { when: TodoWhen; onChange: (when: TodoWhen) => void; allowRepeat?: boolean }) {
+  const names = weekdayNames("narrow");
+  return (
+    <>
+        <label className="flex min-w-0 items-center gap-2 text-[13px] text-ink-secondary">
+          {t("todo.fields.when")}
+          <Select data-todo-when="" value={when.kind} onChange={(event) => onChange(whenFor(event.target.value as TodoWhen["kind"], when))} className="min-w-36">
+            <option value="free">{t("todo.when.free")}</option>
+            <option value="tomorrow">{t("todo.fields.tomorrow")}</option>
+            <option value="at">{t("todo.fields.pickTime")}</option>
+            {allowRepeat && <option value="repeat">{t("todo.fields.repeats")}</option>}
+          </Select>
+        </label>
+        {when.kind === "at" && (
+          <input type="datetime-local" value={when.at} aria-label={t("todo.fields.time")} className={FIELD}
+            onChange={(event) => onChange({ ...when, at: event.target.value })} />
+        )}
+        {when.kind === "repeat" && (
+          <>
+            <input type="time" value={when.time} aria-label={t("todo.fields.time")} className={FIELD}
+              onChange={(event) => onChange({ ...when, time: event.target.value })} />
+            <div role="group" aria-label={t("todo.fields.days")} className="flex gap-1">
+              {MONDAY_FIRST.map((day) => {
+                const on = when.weekdays.includes(day);
+                return (
+                  <button key={day} type="button" aria-pressed={on} data-todo-day={day}
+                    onClick={() => onChange({ ...when, weekdays: on ? when.weekdays.filter((one) => one !== day) : [...when.weekdays, day] })}
+                    className={cn("size-8 rounded-full text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus motion-reduce:transition-none",
+                      on ? "bg-ink/[0.14] text-ink" : "text-ink-secondary hover:bg-ink/[0.06]")}>
+                    {names[day]}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+    </>
   );
 }

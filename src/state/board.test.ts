@@ -14,7 +14,7 @@ vi.mock("react", async (importOriginal) => ({
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 
-import { createBoardTask, loadBoard, resetBoardForTest, setBoardFilter, useBoardFilter, useBoardView, watchBoard } from "./board";
+import { loadBoard, resetBoardForTest, setBoardFilter, useBoardFilter, useBoardView, watchBoard } from "./board";
 import { visibleCards } from "@/components/board/board-model";
 
 const card = (id: string, botId = "scout"): BoardCard => ({
@@ -44,7 +44,7 @@ describe("the Board's state", () => {
     expect(useBoardView()).toMatchObject({ loaded: true, failed: true, cards: [{ id: "thread:a" }] });
   });
 
-  it.each(["bot", "group", "routine.run"])("reads again within a second of a %s frame, once for a burst", async (kind) => {
+  it.each(["bot", "group", "routine.run", "todos"])("reads again within a second of a %s frame, once for a burst", async (kind) => {
     const stop = watchBoard();
     await vi.advanceTimersByTimeAsync(0);
     expect(reads()).toBe(1);
@@ -82,12 +82,8 @@ describe("the Board's state", () => {
     expect(visibleCards(cards, null)).toHaveLength(2);
   });
 
-  it("adds a task in two calls: a new conversation, then its first message", async () => {
-    fixture.api.mockImplementation(async (path: string) => (path.endsWith("/tasks") ? { task: { threadId: "t1" } } : { cards: [] }));
-    await createBoardTask("scout", "Write the brief");
-    const [first, second] = fixture.api.mock.calls;
-    expect(first).toEqual(["/api/bots/scout/tasks", { method: "POST", body: JSON.stringify({ select: false }) }]);
-    expect(second![0]).toBe("/api/bots/scout/messages");
-    expect(JSON.parse(second![1].body)).toMatchObject({ text: "Write the brief", threadId: "t1" });
+  it("keeps an open todo in view when a bot is chosen, because it has no bot yet", () => {
+    const open: BoardCard = { ...card("todo:o", ""), kind: "todo", todoId: "o", column: "todo", state: "open", group: "open" };
+    expect(visibleCards([card("a", "scout"), open], "scout").map((one) => one.id)).toEqual(["a", "todo:o"]);
   });
 });
