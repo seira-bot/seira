@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { publicDevsReport } from "./bug-offer-report.ts";
 import { buildDevsReport, cleanTitle, contactAddress, DEVS_REPORT_LIMITS, environmentSecrets, GENERIC_REPORT_TITLE, ownHostNames, redactReportText, withoutContact, type DevsReportInput } from "./devs-report.ts";
 
 const ANTHROPIC = `sk-ant-${"a".repeat(40)}`;
@@ -165,6 +166,35 @@ describe("a @devs report's title", () => {
     expect(cleanTitle("Budi cannot send pictures from the composer", { redact, names: ["Budi"] })).toBe("cannot send pictures from the composer");
     expect(cleanTitle("Sync stopped on atlas-box overnight", { redact, names: ["atlas-box"] })).toBe("Sync stopped on overnight");
     expect(ownHostNames("my-laptop-4.home.arpa")).toEqual(["my-laptop-4.home.arpa", "my-laptop-4"]);
+  });
+
+  it("drops a known name before the length cut, so the public report never keeps half of it", () => {
+    const lead = "The composer froze after sending a very large picture from the clipboard";
+    const names = ["Ada Lovelace"];
+    const text = `${lead} Ada Lovelace was waiting for the answer`;
+    // Without the names the cut falls inside the name: this is the leak the first pass closes.
+    expect(cleanTitle(text, { redact: (value) => value })).toMatch(/Ada/);
+    const built = buildDevsReport(input({ names, summary: wentWrong(text) }), []);
+    expect(built.title).not.toMatch(/Ada|Lovel/);
+    const published = publicDevsReport(built, [], { names });
+    expect(published.title).not.toMatch(/Ada|Lovel/);
+    expect(published.title).toBe(built.title);
+    expect((published.title ?? "").length).toBeLessThanOrEqual(80);
+    expect(publicDevsReport(buildDevsReport(input({ names, words: text, summary: undefined }), []), [], { names }).title).not.toMatch(/Ada|Lovel/);
+  });
+
+  it("also drops the bot's name, the one who wrote the summary and this install's id from the first pass", () => {
+    const installId = "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e";
+    expect(titleOf({ summary: wentWrong("Scout cannot read the sheet after the update") })).toBe("cannot read the sheet after the update");
+    expect(titleOf({ installId: "inst-77a1b2", summary: wentWrong("Install inst-77a1b2 cannot send pictures") })).toBe("Install cannot send pictures");
+    expect(titleOf({ installId, summary: wentWrong(`Install ${installId} cannot send pictures`) })).not.toContain("4b7c1f2e");
+  });
+
+  it("keeps secrets first when the names are known too", () => {
+    const held = "Zq9xK2mP.rTzwab9";
+    const built = buildDevsReport(input({ names: ["Ada Lovelace"], words: "", summary: wentWrong(`Ada Lovelace says the key ${held} was refused`) }), [held]);
+    expect(built.title).toBe("says the key was refused");
+    expect(JSON.stringify(built)).not.toMatch(/Zq9|rTzwab|wab9/);
   });
 
   it("uses the fixed generic title when nothing safe is left, never an empty one", () => {

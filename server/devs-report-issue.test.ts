@@ -62,6 +62,23 @@ describe("the prefilled issue form for a @devs report", () => {
     expect(withFinalTitle(withFinalTitle(PAYLOAD)).title).toBe(withFinalTitle(PAYLOAD).title);
   });
 
+  it("keeps a stored title of up to 120 characters whole, so an error draft shows what the relay files", () => {
+    const long = `A request fails: ${"x".repeat(100)}`;
+    expect(long.length).toBeLessThanOrEqual(120);
+    expect(bugReportTitle({ ...PAYLOAD, title: long })).toBe(long);
+    expect(fields(bugReportIssueUrl({ ...PAYLOAD, title: long })).get("title")).toBe(long);
+    expect(withFinalTitle(withFinalTitle({ ...PAYLOAD, title: long })).title).toBe(long);
+    expect(bugReportTitle({ ...PAYLOAD, title: "y".repeat(150) })).toHaveLength(120);
+  });
+
+  it("redacts a title-less payload's first line before the title rules cut into it", () => {
+    const key = `sk-ant-${"a".repeat(40)}`;
+    expect(bugReportTitle({ ...PAYLOAD, description: `Auth failed with ${key} again` })).toBe("Auth failed with again");
+    const piece = "Zq9xK2mP.rTzwab9";
+    const title = bugReportTitle({ ...PAYLOAD, description: `The key ${piece} was refused` });
+    expect(title).not.toMatch(/Zq9|rTzwab|wab9/);
+  });
+
   it("cleans the description's first line for a report that has no title, and never leaves the title empty", () => {
     const unsafe: Array<[string, string]> = [["It broke in C:\\Users\\ada\\work", "It broke in"], ["It broke on \\\\fileserver\\share\\a.docx", "It broke on"],
       ["It broke at [2001:db8::1]:8080", "It broke at"], ["It broke at localhost:3000", "It broke at"], ["It broke on laptop-ada:8443", "It broke on"]];

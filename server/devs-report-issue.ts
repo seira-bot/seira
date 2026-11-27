@@ -4,7 +4,9 @@ import { BUG_REPORT_ISSUE_FORM, BUG_REPORT_ISSUE_MAX_URL } from "../shared/devs-
 import { GENERIC_REPORT_TITLE, cleanTitle, redactReportText, type DevsReportPayload } from "./devs-report.ts";
 
 export const MAX_ISSUE_URL = BUG_REPORT_ISSUE_MAX_URL;
-const TITLE_MAX = 80;
+/** A stored title (a @devs title is cut at 80, an error title at 120) is kept whole, so a second pass changes nothing. */
+const TITLE_MAX = 120;
+const FALLBACK_TITLE_MAX = 80;
 const NO_WORDS = "(no words besides @devs)";
 const CUT = "\n…";
 
@@ -56,8 +58,9 @@ export function bugReportTitle(payload: DevsReportPayload, home = homedir()): st
   const named = payload.title ? tidy(payload.title, own, home).replace(/\s+/g, " ").trim() : "";
   if (named) return clipText(named, TITLE_MAX).trimEnd();
   const words = payload.description.trim().split("\n").map((line) => line.trim()).find(Boolean) ?? "";
-  const clean = words === NO_WORDS ? "" : cleanTitle(tidy(words, own, home), { redact: (text) => redactReportText(text), names: own });
-  return clean ? clipText(clean, TITLE_MAX).trimEnd() : GENERIC_REPORT_TITLE;
+  // A payload without a title (an older version made it): secrets go out first, then the title rules clean the first line.
+  const clean = words === NO_WORDS ? "" : cleanTitle(words, { redact: (text) => redactReportText(text), names: [...own, ...(home.length > 1 ? [home.replace(/[\\/]+$/, "")] : [])], max: FALLBACK_TITLE_MAX });
+  return clean || GENERIC_REPORT_TITLE;
 }
 
 /** The payload with its final title stored in it, so what the relay files is what the person saw. */

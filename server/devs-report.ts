@@ -68,6 +68,8 @@ export interface DevsReportInput {
   message: string;
   /** Their words without the tag. */
   words: string;
+  /** The people in the conversation: their names stay out of the public title (see `reportTitle`). */
+  names?: readonly string[];
   bots: ReportedBot[];
   summary?: { by: string; text: BotSummary };
   /** Why no bot wrote a summary. */
@@ -218,8 +220,11 @@ export function cleanTitle(text: string | undefined, options: { redact: (text: s
 }
 
 /** The issue title: the first sentence of the bot's summary, else the person's words, each cleaned as above; the fixed
- * generic title when neither leaves one, so the relay never falls back to the description's first line. */
-export function reportTitle(input: Pick<DevsReportInput, "summary" | "words">, redact: (text: string) => string, names: readonly string[] = []): string {
+ * generic title when neither leaves one, so the relay never falls back to the description's first line. The names the
+ * report knows (the people, this install, the bots) go out in the first pass, before the sentence and length cuts,
+ * so a cut can never leave half of a name. */
+export function reportTitle(input: Pick<DevsReportInput, "summary" | "words" | "installId" | "bots" | "names">, redact: (text: string) => string): string {
+  const names = [...(input.names ?? []), input.installId, ...input.bots.map((bot) => bot.name), ...(input.summary ? [input.summary.by] : [])];
   return cleanTitle(input.summary?.text.wentWrong, { redact, names }) || cleanTitle(input.words, { redact, names }) || GENERIC_REPORT_TITLE;
 }
 
