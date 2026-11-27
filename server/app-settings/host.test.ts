@@ -725,15 +725,21 @@ describe("people who sign in", () => {
       await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["Sales"] } });
       const card = fx.cards().at(-1)!.card;
       expect(card.appSettingRequest.consequence).toBe("Anyone with an address at @corp.test can sign in, not only one person.");
-      expect(card.subtitle).toContain("Change @corp.test as user, sees only Sales. 1 address at @corp.test is on the list on its own and keeps its own role. Everyone at @corp.test sees what is named above.");
+      expect(card.subtitle).toContain("Change @corp.test as user, sees only Sales. 1 address at @corp.test is on the list on its own as a user. Everyone at @corp.test sees what is named above.");
 
-      const mixed = withDomain({ admins: ["boss@acme.com", "lee@corp.test"], members: ["@corp.test", "kim@corp.test"] }, { "kim@corp.test": SALES_ONLY, "zed@corp.test": SALES_ONLY });
+      // lee is an admin on their own: their grant changes nothing, and the domain's access does not bind them.
+      const mixed = withDomain(
+        { admins: ["boss@acme.com", "lee@corp.test"], members: ["@corp.test", "kim@corp.test", "LEE@corp.test"] },
+        { "kim@corp.test": SALES_ONLY, "zed@corp.test": SALES_ONLY, "lee@corp.test": SALES_ONLY },
+      );
       await mixed.set("people.signIn", { email: "@corp.test", sees: { departments: ["General"] } });
-      expect(mixed.cards().at(-1)!.card.subtitle).toContain("2 addresses at @corp.test are on the list on their own and keep their own role. "
-        + "2 addresses at @corp.test have access of their own and keep it; everyone else at @corp.test sees what is named above.");
+      expect(mixed.cards().at(-1)!.card.subtitle).toContain("Change @corp.test as user, sees only General. "
+        + "1 address at @corp.test is an admin on its own and sees everything. 1 address at @corp.test is on the list on its own as a user. "
+        + "2 addresses at @corp.test have access of their own and keep it. "
+        + "Everyone at @corp.test who is not an admin and has no access of their own sees what is named above.");
     });
 
-    it("refuses an @domain card's Apply as stale once an address under it gets its own entry or access", async () => {
+    it("refuses an @domain card's Apply as stale once an address under it gets its own entry, access or role", async () => {
       const fx = withDomain({ admins: ["boss@acme.com"], members: ["@corp.test"] });
       await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["Sales"] } });
       fx.grants["pat@corp.test"] = SALES_ONLY;
@@ -745,6 +751,13 @@ describe("people who sign in", () => {
       (fx.cfg as { signIn?: { members: string[] } }).signIn!.members.push("kim@corp.test");
       const listed = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
       expect(listed.status).toBe(409);
+      expect(fx.cards().at(-1)!.card.appSettingRequest).toMatchObject({ result: "stale" });
+
+      // Same number of entries, another role: kim moves from user to admin, so the card's admin note is wrong.
+      await fx.set("people.signIn", { email: "@corp.test", sees: { departments: ["Sales"] } });
+      (fx.cfg as { signIn?: unknown }).signIn = { admins: ["boss@acme.com", "kim@corp.test"], members: ["@corp.test"] };
+      const promoted = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+      expect(promoted.status).toBe(409);
       expect(fx.cards().at(-1)!.card.appSettingRequest).toMatchObject({ result: "stale" });
       expect(fx.routeCalls).toEqual([]);
     });

@@ -24,8 +24,9 @@ type Level = "view" | "chat";
 /** A department or bot by name (a bot also by id), with the level it keeps when none is given: chat for a new one. */
 type Item = string | { name: string; level: Level };
 type Sees = "whole team" | { departments?: Item[]; bots?: Item[] };
-/** Addresses at an @domain with a list entry of their own, and with access of their own: the two rules are apart. */
-type Under = { onList: number; withAccess: number };
+/** Addresses at an @domain with a list entry of their own, by role, and users with access of their own: the role rule and
+ * the access rule are apart, and an admin sees everything whatever a grant says. */
+type Under = { admins: number; users: number; withAccess: number };
 /** `effective`: only on the value `current` gives (Undo writes it back), never on a bot's: the schema refuses the field. */
 type Person = { email: string; role?: Role; sees?: Sees; effective?: { role: Role; sees: Sees; under?: Under } };
 /** What a person holds once the names are resolved; a department's name is "" for General. */
@@ -83,11 +84,14 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     const { admins, members } = lists();
     return { admins: [...rest(admins), ...(role === "admin" ? [entry] : [])], members: [...rest(members), ...(role === "user" ? [entry] : [])] };
   };
-  /** Addresses at an @domain that have a list entry or access of their own: the domain's rule does not decide for them. */
+  /** Addresses at an @domain that have a list entry or access of their own: the domain's rule does not decide for them. An
+   * address on both lists signs in as an admin, and an admin's grant changes nothing, so neither counts as a user. */
   const listedUnder = (domain: string): Under => {
     const under = (one: string) => !one.startsWith("@") && one.trim().toLowerCase().endsWith(domain);
     const { admins, members } = lists();
-    return { onList: [...admins, ...members].filter(under).length, withAccess: Object.keys(deps.people?.grants() ?? {}).filter(under).length };
+    const ownAdmins = admins.filter(under);
+    const user = (one: string) => under(one) && !ownAdmins.some((admin) => same(admin, one));
+    return { admins: ownAdmins.length, users: members.filter(user).length, withAccess: Object.keys(deps.people?.grants() ?? {}).filter(user).length };
   };
   const place = () => deps.people?.place() ?? "none";
   const unavailable = (): string | null => {
@@ -164,7 +168,8 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
       if (role === "user" && access === null && domainGrant(entry)) {
         return { refusal: `${entry} would see only what everyone at ${domain} sees, not the whole team. Name what ${entry} should see, or change ${domain} first.` };
       }
-      if (!domain && role === "none" && listedUnder(entry).onList) {
+      const listed = domain ? null : listedUnder(entry);
+      if (listed && role === "none" && listed.admins + listed.users) {
         return { refusal: `Some addresses at ${entry} are on the list on their own and would still sign in. Remove them first, or remove ${entry} in ${placePath("members")}.` };
       }
     }
@@ -174,15 +179,17 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
     if (role === before && (asked === null || sameAccess)) return { refusal: `${entry} already has this.` };
     return { entry, before, role, access, shown };
   };
-  /** Sign-in and access follow two rules: an own list entry decides the role, an own grant decides what they see. A bot never
-   * leaves an @domain an admin, so an own entry keeps its own role once the change applies. */
+  /** Sign-in and access follow two rules: an own list entry decides the role, an own grant decides what a user sees. A bot never
+   * leaves an @domain an admin, so the domain's card is a user's: its access binds only the users at the domain with no grant of
+   * their own, never an admin, who sees everything. */
   const apart = (domain: string): string => {
-    const { onList, withAccess } = listedUnder(domain);
-    const role = !onList ? ""
-      : onList === 1 ? ` 1 address at ${domain} is on the list on its own and keeps its own role.` : ` ${onList} addresses at ${domain} are on the list on their own and keep their own role.`;
-    const kept = withAccess === 1 ? ` 1 address at ${domain} has access of its own and keeps it;` : ` ${withAccess} addresses at ${domain} have access of their own and keep it;`;
-    const sees = withAccess ? `${kept} everyone else at ${domain} sees what is named above.` : onList ? ` Everyone at ${domain} sees what is named above.` : "";
-    return role + sees;
+    const { admins, users, withAccess } = listedUnder(domain);
+    const count = (n: number, one: string, many: string) => (!n ? "" : n === 1 ? ` 1 address at ${domain} ${one}.` : ` ${n} addresses at ${domain} ${many}.`);
+    const others = admins && withAccess ? " who is not an admin and has no access of their own" : admins ? " who is not an admin" : withAccess ? " with no access of their own" : "";
+    return count(admins, "is an admin on its own and sees everything", "are admins on their own and see everything")
+      + count(users, "is on the list on its own as a user", "are on the list on their own as users")
+      + count(withAccess, "has access of its own and keeps it", "have access of their own and keep it")
+      + (admins || users || withAccess ? ` Everyone at ${domain}${others} sees what is named above.` : "");
   };
   const scopeWords = (held: Held | null): string =>
     held ? names([...held.departments.map((one) => `${one.name || GENERAL}${one.level === "view" ? " (view only)" : ""}`), ...held.bots.map((one) => `${one.name}${one.level === "view" ? " (view only)" : ""}`)]) : "";
@@ -218,7 +225,8 @@ export function peopleEntries(deps: Pick<RegistryDeps, "cfg" | "bots" | "section
       current: (value: Person) => {
         const entry = accessEntry(value.email);
         if (!entry) return undefined;
-        // The domain card's note counts the addresses under it, so a change to them makes its Apply stale too.
+        // The domain card's note counts the addresses under it by role, so a new entry, a role change or a new grant under it
+        // makes its Apply stale too.
         const effective = entry.startsWith("@")
           ? { role: roleOf(entry), sees: seesNow(entry), under: listedUnder(entry) }
           : { role: signsInAs(entry), sees: asSees(effectiveGrant(entry)) };
