@@ -34,7 +34,7 @@ One plain GET of each public list (the file on GitHub and the team's list on `cl
 GitHub and Seira see the server's IP address, as for any download. When a card has a picture, the person's browser loads it from
 the same place, with no cookie and no referrer. (Cards from the team's list use only the built-in marks, never a picture address.) Clicking a card's link opens its address exactly as the file has it,
 in the system browser on the desktop (a new tab with no opener or referrer in a browser), with nothing added. With
-analytics on, the app counts the card (see [Counting](#counting)). The server also sends one anonymous POST of card ids and actions (see [Counting](#counting)).
+Usage analytics on, the app counts each card, and the server sends one anonymous POST of card ids and actions (see [Counting](#counting)).
 
 Older versions of the app know nothing of this file and never download it.
 
@@ -203,9 +203,9 @@ Add a card to `announcements/announcements.json` as above. It is listed and rais
   pages, the bundled ones included. For a self-hosted server or an open-source build that should never show them. The
   desktop app's own server inherits the app's environment, so it holds there when the app is started with it set.
 - **`SEIRA_DISABLE_ANNOUNCEMENT_COUNTS=1`** keeps the cards and stops only the anonymous card count ([Counting](#counting)).
-- **No in-app switch governs these cards.** The app has no setting for promotional popups: the product-updates question is
-  about email, and the usage-analytics switch only stops the counting. A person closes a card with Not now or the X, and
-  never sees that card again.
+- **No in-app switch hides these cards.** The app has no setting for promotional popups: the product-updates question is
+  about email. The Usage analytics switch, which every build shows, only stops the counting. A person closes a card with
+  Not now or the X, and never sees that card again.
 
 ## Counting
 
@@ -217,6 +217,8 @@ Escape or Not now). The `id` is the card's own id from this public file, the sam
 [Usage analytics](analytics.md). A build without a PostHog key sends none.
 
 **The anonymous card count.** This one needs no PostHog key. It tells Seira how many devices saw and used each card.
+Every build shows the Usage analytics switch in Settings, also a build without a key, and the switch stops this count.
+A build without a key sends only this count, and its switch says so.
 
 - **What is sent.** Only the card's `id` and the `action` (`shown`, `primary`, `secondary` or `close`). Nothing else goes
   with it: no cookie, no account, no install id, no app version.
@@ -229,7 +231,7 @@ Escape or Not now). The `id` is the card's own id from this public file, the sam
 - **Once per device.** The page remembers the counted cards in the browser (the last 200 card ids). A device counts once per
   card and action, so the totals are close to the number of devices. A desktop app can change its port, and that gives it
   a new browser record, so one device may count again.
-- **Turning it off.** Turn Usage analytics off, or set `SEIRA_DISABLE_ANNOUNCEMENTS=1` or
+- **Turning it off.** Turn Usage analytics off in Settings, or set `SEIRA_DISABLE_ANNOUNCEMENTS=1` or
   `SEIRA_DISABLE_ANNOUNCEMENT_COUNTS=1` in the server's environment. With either variable the server still answers the
   page and sends nothing.
 

@@ -39,13 +39,13 @@ export function optAction(enabled: boolean, running: boolean): OptAction {
 }
 
 export function setAnalyticsEnabled(enabled: boolean) {
-  if (!analyticsToken()) return;
   choice = enabled;
   void desktopSwitch()?.set?.(enabled).catch(() => {});
   try {
     localStorage.setItem(OPT_OUT_KEY, enabled ? "0" : "1");
   } catch {
   }
+  if (!analyticsToken()) return;
   if (!enabled) pending = [];
   switch (optAction(enabled, client !== undefined)) {
     case "opt-out":
