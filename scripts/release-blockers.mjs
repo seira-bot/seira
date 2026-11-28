@@ -1,7 +1,9 @@
 // Refuses a release while a P0 issue is open, or while a draft or triage security advisory of severity high or critical
 // has a vulnerable version range that covers the release version and no patched version that covers it.
-// A range that does not parse gives a warning, not a refusal. It only reads from GitHub, through `gh api`.
-// It prints the number of each blocking issue and the id and severity of each blocking advisory, never an advisory description.
+// It fails closed: an advisory with no vulnerability, or with a range that does not parse, blocks until the release version is shown to be safe.
+// It only reads from GitHub, through `gh api`.
+// The Actions log is public and a draft or triage advisory is private. So it prints the number of each blocking issue
+// and only COUNTS of blocking advisories, never an advisory id, severity, state or description.
 // Exit status: 0 nothing blocks the release, 1 something blocks it, 2 wrong use or an API error.
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -96,17 +98,19 @@ export function rangeCovers(range, version) {
 }
 
 /**
- * The blockers and the warnings as plain lines. `issues` are open issues with the P0 label, `advisories` carry a `state` field.
+ * The blockers as plain lines. `issues` are open issues with the P0 label, `advisories` carry a `state` field.
  * An advisory blocks when one vulnerability has a range that covers `version` and no patched version that covers it.
- * An advisory with no vulnerability, or with a range that does not parse, gives a warning.
+ * An advisory with no vulnerability, or with a range that does not parse, also blocks: the version is not shown to be safe.
+ * The lines name issue numbers (public) and give counts of advisories (private), never an advisory id.
  */
 export function judgeBlockers({ issues, advisories, version }) {
   const blocks = [];
-  const warnings = [];
   for (const issue of issues) {
     if (issue.pull_request) continue;
     blocks.push(`issue #${issue.number} has the label ${BLOCKING_LABEL}`);
   }
+  let affected = 0;
+  let unverified = 0;
   for (const advisory of advisories) {
     if (!OPEN_ADVISORY_STATES.includes(advisory.state)) continue;
     const severity = String(advisory.severity ?? "").toLowerCase();
@@ -120,11 +124,13 @@ export function judgeBlockers({ issues, advisories, version }) {
       if (covers === true) blocked = true;
       else if (covers === null) unknown = true;
     }
-    const name = `advisory ${advisory.ghsa_id} (${severity}, ${advisory.state})`;
-    if (blocked) blocks.push(`${name} affects ${version} and has no patched version that covers it`);
-    else if (unknown) warnings.push(`${name} has no version range that parses, so it does not block ${version}`);
+    if (blocked) affected++;
+    else if (unknown) unverified++;
   }
-  return { blocks, warnings };
+  const plural = (count) => (count === 1 ? "advisory" : "advisories");
+  if (affected > 0) blocks.push(`${affected} open high or critical ${plural(affected)} affect ${version} and have no patched version that covers it`);
+  if (unverified > 0) blocks.push(`${unverified} open high or critical ${plural(unverified)} name no version range that can be read, so ${version} is not shown to be safe`);
+  return { blocks, warnings: [] };
 }
 
 async function paged(api, path) {
@@ -136,7 +142,7 @@ async function paged(api, path) {
   }
 }
 
-/** Reads the open P0 issues and the open advisories, logs one line per blocker and returns the exit status. */
+/** Reads the open P0 issues and the open advisories, logs one line per blocker (counts for advisories) and returns the exit status. */
 export async function releaseBlockers({ api, repo = "owner/name", version, log = console.log }) {
   const issues = await paged(api, `repos/${repo}/issues?state=open&labels=${BLOCKING_LABEL}`);
   const advisories = [];

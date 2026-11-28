@@ -213,9 +213,13 @@ runs on a pull request.
   The script stops the release while a `P0` issue is open, or while a draft or
   triage security advisory of high or critical severity has a vulnerable version
   range that covers the release version and no patched version that covers it.
-  A range that does not parse gives a warning, not a stop. It prints the issue
-  number, and the advisory id and severity. It never prints an advisory
-  description.
+  It fails closed: an advisory with no vulnerability, or with a range that does
+  not parse, also stops the release until the version is shown to be safe. The
+  Actions log is public and these advisories are private. So the script prints
+  the issue number and only counts of advisories. It never prints an advisory
+  id, severity, state, or description. The release App needs the
+  `Repository security advisories: read` permission. Without it, the script
+  exits with 2 and the release stops.
 - Each job that writes mints its own App token in the `release` environment.
   A job with write access runs only the scripts `release-assets.mjs`,
   `release-blockers.mjs`, and `release-preflight.mjs`, taken from the workflow
