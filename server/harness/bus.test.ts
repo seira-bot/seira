@@ -638,6 +638,7 @@ describe("EventBus task-list counts", () => {
     bus = new EventBus();
     bus.subscribe((event) => seen.push(event));
   });
+  afterEach(() => bus.flush());
   const plan = (done: number, total: number, over: Partial<RuntimeEvent> = {}) =>
     bus.publish(testEvent({ type: "turn.plan", done, total, turnId: "turn-1", ...over } as Partial<RuntimeEvent>));
   const counts = () => seen.filter((event) => event.type === "turn.plan").map((event) => (event as Extract<RuntimeEvent, { type: "turn.plan" }>)).map((event) => `${event.done}/${event.total}`);
