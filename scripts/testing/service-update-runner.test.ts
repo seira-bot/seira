@@ -206,7 +206,9 @@ describe.skipIf(process.platform !== "linux")("deploy/service-update-runner.sh",
 
     const copies = box.copies();
     expect(copies).toHaveLength(1);
-    expect(copies[0]).toMatch(new RegExp(`^seira-data-${OLD.replace(/\./g, "\\.")}-\\d{8}T\\d{6}Z\\.tar\\.gz$`));
+    const copyName = `seira-data-${OLD}-`;
+    expect(copies[0]!.startsWith(copyName)).toBe(true);
+    expect(copies[0]!.slice(copyName.length)).toMatch(/^\d{8}T\d{6}Z\.tar\.gz$/);
     expect(box.tarList(copies[0]!)).toEqual(["./", "./config.json"]);
     expect(box.calls().findIndex((call) => call === "systemctl stop seira.service")).toBeLessThan(box.calls().findIndex((call) => call === "systemctl start seira.service"));
     expect(existsSync(join(box.state, "journal"))).toBe(false);
