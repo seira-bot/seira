@@ -97,7 +97,7 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
                   return (
                     <button key={hour} type="button" data-slot-at={at} data-slot-past={past ? "" : undefined} aria-label={label} title={label} onClick={() => onSlot(at)}
                       className={cn("group absolute inset-x-0.5 z-[1] flex h-[38px] items-center justify-center rounded-md text-accent-text hover:bg-accent/10 focus-visible:bg-accent/10", move.drag && past && "pointer-events-none")} style={{ top: index * HOUR_HEIGHT }}>
-                      <Plus size={14} aria-hidden="true" className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                      <Plus size={14} aria-hidden="true" className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 focus-visible:opacity-100 touch:opacity-100" />
                     </button>
                   );
                 })}
