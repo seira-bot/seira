@@ -9,6 +9,7 @@ import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import tebarLogo from "@/assets/tebar/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
+import tiktokLogo from "@/assets/tiktok/logo.png";
 import type { LocaleKey } from "@/locales";
 import { WAPILOT_MCP_URL } from "../../shared/one-bot-mcp";
 
@@ -124,6 +125,24 @@ export const HOSTED_MCP_APPS = [
     description: "tebar.description",
     notice: "tebar.notice",
     keywords: "tebar social media schedule scheduled posts calendar caption comments messages dm inbox automation instagram tiktok threads youtube facebook linkedin telegram discord pinterest reels story stats analytics",
+  },
+  {
+    id: "tiktok",
+    label: "TikTok",
+    url: "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-organic-social",
+    icon: { image: tiktokLogo },
+    description: "tiktok.description",
+    notice: "tiktok.notice",
+    keywords: "tiktok social media account profile videos video stats insights analytics benchmarks comments reply mentions trends hashtags music creators spark",
+  },
+  {
+    id: "tiktok-ads",
+    label: "TikTok for Business",
+    url: "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-layer",
+    icon: { image: tiktokLogo },
+    description: "tiktokAds.description",
+    notice: "tiktokAds.notice",
+    keywords: "tiktok ads advertising ad account campaigns ad groups creatives audiences catalog reports spend budget smart+ marketing",
   },
 ] as const satisfies readonly HostedMcpApp[];
 
