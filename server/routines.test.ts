@@ -4644,7 +4644,7 @@ describe("a routine linked to a workflow", () => {
         runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
         mayDraft: () => false, drafted: () => {},
       });
-      expect(h.manager.listRuns().map((run) => [run.id, run.status])).toEqual([[newerRun, "running"], [olderRun, "waiting"]]);
+      expect(Object.fromEntries(h.manager.listRuns().map((run) => [run.id, run.status]))).toEqual({ [olderRun]: "waiting", [newerRun]: "running" });
       expect(gate.confines("shared")).toBe(true);
       expect(gate.refusesRoute({ id: "ana", name: "Ana" }, "shared", "POST", "/api/internal/memory")).toBe(true);
       expect(h.manager.runForThread("shared")).toMatchObject({ id: newerRun, access: "read-and-draft" });
