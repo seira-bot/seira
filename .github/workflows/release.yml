@@ -9,8 +9,8 @@
 # - The `gate` job runs scripts/release-gate.mjs. A run that passes does not wait.
 # - A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait. A run that the gate refuses stops.
 # - Every job that holds a token with write access runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
-# - The `blockers` job and the `publish` job stop the release while a P0 issue is open, or while a high or critical advisory covers the release version and has no patch for it, or has no readable version range (scripts/release-blockers.mjs).
-#   The script prints counts of advisories, never an id, because the log is public. The App needs `Repository security advisories: read`.
+# - The `blockers` job and the `publish` job stop the release while a P0 issue is open, or while a high or critical advisory does not show that the release version is safe (scripts/release-blockers.mjs). The log is public, so they print only a count of blocking advisories.
+#   The App needs `Repository security advisories: read`.
 # - The App token comes from the `release` environment. Each job mints its own token, and a job that can name its permission does so.
 #   The `release tag creation` ruleset lets only the App and the organization admins create a tag.
 #   A release that the job token publishes starts no other workflow, so the `publish` job uses the App token.

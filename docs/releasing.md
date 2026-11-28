@@ -53,7 +53,7 @@ rest, on `main` only:
 | `ci-proof` | Waits up to 120 minutes for a successful `CI` run on that tree. |
 | `gate` | Runs the [release gate](ci.md#the-release-gate). A run that passes does not wait. |
 | `approval` | Runs only when the gate flags the run. It waits 6 hours in `release-approval`. |
-| `blockers` | Stops the release while a `P0` issue is open, or while a high or critical security advisory has a version range that covers the release version and no patched version that covers it. |
+| `blockers` | Stops the release while a `P0` issue is open, or while a high or critical security advisory does not show that the release version is safe. |
 | `tag` | Creates the annotated tag on the release commit, then runs the preflight on the tag. |
 | `draft` | Creates the draft release, and lists the platforms that are already on it. |
 | `linux`, `flatpak`, `linux-attach` | Build the Linux packages and the Flatpak bundle, then attach them to the draft. |
@@ -66,9 +66,14 @@ rest, on `main` only:
 - A blocker stops the release before the tag exists. Close the `P0` issue, or
   set the patched version or the correct version range on the advisory. Then
   start the workflow again.
-- An advisory whose version range does not parse, or that names no
-  vulnerability, does not stop the release. The `blockers` job prints a warning
-  with its id. Write the range in the GitHub form, for example `>= 0.1.170`.
+- An advisory stops the release when its version range covers the release
+  version, does not parse, or is missing, and no patched version covers the
+  release version. Write the range in the GitHub form, for example
+  `>= 0.1.170, <= 0.1.196`, or close the advisory.
+- The Actions log is public, so the `blockers` job prints only the number of
+  blocking advisories. To see which advisories block, run
+  `node scripts/release-blockers.mjs --version <x.y.z> --details` on your own
+  computer.
 - Every job is safe to run again. A job that finds its work already done does
   nothing. A platform whose update feed is on the draft is not built again.
 - To continue a release that stopped, open **Actions → Release → Run workflow**

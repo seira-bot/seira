@@ -211,15 +211,14 @@ runs on a pull request.
   A maintainer can cancel the run during the wait.
 - The `blockers` job and the `publish` job run `scripts/release-blockers.mjs`.
   The script stops the release while a `P0` issue is open, or while a draft or
-  triage security advisory of high or critical severity has a vulnerable version
-  range that covers the release version and no patched version that covers it.
-  It fails closed: an advisory with no vulnerability, or with a range that does
-  not parse, also stops the release until the version is shown to be safe. The
-  Actions log is public and these advisories are private. So the script prints
-  the issue number and only counts of advisories. It never prints an advisory
-  id, severity, state, or description. The release App needs the
-  `Repository security advisories: read` permission. Without it, the script
-  exits with 2 and the release stops.
+  triage security advisory of high or critical severity does not show that the
+  release version is safe: its vulnerable version range covers the version, does
+  not parse, or is missing, and no patched version covers the version. The
+  Actions log is public, so the script prints the issue number but only the
+  number of blocking advisories. `--details` also prints the advisory id,
+  severity and state. Use it only where the output stays private. The release
+  App needs the `Repository security advisories: read` permission. Without it,
+  the script exits with 2 and the release stops.
 - Each job that writes mints its own App token in the `release` environment.
   A job with write access runs only the scripts `release-assets.mjs`,
   `release-blockers.mjs`, and `release-preflight.mjs`, taken from the workflow

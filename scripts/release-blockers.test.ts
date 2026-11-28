@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { judgeBlockers, rangeCovers, releaseBlockers, versionCovers } from "./release-blockers.mjs";
+import { advisoryBlock, judgeBlockers, rangeCovers, releaseBlockers, versionCovers } from "./release-blockers.mjs";
 
 interface Advisory {
   ghsa_id: string;
@@ -36,7 +36,7 @@ const advisory = (
   ...extra,
 });
 
-const run = async (world: World, version = "1.2.0") => {
+const run = async (world: World, version = "1.2.0", details = false) => {
   const calls: string[] = [];
   const api = async (path: string) => {
     calls.push(path);
@@ -54,7 +54,7 @@ const run = async (world: World, version = "1.2.0") => {
     throw new Error(`unexpected api call ${path}`);
   };
   const out: string[] = [];
-  const code = await releaseBlockers({ api, repo: "o/r", version, log: (line: string) => out.push(line) });
+  const code = await releaseBlockers({ api, repo: "o/r", version, details, log: (line: string) => out.push(line) });
   return { code, out: out.join("\n"), calls };
 };
 
@@ -87,13 +87,19 @@ describe("release blockers", () => {
   it("blocks on a draft high advisory with no patched version (exit 1)", async () => {
     const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high")] });
     expect(result.code).toBe(1);
-    expect(result.out).toContain("1 open high or critical advisory affect");
+    expect(result.out).toContain("FAIL 1 security advisory blocks release 1.2.0.");
+    expect(result.out).toContain("Release 1.2.0 is blocked.");
   });
 
   it("blocks on a triage critical advisory whose patch is newer than the release", async () => {
     const result = await run({ triage: [advisory("GHSA-1111-2222-3333", "critical", "1.3.0")] });
     expect(result.code).toBe(1);
-    expect(result.out).toContain("critical");
+    expect(result.out).toContain("FAIL 1 security advisory blocks");
+  });
+
+  it("counts every blocking advisory", async () => {
+    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high")], triage: [advisory("GHSA-1111-2222-3333", "critical")] });
+    expect(result.out).toContain("FAIL 2 security advisories block release 1.2.0.");
   });
 
   it("blocks when only one of two vulnerabilities has a covering patch", async () => {
@@ -129,66 +135,64 @@ describe("release blockers", () => {
     expect(result.out).toContain("issue #500");
   });
 
-  it("prints counts only: no GHSA id, severity, state or description of a private advisory", async () => {
-    const world = {
-      draft: [advisory("GHSA-aaaa-bbbb-cccc", "high"), advisory("GHSA-dddd-eeee-ffff", "critical", null, {}, "free text")],
-      triage: [advisory("GHSA-gggg-hhhh-iiii", "critical", "1.3.0")],
-      issues: [{ number: 3 }],
-    };
-    for (const version of ["1.2.0", "0.0.1"]) {
-      const result = await run(world, version);
-      expect(result.out).not.toMatch(/GHSA/i);
-      expect(result.out).not.toMatch(/draft|triage|SECRET/i);
-      expect(result.out).not.toMatch(/\b(high|critical)\b,/);
+  it("prints no advisory id, severity, state or description without --details", async () => {
+    const worlds: World[] = [
+      { draft: [advisory("GHSA-aaaa-bbbb-cccc", "high")], issues: [{ number: 3 }] },
+      { triage: [advisory("GHSA-1111-2222-3333", "critical", "1.3.0")] },
+      { draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, "free text")] },
+      { draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: [] })] },
+    ];
+    for (const world of worlds) {
+      const result = await run(world);
+      expect(result.code).toBe(1);
+      expect(result.out).not.toMatch(/GHSA-|SECRET|high|critical|draft|triage/);
     }
-    const result = await run(world);
-    expect(result.out).toContain("2 open high or critical advisories affect 1.2.0");
-    expect(result.out).toContain("1 open high or critical advisory name no version range");
-    expect(result.out).toContain("issue #3");
+  });
+
+  it("prints the id, severity, state and reason with --details, never the description", async () => {
+    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high")], triage: [advisory("GHSA-1111-2222-3333", "critical", null, {}, "free text")] }, "1.2.0", true);
+    expect(result.out).toContain("advisory GHSA-aaaa-bbbb-cccc (high, draft) affects 1.2.0 and has no patched version that covers it");
+    expect(result.out).toContain("advisory GHSA-1111-2222-3333 (critical, triage) has no version range that shows 1.2.0 is safe");
+    expect(result.out).not.toContain("SECRET");
   });
 
   it("blocks on an open-ended range that covers the release", async () => {
-    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, ">= 0.1.170")] }, "0.1.197");
+    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, ">= 0.1.170")] }, "0.1.197", true);
     expect(result.code).toBe(1);
-    expect(result.out).toContain("FAIL 1 open high or critical advisory affect 0.1.197");
+    expect(result.out).toContain("advisory GHSA-aaaa-bbbb-cccc (high, draft) affects 0.1.197");
   });
 
   it("passes a closed range that ends below the release", async () => {
     const result = await run({ triage: [advisory("GHSA-aaaa-bbbb-cccc", "critical", null, {}, ">= 0.1.170, <= 0.1.194")] }, "0.1.197");
     expect(result.code).toBe(0);
-    expect(result.out).not.toMatch(/advisor/);
+    expect(result.out).not.toContain("GHSA-aaaa-bbbb-cccc");
   });
 
   it("passes a range that names one older version", async () => {
     expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, "0.1.196")] }, "0.1.197")).code).toBe(0);
   });
 
-  it("fails closed when the range of a high or critical advisory does not parse (exit 1)", async () => {
+  it("blocks when the range does not parse or is missing", async () => {
     for (const range of ["Post-merge main at 5cafcf8e", "", null]) {
-      for (const severity of ["high", "critical"]) {
-        const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", severity, null, {}, range)] }, "0.1.197");
-        expect(result.code, `${severity} ${range}`).toBe(1);
-        expect(result.out).toContain("FAIL 1 open high or critical advisory name no version range");
-        expect(result.out).toContain("Release 0.1.197 is blocked.");
-        expect(result.out).not.toMatch(/GHSA|warn/);
-      }
+      const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, range)] }, "0.1.197", true);
+      expect(result.code, String(range)).toBe(1);
+      expect(result.out).toContain("advisory GHSA-aaaa-bbbb-cccc (high, draft) has no version range that shows 0.1.197 is safe");
     }
   });
 
-  it("lets a patched version that covers the release clear an unreadable range", async () => {
-    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", "0.1.197", {}, "free text")] }, "0.1.197")).code).toBe(0);
+  it("blocks when an advisory names no vulnerability", async () => {
+    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: [] })] })).code).toBe(1);
+    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: undefined })] })).code).toBe(1);
   });
 
-  it("does not fail closed on an unreadable range of a medium or low advisory", async () => {
+  it("does not block on an unknown range of a medium or low advisory", async () => {
     for (const severity of ["medium", "low", ""]) {
-      expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", severity, null, {}, "free text")] })).code).toBe(0);
+      expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", severity, null, {}, "free text")] })).code, severity).toBe(0);
     }
   });
 
-  it("fails closed when a high advisory names no vulnerability (exit 1)", async () => {
-    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: [] })] });
-    expect(result.code).toBe(1);
-    expect(result.out).not.toContain("GHSA");
+  it("passes a range that does not parse when the patched version covers the release", async () => {
+    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", "1.0.0", {}, "free text")] })).code).toBe(0);
   });
 
   it("passes an open-ended range when the patched version covers the release", async () => {
@@ -202,10 +206,9 @@ describe("release blockers", () => {
         { patched_versions: null, vulnerable_version_range: "< 2.0.0" },
       ],
     });
-    const result = await run({ draft: [mixed] });
+    const result = await run({ draft: [mixed] }, "1.2.0", true);
     expect(result.code).toBe(1);
-    expect(result.out).toContain("affect");
-    expect(result.out).toContain("no version range");
+    expect(result.out).toContain("affects 1.2.0");
   });
 
   it("throws on an API error, so the caller exits with 2", async () => {
@@ -248,7 +251,19 @@ describe("pure parts", () => {
 
   it("ignores an advisory that is not draft or triage", () => {
     const result = judgeBlockers({ issues: [], advisories: [{ ...advisory("GHSA-aaaa-bbbb-cccc", "high"), state: "published" }], version: "1.0.0" });
-    expect(result).toEqual({ blocks: [], warnings: [] });
+    expect(result).toEqual({ issues: [], advisories: [] });
+  });
+
+  it.each([
+    [[{ vulnerable_version_range: ">= 1.0.0" }], "affected"],
+    [[{ vulnerable_version_range: "< 1.0.0" }], null],
+    [[{ vulnerable_version_range: "free text" }], "unknown"],
+    [[{ vulnerable_version_range: "free text", patched_versions: "1.0.0" }], null],
+    [[{ vulnerable_version_range: "free text" }, { vulnerable_version_range: ">= 1.0.0" }], "affected"],
+    [[{ vulnerable_version_range: "free text" }, { vulnerable_version_range: "< 1.0.0" }], "unknown"],
+    [[], "unknown"],
+  ])("advisoryBlock(%j, 1.2.0): %s", (vulnerabilities, expected) => {
+    expect(advisoryBlock({ vulnerabilities }, "1.2.0")).toBe(expected);
   });
 });
 
@@ -297,5 +312,26 @@ describe("command line", () => {
     const result = cli(["--version", "1.2.3"], `case "$2" in repos/o/r/issues*) echo '[{"number":42}]';; *) echo '[]';; esac`);
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("issue #42");
+  });
+
+  const draftAdvisory = `case "$2" in repos/o/r/security-advisories?state=draft*) echo '[{"ghsa_id":"GHSA-xxxx-yyyy-zzzz","severity":"high","vulnerabilities":[]}]';; *) echo '[]';; esac`;
+
+  it("exits 1 and prints only a count when gh api finds a blocking advisory", () => {
+    const result = cli(["--version", "1.2.3"], draftAdvisory);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("FAIL 1 security advisory blocks release 1.2.3.");
+    expect(result.stdout + result.stderr).not.toContain("GHSA-");
+  });
+
+  it("prints the advisory id with --details", () => {
+    const result = cli(["--version", "1.2.3", "--details"], draftAdvisory);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("advisory GHSA-xxxx-yyyy-zzzz (high, draft)");
+  });
+
+  it("is never called with --details from the public Release workflow", () => {
+    const workflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+    expect(workflow).toContain("scripts/release-blockers.mjs");
+    expect(workflow).not.toContain("--details");
   });
 });
