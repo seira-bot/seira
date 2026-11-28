@@ -162,8 +162,9 @@ export function createTodosHost(deps: TodosHostDeps) {
     return parent ? parent.depth + 1 : 0;
   }
 
-  /** Adds todos in one step. A person's drafts either all go in or none; a bot's may be refused one by one. */
-  function add(drafts: readonly TodoDraft[], maker: TodoMaker, options: { depth?: number; person?: TodoPerson } = {}): TodoAddResult {
+  /** Adds todos in one step. A person's drafts either all go in or none; a bot's may be refused one by one.
+   * `readable`: the todos the calling turn may read. A bot's draft matches only those. */
+  function add(drafts: readonly TodoDraft[], maker: TodoMaker, options: { depth?: number; person?: TodoPerson; readable?: (todo: TodoRecord) => boolean } = {}): TodoAddResult {
     if (!Array.isArray(drafts) || drafts.length < 1 || drafts.length > TODO_BATCH_MAX) throw new TodoError(400, `Add between 1 and ${TODO_BATCH_MAX} todos at a time.`);
     const at = now();
     const result: TodoAddResult = { todos: [], existing: [], refused: [] };
@@ -171,6 +172,7 @@ export function createTodosHost(deps: TodosHostDeps) {
     const slots: Array<TodoRecord | undefined> = [];
     const everything = store.everything();
     const live = store.live();
+    const matchable = options.readable ? live.filter(options.readable) : live;
     const madeToday = maker.kind === "bot" ? everything.filter((todo) => todo.madeBy.kind === "bot" && todo.madeBy.botId === maker.botId && at - todo.createdAt < DAY_MS).length : 0;
     const depth = options.depth ?? 0;
     let starts = 0;
@@ -191,8 +193,9 @@ export function createTodosHost(deps: TodosHostDeps) {
     prepared.forEach((item) => {
       const audience = item.source ? audienceOfThread(item.source.threadId) : TEAM_AUDIENCE;
       if (maker.kind === "bot") {
-        // Security invariant: a todo of another audience is never matched, so the answer cannot show it.
-        const same = [...live, ...created].find((todo) => (todo.status === "open" || todo.status === "queued") && todo.botId === item.botId && audienceOfTodo(todo) === audience && sameTitle(todo.title, item.title));
+        // Security invariant: a todo of another audience, or one the calling turn may not read, is never matched, so
+        // the answer cannot show it and a new todo cannot wait for it.
+        const same = [...matchable, ...created].find((todo) => (todo.status === "open" || todo.status === "queued") && todo.botId === item.botId && audienceOfTodo(todo) === audience && sameTitle(todo.title, item.title));
         if (same) {
           result.existing.push(same);
           slots.push(same);
@@ -378,8 +381,9 @@ export function createTodosHost(deps: TodosHostDeps) {
     throw new TodoError(400, "Use \"free\", a date and time, or afterIndex for when to start.");
   }
 
-  /** `person`: whom the conversation the bot is in works for; the todo's own conversation opens as them. */
-  function botAdd(caller: BotCaller, raw: unknown, person?: TodoPerson): TodoAddResult {
+  /** `person`: whom the conversation the bot is in works for; the todo's own conversation opens as them.
+   * `readable`: the todos the calling turn may read, the same rule as botList. */
+  function botAdd(caller: BotCaller, raw: unknown, person?: TodoPerson, readable: (todo: TodoRecord) => boolean = () => true): TodoAddResult {
     const bot = callerBot(caller);
     const list = Array.isArray(raw) ? raw : [];
     if (list.some((item: Record<string, unknown>) => item?.repeat)) throw new TodoError(403, "You cannot add a repeating todo. Ask for a repeating job with the routine request tool, so the person can confirm it.");
@@ -394,7 +398,7 @@ export function createTodosHost(deps: TodosHostDeps) {
         source: { threadId: caller.threadId, botId: caller.botId },
       };
     });
-    return add(drafts, { kind: "bot", botId: caller.botId }, { depth: depthFor(caller.threadId), ...(person ? { person } : {}) });
+    return add(drafts, { kind: "bot", botId: caller.botId }, { depth: depthFor(caller.threadId), ...(person ? { person } : {}), readable });
   }
 
   function botList(filter: { status?: unknown; assigneeBotId?: unknown }, readable: (todo: TodoRecord) => boolean): TodoRecord[] {
