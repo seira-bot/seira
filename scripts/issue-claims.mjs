@@ -323,6 +323,11 @@ async function sweepClaim({ api, issue, now, log }) {
   const number = issue.number;
   const logins = loginsOf(issue);
   if (logins.length === 0) {
+    const latest = await readIssue(api, number);
+    if (latest.state !== "open" || loginsOf(latest).length > 0 || !namesOf(latest).includes(CLAIMED_HUMAN)) {
+      log(`#${number}: held, issue changed`);
+      return;
+    }
     await removeLabel(api, number, CLAIMED_HUMAN);
     await reconcile({ api, number, now, log });
     return;

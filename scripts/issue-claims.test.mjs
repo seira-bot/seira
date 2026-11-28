@@ -705,6 +705,21 @@ describe("sweep", () => {
       expect(fake.issue(60).labels).toEqual(["P2", "human-window"]);
     });
 
+    it("stale AC-18: keeps the claim label when the issue got an assignee after the list was read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: ["bob"] })], listed: { 60: { assignees: [] } }, events: claimEvents(2) });
+      const lines = [];
+      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {}, offset: 0 });
+      expect(fake.writes()).toEqual([]);
+      expect(fake.issue(60).labels).toContain("claimed: human");
+      expect(lines).toContain("#60: held, issue changed");
+    });
+
+    it("stale AC-18: makes no write when the claim label left after the list was read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: [], labels: ["P2"] })], listed: { 60: { assignees: [], labels: ["P2", "claimed: human"] } } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+
     it("AC-02: keeps a claim when the priority rises to P0", async () => {
       const fake = fakeApi({ issues: [claimed({ labels: ["P0", "claimed: human"] })], events: claimEvents(2) });
       await sweepAt(fake);
