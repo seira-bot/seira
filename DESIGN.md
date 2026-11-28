@@ -57,7 +57,9 @@ where they belong instead of adding new places.
   default and has no dialog and no nag. A second one (2026-11-23): the
   **Glance** check item in the desktop app's View menu (and in the Glance tray
   menu on Linux Wayland). It is on by default and is the only control of
-  Glance.
+  Glance. A third one (2026-11-27): **Who picks a bot for open todos** in the
+  Board's menu. It defaults to the chief of staff bot and has one other
+  choice, Nobody, where the person picks.
 - **Glance is the one place outside the window** (2026-11-23). It is a small
   visor at the top centre of the screen in the desktop app. On Linux Wayland
   the visor shows through a small X11 (XWayland) helper process, because a

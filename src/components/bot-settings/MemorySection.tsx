@@ -37,6 +37,7 @@ import { clockOptions } from "@/lib/clock-time";
 import { roomMemoryCaptureEnabled } from "@/lib/feature-flags";
 import { api, ApiError, useStore, type Bot, type ConfigStatus } from "@/state/store";
 import { SETTINGS_INLINE_INPUT, Switch } from "../SettingsPrimitives";
+import { Select } from "../Select";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { inputCls } from "./field";
 
@@ -562,15 +563,14 @@ function UpkeepTimingRows({ timing }: { timing: UpkeepTiming }) {
           <label htmlFor="memory-tidy-hour" className="text-[13px] font-medium text-ink">{t("memory.upkeep.tidyHour.title")}</label>
           <p className="mt-0.5 text-[13px] leading-relaxed text-ink-secondary">{t("memory.upkeep.tidyHour.subtitle")}</p>
         </div>
-        <select
+        <Select
           id="memory-tidy-hour"
           value={timing.tidyHour}
           disabled={timing.saving}
           onChange={(event) => timing.onTidyHour(Number(event.target.value))}
-          className={cn(SETTINGS_INLINE_INPUT, "w-auto text-left")}
         >
           {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{hourLabel(hour)}</option>)}
-        </select>
+        </Select>
       </div>
     </>
   );

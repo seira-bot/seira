@@ -9,6 +9,7 @@ import { drawWorkflowItem, finishedReply } from "@/components/workflow/draw-work
 import { useWorkflowsUnavailable } from "@/state/workflows";
 import { useSpeakAction } from "@/components/SpeakButton";
 import { openConversationDialog, TEAM_MEMORY_ITEM, TeamMemorySavesContext } from "@/components/conversation-share/conversation-share";
+import { TODO_MENU_KEYS, todoMenuItems, type TodoMenuSource } from "@/components/todo/todo-menu";
 
 export type PinAction = { pinned: boolean; onToggle: () => void; hint?: string };
 
@@ -66,6 +67,7 @@ export function useBotMessageMenu({
   onRegenerate,
   pin,
   draw,
+  todo,
 }: {
   text: string;
   botId?: string;
@@ -82,6 +84,8 @@ export function useBotMessageMenu({
   pin?: PinAction;
   /** Offers "Draw as workflow" on a finished reply. */
   draw?: { threadId: string; reply: Message; dispatch: Dispatch<Action> };
+  /** Offers the todo rows; names the conversation the message is in. */
+  todo?: TodoMenuSource;
 }): MessageMenuItem[] {
   const workflowsOff = useWorkflowsUnavailable();
   const speak = useSpeakAction({ text, botId, messageId, voiceId, tts, localVoice });
@@ -108,11 +112,15 @@ export function useBotMessageMenu({
   }
   if (onRegenerate) items.push({ key: "regenerate", icon: <RefreshCw {...ACTION_ICON} />, label: t("chat.regenerate"), onSelect: onRegenerate, ui: ui("message.regenerate") });
   if (draw && !workflowsOff && finishedReply(draw.reply)) items.push(drawWorkflowItem(draw));
-  items.push(...teamMemory, ...pinItem(pin), idItem(messageId));
+  items.push(...todoMenuItems(text, messageId, todo), ...teamMemory, ...pinItem(pin), idItem(messageId));
   return items;
 }
 
-/** `save`: the message's "Save to team memory", as the bot menu's hook made it. */
+/** The rows of the bot menu's hook that a person's line offers too: team memory and the todo rows. */
+export const userSaveItems = (menu: readonly MessageMenuItem[]): MessageMenuItem[] =>
+  menu.filter((item) => item.key === TEAM_MEMORY_ITEM || TODO_MENU_KEYS.includes(item.key));
+
+/** `save`: the message's "Save to team memory" and todo rows, as the bot menu's hook made them. */
 export function userMessageMenu({ messageId, onEdit, pin, save = [] }: { messageId: string; onEdit?: () => void; pin?: PinAction; save?: MessageMenuItem[] }): MessageMenuItem[] {
   return [
     ...(onEdit ? [{ key: "edit", icon: <Pencil {...ACTION_ICON} />, label: t("chat.editMessage"), onSelect: onEdit, idleOnly: true }] : []),

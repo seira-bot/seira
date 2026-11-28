@@ -1,4 +1,7 @@
+import type { Audience } from "./audience.ts";
 import type { BoardClosure } from "./board-closed.ts";
+import type { Todo } from "../shared/todo.ts";
+import { readyQueue, todoVisible } from "./todos.ts";
 import { BOARD_DONE_MAX, BOARD_DONE_WINDOW_MS, BOARD_TITLE_CHARS, type BoardCard, type BoardColumn, type BoardView } from "../shared/board.ts";
 
 interface HandoffRow {
@@ -50,12 +53,18 @@ export interface BoardSources {
   threads: ReadonlyArray<{ botId: string; task: ThreadRow }>;
   runs(from: number): readonly RunRow[];
   closed?: (cardId: string) => BoardClosure | undefined;
+  /** The todos and the bot picker (null: nobody hands out open todos, so they wait for the person). */
+  todos?: () => { todos: ReadonlyArray<Todo & { audience?: Audience }>; picker: string | null };
 }
 
 export interface BoardViewer {
   thread(threadId: string): boolean;
   bot(botId: string): boolean;
+  audience(audience: Audience): boolean;
   routine(run: { botId?: unknown; groupId?: unknown; threadId?: unknown }): boolean;
+  /** Whether the person a todo works for lets this viewer read it (on a personal Cloud a guest reads only their own).
+   * Absent: yes. */
+  todo?(todoId: string): boolean;
 }
 
 const BRIEF_CHARS = 2000;
@@ -86,7 +95,7 @@ function handoffCards(rows: readonly HandoffRow[], viewer: BoardViewer): BoardCa
       brief: row.text.length > BRIEF_CHARS ? `${row.text.slice(0, BRIEF_CHARS - 1)}…` : row.text,
       createdAt: row.createdAt, updatedAt: row.lastProgressAt ?? row.startedAt ?? row.createdAt,
     };
-    if (row.status === "queued") cards.push({ ...base, column: "todo", state: "queued" });
+    if (row.status === "queued") cards.push({ ...base, column: "todo", state: "queued", group: "next" });
     else if (row.status === "running" || row.status === "resume") cards.push({ ...base, column: "working", state: "running" });
     else if (row.status === "waiting") {
       const asksPerson = Boolean(row.question) && !row.decide;
@@ -125,12 +134,52 @@ function runCards(runs: readonly RunRow[], viewer: BoardViewer): BoardCard[] {
       ...(run.threadId ? { threadId: run.threadId } : {}), ...(run.groupId ? { groupId: run.groupId } : {}),
       createdAt: run.scheduledFor, updatedAt: run.finishedAt ?? run.startedAt ?? run.scheduledFor,
     };
-    if (run.status === "queued") cards.push({ ...base, column: "todo", state: "queued" });
+    if (run.status === "queued") cards.push({ ...base, column: "todo", state: "queued", group: "next" });
     else if (run.status === "running" || run.status === "waiting") cards.push({ ...base, column: "working", state: "running" });
     else if (run.status === "failed") {
       const error = plain(run.error ?? "", TEXT_CHARS);
       cards.push({ ...base, column: "needs-you", state: "failed", ...(error ? { error } : {}) });
     } else cards.push({ ...base, column: "done", state: "completed" });
+  }
+  return cards;
+}
+
+function todoCards(source: NonNullable<BoardSources["todos"]>, viewer: BoardViewer, now: number): BoardCard[] {
+  const { picker, ...all } = source();
+  const shown = (todo: Todo & { audience?: Audience }) => todoVisible(todo, viewer) && (!viewer.todo || viewer.todo(todo.id));
+  const todos = all.todos.filter(shown);
+  const ready = new Set<string>();
+  const place = new Map<string, number>();
+  for (const botId of new Set(todos.map((todo) => todo.botId).filter((id): id is string => Boolean(id)))) {
+    // Readiness looks at every todo; a place in the queue counts only the todos the viewer sees.
+    readyQueue(all.todos, botId, now).filter(shown).forEach((todo, index) => { ready.add(todo.id); place.set(todo.id, index + 1); });
+  }
+  const cards: BoardCard[] = [];
+  for (const todo of todos) {
+    const base = {
+      id: `todo:${todo.id}`, kind: "todo" as const, todoId: todo.id, title: plainTitle(todo.title), botId: todo.botId ?? "",
+      ...(todo.madeBy.kind === "bot" && viewer.bot(todo.madeBy.botId) ? { fromBotId: todo.madeBy.botId } : {}),
+      ...(todo.threadId ? { threadId: todo.threadId } : {}), ...(todo.routineId ? { routineId: todo.routineId } : {}),
+      createdAt: todo.createdAt, updatedAt: todo.updatedAt,
+    };
+    if (todo.status === "open") {
+      cards.push(picker
+        ? { ...base, column: "todo", state: "open", group: "open" }
+        : { ...base, column: "needs-you", state: "unassigned", group: "open" });
+    } else if (todo.status === "queued") {
+      if (ready.has(todo.id)) cards.push({ ...base, column: "todo", state: "queued", group: "next", place: place.get(todo.id)! });
+      else cards.push({ ...base, column: "todo", state: "scheduled", group: "scheduled" });
+    } else if (todo.status === "working") cards.push({ ...base, column: "working", state: "running" });
+    else if (todo.status === "needs-you") {
+      if (todo.stuck === "unassigned") cards.push({ ...base, column: "needs-you", state: "unassigned", group: "open" });
+      else if (todo.question) cards.push({ ...base, column: "needs-you", state: "needs-input", question: todo.question });
+      else cards.push({ ...base, column: "needs-you", state: "waiting-on-you" });
+    } else {
+      const result = todo.result ? { result: todo.result } : {};
+      cards.push(todo.closedBy
+        ? { ...base, column: "done", state: "closed", closedBy: todo.closedBy, ...result, updatedAt: todo.finishedAt ?? todo.updatedAt }
+        : { ...base, column: "done", state: "completed", ...result, updatedAt: todo.finishedAt ?? todo.updatedAt });
+    }
   }
   return cards;
 }
@@ -166,9 +215,12 @@ export function boardView(sources: BoardSources, viewer: BoardViewer, now = Date
   const taken = new Set<string>();
   for (const card of handoffs) if (card.threadId) taken.add(card.threadId);
   for (const run of runs) if (run.threadId) taken.add(run.threadId);
+  const todos = sources.todos ? todoCards(sources.todos, viewer, now) : [];
+  for (const card of todos) if (card.threadId) taken.add(card.threadId);
   const cutoff = now - BOARD_DONE_WINDOW_MS;
   const recent = [...handoffs, ...threadCards(sources.threads, taken, viewer), ...runCards(runs, viewer)]
     .map((card) => withClosure(card, sources.closed))
+    .concat(todos)
     .filter((card) => (card.column !== "done" && card.state !== "failed") || card.updatedAt >= cutoff);
   const cards: BoardCard[] = [];
   const seen = new Set<string>();

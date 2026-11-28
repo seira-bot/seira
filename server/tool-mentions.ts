@@ -1,8 +1,9 @@
+import { GITHUB_APP_SLUG } from "../shared/github-app.ts";
 import { toolkitName } from "./activity.ts";
 import { isMentionBoundary, isMentionNameContinuation } from "../shared/mention-boundary.ts";
 
-export type TurnTool = { name: string; kind: "app" | "mcp"; aliases: readonly string[] };
-export type TaggedTool = { name: string; kind: "app" | "mcp" };
+export type TurnTool = { name: string; kind: "app" | "mcp"; aliases: readonly string[]; hint?: string };
+export type TaggedTool = { name: string; kind: "app" | "mcp"; hint?: string };
 
 /** The tools a message @-tags. The longest name wins; a bot of the same length wins a tie, as in a bot tag. */
 export function taggedTools(text: string, tools: readonly TurnTool[], botNames: readonly string[]): TaggedTool[] {
@@ -16,7 +17,7 @@ export function taggedTools(text: string, tools: readonly TurnTool[], botNames: 
     const hit = names.find(({ name }) => matches(name));
     if (!hit) continue;
     if (botNames.some((name) => name.trim() && name.length >= hit.name.length && matches(name))) continue;
-    if (!found.some((one) => one.name === hit.tool.name && one.kind === hit.tool.kind)) found.push({ name: hit.tool.name, kind: hit.tool.kind });
+    if (!found.some((one) => one.name === hit.tool.name && one.kind === hit.tool.kind)) found.push({ name: hit.tool.name, kind: hit.tool.kind, ...(hit.tool.hint ? { hint: hit.tool.hint } : {}) });
   }
   return found;
 }
@@ -24,22 +25,35 @@ export function taggedTools(text: string, tools: readonly TurnTool[], botNames: 
 /** The sentence of the turn prompt that names the tools the person tagged. */
 export function taggedToolsPrompt(tagged: readonly TaggedTool[]): string {
   if (!tagged.length) return "";
-  const list = tagged.map((tool) => `${tool.name} (${tool.kind === "app" ? "a connected app" : "an MCP server"})`).join(", ");
+  const list = tagged.map((tool) => `${tool.name} (${tool.hint ?? (tool.kind === "app" ? "a connected app" : "an MCP server")})`).join(", ");
   return `The person's message tags these tools: ${list}. They want them used for this request. If one fails, say so plainly.`;
 }
 
 
 /** The tools a turn can name: its connected apps (a slug and a label both name one) and its MCP servers. */
-export function turnTools(apps: readonly { slug: string; label: string }[], mcpServers: readonly string[]): TurnTool[] {
+export function turnTools(apps: readonly TurnApp[], mcpServers: readonly string[]): TurnTool[] {
   const appNames = new Set(apps.map((app) => app.label.toLowerCase()));
   return [
-    ...apps.map((app) => ({ name: app.label, kind: "app" as const, aliases: [app.slug] })),
+    ...apps.map((app) => ({ name: app.label, kind: "app" as const, aliases: app.aliases ?? [app.slug], ...(app.hint ? { hint: app.hint } : {}) })),
     ...mcpServers.filter((name) => !appNames.has(name.toLowerCase())).map((name) => ({ name, kind: "mcp" as const, aliases: [] })),
   ];
 }
 
 type ConnectedService = { connected?: boolean };
-type TurnApp = { slug: string; label: string };
+type TurnApp = { slug: string; label: string; aliases?: readonly string[]; hint?: string };
+
+const NATIVE_GITHUB: TurnApp = {
+  slug: GITHUB_APP_SLUG,
+  label: "GitHub",
+  aliases: [GITHUB_APP_SLUG, "github"],
+  hint: "the GitHub connection: use its GITHUB_APP_* tools, not Composio",
+};
+
+/** The native GitHub connection replaces the Composio toolkit of the same name when it mounts in the turn. */
+export function withNativeGithub(apps: readonly TurnApp[], mounted: boolean): TurnApp[] {
+  if (!mounted) return [...apps];
+  return [...apps.filter((app) => app.slug !== "github" && app.slug !== GITHUB_APP_SLUG), NATIVE_GITHUB];
+}
 
 /** The connected apps a bot may use this turn: connected, and inside its scopes and tool grants. */
 export function usableApps(
@@ -59,10 +73,11 @@ export async function taggedToolsFor(input: {
   botNames: readonly string[];
   mcpServers: readonly string[];
   apps: (() => Promise<TurnApp[]>) | null;
+  github?: boolean;
 }): Promise<string> {
   if (!input.direct || !input.text.includes("@")) return "";
   const apps = await input.apps?.().catch(() => []) ?? [];
-  return taggedToolsPrompt(taggedTools(input.text, turnTools(apps, input.mcpServers), input.botNames));
+  return taggedToolsPrompt(taggedTools(input.text, turnTools(withNativeGithub(apps, input.github === true), input.mcpServers), input.botNames));
 }
 
 /** Only a line the person typed in their own turn may name tools: never a webhook, a schedule, a relayed or peer line,

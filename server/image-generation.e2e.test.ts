@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { z } from "zod";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { startFakeImageApi, type FakeImageApi } from "./testing/fake-image-api.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const botSchema = z.object({ bot: z.object({ id: z.string(), activeTaskId: z.string() }) });
 const waitSchema = z.object({ status: z.string() });
@@ -61,8 +62,7 @@ async function withImageFixture(test: (f: ImageFixture) => Promise<void>) {
       },
       savePlan: (plan) => writeFileSync(planPath, JSON.stringify(plan)),
       turnOf: (botId) => {
-        const lines = existsSync(planPath + ".evidence.jsonl") ? readFileSync(planPath + ".evidence.jsonl", "utf8").trim().split("\n").filter(Boolean) : [];
-        const turn = lines.map((line) => evidenceSchema.parse(JSON.parse(line))).find((entry) => entry.botId === botId);
+        const turn = readJsonLines(planPath + ".evidence.jsonl").map((row) => evidenceSchema.parse(row)).find((entry) => entry.botId === botId);
         if (!turn) throw new Error(`no scripted turn was recorded for ${botId}`);
         return turn;
       },

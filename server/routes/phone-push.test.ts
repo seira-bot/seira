@@ -3,10 +3,11 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { json, readBody } from "../harness/http.ts";
 import { PhonePush } from "../phone-push.ts";
+import { PublicError } from "../public-error.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { createPhonePushRoutes } from "./phone-push.ts";
@@ -94,5 +95,17 @@ describe("/api/push/device", () => {
     expect((await call("PUT", "/api/push/device", { platform: "apns", token: "nope" })).status).toBe(400);
     expect((await call("POST", "/api/push/device", { platform: "apns", token: APNS })).status).toBe(405);
     expect((await call("GET", "/api/push/devices")).body).toEqual({ from: "elsewhere" });
+  });
+
+  it("keeps the words of a refusal, and never sends the text of an error that was not written for the phone", async () => {
+    const { call, push } = await setup();
+    vi.spyOn(push, "register").mockRejectedValueOnce(new PublicError("At most 10 phones can get alerts from this computer.", 409));
+    expect(await call("PUT", "/api/push/device", { platform: "apns", token: APNS })).toEqual({ status: 409, body: { error: "At most 10 phones can get alerts from this computer." } });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(push, "register").mockRejectedValueOnce(new Error("EACCES: permission denied, open '/Users/someone/.seira/push/devices.json'"));
+    const failed = await call("PUT", "/api/push/device", { platform: "apns", token: APNS });
+    expect(failed).toEqual({ status: 500, body: { error: "Could not save the registration" } });
+    expect(String(logged.mock.calls[0]?.[0])).toContain("EACCES");
+    logged.mockRestore();
   });
 });

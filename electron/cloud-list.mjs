@@ -96,6 +96,9 @@ export function olderRelease(version, latest) {
  * account (`managed: false`): Seira neither runs nor vouches for it, so it is no Cloud of theirs to pair or lend to. */
 export const ownCloud = cloud => Boolean(cloud) && cloud.teamId === null && cloud.role === "owner" && cloud.managed !== false;
 
+export const teamCloud = (clouds, origin) => Array.isArray(clouds) && typeof origin === "string" && origin !== ""
+  && clouds.some(cloud => cloud.teamId !== null && cloud.managed !== false && cloud.origin === origin);
+
 /** The person's own servers and computers that signed in with their account: in the rail, each one theirs to connect. */
 export const signedInServers = clouds => (Array.isArray(clouds) ? clouds.filter(cloud => cloud.managed === false) : []);
 

@@ -19,12 +19,20 @@ const copies = (dir: string) => readdirSync(dir).filter((name) => name.startsWit
 const canLockFiles = process.platform !== "win32" && process.getuid?.() !== 0;
 const roomsOnDisk = (file: string) => (JSON.parse(readFileSync(file, "utf8")) as Array<{ name: string }>).map((room) => room.name);
 
-/** The faults of one groups.json: the half of a whole file, an empty file, text that is not JSON, JSON that is not a list, a file this user cannot read. */
+/** The faults of one groups.json: the half of a whole file, an empty file, text that is not JSON, JSON that is not a list of rooms, a file this user cannot read. */
 const FAULTS: Array<{ name: string; unreadable?: boolean; damage: (whole: string) => string }> = [
   { name: "half file", damage: (whole) => whole.slice(0, Math.floor(whole.length / 2)) },
   { name: "empty file", damage: () => "" },
   { name: "text that is not JSON", damage: () => "not json at all, only text from outside" },
   { name: "valid JSON that is not a list", damage: () => "{\"groups\":[]}" },
+  { name: "list with an element that has no id (null)", damage: () => "[{\"id\":null,\"name\":\"x\"}]" },
+  { name: "list with an element that is a number", damage: () => "[7]" },
+  { name: "list with an element that is a text", damage: () => "[\"text\"]" },
+  { name: "list with an element that is null", damage: () => "[null]" },
+  { name: "list with an element that is a list", damage: () => "[[]]" },
+  { name: "list with an empty id", damage: () => "[{\"id\":\"\",\"name\":\"x\"}]" },
+  { name: "list with an id that is a number", damage: () => "[{\"id\":3,\"name\":\"x\"}]" },
+  { name: "list with one good element and one bad element", damage: (whole) => whole.replace(/\]\s*$/, ",7]") },
   { name: "mode 000", unreadable: true, damage: (whole) => whole },
 ];
 

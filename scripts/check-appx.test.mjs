@@ -19,6 +19,7 @@ const GOOD = `<?xml version="1.0" encoding="utf-8"?>
       <Extensions>
         <uap:Extension Category="windows.protocol"><uap:Protocol Name="seira"><uap:DisplayName>Seira package install</uap:DisplayName></uap:Protocol></uap:Extension>
         <desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><uap3:AppExecutionAlias><desktop:ExecutionAlias Alias="seira-desktop.exe" /></uap3:AppExecutionAlias></uap3:Extension>
       </Extensions>
     </Application>
   </Applications>
@@ -42,6 +43,8 @@ describe("checkManifest", () => {
     ["the full trust capability", GOOD.replace('Name="runFullTrust"', 'Name="internetClient"'), "runFullTrust"],
     ["the start-up task", GOOD.replace('TaskId="SeiraStartup"', 'TaskId="Other"'), "startup task SeiraStartup"],
     ["the start-up task being off", GOOD.replace('Enabled="false"', 'Enabled="true"'), "not off by default"],
+    ["the app execution alias", GOOD.replace('Alias="seira-desktop.exe"', 'Alias="other.exe"'), "app execution alias seira-desktop.exe"],
+    ["the alias starting the app", GOOD.replace('Category="windows.appExecutionAlias" Executable="Seira.exe"', 'Category="windows.appExecutionAlias" Executable="Other.exe"'), "does not start Seira.exe"],
   ])("rejects a manifest without %s", (_name, xml, message) => {
     expect(check(xml).errors.join("\n")).toContain(message);
   });

@@ -31,3 +31,13 @@ export function withDefault(question: string): { question: string; default?: str
   const asked = named?.[1]?.trim();
   return named && asked ? { question: asked, default: named[2]!.trim() } : { question };
 }
+
+// What a bot writes after `NEEDS INPUT:` when it has no question. A small fixed list: any other text can be a real question.
+const EMPTY_ANSWERS: ReadonlySet<string> = new Set(["none", "n/a", "na", "nil", "nothing", "not applicable", "no question", "no questions", "-", "\u2013", "\u2014"]);
+
+/** Whether the text after `NEEDS INPUT:` says only that nothing is needed (`none`, `n/a`, `-`), so it is no question.
+ * A default named after it (`Default: …`) is not part of the question. */
+export function noQuestion(question: string): boolean {
+  const asked = withDefault(question).question.trim().replace(/^[\s*_`"'([]+|[\s*_`"')\].!]+$/gu, "").toLowerCase();
+  return asked === "" || EMPTY_ANSWERS.has(asked);
+}

@@ -3,11 +3,12 @@
 // folder gives the same card its link. One loopback stub stands in for the pages service; no model is called.
 import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const owner = randomBytes(32).toString("base64url");
 const realFetch = globalThis.fetch;
@@ -55,8 +56,7 @@ it("shows a dashboard folder inline, serves its Parquet to the frame by token on
     return { status: response.status, body: await response.json() as any };
   };
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const evidence = (botId: string) => (existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean) : [])
-    .map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId);
+  const evidence = (botId: string) => readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === botId);
   const turn = async (bot: any, steps: unknown[]) => {
     writeFileSync(planPath, JSON.stringify({ [bot.id]: { steps, reply: "Done." } }));
     await cli("send", "--bot", bot.id, "--task", bot.activeTaskId, "--text", "Show me the sales dashboard.");
@@ -116,7 +116,7 @@ it("streams a folder's video to the card by byte range, leaves it out of a publi
   const cli = (...args: string[]) => runControlSeira(args, { env: { SEIRA_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string) => (await fetch(`${fixture.info.url}${path}`, { headers: { "content-type": "application/json" } })).json() as Promise<any>;
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const reply = (botId: string) => readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId)
+  const reply = (botId: string) => readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === botId)
     .at(-1).evidence.find((entry: any) => entry.step).response.result.content[0].text as string;
   const turn = async (bot: any, step: unknown) => {
     writeFileSync(planPath, JSON.stringify({ [bot.id]: { steps: [step], reply: "Done." } }));

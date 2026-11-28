@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const told = (turn: any): string => {
   const content = turn.prompt?.message?.content;
@@ -27,7 +28,7 @@ async function fixture(test: (f: any) => Promise<void>) {
       mkdirSync(join(dataDir, "workspaces", botId), { recursive: true });
       writeFileSync(join(dataDir, "workspaces", botId, name), content);
     };
-    const evidence = () => existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+    const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`);
     const turns = (botId: string) => evidence().filter((turn: any) => turn.botId === botId);
     const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages;
     const start = async () => {
@@ -122,7 +123,7 @@ it("passes a file from one room to a teammate working in another room, into that
     }));
     await cli("send-channel", "--channel", source.id, "--text", "@Director Start the assignment");
     expect((await cli("wait", "--channel", source.id, "--timeout", "30")).status).toBe("settled");
-    const turns = readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const turns = readJsonLines(`${planPath}.evidence.jsonl`);
     const sent = JSON.parse(turns.find((turn: any) => turn.botId === sender.id).evidence.find((entry: any) => entry.step?.arguments?.files).response.result.content[0].text);
     expect(sent.files).toContain("Passed spec.md to @Engineer");
     const work = turns.find((turn: any) => turn.botId === target.id);

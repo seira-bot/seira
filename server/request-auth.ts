@@ -496,13 +496,15 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/routines$/ },
   { methods: ["POST"], path: /^\/api\/routines$/ },
   { methods: ["PATCH", "DELETE"], path: /^\/api\/routines\/[\w-]+$/ },
-  { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
+  { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/(?:run|skip)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
   // workflows: steps name bots and instructions only; each route checks that the person sees every bot
   { methods: ["GET", "POST"], path: /^\/api\/workflows$/ },
   { methods: ["GET", "PATCH", "DELETE"], path: /^\/api\/workflows\/[\w-]+$/ },
   { methods: ["GET"], path: /^\/api\/workflows\/[\w-]+\/runs$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/from-start$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/[\w-]+\/switch$/ },
   { methods: ["GET"], path: /^\/api\/workflow-runs\/[\w-]+$/ },
   { methods: ["POST"], path: /^\/api\/workflow-runs\/[\w-]+\/steps\/[\w-]+\/run-again$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/workflow-draft$/ },
@@ -518,6 +520,10 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/board$/ },
   // moving one Needs you card to Done: the handler lets only someone who can chat with the card's bot do it
   { methods: ["POST"], path: /^\/api\/board\/close$/ },
+  // todos: the handlers hide what the viewer cannot see and need chat level on the bot for a change; the bot picker stays admin-only
+  { methods: ["GET", "POST"], path: /^\/api\/todos$/ },
+  { methods: ["PATCH", "DELETE"], path: /^\/api\/todos\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/todos\/[\w-]+\/(start|restore)$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
   { methods: ["GET"], path: /^\/api\/config$/ },
   // a person's own "About you" on a Team Cloud

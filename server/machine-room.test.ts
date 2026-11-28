@@ -128,6 +128,8 @@ describe("the heavy-work part of the system prompt (AC-01)", () => {
   it("is at most 1,200 bytes and has no number that changes", () => {
     expect(Buffer.byteLength(HEAVY_WORK_PROMPT, "utf8")).toBeLessThanOrEqual(1200);
     expect(HEAVY_WORK_PROMPT).toContain("machine_budget");
+    expect(HEAVY_WORK_PROMPT).toContain("too_small");
+    expect(HEAVY_WORK_PROMPT).toContain("Full access");
   });
   it("is the same bytes in the stable half every turn", () => {
     for (const kind of [null, "local", "vm-private", "vps"] as const) expect(longCommandsPrompt(kind)).toContain(HEAVY_WORK_PROMPT);

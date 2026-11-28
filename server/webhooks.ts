@@ -13,6 +13,8 @@ import type { RoutineRunOn } from "./routines.ts";
 import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
 import { PublicError } from "./public-error.ts";
+import type { WorkflowCopyLookup } from "./workflows/routine-link.ts";
+import { assertWorkflowRoom, startWorkflowFields } from "./workflows/start-link.ts";
 
 export type WebhookTriggerInput = z.input<typeof triggerInputSchema>;
 export type WebhookVerificationSample = z.output<typeof verificationSampleSchema>;
@@ -75,7 +77,13 @@ export interface WebhookManagerOptions {
     sameConversation?: boolean;
     /** The person's own Run now test, not an outside delivery. */
     byPerson?: boolean;
+    /** The workflow whose steps the run executes. */
+    workflowId?: string;
+    /** The result of the last step goes to the webhook's chat. */
+    postsResult?: true;
   }) => { id: string };
+  /** The step copy and bots of a workflow, for a webhook that runs it. */
+  workflowCopy?: WorkflowCopyLookup;
   cancelQueued?: (webhookId: string, message: string) => void;
   pendingRuns?: (webhookId: string) => number;
   /** delivery:"post" sink: lands in the trigger's own stable thread, never a caller-supplied one. */
@@ -128,8 +136,9 @@ const triggerInputSchema = z.object({
   payloadFilter: payloadFilterSchema.nullable().optional(),
   maxPendingRuns: maxPendingRunsSchema.nullable().optional(),
   sameConversation: z.boolean().optional(),
+  workflowId: z.string().min(1).nullable().optional(),
 });
-const triggerPatchSchema = triggerInputSchema.partial().extend({ confirmPlace: z.literal(true).optional() });
+const triggerPatchSchema = triggerInputSchema.partial().extend({ confirmPlace: z.literal(true).optional(), rewriteWorkflow: z.literal(true).optional() });
 const verificationSampleSchema = z.object({
   receivedAt: z.number().finite().nonnegative(),
   eventName: z.string().optional(),
@@ -160,6 +169,7 @@ const storedWebhookSchema = z.object({
   // A hand-edited value out of range falls back to the default instead of making the file unreadable.
   maxPendingRuns: maxPendingRunsSchema.optional().catch(undefined),
   sameConversation: z.boolean().optional().catch(undefined),
+  workflowId: z.string().regex(/^[\w-]{1,128}$/).optional().catch(undefined),
   placeLost: z.literal(true).optional().catch(undefined),
   secretHash: z.string().regex(/^[a-f0-9]{64}$/),
   /** The current secret, sealed under WEBHOOK_KEY_FILE beside this file, so the person and the owning bot get the same
@@ -293,7 +303,14 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   if (groupId) clean.groupId = groupId;
   if (typeof input.maxPendingRuns === "number") clean.maxPendingRuns = input.maxPendingRuns;
   if (input.sameConversation) clean.sameConversation = true;
+  if (typeof input.workflowId === "string" && input.workflowId) clean.workflowId = input.workflowId;
   return clean;
+}
+
+/** A webhook that runs a workflow takes its bot and instructions from it, so a body may leave them out. */
+function withLinkedDefaults(value: JsonValue): JsonValue {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.workflowId !== "string") return value;
+  return { botId: "", prompt: "", ...value };
 }
 
 function parseTriggerInput(value: JsonValue): WebhookTriggerInput {
@@ -302,7 +319,7 @@ function parseTriggerInput(value: JsonValue): WebhookTriggerInput {
   return parsed.data;
 }
 
-function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> & { confirmPlace?: true } {
+function parseTriggerPatch(value: JsonValue): Partial<WebhookTriggerInput> & { confirmPlace?: true; rewriteWorkflow?: true } {
   const parsed = triggerPatchSchema.safeParse(value);
   if (!parsed.success) invalidInput(parsed.error);
   return parsed.data;
@@ -355,7 +372,9 @@ function eventPrompt(trigger: StoredWebhookTrigger, event: WebhookEvent, receive
   ].filter(Boolean);
   const configured = trigger.prompt.trim();
   const requestedTask = configured ? "" : taskFromPayload(event.payload);
-  const instructionBlock = configured
+  const instructionBlock = trigger.workflowId !== undefined
+    ? []
+    : configured
     ? ["[USER-CONFIGURED WEBHOOK INSTRUCTIONS]", configured, "[/USER-CONFIGURED WEBHOOK INSTRUCTIONS]"]
     : requestedTask
       ? ["[AUTHENTICATED WEBHOOK TASK]", defuse(requestedTask), "[/AUTHENTICATED WEBHOOK TASK]"]
@@ -366,7 +385,7 @@ function eventPrompt(trigger: StoredWebhookTrigger, event: WebhookEvent, receive
         ];
   // The payload and its headers are the sender's: they never close the data block or open an instructions block.
   return [
-    configured ? webhookRunNote(trigger.name) : webhookNote(trigger.name),
+    configured && trigger.workflowId === undefined ? webhookRunNote(trigger.name) : webhookNote(trigger.name),
     ...instructionBlock,
     "",
     WEBHOOK_EVENT_DATA,
@@ -464,9 +483,14 @@ export class WebhookManager {
 
   create(input: JsonValue): CreatedWebhook {
     this.assertWritable();
-    const clean = cleanInput(parseTriggerInput(input));
+    const parsed = parseTriggerInput(withLinkedDefaults(input));
+    const linked = typeof parsed.workflowId === "string" && parsed.workflowId
+      ? this.linkFields(parsed.workflowId)
+      : null;
+    const clean = cleanInput(linked ? { ...parsed, prompt: linked.prompt, botId: linked.botId } : parsed);
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
+    if (clean.groupId && linked) assertWorkflowRoom(this.options.workflowCopy, (botId, groupId) => this.assertRoomMember(botId, groupId), linked.workflowId, clean.groupId);
     const now = this.now();
     const secret = newSecret();
     const trigger: StoredWebhookTrigger = {
@@ -532,21 +556,38 @@ export class WebhookManager {
       maxPendingRuns: patch.maxPendingRuns === undefined ? trigger.maxPendingRuns : patch.maxPendingRuns,
       sameConversation: patch.sameConversation ?? trigger.sameConversation,
     });
+    const settingsEdit = patch.workflowId !== undefined || patch.rewriteWorkflow || patch.botId !== undefined || patch.prompt !== undefined
+      || patch.runOn !== undefined || patch.delivery !== undefined || patch.sameConversation !== undefined;
+    const linkTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : settingsEdit ? trigger.workflowId : undefined;
+    if (linkTo) Object.assign(clean, this.linkFields(linkTo));
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
+    const linkedTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : trigger.workflowId;
+    if (clean.groupId && linkedTo) assertWorkflowRoom(this.options.workflowCopy, (botId, groupId) => this.assertRoomMember(botId, groupId), linkedTo, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
+    const unlinked = patch.workflowId === null && trigger.workflowId !== undefined;
+    if (patch.workflowId === null) delete trigger.workflowId;
+    if (unlinked) trigger.enabled = false;
     if (placeCleared) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
     if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;
     if (clean.maxPendingRuns === undefined) delete trigger.maxPendingRuns;
     if (!clean.sameConversation) delete trigger.sameConversation;
-    if (patch.enabled === false) {
+    if (patch.enabled === false || unlinked) {
       this.options.cancelQueued?.(trigger.id, "The webhook was paused before this delivery started");
     }
     this.save();
     this.emit(trigger);
     return publicTrigger(trigger);
+  }
+
+  private linkFields(workflowId: string): { workflowId: string; prompt: string; botId: string } {
+    try {
+      return startWorkflowFields(workflowId, this.options.workflowCopy);
+    } catch (error) {
+      return fail(409, error instanceof Error ? error.message : "This webhook cannot run that workflow.");
+    }
   }
 
   remove(id: string): boolean {
@@ -647,7 +688,7 @@ export class WebhookManager {
 
   /** A room post synthesizes audio, so only that branch is a Promise; every other delivery stays synchronous. */
   private deliver(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson: boolean, secret: string): WebhookReceiveResult | Promise<WebhookReceiveResult> {
-    return trigger.delivery === "post" && trigger.groupId ? this.deliverRoom(trigger, event, byPerson, secret) : this.dispatch(trigger, event, byPerson);
+    return trigger.delivery === "post" && trigger.groupId && trigger.workflowId === undefined ? this.deliverRoom(trigger, event, byPerson, secret) : this.dispatch(trigger, event, byPerson);
   }
 
   private rejectAttempt(trigger: StoredWebhookTrigger, event: WebhookEvent, error: unknown): void {
@@ -660,7 +701,7 @@ export class WebhookManager {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     // A room delivery synthesizes voice and stores images asynchronously; the test route stays synchronous.
-    if (trigger.delivery === "post" && trigger.groupId) fail(400, "a room webhook posts through its webhook URL, not the test button");
+    if (trigger.delivery === "post" && trigger.groupId && trigger.workflowId === undefined) fail(400, "a room webhook posts through its webhook URL, not the test button");
     const eventName = trigger.eventTypes?.[0] ?? "seira.test";
     // Run now is the person's own test: like a schedule's, it runs while paused.
     return this.dispatch(trigger, {
@@ -800,11 +841,12 @@ export class WebhookManager {
 
   /** run and thread-post deliveries: synchronous, one receipt, no awaits. Room triggers go through deliverRoom. */
   private dispatch(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson = false): WebhookReceiveResult {
+    if (trigger.workflowId !== undefined && trigger.groupId) assertWorkflowRoom(this.options.workflowCopy, (botId, groupId) => this.assertRoomMember(botId, groupId), trigger.workflowId, trigger.groupId);
     const now = this.now();
     const admitted = this.admit(trigger, event, byPerson, now);
     if ("receipt" in admitted) return admitted.receipt;
     const { deliveryId } = admitted;
-    if (trigger.delivery === "post") {
+    if (trigger.delivery === "post" && trigger.workflowId === undefined) {
       // Never fall through to a task run.
       if (!this.options.post) fail(503, "This server cannot post webhook messages to chat");
       const threadId = this.options.resolvePostThread?.(trigger, false);
@@ -836,6 +878,7 @@ export class WebhookManager {
       deliveryId,
       receivedAt: now,
       sameConversation: trigger.sameConversation,
+      ...(trigger.workflowId === undefined ? {} : { workflowId: trigger.workflowId, ...(trigger.delivery === "post" ? { postsResult: true } : {}) }),
       ...(byPerson ? { byPerson: true } : {}),
     });
     this.deliveries.push({ key: `${trigger.endpointId}:${deliveryId}`, runId: run.id, at: now });

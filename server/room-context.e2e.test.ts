@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireBot, WireGroup } from "../shared/wire.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 // The scripted fake engine reports this prompt size on every turn, so each room turn measures the bot as nearly full.
 const CONTEXT_TOKENS = 990_000;
@@ -31,8 +32,7 @@ it("shows a bot's room context, compacts on request, and compacts before a turn 
     expect((await post(`/api/groups/${room.id}/members/${bot.id}/compact`)).status).toBe(409);
     expect((await post(`/api/groups/${room.id}/members/${other.id}/compact`)).status).toBe(404);
 
-    const turns = () => readFileSync(join(dataDir, "room-plan.json.evidence.jsonl"), "utf8").trim().split("\n")
-      .map(line => JSON.parse(line) as { botId: string; pid: number }).filter(turn => turn.botId === bot.id);
+    const turns = () => readJsonLines<{ botId: string; pid: number }>(join(dataDir, "room-plan.json.evidence.jsonl")).filter(turn => turn.botId === bot.id);
     const config = async (context: Record<string, unknown>) => expect((await fetch(url + "/api/config", {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ context }) })).ok).toBe(true);
 
@@ -76,8 +76,7 @@ it("drops a member's reading once another member's turn replaces its warm proces
       await control("send-channel", "--channel", room.id, "--text", text);
       expect(await control("wait", "--channel", room.id, "--timeout", "30")).toMatchObject({ status: "settled" });
     };
-    const turns = () => readFileSync(join(dataDir, "room-plan.json.evidence.jsonl"), "utf8").trim().split("\n")
-      .map(line => JSON.parse(line) as { botId: string; pid: number });
+    const turns = () => readJsonLines<{ botId: string; pid: number }>(join(dataDir, "room-plan.json.evidence.jsonl"));
     await fetch(url + "/api/config", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ context: { autoCompact: false } }) });
 
     await send("@Editor Cut the intro.");

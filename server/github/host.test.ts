@@ -72,6 +72,15 @@ describe("the flag and the mount (AC-02)", () => {
     expect(on.host.toolListing()).toHaveProperty(GITHUB_APP_SLUG);
   });
 
+  it("names the tools, the granted repositories with their levels, and forbids Composio and a token (AC-03)", () => {
+    const on = fixture({ policy: policy("pull_requests") });
+    const text = on.host.prompt(on.bot);
+    expect(text).toContain("GITHUB_APP_*");
+    expect(text).toContain("acme/web (pull requests)");
+    expect(text).toContain("Do not use Composio for GitHub");
+    expect(text).toContain("never ask the person for a token");
+  });
+
   it("lists only the tools the level reaches, and none a bot's grants leave out", async () => {
     expect(await names(fixture({ policy: policy("read") }).host)).toEqual(GITHUB_APP_TOOL_NAMES.filter((name) => /LIST|GET|SEARCH/u.test(name)));
     expect(await names(fixture({ policy: policy("pull_requests") }).host)).not.toContain("GITHUB_APP_MERGE_PULL");

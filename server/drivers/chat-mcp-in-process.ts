@@ -1,7 +1,7 @@
 import { connectorMcp } from "../connector-mcp.ts";
 import { failure, HARNESS_MCP_MAX_PENDING, harnessMcpRequest, parseHarnessMcpKind, type HarnessMcpKind, type RpcId } from "../harness-mcp-request.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { isOwnNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import { toolLimitFromEnv } from "../tool-count-limit.ts";
 import type { Json } from "./agents-client.ts";
 import { agentsMcp } from "./agents-mcp.ts";
@@ -29,11 +29,11 @@ function harnessAnswer(kind: HarnessMcpKind, env: NodeJS.ProcessEnv, stop: Abort
 
 /** Seira's own agents, connected-apps, data, Email, phone and GitHub servers, as the harness launches them, answer in this process
  * for a chat-completions turn, as they do for engines that reach them by URL. Security: each reads the environment that
- * its process would get and reaches the harness only with the turn's capability token. */
-export function inProcessServer(server: { command: string; args: string[]; env: Record<string, string> }, reply: (message: unknown) => void): InProcessServer | undefined {
-  if (server.command !== process.execPath) return undefined;
+ * its process would get and reaches the harness only with the turn's capability token. `env` is the environment that the
+ * spawned path gives the same server (`chatMcpEnvironment`), never the whole of `process.env`. */
+export function inProcessServer(server: { command: string; args: string[] }, reply: (message: unknown) => void, env: NodeJS.ProcessEnv): InProcessServer | undefined {
+  if (!isOwnNode(server.command)) return undefined;
   const [script, kindArgument, ...rest] = server.args;
-  const env: NodeJS.ProcessEnv = { ...process.env, ...server.env };
   const stop = new AbortController();
   if (script === SPAWNED_PROXIES.connectors && kindArgument === undefined) {
     return { read: connectorMcp(env, reply, (line) => console.warn(`[connectors] ${line}`), stop.signal), stop };

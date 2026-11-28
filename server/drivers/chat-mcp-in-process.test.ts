@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
 import { SPAWNED_PROXIES } from "../proxy-paths.ts";
-import { ChatMcpClient, mountChatTools, type ChatToolSession } from "./chat-mcp-tools.ts";
+import { ChatMcpClient, chatMcpEnvironment, mountChatTools, type ChatToolSession } from "./chat-mcp-tools.ts";
 
 const spawned = vi.hoisted(() => [] as string[][]);
 vi.mock("../procs.ts", async (importOriginal) => {
@@ -24,6 +24,16 @@ vi.mock("../procs.ts", async (importOriginal) => {
   };
 });
 
+const answered = vi.hoisted(() => ({ agents: [] as NodeJS.ProcessEnv[], connectors: [] as NodeJS.ProcessEnv[] }));
+vi.mock("./agents-mcp.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./agents-mcp.ts")>();
+  return { ...actual, agentsMcp: (...args: Parameters<typeof actual.agentsMcp>) => { answered.agents.push(args[0]); return actual.agentsMcp(...args); } };
+});
+vi.mock("../connector-mcp.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../connector-mcp.ts")>();
+  return { ...actual, connectorMcp: (...args: Parameters<typeof actual.connectorMcp>) => { answered.connectors.push(args[0]); return actual.connectorMcp(...args); } };
+});
+
 type Seen = { url: string; authorization?: string; closed: Promise<void> };
 type Harness = { url: string; seen: Seen[]; server: HttpServer };
 
@@ -31,6 +41,9 @@ const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   spawned.length = 0;
+  answered.agents.length = 0;
+  answered.connectors.length = 0;
+  vi.unstubAllEnvs();
 });
 
 async function harness(answer: (request: IncomingMessage, response: ServerResponse) => void): Promise<Harness> {
@@ -184,5 +197,27 @@ describe("the agents server on a chat-completions turn", () => {
 
     await expect(other.tools(controller.signal)).resolves.toEqual([]);
     expect(spawned).toEqual([[SPAWNED_PROXIES.agents], [SPAWNED_PROXIES.harnessMcp, "browser"], [script]]);
+  });
+
+  it("gives an in-process server the environment that a spawned server gets", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "host-provider-key-here");
+    vi.stubEnv("SEIRA_CLOUD_AI_TOKEN", "host-control-plane-here");
+    vi.stubEnv("SEIRA_LICENSE_KEY", "host-license-here");
+    const connectors = { command: process.execPath, args: [SPAWNED_PROXIES.connectors], env: { SEIRA_HARNESS_URL: "http://127.0.0.1:9", SEIRA_COMMS_TOKEN: "connectors-here" } };
+    const mounted = [new ChatMcpClient(agents("http://127.0.0.1:9")), new ChatMcpClient(connectors)];
+    cleanups.push(...mounted.map((client) => () => client.close()));
+
+    const [seenByAgents] = answered.agents;
+    const [seenByConnectors] = answered.connectors;
+    for (const [seen, descriptor] of [[seenByAgents, agents("http://127.0.0.1:9")], [seenByConnectors, connectors]] as const) {
+      expect(seen).toBeDefined();
+      expect(seen).not.toHaveProperty("ANTHROPIC_API_KEY");
+      expect(seen).not.toHaveProperty("SEIRA_CLOUD_AI_TOKEN");
+      expect(seen).not.toHaveProperty("SEIRA_LICENSE_KEY");
+      expect(seen?.SEIRA_HARNESS_URL).toBe("http://127.0.0.1:9");
+      expect(seen?.PATH).toBeTruthy();
+      expect(Object.keys(seen ?? {}).sort()).toEqual(Object.keys(chatMcpEnvironment(descriptor.env)).sort());
+    }
+    expect(spawned).toEqual([]);
   });
 });

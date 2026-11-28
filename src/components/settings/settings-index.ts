@@ -72,7 +72,7 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "data", owner: "place", labelKey: "settings.page.data", icon: Archive, when: advancedOnly(adminPage),
     synonyms: ["data", "storage", "attachments", "activity", "audit"] },
   { id: "people", owner: "place", labelKey: "settings.section.people", icon: Users,
-    when: (ctx) => !ctx.client && ctx.admin && (ctx.team || (!ctx.desktop && !ctx.cloud)),
+    when: (ctx) => !ctx.client && ctx.admin && (ctx.team || (!ctx.here && !ctx.cloud)),
     synonyms: ["people", "members", "invite", "roles", "bot access", "sharing", "team", "premium", "plan", "upgrade"] },
   { id: "installations", owner: "place", labelKey: "settings.section.workspaces", icon: Server, when: (ctx) => !ctx.client && ctx.installations,
     synonyms: ["installations", "fleet", "clients", "tenants"] },

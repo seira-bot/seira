@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { inviteAddsToBot, mayInviteHere, type InviteEnvironment } from "./invite-access";
 
 const selfHosted: InviteEnvironment = { emailSignIn: true, cloudTeam: false };
-const ready = { admin: true as boolean | null, desktop: false, config: {} as unknown, environment: selfHosted as InviteEnvironment | null };
+const ready = { admin: true as boolean | null, here: false, config: {} as unknown, environment: selfHosted as InviteEnvironment | null };
 
 describe("where an admin may invite people", () => {
   it("AC-23 allows an admin of a self-hosted server that signs in by email", () => {
@@ -15,8 +15,12 @@ describe("where an admin may invite people", () => {
     expect(mayInviteHere({ ...ready, admin: null })).toBe(false);
   });
 
-  it("AC-23 refuses the desktop app", () => {
-    expect(mayInviteHere({ ...ready, desktop: true })).toBe(false);
+  it("AC-E3 refuses the desktop app's own computer page", () => {
+    expect(mayInviteHere({ ...ready, here: true })).toBe(false);
+  });
+
+  it("AC-E2 allows a connected server's page in the desktop window", () => {
+    expect(mayInviteHere({ ...ready, here: false })).toBe(true);
   });
 
   it("AC-23 refuses a Team Cloud, by its settings or by what the server says", () => {

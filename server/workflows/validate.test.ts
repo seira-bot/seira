@@ -34,6 +34,16 @@ describe("saving a workflow", () => {
     }
   });
 
+  it("keeps a step's own model and access, drops an empty one, and refuses a wrong one", () => {
+    const model = { instanceId: "codex", model: " gpt-x " };
+    const result = validateWorkflowInput(input([{ ...bot("a"), modelSelection: model, access: "read-and-draft" }, { ...bot("b", "ben"), modelSelection: null, access: null }], [link("1", "a", "b")]), facts);
+    expect(result.ok && result.value.steps).toMatchObject([{ id: "a", modelSelection: { instanceId: "codex", model: "gpt-x" }, access: "read-and-draft" }, { id: "b" }]);
+    expect(result.ok && result.value.steps[1]).not.toHaveProperty("modelSelection");
+    expect(result.ok && result.value.steps[1]).not.toHaveProperty("access");
+    expect(codes(input([{ ...bot("a"), modelSelection: { instanceId: "" } }]))).toEqual(["workflow_shape"]);
+    expect(codes(input([{ ...bot("a"), access: "write" }]))).toEqual(["workflow_shape"]);
+  });
+
   it("keeps ifUpdatedAt and drops fields it does not know", () => {
     const result = validateWorkflowInput({ ...input([bot("a")]), ifUpdatedAt: 7, extra: 1 }, facts);
     expect(result.ok && result.value).toEqual({ name: "Morning", steps: [bot("a")], connections: [], ifUpdatedAt: 7 });

@@ -6,7 +6,7 @@ import type { AppConfig } from "../config.ts";
 import { connectorRefusalText, connectorScopeRefusalText, evaluateConnectorTools } from "../connector-verdict.ts";
 import { appendDecision } from "../decision-log.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { OutboundHoldAnswer } from "../outbound-hold.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE, GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";
 import { githubAppEnabled } from "./flag.ts";
@@ -61,9 +61,13 @@ const sameGrant = (a: GithubRepoGrant, b: GithubRepoGrant) => a.installationId =
 
 const READS_OUTSIDE_TEXT: ReadonlySet<GithubAppToolName> = new Set(["GITHUB_APP_GET_FILE", "GITHUB_APP_SEARCH_CODE", "GITHUB_APP_LIST_ISSUES", "GITHUB_APP_GET_ISSUE", "GITHUB_APP_LIST_PULLS", "GITHUB_APP_GET_PULL"]);
 
+const LEVEL_WORDS: Record<GithubRepoGrant["level"], string> = { read: "read only", pull_requests: "pull requests", write: "read and write" };
+
 export function githubPrompt(policy: GithubBotPolicy, botId: string): string {
   const own = policy.ownBranchesOnly ? ` Push only to branches that start with ${githubBotBranchPrefix(botId)}.` : "";
-  return `For GitHub, use the ${GITHUB_APP_MCP_SERVER} tools (GITHUB_APP_*) in your granted repositories.${own}`;
+  const repos = policy.repos.length ? policy.repos.map((grant) => `${grant.fullName} (${LEVEL_WORDS[grant.level]})`).join(", ") : "none yet";
+  return ` For GitHub, use the ${GITHUB_APP_MCP_SERVER} tools (GITHUB_APP_*), for example GITHUB_APP_LIST_REPOS. They work now, in your granted repositories: ${repos}.${own}`
+    + " Do not use Composio for GitHub, do not search for another GitHub tool, and never ask the person for a token or a sign-in for GitHub.";
 }
 
 export function createGithubHost(deps: GithubHostDeps) {
@@ -146,7 +150,7 @@ export function createGithubHost(deps: GithubHostDeps) {
     available: () => allowedHere() && enabled(),
     integration(bot: GithubBot, mint: () => string, harnessUrl: string): { command: string; args: string[]; env: Record<string, string> } | null {
       if (!mounts(bot)) return null;
-      return { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
+      return { command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
     },
     prompt(bot: GithubBot): string {
       const policy = policyOf(bot.id);

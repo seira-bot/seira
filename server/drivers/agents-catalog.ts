@@ -112,6 +112,8 @@ const TRIGGER_FIELDS_SCHEMA = {
 } as const;
 
 const CHIEF_PROFILE_TARGET = " A Chief of Staff may pass for_bot_id (from list_bots) for a requested change to another bot in its section.";
+const CAPACITY_NOTE = " If the result says this computer is small for the team, tell the person and ask; pass capacity_ok true only after they agree.";
+const CAPACITY_OK = { type: "boolean", description: "true only after the person agreed to a team bigger than this computer runs well." };
 const APPLIES_AT_ONCE = " It applies at once, with an Undo where possible: read the result before saying it did.";
 const APPLIES_OUTCOME = APPLIES_AT_ONCE + " It never raises another bot's execution permissions.";
 
@@ -334,10 +336,11 @@ const TOOL_DEFINITIONS = [
   {
     name: "create_bot",
     description:
-      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn." + CAPACITY_NOTE,
     inputSchema: {
       type: "object",
       properties: {
+        capacity_ok: CAPACITY_OK,
         name: { type: "string", description: "Short, unique display name for the specialist." },
         role: { type: "string", description: "The specialist's job title or role." },
         instructions: { type: "string", description: "What this specialist is responsible for and how it should work." },
@@ -367,10 +370,11 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "propose_team_setup",
-    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes." + APPLIES_AT_ONCE,
+    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes." + APPLIES_AT_ONCE + CAPACITY_NOTE,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
+        capacity_ok: CAPACITY_OK,
         reason: { type: "string", minLength: 1, maxLength: 500 },
         newTeams: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 60 } },
         operations: { type: "array", minItems: 1, maxItems: 40, items: {
@@ -547,6 +551,78 @@ const TOOL_DEFINITIONS = [
         card_id: { type: "string", description: "The card's id from the list. Omit to list the cards you may close." },
         reason: { type: "string", minLength: 1, maxLength: 200, description: "Required with card_id: why the card is done, in one plain sentence." },
       },
+    },
+  },
+  {
+    name: "todo_add",
+    description:
+      "Write down todos on the Board for yourself, a teammate, or the team's picker (omit assigneeBotId). Each waits in its bot's queue and starts when the bot is free. The person sees one card with Undo. For work that happens later or elsewhere, not for what you can do now. Work that repeats is not a todo.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todos: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          description: "The todos to add, in order.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: { type: "string", minLength: 1, maxLength: 120, description: "What to do, in one plain line." },
+              note: { type: "string", maxLength: 2000, description: "More detail for the bot that does it." },
+              assigneeBotId: { type: "string", description: "The bot that does it: its id or its name. Omit to let the picker choose." },
+              when: { type: "string", description: "\"free\" (default) or an ISO date and time: not before then." },
+              afterIndex: { type: "integer", minimum: 0, description: "Wait for the todo at this earlier place in this list." },
+            },
+            required: ["title"],
+          },
+        },
+      },
+      required: ["todos"],
+    },
+  },
+  {
+    name: "todo_list",
+    description: "List todos on the Board you may read, first in line first. Filter by status or by the bot that does them.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        status: { type: "string", enum: ["open", "queued", "working", "needs-you", "done"], description: "Only todos with this status." },
+        assigneeBotId: { type: "string", description: "Only todos of this bot: its id or its name." },
+      },
+    },
+  },
+  {
+    name: "todo_assign",
+    description: "Give a todo that waits (open or queued) to a bot, with a one-line reason. Use it as the team's picker to hand out open todos, or to hand your own todo to a teammate. Leave a todo alone when no bot fits.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todoId: { type: "string", description: "The todo's id from todo_list or the message you got." },
+        assigneeBotId: { type: "string", description: "The bot that gets it: its id or its name." },
+        reason: { type: "string", minLength: 1, maxLength: 200, description: "Why this bot fits, in one line." },
+      },
+      required: ["todoId", "assigneeBotId", "reason"],
+    },
+  },
+  {
+    name: "todo_update",
+    description: "Change a todo that is yours, that you made, or that you handed out: move it to done or back to the queue, rename it, change its note, or record its result.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        todoId: { type: "string", description: "The todo's id." },
+        status: { type: "string", enum: ["done", "queued"], description: "done: finished. queued: back in its bot's queue." },
+        title: { type: "string", minLength: 1, maxLength: 120 },
+        note: { type: "string", maxLength: 2000 },
+        result: { type: "string", maxLength: 2000, description: "What came out of it, in one or two sentences." },
+      },
+      required: ["todoId"],
     },
   },
   {

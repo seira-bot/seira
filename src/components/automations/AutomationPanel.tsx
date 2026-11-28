@@ -11,6 +11,7 @@ import { loadWebhookCredentials, webhookCredentialStore } from "@/lib/webhook-cr
 import { useStore } from "@/state/store";
 import { AppEventsSection } from "./AppEventsSection";
 import { useAllAutomationActions } from "./app-actions";
+import { clock, longDay } from "../automations-calendar/phrases";
 import { WorkflowRoutineSection } from "../workflow/WorkflowRoutineSection";
 import { FixButton, StatusMark } from "./parts";
 
@@ -18,8 +19,10 @@ const RECENT = 5;
 const BUTTON = "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium disabled:opacity-50";
 
 /** One automation, simply: its sentence, its status, the last five runs plus any failure not yet seen, and what can be done to it. */
-export function AutomationPanel({ automation, sentence, onClose, onEdit, onDeleted }: {
+export function AutomationPanel({ automation, sentence, occurrence, onClose, onEdit, onDeleted }: {
   automation: Automation;
+  /** The Calendar card or chip this was opened from. */
+  occurrence?: { at: number; runId?: string };
   sentence: string;
   onClose: () => void;
   onEdit: () => void;
@@ -40,6 +43,8 @@ export function AutomationPanel({ automation, sentence, onClose, onEdit, onDelet
   const name = automation.name.trim();
   const botName = state.bots.find((bot) => bot.id === automation.botId)?.name ?? t("routines.unavailableBot");
   const instructions = automation.instructions.trim();
+  const occurrenceRun = occurrence?.runId ? automation.runs.find((run) => run.id === occurrence.runId) : undefined;
+  const occurrenceLine = occurrenceRun ? runLine(occurrenceRun) : null;
   const reason = status.state === "done" ? t("automations.reason.done") : status.reason;
   const calls = webhook ? webhookCalls(webhook.id, state.webhookAttempts) : [];
   const received = webhook ? lastReceived(webhook, state.webhookAttempts) : null;
@@ -70,6 +75,14 @@ export function AutomationPanel({ automation, sentence, onClose, onEdit, onDelet
           {reason && <span className="min-w-0 text-ink-secondary">{reason}</span>}
           <FixButton automation={automation} status={status} actions={actions} onEdit={onEdit} />
         </div>
+
+        {occurrence && (
+          <section data-occurrence-context="" className="rounded-xl border border-hairline/45 bg-inset/50 p-3.5 text-[13px]">
+            <p className="font-semibold text-ink">{t("automations.cal.panel.when", { date: longDay(occurrence.at), time: clock(occurrence.at) })}</p>
+            {occurrenceLine && <p className="mt-1 flex items-baseline gap-2"><span className={cn("shrink-0 font-semibold", occurrenceLine.mark === "✓" ? "text-success" : occurrenceLine.mark === "✗" ? "text-danger" : "text-warning")}>{occurrenceLine.mark}</span><span className="min-w-0 text-ink">{occurrenceLine.text}</span></p>}
+            {!occurrenceRun && <p className="mt-1 text-ink-secondary">{t(occurrence.at > Date.now() ? "automations.cal.key.schedule" : "automations.cal.missed")}</p>}
+          </section>
+        )}
 
         {webhook && (
           <section className="rounded-xl border border-hairline/45 bg-inset/50 p-3.5">
@@ -121,7 +134,7 @@ export function AutomationPanel({ automation, sentence, onClose, onEdit, onDelet
         )}
 
         {name && instructions && !automation.workflowId && <p data-testid="automation-instructions" className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink">{instructions}</p>}
-        {automation.workflowId && <WorkflowRoutineSection routineId={automation.id} workflowId={automation.workflowId} />}
+        {automation.workflowId && <WorkflowRoutineSection routineId={automation.id} workflowId={automation.workflowId} runId={occurrenceRun?.id} />}
 
         {automation.appTrigger && <AppEventsSection trigger={automation.appTrigger} />}
 

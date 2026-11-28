@@ -24,6 +24,13 @@ type Placed = Pick<HandoffView, "threadId"> & Partial<Pick<HandoffView, "id" | "
 
 export const unknownBot = (id: string) => `No bot with id "${peerName(id)}" — call list_bots and copy the exact id from the result`;
 
+/** A todo a personal Seira makes for a team bot works for its person: the bot must be one that person may chat with, as in
+ * a chat. Any other bot, and any bot that is not a personal Seira, has no owner to check. */
+export const ownerMayHand = (from: RosterMember, target: RosterMember, level: (bot: RosterMember, email: string) => BotAccessLevel): boolean => {
+  const email = defaultBotPerson(from);
+  return !email || atLeast(level(target, email), "chat");
+};
+
 export function createPersonalReach(deps: PersonalReachDeps) {
   const ownerOf = (from: RosterMember): string | null => defaultBotPerson(from) || null;
   /** The Seira's person, when this conversation is private to them. */

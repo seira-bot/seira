@@ -9,7 +9,7 @@ The engine and its model decide how smart and how fast an answer is. These
 benchmarks measure what Seira itself adds: the install, the memory and CPU it
 keeps, the time it takes to start, and the time it adds to each chat turn.
 
-Every number on this page comes from one script,
+Every number in [Results: a small VPS](#results-a-small-vps) comes from one script,
 [`scripts/bench-server.ts`](https://github.com/seira-bot/seira/blob/main/scripts/bench-server.ts), run on a released
 version. The raw output is in [`docs/benchmarks/`](https://github.com/seira-bot/seira/tree/main/docs/benchmarks). Run the script
 on your own server to get your own numbers (see [Run it yourself](#run-it-yourself)).
@@ -70,6 +70,87 @@ depend on the CPU.
 - A minimal Ubuntu 26.04 has no `unzip`. Without it Seira cannot prepare Chrome
   at the first start, and bots use the engine's own browser. Run
   `npx @seira-bot/seira browser install --with-deps` to give bots a browser.
+
+## Results: real models on a small VPS
+
+Seira 0.1.194 in Docker (`ghcr.io/seira-bot/seira`), on a second VPS with 2 vCPU
+(AMD EPYC 9754), 7.6 GB of memory and Ubuntu 24.04. On 2026-11-26, 164 tasks
+went to real models: Claude Opus 5.5, Sonnet 5.5 and Haiku 5.5 (effort medium),
+Codex GPT-6.2 Sol, GPT-6.1 Terra and GPT-6 Luna (effort medium), and the free
+OpenCode model. 156 tasks passed the answer check.
+
+A separate harness ran these tests, not `bench-server.ts`. Issue
+[#662](https://github.com/seira-bot/seira/issues/662) has the method, all
+tables and each failure. The summary data is in
+[`2026-11-26-vps-2vcpu-real-models.json`](https://github.com/seira-bot/seira/blob/main/docs/benchmarks/2026-11-26-vps-2vcpu-real-models.json).
+
+Memory in this section is PSS. A memory page that processes share counts once,
+split between them. So PSS is lower than the RSS sum in the table above.
+
+### One model at a time
+
+The task: make a file with a table of the first 10 prime numbers, read it back,
+and reply with the sum. Each run starts a new chat. 3 runs per model.
+
+| Model | Engine memory, p50 | Task time, p50 / p95 | Follow-up in the same chat, p50 | Input tokens of an empty turn | Input / output tokens of the task |
+|---|---|---|---|---|---|
+| Claude Opus 5.5 | 235 MiB | 7.1 s / 7.3 s | 1.0 s | 23,505 | 48,319 / 319 |
+| Claude Sonnet 5.5 | 377 MiB | 5.4 s / 5.9 s | 1.0 s | 23,397 | 47,831 / 242 |
+| Claude Haiku 5.5 | 226 MiB | 5.6 s / 6.0 s | 0.8 s | 24,227 | 50,210 / 514 |
+| GPT-6.2 Sol | 442 MiB | 23.4 s / 26.4 s | 4.9 s | 20,425 | 84,032 / 425 |
+| GPT-6.1 Terra | 327 MiB | 9.9 s / 13.9 s | 4.3 s | 20,157 | 41,092 / 207 |
+| GPT-6 Luna | 336 MiB | 10.3 s / 10.3 s | 4.1 s | 19,531 | 40,105 / 186 |
+| OpenCode `beam-free` | 452 MiB | 16.3 s / 19.0 s | 3.6 s | 12,003 | 42,670 / 168 |
+
+Engine memory is the peak of the new engine and its MCP helper processes. A
+follow-up uses the engine that is still loaded, so it adds no memory. With 3
+runs, p95 is the slowest run.
+
+### Many tasks at once
+
+The same task on a pool of bots of one engine, all sent at the same moment.
+
+| Engine (model) | Tasks at once | Passed | Memory peak | Task time, p50 / p95 | CPU, mean (2 vCPU = 200%) |
+|---|---|---|---|---|---|
+| Claude (Haiku 5.5) | 1 | 1/1 | 657 MiB | 4.9 s / 4.9 s | 52% |
+| | 4 | 4/4 | 1,909 MiB | 8.6 s / 9.3 s | 161% |
+| | 8 | 8/8 | 3,531 MiB | 15.1 s / 17.8 s | 162% |
+| | 12 | 12/12 | 3,645 MiB | 23.1 s / 28.5 s | 156% |
+| Codex (GPT-6 Luna) | 1 | 1/1 | 678 MiB | 11.2 s / 11.2 s | 15% |
+| | 4 | 3/4 | 1,135 MiB | 11.5 s / 13.7 s | 61% |
+| | 8 | 7/8 | 1,752 MiB | 15.3 s / 23.1 s | 84% |
+| | 12 | 11/12 | 1,772 MiB | 15.6 s / 26.4 s | 111% |
+| OpenCode (`beam-free`) | 1 | 1/1 | 908 MiB | 29.5 s / 29.5 s | 22% |
+| | 4 | 4/4 | 1,637 MiB | 18.2 s / 21.9 s | 73% |
+| | 8 | 8/8 | 2,341 MiB | 20.9 s / 22.1 s | 128% |
+| | 12 | 12/12 | 2,988 MiB | 50.8 s / 149.5 s | 70% |
+
+The memory peak includes the server and engines that were still loaded from
+earlier rows. The failed Codex tasks gave a wrong sum. They were not server
+failures.
+
+### What the real-model numbers show
+
+- **Each bot that works adds about 200 to 450 MiB.** That is the engine and
+  its MCP helper processes. When many bots work at once, each new engine adds
+  about 190 to 250 MiB, because the processes share more pages. OpenCode starts
+  one shared server (about 500 MiB with the first bot), then adds about
+  100 MiB for each bot.
+- **The MCP helpers are a large part.** Each engine starts its own 4 or 5 Node
+  helper processes. They are 41% of the engine memory on Claude and 48% on
+  Codex.
+- **CPU is the limit on 2 vCPU, not memory.** From 4 Claude tasks at once the
+  CPU stays near 160%, and the task time grows from 4.9 s to 23.1 s at 12
+  tasks. Codex and OpenCode do more of the work at the provider.
+- **Memory stays well below 8 GB.** 12 Claude tasks at once peaked at 3.6 GiB,
+  and the server kept at least 2.4 GiB free. No turn waited for memory.
+- **Each turn has a fixed token cost.** An empty turn sends about 23,000 to
+  24,000 input tokens on Claude, about 20,000 on Codex and 12,000 on OpenCode.
+  The prompt cache serves most of them.
+- **Departments multiply tokens.** A chief that gives work to 2 teammates used
+  130,000 to 400,000 input tokens per job, 5 to 10 times one bot alone.
+- **Memory comes back.** After the load, when all engines had stopped, the
+  server used 374 MiB with 53 bots. Before the load it used 426 MiB.
 
 ## Run it yourself
 

@@ -10,6 +10,7 @@ import { hasTeamAuthority } from "./peer-roster.ts";
 import type { BotRecord, OptionCardData } from "./store.ts";
 import type { TeamSetupRequest, TeamSetupResult } from "../shared/team-setup.ts";
 import type { DirectApply } from "./direct-apply.ts";
+import { teamCapacity, type MachineSpec, type TeamCapacity } from "./machine-capacity.ts";
 
 function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean }>) {
   const bots: BotRecord[] = [];
@@ -53,7 +54,8 @@ function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean 
   const validateChange = vi.fn();
   const newBotApproval = vi.fn((): "ask" | "full" | undefined => undefined);
   const canPersist = vi.fn((): { ok: true } | { ok: false; status: number; error: string } => ({ ok: true }));
-  const service = new TeamSetupRequestService({ store, teams: () => teams, maxBots: 100, hasTeamAuthority,
+  let capacityFor: (botsAfter: number) => TeamCapacity | null = () => null;
+  const service = new TeamSetupRequestService({ store, teams: () => teams, maxBots: 100, hasTeamAuthority, capacity: (botsAfter) => capacityFor(botsAfter),
     canPersist, ownsThread: () => sourceExists, targetBusy, deleteBot, deletionRefusal, autoApply, validateChange, newBotApproval,
     mcpServerProblem: (name, botId) => {
       const servers: Record<string, { bot?: string }> = { hindsight: {}, linear: {}, "clive-notes": { bot: "Clive" } };
@@ -69,7 +71,7 @@ function harness(caps?: Record<string, { driverKind: string; agentsMcp: boolean 
   const propose = (operations: unknown[], newTeams: string[] = []) => service.propose({ botId: chief.id, threadId: chief.threadId, plan: { reason: "Requested specialist setup", operations, newTeams } });
   const submit = (operations: unknown[], newTeams: string[] = []) => service.submit({ botId: chief.id, threadId: chief.threadId, plan: { reason: "Requested specialist setup", operations, newTeams } });
   const resolve = (requestId: string, behavior = "allow") => service.resolve({ botId: chief.id, threadId: chief.threadId, requestId, behavior });
-  return { service, store, chief, peer, bot, teams, propose, submit, resolve, apply, deleteBot, deletionRefusal, messages, autoApply, targetBusy, validateChange, newBotApproval, canPersist, removeSource: () => { sourceExists = false; } };
+  return { setCapacity: (next: typeof capacityFor) => { capacityFor = next; }, service, store, chief, peer, bot, teams, propose, submit, resolve, apply, deleteBot, deletionRefusal, messages, autoApply, targetBusy, validateChange, newBotApproval, canPersist, removeSource: () => { sourceExists = false; } };
 }
 const specialist = (key: string, section: string, modelSelection = { instanceId: "claude", model: "sonnet" }) => ({ action: "create", key,
   fields: { name: key, title: "Specialist", soul: "Finish the assigned work.", section, modelSelection } });
@@ -783,5 +785,56 @@ describe("a Chief making bots, whatever the plan", () => {
   it("still holds the workspace's own ceiling", () => {
     const app = full(97);
     expect(() => app.propose([specialist("Scout"), specialist("Writer")])).toThrow(expect.objectContaining({ status: 409, message: "This setup exceeds the workspace bot limit" }));
+  });
+});
+
+const GB = 1024 ** 3;
+const spec = (botGb: number | null): MachineSpec => ({ totalMemoryBytes: 8 * GB, botMemoryBytes: botGb === null ? null : botGb * GB, freeBotMemoryBytes: 4 * GB, cpus: 4, diskFreeBytes: 50 * GB, os: "linux" });
+const withMemory = (botGb: number | null) => (botsAfter: number) => teamCapacity(spec(botGb), botsAfter);
+
+describe("capacity of a setup that creates bots", () => {
+  it("adds one capacity line to the review card when the team is tight or over", () => {
+    const h = harness(); h.setCapacity(withMemory(0.7));
+    const card = h.propose([specialist("Mira", "Research"), specialist("Noor", "Research")], ["Research"]);
+    expect(card.detail).toContain("This computer can run about 1 bots at work at the same time. After this setup there are 4 bots.");
+    expect(card.detail.match(/at work at the same time/g)).toHaveLength(1);
+  });
+  it("adds no line when the team fits, when nothing is created, or when the memory is unknown", () => {
+    const fits = harness(); fits.setCapacity(withMemory(5));
+    expect(fits.propose([specialist("Mira", "Research")], ["Research"]).detail).not.toContain("at work at the same time");
+    const update = harness(); update.setCapacity(withMemory(0.7));
+    expect(update.propose([{ action: "update", botId: update.peer.id, fields: { title: "Lead" } }]).detail).not.toContain("at work at the same time");
+    const unknown = harness(); unknown.setCapacity(withMemory(null));
+    expect(unknown.propose([specialist("Mira", "Research")], ["Research"]).detail).not.toContain("at work at the same time");
+  });
+  it("holds a setup that is over at Full access, creates nothing and says how to go on", async () => {
+    const h = harness(); h.autoApply.mockReturnValue("full-access"); h.setCapacity(withMemory(0.7));
+    const response = await h.submit([specialist("A", "Work"), specialist("B", "Work"), specialist("C", "Work")]);
+    expect(response).toMatchObject({ state: "held", applied: false });
+    expect(response).toHaveProperty("capacityHold", expect.stringContaining("capacity_ok true"));
+    expect(h.apply).not.toHaveBeenCalled();
+    expect(h.messages).toHaveLength(0);
+  });
+  it("applies an over setup when the person agreed, with a note for the bot", async () => {
+    const h = harness(); h.autoApply.mockReturnValue("full-access"); h.setCapacity(withMemory(0.7));
+    const response = await h.service.submit({ botId: h.chief.id, threadId: h.chief.threadId, capacityOk: true, plan: { reason: "Requested specialist setup", operations: [specialist("A", "Work"), specialist("B", "Work"), specialist("C", "Work")], newTeams: [] } });
+    expect(response).toMatchObject({ state: "applied", capacityNote: expect.stringContaining("bots at work at the same time") });
+  });
+  it("applies a tight setup at once with a note", async () => {
+    const h = harness(); h.autoApply.mockReturnValue("full-access"); h.setCapacity(withMemory(0.7));
+    const response = await h.submit([specialist("A", "Work")]);
+    expect(response).toMatchObject({ state: "applied", capacityNote: expect.any(String) });
+  });
+  it("gives no note when the team fits or the memory is unknown", async () => {
+    const fits = harness(); fits.autoApply.mockReturnValue("full-access"); fits.setCapacity(withMemory(5));
+    expect(await fits.submit([specialist("A", "Work")])).not.toHaveProperty("capacityNote");
+    const unknown = harness(); unknown.autoApply.mockReturnValue("full-access"); unknown.setCapacity(withMemory(null));
+    expect(await unknown.submit([specialist("A", "Work")])).toMatchObject({ state: "applied" });
+  });
+  it("shows the card with its line when the person confirms, not a hold", async () => {
+    const h = harness(); h.setCapacity(withMemory(0.7));
+    const response = await h.submit([specialist("A", "Work"), specialist("B", "Work"), specialist("C", "Work")]);
+    expect(response).toMatchObject({ state: "pending" });
+    expect(response.detail).toContain("at work at the same time");
   });
 });

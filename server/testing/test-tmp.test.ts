@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { TEST_HOME_PREFIX, TEST_RUN_ID_VARIABLE, TEST_TMP_PREFIX, testTmpPrefix, useTestTmp } from "./test-tmp.ts";
+import { TEST_HOME_PREFIX, TEST_RUN_ID_VARIABLE, TEST_TMP_PREFIX, testTmpPrefix, testTmpRoot, useTestTmp } from "./test-tmp.ts";
 
 describe("the temp folder of a test file", () => {
   it("is a folder that the setup file made for this file", () => {
@@ -39,7 +39,7 @@ describe("useTestTmp", () => {
     const scratch = useTestTmp();
     try {
       expect(tmpdir()).toBe(scratch.path);
-      expect(scratch.path.startsWith(before.tmpdir + sep)).toBe(true);
+      expect(scratch.path.startsWith(testTmpRoot(before.tmpdir) + sep)).toBe(true);
       expect(basename(scratch.path).startsWith(TEST_TMP_PREFIX)).toBe(true);
       writeFileSync(join(scratch.path, "leftover.txt"), "x");
     } finally {
@@ -66,6 +66,26 @@ describe("useTestTmp", () => {
     }
     // Checked after remove(): the variable is gone again, not set to the string "undefined".
     if (saved === undefined) expect(process.env.TMP).toBeUndefined();
+  });
+});
+
+describe("testTmpRoot", () => {
+  const macTmp = "/var/folders/k_/fpgwjr0n3d5c5k5ggvpxj9cr0000gp/T";
+
+  it("keeps a temp folder short enough for the broker socket in the throwaway home", () => {
+    expect(testTmpRoot("/tmp", "linux")).toBe("/tmp");
+    expect(testTmpRoot("/private/tmp/q", "darwin")).toBe("/private/tmp/q");
+  });
+
+  it("moves to /tmp when that socket would pass sun_path, as under a macOS per-user TMPDIR", () => {
+    expect(testTmpRoot(macTmp, "darwin")).toBe("/private/tmp");
+    expect(testTmpRoot(`/home/someone/${"deep/".repeat(12)}tmp`, "linux")).toBe("/tmp");
+    const deepest = join(testTmpRoot(macTmp, "darwin"), `${TEST_TMP_PREFIX}a1b2c3-XXXXXX`, `${TEST_HOME_PREFIX}XXXXXX`, ".seira", "perm-t-pe5335.sock");
+    expect(Buffer.byteLength(deepest)).toBeLessThan(104);
+  });
+
+  it("leaves Windows alone: its broker uses named pipes", () => {
+    expect(testTmpRoot(`C:\\Users\\someone\\${"Deep\\".repeat(12)}Temp`, "win32")).toContain("Deep");
   });
 });
 

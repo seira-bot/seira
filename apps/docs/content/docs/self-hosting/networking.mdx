@@ -39,7 +39,7 @@ npx @seira-bot/seira serve --access-log
 access 2026-11-23T09:15:02.481Z GET /api/health 200 3ms via=local
 ```
 
-A line holds the time, the method, the path, the status, the duration and the way in: `tunnel` for the phone tunnel, `local` for every other connection. It never holds the query string, a cookie, a header or a body. The log is off unless you turn it on.
+A line holds the time, the method, the route, the status, the duration and the way in: `tunnel` for the phone tunnel, `local` for every other connection. The route is the shape of the path, taken from the list of known routes: a word stays only when no known route reads that position as a name or an id, any other name or id is written as `:id`, and the part of a path that matches no known route is written as `<other>`. It never holds the query string, a cookie, a header or a body. The log is off unless you turn it on.
 
 ## Port overrides
 

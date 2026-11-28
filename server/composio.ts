@@ -2,7 +2,7 @@ import type { AppConfig } from "./config.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ACCOUNT_ID, inventoryAccountSchema, toolkitInventoryPageSchema, toolkitPageSchema, type ToolkitItem } from "./composio-inventory-schema.ts";
-import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { managedConnectorUnavailableReason, managedCustomAuthReason } from "../shared/connector-availability.ts";
 import {
   DEFAULT_BACKEND_ORIGIN,
@@ -242,7 +242,7 @@ export async function mcpIntegration(
     );
   }
   return {
-    command: process.execPath,
+    command: ownNode(),
     args: [SPAWNED_PROXIES.connectors],
     env: {
       ELECTRON_RUN_AS_NODE: "1",

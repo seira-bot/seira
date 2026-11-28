@@ -60,9 +60,9 @@ import { appendNative } from "./native.ts";
 import type { KeepWarmContract } from "./claude-keepwarm.ts"; import { claudeForks } from "./claude-warm-summary.ts";
 import { BACKGROUND_CALL_TIMEOUT_MS, backgroundCallArgs, spawnBackgroundCall } from "./claude-background.ts"; import { withEndpointFolder } from "./claude-endpoint-folder.ts";
 import { permissionLaunchCwd, shellRequest } from "./permission-command.ts"; import { readToolPaths } from "../own-file-reads.ts";
-import { SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
+import { ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
-import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
+import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { claudeTodoPlan } from "./turn-plan.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
 import {
   ASK_USER_QUESTION_TOOL,
   ASK_USER_TOOL,
@@ -1096,7 +1096,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (turn.integrations?.github) { mcpServers[GITHUB_APP_MCP_SERVER] = { ...turn.integrations.github }; allowed.push(...GITHUB_APP_READ_TOOL_NAMES.map((tool) => `mcp__${GITHUB_APP_MCP_SERVER}__${tool}`)); }
       if (turn.integrations?.dweb) {
         mcpServers.dweb = {
-          command: process.execPath,
+          command: ownNode(),
           args: [DWEB_PROXY_PATH],
           env: {
             ...NODE_ENV_FLAG,
@@ -1138,7 +1138,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         args.push("--permission-prompt-tool", "mcp__ogb__approve");
       }
       const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { SEIRA_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
-      mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
+      mcpServers.ogb = { command: ownNode(), args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
       allowed.push("mcp__ogb", ...gateQueryTools(mcpServers));
       // A guest pre-allows only harness tools; anything else (the browser can open file:) asks.
       if (turn.guestConfined) allowed.splice(0, allowed.length, ...allowed.filter((name) => name === "mcp__ogb" || name === "mcp__agents"));
@@ -1302,7 +1302,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
             },
           });
           if (broker.socketPath !== socketPath && mcpConfigPath) {
-            mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, broker.socketPath], env: permissionEnv, alwaysLoad: true };
+            mcpServers.ogb = { command: ownNode(), args: [PERM_PROXY_PATH, broker.socketPath], env: permissionEnv, alwaysLoad: true };
           }
         }
 
@@ -1542,7 +1542,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
                   title: b.name,
                   summary: commandSummary(b.input),
                   input: toolDetailPreview(b.input),
-                });
+                }); const plan = b.name === "TodoWrite" && !o.parent_tool_use_id ? claudeTodoPlan(b.input) : null; if (plan) emit({ ...base(threadId, currentTurnId()), ...plan });
               }
             }
             if (msg.usage) {

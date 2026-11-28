@@ -19,10 +19,10 @@ import { argumentNames, outOfBounds } from "./agents-schema.ts";
 import { dropBlankArguments } from "./agents-blank-arguments.ts";
 import { callResearchTool, RESEARCH_TOOL_NAMES } from "./agents-research-tools.ts";
 import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
-import { callMachineBudgetTool, callUsageLimitsTool, MACHINE_BUDGET_TOOL, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
+import { callMachineBudgetTool, callUsageLimitsTool, capacityHeld, capacityNote, MACHINE_BUDGET_TOOL, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
 import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts"; import { callSuggestRepliesTool, SUGGEST_REPLIES_TOOL } from "./agents-suggest-replies-tool.ts"; import { callSuggestTasksTool, SUGGEST_TASKS_TOOL } from "./agents-suggest-tasks-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts"; import { callTodoTool } from "./agents-todo-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
@@ -184,7 +184,7 @@ function completedProposalResult(r: Json, subject: string): { text: string; isEr
   if (state !== "applied" || (result?.state !== undefined && result.state !== "applied")) {
     return { text: `The request for ${subject} did not complete successfully.${error ? ` ${error}` : ""}${summary}${details}\n\nDo not claim it was applied. Address the reported blocker rather than repeating the request or asking for a duplicate confirmation.`, isError: true };
   }
-  return { text: `Applied ${subject}.${summary}${details}${attention ? `\n\nNeeds attention: ${attention}` : ""}\n\nNo additional confirmation is needed. Continue the requested work; do not wait for a review card or ask the user to approve this change again.` };
+  return { text: `Applied ${subject}.${summary}${details}${attention ? `\n\nNeeds attention: ${attention}` : ""}\n\nNo additional confirmation is needed. Continue the requested work; do not wait for a review card or ask the user to approve this change again.${capacityNote(r)}` };
 }
 
 function confirmationResult(r: Json, fallback: string, noun = "routine"): { text: string; isError?: boolean } {
@@ -256,7 +256,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (DEVS_TOOL_NAMES.has(name)) return callDevsTool(name, args, context);
   if (TRIGGER_TOOL_NAMES.has(name)) return callTriggerTool(name, args, context); if (WORKFLOW_TOOL_NAMES.has(name)) return callWorkflowTool(args, context);
   if (WAIT_TOOL_NAMES.has(name)) return callWaitTool(name, args, context);
-  if (name === USAGE_LIMITS_TOOL) return callUsageLimitsTool(context); if (name === MACHINE_BUDGET_TOOL) return callMachineBudgetTool(context);
+  if (name === USAGE_LIMITS_TOOL) return callUsageLimitsTool(context); if (name === MACHINE_BUDGET_TOOL) return callMachineBudgetTool(context, args);
   if (COMPUTER_ASK_TOOL_NAMES.has(name)) return callComputerAskTool(args, context);
   // Second lock: with sharing off the catalog already omits these tools.
   if (SHARED_COMPUTER_TOOL_NAMES.has(name) && !context.sharedComputers) {
@@ -493,6 +493,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     };
   }
   if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
+  if (name === "todo_add" || name === "todo_list" || name === "todo_assign" || name === "todo_update") return callTodoTool(name, args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);
@@ -507,12 +508,13 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   }
   if (name === "propose_team_setup" || name === "propose_bot_deletion") {
     const deleting = name === "propose_bot_deletion";
+    const { capacity_ok: capacityOk, ...plan } = args;
     const result = await api(deleting ? "/api/internal/bot-deletion-requests" : "/api/internal/team-setup-requests", {
       method: "POST", body: JSON.stringify({ fromBotId: BOT_ID, fromThreadId: THREAD_ID,
-        ...(deleting ? { targetBotId: args.bot_id, reason: args.reason } : { plan: args }),
+        ...(deleting ? { targetBotId: args.bot_id, reason: args.reason } : { plan, ...(capacityOk === true ? { capacityOk: true } : {}) }),
       }),
     });
-    const completed = completedProposalResult(result, deleting ? "the requested bot deletion" : "the requested team setup");
+    const completed = capacityHeld(result) ?? completedProposalResult(result, deleting ? "the requested bot deletion" : "the requested team setup");
     if (completed) return completed;
     return { text: `One review card is visible: ${String(result.title)}. Nothing has been applied. End this turn; the decision and structured result resume you automatically once. Do not ask again, poll, or repeat this proposal.` };
   }
@@ -535,8 +537,11 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
         ...(copyFrom ? { copyFromBotId: copyFrom } : {}),
         ...(args.modelSelection !== undefined ? { modelSelection: args.modelSelection } : {}),
         ...(typeof args.cwd === "string" ? { cwd: args.cwd.trim() } : {}),
+        ...(args.capacity_ok === true ? { capacityOk: true } : {}),
       }),
     });
+    const held = capacityHeld(r);
+    if (held) return held;
     if (r.state === "pending") {
       return { text: `One review card is visible: ${String(r.title)}. @${botName} has not been created yet. End this turn; the decision and structured result resume you automatically once. Do not ask again, poll, or repeat this request.` };
     }
@@ -544,7 +549,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     const created = r.name ?? botName;
     const noComputer = r.noCloudComputerYet === true ? noCloudComputerNote(String(created)) : "";
     return {
-      text: `Created @${created} in ${r.section ?? "General"} [id: ${r.id}].${r.modelSelection ? ` Model: ${JSON.stringify(r.modelSelection)}.` : ""} Assign work with coordinate_bots.${noComputer}`,
+      text: `Created @${created} in ${r.section ?? "General"} [id: ${r.id}].${r.modelSelection ? ` Model: ${JSON.stringify(r.modelSelection)}.` : ""} Assign work with coordinate_bots.${noComputer}${capacityNote(r)}`,
     };
   }
   if (member === "create_room") {

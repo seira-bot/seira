@@ -4,12 +4,13 @@
 // Both then waited on each other, both worked the same problem in two places, and each came back with its own plan.
 // After: the second request is refused at once, naming the request it would answer, so the chief of staff answers the
 // person itself and the mail bot's question still gets its answer. Once that answer is in, the same hand-off is ordinary.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
 
@@ -39,8 +40,7 @@ it("refuses a request back to a bot that is waiting on you, and the same hand-of
         { key: "C2-DONE", match: [SETTLED, "C2-JOB"], reply: "C2-DONE: port 993." },
       ] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const keys = (botId: string) => evidence().filter((turn) => turn.botId === botId).map((turn) => turn.planKey);
     const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages as any[];
     const said = async (threadId: string, text: string) => (await messages(threadId)).some((row) => row.text === text);

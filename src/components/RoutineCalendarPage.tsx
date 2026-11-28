@@ -117,6 +117,8 @@ export type EventSeed = {
   anchor?: { x: number; y: number };
   routine?: Routine;
   call?: CalendarCall;
+  /** The start value of a new routine; an existing routine or call keeps its own. */
+  schedule?: RoutineSchedule;
 };
 
 /** No group is a goal in one bot's own chat, which any active bot can lead. */
@@ -318,7 +320,7 @@ export function EventEditor({
         : existingCall?.schedule.type === "daily"
           ? atLocalTime(seed.at, existingCall.schedule.time)
           : seed.at;
-  const schedule = existingRoutine?.schedule ?? existingCall?.schedule ?? { type: "once" as const, at: initialAt };
+  const schedule = existingRoutine?.schedule ?? existingCall?.schedule ?? seed.schedule ?? { type: "once" as const, at: initialAt };
   const [date, setDate] = useState(toLocalDateInput(initialAt));
   const [startTime, setStartTime] = useState(toLocalTimeInput(initialAt));
   const [durationMinutes, setDurationMinutes] = useState(existingRoutine?.durationMinutes ?? existingCall?.durationMinutes ?? seed.durationMinutes);
@@ -1573,20 +1575,32 @@ export function PausedList({
   );
 }
 
+function firstDayAt(schedule: Extract<RoutineSchedule, { type: "daily" }>): number {
+  let day = startOfDay(Date.now());
+  for (let step = 0; step < 7 && !schedule.weekdays.includes(new Date(day).getDay()); step += 1) day = addDays(day, 1);
+  return atLocalTime(day, schedule.time);
+}
+
 export function RoutineEditor({
   routine,
   bots,
   lockedBotId, initialBotId,
-  plain, initialWorkflowId,
+  plain, initialWorkflowId, initialSchedule,
   onClose,
 }: {
   routine?: Routine;
   bots: Bot[];
   lockedBotId?: string; initialBotId?: string;
   plain?: boolean; initialWorkflowId?: string;
+  /** The start value of a new routine: a one-time or repeating schedule picked on the Calendar. */
+  initialSchedule?: RoutineSchedule;
   onClose: () => void;
 }) {
-  const at = routine?.schedule.type === "once"
+  const at = !routine && initialSchedule?.type === "once"
+    ? initialSchedule.at
+    : !routine && initialSchedule?.type === "daily"
+      ? firstDayAt(initialSchedule)
+      : routine?.schedule.type === "once"
     ? routine.schedule.at
     : routine?.schedule.type === "daily"
       ? atLocalTime(Date.now(), routine.schedule.time)
@@ -1595,5 +1609,5 @@ export function RoutineEditor({
       : routine?.schedule.type === "cron"
         ? routine.nextRunAt ?? nextHour()
       : nextHour();
-  return <EventEditor seed={{ kind: "routine", at, durationMinutes: routine?.durationMinutes ?? 30, botIds: lockedBotId ? [lockedBotId] : routine ? [routine.botId] : initialBotId ? [initialBotId] : bots.length === 1 ? [bots[0]!.id] : [], routine, workflowId: initialWorkflowId }} bots={bots} lockedBotId={lockedBotId} plain={plain} onClose={onClose} onSavedCall={() => {}} />;
+  return <EventEditor seed={{ kind: "routine", at, durationMinutes: routine?.durationMinutes ?? 30, botIds: lockedBotId ? [lockedBotId] : routine ? [routine.botId] : initialBotId ? [initialBotId] : bots.length === 1 ? [bots[0]!.id] : [], routine, workflowId: initialWorkflowId, schedule: routine ? undefined : initialSchedule }} bots={bots} lockedBotId={lockedBotId} plain={plain} onClose={onClose} onSavedCall={() => {}} />;
 }

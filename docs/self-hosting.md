@@ -626,6 +626,8 @@ and the small helper programs that give it its tools:
 | Each bot that is working | 6 or more | about 45, more while it runs commands | about 700 MB |
 | Each open browser | about 13 | about 165 | about 400 MB |
 
+These memory values are budgets. On a 2 vCPU server with small tasks, the
+measured memory was lower: see [Benchmarks](benchmarks.md#results-real-models-on-a-small-vps).
 An engine stays loaded for ten minutes after its bot's last turn, so count
 the bots that work within the same ten minutes, not only in the same second.
 Leave room for the commands bots run: budget about 80 per working bot.
@@ -1247,6 +1249,16 @@ You can also start from the sidebar. Open the menu of a department and choose
 **Invite to this department**, or open the menu of a bot and choose **Invite to
 this bot**. The dialog opens with that department or bot already ticked. These
 two entries show only to an admin on a server that signs people in by email.
+
+Inviting also works in the desktop app, after you add the server with **Connect
+to a server**. The desktop app's own computer has no invite. To work with other
+people, start a Team on Seira Cloud, or run Seira on a server of your own and
+invite them there.
+
+You can also ask a bot in your own chat, for example "invite name@company.com
+to Sales, can chat". The bot posts a card that names the person, the role and the
+access. Nothing changes until you tap **Apply**, in the desktop app or on a phone
+paired with full access. A bot of a person who is not an admin cannot invite.
 
 To change what a person can reach, choose **Change access** on their row.
 If you invite a person by address to a bot that is shared with only some people,

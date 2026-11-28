@@ -22,9 +22,11 @@ server has its own temporary data folder. It drives the real Apps pop-up and
 bot panel, and checks:
 
 - With no connection, the GitHub tile is in Featured with a Connect button
-  and a Bot access section.
-- As the owner, the tile lists both accounts, a pending organization request
-  and the bots that use GitHub. The Which bots dialog has one switch per bot.
+  and no Manage section.
+- As the owner, the connected tile stays in Featured and shows one accounts
+  summary, a pending organization request and the bots that use GitHub. One
+  Manage section holds the account rows, Disconnect, Add account and the
+  access note. The Which bots dialog has one switch per bot.
 - The bot's Apps page shows a Repositories row. The bot GitHub page lists
   each repository with its level and the two rules.
 - Changing a level on the level page is stored: `GET /api/github-app` shows

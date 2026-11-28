@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BotAccessLevel } from "../../shared/bot-access.ts";
 import { resolveTeammate, unreachableTeammate, type RosterMember } from "../peer-roster.ts";
-import { createPersonalReach } from "./personal-reach.ts";
+import { createPersonalReach, ownerMayHand } from "./personal-reach.ts";
 
 const MIRA = "mira@acme.test";
 const key = (email: string) => `p_${email.replace(/\W/g, "").padEnd(22, "x").slice(0, 22)}`;
@@ -80,5 +80,19 @@ describe("a person's own Seira reaching the team's bots", () => {
     expect(world().mayAnswerIn("mine", "mine")).toBe(true);
     expect(world().mayAnswerIn("mine", "bens")).toBe(false);
     expect(world().mayAnswerIn("shared", "shared")).toBe(false);
+  });
+});
+
+describe("a todo a personal Seira makes for a team bot", () => {
+  const level = (bot: RosterMember) => levels[bot.id] ?? "none";
+
+  it("goes only to a bot its person may chat with", () => {
+    expect(ownerMayHand(seira, sales, level)).toBe(true);
+    expect(ownerMayHand(seira, archive, level)).toBe(false);
+    expect(ownerMayHand(seira, payroll, level)).toBe(false);
+  });
+
+  it("is not checked for a bot that is not a personal Seira", () => {
+    expect(ownerMayHand(sales, payroll, level)).toBe(true);
   });
 });

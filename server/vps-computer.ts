@@ -33,7 +33,7 @@ import { COMMAND_TIMEOUT_KILL_GRACE_MS, defaultRunner, type VpsCommandRunner } f
 export { defaultRunner, type VpsCommandOptions, type VpsCommandRunner } from "./vps-command.ts";
 import { prepareVpsSsh } from "./vps-ssh.ts";
 import { loadEnvironmentId } from "./environment.ts";
-import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { dockerCliMissing, dockerCliMissingProblem } from "./vps-hints.ts";
 import { PublicError } from "./public-error.ts";
 
@@ -1158,7 +1158,7 @@ export function vpsComputerMcp(cfg: AppConfig, botId: string, containerRef?: str
   const alias = vpsSshAlias(cfg);
   if (!alias) throw new Error("VPS is not configured — add an SSH config alias first");
   return {
-    command: process.execPath,
+    command: ownNode(),
     args: [SPAWNED_PROXIES.vpsContainerMcp, alias, containerRef ?? vpsContainerName(botId)],
     env: { ELECTRON_RUN_AS_NODE: "1" },
   };

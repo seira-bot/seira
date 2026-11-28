@@ -75,7 +75,7 @@ import { startupFailureRecoverable } from "./startup-recovery.ts";
 import { engineFailure, engineFailureKind } from "../engine-errors.ts";
 import { acpRuntimeFailure, acpStopFailure } from "./failure-words.ts";
 import { narrowsNativeTools, parseToolScope } from "../../../shared/tool-scope.ts";
-import { acpMcpServers, type AcpMcpServer } from "../turn-mcp.ts"; import { turnMcpCommands } from "./mcp-commands.ts"; import { acpOwnMcpOverHttp, loopbackUnproxied, noteAcpMcpHttp } from "../own-mcp-http.ts"; import { acpToolOutput, acpToolProgress } from "../tool-progress.ts";
+import { acpMcpServers, type AcpMcpServer } from "../turn-mcp.ts"; import { turnMcpCommands } from "./mcp-commands.ts"; import { acpOwnMcpOverHttp, loopbackUnproxied, noteAcpMcpHttp } from "../own-mcp-http.ts"; import { acpToolOutput, acpToolProgress } from "../tool-progress.ts"; import { acpTurnPlan } from "../turn-plan.ts";
 import { learnedToolCountLimit, mcpToolBudget, retryUnderToolLimit } from "../../tool-count-limit.ts"; import { instanceEnvNames } from "../../bot-box/env.ts";
 
 /** Failures fixed on the provider account, not by retrying; the reporting process stays pooled. */
@@ -882,7 +882,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             case "session_info_update":
             case "plan": {
               const report = readSessionReport(u, p._meta, current.state, session);
-              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", input: 0, output: 0, ...report.context });
+              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", input: 0, output: 0, ...report.context }); const counts = u.sessionUpdate === "plan" ? acpTurnPlan(u) : null; if (counts) emit({ ...base(threadId, current.turnId), ...counts });
               if (!report.step) break;
               current.flushAssistantText();
               const itemId = `plan-${newId()}`;

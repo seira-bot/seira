@@ -163,7 +163,7 @@ export class ChatMcpClient {
   constructor(server: Server, computerUse = false, configured = false) {
     this.frameBytes = computerUse ? 32 * 1024 * 1024 : FRAME_BYTES;
     this.configured = Object.values(server.env).filter((value) => value.length >= 6);
-    this.local = configured ? undefined : inProcessServer(server, (message) => queueMicrotask(() => this.onData(`${JSON.stringify(message)}\n`)));
+    this.local = configured ? undefined : inProcessServer(server, (message) => queueMicrotask(() => this.onData(`${JSON.stringify(message)}\n`)), chatMcpEnvironment(server.env));
     if (this.local) return;
     try {
       // The desktop shell inherits Finder's bare PATH, where `npx`-style servers cannot find `node`.

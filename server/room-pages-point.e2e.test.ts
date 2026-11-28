@@ -1,9 +1,10 @@
 // End-to-end on the fakes: in a room, the person points at part of a member's page and the pick goes to the bot that
 // made the page, as records in that bot's turn only. No model is called and no external service is reached.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 let fixture: Awaited<ReturnType<typeof launchVerificationServer>>;
 
@@ -26,8 +27,7 @@ it("sends a pick on a room page to the bot that made it, and to no other member"
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const designer = (await cli("new-bot", "--name", "Designer")).bot;
   const helper = (await cli("new-bot", "--name", "Helper")).bot;
-  const evidence = (botId: string) => (existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean) : [])
-    .map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId && entry.prompt !== undefined);
+  const evidence = (botId: string) => readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === botId && entry.prompt !== undefined);
   const plan = (steps: Array<{ tool: string; arguments: unknown }>) =>
     writeFileSync(planPath, JSON.stringify({ [designer.id]: { steps, reply: "Done." }, [helper.id]: { steps: [], reply: "Done." } }));
   // Helper answers the room by default, so only the pick can send the next line to Designer.
