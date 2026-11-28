@@ -1879,7 +1879,7 @@ describe("Release workflow", () => {
 
   it("runs no code from the release commit in a job that holds a write token or the App token", () => {
     const powerful = jobs.filter(holdsPower);
-    expect(powerful.map(([id]) => id)).toEqual(["blockers", "tag", "draft", "linux-attach", "publish"]);
+    expect(powerful.map(([id]) => id)).toEqual(["blockers", "tag", "draft", "linux-attach", "publish", "server-image"]);
     for (const [id, job] of powerful) {
       for (const step of stepsOf(job)) {
         const where = `job ${id} step ${step.name ?? step.uses}`;
