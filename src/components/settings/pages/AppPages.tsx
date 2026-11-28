@@ -22,6 +22,8 @@ import { OpenAtLoginRow } from "../../OpenAtLoginRow";
 import { PinnedPanelsSettings } from "../../PinnedPanelsSettings";
 import { RemoteComputerSection } from "../../RemoteComputerSection";
 import { SettingRow, SettingsGroup, SettingsLinkRow, SettingsRows, Switch } from "../../SettingsPrimitives";
+import { AiThemeMaker } from "../../AiThemeMaker";
+import type { AiThemeRequest } from "../../ai-theme-request";
 import { ThemeGallery } from "../../ThemeGallery";
 import { TalkShortcutRow } from "../../TalkShortcutRow";
 import { ThemeRow } from "../../ThemeRow";
@@ -146,6 +148,8 @@ export function GeneralPage() {
 
 export function AppearancePage() {
   const { ctx, place, go } = useSettingsShell();
+  const [maker, setMaker] = useState<AiThemeRequest | null>(null);
+  if (maker) return <AiThemeMaker request={maker} onBack={() => setMaker(null)} />;
   return <>
     <SettingsGroup label={t("settings.appearance.look")} block="look">
       <SettingsRows>
@@ -155,7 +159,7 @@ export function AppearancePage() {
         {!ctx.client && <SettingsLinkRow title={t("placeLook.sidebarColor")} value={place.name} badge={<PlaceBadge place={place} size={14} />} onClick={() => go("overview", "sidebar")} data={{ "data-settings-door": "sidebar-color" }} />}
       </SettingsRows>
     </SettingsGroup>
-    <ThemeGallery />
+    <ThemeGallery onMake={setMaker} />
     <CustomThemesSettings />
     <SettingsGroup label={t("settings.appearance.chat")} block="chat">
       <SettingsRows>

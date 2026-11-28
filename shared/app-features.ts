@@ -192,6 +192,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     tools: ["app_settings"],
   },
   {
+    id: "ai-theme-maker",
+    name: "Make a theme with AI",
+    place: "Settings → Appearance, the card at the top of the theme gallery",
+    does: "The active bot makes three themes, each with a light and a dark look, from a sentence, a picture or a brand colour. Try one on in this window, refine it with a tap, then keep it or undo it. Every theme keeps its text readable.",
+  },
+  {
     id: "text-size",
     name: "Text size",
     place: "Settings → Appearance → Text size (desktop app); the View menu; Ctrl or Cmd with plus, minus or 0",
