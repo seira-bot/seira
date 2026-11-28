@@ -26,7 +26,7 @@ export const CONFIRM_MS = 15 * 60_000;
 export const OPEN_CARD_LIMIT = 3;
 const UNDO_FILE = "app-settings-undo.json";
 const UNDO_KEEP = 200;
-const THEME_ACTIONS: readonly string[] = ["theme", "set_theme", "add_theme_asset", "theme_history", "undo_theme"];
+const THEME_ACTIONS: readonly string[] = ["theme", "show_theme", "set_theme", "add_theme_asset", "theme_history", "undo_theme"];
 const FIND_LIMIT = 8;
 const FEATURE_LIMIT = 5;
 const featureLine = (feature: AppFeature) => `${feature.name} — ${feature.place}: ${feature.does}${feature.tools?.length ? ` (tools: ${feature.tools.join(", ")})` : ""}`;
@@ -388,6 +388,15 @@ export function createAppSettings(deps: AppSettingsDeps) {
     if (!person) return refuse(403, "A theme changes only for the person who asked, in their own conversation. This turn was not started by them here, so nothing changed.");
     if (body.action === "theme") return themes.overview(person, body.id);
     if (body.action === "theme_history") return themes.history(person);
+    if (body.action === "show_theme") {
+      if (deps.connectorThread(bot.id, turn.threadId)?.group) return refuse(403, "No theme card shown: a theme card is not drawn in a room. Tell the user in one line, or ask them to ask you in your own chat, where you can show it.");
+      const offered = themes.offered(body);
+      if ("error" in offered) return refuse(400, offered.error);
+      const shownBudget = spendWrite(turn);
+      if (shownBudget) return refuse(429, shownBudget);
+      store.appendMessage(turn.threadId, { role: "bot", kind: "text", text: offered.text, themeCard: offered.card });
+      return reply(200, { text: offered.answer });
+    }
     const asked = body.action === "set_theme" ? themes.wanted(person, body) : body.action === "undo_theme" ? themes.undo(person, body) : null;
     if (asked && "error" in asked) return refuse(400, asked.error);
     const budget = spendWrite(turn);

@@ -192,6 +192,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     tools: ["app_settings"],
   },
   {
+    id: "theme-card",
+    name: "Theme card",
+    place: "in the conversation, below a bot's message",
+    does: "A theme a bot makes can show as a card with a light and a dark picture. Wear it puts it on in every window with Undo, Save keeps it in Your themes, Try another asks for a new one. A bot offers it with show_theme.",
+    tools: ["app_settings"],
+  },
+  {
     id: "text-size",
     name: "Text size",
     place: "Settings → Appearance → Text size (desktop app); the View menu; Ctrl or Cmd with plus, minus or 0",

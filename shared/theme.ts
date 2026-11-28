@@ -18,6 +18,9 @@ export const THEME_LIMITS = {
   themesPerPerson: 50,
 } as const;
 
+/** The longest line a bot may put under a theme's name on the card show_theme draws. */
+export const THEME_CARD_DESCRIPTION_CHARS = 200;
+
 export const THEME_ID = /^[a-z0-9][a-z0-9-]{0,47}$/;
 export const THEME_ASSET_NAME = /^[a-z0-9][a-z0-9_-]{0,79}\.(png|jpe?g|webp|gif|avif|svg|woff2?|ttf|otf)$/;
 const ASSET_URL = /^\/api\/theme-assets\/[a-z0-9][a-z0-9-]{0,47}\/[a-z0-9][a-z0-9_-]{0,79}\.[a-z0-9]{2,5}$/;
@@ -266,7 +269,7 @@ export function themeGuide(): string {
     "Stable selectors (other class names change between releases, so never rely on them):",
     ...THEME_HOOKS.map((hook) => `- ${hook.selector}: ${hook.what}`),
     "",
-    "Calls: theme (optional id: also return that saved theme). set_theme with id and theme (the theme as JSON) saves and wears it; with only id it wears a saved theme, a popular theme from theme's `popular` list (such as popular-nord), a built-in skin, or none. add_theme_asset with id and path.",
+    "Calls: theme (optional id: also return that saved theme). show_theme with theme (the theme as JSON, best with both `light` and `dark`) and an optional short `description` offers a theme as a card in the conversation; the person wears or saves it from the card, and nothing is saved or worn until they do. The card shows colours only, so css and font are left out. Use show_theme to offer a theme, and set_theme only when the person asked to wear it right away. set_theme with id and theme (the theme as JSON) saves and wears it; with only id it wears a saved theme, a popular theme from theme's `popular` list (such as popular-nord), a built-in skin, or none. add_theme_asset with id and path.",
     `theme_history lists the person's last ${LOOK_HISTORY_LIMIT} look changes, newest first, each with its index and the look right after it. undo_theme goes back: steps (default 1) undoes that many changes; index returns to the look right after that entry, theme file and all. An undo is itself a change, so undoing it again is a redo.`,
     "",
     "You cannot see the result. Make one small change at a time, then ask the person how it looks.",

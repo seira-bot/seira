@@ -6,7 +6,8 @@ import { z } from "zod";
 
 import { SKIN_IDS } from "../../shared/app-settings.ts";
 import { POPULAR_THEMES } from "../../shared/popular-themes.ts";
-import { THEME_ID, THEME_LIMITS, themeCssProblem, themeFileSchema, themeGuide, type LookChange, type ThemeFile } from "../../shared/theme.ts";
+import { THEME_CARD_DESCRIPTION_CHARS, THEME_ID, THEME_LIMITS, themeCssProblem, themeFileSchema, themeGuide, type LookChange, type ThemeFile } from "../../shared/theme.ts";
+import type { ThemeCardData } from "../../packages/phone-protocol/src/theme-card.ts";
 import { openMessageFile } from "../message-file.ts";
 import type { WritableEntry } from "../app-settings/registry.ts";
 import type { Skin } from "./history.ts";
@@ -85,32 +86,55 @@ export function createThemeTool(deps: ThemeToolDeps) {
     });
   }
 
+  /** The theme a call sends and the id it is saved under; or why it cannot. */
+  function readTheme(body: Record<string, unknown>): { id: string; file: ThemeFile } | { error: string } {
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    let raw: unknown = body.theme;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        return { error: "theme must be the theme as JSON: {\"name\", \"canvas\", \"accent\", \"colors\", \"css\", ...}." };
+      }
+    }
+    const parsed = themeFileSchema.safeParse(raw);
+    if (!parsed.success) return { error: `The theme does not fit: ${parsed.error.issues.slice(0, 6).map((issue) => `${issue.path.join(".") || "theme"}: ${issue.message}`).join("; ")}.` };
+    const themeId = id || slugFor(parsed.data.name);
+    if (BUILT_IN.includes(themeId) || !THEME_ID.test(themeId) || themeId === "none") return { error: `${themeId} cannot be a saved theme's id. Use lowercase letters, digits and dashes, not a built-in skin's name.` };
+    const problem = parsed.data.css ? themeCssProblem(parsed.data.css) : null;
+    if (problem) return { error: `Nothing changed. ${problem}` };
+    return { id: themeId, file: parsed.data };
+  }
+
   /** What set_theme asks for, as the change to make and the line its card shows; or why it cannot. */
   function wanted(person: string, body: Record<string, unknown>): { wear: Wear; change: string } | { error: string } {
     const id = typeof body.id === "string" ? body.id.trim() : "";
     if (body.theme !== undefined) {
-      let raw: unknown = body.theme;
-      if (typeof raw === "string") {
-        try {
-          raw = JSON.parse(raw);
-        } catch {
-          return { error: "theme must be the theme as JSON: {\"name\", \"canvas\", \"accent\", \"colors\", \"css\", ...}." };
-        }
-      }
-      const parsed = themeFileSchema.safeParse(raw);
-      if (!parsed.success) return { error: `The theme does not fit: ${parsed.error.issues.slice(0, 6).map((issue) => `${issue.path.join(".") || "theme"}: ${issue.message}`).join("; ")}.` };
-      const themeId = id || slugFor(parsed.data.name);
-      if (BUILT_IN.includes(themeId) || !THEME_ID.test(themeId) || themeId === "none") return { error: `${themeId} cannot be a saved theme's id. Use lowercase letters, digits and dashes, not a built-in skin's name.` };
-      const problem = parsed.data.css ? themeCssProblem(parsed.data.css) : null;
-      if (problem) return { error: `Nothing changed. ${problem}` };
-      const existed = store.read(person, themeId) !== null;
-      return { wear: { id: themeId, save: { id: themeId, file: parsed.data } }, change: `${existed ? "Update" : "Save"} the theme ${parsed.data.name} and wear it` };
+      const read = readTheme(body);
+      if ("error" in read) return read;
+      const existed = store.read(person, read.id) !== null;
+      return { wear: { id: read.id, save: { id: read.id, file: read.file } }, change: `${existed ? "Update" : "Save"} the theme ${read.file.name} and wear it` };
     }
     if (id === "none") return { wear: { id: null }, change: "Take off the custom theme" };
     if (BUILT_IN.includes(id)) return { wear: { id: null, skin: id as Skin }, change: id === "system" ? "Go back to the built-in look that follows the computer" : `Go back to the built-in ${id} skin` };
     const saved = THEME_ID.test(id) ? store.read(person, id) : null;
     if (!saved) return { error: `No saved theme or built-in skin is called ${JSON.stringify(id)}. Call theme to list them, or send theme to save a new one.` };
     return { wear: { id }, change: `Wear the theme ${saved.name}` };
+  }
+
+  /** What show_theme puts in the conversation: the theme's colours only, for the person to wear or save from the card. Nothing is saved or worn. */
+  function offered(body: Record<string, unknown>): { card: ThemeCardData; text: string; answer: string } | { error: string } {
+    const read = readTheme(body);
+    if ("error" in read) return read;
+    const { name, skin, canvas, accent, colors, light, dark } = read.file;
+    const description = typeof body.description === "string" ? body.description.trim().slice(0, THEME_CARD_DESCRIPTION_CHARS) : "";
+    const dropped = [read.file.css ? "css" : "", read.file.font ? "font" : ""].filter(Boolean);
+    const card: ThemeCardData = { id: read.id, name, ...(description ? { description } : {}), theme: { ...(skin ? { skin } : {}), ...(canvas ? { canvas } : {}), ...(accent ? { accent } : {}), ...(colors ? { colors } : {}), ...(light ? { light } : {}), ...(dark ? { dark } : {}) } };
+    return {
+      card,
+      text: `A theme for you: ${name}.${description ? ` ${description}` : ""}`,
+      answer: `Shown: ${name}. The person can wear or save it from the card.${dropped.length ? ` The card carries colours only, so ${dropped.join(" and ")} was left out; wear it with set_theme if it needs that.` : ""}`,
+    };
   }
 
   function history(person: string): Reply {
@@ -164,7 +188,7 @@ export function createThemeTool(deps: ThemeToolDeps) {
     }
   }
 
-  return { entry, overview, wanted, undo, history, addAsset, person: deps.person };
+  return { entry, overview, wanted, offered, undo, history, addAsset, person: deps.person };
 }
 
 export type ThemeTool = ReturnType<typeof createThemeTool>;
