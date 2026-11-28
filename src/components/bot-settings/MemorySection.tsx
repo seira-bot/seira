@@ -32,10 +32,12 @@ import {
 } from "@/lib/memory";
 import { localizedRelativeTime } from "@/lib/relative-time";
 import { shortPath } from "@/lib/short-path";
-import { activeLocale, t } from "@/lib/i18n";
+import { activeLocale, intlLocale, t } from "@/lib/i18n";
+import { clockOptions } from "@/lib/clock-time";
 import { roomMemoryCaptureEnabled } from "@/lib/feature-flags";
 import { api, ApiError, useStore, type Bot, type ConfigStatus } from "@/state/store";
-import { Switch } from "../SettingsPrimitives";
+import { SETTINGS_INLINE_INPUT, Switch } from "../SettingsPrimitives";
+import { Select } from "../Select";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { inputCls } from "./field";
 
@@ -127,6 +129,8 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
   const learnFromRooms = roomMemoryCaptureEnabled(state.config);
   const [roomsSaving, setRoomsSaving] = useState(false);
   const [roomsError, setRoomsError] = useState("");
+  const [timingSaving, setTimingSaving] = useState(false);
+  const [timingError, setTimingError] = useState("");
 
   const refresh = async (openPath?: string) => {
     const [nextOverview, nextJournal, nextUpkeep] = await Promise.all([
@@ -272,6 +276,20 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
     }
   };
 
+  const saveTiming = async (memory: { captureQuietMs?: number; tidyHour?: number }) => {
+    if (timingSaving) return;
+    setTimingSaving(true);
+    setTimingError("");
+    try {
+      const config: ConfigStatus = await api("/api/config", { method: "PUT", body: JSON.stringify({ memory }) });
+      dispatch({ type: "configStatus", config });
+    } catch (cause) {
+      setTimingError(cause instanceof Error ? cause.message : t("memory.upkeep.timing.error"));
+    } finally {
+      setTimingSaving(false);
+    }
+  };
+
   const tidyNow = async () => {
     setTidying(true);
     setError(null);
@@ -353,6 +371,14 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
         onToggle={toggleUpkeep}
         onTidy={() => void tidyNow()}
         rooms={{ enabled: learnFromRooms, saving: roomsSaving, error: roomsError, onToggle: () => void toggleRooms() }}
+        timing={state.config?.memory ? {
+          quietMinutes: Math.round(state.config.memory.captureQuietMs / 60_000),
+          tidyHour: state.config.memory.tidyHour,
+          saving: timingSaving,
+          error: timingError,
+          onQuietMinutes: (minutes) => void saveTiming({ captureQuietMs: minutes * 60_000 }),
+          onTidyHour: (hour) => void saveTiming({ tidyHour: hour }),
+        } : undefined}
       />}
 
       {editing && (
@@ -475,6 +501,81 @@ export function topicTemplate(fileName: string): string {
 }
 
 
+export interface UpkeepTiming {
+  quietMinutes: number;
+  tidyHour: number;
+  saving: boolean;
+  error: string;
+  onQuietMinutes: (minutes: number) => void;
+  onTidyHour: (hour: number) => void;
+}
+
+const MIN_QUIET_MINUTES = 1;
+const MAX_QUIET_MINUTES = 1440;
+
+function hourLabel(hour: number): string {
+  const locale = intlLocale();
+  return new Intl.DateTimeFormat(locale, clockOptions(locale, true)).format(new Date(2000, 0, 1, hour));
+}
+
+function UpkeepTimingRows({ timing }: { timing: UpkeepTiming }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => { setDraft(null); }, [timing.quietMinutes]);
+  const value = draft ?? String(timing.quietMinutes);
+  const commit = () => {
+    const minutes = Number(value);
+    if (value.trim() === "" || !Number.isInteger(minutes) || minutes < MIN_QUIET_MINUTES || minutes > MAX_QUIET_MINUTES) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    if (minutes === timing.quietMinutes) { setDraft(null); return; }
+    timing.onQuietMinutes(minutes);
+  };
+  return (
+    <>
+      <div className="mt-3 flex items-start justify-between gap-3 border-t border-hairline/40 pt-3">
+        <div className="min-w-0">
+          <label htmlFor="memory-quiet-minutes" className="text-[13px] font-medium text-ink">{t("memory.upkeep.quiet.title")}</label>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-secondary">{t("memory.upkeep.quiet.subtitle")}</p>
+          {invalid && <p role="alert" className="mt-1 text-[13px] text-danger">{t("memory.upkeep.quiet.invalid")}</p>}
+          {timing.error && <p role="alert" className="mt-1 text-[13px] text-danger">{timing.error}</p>}
+        </div>
+        <input
+          id="memory-quiet-minutes"
+          type="number"
+          min={MIN_QUIET_MINUTES}
+          max={MAX_QUIET_MINUTES}
+          step={1}
+          inputMode="numeric"
+          value={value}
+          disabled={timing.saving}
+          aria-invalid={invalid}
+          onChange={(event) => { setDraft(event.target.value); setInvalid(false); }}
+          onBlur={commit}
+          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+          className={cn(SETTINGS_INLINE_INPUT, invalid && "border-danger/60")}
+        />
+      </div>
+      <div className="mt-3 flex items-start justify-between gap-3 border-t border-hairline/40 pt-3">
+        <div className="min-w-0">
+          <label htmlFor="memory-tidy-hour" className="text-[13px] font-medium text-ink">{t("memory.upkeep.tidyHour.title")}</label>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-secondary">{t("memory.upkeep.tidyHour.subtitle")}</p>
+        </div>
+        <Select
+          id="memory-tidy-hour"
+          value={timing.tidyHour}
+          disabled={timing.saving}
+          onChange={(event) => timing.onTidyHour(Number(event.target.value))}
+        >
+          {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{hourLabel(hour)}</option>)}
+        </Select>
+      </div>
+    </>
+  );
+}
+
 export function MemoryUpkeepCard({
   enabled,
   status,
@@ -482,6 +583,7 @@ export function MemoryUpkeepCard({
   onToggle,
   onTidy,
   rooms,
+  timing,
 }: {
   enabled: boolean;
   status: UpkeepStatus | null;
@@ -489,6 +591,7 @@ export function MemoryUpkeepCard({
   onToggle: () => void;
   onTidy: () => void;
   rooms?: { enabled: boolean; saving: boolean; error: string; onToggle: () => void };
+  timing?: UpkeepTiming;
 }) {
   return (
     <div className="rounded-xl bg-card p-4">
@@ -518,6 +621,7 @@ export function MemoryUpkeepCard({
           />
         </div>
       )}
+      {enabled && timing && <UpkeepTimingRows timing={timing} />}
       {enabled && status && !status.modelSteps && (
         <p className="mt-2 text-[13px] text-ink-secondary">{t("memory.upkeep.noModelSteps")}</p>
       )}

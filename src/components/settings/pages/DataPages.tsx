@@ -1,6 +1,7 @@
 import { t } from "@/lib/i18n";
 import { ActivitySection } from "../../ActivitySection";
 import { AdminOnly } from "../../AdminOnly";
+import { ApprovalHistorySetting } from "../../ApprovalHistorySetting";
 import { AttachmentStorageSettings } from "../../AttachmentStorageSettings";
 import { AccessOverview } from "../../bot-access/AccessOverview";
 import { CompanyBackupSettings } from "../../CompanyBackupSettings";
@@ -45,7 +46,7 @@ export function DataPage() {
     <SettingsGroup label={t("settings.data.storage")} block="storage">
       <SettingsRows><AttachmentStorageSettings /></SettingsRows>
     </SettingsGroup>
-    {ctx.advanced && <ThreadCleanupSettings />}
+    {ctx.advanced && <><ThreadCleanupSettings /><ApprovalHistorySetting /></>}
     {!ctx.desktop && ctx.admin && <ActivitySection />}
   </>;
 }

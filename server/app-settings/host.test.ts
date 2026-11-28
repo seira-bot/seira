@@ -1114,6 +1114,34 @@ describe("settings changes judged on the turn's own request", () => {
     expect(fx.bots[0]).toMatchObject({ approvalMode: "full" });
   });
 
+  it("refuses Apply of a switch to Chatterbox as stale when its saved address moved after the card named the host", async () => {
+    const fx = fixture();
+    Object.assign(fx.cfg, { tts: { provider: "system", baseUrl: "https://voice-a.example.com" } });
+    await fx.set("voice.provider", "chatterbox");
+    expect(fx.cards().at(-1)!.card.appSettingRequest.consequence).toBe("Text from your conversations will go to voice-a.example.com, off this computer.");
+    (fx.cfg as { tts?: { baseUrl?: string } }).tts!.baseUrl = "https://voice-b.example.com";
+    const moved = await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow");
+    expect(moved.status).toBe(409);
+    expect(fx.cards().at(-1)!.card.appSettingRequest).toMatchObject({ result: "stale" });
+    expect(fx.saved).toEqual([]);
+  });
+
+  it("applies a switch to Chatterbox after the tap when its saved address did not move", async () => {
+    const fx = fixture();
+    Object.assign(fx.cfg, { tts: { provider: "system", baseUrl: "https://voice-a.example.com" } });
+    await fx.set("voice.provider", "chatterbox");
+    expect((await fx.resolve(String(fx.cards().at(-1)!.card.requestId), "allow")).status).toBe(200);
+    expect(fx.saved).toEqual([{ tts: { provider: "chatterbox" } }]);
+  });
+
+  it("applies a switch to Chatterbox at once, with no card, when its saved address is on this computer", async () => {
+    const fx = fixture();
+    Object.assign(fx.cfg, { tts: { provider: "system", baseUrl: "http://127.0.0.1:8000" } });
+    expect((await fx.set("voice.provider", "chatterbox")).body.text).toContain("Changed Voice provider from system to chatterbox");
+    expect(fx.cards().some((one) => one.card.options?.length)).toBe(false);
+    expect(fx.saved).toEqual([{ tts: { provider: "chatterbox" } }]);
+  });
+
   it("Undo of an approval change is refused as stale when one conversation changed after the change", async () => {
     const fx = fixture();
     await fx.set("bots.approvalModes", JSON.stringify({ botId: "kiwi", mode: "ask" }));

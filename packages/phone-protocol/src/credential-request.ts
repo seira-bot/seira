@@ -113,6 +113,12 @@ export const CREDENTIAL_TARGETS = {
     placeholder: "sk-…",
     helpUrl: "https://platform.deepseek.com/api_keys",
   },
+  tregApiKey: {
+    label: "treg key",
+    description: "Lets bots search X and look up companies, people, funding and news through treg.",
+    placeholder: "Paste your treg key",
+    helpUrl: "https://treg.to",
+  },
 } as const;
 
 export type CredentialTargetId = keyof typeof CREDENTIAL_TARGETS;
@@ -140,6 +146,7 @@ export type CredentialConfig = {
   modelgo?: { key?: string };
   meta?: { key?: string };
   deepseek?: { key?: string };
+  treg?: { key?: string };
   /** Not in the settings file: the server fills it from its login store. */
   onePassword?: { connected?: boolean };
 };
@@ -212,6 +219,8 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
       return { meta: { key: value } };
     case "deepseekApiKey":
       return { deepseek: { key: value } };
+    case "tregApiKey":
+      return { treg: { key: value } };
   }
 }
 
@@ -253,6 +262,8 @@ export function credentialIsConfigured(config: CredentialConfig, id: CredentialT
       return Boolean(config.meta?.key);
     case "deepseekApiKey":
       return Boolean(config.deepseek?.key);
+    case "tregApiKey":
+      return Boolean(config.treg?.key);
   }
 }
 

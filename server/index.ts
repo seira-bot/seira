@@ -63,7 +63,7 @@ import {
 import * as checkpoints from "./checkpoints.ts";
 import { commandReceipt } from "./commands.ts"; import { moveSavedGrants } from "./mcp-grant-spec.ts";
 import { buildTurnDigest, coverageForDriver, digestCompletedLate, digestPromptLine, renderDigest, toolEvidence } from "./digest.ts";
-import { appendDecision, bindDecisionRetention, decisionRetentionDays, flushDecisionLog, pruneDecisions, withDecisionActor, type DecisionActor, type DecisionVia } from "./decision-log.ts";
+import { appendDecision, bindDecisionRetention, decisionRetentionDays, decisionRetentionPinned, flushDecisionLog, pruneDecisions, withDecisionActor, type DecisionActor, type DecisionVia } from "./decision-log.ts";
 import { folderToFollow, inMyFolderCwd, validateBotCwd } from "./bot-cwd.ts";
 import { ATTACHMENTS_DIR, attachmentExists, deleteAttachment, keptAttachmentNames, offerAttachmentClear, saveAudio, saveImage } from "./attachments.ts";
 import {
@@ -11473,7 +11473,8 @@ function configStatus() {
       ...(cfg.budgets?.warnAtPercent !== undefined ? { warnAtPercent: cfg.budgets.warnAtPercent } : {}),
     },
     billing: { currency: cfg.billing?.currency ?? "USD", prices: cfg.billing?.prices ?? {} },
-    decisions: { retentionDays: decisionRetentionDays(cfg.decisions?.retentionDays) },
+    decisions: { retentionDays: decisionRetentionDays(cfg.decisions?.retentionDays), fixed: decisionRetentionPinned() !== null },
+    memory: { captureQuietMs: captureQuietMs(cfg), tidyHour: tidyHour(cfg) },
     safetyFloor: { enabled: safetyFloorOn() },
     openaiCompat: { ...keyStatus(cfg.openaiCompat?.key), url: cfg.openaiCompat?.url ?? "" },
     composio: {

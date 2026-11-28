@@ -17,6 +17,7 @@ const CONSEQUENCE_KEYS = {
   wayIn: "server.appSettings.confirm.wayIn",
   usageData: "server.appSettings.confirm.usageData",
   emailOut: "server.appSettings.confirm.emailOut",
+  deletesHistory: "server.appSettings.confirm.deletesHistory",
   browserOn: "server.appSettings.confirm.browserOn",
   browserOnAll: "server.appSettings.confirm.browserOnAll",
   appsOn: "server.appSettings.confirm.appsOn",
