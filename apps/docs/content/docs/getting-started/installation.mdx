@@ -8,14 +8,27 @@ icon: Download
 
 Choose your computer below. Each link always downloads the latest published build.
 
+<a
+  href="https://apps.microsoft.com/detail/9MVFVK4VTFDH?referrer=appbadge&mode=direct"
+  className="not-prose inline-block"
+>
+  <img
+    src="/badges/microsoft-store.svg"
+    alt="Download from the Microsoft Store"
+    width={205}
+    height={56}
+    style={{ height: '3.5rem', width: 'auto' }}
+  />
+</a>
+
 | Platform | Recommended package | Notes |
 |---|---|---|
 | macOS | No download | [Run the server](/docs/self-hosting#on-your-own-computer-or-by-hand) with Node and open Seira in your browser, or [build Seira from source](#build-from-source). |
-| Windows x64 | [Download installer](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) | Per-user installer; Windows signing is not yet available. |
+| Windows x64 | [Microsoft Store](https://apps.microsoft.com/detail/9MVFVK4VTFDH?referrer=appbadge&mode=direct) · [Download installer](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) | Microsoft Store is recommended. The installer is per-user and not code-signed yet. |
 | Ubuntu 24.04 x64 | [Download `.deb`](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) · [AppImage](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) | The `.deb` is recommended; the AppImage is portable. |
 
 <Callout type="warn" title="Windows SmartScreen">
-  The Windows installer is not code-signed yet. Windows may show “Unknown publisher.” Verify that you downloaded it from the official Seira releases repository before choosing **More info → Run anyway**.
+  The Windows installer is not code-signed yet. Windows may show “Unknown publisher.” Verify that you downloaded it from the official Seira releases repository before choosing **More info → Run anyway**. Seira from Microsoft Store does not show this warning.
 </Callout>
 
 ## Install an agent CLI
