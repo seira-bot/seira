@@ -44,7 +44,7 @@ async function roomFixture(members: "both" | "scout") {
     return (await api("GET", "/api/routines")).runs.find((item: any) => item.id === runId);
   };
   const lines = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=200`)).messages as any[];
-  return { fixture, call, api, scout, writer, room, workflow, turns, finished, lines };
+  return { fixture, call, api, scout, writer, room, workflow, turns, finished, lines, planPath };
 }
 
 it("room goal runs each step in the room", async () => {
@@ -63,6 +63,28 @@ it("room goal runs each step in the room", async () => {
     expect(turns().map((turn) => [turn.botId, turn.threadId])).toEqual([[scout.id, done.threadId], [writer.id, done.threadId]]);
     const said = (await lines(done.threadId)).filter((line) => line.role === "bot" && line.kind === "text").map((line) => [line.from?.botId, line.text]);
     expect(said).toEqual(expect.arrayContaining([[scout.id, expect.stringContaining("Alpha findings")], [writer.id, expect.stringContaining("Beta write-up")]]));
+  } finally { await fixture.close(); }
+}, 120_000);
+
+it("stopping a room-goal workflow run stops the room turn", async () => {
+  const { fixture, api, scout, room, workflow, turns, lines, planPath } = await roomFixture("both");
+  const readyFile = `${planPath}.ready`;
+  try {
+    writeFileSync(planPath, JSON.stringify({ [scout.id]: { reply: "Alpha findings", readyFile, gateFile: `${planPath}.never` } }));
+    const { routine } = await api("POST", "/api/routines", {
+      name: "Findings goal", target: "room-goal", groupId: room.id, botId: scout.id, workflowId: workflow.id, prompt: "unused",
+      schedule: { type: "daily", time: "09:00" }, enabled: false,
+    });
+    const { run } = await api("POST", `/api/routines/${routine.id}/run`);
+    await expect.poll(() => existsSync(readyFile), { timeout: 30_000 }).toBe(true);
+    await api("POST", `/api/routine-runs/${run.id}/cancel`);
+    await expect.poll(async () => {
+      const state = await api("GET", "/api/bots?messages=0");
+      return { run: (await api("GET", `/api/workflow-runs/${run.id}`)).run.status, working: Boolean(state.groups.find((group: any) => group.id === room.id)?.working) };
+    }, { timeout: 30_000 }).toEqual({ run: "stopped", working: false });
+    const threadId = (await api("GET", "/api/routines")).runs.find((item: any) => item.id === run.id).threadId as string;
+    expect((await lines(threadId)).some((line) => String(line.text ?? "").includes("Alpha findings"))).toBe(false);
+    expect(turns().every((turn) => turn.botId === scout.id)).toBe(true);
   } finally { await fixture.close(); }
 }, 120_000);
 
