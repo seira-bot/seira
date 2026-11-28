@@ -42,3 +42,18 @@ describe("case-insensitive message search outside ASCII", () => {
     expect((await searchMessagesAsync("école", 1)).map((one) => one.messageId)).toEqual(["decoy"]);
   });
 });
+
+describe("search snippets", () => {
+  it("show the words of a Markdown reply, not its markup", async () => {
+    insertMessage("text", { id: "md", at: 1, role: "bot", kind: "text", text: "## Hasil\n- Ada **2 masalah serius** di `server.ts`, lihat [laporan](https://example.com/r)" });
+    const [hit] = await searchMessagesAsync("masalah");
+    expect(hit!.snippet).toBe("Hasil Ada 2 masalah serius di server.ts, lihat laporan");
+    expect(hit!.snippet.slice(hit!.matchStart, hit!.matchStart + hit!.matchLength)).toBe("masalah");
+  });
+
+  it("still finds a query that spells out Markdown", async () => {
+    insertMessage("text", { id: "raw", at: 1, role: "user", kind: "text", text: "why does **bold** stay" });
+    const [hit] = await searchMessagesAsync("**bold");
+    expect(hit!.snippet.slice(hit!.matchStart, hit!.matchStart + hit!.matchLength)).toBe("**bold");
+  });
+});

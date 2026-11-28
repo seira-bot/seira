@@ -857,7 +857,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         role={renaming ? undefined : "button"}
         tabIndex={renaming ? undefined : 0}
         aria-label={
-          !renaming && iconOnly
+          !renaming
             ? deleting
               ? t("sidebar.bot.deletingAria", { name: bot.name })
               : `${bot.name}${bot.title?.trim() ? ` · ${bot.title.trim()}` : ""}${bot.chiefOfStaff ? ` · ${t("sidebar.bot.chiefOfStaff")}` : ""}${onLiveCall ? ` · ${t("call.live.badge")}` : ""}${waiting ? ` · ${t("sidebar.preview.waiting")}` : working ? ` · ${t("chat.activity.working")}` : failed ? ` · ${t("sidebar.preview.failed")}` : teammateWait ? ` · ${t("sidebar.preview.waitingOnTeammate")}` : queued ? ` · ${t("task.queued")}` : ""}${unread ? ` · ${t("task.unread")}` : ""}`

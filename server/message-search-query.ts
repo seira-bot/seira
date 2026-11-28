@@ -29,6 +29,15 @@ function matchSpan(text: string, needle: string): { start: number; length: numbe
   return null;
 }
 
+// Snippets show text, not Markdown: keep link labels and drop emphasis, code ticks and line markers.
+export function markdownToPlain(text: string): string {
+  return text
+    .replace(/!?\[([^\]\n]*)\]\([^)\s]*(?:\s+"[^"]*")?\)/g, "$1")
+    .replace(/(\*\*|__|~~)(?=\S)([^\n]*?\S)\1/g, "$2")
+    .replace(/`+([^`\n]+)`+/g, "$1")
+    .replace(/^[ \t]*(?:#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+(?:\[[ xX]\][ \t]+)?)/gm, "");
+}
+
 export function searchMessagesInDatabase(database: DatabaseSync, query: string, limit = 40, threadId?: string): SearchHit[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
@@ -55,8 +64,12 @@ export function searchMessagesInDatabase(database: DatabaseSync, query: string, 
     from_name: string | null;
   }>;
   return rows.map((row) => {
-    const haystack = row.kind === "activity" ? (row.tool_name ?? "") : (row.text ?? "");
-    const hit = matchSpan(haystack, needle) ?? { start: 0, length: 0 };
+    const raw = row.kind === "activity" ? (row.tool_name ?? "") : (row.text ?? "");
+    const plain = row.kind === "activity" ? raw : markdownToPlain(raw);
+    // A query that names Markdown itself ("**bold") still finds its place in the raw text.
+    const plainHit = matchSpan(plain, needle);
+    const haystack = plainHit ? plain : raw;
+    const hit = plainHit ?? matchSpan(raw, needle) ?? { start: 0, length: 0 };
     const start = Math.max(0, hit.start - 60);
     const end = Math.min(haystack.length, hit.start + hit.length + 90);
     const head = start > 0 ? "…" : "";

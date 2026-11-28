@@ -87,6 +87,15 @@ describe("Advanced bot row", () => {
     expect(html).toContain('title="Chief · Planner · Chief of Staff"');
   });
 
+  it("names the row in Simple and Advanced by the bot, its role and status, never by the Rename button inside it", () => {
+    for (const advanced of [false, true]) {
+      fixture.advanced = advanced;
+      const { html } = capture(() => drawBot(rowProps(chief)));
+      const row = html.match(/<div[^>]*data-sidebar-bot-row="chief"[^>]*>/)![0];
+      expect(row).toContain('aria-label="Chief · Planner · Chief of Staff"');
+    }
+  });
+
   it("opens the same bot a Simple row opens, from the mouse and from the keyboard", () => {
     const opened: unknown[] = [];
     for (const advanced of [false, true]) {
