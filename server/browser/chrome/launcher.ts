@@ -31,6 +31,7 @@ const SOURCES: Record<FoundChrome["source"], string> = {
   downloaded: "downloaded",
   named: "named by SEIRA_CHROME_PATH or AGENT_BROWSER_EXECUTABLE_PATH",
   "agent-browser": "installed by agent-browser",
+  found: "found on this server",
 };
 
 const megabytes = (bytes: number) => Math.round(bytes / 1_048_576);
@@ -262,8 +263,8 @@ export class ChromeLauncher implements BrowserLaunch {
     try {
       identity = await this.identityOf(chrome);
     } catch (error) {
-      if (plan.kind !== "chrome" || plan.chrome.source !== "installed" || !plan.fallback) throw error;
-      this.log(`browser: Google Chrome at ${chrome.path} could not start headless (${message(error)}); using Chrome for Testing`);
+      if (plan.kind !== "chrome" || !plan.fallback) throw error;
+      this.log(`browser: ${product(chrome)} at ${chrome.path} could not start headless (${message(error)}); using Chrome for Testing`);
       chrome = await this.download(plan.fallback);
       identity = await this.identityOf(chrome);
     }

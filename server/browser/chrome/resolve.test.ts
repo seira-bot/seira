@@ -83,9 +83,9 @@ describe("which Chrome the bots' browser runs", () => {
     expect(chromePolicyManaged(linuxDesktop(["/etc/opt/chrome/policies/managed/README"]))).toBe(false);
   });
 
-  it("on a Linux server keeps a browser agent-browser finds on PATH rather than downloading another", () => {
+  it("on a Linux server runs a browser agent-browser finds on PATH through the launcher, so it never sends HeadlessChrome", () => {
     const server = host("linux", ["/usr/bin/chromium"], { arch: "x64", env: { PATH: "/usr/bin" } });
-    expect(resolveChromePlan(server, managed)).toEqual({ kind: "legacy", reason: "agent-browser found a browser on this server" });
+    expect(resolveChromePlan(server, managed)).toEqual({ kind: "chrome", chrome: { path: "/usr/bin/chromium", source: "found" }, fallback: chromeForTestingPin("linux", "x64") });
   });
 
   it("on a server uses the Chrome for Testing agent-browser installed, newest first", () => {
@@ -104,16 +104,19 @@ describe("which Chrome the bots' browser runs", () => {
   });
 
   it("on a Linux server keeps a browser agent-browser already finds, rather than downloading another", () => {
-    const found = { kind: "legacy", reason: "agent-browser found a browser on this server" };
+    const found = (path: string) => ({ kind: "chrome", chrome: { path, source: "found" }, fallback: chromeForTestingPin("linux", "arm64") });
     const withPath = (files: string[], env: NodeJS.ProcessEnv = {}) => host("linux", files, { env: { PATH: "/usr/local/bin:/usr/bin", ...env } });
-    expect(resolveChromePlan(withPath(["/usr/bin/chromium"]), managed)).toEqual(found);
-    expect(resolveChromePlan(withPath(["/usr/local/bin/google-chrome-stable"]), managed)).toEqual(found);
-    expect(resolveChromePlan(withPath(["/home/ada/.cache/puppeteer/chrome/linux-153.0.8010.47/chrome-linux64/chrome"]), managed)).toEqual(found);
-    expect(resolveChromePlan(withPath(["/home/ada/.cache/ms-playwright/chromium-1200/chrome-linux/chrome"]), managed)).toEqual(found);
-    expect(resolveChromePlan(withPath(["/pw/chromium-1200/chrome-linux64/chrome"], { PLAYWRIGHT_BROWSERS_PATH: "/pw" }), managed)).toEqual(found);
+    expect(resolveChromePlan(withPath(["/usr/bin/chromium"]), managed)).toEqual(found("/usr/bin/chromium"));
+    expect(resolveChromePlan(withPath(["/usr/local/bin/google-chrome-stable"]), managed)).toEqual(found("/usr/local/bin/google-chrome-stable"));
+    expect(resolveChromePlan(withPath(["/usr/local/bin/chromium", "/usr/bin/google-chrome"]), managed)).toEqual(found("/usr/local/bin/chromium"));
+    const puppeteer = "/home/ada/.cache/puppeteer/chrome/linux-153.0.8010.47/chrome-linux64/chrome";
+    expect(resolveChromePlan(withPath([puppeteer]), managed)).toEqual(found(puppeteer));
+    const playwright = "/home/ada/.cache/ms-playwright/chromium-1200/chrome-linux/chrome";
+    expect(resolveChromePlan(withPath([playwright]), managed)).toEqual(found(playwright));
+    expect(resolveChromePlan(withPath(["/pw/chromium-1200/chrome-linux64/chrome"], { PLAYWRIGHT_BROWSERS_PATH: "/pw" }), managed)).toEqual(found("/pw/chromium-1200/chrome-linux64/chrome"));
     // agent-browser runs with the augmented PATH, so a browser only there counts too.
     const augmented = { ...host("linux", ["/opt/extra/chromium"], { env: { PATH: "/usr/bin" } }), enginePath: () => "/opt/extra:/usr/bin" };
-    expect(resolveChromePlan(augmented, managed)).toEqual(found);
+    expect(resolveChromePlan(augmented, managed)).toEqual(found("/opt/extra/chromium"));
     // A cache entry without its browser executable is incomplete: the server still downloads.
     expect(resolveChromePlan(withPath(["/home/ada/.cache/puppeteer/chrome/linux-153.0.8010.47/README"]), managed)).toMatchObject({ kind: "download" });
     expect(resolveChromePlan(withPath(["/home/ada/.cache/ms-playwright/chromium-1200/INSTALLATION_COMPLETE"]), managed)).toMatchObject({ kind: "download" });

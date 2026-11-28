@@ -204,6 +204,38 @@ describe("the Chrome launcher", () => {
     expect(readFileSync(chrome.path, "utf8")).toMatch(/chrome-mac-arm64[\\/]Google Chrome for Testing\.app/u);
   });
 
+  it("on a Linux server wraps the browser agent-browser finds, and downloads Chrome for Testing when that one cannot start headless", async () => {
+    const root = mkdtempSync(join(tmpdir(), "seira-launcher-"));
+    folders.push(root);
+    const env = { HOME: root };
+    const chromium = join(root, ".cache", "ms-playwright", "chromium-1200", "chrome-linux", "chrome");
+    mkdirSync(dirname(chromium), { recursive: true });
+    writeFileSync(chromium, "#!/bin/sh\n", { mode: 0o755 });
+    const real = chromeHost({ dataDir: join(root, "data"), env, platform: "linux", arch: "x64", enginePath: () => "" });
+    const host = { ...real, exists: (path: string) => path.startsWith(root) && existsSync(path), list: (folder: string) => folder.startsWith(root) ? real.list(folder) : [] };
+    const install = vi.fn(async (options: Parameters<typeof installChromeForTesting>[0]) => {
+      const path = chromeForTestingExecutable(options.dataDir, options.pin);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, "#!/bin/sh\n", { mode: 0o755 });
+      return path;
+    });
+    const options = { dataDir: join(root, "data"), env, platform: "linux" as const, arch: "x64", host, engine: () => ({ managed: true }), install, screen: async () => ({ width: 1440, height: 900 }), sidecars: sidecars(), log: () => {}, checkLauncher: async () => {} };
+    const found = new ChromeLauncher({ ...options, calibrate: async () => identity("158", "Not_A Brand") });
+    expect(found.env()).toEqual({ AGENT_BROWSER_EXECUTABLE_PATH: found.path, AGENT_BROWSER_HIDE_SCROLLBARS: "0" });
+    await found.prepare();
+    expect(found.describe()).toBe("Chrome for Testing 158 (found on this server)");
+    expect(readFileSync(found.path, "utf8")).toContain("ms-playwright/chromium-1200/chrome-linux/chrome");
+    expect(install).not.toHaveBeenCalled();
+
+    const broken = new ChromeLauncher({ ...options, dataDir: join(root, "data-2"), calibrate: async (path: string) => {
+      if (path.includes("ms-playwright")) throw new Error("the browser exited (1) before it answered");
+      return identity("158", "Not_A Brand");
+    } });
+    await broken.prepare();
+    expect(broken.describe()).toBe("Chrome for Testing 158 (downloaded)");
+    expect(install).toHaveBeenCalledOnce();
+  });
+
   it("keeps the engine's own browser, and says why, when Chrome cannot be prepared at all", async () => {
     const named = mkdtempSync(join(tmpdir(), "seira-named-"));
     folders.push(named);
