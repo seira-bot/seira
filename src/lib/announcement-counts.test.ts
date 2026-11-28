@@ -9,6 +9,7 @@ async function load() {
   vi.resetModules();
   const { api } = await import("@/state/store");
   const counts = await import("./announcement-counts");
+  vi.mocked(api).mockClear();
   return { api: vi.mocked(api), ...counts };
 }
 
@@ -46,6 +47,7 @@ describe("announcement counts on the page", () => {
     first.countAnnouncement({ id: "card-one" }, "shown");
     expect(first.api).toHaveBeenCalledTimes(1);
     const reloaded = await load();
+    expect(reloaded.api).not.toHaveBeenCalled();
     reloaded.countAnnouncement({ id: "card-one" }, "shown");
     expect(reloaded.api).not.toHaveBeenCalled();
     reloaded.countAnnouncement({ id: "card-one" }, "close");
