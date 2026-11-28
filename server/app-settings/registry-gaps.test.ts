@@ -59,11 +59,43 @@ describe("the voice provider setting (AC-01 to AC-03)", () => {
       expect(entry(current).confirm?.(provider)).toEqual({ code: "dataTo", params: { provider: name } });
     });
 
-  it("applies at once for system and chatterbox, and when the provider stays the same", () => {
+  it("applies at once for the system voice, and when the provider stays the same", () => {
     expect(entry({ tts: { provider: "fish" } }).confirm?.("system")).toBeNull();
-    expect(entry({ tts: { provider: "fish" } }).confirm?.("chatterbox")).toBeNull();
     expect(entry({ tts: { provider: "fish" } }).confirm?.("fish")).toBeNull();
     expect(entry().confirm?.("elevenlabs")).toBeNull();
+  });
+
+  it.each([["http://localhost:8000"], ["http://127.0.0.1:8000/v1"], ["http://[::1]:8000"], ["127.0.0.1:8000"]])(
+    "applies at once for Chatterbox when its saved address %s stays on this computer", (baseUrl) => {
+      expect(entry({ tts: { provider: "fish", baseUrl } }).confirm?.("chatterbox")).toBeNull();
+    });
+
+  it("applies at once for Chatterbox when no address is saved yet, since no text can go anywhere", () => {
+    expect(entry({ tts: { provider: "fish" } }).confirm?.("chatterbox")).toBeNull();
+    expect(entry({ tts: { provider: "fish", baseUrl: "  " } }).confirm?.("chatterbox")).toBeNull();
+  });
+
+  it.each([
+    ["https://voice.example.com/v1", "voice.example.com"],
+    ["http://192.168.1.20:8000", "192.168.1.20:8000"],
+    ["http://localhost.example.com:8000", "localhost.example.com:8000"],
+    ["http://127.0.0.1@voice.example.com:8000", "voice.example.com:8000"],
+    ["not an address", "not an address"],
+  ])("waits for a tap that names the host when Chatterbox is saved at %s", (baseUrl, host) => {
+    expect(entry({ tts: { provider: "fish", baseUrl } }).confirm?.("chatterbox")).toEqual({ code: "dataTo", params: { provider: host } });
+    expect(entry({ tts: { provider: "fish", baseUrl } }).confirm?.({ provider: "chatterbox", voice: "v", model: "m" })).toEqual({ code: "dataTo", params: { provider: host } });
+  });
+
+  it("does not ask again when Chatterbox is already the provider", () => {
+    expect(entry({ tts: { provider: "chatterbox", baseUrl: "https://voice.example.com" } }).confirm?.("chatterbox")).toBeNull();
+  });
+
+  it("names the saved host as the destination only for a change to Chatterbox", () => {
+    const remote = entry({ tts: { provider: "fish", baseUrl: "https://voice.example.com:9000/v1" } });
+    expect(remote.destination?.("chatterbox")).toBe("voice.example.com:9000");
+    expect(remote.destination?.("system")).toBeNull();
+    expect(remote.destination?.("gemini")).toBeNull();
+    expect(entry({ tts: { provider: "fish" } }).destination?.("chatterbox")).toBeNull();
   });
 
   it("uses a card line that exists for the dataTo code", () => {

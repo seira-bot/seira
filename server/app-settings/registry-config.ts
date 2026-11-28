@@ -12,6 +12,7 @@ import { browserEngineChoice } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
 import { CONFIG_PATCH_FIELDS as F, DEFAULT_CAPTURE_QUIET_MS, DEFAULT_TIDY_HOUR, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
 import { decisionRetentionDays, decisionRetentionPinned } from "../decision-log.ts";
+import { isLoopbackHost } from "../request-auth.ts";
 import { threadLogCapOrDefault } from "../thread-log-rotation.ts";
 import { hostOf, type Consequence, type ConsequenceCode } from "./confirm.ts";
 import { display, withoutKeys, type RegistryDeps, type SettingEntry, type Where, type WritableSpec } from "./registry.ts";
@@ -33,6 +34,12 @@ const CLOUD_VOICES: Partial<Record<VoiceProvider, string>> = { elevenlabs: "Elev
 const VOICE_NEEDS: Record<VoiceProvider, string> = {
   elevenlabs: "keys.ttsKey", fish: "keys.fishAudioKey", gemini: "keys.geminiTtsKey", xai: "keys.xaiApiKey", openai: "keys.openaiApiKey", deepseek: "keys.deepseekApiKey",
   chatterbox: "voice.baseUrl", system: "nothing: it uses the computer's own voice",
+};
+/** The host the saved Chatterbox address sends to, for a change to Chatterbox; null for any other voice. */
+const voiceHost = (value: VoiceProvider | VoiceState, address: string | undefined): string | null => {
+  if ((typeof value === "string" ? value : value.provider) !== "chatterbox") return null;
+  const saved = address?.trim();
+  return saved ? hostOf(saved) : null;
 };
 const memoryUpkeep = nonEmpty(z.object({
   captureQuietMs: z.number().int().min(1_000).max(24 * 60 * 60_000).optional(),
@@ -281,8 +288,14 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       write: (value: VoiceProvider | VoiceState) => deps.saveConfig({ tts: typeof value === "string" ? { provider: value } : { provider: value.provider, voice: value.voice, model: value.model } }),
       confirm: (value: VoiceProvider | VoiceState) => {
         const next = typeof value === "string" ? value : value.provider;
-        return next !== (cfg().tts?.provider ?? "elevenlabs") && CLOUD_VOICES[next] ? { code: "dataTo", params: { provider: CLOUD_VOICES[next]! } } : null;
+        if (next === (cfg().tts?.provider ?? "elevenlabs")) return null;
+        if (CLOUD_VOICES[next]) return { code: "dataTo", params: { provider: CLOUD_VOICES[next]! } };
+        // Chatterbox sends the text to the address saved for it: only a loopback address stays on this computer.
+        const host = voiceHost(value, cfg().tts?.baseUrl);
+        return host && !isLoopbackHost(host) ? { code: "dataTo", params: { provider: host } } : null;
       },
+      // The card names this host, so Apply refuses when the saved address moved to another one after the card was shown.
+      destination: (value: VoiceProvider | VoiceState) => voiceHost(value, cfg().tts?.baseUrl),
       more: () => ({ providers: Object.fromEntries(voiceProvider.options.map((provider) => [provider, `needs ${VOICE_NEEDS[provider]}`])), help: "Changing the provider resets the voice and model to that provider's defaults. A provider that needs a key has its own entry: set it with no value and a secure card asks the user." }),
     }),
     section({

@@ -100,8 +100,10 @@ client scope only. Nothing touches live app data.
   came from the environment is not copied into `config.json`.
   `server/app-settings/registry-gaps.test.ts` checks the saved patch.
 - **Voice provider.** `set voice.provider` to a cloud provider waits on a card
-  that says the text goes to that company. System and Chatterbox apply at once.
-  Undo puts back the provider, the voice and the model.
+  that says the text goes to that company. Chatterbox waits on a card that names
+  the host of its saved address, unless that address is on this computer; Apply
+  is refused if the address moves to another host after the card. The system
+  voice applies at once. Undo puts back the provider, the voice and the model.
 - **Approval history.** `set decisions.retentionDays` to a lower number waits on a
   card that says the older history is deleted and Undo cannot bring it back.
   A higher number applies at once. It is refused when the server's setup fixes

@@ -58,6 +58,8 @@ interface Writable {
   describe?(value: unknown): { change: string } | { refusal: string };
   /** Non-null when this value only applies after the owner taps Apply on a card naming what follows. */
   confirm?(value: unknown): Consequence | null;
+  /** Where the value sends the owner's data, when that can change on its own (a saved address): Apply refuses once it differs from the one the card named. */
+  destination?(value: unknown): string | null;
   /** The complete current and proposed text for the card that waits for the owner's Apply, so the owner reads all of what they approve. */
   review?(value: unknown): { before: string; after: string } | null;
 }
@@ -128,9 +130,9 @@ const KEY_WHERE: Partial<Record<CredentialTargetId, Where>> = {
   tregApiKey: "apps",
 };
 
-export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review"> & {
+export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review" | "destination"> & {
   read?(): string; current(value: never): unknown; write(value: never): Promise<string | null>; describe?(value: never): { change: string } | { refusal: string };
-  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null;
+  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null; destination?(value: never): string | null;
 };
 /** `line` says what the new value does on the applied card; `refusal` names a value only the person sets, in Settings. */
 export type WindowPref = (id: WindowPrefId, label: string, help: string, where: Where, synonyms: string[], allowed: string,
