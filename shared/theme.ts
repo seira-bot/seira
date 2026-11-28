@@ -79,6 +79,8 @@ export interface ThemeSummary {
   name: string;
   hasCss: boolean;
   assets: string[];
+  /** The colours and skin the theme sets, for a small picture of it. */
+  look: Pick<ThemeFile, "skin" | "canvas" | "accent" | "colors" | "light" | "dark">;
 }
 /** GET /api/themes: this person's saved themes and the one their windows wear. */
 export interface ThemeList {
@@ -264,7 +266,7 @@ export function themeGuide(): string {
     "Stable selectors (other class names change between releases, so never rely on them):",
     ...THEME_HOOKS.map((hook) => `- ${hook.selector}: ${hook.what}`),
     "",
-    "Calls: theme (optional id: also return that saved theme). set_theme with id and theme (the theme as JSON) saves and wears it; with only id it wears a saved theme, a built-in skin, or none. add_theme_asset with id and path.",
+    "Calls: theme (optional id: also return that saved theme). set_theme with id and theme (the theme as JSON) saves and wears it; with only id it wears a saved theme, a popular theme from theme's `popular` list (such as popular-nord), a built-in skin, or none. add_theme_asset with id and path.",
     `theme_history lists the person's last ${LOOK_HISTORY_LIMIT} look changes, newest first, each with its index and the look right after it. undo_theme goes back: steps (default 1) undoes that many changes; index returns to the look right after that entry, theme file and all. An undo is itself a change, so undoing it again is a redo.`,
     "",
     "You cannot see the result. Make one small change at a time, then ask the person how it looks.",

@@ -8,6 +8,7 @@ import {
   LOOK_HISTORY_LIMIT, rehomeThemeCss, THEME_ASSET_NAME, THEME_EXPORT_VERSION, THEME_ID, THEME_LIMITS, themeAssetType, themeAssetUrl, themeCssProblem,
   themeFileSchema, type LookChange, type ThemeExport, type ThemeFile, type ThemeHistoryItem, type ThemeList,
 } from "../../shared/theme.ts";
+import { popularTheme } from "../../shared/popular-themes.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { appendHistory, lookAfter, readHistory, type Look, type Skin, type Snapshot } from "./history.ts";
 
@@ -85,7 +86,8 @@ export function createThemeStore(deps: { dataDir: string }) {
   const assetsDir = (person: string, id: string) => join(folder(person, id), "assets");
   const validId = (id: string) => THEME_ID.test(id) && !RESERVED_IDS.has(id);
 
-  function read(person: string, id: string): ThemeFile | null {
+  /** The theme this person saved under `id`. */
+  function readSaved(person: string, id: string): ThemeFile | null {
     if (!validId(id)) return null;
     try {
       const parsed = themeFileSchema.safeParse(JSON.parse(readFileSync(join(folder(person, id), "theme.json"), "utf8")));
@@ -93,6 +95,11 @@ export function createThemeStore(deps: { dataDir: string }) {
     } catch {
       return null;
     }
+  }
+
+  /** A saved theme, or else the popular theme with that id: wearing one copies nothing into the person's folder. */
+  function read(person: string, id: string): ThemeFile | null {
+    return readSaved(person, id) ?? (validId(id) ? popularTheme(id)?.theme ?? null : null);
   }
 
   function ids(person: string): string[] {
@@ -131,7 +138,7 @@ export function createThemeStore(deps: { dataDir: string }) {
     if (!validId(id)) return refused("A theme id is lowercase letters, digits and dashes, up to 48 characters.");
     const problem = file.css ? themeCssProblem(file.css) : null;
     if (problem) return refused(problem);
-    if (!read(person, id) && ids(person).length >= THEME_LIMITS.themesPerPerson) return refused(`You can keep up to ${THEME_LIMITS.themesPerPerson} themes. Delete one first.`);
+    if (!readSaved(person, id) && ids(person).length >= THEME_LIMITS.themesPerPerson) return refused(`You can keep up to ${THEME_LIMITS.themesPerPerson} themes. Delete one first.`);
     return null;
   }
 
@@ -167,7 +174,7 @@ export function createThemeStore(deps: { dataDir: string }) {
     if (write.wear && !read(person, write.wear) && !saves.some((save) => save.id === write.wear)) return refused(`No saved theme has the id ${write.wear}.`);
     const known = readHistory(home(person)).at(-1)?.after.skin;
     const before: Look = { id: active(person), ...(known ? { skin: known } : {}) };
-    const themes: Record<string, Snapshot> = Object.fromEntries([...saves.map((save) => save.id), ...(write.keep ?? [])].map((id) => [id, { file: read(person, id), assets: assets(person, id) }]));
+    const themes: Record<string, Snapshot> = Object.fromEntries([...saves.map((save) => save.id), ...(write.keep ?? [])].map((id) => [id, { file: readSaved(person, id), assets: assets(person, id) }]));
     for (const { id, file } of saves) writeTheme(person, id, file);
     if (write.wear !== undefined) setActive(person, write.wear);
     const skin = write.skin ?? known;
@@ -284,8 +291,8 @@ export function createThemeStore(deps: { dataDir: string }) {
     read, save, active, setActive, change, history, restore, missingAssets, addAsset, asset, duplicate, remove, exportTheme, importTheme, freeId,
     list(person: string): ThemeList {
       const themes = ids(person).flatMap((id) => {
-        const file = read(person, id);
-        return file ? [{ id, name: file.name, hasCss: Boolean(file.css), assets: assets(person, id) }] : [];
+        const file = readSaved(person, id);
+        return file ? [{ id, name: file.name, hasCss: Boolean(file.css), assets: assets(person, id), look: { skin: file.skin, canvas: file.canvas, accent: file.accent, colors: file.colors, light: file.light, dark: file.dark } }] : [];
       });
       return { active: active(person), themes };
     },

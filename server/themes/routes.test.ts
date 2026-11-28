@@ -120,4 +120,13 @@ describe("theme routes", () => {
     expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: null, skin: "diwali" }, auth: ann })).toMatchObject({ status: 200 });
     expect(changed.at(-1)).toEqual({ person: "p_ann", skin: "system" });
   });
+
+  it("wears a popular theme through the active route, with the skin put back to system", async () => {
+    const { routes, changed } = fixture();
+    expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: "popular-catppuccin", skin: "system" }, auth: ann })).toMatchObject({ status: 200 });
+    expect(changed.at(-1)).toEqual({ person: "p_ann", skin: "system" });
+    expect(await callRoute(routes, { method: "GET", path: "/api/themes/active", auth: ann })).toMatchObject({ status: 200, body: { id: "popular-catppuccin", theme: { name: "Catppuccin" } } });
+    expect(await callRoute(routes, { method: "GET", path: "/api/themes", auth: ann })).toEqual({ status: 200, body: { active: "popular-catppuccin", themes: [] } });
+    expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: "popular-nope" }, auth: ann })).toMatchObject({ status: 404 });
+  });
 });

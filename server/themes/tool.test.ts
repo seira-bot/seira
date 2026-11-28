@@ -185,4 +185,17 @@ describe("app_settings theme actions", () => {
     expect((await call({ action: "undo_theme" })).status).toBe(200);
     expect(themes.list("owner").active).toBe("neon");
   });
+
+  it("lists the popular themes and wears one by id without saving it", async () => {
+    const { call, themes, changed } = fixture();
+    const body = JSON.parse(String((await call({ action: "theme" })).body.text));
+    expect(body.popular).toHaveLength(10);
+    expect(body.popular[0]).toMatchObject({ id: "popular-catppuccin", name: "Catppuccin" });
+    expect(body.saved).toEqual([]);
+    expect((await call({ action: "set_theme", id: "popular-nord" })).status).toBe(200);
+    expect(themes.list("owner")).toMatchObject({ active: "popular-nord", themes: [] });
+    expect(changed.at(-1)).toEqual({ person: "owner" });
+    expect(JSON.parse(String((await call({ action: "theme", id: "popular-nord" })).body.text)).theme).toMatchObject({ id: "popular-nord", name: "Nord" });
+    expect((await call({ action: "set_theme", id: "popular-nope" })).status).toBe(400);
+  });
 });

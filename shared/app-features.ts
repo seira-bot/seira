@@ -185,6 +185,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["updateCheckHonest", "uiMap", "placeCard", "botSettings"],
   },
   {
+    id: "theme-gallery",
+    name: "Theme gallery",
+    place: "Settings → Appearance → Theme, the Popular, Seira and Your themes cards",
+    does: "Ten popular themes (Catppuccin, Tokyo Night, Dracula, One Dark, Nord, Gruvbox, Rosé Pine, Solarized, Ayu, Night Owl) and Seira's own skins, as cards. One tap wears it in every window. A bot wears one with set_theme.",
+    tools: ["app_settings"],
+  },
+  {
     id: "text-size",
     name: "Text size",
     place: "Settings → Appearance → Text size (desktop app); the View menu; Ctrl or Cmd with plus, minus or 0",

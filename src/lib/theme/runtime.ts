@@ -1,9 +1,11 @@
 // The window's custom theme: colours painted over the skin's tokens, the theme's CSS after the app's own, kept in step
 // with the server through `theme` frames. Every way back lives here, outside anything a theme's CSS can hide.
+import { popularTheme } from "../../../shared/popular-themes";
 import { SAFE_LOOK_PARAM, THEME_COLOR_ROLES, themeFileSchema, type ActiveTheme, type ThemeFile } from "../../../shared/theme";
 import { readColorScheme } from "../color-scheme";
-import { DEFAULT_SKIN_CHOICE, SKIN_IDS, applySkinChoice, readSkin, resolveSkin, subscribeSkin, THEME_SKINS, wearSkin, type SkinChoice } from "../skins";
-import { accentPalette, canvasPalette, modeOf } from "./palette";
+import { DEFAULT_SKIN_CHOICE, SKIN_IDS, applySkinChoice, readSkin, readSkinChoice, resolveSkin, subscribeSkin, THEME_SKINS, wearSkin, type SkinChoice } from "../skins";
+import { modeOf } from "./palette";
+import { followsChoice, themeCanvas, themeColors } from "./tokens";
 import { applyThemeCss } from "./theme-css";
 
 const CACHE_KEY = "seira-theme";
@@ -59,24 +61,16 @@ function paint(): void {
     const theme = safeLook() ? null : worn?.theme;
     if (!theme) {
       delete root.dataset.theme;
+      delete root.dataset.themeBubble;
       applyThemeCss("");
       wearSkin(readSkin());
       return;
     }
-    const plainSkin = !theme.skin || theme.skin === "system" || theme.skin === THEME_SKINS.light || theme.skin === THEME_SKINS.dark;
-    const followsChoice = Boolean(theme.light && theme.dark) && plainSkin;
-    const base: SkinChoice | undefined = followsChoice ? undefined : theme.skin ?? (theme.canvas ? THEME_SKINS[modeOf(theme.canvas)] : undefined);
+    const base: SkinChoice | undefined = followsChoice(theme) ? undefined : theme.skin ?? (theme.canvas ? THEME_SKINS[modeOf(theme.canvas)] : undefined);
     wearSkin(base ? resolveSkin(base) : readSkin());
     const mode = readColorScheme(root);
-    const variant = theme[mode];
-    const canvas = variant?.canvas ?? (theme.canvas && modeOf(theme.canvas) === mode ? theme.canvas : undefined);
-    const accent = variant?.accent ?? theme.accent;
-    const colors = {
-      ...(canvas ? canvasPalette(canvas, mode) : {}),
-      ...(accent ? accentPalette(accent, mode, canvas ?? (mode === "dark" ? "#121212" : "#ffffff")) : {}),
-      ...theme.colors,
-      ...variant?.colors,
-    };
+    const canvas = themeCanvas(theme, mode);
+    const colors = themeColors(theme, mode);
     for (const role of THEME_COLOR_ROLES) {
       const value = colors[role];
       if (!value) continue;
@@ -92,6 +86,8 @@ function paint(): void {
       painted.push("--font-sans");
     }
     root.dataset.theme = worn!.id;
+    if (colors["bubble-user"]) root.dataset.themeBubble = "";
+    else delete root.dataset.themeBubble;
     applyThemeCss(theme.css ?? "");
   } finally {
     painting = false;
@@ -151,9 +147,23 @@ export function takeOffTheme(): void {
 }
 
 /** Wears one of the person's saved themes, here and in their other windows; false when the server refused. */
-export async function chooseTheme(id: string | null): Promise<boolean> {
-  const done = await wearOnServer(id);
+export async function chooseTheme(id: string | null, skin?: SkinChoice): Promise<boolean> {
+  const done = await wearOnServer(id, skin);
   if (done) await loadTheme();
+  return done;
+}
+
+/** Wears a popular theme at once here, then in the person's other windows. A skin with its own effects (Pop, Halloween,
+ * Aurora) would paint under the theme, so the skin goes back to following the computer; Light, Dark and System stay. */
+export async function wearPopularTheme(id: string): Promise<boolean> {
+  const entry = popularTheme(id);
+  if (!entry) return false;
+  const choice = readSkinChoice();
+  const plain = choice === "system" || choice === THEME_SKINS.light || choice === THEME_SKINS.dark;
+  if (!plain) applySkinChoice("system");
+  wearTheme({ id, theme: entry.theme });
+  const done = await chooseTheme(id, plain ? undefined : "system");
+  if (!done) await loadTheme();
   return done;
 }
 

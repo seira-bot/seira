@@ -5,6 +5,7 @@ import { basename, dirname, extname } from "node:path";
 import { z } from "zod";
 
 import { SKIN_IDS } from "../../shared/app-settings.ts";
+import { POPULAR_THEMES } from "../../shared/popular-themes.ts";
 import { THEME_ID, THEME_LIMITS, themeCssProblem, themeFileSchema, themeGuide, type LookChange, type ThemeFile } from "../../shared/theme.ts";
 import { openMessageFile } from "../message-file.ts";
 import type { WritableEntry } from "../app-settings/registry.ts";
@@ -76,6 +77,7 @@ export function createThemeTool(deps: ThemeToolDeps) {
       text: JSON.stringify({
         current: list.active ? { id: list.active, theme: current } : "none: the person's built-in skin",
         builtIn: BUILT_IN,
+        popular: POPULAR_THEMES.map(({ id, name, variants }) => ({ id, name, variants: `${variants.dark} (dark), ${variants.light} (light)` })),
         saved: list.themes,
         ...(asked ? { theme: { id, ...asked } } : {}),
         guide: themeGuide(),

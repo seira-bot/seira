@@ -22,11 +22,10 @@ import { OpenAtLoginRow } from "../../OpenAtLoginRow";
 import { PinnedPanelsSettings } from "../../PinnedPanelsSettings";
 import { RemoteComputerSection } from "../../RemoteComputerSection";
 import { SettingRow, SettingsGroup, SettingsLinkRow, SettingsRows, Switch } from "../../SettingsPrimitives";
-import { SkinPicker } from "../../SkinPicker";
+import { ThemeGallery } from "../../ThemeGallery";
 import { TalkShortcutRow } from "../../TalkShortcutRow";
-import { useSkinChoice, ThemeRow } from "../../ThemeRow";
+import { ThemeRow } from "../../ThemeRow";
 import { WindowFrameRow } from "../../WindowFrameRow";
-import { resolveSkin, SKINS } from "@/lib/skins";
 import { versionLine } from "../settings-context";
 import { useSettingsShell } from "../settings-shell";
 import { PlaceBadge } from "../SettingsNav";
@@ -145,30 +144,18 @@ export function GeneralPage() {
   </>;
 }
 
-function ThemePickerRow({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const choice = useSkinChoice();
-  const current = SKINS.find((skin) => skin.id === resolveSkin(choice))?.name;
-  return (
-    <SettingRow title={t("settings.theme.title")} subtitle={choice === "system" ? t("settings.simple.themes.followHint") : current}>
-      <button type="button" className="ui-button" aria-expanded={open} data-settings-themes="" onClick={onToggle}>{t(open ? "settings.appearance.hideThemes" : "settings.simple.themes.browse")}</button>
-    </SettingRow>
-  );
-}
-
 export function AppearancePage() {
-  const { ctx, place, go, anchor } = useSettingsShell();
-  const [themes, setThemes] = useState(anchor === "themes");
+  const { ctx, place, go } = useSettingsShell();
   return <>
     <SettingsGroup label={t("settings.appearance.look")} block="look">
       <SettingsRows>
         <ThemeRow simple />
-        <ThemePickerRow open={themes} onToggle={() => setThemes((open) => !open)} />
-        {themes && <div data-settings-block="themes" className="p-4"><SkinPicker /></div>}
         <ColorUserBubblesRow simple />
         <TextSizeRow />
         {!ctx.client && <SettingsLinkRow title={t("placeLook.sidebarColor")} value={place.name} badge={<PlaceBadge place={place} size={14} />} onClick={() => go("overview", "sidebar")} data={{ "data-settings-door": "sidebar-color" }} />}
       </SettingsRows>
     </SettingsGroup>
+    <ThemeGallery />
     <CustomThemesSettings />
     <SettingsGroup label={t("settings.appearance.chat")} block="chat">
       <SettingsRows>

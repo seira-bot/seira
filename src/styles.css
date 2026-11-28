@@ -2930,7 +2930,8 @@ html[data-cloud-intent-morph] [data-tour="composer"] { view-transition-name: clo
 }
 /* Same mechanism, one skin deeper: Daylight paints the user's own bubble in
    near-black on a near-white page, and the `text-ink` the composer and the
-   thread hardcode would be black on black. */
+   thread hardcode would be black on black. A theme that sets its own bubble
+   colour is not inverted, so Daylight's near-white inks stay out of it. */
 .bg-bubble-user {
   color: var(--color-bubble-user-ink);
 }
@@ -2939,7 +2940,7 @@ html[data-cloud-intent-morph] [data-tour="composer"] { view-transition-name: clo
    quoted replies and attachment controls. Keep their normal semantic tokens
    together; overriding only the parent's color leaves explicit child ink dark.
    Stop at a nested skin so the picker previews retain their own palettes. */
-@scope ([data-skin="daylight"]) to ([data-skin]) {
+@scope ([data-skin="daylight"]:not([data-theme-bubble])) to ([data-skin]) {
   .bg-bubble-user {
     --color-ink: #fcfcfc;
     --color-ink-secondary: #c4c4c4;
