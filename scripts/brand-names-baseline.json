@@ -206,6 +206,10 @@
     "5d2ddb4d6dce7c73",
     "af3260db2ba2dd3e"
   ],
+  "deploy/service-update-runner.sh": [
+    "98d5ae82329f8850",
+    "a46ac4b95792f6ab"
+  ],
   "deploy/update.sh": [
     "24ef10fba8a3b7ed",
     "2a4f1b8499e5daa7",

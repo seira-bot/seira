@@ -5,6 +5,9 @@ import { join, sep } from "node:path";
 export const LATEST_RELEASE_URL = "https://api.github.com/repos/seira-bot/seira/releases/latest";
 /** Written by .github/workflows/promote-stable.yml: the released version our own Clouds have run for 48 hours. */
 export const STABLE_CHANNEL_URL = "https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json";
+/** The package an npm install updates from. A GitHub release comes first; its npm package comes later, after the release gate. */
+export const NPM_PACKAGE_URL = "https://registry.npmjs.org/@seira-bot/seira";
+const RELEASE_TAG_URL = "https://github.com/seira-bot/seira/releases/tag/v";
 const CACHE_MS = 60 * 60_000;
 /** How long the last answer stands in when the channel cannot be read: an outage of GitHub is no reason to say nothing. */
 const STALE_MS = 24 * 60 * 60_000;
@@ -126,8 +129,8 @@ export function createUpdateChecker(options: {
     available: false,
     ...updateCommand(options.install),
   });
-  const ask = (url: string) => fetchJson(url, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "seira-update-check" },
+  const ask = (url: string, accept = "application/vnd.github+json") => fetchJson(url, {
+    headers: { accept, "user-agent": "seira-update-check" },
     signal: AbortSignal.timeout(8_000),
   });
 
@@ -151,15 +154,28 @@ export function createUpdateChecker(options: {
     return { version: release.tag_name.replace(/^v/, ""), ...(typeof release.html_url === "string" ? { releaseUrl: release.html_url } : {}) };
   }
 
+  /** `version` when npm has it; else npm's newest version when that is older; else null: nothing to install yet. */
+  async function onNpm(found: Found): Promise<Found | null> {
+    const exact = await ask(`${NPM_PACKAGE_URL}/${found.version}`, "application/json");
+    if (exact.ok) return found;
+    if (exact.status !== 404) throw new Error(`The npm registry answered ${exact.status}`);
+    const latest = await ask(`${NPM_PACKAGE_URL}/latest`, "application/json");
+    if (!latest.ok) throw new Error(`The npm registry answered ${latest.status}`);
+    const { version } = await latest.json() as { version?: unknown };
+    if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version) || !isNewerVersion(found.version, version)) return null;
+    return { version, releaseUrl: `${RELEASE_TAG_URL}${version}` };
+  }
+
   return async function check(): Promise<UpdateCheck> {
     if (options.install === "desktop" || options.install === "managed") return base();
     if (cached && now() - cached.at < CACHE_MS) return cached.result;
     inflight ??= (async () => {
       try {
         const promoted = channel === "stable" ? await stable() : null;
-        const found = promoted ?? await newest();
+        const released = promoted ?? await newest();
+        const found = released && options.install === "npm" ? await onNpm(released) : released;
         if (!found) {
-          const result: UpdateCheck = { ...base(), channel: "newest" };
+          const result: UpdateCheck = { ...base(), channel: promoted ? "stable" : "newest" };
           cached = lastGood = { at: now(), result };
           return result;
         }

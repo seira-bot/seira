@@ -11,7 +11,7 @@ import { AppTriggerError, AppTriggerManager, type AppTriggerPatch } from "./app-
 import { managedComposioBrokerOff } from "./composio-broker-access.ts";
 import type { RosterMember } from "./peer-roster.ts";
 import type { RequestAuth } from "./request-auth.ts";
-import type { Routine, RoutineManager } from "./routines.ts";
+import type { Routine, RoutineManager, RoutineRun } from "./routines.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./routes/table.ts";
 import { listTriggers, triggerTarget } from "./trigger-tools.ts";
 import { addressFor } from "./webhook-address.ts";
@@ -38,7 +38,10 @@ export interface AppTriggerHostDeps {
   webhookBase: () => string;
   botState: (botId: string) => "ready" | "busy" | "missing";
   timeZone: () => string;
-  visibleBot: (auth: RequestAuth, botId: string) => boolean;
+  /** Whether this person may see an automation: its bot, and every bot of the workflow it runs. */
+  shown: (auth: RequestAuth, trigger: { botId: string; workflowId?: string; prompt?: string }) => boolean;
+  /** Whether this person may see an attempt of an automation they see: judged by the run it made, not only by the automation as it is now. */
+  attemptShown?: (auth: RequestAuth, attempt: { runId?: string }, trigger: { botId: string; workflowId?: string }) => boolean;
   emit: (frame: Record<string, unknown>) => void;
   audit: (row: { threadId: string; requestId: string; botId: string; botName: string; tool: string; summary: string }) => void;
   broker?: AppTriggerBroker;
@@ -60,6 +63,10 @@ export interface InternalTriggerContext {
   canCommit: () => boolean;
   /** Whether this turn may know of the routine: on a Team Cloud one that lives in someone's private chat only in theirs. */
   routineShown?: (routine: Routine) => boolean;
+  /** Whether this turn may know of a webhook or app trigger that runs a workflow: only when it may read every bot in the workflow's steps. */
+  startShown?: (start: { botId: string; workflowId?: string; prompt: string }) => boolean;
+  /** Whether this turn may know of a run of a webhook or app trigger: judged by the bots and chats the run used. */
+  runShown?: (run: RoutineRun) => boolean;
 }
 
 const GUEST_REFUSAL = "Only the Cloud's owner can make a bot watch their connected apps. Tell the person to ask from their own conversation.";
@@ -124,15 +131,23 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     return result;
   }
 
+  const snapshotFor = (auth: RequestAuth) => {
+    const snapshot = manager.snapshot();
+    const shown = snapshot.triggers.filter((trigger) => deps.shown(auth, trigger));
+    const byId = new Map(shown.map((trigger) => [trigger.id, trigger]));
+    const attempts = snapshot.attempts.filter((attempt) => {
+      const trigger = byId.get(attempt.triggerId);
+      return trigger !== undefined && (deps.attemptShown?.(auth, attempt, trigger) ?? true);
+    });
+    return { ...snapshot, triggers: shown, attempts };
+  };
+
   /** The person's side: /api/app-triggers. Reads follow what this viewer may see; changes need the owner. */
   const routes: RouteHandler = async ({ req, res, url, path, method, auth, json, readBody }: RouteContext) => {
     if (!path.startsWith("/api/app-triggers")) return PASS;
     try {
       if (path === "/api/app-triggers" && method === "GET") {
-        const snapshot = manager.snapshot();
-        const shown = snapshot.triggers.filter((trigger) => deps.visibleBot(auth, trigger.botId));
-        const ids = new Set(shown.map((trigger) => trigger.id));
-        return json(res, 200, { ...snapshot, triggers: shown, attempts: snapshot.attempts.filter((attempt) => ids.has(attempt.triggerId)) });
+        return json(res, 200, snapshotFor(auth));
       }
       if (path === "/api/app-triggers/events" && method === "GET") {
         const bot = deps.store.bot(url.searchParams.get("botId") ?? "");
@@ -141,7 +156,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       }
       if (path === "/api/app-triggers/sync" && method === "POST") {
         await manager.reconcile();
-        return json(res, 200, manager.snapshot());
+        return json(res, 200, snapshotFor(auth));
       }
       if (path === "/api/app-triggers" && method === "POST") {
         const body = (await readBody(req)) as Record<string, unknown>;
@@ -172,7 +187,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       const id = match[1]!;
       const current = manager.get(id);
       // Security: a hidden bot, or a workflow this person may not change, answers as a missing automation on every by-id request.
-      if (current && !deps.visibleBot(auth, current.botId)) return json(res, 404, { error: "no such automation" });
+      if (current && !deps.shown(auth, current)) return json(res, 404, { error: "no such automation" });
       const heldBack = current?.workflowId ? deps.workflowGate?.(auth, {}, current.workflowId) : null;
       if (heldBack) return json(res, heldBack.status, { error: heldBack.status === 404 ? "no such automation" : heldBack.error });
       if (match[2] === "test" && method === "POST") {
@@ -225,7 +240,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     const ownerId = target.forBot?.botId ?? context.from.id;
     const listing = listTriggers({
       botId: ownerId, triggerId: url.searchParams.get("triggerId") ?? undefined, routines: deps.routines().listRoutines().filter((routine) => context.routineShown?.(routine) ?? true),
-      webhooks: deps.webhooks.list(), appTriggers: manager.list(), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(), workflowName: deps.workflowName,
+      webhooks: deps.webhooks.list().filter((webhook) => context.startShown?.(webhook) ?? true), appTriggers: manager.list().filter((trigger) => context.startShown?.(trigger) ?? true), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(), workflowName: deps.workflowName, ...(context.runShown ? { runShown: context.runShown } : {}),
     });
     const shown = listing.trigger;
     if (url.searchParams.get("includeAddress") !== "1" || !shown) return json(res, 200, listing);

@@ -57,6 +57,7 @@ export function startLinkRefusal(
   const next = typeof workflowId === "string" ? workflows?.get(workflowId) : null;
   if (typeof workflowId === "string" && workflowId && !next) return { status: 404, error: "no such workflow" };
   const old = current === undefined ? null : workflows?.get(current);
+  if (current && !old && !visible.everything) return { status: 404, error: "no such workflow" };
   if ((next && !workflowVisible(next, visible)) || (old && !workflowVisible(old, visible))) return { status: 404, error: "no such workflow" };
   const bots = [...workflowBotIds(old?.steps), ...workflowBotIds(next?.steps)];
   const short = bots.length ? deps.botsRefusal(auth, bots, current === undefined ? "chat" : "edit") : null;

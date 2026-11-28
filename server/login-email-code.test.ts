@@ -24,7 +24,7 @@ function setup(url: string, html: string, answer: (ask: EmailCodeAsk) => EmailCo
   let typedCount = 0;
   let clock = NOW;
   const deps: FillLoginDeps = {
-    engine: (args) => page!.engine(args), insertText: (text) => page!.insertText(text), press: (key) => page!.press(key), click: (selector) => page!.click(selector),
+    engine: (args) => page!.engine(args), insertText: (text) => page!.insertText(text), typeKeys: (text) => page!.typeKeys(text), press: (key) => page!.press(key), click: (selector) => page!.click(selector),
     remember: (value, kind) => { remembered.push([kind, value]); },
     now: () => clock, sleep: async (ms) => { clock += ms; onSleep?.(clock); },
     turnActive: active,

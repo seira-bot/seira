@@ -109,7 +109,7 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 | **Ubuntu 24.04**, x64 | [`Seira-amd64.deb`](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) | `sudo apt install ./Seira-amd64.deb` |
 | **Other Linux**, x64 | [`Seira.AppImage`](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) | `chmod +x Seira.AppImage`, then open it. |
 | **Linux with Flatpak**, x64 | [`seira.flatpakref`](https://flatpak.seira.bot/seira.flatpakref) | `flatpak install --user https://flatpak.seira.bot/seira.flatpakref` |
-| **macOS** | No download yet | [Run the server](#run-it-on-a-server) with Node and open it in your browser, or [build the app from source](#build-from-source). |
+| **macOS** | [`Seira.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira.dmg) for Apple silicon, or [`Seira-intel.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira-intel.dmg) for Intel | Open the disk image, then drag Seira to Applications. |
 | **A server** (VPS or home server) | [`@seira-bot/seira`](https://www.npmjs.com/package/@seira-bot/seira) on npm | `npx @seira-bot/seira setup`. See [Run it on a server](#run-it-on-a-server). |
 
 The app updates itself. The Flatpak gets updates from `flatpak update`.
@@ -346,7 +346,7 @@ Seira has more than 30 engines. They include Claude Code, Codex, Gemini, Grok, C
 <details>
 <summary><b>Is there a macOS app?</b></summary>
 <br>
-There is no macOS download yet. The code builds for macOS, so you can <a href="#build-from-source">build the app from source</a>. You can also <a href="#run-it-on-a-server">run the server</a> with Node and open Seira in your browser.
+Yes. Download <a href="https://github.com/seira-bot/seira/releases/latest/download/Seira.dmg"><code>Seira.dmg</code></a> for a Mac with Apple silicon, or <a href="https://github.com/seira-bot/seira/releases/latest/download/Seira-intel.dmg"><code>Seira-intel.dmg</code></a> for a Mac with an Intel chip. You can also <a href="#build-from-source">build the app from source</a>, or <a href="#run-it-on-a-server">run the server</a> with Node and open Seira in your browser.
 </details>
 
 <details>
@@ -452,9 +452,9 @@ On Windows, a run from source shows **Seira (dev)** on the taskbar. The installe
 <summary><b>Desktop support for each system</b></summary>
 <br>
 
-| Capability | Windows x64 | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland | macOS (from source) |
+| Capability | Windows x64 | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland | macOS |
 |---|---|---|---|---|
-| Packaged app, harness server inside, local engines | Supported | Beta | Beta | Builds, no release |
+| Packaged app, harness server inside, local engines | Supported | Beta | Beta | Supported |
 | Your own VPS as a cloud computer, connected apps | Supported | Beta | Beta | Supported |
 | Preview of the local screen | Not available | Beta | Beta | Supported |
 | Bot control of this computer | Supported | Beta, after you opt in | Off for safety | Supported |
