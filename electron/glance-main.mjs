@@ -1,5 +1,6 @@
 import { actAllowed, cleanAct, initialState, step, validFeed } from "./glance-model.mjs";
 import { createGlanceTray } from "./glance-tray.mjs";
+import { validInset } from "./glance-top-inset.mjs";
 import { createGlanceWindow } from "./glance-window.mjs";
 
 /** The page answers an act within this time, or the answer counts as not sent. */
@@ -25,9 +26,10 @@ export function isWaylandSession({ platform, env, switches = {} }) {
  * `getMainWindow`: the main window, if any. `revealChat({ botId, threadId })`: raises the main window on that chat.
  * `prefs`: glanceHidden() and setGlanceHidden(). `onHiddenChange()`: the View menu follows the choice.
  */
-export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch, getMainWindow, prefs, t, revealChat, onHiddenChange = () => {}, platform = process.platform, isWayland = false, x11Available = false, createHelperVisor = null, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, createVisor = createGlanceWindow, createTray = createGlanceTray }) {
+export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch, getMainWindow, prefs, t, revealChat, onHiddenChange = () => {}, platform = process.platform, isWayland = false, x11Available = false, createHelperVisor = null, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, resolveInset = null, createVisor = createGlanceWindow, createTray = createGlanceTray }) {
   let model = initialState(), feed = null, view = null, pageOrigin = null, hidden = prefs.glanceHidden() === true;
   let visor = null, helper = false, failures = 0, helperOff = false, tray = null, timer = null, openToken = null, nextAct = 1, drawn = null;
+  let inset = 0, insetReady = false, hideCount = 0, probing = null;
   const watched = new WeakSet(), waiting = new Map(), avatars = new Map(), loading = new Set();
 
   const page = () => { const win = getMainWindow(); return win && !win.isDestroyed() ? win : null; };
@@ -86,7 +88,7 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
 
   function draw() {
     if (!view) return;
-    if (hidden) { visor?.close(); visor = null; drawn = null; tray?.destroy(); tray = null; return; }
+    if (hidden) { visor?.close(); visor = null; drawn = null; insetReady = false; hideCount++; tray?.destroy(); tray = null; return; }
     const useHelper = isWayland && x11Available && Boolean(createHelperVisor) && !helperOff;
     if (isWayland && !useHelper) {
       if (!view.active) { tray?.destroy(); return; }
@@ -94,11 +96,26 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
       tray.update(view);
       return;
     }
-    if (!view.active) { visor?.hide(); drawn = null; return; }
-    if (visor && helper !== useHelper) { visor.close(); visor = null; drawn = null; }
+    if (!view.active) { visor?.hide(); drawn = null; insetReady = false; hideCount++; return; }
+    if (visor && helper !== useHelper) { visor.close(); visor = null; drawn = null; insetReady = false; }
     if (tray && useHelper) { tray.destroy(); tray = null; }
-    visor ??= useHelper ? createHelperVisor({ onAct: act, onFail: helperFailed }) : createVisor({ BrowserWindow, screen, platform });
+    visor ??= useHelper ? createHelperVisor({ onAct: act, onFail: helperFailed }) : createVisor({ BrowserWindow, screen, platform, topInset: () => inset });
     helper = useHelper;
+    if (resolveInset && platform === "linux" && !insetReady) {
+      if (probing !== hideCount) {
+        const round = hideCount, target = visor;
+        probing = round;
+        Promise.resolve().then(() => resolveInset()).catch(() => null).then((top) => {
+          if (probing === round) probing = null;
+          if (round !== hideCount || visor !== target) { draw(); return; }
+          inset = validInset(top) ?? inset;
+          insetReady = true;
+          target.setTopInset?.(inset);
+          draw();
+        });
+      }
+      return;
+    }
     const next = payloadOf(), mark = JSON.stringify(next);
     if (mark === drawn && visor.visible()) return;
     drawn = mark;
@@ -181,6 +198,7 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
   function helperFailed() {
     failures++;
     visor = null;
+    insetReady = false;
     drawn = null;
     if (failures >= HELPER_FAILURES) helperOff = true;
     run();

@@ -627,3 +627,61 @@ describe("EventBus status-line progress", () => {
     expect(logged).toEqual(["item.started"]);
   });
 });
+
+describe("EventBus task-list counts", () => {
+  let seen: RuntimeEvent[];
+  let bus: EventBus;
+  beforeEach(() => {
+    rmSync(EVENTS_DIR, { recursive: true, force: true });
+    ensureDirs();
+    seen = [];
+    bus = new EventBus();
+    bus.subscribe((event) => seen.push(event));
+  });
+  const plan = (done: number, total: number, over: Partial<RuntimeEvent> = {}) =>
+    bus.publish(testEvent({ type: "turn.plan", done, total, turnId: "turn-1", ...over } as Partial<RuntimeEvent>));
+  const counts = () => seen.filter((event) => event.type === "turn.plan").map((event) => (event as Extract<RuntimeEvent, { type: "turn.plan" }>)).map((event) => `${event.done}/${event.total}`);
+
+  it("delivers a count when it changes and drops a repeat", () => {
+    plan(0, 3);
+    plan(0, 3);
+    plan(1, 3);
+    plan(1, 3);
+    plan(1, 4);
+    expect(counts()).toEqual(["0/3", "1/3", "1/4"]);
+  });
+
+  it("starts again for a new turn, and after a turn ends", () => {
+    plan(1, 3);
+    plan(1, 3, { turnId: "turn-2" });
+    bus.publish(testEvent({ type: "turn.completed", ok: true, turnId: "turn-2" } as Partial<RuntimeEvent>));
+    plan(1, 3, { turnId: "turn-2" });
+    expect(counts()).toEqual(["1/3", "1/3", "1/3"]);
+  });
+
+  it("keeps one memory for each thread", () => {
+    plan(1, 3, { threadId: "t-a" });
+    plan(1, 3, { threadId: "t-b" });
+    expect(counts()).toEqual(["1/3", "1/3"]);
+  });
+
+  it("drops counts that cannot be right", () => {
+    for (const [done, total] of [[0, 0], [2, 1], [-1, 3], [1.5, 3], [0, 51], [Number.NaN, 3]]) plan(done, total);
+    expect(counts()).toEqual([]);
+  });
+
+  it("never writes a count to the event log", async () => {
+    plan(1, 3);
+    bus.publish(testEvent({ type: "turn.started" } as Partial<RuntimeEvent>));
+    await bus.flush();
+    expect(counts()).toEqual(["1/3"]);
+    const logged = readFileSync(join(EVENTS_DIR, "thread-1.ndjson"), "utf8").trim().split("\n").map((line) => JSON.parse(line).type);
+    expect(logged).toEqual(["turn.started"]);
+  });
+
+  it("sends the text that waits to merge before the count", () => {
+    bus.publish(testEvent({ type: "content.delta", streamKind: "assistant_text", delta: "step one done" } as Partial<RuntimeEvent>));
+    plan(1, 3);
+    expect(seen.map((event) => event.type)).toEqual(["content.delta", "turn.plan"]);
+  });
+});

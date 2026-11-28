@@ -66,6 +66,8 @@ describe("hosted MCP apps", () => {
       ["grupy", "https://mcp.grupy.chat/mcp"],
       ["wapilot", "https://integrator.wapilot.id/v1/mcp"],
       ["tebar", "https://api.tebar.app/mcp"],
+      ["tiktok", "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-organic-social"],
+      ["tiktok-ads", "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-layer"],
     ]);
     const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
     for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);

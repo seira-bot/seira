@@ -44,7 +44,7 @@ export function createInternalTodoRoutes(deps: InternalTodoDeps): RouteHandler {
       if (method !== "POST") return json(res, 405, { error: "method not allowed" });
       const body = (await deps.readBody()) as Record<string, unknown> | null;
       if (path === "/api/internal/todos") {
-        const added = deps.host.botAdd(caller, body?.todos, deps.person?.());
+        const added = deps.host.botAdd(caller, body?.todos, deps.person?.(), deps.readable);
         const fresh = added.todos.map(publicTodo);
         if (fresh.length) deps.postLine(caller.threadId, batchLine(fresh, deps.botName), fresh.map((todo) => todo.id));
         return json(res, 200, {

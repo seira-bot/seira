@@ -15,6 +15,7 @@ import { redactSecretsInText } from "./redact.ts"; import { chiefLevel } from ".
 import type { BotRecord, OptionCardData } from "./store.ts"; import { outsideDepartmentReason } from "./peer-roster.ts";
 import type { TeamSetupFields, TeamSetupOperation, TeamSetupRequest, TeamSetupResult, TeamSetupUndo } from "../shared/team-setup.ts";
 import { PUBLIC_ERROR_MARK } from "./public-error.ts";
+import { capacityCardLine, capacityHoldText, capacityNoteText, type TeamCapacity } from "./machine-capacity.ts";
 
 const section = (value?: string) => value?.trim() || "";
 const teamName = z.string().trim().min(1).max(60).refine(fitsOnOneLine).refine((value) => redactSecretsInText(value) === value, "Team names cannot contain credentials");
@@ -113,6 +114,8 @@ interface Options {
   mcpServerProblem?(name: string, botId: string): string | null;
   /** The level a new bot starts at, as bot creation would resolve and check it; undefined for the workspace default. */
   newBotApproval?(): Exclude<ApprovalMode, "custom"> | undefined;
+  /** How this computer carries the team once the setup is applied; null where it cannot be read. */
+  capacity?(botsAfter: number): TeamCapacity | null;
   maxBots: number;
   ownsThread(botId: string, threadId: string): boolean;
   /** `request` only for a reviewed deletion; Undo of a creation deletes without one. */
@@ -122,7 +125,7 @@ interface Options {
 }
 
 type RequestFrom = { botId: string; name: string; color: string };
-type SetupArgs = { botId: string; threadId: string; plan: unknown; from?: RequestFrom };
+type SetupArgs = { botId: string; threadId: string; plan: unknown; from?: RequestFrom; capacityOk?: boolean };
 type DeletionArgs = { botId: string; threadId: string; targetBotId: string; reason: string; from?: RequestFrom };
 /** Server-only invocation lease. Never saved on a request or approval card. */
 type SubmitAuthority = { canCommit?: () => boolean };
@@ -293,9 +296,25 @@ export class TeamSetupRequestService {
   propose(args: SetupArgs) { return this.card(this.prepare(args), args.from); }
   proposeDeletion(args: DeletionArgs) { return this.card(this.prepareDeletion(args), args.from); }
 
+  /** The capacity of a setup that creates bots, when this computer carries the team only tightly or not at all. */
+  private strainedCapacity(request: TeamSetupRequest): TeamCapacity | null {
+    const creating = request.operations.filter((operation) => operation.action === "create").length;
+    if (creating === 0 || request.deletion) return null;
+    const capacity = this.options.capacity?.(this.options.store.bots.filter((bot) => !bot.hidden).length + creating) ?? null;
+    return capacity && capacity.verdict !== "ok" ? capacity : null;
+  }
+
   async submit(args: SetupArgs & SubmitAuthority) {
     const grant = this.options.autoApply?.(args.botId, args.threadId) ?? null;
-    if (grant) return { ...await this.applyImmediately(this.prepare(args), args.from, args.canCommit), appliedBy: grant };
+    if (grant) {
+      const request = this.prepare(args), capacity = this.strainedCapacity(request);
+      if (capacity?.verdict === "over" && !args.capacityOk) {
+        const capacityHold = capacityHoldText(capacity);
+        return { state: "held" as const, applied: false, requestId: request.requestId, detail: capacityHold, capacityHold };
+      }
+      const applied = await this.applyImmediately(request, args.from, args.canCommit);
+      return { ...applied, appliedBy: grant, ...(capacity && applied.state === "applied" ? { capacityNote: capacityNoteText(capacity) } : {}) };
+    }
     return { ...this.propose(args), applied: false, state: "pending" as const };
   }
 
@@ -310,6 +329,8 @@ export class TeamSetupRequestService {
     if (!permission.ok) throw new TeamSetupError(permission.error, permission.status);
     const chief = this.chief(request.botId);
     const lines = [`Why: ${request.reason}`];
+    const strained = this.strainedCapacity(request);
+    if (strained) lines.push(capacityCardLine(strained));
     if (request.deletion) lines.push(`Delete @${request.deletion.name} (${request.deletion.botId}).`, "Permanently removes this bot, all its conversations, memory, instructions, skills, and any computer owned only by it. Generated project files and shared department computers remain. Active work or an unavailable provider can block deletion safely.");
     if (request.newTeams.length) {
       lines.push(`Create departments: ${request.newTeams.map((name) => JSON.stringify(name)).join(", ")}.`);

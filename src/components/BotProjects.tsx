@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { MENU_SHEET } from "./menu-recipe";
 import { useHeldMenuMotion } from "./MenuMotion";
 import { t } from "@/lib/i18n";
+import { shortcutLabel } from "./ShortcutHint";
 
 const FOLDER_EMOJI = ["📁", "💼", "🏠", "📬", "💡", "🚀", "🎨", "🧪", "📚", "🌱", "⭐", "🛠️"];
 
@@ -181,7 +182,7 @@ export function NewThreadButton({ bot, className, compact = false, onCreated }: 
   const { dispatch } = useStore();
   const projects = bot.projects ?? [];
   const currentProject = projects.find((project) => project.id === bot.tasks?.find((task) => task.threadId === bot.threadId)?.projectId);
-  return <button type="button" aria-label={t("task.newShort")} title={currentProject ? t("task.newIn", { name: currentProject.name }) : t("task.newShort")}
+  return <button type="button" aria-label={t("task.newShort")} title={currentProject ? t("task.newIn", { name: currentProject.name }) : `${t("task.newShort")} (${shortcutLabel("new-thread")})`}
     onClick={() => {
       dispatch({ type: "newTask", botId: bot.id, ...(currentProject ? { projectId: currentProject.id } : {}) });
       onCreated?.();

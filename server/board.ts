@@ -62,6 +62,9 @@ export interface BoardViewer {
   bot(botId: string): boolean;
   audience(audience: Audience): boolean;
   routine(run: { botId?: unknown; groupId?: unknown; threadId?: unknown }): boolean;
+  /** Whether the person a todo works for lets this viewer read it (on a personal Cloud a guest reads only their own).
+   * Absent: yes. */
+  todo?(todoId: string): boolean;
 }
 
 const BRIEF_CHARS = 2000;
@@ -143,7 +146,7 @@ function runCards(runs: readonly RunRow[], viewer: BoardViewer): BoardCard[] {
 
 function todoCards(source: NonNullable<BoardSources["todos"]>, viewer: BoardViewer, now: number): BoardCard[] {
   const { picker, ...all } = source();
-  const shown = (todo: Todo & { audience?: Audience }) => todoVisible(todo, viewer);
+  const shown = (todo: Todo & { audience?: Audience }) => todoVisible(todo, viewer) && (!viewer.todo || viewer.todo(todo.id));
   const todos = all.todos.filter(shown);
   const ready = new Set<string>();
   const place = new Map<string, number>();

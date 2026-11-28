@@ -172,3 +172,16 @@ test("AC-09 no folder is removed or made again on close or exit", () => {
   child.emit("exit", 0, null);
   assert.equal(w.made.length, 1);
 });
+
+test("an inset message is one JSON line, sent before the render that waits for ready", () => {
+  const w = world();
+  w.remote.setTopInset(35);
+  assert.equal(w.spawns.length, 0);
+  w.remote.render({ n: 1 });
+  assert.equal(w.child().written.length, 0);
+  w.emit({ t: "ready" });
+  assert.deepEqual(w.child().written, [{ t: "inset", top: 35 }, { t: "render", payload: { n: 1 } }]);
+  w.remote.setTopInset(40);
+  assert.deepEqual(w.child().written.at(-1), { t: "inset", top: 40 });
+  assert.equal(w.child().written.length, 3);
+});

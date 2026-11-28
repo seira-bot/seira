@@ -62,7 +62,7 @@ async function measured(): Promise<Record<string, number>> {
   };
 }
 
-/** Bytes when the budget was last set. The profile text gained 152 bytes on purpose: it tells a bot to call app_settings show_place after places. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
+/** Bytes when the budget was last set. The heavy-work text gained 182 bytes on purpose: it tells a bot to ask machine_budget with the task and to warn before a job that is too big. The profile text gained 152 bytes on purpose: it tells a bot to call app_settings show_place after places. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
@@ -80,15 +80,15 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "team-memory": 286,
   // Every computer:* prompt carries 536 bytes on purpose: the free-form memory text.
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.
-  "computer:vm-private": 6095,
-  "computer:vm-shared": 6090,
-  "computer:vps": 5166,
-  "computer:local": 5505,
-  "claude:direct-chat": 9217,
-  "claude:setup-chat": 11613,
+  "computer:vm-private": 6277,
+  "computer:vm-shared": 6272,
+  "computer:vps": 5348,
+  "computer:local": 5687,
+  "claude:direct-chat": 9399,
+  "claude:setup-chat": 11795,
   "claude:volatile-note": 178,
-  "codex:direct-chat": 9217,
-  "codex:setup-chat": 11613,
+  "codex:direct-chat": 9399,
+  "codex:setup-chat": 11795,
   "codex:resumed-instructions": 207,
   "codex:volatile-note": 91,
 };

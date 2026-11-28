@@ -195,8 +195,15 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse", "moveHideTarget"],
+    does: "The AIs that bots use, by plan or by key. Each Claude account is its own AI and keeps its own approvals. To share work across several of them, use the AI pool.",
+    releaseNotes: ["claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse", "moveHideTarget"],
+  },
+  {
+    id: "ai-pool",
+    name: "AI pool",
+    place: "Settings → AI → AI pool",
+    does: "Shares work across two to ten AIs, such as several Claude accounts and Codex, so one plan's limit lasts longer: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI.",
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot"],
   },
   {
     id: "models",
@@ -208,9 +215,9 @@ export const APP_FEATURES: readonly AppFeature[] = [
   },
   {
     id: "machine-budget",
-    name: "Heavy work on this computer",
+    name: "Heavy work and team size on this computer",
     place: "a bot's own work; no setting",
-    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks free memory and processors. It starts only as many workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
+    does: "Before heavy work or a big new team, Seira checks this computer's memory, processors and disk. When the job or team is too big, the bot tells you first and offers a lighter way.",
     tools: ["machine_budget"],
   },
   {

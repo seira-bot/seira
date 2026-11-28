@@ -5,7 +5,7 @@ import type { WorkflowStarts } from "../host/workflow-starts.ts";
 import { WORKFLOW_ROUTINE_REFUSAL, type WorkflowRoutineEdits } from "../host/workflow-routine-edits.ts";
 import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
-import { publicErrorText } from "../public-error.ts";
+import { isPublicError, publicErrorText } from "../public-error.ts";
 import { workflowCopy } from "../workflows/routine-link.ts";
 import { problemBody, validateWorkflowInput } from "../workflows/validate.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -269,7 +269,12 @@ export function createWorkflowRoutes(deps: WorkflowRoutesDeps): RouteHandler {
       return started ? json(res, 201, { run: started }) : json(res, 409, { error: "The routine can't run now." });
     } catch (error) {
       if (error instanceof PlaceLostError) return json(res, 409, { error: error.message });
-      return json(res, 500, { error: error instanceof Error ? error.message : "The run could not start." });
+      // A public refusal keeps the status it declares; one with none is a conflict with the run's state.
+      if (isPublicError(error)) {
+        const status = (error as unknown as { status?: unknown }).status;
+        return json(res, typeof status === "number" ? status : 409, { error: error.message });
+      }
+      return json(res, 500, { error: publicErrorText(error, "POST workflow step run again", "The run could not start.") });
     }
   };
 }

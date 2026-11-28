@@ -588,7 +588,7 @@ export function AttachmentPreviewDialog({
             )}
             <button
               onClick={onClose}
-              className="flex size-9 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white"
+              className="-my-1 flex size-11 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white"
               aria-label={t("attach.close")}
             >
               <X size={19} />

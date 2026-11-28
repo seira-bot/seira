@@ -511,6 +511,16 @@ describe("a Team Cloud's audiences", () => {
     expect(frameForMember(own, ctx, seen)).toBe(own);
   });
 
+  it("sends the task-list counts of a chat only to someone who may see that chat", () => {
+    const admin = new VisibleSet(open, openGroups, BEN_ADMIN, undefined, { of: audienceOf, person: BEN_KEY });
+    const ctx: FrameContext = { visible: admin, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined };
+    const seen: StreamSeen = { bots: new Set(open.map((bot) => bot.id)), groups: new Set(["room-pub"]) };
+    const plan = (threadId: string) => ({ kind: "runtime", event: { type: "turn.plan", threadId, turnId: "turn-1", done: 1, total: 4 } });
+    expect(frameForMember(plan("t-pub-2"), ctx, seen)).toBeUndefined();
+    const own = plan("t-pub");
+    expect(frameForMember(own, ctx, seen)).toBe(own);
+  });
+
   it("finds every conversation a request names: a task in the path, the query and the body", () => {
     expect(requestThreadIds("/api/bots/pub/tasks/t-pub-2", new URLSearchParams())).toEqual(["t-pub-2"]);
     expect(requestThreadIds("/api/bots/pub/tasks/t-pub-2/title", new URLSearchParams("threadId=t-x"))).toEqual(["t-pub-2", "t-x"]);

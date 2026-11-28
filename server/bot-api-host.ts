@@ -19,7 +19,7 @@ import { PASS, type RouteHandler } from "./routes/table.ts";
 import { parseJson, schemaIssue } from "./schema.ts";
 import type { Message, Store } from "./store.ts";
 import { bearerSecret, header, json, readRawBody, type IngressDoor } from "./webhook-ingress.ts";
-import { PublicError } from "./public-error.ts";
+import { PublicError, publicErrorText } from "./public-error.ts";
 
 /** How long a call waits by default before answering "working" with its thread id. Under the 60 s that Fly's proxy is reported
  * (community.fly.io, staff replies, 2022-2024) to allow a connection with no bytes: a dropped answer would lose the thread id. */
@@ -223,7 +223,7 @@ export function createBotApiHost(deps: BotApiHostDeps) {
     try {
       claim = deps.claimRequest?.();
     } catch (error) {
-      json(res, statusOf(error), { error: error instanceof Error ? error.message : "Try again soon" });
+      json(res, statusOf(error), { error: publicErrorText(error, "Bot API request claim", "Try again soon") });
       return true;
     }
     // A call can wait minutes for its reply: the claim that holds off maintenance ends once the turn has started.
@@ -364,7 +364,7 @@ export function createBotApiHost(deps: BotApiHostDeps) {
       }
       return answer(res, 200, view(botId, auth));
     } catch (error) {
-      return answer(res, statusOf(error), { error: error instanceof Error ? error.message : String(error) });
+      return answer(res, statusOf(error), { error: publicErrorText(error, "POST bot API settings") });
     }
   };
 

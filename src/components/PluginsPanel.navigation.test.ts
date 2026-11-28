@@ -159,7 +159,7 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(HOSTED_CONNECTED, { ...everyApp(false), [HOSTED_MCP_APPS[0].id]: true });
     expect(render().html).toContain("2 connected");
   });
-  it.each(HOSTED_MCP_APPS)("finds $label by its own name and shows no other hosted card", (app) => {
+  it.each(HOSTED_MCP_APPS.filter((app) => app.label !== "TikTok"))("finds $label by its own name and shows no other hosted card", (app) => {
     fixture.overrides.set(HOSTED_CONNECTED, Object.fromEntries(HOSTED_MCP_APPS.map((one) => [one.id, true])));
     fixture.overrides.set(SEARCH, app.label.toLowerCase());
     const html = render().html;
@@ -183,15 +183,20 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(SEARCH, "whatsapp");
     expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "dalekta", "grupy", "konektor", "wapilot"]);
   });
+  it("finds every hosted card that works with TikTok", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "tiktok");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["repliz", "tebar", "tiktok", "tiktok-ads"]);
+  });
   it("finds the two hosted cards whose text mentions a broadcast", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "broadcast");
     expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["konektor", "wapilot"]);
   });
-  it("finds the two hosted cards whose text mentions a comment", () => {
+  it("finds the three hosted cards whose text mentions a comment", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "comment");
-    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["repliz", "tebar"]);
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["repliz", "tebar", "tiktok"]);
   });
   it("finds the two hosted cards whose text mentions a landing page", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);

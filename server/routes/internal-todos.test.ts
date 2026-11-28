@@ -69,6 +69,27 @@ describe("internal todo routes", () => {
     expect(ctx.store.get(todo.id)!.status).toBe("open");
   });
 
+  it("never matches a todo the caller may not read when a bot adds one with the same title (security)", async () => {
+    const ctx = setup();
+    const hidden = ctx.host.add([{ title: "Pay the team", botId: "scout", source: { threadId: "private" } }], { kind: "person", name: "Owner" }).todos[0]!;
+    const add = async (readable: (todo: { source?: { threadId: string } }) => boolean) => {
+      const route = createInternalTodoRoutes({ host: ctx.host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => ({ todos: [{ title: "Pay the team", assigneeBotId: "Scout" }, { title: "Tell the team", afterIndex: 0 }] }), readable: readable as never, botName: () => undefined, postLine: () => {} });
+      const sent: any = {};
+      await route({ req: {} as never, res: {} as never, url: new URL("/api/internal/todos", "http://x"), path: "/api/internal/todos", method: "POST", auth: {} as never, readBody: (async () => null) as never, json: ((_r: unknown, status: number, payload: unknown) => { sent.status = status; sent.body = payload; }) as never });
+      return sent;
+    };
+    const refused = await add((todo) => todo.source?.threadId !== "private");
+    expect(refused.status).toBe(200);
+    expect(refused.body.existing).toEqual([]);
+    expect(refused.body.added.map((todo: { title: string }) => todo.title)).toEqual(["Pay the team", "Tell the team"]);
+    const [own, next] = refused.body.added as Array<{ id: string }>;
+    expect(own!.id).not.toBe(hidden.id);
+    expect(ctx.store.get(next!.id)!.start).toEqual({ kind: "after", todoId: own!.id });
+    expect(ctx.store.get(hidden.id)).toMatchObject({ title: "Pay the team", status: "queued" });
+    // A caller that may read the todo still gets the match.
+    expect((await add(() => true)).body.existing[0].id).toBe(hidden.id);
+  });
+
   it("refuses a repeating todo from a bot with a plain reason", async () => {
     const ctx = setup();
     const route = createInternalTodoRoutes({ host: ctx.host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => ({ todos: [{ title: "Daily", repeat: { time: "09:00", weekdays: [] } }] }), readable: () => true, botName: () => undefined, postLine: () => {} });

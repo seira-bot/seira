@@ -9,7 +9,7 @@ import { PASS, type RouteContext } from "./table.ts";
 
 const NOW = 1_800_000_000_000;
 
-function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: unknown[]; todoRefusal?: (todoId: string) => string | null; closeTodo?: (todoId: string) => void } = {}) {
+function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: unknown[]; todoRefusal?: (todoId: string) => string | null; todoReadable?: (todoId: string) => boolean; closeTodo?: (todoId: string) => void } = {}) {
   const closed = new Map<string, BoardClosure>();
   const closures: BoardClosures = {
     get: (id) => closed.get(id),
@@ -41,7 +41,8 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
   } as unknown as VisibleSet;
   const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW,
     ...(options.closeTodo ? { closeTodo: (todoId: string) => options.closeTodo!(todoId) } : {}),
-    ...(options.todoRefusal ? { todoRefusal: (_auth: RequestAuth, todoId: string) => options.todoRefusal!(todoId) } : {}) });
+    ...(options.todoRefusal ? { todoRefusal: (_auth: RequestAuth, todoId: string) => options.todoRefusal!(todoId) } : {}),
+    ...(options.todoReadable ? { todoReadable: (_auth: RequestAuth, todoId: string) => options.todoReadable!(todoId) } : {}) });
   const call = async (method: string, path: string, body: unknown = {}) => {
     const sent: { status?: number; body?: any } = {};
     const out = await route({
@@ -124,6 +125,19 @@ describe("POST /api/board/close", () => {
     const open = setup({}, { todos: [todo], todoRefusal: () => null, closeTodo: (id) => { closedTodos.push(id); } });
     expect(await close(open.call, "todo:t1")).toMatchObject({ status: 200 });
     expect(closedTodos).toEqual(["t1"]);
+  });
+
+  it("leaves out a todo card the person may not read, and answers its close with 404 (security)", async () => {
+    const card = (id: string) => ({ id, title: `Plan ${id}`, status: "needs-you", start: { kind: "free" }, rank: 1, madeBy: { kind: "person", name: "R" }, botId: "atlas", attempts: 1, depth: 0, createdAt: NOW - 1000, updatedAt: NOW - 1000 });
+    const closedTodos: string[] = [];
+    const { call } = setup({}, { todos: [card("mine"), card("theirs")], todoReadable: (id) => id === "mine", todoRefusal: () => null, closeTodo: (id) => { closedTodos.push(id); } });
+    const ids = ((await call("GET", "/api/board")).body.cards as Array<{ id: string }>).map((one) => one.id);
+    expect(ids).toContain("todo:mine");
+    expect(ids).not.toContain("todo:theirs");
+    expect(await close(call, "todo:theirs")).toMatchObject({ status: 404 });
+    expect(closedTodos).toEqual([]);
+    expect(await close(call, "todo:mine")).toMatchObject({ status: 200 });
+    expect(closedTodos).toEqual(["mine"]);
   });
 
   it("refuses a body without a card id or with a reason that is too long", async () => {

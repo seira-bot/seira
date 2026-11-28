@@ -281,6 +281,21 @@ offer an **Open Settings** action on Linux.
 Local computer control is independent from preview. It is available after explicit opt-in on Xorg and remains
 fail-closed on Wayland. XWayland's `DISPLAY` never bypasses the Wayland safety gate.
 
+### Glance on tiling Wayland compositors
+
+On Wayland, Glance runs in a small helper window on XWayland so it can stay on top. Tiling compositors such as
+Hyprland and Sway do not tell XWayland where a top panel (Waybar and similar) sits, so Seira asks the compositor
+for the panel's height when the visor opens and each time it appears again:
+
+- **Hyprland** (when `HYPRLAND_INSTANCE_SIGNATURE` is set): the monitor's reserved top space from `hyprctl monitors -j`.
+- **Sway** (when `SWAYSOCK` is set): the offset of the focused workspace from `swaymsg -t get_workspaces`.
+- **Any other compositor** (river, niri and so on): set `SEIRA_GLANCE_TOP_INSET` to the panel height in pixels,
+  for example `SEIRA_GLANCE_TOP_INSET=35`. See [environment-variables.md](environment-variables.md#glance-top-inset).
+
+GNOME and KDE already report the work area, so they need nothing. If the compositor tool is missing or does not
+answer within 1.5 seconds, Glance keeps the last panel height it found (the top of the screen the first time) and
+asks again the next time it appears.
+
 ## Enable local control
 
 Installed `.deb` and AppImage builds include the certified **Cua Driver 0.41.3** CLI and cursor-theme sidecar.

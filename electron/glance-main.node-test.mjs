@@ -10,7 +10,7 @@ const bot = (id, extra = {}) => ({ botId: id, threadId: `t-${id}`, name: id, ava
 const approval = { kind: "approval", requestId: "r1", title: "Run", detail: "ls", choices: [], canAlways: true };
 const feed = (...bots) => ({ version: 1, lang: "en", bots, labels: LABELS });
 
-function world({ wayland = false, hidden = false, focused = false, x11 = false } = {}) {
+function world({ wayland = false, hidden = false, focused = false, x11 = false, resolveInset = null } = {}) {
   const log = [], timers = [], handlers = { on: {}, handle: {} };
   const mainFrame = { url: `${ORIGIN}/` };
   const contents = Object.assign(new EventEmitter(), { mainFrame, isLoadingMainFrame: () => false, getURL: () => `${ORIGIN}/x`, send: (channel, payload) => log.push({ channel, payload }) });
@@ -21,18 +21,18 @@ function world({ wayland = false, hidden = false, focused = false, x11 = false }
     render(p) { fakeVisor.renders.push(p); fakeVisor.shown = true; }, hide() { fakeVisor.hides++; fakeVisor.shown = false; }, close() { fakeVisor.closed++; }, setSize(s) { fakeVisor.sizes.push(s); return true; } };
   const fakeTray = { updates: [], destroyed: 0, update(v) { fakeTray.updates.push(v); }, destroy() { fakeTray.destroyed++; }, relabel() {} };
   const prefs = { glanceHidden: () => hidden, setGlanceHidden: (v) => { hidden = v; saved.push(v); } };
-  const reveals = [], helpers = [];
+  const reveals = [], helpers = [], order = [], visorOptions = [];
   const glance = installGlance({
     ipcMain: { on: (c, f) => { handlers.on[c] = f; }, handle: (c, f) => { handlers.handle[c] = f; } },
     screen: {}, BrowserWindow: class {}, Tray: class {}, Menu: {}, nativeImage: {}, fetch: async () => ({ ok: false }),
     getMainWindow: () => win, prefs, t: (k) => k, revealChat: (target) => reveals.push(target), isWayland: wayland, platform: "linux",
     setTimer: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; }, clearTimer: () => {},
-    createVisor: () => { visors.push(fakeVisor); return fakeVisor; }, createTray: () => { trays.push(fakeTray); return fakeTray; },
-    x11Available: x11, createHelperVisor: (hooks) => { const h = { ...fakeVisor, hooks, closed: 0, renders: [], hides: 0, shown: false, contents: () => null, visible: () => h.shown, render(p) { h.renders.push(p); h.shown = true; }, hide() { h.hides++; h.shown = false; }, close() { h.closed++; } }; helpers.push(h); return h; },
+    createVisor: (options) => { visorOptions.push(options); visors.push(fakeVisor); return fakeVisor; }, createTray: () => { trays.push(fakeTray); return fakeTray; },
+    x11Available: x11, resolveInset, createHelperVisor: (hooks) => { const h = { ...fakeVisor, hooks, closed: 0, renders: [], hides: 0, shown: false, contents: () => null, visible: () => h.shown, setTopInset(n) { order.push(["inset", n]); }, render(p) { order.push(["render"]); h.renders.push(p); h.shown = true; }, hide() { h.hides++; h.shown = false; }, close() { h.closed++; } }; helpers.push(h); return h; },
   });
   const page = { sender: contents, senderFrame: mainFrame };
   const send = (raw, event = page) => handlers.on["glance:feed"](event, raw);
-  return { helpers, glance, handlers, log, timers, fakeVisor, fakeTray, visors, trays, saved, reveals, page, contents, mainFrame, win, send, visorEvent: { sender: visorContents, senderFrame: visorContents.mainFrame } };
+  return { visorOptions, order, helpers, glance, handlers, log, timers, fakeVisor, fakeTray, visors, trays, saved, reveals, page, contents, mainFrame, win, send, visorEvent: { sender: visorContents, senderFrame: visorContents.mainFrame } };
 }
 
 test("AC-15 a feed from a subframe, another page or the wrong origin is ignored", () => {
@@ -264,4 +264,197 @@ test("AC-08 turning Glance off or leaving closes the helper", () => {
   w2.send(feed(bot("a")));
   w2.glance.destroy();
   assert.equal(w2.helpers[0].closed, 1);
+});
+
+test("glanceBounds honours a top inset when the work area is wrong, and never double-counts a real one", () => {
+  const size = { width: 200, height: 40 };
+  const wrong = { bounds: { x: 0, y: 0, width: 1920, height: 1200 }, workArea: { x: 0, y: 0, width: 1920, height: 1200 } };
+  assert.equal(glanceBounds(wrong, "linux", size, 35).y, 43);
+  assert.equal(glanceBounds(wrong, "linux", size, 0).y, 8);
+  assert.equal(glanceBounds(wrong, "linux", size).y, 8);
+  const real = { bounds: wrong.bounds, workArea: { x: 0, y: 30, width: 1920, height: 1170 } };
+  assert.equal(glanceBounds(real, "linux", size, 35).y, 43);
+  assert.equal(glanceBounds(real, "linux", size, 10).y, 38);
+  assert.equal(glanceBounds(wrong, "darwin", size, 35).y, 0);
+});
+
+test("setTopInset re-places a live visor, and a getter is read on every placement", () => {
+  const sets = [];
+  class Fake extends EventEmitter {
+    constructor() { super(); this.webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler() {}, executeJavaScript: async () => {}, loadURL() {} }); }
+    loadURL() { return Promise.resolve(); }
+    isDestroyed() { return false; } setAlwaysOnTop() {} setVisibleOnAllWorkspaces() {} showInactive() {} destroy() {}
+    setBounds(b) { sets.push(b); }
+  }
+  const display = { bounds: { x: 0, y: 0, width: 1920, height: 1200 }, workArea: { x: 0, y: 0, width: 1920, height: 1200 } };
+  const screen = Object.assign(new EventEmitter(), { getPrimaryDisplay: () => display });
+  const visor = createGlanceWindow({ BrowserWindow: Fake, screen, platform: "linux", preload: "p.cjs" });
+  visor.render({ entries: [] });
+  visor.setSize({ width: 200, height: 40 });
+  assert.equal(sets.at(-1).y, 8);
+  visor.setTopInset(35);
+  assert.equal(sets.at(-1).y, 43);
+  visor.close();
+  let inset = 20;
+  const dynamic = createGlanceWindow({ BrowserWindow: Fake, screen, platform: "linux", preload: "p.cjs", topInset: () => inset });
+  dynamic.render({ entries: [] });
+  dynamic.setSize({ width: 200, height: 40 });
+  assert.equal(sets.at(-1).y, 28);
+  inset = 40;
+  dynamic.setSize({ width: 210, height: 40 });
+  assert.equal(sets.at(-1).y, 48);
+  dynamic.close();
+});
+
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("on Wayland with the helper the inset is resolved first and sent before the render, and again after hide then show", async () => {
+  let calls = 0, answer = 35;
+  const w = world({ wayland: true, x11: true, resolveInset: async () => { calls++; return answer; } });
+  w.send(feed(bot("a", { state: "needs", ask: approval })));
+  assert.equal(w.helpers.length, 1);
+  assert.equal(w.helpers[0].renders.length, 0);
+  await settle();
+  assert.deepEqual(w.order, [["inset", 35], ["render"]]);
+  assert.equal(calls, 1);
+  w.send(feed(bot("a", { state: "needs", ask: approval, line: "More" })));
+  await settle();
+  assert.equal(calls, 1);
+  w.send(feed());
+  assert.equal(w.helpers[0].hides, 1);
+  const before = w.order.length;
+  answer = 50;
+  w.send(feed(bot("a", { state: "needs", ask: approval })));
+  await settle();
+  assert.equal(calls, 2);
+  assert.deepEqual(w.order.slice(before), [["inset", 50], ["render"]]);
+});
+
+test("without a resolver the visor draws at once", () => {
+  const w = world({ wayland: true, x11: true });
+  w.send(feed(bot("a")));
+  assert.equal(w.helpers[0].renders.length, 1);
+});
+
+test("a resolver that rejects still draws, keeps the last good inset, and probes again on the next show", async () => {
+  const answers = [35, "reject"];
+  let calls = 0;
+  const w = world({ wayland: true, x11: true, resolveInset: async () => { calls++; const next = answers.shift(); if (next === "reject") throw new Error("x"); return next ?? 35; } });
+  const shown = () => feed(bot("a", { state: "needs", ask: approval }));
+  w.send(shown());
+  await settle();
+  w.send(feed());
+  w.order.length = 0;
+  w.send(shown());
+  await settle();
+  assert.deepEqual(w.order, [["inset", 35], ["render"]]);
+  w.send(feed());
+  w.order.length = 0;
+  w.send(shown());
+  await settle();
+  assert.equal(calls, 3);
+  assert.deepEqual(w.order, [["inset", 35], ["render"]]);
+});
+
+test("in the X11-only path the visor reads the resolved inset through its getter", async () => {
+  const w = world({ resolveInset: async () => 35 });
+  w.send(feed(bot("a", { state: "needs", ask: approval })));
+  assert.equal(w.visors.length, 1);
+  await settle();
+  assert.equal(w.visorOptions[0].topInset(), 35);
+  assert.equal(w.fakeVisor.renders.length, 1);
+});
+
+test("a probe that was started before a hide is discarded, and the next show probes again", async () => {
+  const pending = [];
+  const w = world({ wayland: true, x11: true, resolveInset: () => new Promise((resolve) => pending.push(resolve)) });
+  const shown = () => feed(bot("a", { state: "needs", ask: approval }));
+  w.send(shown());
+  await settle();
+  assert.equal(pending.length, 1);
+  w.send(feed());
+  w.send(shown());
+  await settle();
+  assert.equal(pending.length, 2);
+  pending[0](10);
+  await settle();
+  assert.deepEqual(w.order, []);
+  assert.equal(pending.length, 2);
+  pending[1](50);
+  await settle();
+  assert.deepEqual(w.order, [["inset", 50], ["render"]]);
+});
+
+test("a failed probe draws with the last good value, keeps the last good value and probes again on the next show", async () => {
+  const answers = [null, 35, null];
+  let calls = 0;
+  const w = world({ wayland: true, x11: true, resolveInset: async () => { calls++; return answers.shift(); } });
+  const shown = () => feed(bot("a", { state: "needs", ask: approval }));
+  w.send(shown());
+  await settle();
+  assert.deepEqual(w.order, [["inset", 0], ["render"]]);
+  w.send(feed());
+  w.order.length = 0;
+  w.send(shown());
+  await settle();
+  assert.equal(calls, 2);
+  assert.deepEqual(w.order, [["inset", 35], ["render"]]);
+  w.send(feed());
+  w.order.length = 0;
+  w.send(shown());
+  await settle();
+  assert.equal(calls, 3);
+  assert.deepEqual(w.order, [["inset", 35], ["render"]]);
+});
+
+test("a failed probe does not probe again while the visor stays up", async () => {
+  let calls = 0;
+  const w = world({ wayland: true, x11: true, resolveInset: async () => { calls++; return null; } });
+  w.send(feed(bot("a", { state: "needs", ask: approval })));
+  await settle();
+  w.send(feed(bot("a", { state: "needs", ask: approval, line: "More" })));
+  await settle();
+  assert.equal(calls, 1);
+  assert.equal(w.helpers[0].renders.length, 2);
+});
+
+function linuxWindow(options = {}) {
+  const sets = [];
+  class Fake extends EventEmitter {
+    constructor() { super(); this.webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler() {}, executeJavaScript: async () => {}, loadURL() {} }); }
+    loadURL() { return Promise.resolve(); }
+    isDestroyed() { return false; } setAlwaysOnTop() {} setVisibleOnAllWorkspaces() {} showInactive() {} destroy() {}
+    setBounds(b) { sets.push(b); }
+  }
+  const display = { bounds: { x: 0, y: 0, width: 1920, height: 1200 }, workArea: { x: 0, y: 0, width: 1920, height: 1200 } };
+  const screen = Object.assign(new EventEmitter(), { getPrimaryDisplay: () => display });
+  const visor = createGlanceWindow({ BrowserWindow: Fake, screen, platform: "linux", preload: "p.cjs", ...options });
+  visor.render({ entries: [] });
+  return { sets, screen, visor };
+}
+
+test("a grown visor sits at y 43 under a 35 px inset, given as a number or a getter", () => {
+  for (const topInset of [35, () => 35]) {
+    const { sets, visor } = linuxWindow({ topInset });
+    visor.setSize({ width: 380, height: 160 });
+    assert.deepEqual(sets.at(-1), { x: 770, y: 43, width: 380, height: 160 });
+    visor.close();
+  }
+});
+
+test("growing first and setting the inset after keeps the height and moves to y 43", () => {
+  const { sets, visor } = linuxWindow();
+  visor.setSize({ width: 380, height: 160 });
+  assert.equal(sets.at(-1).y, 8);
+  visor.setTopInset(35);
+  assert.deepEqual(sets.at(-1), { x: 770, y: 43, width: 380, height: 160 });
+  visor.close();
+});
+
+test("a display change after growing keeps y 43", () => {
+  const { sets, screen, visor } = linuxWindow({ topInset: 35 });
+  visor.setSize({ width: 380, height: 160 });
+  screen.emit("display-metrics-changed");
+  assert.deepEqual(sets.at(-1), { x: 770, y: 43, width: 380, height: 160 });
+  visor.close();
 });

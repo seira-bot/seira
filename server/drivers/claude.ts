@@ -62,7 +62,7 @@ import { BACKGROUND_CALL_TIMEOUT_MS, backgroundCallArgs, spawnBackgroundCall } f
 import { permissionLaunchCwd, shellRequest } from "./permission-command.ts"; import { readToolPaths } from "../own-file-reads.ts";
 import { ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
-import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
+import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { claudeTodoPlan } from "./turn-plan.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
 import {
   ASK_USER_QUESTION_TOOL,
   ASK_USER_TOOL,
@@ -1542,7 +1542,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
                   title: b.name,
                   summary: commandSummary(b.input),
                   input: toolDetailPreview(b.input),
-                });
+                }); const plan = b.name === "TodoWrite" && !o.parent_tool_use_id ? claudeTodoPlan(b.input) : null; if (plan) emit({ ...base(threadId, currentTurnId()), ...plan });
               }
             }
             if (msg.usage) {
