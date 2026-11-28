@@ -239,7 +239,7 @@ It is off unless you set it. Add it to `config.json`; the server follows the
 file, so adding the helper or taking it out again applies without a restart:
 
 ```json
-{ "helper": { "instanceId": "claude", "model": "claude-haiku-4-5" } }
+{ "helper": { "instanceId": "claude", "model": "claude-haiku-5-5" } }
 ```
 
 or set `SEIRA_HELPER_INSTANCE` (and, if you want, `SEIRA_HELPER_MODEL`) in the
