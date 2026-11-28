@@ -11956,7 +11956,7 @@ const todoSessionMayReadId = (auth: RequestAuth, todoId: string): boolean => {
 };
 /** Security invariant: a bot's turn reads or changes a todo only where it may read where the todo came from. On a Team
  * Cloud by the audience rule; on a personal Cloud a confined turn (a guest's or outside work) only its own conversation's
- * todos and its person's. */
+ * todos and its person's. A marker key (nobody, outside) is no person, so outside work never reads another's todos. */
 const todoTurnMayRead = (threadId: string, todo: TodoRecord): boolean => {
   if (CLOUD_TEAM) {
     return mayRead(todoAudience(todo), teamHost.audienceOf(threadId))
@@ -11964,7 +11964,7 @@ const todoTurnMayRead = (threadId: string, todo: TodoRecord): boolean => {
   }
   if (!CLOUD_HOME || !(cloudGuestDriven(threadId) || outsideDrivenThread(threadId))) return true;
   const own = openerFrom(threadId);
-  return todo.threadId === threadId || todo.source?.threadId === threadId || (own !== undefined && own !== CLOUD_NOBODY_KEY && todo.person?.key === own);
+  return todo.threadId === threadId || todo.source?.threadId === threadId || (own !== undefined && !TODO_MARKERS.has(own) && todo.person?.key === own);
 };
 /** The key a bot's todo opens its conversation as. Work from outside stays outside work (a routine it proposes is too). */
 const todoKeyFrom = (threadId: string): string | undefined =>
