@@ -5,12 +5,16 @@ import type { BoardSources } from "../board.ts";
 import type { BoardClosure, BoardClosures } from "../board-closed.ts";
 import { requiredScope, type RequestAuth } from "../request-auth.ts";
 import type { Todo } from "../../shared/todo.ts";
+import { createTodoPolicy } from "../host/todo-policy.ts";
+import { personKey } from "../person-key.ts";
+import type { SessionRecord } from "../sessions.ts";
+import type { TodoRecord } from "../todos.ts";
 import { createBoardRoutes, type BoardRouteDeps } from "./board.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
 const NOW = 1_800_000_000_000;
 
-function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: Todo[]; deps?: Partial<BoardRouteDeps> } = {}) {
+function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: Todo[]; deps?: Partial<BoardRouteDeps>; auth?: RequestAuth } = {}) {
   const closed = new Map<string, BoardClosure>();
   const closures: BoardClosures = {
     get: (id) => closed.get(id),
@@ -44,7 +48,7 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
     const sent: { status?: number; body?: any } = {};
     const out = await route({
       req: {} as IncomingMessage, res: {} as ServerResponse, url: new URL(path, "http://127.0.0.1"), path, method,
-      auth: { kind: "loopback", scopes: ["client"] } as RequestAuth, readBody: (async () => body) as RouteContext["readBody"],
+      auth: options.auth ?? ({ kind: "loopback", scopes: ["client"] } as RequestAuth), readBody: (async () => body) as RouteContext["readBody"],
       json: ((_res: ServerResponse, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as RouteContext["json"],
     });
     return { out, ...sent };
@@ -143,6 +147,29 @@ describe("security: a person's todo on the Board", () => {
     const { call } = setup({}, { todos: [todo("owners")], deps: { todoCloseRefusal: () => "On this Cloud you can only change todos you made.", closeTodo: (id) => { closedTodos.push(id); } } });
     expect(await call("POST", "/api/board/close", { cardId: "todo:owners" })).toMatchObject({ status: 403, body: { error: "On this Cloud you can only change todos you made." } });
     expect(closedTodos).toEqual([]);
+  });
+
+  it("never lets a guest close a todo another person wrote, by the Cloud's own rule", async () => {
+    const guest = { id: "s-pat", email: "pat@example.com" } as SessionRecord;
+    const records: Record<string, TodoRecord> = {
+      theirs: { ...todo("theirs"), person: { key: "p_owner" } },
+      mine: { ...todo("mine"), person: { key: personKey(guest) } },
+    };
+    const rules = createTodoPolicy({
+      mode: "personal", nobodyKey: "p_nobody", outsideKey: "p_outside", actorKey: (auth) => personKey(auth.session),
+      ownerSession: (auth) => auth.kind === "session" && auth.scopes.includes("admin"), ownerPerson: (key) => key === "p_owner",
+      viewerFor: () => ({ kind: "member" }), level: () => "chat", teamPeople: () => [], signedIn: () => [], audienceOf: () => "team",
+      readableFrom: () => () => true, guestDriven: () => false, outsideDriven: () => false, outsideStaysHere: () => false, openerFrom: () => undefined,
+    });
+    const closedTodos: string[] = [];
+    const { call } = setup({}, {
+      todos: [todo("theirs"), todo("mine")], auth: { kind: "session", session: guest, via: "cookie", scopes: ["client"] },
+      deps: { todoReadable: (auth, id) => rules.sessionMayRead(auth, records[id]!), todoCloseRefusal: (auth, id) => rules.changeRefusal(auth, records[id]!), closeTodo: (id) => { closedTodos.push(id); } },
+    });
+    expect((await call("POST", "/api/board/close", { cardId: "todo:theirs" })).status).toBe(404);
+    expect(closedTodos).toEqual([]);
+    expect((await call("POST", "/api/board/close", { cardId: "todo:mine" })).status).toBe(200);
+    expect(closedTodos).toEqual(["mine"]);
   });
 
   it("closes a todo the person may change", async () => {
