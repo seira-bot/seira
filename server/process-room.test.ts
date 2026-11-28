@@ -6,7 +6,7 @@ import { engineFailureKind } from "./drivers/engine-errors.ts";
 import { classifyError } from "./drivers/retry.ts";
 import { EngineMemory, FIRST_FRAME_MS, readHostMemory, withEngineMemory, type HostMemory } from "./engine-memory.ts";
 import { containerLimited, readCgroupMemory, readPids, readProcessLimits } from "./process-limits.ts";
-import { BROWSER_NO_ROOM, BROWSER_TASKS, ENGINE_TASKS, gateHost, linuxTreeUse, margin, ProcessBudget, turnsSetting, turnsUnder, type TreeUse } from "./process-room.ts";
+import { BROWSER_NO_ROOM, BROWSER_TASKS, ENGINE_TASKS, gateHost, gateStartLine, linuxTreeUse, margin, ProcessBudget, turnsSetting, turnsUnder, type TreeUse } from "./process-room.ts";
 import { outOfProcesses, shortageCode } from "./process-shortage.ts";
 import { describeSpawnFailure, linuxGroupOnlyExited } from "./procs.ts";
 import { classifyRoutineFailure, recoverRun, ROUTINE_BUSY_WAIT_MS } from "./routine-recovery.ts";
@@ -73,26 +73,31 @@ describe("where turns wait for room, and the one setting", () => {
     for (const value of [undefined, "", "auto", "-3", "2.5", "many"]) expect(turnsSetting(value)).toBe("auto");
   });
 
-  it("is on for a Cloud home and for a self-hosted Linux server in a container with a limit, the desktop app on Linux unless turned off, and elsewhere only when asked for", () => {
-    const limited = () => true, open = () => false;
-    expect(gateHost({}, "linux", limited)).toBe("server");
-    expect(gateHost({}, "linux", open)).toBeNull();
-    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "auto" }, "linux", open)).toBe("server");
-    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "8" }, "linux", open)).toBe("server");
-    expect(gateHost({ SEIRA_CLOUD_ROLE: "home" }, "linux", open)).toBe("cloud");
-    expect(gateHost({ SEIRA_CLOUD_ROLE: "team", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", open)).toBe("cloud");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "linux", limited)).toBe("desktop");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "win32", open)).toBe("desktop");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "win32", open)).toBeNull();
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "4" }, "linux", limited)).toBe("desktop");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", limited)).toBeNull();
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "darwin", open)).toBe("desktop");
-    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "darwin", open)).toBeNull();
-    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "off" }, "linux", limited)).toBeNull();
+  it("is on for a Cloud home, a self-hosted Linux server, in a container or not, and the desktop app unless turned off, and elsewhere only when asked for", () => {
+    expect(gateHost({}, "linux")).toBe("server");
+    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "auto" }, "linux")).toBe("server");
+    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "8" }, "linux")).toBe("server");
+    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "off" }, "linux")).toBeNull();
+    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "0" }, "linux")).toBeNull();
+    expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: " OFF " }, "linux")).toBeNull();
+    expect(gateHost({ SEIRA_CLOUD_ROLE: "home" }, "linux")).toBe("cloud");
+    expect(gateHost({ SEIRA_CLOUD_ROLE: "team", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux")).toBe("cloud");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "linux")).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "win32")).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "win32")).toBeNull();
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "4" }, "linux")).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "linux")).toBeNull();
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1" }, "darwin")).toBe("desktop");
+    expect(gateHost({ SEIRA_DESKTOP_PARENT: "1", SEIRA_TURNS_MAX_RUNNING: "off" }, "darwin")).toBeNull();
     for (const platform of ["darwin", "win32"] as const) {
-      expect(gateHost({}, platform, () => { throw new Error("nothing is read off Linux"); })).toBeNull();
-      expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "6" }, platform, open)).toBe("server");
+      expect(gateHost({}, platform)).toBeNull();
+      expect(gateHost({ SEIRA_TURNS_MAX_RUNNING: "6" }, platform)).toBe("server");
     }
+  });
+
+  it("logs one line that names the setting that turns the gate off, for a server only", () => {
+    expect(gateStartLine("server")).toContain("SEIRA_TURNS_MAX_RUNNING=off");
+    for (const host of ["desktop", "cloud", null] as const) expect(gateStartLine(host)).toBeNull();
   });
 
   it("knows a container that was given a limit by the files at its cgroup root, and a machine's own root by their absence", () => {
