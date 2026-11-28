@@ -28,7 +28,7 @@ function harness(over: Partial<FillLoginTurnDeps> & { at?: Surface | null } = {}
     withSecretInput: (_session, _spec, fill) => fill(),
     logins: { sitesFor: () => [BANK], candidates: async () => [], markUsed: () => {} },
     onePasswordTrouble: () => undefined,
-    loginInput: () => ({ engine: async () => null, insertText: async () => {}, press: async () => {}, click: async () => {} }),
+    loginInput: () => ({ engine: async () => null, insertText: async () => {}, typeKeys: async () => {}, press: async () => {}, click: async () => {} }),
     remember: () => {},
     stepContext: () => ({ botId: "b1", botName: "Statements", threadId: "t1", generation: "g1", turnId: () => null, record: false }),
     ...over,
@@ -106,7 +106,7 @@ describe("fill_login in the bot's own browser", () => {
     const { fill } = harness({
       at: "browser", turnActive: () => false,
       target: async () => ({ session: "bot-b1", spec: { command: "agent-browser", env: {} }, env: {} }),
-      loginInput: () => ({ engine, insertText: async () => {}, press: async () => {}, click: async () => {} }),
+      loginInput: () => ({ engine, insertText: async () => {}, typeKeys: async () => {}, press: async () => {}, click: async () => {} }),
     });
     expect(await fill(bot, turn, undefined, undefined)).toEqual({ ok: false, text: "Stopped filling this login because the turn ended." });
     expect(engine).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe("fill_login in the bot's own browser", () => {
     const { fill } = harness({
       at: "browser",
       target: async () => ({ session: "bot-b1", spec: { command: "agent-browser", env: {} }, env: {} }),
-      loginInput: () => ({ engine: async () => ({ url: "https://bank.test/sign-in" }), insertText: async () => {}, press: async () => {}, click: async () => {} }),
+      loginInput: () => ({ engine: async () => ({ url: "https://bank.test/sign-in" }), insertText: async () => {}, typeKeys: async () => {}, press: async () => {}, click: async () => {} }),
       onePasswordTrouble: () => "1Password is limiting requests right now. Try again in a few minutes.",
     });
     const answer = await fill(bot, turn, undefined, undefined);

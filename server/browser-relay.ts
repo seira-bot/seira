@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { browserDaemonFile, inRunningBrowser } from "./browser-engine.ts";
 import { processAlive } from "./browser-processes.ts";
 import { browserRuntimeEnv, type BrowserSpawnSpec } from "./browser-runtime.ts";
+import { keyCodeFor } from "./browser/cdp/keyboard.ts";
 
 export interface RelayTarget { session: string; binaryPath: string; env: NodeJS.ProcessEnv }
 
@@ -164,6 +165,23 @@ export async function typeText(ports: RelayPorts, target: RelayTarget, text: str
   if (answer?.success !== true) throw new Error("The browser did not take the typing.");
 }
 
+/** Each character as a keyDown carrying its text and a keyUp, for pages that ignore inserted text; the text travels only in the request bodies. */
+export async function typeKeys(ports: RelayPorts, target: RelayTarget, text: string): Promise<void> {
+  const port = await openPort(ports, target);
+  const refused = "The browser did not take the typing.";
+  for (const char of text) {
+    const code = keyCodeFor(char);
+    const key = char === "\n" ? "Enter" : char;
+    for (const down of [true, false]) {
+      const command = { action: "keyboard", eventType: down ? "keyDown" : "keyUp", key, ...(code ? { code } : {}), ...(down ? { text: char === "\n" ? "\r" : char } : {}) };
+      let answer: RelayAnswer | null = null;
+      try { answer = await relay(port, command, { timeoutMs: 15_000, maxBytes: 65_536 }); }
+      catch {}
+      if (answer?.success !== true) throw new Error(refused);
+    }
+  }
+}
+
 export async function runCommand(ports: RelayPorts, target: RelayTarget, command: Record<string, unknown>, timeoutMs: number): Promise<RelayAnswer> {
   const port = await openPort(ports, target);
   try { return await relay(port, command, { timeoutMs, maxBytes: 65_536 }); }
@@ -218,6 +236,7 @@ export function relayInput(spec: Pick<BrowserSpawnSpec, "command" | "env">, sess
   };
   return {
     insertText: (text: string) => typeText(relayPorts, target, text),
+    typeKeys: (text: string) => typeKeys(relayPorts, target, text),
     press: (key: string) => act({ action: "press", key }, "The browser did not take the key."),
     click: (selector: string) => act({ action: "click", selector }, "The browser did not take the click."),
   };

@@ -31,7 +31,7 @@ export interface FillLoginTurnDeps {
   logins: Pick<BotLogins, "candidates" | "sitesFor" | "markUsed">;
   /** Why 1Password's logins may be missing just now. */
   onePasswordTrouble(): string | undefined;
-  loginInput(session: string, spec: Spec, env: NodeJS.ProcessEnv): Pick<FillLoginDeps, "engine" | "insertText" | "press" | "click">;
+  loginInput(session: string, spec: Spec, env: NodeJS.ProcessEnv): Pick<FillLoginDeps, "engine" | "insertText" | "typeKeys" | "press" | "click">;
   remember: FillLoginDeps["remember"];
   stepContext(bot: BotRecord, turn: Turn): StepContext;
   /** Absent where no mailbox can be read for a sign-in. */

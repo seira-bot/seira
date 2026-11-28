@@ -19,6 +19,8 @@ export interface FillCandidate extends LoginPlace {
 export interface FillLoginDeps {
   engine(args: string[]): Promise<Record<string, unknown> | null>;
   insertText(text: string): Promise<void>;
+  /** Each character as key events, for pages that ignore inserted text. */
+  typeKeys(text: string): Promise<void>;
   /** A key pressed at the focused element, as real input. */
   press(key: string): Promise<void>;
   /** A real click on the element a CSS selector names. */
@@ -233,26 +235,43 @@ const CHECK_FIELDS = `((key) => {
   return JSON.stringify(out);
 })`;
 
-/** The form's own submit button first, else a button named for signing in anywhere on the page. */
+const FIELD_FILLED = `((key) => {
+  ${PAGE_HELPERS}
+  const el = all("[" + MARK + "=\\"" + key + "\\"]")[0];
+  return JSON.stringify({ filled: Boolean(el && typeof el.value === "string" && el.value.length > 0) });
+})`;
+
+/** Walks up from the filled field; the first container holding a sign-in control decides, so a button elsewhere on the page is never pressed. */
 const MARK_SUBMIT = `((key) => {
   ${PAGE_HELPERS}
   const fields = marked(key).filter((el) => el instanceof HTMLInputElement);
   const field = fields.find((el) => /:password$/.test(el.getAttribute(MARK) || "")) || fields[fields.length - 1];
+  if (!field) return JSON.stringify({ found: false });
   const label = (el) => {
     const host = hostOf(el);
     return (el.innerText || el.value || el.getAttribute("aria-label") || el.title ||
       (host && (host.innerText || host.textContent || host.getAttribute("aria-label"))) || "").replace(/\\s+/g, " ").trim();
   };
   const NAMED = /^(?:sign ?in|log ?in|log ?on|sign ?on|continue|next|submit|verify|confirm)$/i;
-  const enabled = (el) => visible(el) && !el.disabled && el.getAttribute("aria-disabled") !== "true";
-  const inForm = field && field.form
-    ? Array.from(field.form.querySelectorAll("button, input[type=submit], input[type=image]")).filter((el) => enabled(el) && (el.type === "submit" || el.type === "image"))
-    : [];
-  const control = inForm.find((el) => NAMED.test(label(el))) || inForm[0] ||
-    all('button, [role="button"], input[type=submit], input[type=button]').find((el) => enabled(el) && NAMED.test(label(el)));
-  if (!control) return JSON.stringify({ found: false });
-  control.setAttribute(MARK, key + "submit");
-  return JSON.stringify({ found: true });
+  const enabled = (el) => !el.disabled && el.getAttribute("aria-disabled") !== "true";
+  const ownForm = new Set(field.form
+    ? Array.from(field.form.querySelectorAll("button, input[type=submit], input[type=image]")).filter((el) => el.type === "submit" || el.type === "image")
+    : []);
+  const SELECTOR = 'button, [role="button"], input[type=submit], input[type=button], input[type=image]';
+  const within = (scope) => {
+    const found = queryAllDeep(scope, SELECTOR);
+    if (scope.shadowRoot) found.push(...queryAllDeep(scope.shadowRoot, SELECTOR));
+    return found.filter((el) => visible(el) && (ownForm.has(el) || NAMED.test(label(el))));
+  };
+  for (let scope = field.parentElement || hostOf(field); scope; scope = scope.parentElement || hostOf(scope)) {
+    const candidates = within(scope);
+    if (!candidates.length) continue;
+    const control = candidates.find((el) => enabled(el) && NAMED.test(label(el))) || candidates.find((el) => enabled(el) && ownForm.has(el));
+    if (!control) return JSON.stringify({ found: false, disabled: true });
+    control.setAttribute(MARK, key + "submit");
+    return JSON.stringify({ found: true });
+  }
+  return JSON.stringify({ found: false });
 })`;
 
 const PAGE_STATE = `((nonce) => {
@@ -425,7 +444,7 @@ function found(value: Record<string, unknown> | null): Found | null {
   };
 }
 
-type Submitted = { kind: "no-control" } | { kind: "done"; changed: boolean; href: string; title: string; alert: string; human: boolean };
+type Submitted = { kind: "no-control" } | { kind: "disabled" } | { kind: "done"; changed: boolean; href: string; title: string; alert: string; human: boolean };
 
 /** One fill_login call on one login: each step fills what the page shows and submits it, then reads what the page did. */
 class LoginRun {
@@ -562,6 +581,11 @@ class LoginRun {
         await this.page(UNMARK, this.nonce);
         return this.outcome(false, `The page moved away from ${this.host} before anything was filled. Open its login page again, then call fill_login.`);
       }
+      if (typed.kind === "no-password") {
+        return this.failed(typed.empty
+          ? `The saved login for ${this.who()} on ${this.host} has no password, so nothing was submitted. Add the password in Settings → Vault, or call request_sign_in so the person signs in.`
+          : `${this.done.size ? `Filled ${this.filledWords()} for ${this.who()} on ${this.host}, but the` : `The`} password box did not take the typing, so nothing was submitted. Call request_sign_in so the person signs in.`);
+      }
       if (typed.kind === "none") {
         await this.page(UNMARK, this.nonce);
         if (fields.code > 0 && !this.secretsHaveTotp()) {
@@ -585,6 +609,7 @@ class LoginRun {
         if (error instanceof LoginTurnEnded) throw error;
         return this.failed(`Filled ${this.filledWords()} for ${this.who()} on ${this.host}, but the browser did not take the Enter key or the click to submit it.`);
       }
+      if (sent.kind === "disabled") return this.failed(`Filled ${this.filledWords()} for ${this.who()} on ${this.host}, but the page kept its sign-in button off, so nothing was submitted. The page may not have taken the typing. Call request_sign_in so the person signs in.`);
       if (sent.kind === "no-control") return this.leave(`It was not submitted: Enter did nothing and the page has no sign-in button to press. Press the page's own sign-in button now.${codeNote}`);
       if (sent.human) return this.failed(`A human check (CAPTCHA) appeared on ${this.host} after the login for ${this.who()} was submitted. Call request_sign_in so the person finishes signing in.`);
       if (!sent.changed) {
@@ -625,10 +650,20 @@ class LoginRun {
     if (focus.focused !== true) return "missed";
     await this.deps.insertText(text);
     this.checkActive();
+    const taken = await this.page(FIELD_FILLED, key);
+    this.checkActive();
+    if (taken && taken.filled !== true && text) {
+      const again = await this.page(FOCUS_FIELD, this.nonce, key, "type", null);
+      this.checkActive();
+      if (!again || typeof again.href !== "string" || !this.stillHere(again.href)) return "moved";
+      if (again.focused !== true) return "missed";
+      await this.deps.typeKeys(text);
+      this.checkActive();
+    }
     return "typed";
   }
 
-  private async fillStep(step: number, fields: Found): Promise<{ kind: "typed"; last: string } | { kind: "none" } | { kind: "moved" }> {
+  private async fillStep(step: number, fields: Found): Promise<{ kind: "typed"; last: string } | { kind: "no-password"; empty: boolean } | { kind: "none" } | { kind: "moved" }> {
     this.checkActive();
     const key = `${this.nonce}:${step}:`;
     const typed: Array<[FilledField, string]> = [];
@@ -653,7 +688,7 @@ class LoginRun {
       this.deps.remember(this.secrets.password, "password");
       if (this.secrets.totp) this.deps.remember(this.secrets.totp.secret, "password");
     }
-    if (!moved && fields.password && this.secrets && await fill("password", this.secrets.password)) typed.push(["password", "password"]);
+    if (!moved && fields.password && this.secrets?.password && await fill("password", this.secrets.password)) typed.push(["password", "password"]);
     if (!moved && fields.code > 0 && this.secrets?.totp) {
       const totp = this.secrets.totp;
       const left = totp.period * 1000 - (this.now() % (totp.period * 1000));
@@ -679,6 +714,7 @@ class LoginRun {
       this.fromMailbox = true;
     }
     if (held.some(([field]) => field !== "username")) this.secretUrl = fields.href;
+    if (fields.password && !held.some(([field]) => field === "password")) return { kind: "no-password", empty: !this.secrets?.password };
     return { kind: "typed", last: held.at(-1)![1] };
   }
 
@@ -728,6 +764,7 @@ class LoginRun {
     if (!settled(state) && !(state !== "silent" && sending(state))) {
       const control = await this.page(MARK_SUBMIT, key);
       this.checkActive();
+      if (control?.disabled === true) return { kind: "disabled" };
       if (control?.found !== true) return { kind: "no-control" };
       await this.deps.click(`[${MARK}="${key}submit"]`);
     }
