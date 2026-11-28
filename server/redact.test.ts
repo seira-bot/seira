@@ -78,14 +78,14 @@ describe("redactSecrets", () => {
     expect(out).toContain('"1"');
   });
 
-  it("still content-redacts an ACP env entry whose name is not secret-shaped", () => {
+  it("still content-redacts an own server's ACP env entry whose name is not secret-shaped", () => {
     const alpha = "abcdefghijklmnopqrstuvwxyz0123456789";
     const leaked = `sk-ant-api03-${alpha}`;
     const sessionNew = {
       params: {
         mcpServers: [
           {
-            name: "custom",
+            name: "computer",
             env: [
               { name: "SESSION_CONFIG", value: leaked },
               { name: "FEATURE_FLAG", value: "enabled" },
@@ -101,6 +101,87 @@ describe("redactSecrets", () => {
     expect(out).toContain("FEATURE_FLAG");
     expect(out).toContain("enabled");
     expect(out).toMatch(/«redacted \d+ chars»/);
+  });
+
+  it("masks every env and header value of a custom MCP server in the ACP array form, whatever the name", () => {
+    const sessionNew = {
+      params: {
+        mcpServers: [
+          {
+            name: "mysql",
+            command: "/usr/bin/mysql-mcp",
+            args: ["--stdio"],
+            env: [
+              { name: "DB_PASS", value: "synthetic-db-pass-1" },
+              { name: "MYSQL_PWD", value: "synthetic-pwd-2" },
+              { name: "AIRTABLE_PAT", value: "synthetic-pat-3" },
+              { name: "FEATURE_FLAG", value: "synthetic-flag-4" },
+            ],
+          },
+          {
+            type: "http",
+            name: "gateway",
+            url: "https://mcp.example.test/v1",
+            headers: [
+              { name: "Cookie", value: "session=synthetic-cookie-5" },
+              { name: "X-Tenant", value: "synthetic-tenant-6" },
+            ],
+          },
+        ],
+      },
+    };
+
+    const out = flat(redactSecrets(sessionNew));
+    for (const value of ["synthetic-db-pass-1", "synthetic-pwd-2", "synthetic-pat-3", "synthetic-flag-4", "synthetic-cookie-5", "synthetic-tenant-6"]) {
+      expect(out).not.toContain(value);
+    }
+    // The shape stays: names, command, args and url are not credentials.
+    for (const kept of ["DB_PASS", "MYSQL_PWD", "AIRTABLE_PAT", "Cookie", "X-Tenant", "/usr/bin/mysql-mcp", "--stdio", "https://mcp.example.test/v1"]) {
+      expect(out).toContain(kept);
+    }
+    expect(out).toContain("«redacted 19 chars»");
+  });
+
+  it("masks every env and header value of a custom MCP server in Claude's record form, whatever the name", () => {
+    const config = {
+      mcpServers: {
+        reports: {
+          command: "node",
+          args: ["reports.js"],
+          env: { DB_PASS: "synthetic-db-pass-1", COOKIE: "synthetic-cookie-2", RETRIES: "3" },
+        },
+        gateway: { type: "http", url: "https://mcp.example.test/v1", headers: { "X-Tenant": "synthetic-tenant-3", Cookie: "synthetic-cookie-4" } },
+      },
+    };
+
+    const out = flat(redactSecrets(config));
+    for (const value of ["synthetic-db-pass-1", "synthetic-cookie-2", "synthetic-tenant-3", "synthetic-cookie-4"]) expect(out).not.toContain(value);
+    for (const kept of ["DB_PASS", "COOKIE", "RETRIES", "X-Tenant", "reports.js", "https://mcp.example.test/v1"]) expect(out).toContain(kept);
+    // A one-character value is masked too.
+    expect(out).toContain("«redacted 1 chars»");
+  });
+
+  it("masks a custom server's env however the entries are written", () => {
+    const out = flat(redactSecrets({ mcpServers: { a: { env: ["DB_PASS=synthetic-eq-1", "synthetic-bare-2"] }, b: { env: { N: 5 } } } }));
+    expect(out).not.toContain("synthetic-eq-1");
+    expect(out).not.toContain("synthetic-bare-2");
+    expect(out).toContain("DB_PASS=");
+    expect(out).not.toContain('"N":5');
+  });
+
+  it("keeps non-secret env values of Seira's own servers in both forms", () => {
+    const acp = flat(redactSecrets({ params: { mcpServers: [{ name: "agents", env: [{ name: "SEIRA_BOT_ID", value: "bot-123" }, { name: "SEIRA_COMMS_TOKEN", value: "synthetic-token-1" }] }] } }));
+    expect(acp).toContain("bot-123");
+    expect(acp).not.toContain("synthetic-token-1");
+    const record = flat(redactSecrets({ mcpServers: { computer: { env: { ELECTRON_RUN_AS_NODE: "1", OGB_BOX_ID: "box-9" } }, github_app: { headers: { "X-Install": "install-7" } } } }));
+    expect(record).toContain('"ELECTRON_RUN_AS_NODE":"1"');
+    expect(record).toContain("box-9");
+    expect(record).toContain("install-7");
+  });
+
+  it("does not treat env and headers outside mcpServers as MCP values", () => {
+    const update = { params: { env: { RETRIES: "3" }, headers: { accept: "text/plain" } } };
+    expect(redactSecrets(update)).toEqual(update);
   });
 
   it("leaves ordinary protocol traffic alone", () => {
