@@ -16,8 +16,8 @@ let pending: Array<(ph: PostHog) => void> = [];
 // Outranks storage, so a rejected write cannot lose an opt-out.
 let choice: boolean | undefined;
 
-export function analyticsEnabled(): boolean {
-  if (!analyticsToken()) return false;
+/** The person's Usage analytics choice, whether or not this build carries a PostHog key. */
+export function usageAnalyticsChoice(): boolean {
   if (choice !== undefined) return choice;
   const desktop = desktopSwitch()?.enabled();
   if (typeof desktop === "boolean") return desktop;
@@ -26,6 +26,10 @@ export function analyticsEnabled(): boolean {
   } catch {
     return true;
   }
+}
+
+export function analyticsEnabled(): boolean {
+  return Boolean(analyticsToken()) && usageAnalyticsChoice();
 }
 
 export type OptAction = "init" | "opt-in" | "opt-out" | "none";

@@ -1429,6 +1429,8 @@ When someone opens the app, the server downloads the project's public announceme
 plain GET with nothing of yours in it. Its pages may show one of the cards in the corner: product news, a tip, or a
 sponsor's offer, each once per person ([docs/announcements.md](announcements.md)). Set `SEIRA_DISABLE_ANNOUNCEMENTS=1`
 in the server's environment to never download them and never show those cards.
+Set `SEIRA_DISABLE_ANNOUNCEMENT_COUNTS=1` to keep the cards but never send the anonymous count of how many devices saw
+or used each card ([what it sends](announcements.md#counting)).
 
 ## Attachment storage
 

@@ -48,7 +48,8 @@ on there lasts until that page reloads. In a browser, switch it off on each serv
   campaign parameters (`utm_*`, `gclid` and the like) and their `$initial_*` and `$session_entry_*` copies are removed
   before an event leaves the app.
 - File paths, and ids of any kind: bot, room, conversation, instance, account or computer. (An `announcement` event
-  names the card, by the id the public announcements give it, never anything of yours.)
+  names the card, by the id the public announcements give it, never anything of yours. The anonymous card count is
+  separate from PostHog: see [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md#counting).)
 - Instructions, prompts, message content, model output and error messages.
 
 ## Allowed values
