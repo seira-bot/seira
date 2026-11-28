@@ -8,7 +8,7 @@ Seira ships three desktop packages:
 - macOS apps for Apple silicon (arm64) and Intel (x64), which the
   `Package macOS` workflow builds, signs, and notarizes on a GitHub-hosted
   macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
-  Until a maintainer sets them, a release has no macOS assets.
+  Every release must have the macOS files.
 
 A maintainer creates the tag and the draft GitHub release, and attaches the
 Linux and Windows files by hand. For a signed `v*` tag, the `Package macOS`
@@ -374,8 +374,8 @@ Rules for the package:
 
 ### 6. Build and attach the macOS apps
 
-Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set. The workflow attaches the files to the draft release.
+Do this step for every release. The [macOS signing secrets](#macos-signing-secrets)
+must be set. The workflow attaches the files to the draft release.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -476,7 +476,7 @@ The command makes the draft release public and marks it as the latest release.
 
 - It refuses when a Linux or Windows asset is missing. The release stays a draft.
 - The Linux assets include the Flatpak bundle `Seira-<version>-x86_64.flatpak`.
-- It refuses when the release has any macOS file and a macOS asset is missing.
+- It refuses when a macOS asset is missing. A release needs all twelve macOS files.
 - It refuses when `check` finds a problem. The release stays a draft.
 - It runs `check` again after it publishes the release.
 - Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
