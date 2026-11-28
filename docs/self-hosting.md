@@ -2131,9 +2131,11 @@ is newer than the one it reports), and asks before it puts back data from an
 update an earlier run left unfinished.
 [Every step, the rollback and the exit codes](deploy-vps.md#update).
 
-For the npm service there is no one-command updater yet:
-[do the same steps by hand](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-the-same-steps-by-hand),
-as the service user while the server is stopped. For a foreground invocation,
+The npm service gets the same button, and the same steps with a way back, from
+`deploy/service-update-runner.sh --install`
+([how](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-one-command-with-a-way-back)).
+A server with either runner also updates by itself when no bot is working, at
+most once in 6 hours; `SEIRA_AUTO_UPDATE=off` stops that. For a foreground invocation,
 `npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com` selects a particular published
 release; replace `X.Y.Z` with that version.
 

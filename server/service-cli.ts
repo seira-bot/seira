@@ -10,6 +10,7 @@ import {
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
 import { cliCommand } from "./cli-invocation.ts";
+import { serverVersion } from "./environment.ts";
 import { controlPlaneProblem, fleetCredential } from "./tunnel.ts";
 
 export interface ServiceInstallInput {
@@ -32,6 +33,8 @@ export interface ServiceInstallInput {
   hasSentinel?: (script: string) => boolean;
   script: string;
   node: string;
+  /** The version the update runner's setup line names; defaults to this server's own. */
+  version?: string;
   /** Under npx: installs `seira@version` into `prefix` and resolves whether npm succeeded. */
   installCopy?: (prefix: string, version: string) => boolean;
   platform?: NodeJS.Platform;
@@ -109,6 +112,11 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   io.log(platform === "darwin" ? "to install and start it (runs at login):" : "to install and start it (runs at boot, restarts if it stops):");
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
+  if (platform === "linux") {
+    io.log("to let the app update this server, and keep it up to date, run this once on the host:");
+    io.log(`  curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/v${input.version ?? serverVersion()}/deploy/service-update-runner.sh -o service-update-runner.sh && sudo bash service-update-runner.sh --install`);
+    io.log("");
+  }
   if (input.domain && platform === "linux") io.log("the unit grants Caddy the capability for ports 80 and 443, so no setcap is needed under the service");
   io.log(`the service searches this PATH for engines: ${spec.path}. After you upgrade Node, run \`${cliCommand("service install")}\` again.`);
   const euid = "euid" in input ? input.euid : process.geteuid?.();

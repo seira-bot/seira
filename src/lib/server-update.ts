@@ -108,7 +108,9 @@ function reasonText(reason: ServerUpdateReason, status: ServerUpdateStatus, run?
   const [folder, owners, mode] = run?.detail?.split(" ") ?? [];
   return t(REASON_TEXT[reason], {
     version: run?.target ?? status.latest ?? "", command: command ?? "", folder: folder ? `${folder} (${owners}, ${mode})` : "",
-    list: "docker volume ls --filter label=com.seira.role=update-backup", remove: "docker volume rm <name>",
+    ...(status.layout === "service"
+      ? { list: "sudo ls -l /var/backups/seira-update", remove: "sudo rm /var/backups/seira-update/<name>" }
+      : { list: "docker volume ls --filter label=com.seira.role=update-backup", remove: "docker volume rm <name>" }),
   });
 }
 
