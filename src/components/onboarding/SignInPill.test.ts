@@ -27,3 +27,11 @@ it("still installs that engine from the pill before its sign-in", () => {
 it("opens the dialog when there is nothing the pill can do itself", () => {
   expect(pillWay(undefined)).toBe("dialog");
 });
+
+it("offers the sign-in again for an AI that is signed in but did not answer its test", () => {
+  const ready = (authentication: InstanceInfo["authentication"]) =>
+    ({ ...signedOut("device-code"), snapshot: { state: "available", authenticated: true }, authentication }) as InstanceInfo;
+  expect(pillWay(ready({ method: "device-code" }))).toBe("sign-in");
+  expect(pillWay(ready({ method: "callback-url" }))).toBe("dialog");
+  expect(pillWay(ready(undefined))).toBe("dialog");
+});

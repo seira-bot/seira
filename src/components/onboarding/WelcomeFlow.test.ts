@@ -41,6 +41,10 @@ const claude = (ready: boolean, aiTest?: InstanceInfo["aiTest"]): InstanceInfo =
   instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", install: { docsUrl: "https://example.test" },
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] }, ...(aiTest ? { aiTest } : {}),
 });
+const codex = (ready: boolean, aiTest?: InstanceInfo["aiTest"]): InstanceInfo => ({
+  instanceId: "codex", driverKind: "codex", displayName: "Codex", install: { docsUrl: "https://example.test" },
+  snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] }, ...(aiTest ? { aiTest } : {}),
+});
 const freeOpenCode: InstanceInfo = {
   instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", install: { docsUrl: "https://example.test" },
   snapshot: { state: "available", authenticated: true, freeFallback: true }, models: { default: "opencode/big-pickle", options: [] }, aiTest: "passed",
@@ -57,6 +61,12 @@ function Watch() {
 }
 const text = () => host.textContent ?? "";
 const button = (label: string) => [...host.querySelectorAll("button")].find((node) => node.textContent === label);
+const choice = (id: string) => host.querySelector<HTMLElement>(`[data-welcome-choice="${id}"]`)!;
+const choiceIds = () => [...host.querySelectorAll("[data-welcome-choice]")].map((node) => node.getAttribute("data-welcome-choice"));
+const arrow = async (name: string) => {
+  const group = host.querySelector<HTMLElement>("[data-welcome-choices]")!;
+  await act(async () => { group.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true })); });
+};
 const press = async (label: string) => { await act(async () => { button(label)!.click(); }); };
 const tick = async (ms: number) => { await act(async () => { vi.advanceTimersByTime(ms); }); };
 const key = async (name: string) => {
@@ -198,16 +208,17 @@ describe("with no AI working yet", () => {
     expect(host.querySelector("h1")?.textContent).toBe("Meet Seira");
     expect(button("Next")).toBeUndefined();
     expect(button("Sign in with Claude")).toBeDefined();
+    expect(host.querySelector("[data-welcome-choices]"), "one choice is no choice").toBeNull();
     expect(button("Other ways to connect")).toBeDefined();
     expect(host.querySelector("[data-engine-setup]"), "no setup card on the screen itself").toBeNull();
     await toChief("Set up later");
     expect(text()).toContain("Introducing your Chief of Staff");
   });
 
-  it("opens every other way in the Connect an AI dialog, where OpenCode's free model is only a backup", async () => {
+  it("opens every other way in the Connect an AI dialog, while OpenCode's free model is the pill's choice", async () => {
     f.state = { ...f.state, instances: [freeOpenCode, claude(false)] };
     await show();
-    expect(button("Connect Claude"), "an AI set up in Terminal opens the dialog").toBeDefined();
+    expect(button("Start free with OpenCode")).toBeDefined();
     expect(f.checks).toEqual([]);
     await press("Other ways to connect");
     const dialog = host.querySelector("[data-connect-ai]")!;
@@ -219,12 +230,78 @@ describe("with no AI working yet", () => {
     expect(text(), "Escape closed the dialog only").toContain("Meet Seira");
   });
 
-  it("says why an AI didn't answer its test, under the pill and in the dialog with Check again", async () => {
+  it("says why an AI didn't answer its test, under the pill once it is chosen and in the dialog with Check again", async () => {
     f.state = { ...f.state, instances: [freeOpenCode, claude(true, "failed")] };
     await show();
+    expect(host.querySelector("[role=alert]"), "OpenCode is chosen").toBeNull();
+    expect(choice("claude").textContent).toContain("Didn't answer");
+    await act(async () => { choice("claude").click(); });
     expect(host.querySelector("[role=alert]")?.textContent).toContain("Claude");
     await press("Other ways to connect");
     expect(host.querySelector("[data-connect-ai] [data-ai-silent]")).not.toBeNull();
+  });
+
+  it("offers OpenCode, Claude and Codex in that order, with OpenCode chosen and one press to start free", async () => {
+    f.state = { ...f.state, instances: [claude(false), codex(false), freeOpenCode] };
+    await show();
+    expect(choiceIds()).toEqual(["opencodeGo", "claude", "codex"]);
+    expect(choice("opencodeGo").getAttribute("aria-checked")).toBe("true");
+    expect(choice("claude").getAttribute("aria-checked")).toBe("false");
+    expect(choice("claude").textContent).toContain("Your Claude plan");
+    await toChief("Start free with OpenCode");
+    expect(text()).toContain("Introducing your Chief of Staff");
+  });
+
+  it("turns the pill into the chosen AI's own action", async () => {
+    f.state = { ...f.state, instances: [freeOpenCode, claude(false), codex(false)] };
+    await show();
+    await act(async () => { choice("claude").click(); });
+    expect(button("Connect Claude")).toBeDefined();
+    expect(button("Start free with OpenCode")).toBeUndefined();
+  });
+
+  it("installs OpenCode from the pill when it is not installed", async () => {
+    const missing = { ...freeOpenCode, snapshot: { state: "unavailable" }, aiTest: undefined, models: { default: "", options: [] },
+      install: { docsUrl: "https://example.test", server: { standalone: {} } } } as unknown as InstanceInfo;
+    f.state = { ...f.state, instances: [missing, claude(false), codex(false)] };
+    await show();
+    await press("Install OpenCode");
+    expect(f.api).toHaveBeenCalledWith("/api/instances/opencodeGo/install", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("waits while OpenCode installs, and never moves on", async () => {
+    f.state = { ...f.state, instances: [{ ...freeOpenCode, snapshot: { state: "unavailable" }, installing: true, aiTest: undefined, models: { default: "", options: [] } } as InstanceInfo, claude(false)] };
+    await show();
+    expect(text()).toContain("Getting OpenCode ready…");
+    expect(button("Next")).toBeUndefined();
+    expect(button("Start free with OpenCode")).toBeUndefined();
+  });
+
+  it("offers the sign-in again for a chosen Codex that is signed in but did not answer, and says why", async () => {
+    const stale = { ...codex(true, "failed"), authentication: { method: "device-code" }, aiTestError: "Codex isn't signed in on this computer anymore." } as InstanceInfo;
+    f.state = { ...f.state, instances: [freeOpenCode, claude(false), stale] };
+    await show();
+    await act(async () => { choice("codex").click(); });
+    expect(button("Sign in with Codex")).toBeDefined();
+    expect(host.querySelector("[role=alert]")?.textContent).toBe("Codex isn't signed in on this computer anymore.");
+  });
+
+  it("moves the choice with the arrow keys and wraps around", async () => {
+    f.state = { ...f.state, instances: [freeOpenCode, claude(false), codex(false)] };
+    await show();
+    await arrow("ArrowRight");
+    expect(choice("claude").getAttribute("aria-checked")).toBe("true");
+    expect(choice("opencodeGo").getAttribute("aria-checked")).toBe("false");
+    await arrow("ArrowLeft");
+    await arrow("ArrowLeft");
+    expect(choice("codex").getAttribute("aria-checked")).toBe("true");
+    expect(host.querySelector("[data-welcome-choices]")!.getAttribute("role")).toBe("radiogroup");
+  });
+
+  it("leaves out an AI this computer does not offer", async () => {
+    f.state = { ...f.state, instances: [freeOpenCode, { ...claude(false), readOnly: true }, codex(false)] };
+    await show();
+    expect(choiceIds()).toEqual(["opencodeGo", "codex"]);
   });
 
   it("leaves the AI out for one that answered the server's own test", async () => {

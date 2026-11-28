@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, Check, Plus } from "lucide-react";
+import { ArrowUp, Check, LoaderCircle, Plus } from "lucide-react";
 import { engineReady } from "@/components/EngineLibrary";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";
 import { SeiraCharacter } from "@/components/seira-character";
@@ -7,11 +7,14 @@ import { brand, productName } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { activeLocale, t } from "@/lib/i18n";
 import { INSTALL_BWRAP } from "@/lib/folder-access";
-import { aiChoices, aiWorks } from "@/lib/onboarding";
+import { aiChoices, aiWorks, welcomeChoices } from "@/lib/onboarding";
+import type { InstanceInfo } from "@/state/store";
 import { useStore } from "@/state/store";
+import { freeFallback } from "../../../shared/ai-ranking";
 import { ConnectAiDialog } from "./ConnectAi";
 import { PILL, SignInPill, useSignInPill } from "./SignInPill";
-import { useWelcomeAi } from "./welcome-ai";
+import { canRun, useWelcomeAi } from "./welcome-ai";
+import { WelcomeChoices } from "./WelcomeChoices";
 
 const CHARACTER_SIZE = 176;
 const PLACEHOLDER_MS = 700;
@@ -66,12 +69,25 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
     if (!hosted && known && !ready && tested?.state !== "testing") setAsking(true);
   }, [hosted, known, ready, tested?.state]);
   const { recommended } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
-  const pill = useSignInPill(recommended);
+  const choices = welcomeChoices(state.instances);
+  const [picked, setPicked] = useState<string | null>(null);
+  const selected = choices.find((choice) => choice.instanceId === picked) ?? choices[0];
+  const target = selected ?? recommended;
+  const pill = useSignInPill(target);
   const [dialog, setDialog] = useState(false);
 
   const logo = brand().logo;
-  const failure = pill.error ?? (tested?.state === "failed" ? tested.error ?? t("onboarding.engines.noAnswer", { name: tested.instance.displayName }) : null);
   const signingIn = asking && !ready;
+  const testedTarget = tested !== null && target !== undefined && tested.instance.instanceId === target.instanceId ? tested : null;
+  const silent = testedTarget?.state === "failed";
+  const failure = pill.error ?? (testedTarget?.state === "failed" ? testedTarget.error ?? t("onboarding.engines.noAnswer", { name: testedTarget.instance.displayName }) : null);
+  const name = target?.displayName ?? "";
+  const choiceLine = (choice: InstanceInfo) => tested?.state === "failed" && tested.instance.instanceId === choice.instanceId ? t("onboarding.meet.choice.silent")
+    : choice.driverKind === "opencodeGo" ? t("onboarding.meet.choice.free")
+    : choice.driverKind === "claudeAgent" ? t("onboarding.meet.choice.claude")
+    : t("onboarding.meet.choice.chatgpt");
+  const startsNow = target !== undefined && !silent && canRun(target) && testedTarget?.state !== "testing";
+  const preparing = target !== undefined && !silent && !startsNow && (target.installing === true || (engineReady(target) && !canRun(target)));
   return (
     <div className="relative h-full min-h-[600px] w-full text-center">
       <h1 id="welcome-title" className="absolute left-1/2 top-[calc(50%-264px)] w-max max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 text-[28px] font-normal leading-[34px] tracking-[-0.02em] text-ink">
@@ -96,8 +112,16 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
             <Check size={14} strokeWidth={2.5} aria-hidden="true" />{t("onboarding.meet.connected", { name: tested.instance.displayName })}
           </p>
         )}
-        {signingIn ? (
-          <SignInPill pill={pill} instance={recommended} waiting={tested?.state === "testing"} onDialog={() => setDialog(true)} />
+        {signingIn && startsNow ? (
+          <button type="button" data-primary="" onClick={onNext} className={PILL}>
+            {target && freeFallback(target) ? t("onboarding.meet.startFree", { name }) : t("onboarding.meet.next")}
+          </button>
+        ) : signingIn && preparing ? (
+          <button type="button" className={PILL} aria-disabled="true" data-sign-in="preparing">
+            <LoaderCircle size={14} aria-hidden="true" className="shrink-0 animate-spin" />{t("onboarding.meet.preparing", { name })}
+          </button>
+        ) : signingIn ? (
+          <SignInPill pill={pill} instance={target} waiting={testedTarget?.state === "testing"} onDialog={() => setDialog(true)} />
         ) : (
           <button type="button" data-primary="" onClick={onNext} className={cn(PILL, asking && "animate-fade-in [animation-duration:150ms]")}>
             {t("onboarding.meet.next")}
@@ -118,6 +142,9 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           </div>
         )}
       </div>
+      {signingIn && choices.length >= 2 && (
+        <WelcomeChoices choices={choices} selected={selected} onSelect={setPicked} line={choiceLine} />
+      )}
       {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
     </div>
   );

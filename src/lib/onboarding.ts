@@ -176,6 +176,12 @@ export function aiChoices<Instance extends AiChoice>(instances: readonly Instanc
   return { recommended, others: instances.filter((instance) => instance !== recommended) };
 }
 
+/** The first screen offers OpenCode's free models first, then a Claude plan, then a ChatGPT plan through Codex. */
+export function welcomeChoices<Instance extends AiChoice & { policy?: unknown }>(instances: readonly Instance[]): Instance[] {
+  const offered = (instance: Instance) => !instance.readOnly && instance.access !== "api" && instance.access !== "custom" && !instance.policy;
+  return ["opencodeGo", "claudeAgent", "codex"].flatMap((kind) => instances.find((instance) => instance.driverKind === kind && offered(instance)) ?? []);
+}
+
 /** The AI the welcome's Connect an AI step stands on: the best ready AI (the same ranking) that isn't OpenCode's free
  * backup, passing over one whose test message got no answer. An AI not tested yet is `testing`; none ready is null. */
 export function welcomeAi<Instance extends RankableAi>(

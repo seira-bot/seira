@@ -154,7 +154,7 @@ The server is also a Docker image: `ghcr.io/seira-bot/seira`.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/docs-engine-detection.png" alt="The Seira welcome screen with a Sign in with Claude button and Other ways to connect" width="100%">
+      <img src="docs/screenshots/docs-engine-detection.png" alt="The welcome's first screen when no AI works yet, with OpenCode's free AI selected and Claude and Codex beside it" width="100%">
       <br><b>Ready on the first start.</b> Sign in with an AI that you already use, or start with free models.
     </td>
     <td width="50%" valign="top">

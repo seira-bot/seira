@@ -21,6 +21,7 @@ import {
   showWelcome,
   welcomeOnScreen,
   welcomeAi,
+  welcomeChoices,
   welcomeDue,
   welcomeViewer,
   WELCOME_VERSION,
@@ -178,6 +179,31 @@ describe("connecting an AI in the welcome", () => {
     expect(aiChoices([kimi, grok, antigravity]).recommended).toBe(antigravity);
     expect(aiChoices([kimi, grok])).toEqual({ recommended: grok, others: [kimi] });
     expect(aiChoices([kimi, row("droid", "droidAgent")]).recommended).toBe(kimi);
+  });
+});
+
+describe("the choices on the welcome's first screen", () => {
+  type Row = { id: string; driverKind: string; access?: string; readOnly?: boolean; policy?: unknown };
+  const row = (id: string, driverKind: string, extra: Partial<Row> = {}): Row => ({ id, driverKind, ...extra });
+  const opencode = row("opencode", "opencodeGo");
+  const claude = row("claude", "claudeAgent");
+  const codex = row("codex", "codex");
+
+  it("lists OpenCode, Claude, then Codex whatever order they come in", () => {
+    expect(welcomeChoices([codex, claude, opencode])).toEqual([opencode, claude, codex]);
+    expect(welcomeChoices([claude, codex, opencode])).toEqual([opencode, claude, codex]);
+  });
+
+  it("leaves out one that is read-only, an API key, a custom endpoint, or refused by a policy", () => {
+    expect(welcomeChoices([opencode, row("a", "claudeAgent", { readOnly: true }), codex])).toEqual([opencode, codex]);
+    expect(welcomeChoices([opencode, row("a", "claudeAgent", { access: "api" }), codex])).toEqual([opencode, codex]);
+    expect(welcomeChoices([opencode, claude, row("a", "codex", { access: "custom" })])).toEqual([opencode, claude]);
+    expect(welcomeChoices([opencode, row("a", "claudeAgent", { policy: { reason: "no" } }), codex])).toEqual([opencode, codex]);
+  });
+
+  it("ignores other kinds and gives nothing for no AIs", () => {
+    expect(welcomeChoices([row("grok", "grokAgent"), row("gemini", "geminiAgent"), claude])).toEqual([claude]);
+    expect(welcomeChoices([])).toEqual([]);
   });
 });
 
