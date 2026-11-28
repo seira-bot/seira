@@ -250,7 +250,7 @@ const PRS_QUERY = `query($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
-      nodes { number isDraft author { login __typename } closingIssuesReferences(first: 25) { nodes { number } } }
+      nodes { number isDraft author { login __typename } labels(first: 20) { nodes { name } } closingIssuesReferences(first: 25) { nodes { number } } }
     }
   }
 }`;
@@ -267,6 +267,7 @@ async function loadPrs(api) {
         number: node.number,
         isDraft: node.isDraft,
         author: node.author,
+        stalled: (node.labels?.nodes ?? []).some((label) => label.name === "stalled"),
         closes: (node.closingIssuesReferences?.nodes ?? []).map((issue) => issue.number),
       });
     }
@@ -316,7 +317,7 @@ async function loadData(api) {
   return { issues, prs, usesWindow, details };
 }
 
-const linkedPrs = (prs, number) => prs.filter((pr) => pr.closes.includes(number)).map((pr) => pr.number);
+const linkedPrs = (prs, number) => prs.filter((pr) => !pr.stalled && pr.closes.includes(number)).map((pr) => pr.number);
 
 function claimsByIssueOf(data) {
   const map = new Map();

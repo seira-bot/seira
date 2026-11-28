@@ -4,6 +4,7 @@
 // notice queue, after every notice someone must act on.
 import { useEffect, useSyncExternalStore } from "react";
 import { track } from "@/lib/analytics";
+import { countAnnouncement } from "@/lib/announcement-counts";
 import { hintSeen, type OnboardingStatus } from "@/lib/onboarding";
 import { localDay } from "@/lib/notices";
 import type { CloudPlanView } from "@/lib/cloud-plan";
@@ -261,4 +262,5 @@ export type AnnouncementAction = "shown" | "primary" | "secondary" | "close";
  * the public file, the same for everyone. */
 export function reportAnnouncement(card: { id: string; kind: AnnouncementKind }, action: AnnouncementAction): void {
   track("announcement", { id: card.id, kind: card.kind, action });
+  countAnnouncement(card, action);
 }

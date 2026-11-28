@@ -16,8 +16,8 @@ let pending: Array<(ph: PostHog) => void> = [];
 // Outranks storage, so a rejected write cannot lose an opt-out.
 let choice: boolean | undefined;
 
-export function analyticsEnabled(): boolean {
-  if (!analyticsToken()) return false;
+/** The person's Usage analytics choice, whether or not this build carries a PostHog key. */
+export function usageAnalyticsChoice(): boolean {
   if (choice !== undefined) return choice;
   const desktop = desktopSwitch()?.enabled();
   if (typeof desktop === "boolean") return desktop;
@@ -28,6 +28,10 @@ export function analyticsEnabled(): boolean {
   }
 }
 
+export function analyticsEnabled(): boolean {
+  return Boolean(analyticsToken()) && usageAnalyticsChoice();
+}
+
 export type OptAction = "init" | "opt-in" | "opt-out" | "none";
 export function optAction(enabled: boolean, running: boolean): OptAction {
   if (!enabled) return running ? "opt-out" : "none";
@@ -35,13 +39,13 @@ export function optAction(enabled: boolean, running: boolean): OptAction {
 }
 
 export function setAnalyticsEnabled(enabled: boolean) {
-  if (!analyticsToken()) return;
   choice = enabled;
   void desktopSwitch()?.set?.(enabled).catch(() => {});
   try {
     localStorage.setItem(OPT_OUT_KEY, enabled ? "0" : "1");
   } catch {
   }
+  if (!analyticsToken()) return;
   if (!enabled) pending = [];
   switch (optAction(enabled, client !== undefined)) {
     case "opt-out":

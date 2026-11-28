@@ -14,7 +14,7 @@ export interface BoardCloseDeps {
   closeTodo?: (todoId: string, botId: string, reason: string) => void;
 }
 
-const EVERYTHING = { thread: () => true, bot: () => true, routine: () => true };
+const EVERYTHING = { thread: () => true, bot: () => true, audience: () => true, routine: () => true };
 
 /** What a bot's board_close call gets: with no body, the Needs you cards that bot may close; with one, the close itself. */
 export function boardCloseAnswer(deps: BoardCloseDeps, body: Record<string, unknown> | null): { status: number; body: Record<string, unknown> } {

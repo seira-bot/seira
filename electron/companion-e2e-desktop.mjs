@@ -31,5 +31,5 @@ export function createDesktopCompanionE2E({ isPackaged, appVersion, readCredenti
   });
   setCompanionE2EHooks({ initialMessage: () => e2e.message(), tokenRejected: e2e.tokenRejected, changed: () => void e2e.reconcile() });
   powerMonitor?.on("resume", () => e2e.resumed());
-  return e2e;
+  return Object.defineProperty(e2e, "configured", { value: client !== null, enumerable: true });
 }

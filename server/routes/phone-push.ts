@@ -3,6 +3,7 @@
 import { PHONE_ACTIVITY_ROUTE, PHONE_PUSH_ROUTE } from "../../shared/phone-push.ts";
 import { activityRegistrationSchema, type PhoneActivity } from "../phone-activity.ts";
 import { registrationSchema, type PhonePush } from "../phone-push.ts";
+import { publicErrorText } from "../public-error.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { phoneKey } from "./phones.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
@@ -35,7 +36,7 @@ export function createPhonePushRoutes(deps: PhonePushRouteDeps): RouteHandler {
       return json(res, 200, await deps.push.register(key, parsed.data));
     } catch (error) {
       const status = (error as { status?: unknown }).status === 409 ? 409 : 500;
-      return json(res, status, { error: error instanceof Error ? error.message : "Could not save the registration" });
+      return json(res, status, { error: publicErrorText(error, "PUT phone registration", "Could not save the registration") });
     }
   };
 }
@@ -70,7 +71,7 @@ export function createPhoneActivityRoutes(deps: PhoneActivityRouteDeps): RouteHa
       return json(res, 200, answer());
     } catch (error) {
       const status = (error as { status?: unknown }).status === 409 ? 409 : 500;
-      return json(res, status, { error: error instanceof Error ? error.message : "Could not save the registration" });
+      return json(res, status, { error: publicErrorText(error, "PUT phone registration", "Could not save the registration") });
     }
   };
 }

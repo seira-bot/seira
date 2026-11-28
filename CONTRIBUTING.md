@@ -29,6 +29,13 @@ You can hold one open claim at a time. After your first merged pull request, you
 
 An issue with the label `size: L`, `needs-security-review`, or `area: ci` needs a maintainer.
 
+### Assigned issues
+
+An assigned issue needs a draft pull request within 7 days.
+A bot reminds the assignees after 5 days.
+The bot unassigns them after 7 days, at least 2 days after the reminder.
+This rule applies to maintainers too.
+
 ## Send a pull request
 
 1. For a large change, open an issue first and agree on the approach.
@@ -57,6 +64,18 @@ You need Node 24+ and pnpm. To chat with a bot, you also need a logged-in
 The code rules are in the [code guide](docs/contributing.md): repo map, tests,
 data format, provider drivers, platform rules, and CI. UI changes follow
 [DESIGN.md](DESIGN.md).
+
+### Review and stalled pull requests
+
+Maintainers give a first review within 24 hours after a pull request is ready.
+After 24 hours without a maintainer response, a bot adds `needs-review` and asks the maintainers.
+After 48 hours, the bot asks again.
+
+A pull request waits for its author when it is a draft or when a review asked for changes.
+After 7 days, a bot reminds the author.
+After 14 days, the issues that it closes become free for other people.
+The pull request gets the label `stalled` and stays open.
+Push a change to continue.
 
 ## How a change lands
 

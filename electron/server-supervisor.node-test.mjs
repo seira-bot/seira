@@ -524,7 +524,7 @@ test("a child that will not stop aborts the switch before its lease is handed aw
 test("boot reads the environment decision before the boot lease and never creates the missing dir", () => {
   const boot = MAIN_SOURCE.slice(MAIN_SOURCE.indexOf("environmentsState = environmentsStore.read();"), MAIN_SOURCE.indexOf("app.setAsDefaultProtocolClient"));
   const decision = boot.indexOf("bootEnvironmentDir(");
-  const lease = boot.indexOf("acquireDataDirLease(");
+  const lease = boot.indexOf("acquireDataDirLeaseWhenFree(");
   assert.ok(decision > 0 && decision < lease, "the missing-dir decision must precede the boot lease");
   assert.match(boot, /activeId: LOCAL_ID/);
   assert.match(boot, /showErrorBox\(nativeT\("native\.boot\.folderMissing\.title"\)/);

@@ -5,9 +5,11 @@ import {
   BOOT_PROBE_FAST_INTERVAL_MS,
   BOOT_PROBE_FAST_WINDOW_MS,
   BOOT_PROBE_INTERVAL_MS,
+  BOOT_PROBE_REQUEST_TIMEOUT_MS,
   bootFailureMessage,
   listeningSignal,
   pollServerIdentity,
+  SERVER_BOOT_TIMEOUT_MS,
 } from "./server-boot-probe.mjs";
 
 const OUR_BODY = () => ({ app: "seira", pid: 4242, static: true });
@@ -252,10 +254,10 @@ test("polls fast during the usual boot window, then falls back to the slow inter
   );
 });
 
-test("each probe's abort timer is the remaining boot budget, not the poll interval", async (t) => {
+test("each probe's abort timer is the remaining boot budget, capped at the request timeout", async (t) => {
   const timeout = t.mock.method(AbortSignal, "timeout");
   const clock = fakeClock();
-  const bootTimeoutMs = 1_000;
+  const bootTimeoutMs = BOOT_PROBE_REQUEST_TIMEOUT_MS + 1_000;
   const remainingAtFetch = [];
   const outcome = await pollServerIdentity({
     port: 8799,
@@ -269,32 +271,96 @@ test("each probe's abort timer is the remaining boot budget, not the poll interv
     },
   });
   assert.equal(outcome.outcome, "timeout");
-  assert.ok(remainingAtFetch.length > 1);
-  assert.deepEqual(
-    timeout.mock.calls.map((call) => call.arguments[0]),
-    remainingAtFetch,
+  const timers = timeout.mock.calls.map((call) => call.arguments[0]);
+  assert.deepEqual(timers, remainingAtFetch.map((ms) => Math.min(ms, BOOT_PROBE_REQUEST_TIMEOUT_MS)));
+  assert.equal(timers[0], BOOT_PROBE_REQUEST_TIMEOUT_MS);
+  assert.ok(timers.at(-1) < BOOT_PROBE_REQUEST_TIMEOUT_MS);
+});
+
+test("a live child that answers after several minutes keeps its port", async () => {
+  const clock = fakeClock();
+  const answersAt = 5 * 60_000;
+  const outcome = await pollServerIdentity({
+    port: 8799,
+    pid: () => 4242,
+    bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
+    now: clock.now,
+    sleep: clock.sleep,
+    fetchImpl: async () => {
+      if (clock.t < answersAt) throw new Error("ECONNREFUSED");
+      return { ok: true, status: 200, json: async () => OUR_BODY() };
+    },
+  });
+  assert.equal(outcome.outcome, "ready");
+  assert.ok(outcome.latencyMs >= answersAt);
+});
+
+test("a live child that never answers times out at the ten minute limit", async () => {
+  assert.equal(SERVER_BOOT_TIMEOUT_MS, 600_000);
+  const clock = fakeClock();
+  const outcome = await pollServerIdentity({
+    port: 8799,
+    pid: () => 4242,
+    bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
+    now: clock.now,
+    sleep: clock.sleep,
+    fetchImpl: async () => {
+      throw new Error("ECONNREFUSED");
+    },
+  });
+  assert.deepEqual(outcome, { outcome: "timeout", waitedMs: SERVER_BOOT_TIMEOUT_MS });
+  assert.equal(
+    bootFailureMessage(8799, outcome),
+    "child on port 8799 did not answer /api/health within 600s",
   );
 });
 
-test("a child that says it is listening gets the grace before it times out", async () => {
-  const startedAt = Date.now();
-  // Answers only after the plain budget, like a listening server too loaded to reply.
-  const lateFetch = async (...args) => {
-    if (Date.now() - startedAt < 400) throw new Error("ECONNREFUSED");
-    return okFetch()(...args);
-  };
-  const probe = (listening) => pollServerIdentity({
-    port: 8799, pid: () => 4242, bootTimeoutMs: 200, listeningGraceMs: 2_000,
-    isListening: () => listening, fetchImpl: lateFetch,
+test("a child that exits during a long wait is reported at its next poll", async () => {
+  const clock = fakeClock();
+  const exitsAt = 2 * 60_000;
+  const outcome = await pollServerIdentity({
+    port: 8799,
+    pid: () => 4242,
+    bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
+    isExited: () => clock.t >= exitsAt,
+    now: clock.now,
+    sleep: clock.sleep,
+    fetchImpl: async () => {
+      throw new Error("ECONNREFUSED");
+    },
   });
-  const plain = await probe(false);
-  assert.equal(plain.outcome, "timeout");
-  assert.ok(plain.waitedMs >= 200);
-  assert.equal(
-    bootFailureMessage(8799, { outcome: "timeout", waitedMs: 240_000 }),
-    "child on port 8799 did not answer /api/health within 240s",
-  );
-  assert.equal((await probe(true)).outcome, "ready");
+  assert.equal(outcome.outcome, "exited");
+  assert.ok(clock.t - exitsAt <= BOOT_PROBE_INTERVAL_MS);
+});
+
+test("a body cut off by the request timeout is polled again, not taken as another process", async (t) => {
+  const signals = [];
+  t.mock.method(AbortSignal, "timeout", () => {
+    const controller = new AbortController();
+    signals.push(controller);
+    return controller.signal;
+  });
+  let calls = 0;
+  const outcome = await pollServerIdentity({
+    port: 8799,
+    pid: () => 4242,
+    bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
+    sleep: async () => {},
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls > 1) return { ok: true, status: 200, json: async () => OUR_BODY() };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => {
+          signals.at(-1).abort(new DOMException("request timed out", "TimeoutError"));
+          throw signals.at(-1).signal.reason;
+        },
+      };
+    },
+  });
+  assert.equal(outcome.outcome, "ready");
+  assert.equal(calls, 2);
 });
 
 test("the listening line is heard when stdout splits it across chunks", () => {
@@ -308,20 +374,4 @@ test("the listening line is heard when stdout splits it across chunks", () => {
   const quiet = listeningSignal();
   quiet.hear("nothing to see");
   assert.equal(quiet.heard(), false);
-});
-
-test("an answer in flight when the child starts listening gets the grace", async () => {
-  let listening = false;
-  // The answer lands after the plain budget; the child says it is listening meanwhile.
-  const slowAnswer = async (...args) => {
-    setTimeout(() => { listening = true; }, 50);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    return okFetch()(...args);
-  };
-  const outcome = await pollServerIdentity({
-    port: 8799, pid: () => 4242, bootTimeoutMs: 1_000, listeningGraceMs: 2_000,
-    isListening: () => listening, fetchImpl: slowAnswer,
-    now: (() => { const t0 = Date.now(); return () => t0 + (Date.now() - t0) * 5; })(),
-  });
-  assert.equal(outcome.outcome, "ready");
 });

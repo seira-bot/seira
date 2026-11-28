@@ -278,6 +278,29 @@ jobs:
           [ "$actual" = "$SHA256" ] || { echo "::error::The package has SHA-256 $actual, not $SHA256."; exit 1; }
           [ -s msstore/whats-new.txt ] || { echo "::error::The artifact has no What's new text."; exit 1; }
 
+      - name: Install the msstore tool
+        # This step has no secret. It runs before every step that reads a MSSTORE_* credential.
+        # The digest is the SHA-256 of MSStoreCLI-win-x64.zip in the release v0.4.4 of github.com/microsoft/msstore-cli.
+        # It matches the MSStoreCLI-win-x64.zip.sha256.txt file of that release and the digest that the GitHub API shows for the asset.
+        # A new tool version needs a new URL and a new digest, taken from the release.
+        env:
+          MSSTORE_CLI_URL: https://github.com/microsoft/msstore-cli/releases/download/v0.4.4/MSStoreCLI-win-x64.zip
+          MSSTORE_CLI_SHA256: d288a324541dc68244a683eb5b6445e9239bb47d1e6acf5cca4d1476017f1447
+        run: |
+          set -euo pipefail
+          zip="$RUNNER_TEMP/MSStoreCLI-win-x64.zip"
+          curl --fail --silent --show-error --location --retry 3 --output "$zip" "$MSSTORE_CLI_URL"
+          actual=$(sha256sum "$zip" | cut -d' ' -f1)
+          if [ "$actual" != "$MSSTORE_CLI_SHA256" ]; then
+            echo "::error::The msstore tool has SHA-256 $actual, not $MSSTORE_CLI_SHA256. The job stops before it uses a credential."
+            exit 1
+          fi
+          tool="$RUNNER_TEMP/msstorecli"
+          rm -rf "$tool"
+          7z x -y -o"$tool" "$zip" > /dev/null
+          [ -f "$tool/msstore.exe" ] || { echo "::error::The archive has no msstore.exe."; exit 1; }
+          echo "$tool" >> "$GITHUB_PATH"
+
       - name: Check the credentials and Partner Center
         env:
           MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
@@ -316,10 +339,6 @@ jobs:
           }
           console.log("The credentials work and Partner Center has no submission in progress.");
           EOF
-
-      - uses: microsoft/microsoft-store-apppublisher@cc9910a8d59f2eb55cbb83df0a3800cf3b5300e0 # v1.4
-        with:
-          version: v0.4.4
 
       - name: Upload the package
         env:

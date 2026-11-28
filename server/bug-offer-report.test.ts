@@ -78,5 +78,18 @@ describe("a @devs report as a public issue (AC-09)", () => {
     expect(report.contact).toBeUndefined();
     expect(report.diagnostics).toBe("Log: failed at <file>.png");
     expect(report.description).toBe("Pictures never load");
+    expect(report.title).toBe("Bug report from Seira");
+  });
+
+  it("gives the public report one final title, cleaned of names, paths and secrets, or the generic one", () => {
+    const base = { installId: "install-abc-123", source: "bot" as const, description: "x", appVersion: "0.1.178", platform: "linux", diagnostics: "" };
+    const titleOf = (title: string | undefined, secrets: string[] = [], names: string[] = []) => publicDevsReport({ ...base, ...(title === undefined ? {} : { title }) }, secrets, { names }).title;
+    expect(titleOf("Budi sees a blank page in C:\\Users\\budi\\x", [], ["Budi"])).toBe("sees a blank page in");
+    expect(titleOf("Pictures never load")).toBe("Pictures never load");
+    expect(titleOf("Failed for install-abc-123 on localhost:3000 and \\\\box\\share")).toBe("Failed for on and");
+    expect(titleOf("Budi", [], ["Budi"])).toBe("Bug report from Seira");
+    expect(titleOf("")).toBe("Bug report from Seira");
+    expect(titleOf(undefined)).toBe("Bug report from Seira");
+    expect(titleOf("The relay refused Zq9xK2mP.rTzwab9 twice", ["Zq9xK2mP.rTzwab9"])).toBe("The relay refused twice");
   });
 });

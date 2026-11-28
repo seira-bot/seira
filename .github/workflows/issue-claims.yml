@@ -2,6 +2,7 @@ name: Issue claims
 
 # Lets people claim an open issue with a /take comment (CONTRIBUTING.md).
 # - A P2 or P3 issue stays open to people for 24 hours. A claim holds for 72 hours without a draft pull request.
+# - The hourly sweep also frees stale assignments and stalled pull requests, and asks maintainers for a first review.
 # - The job runs scripts/issue-claims.mjs from main only. It installs no dependency and reads no secret.
 # - The job condition drops comments on pull requests, comments from bots and other labels before a runner starts.
 # - One run per issue, and one for the hourly sweep. A newer event can replace a waiting run. The sweep repairs the labels.
@@ -36,6 +37,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

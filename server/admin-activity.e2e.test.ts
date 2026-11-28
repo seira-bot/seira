@@ -190,7 +190,7 @@ posixOnly("admin activity log", () => {
     expect(JSON.stringify(mcpRow)).not.toContain(ARG_SECRET);
     expect(JSON.stringify(mcpRow)).toContain("--api-key");
     expect(JSON.stringify(mcpRow)).toContain("FIXTURE_TOKEN");
-    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ target: { id: oldPhone, name: "Old phone" } });
+    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ target: { id: oldPhone, name: oldPhone }, before: { label: "Old phone" } });
     expect(rows.find((entry) => entry.action === "pairing.create")).toMatchObject({ after: { label: "Reception iPad", scopes: ["client"] } });
     expect(rows.find((entry) => entry.action === "bot.delete")).toMatchObject({ target: { id: botId }, before: { visibility: { people: [ADA] } } });
   });
@@ -290,7 +290,31 @@ posixOnly("admin activity log", () => {
     expect(mine.filter((entry) => entry.action === "session.rename")).toHaveLength(1);
     expect(mine.filter((entry) => entry.action === "session.revoke")).toHaveLength(1);
     expect(mine.find((entry) => entry.action === "session.rename")).toMatchObject({
-      who: BOSS, target: { id: phone, name: "Reception phone" }, before: { label: "Front desk phone" }, after: { label: "Reception phone" } });
-    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ who: BOSS, target: { id: phone, name: "Reception phone" } });
+      who: BOSS, target: { id: phone, name: phone }, before: { label: "Front desk phone" }, after: { label: "Reception phone" } });
+    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ who: BOSS, target: { id: phone, name: phone }, before: { label: "Reception phone" } });
+  });
+
+  it("records each device rename as the change that was saved, even when renames overlap", async () => {
+    const opened = await api("POST", "/api/auth/pairing", { label: "Lobby phone", scopes: ["client"] }, BOSS);
+    expect(opened.status).toBe(200);
+    const paired = await api("POST", "/api/auth/pair", { code: opened.body.code, label: "Lobby phone" });
+    expect(paired.status, JSON.stringify(paired.body)).toBe(200);
+    const id = paired.body.session.id as string;
+    expect((await api("GET", "/api/admin-activity", undefined, BOSS)).body.recording).toBe(true);
+    const answers = await Promise.all(["Lobby A", "Lobby B", "Lobby C"].map((label) => api("PATCH", `/api/auth/sessions/${id}`, { label }, BOSS)));
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200, 200]);
+    const saved = (await api("GET", "/api/auth/sessions", undefined, BOSS)).body.sessions.find((session: { id: string }) => session.id === id).label;
+    const renames = (await activity("?what=session")).filter((entry) => entry.action === "session.rename" && entry.target?.id === id);
+    expect(renames).toHaveLength(3);
+    const step = new Map<string, string>(renames.map((entry) => [entry.before.label, entry.after.label]));
+    let label = "Lobby phone";
+    const walked: string[] = [];
+    while (step.has(label) && walked.length < 5) { label = step.get(label)!; walked.push(label); }
+    expect(walked).toHaveLength(3);
+    expect(label).toBe(saved);
+    expect(renames.every((entry) => entry.target.name === id && entry.who === BOSS)).toBe(true);
+    expect((await api("PATCH", `/api/auth/sessions/${id}`, { label: saved }, BOSS)).status).toBe(200);
+    expect((await activity("?what=session")).filter((entry) => entry.action === "session.rename" && entry.target?.id === id)).toHaveLength(3);
+    expect((await api("DELETE", `/api/auth/sessions/${id}`, undefined, BOSS)).status).toBe(200);
   });
 });

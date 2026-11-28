@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { HistoryItem } from "@/lib/announcement-history";
+import { countAnnouncement } from "@/lib/announcement-counts";
 import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";
 import { activeLocale, t } from "@/lib/i18n";
@@ -36,7 +37,7 @@ function Mark({ item }: { item: HistoryItem }) {
 /** One announcement: its date, mark, title and line or two, and its own buttons. */
 function Row({ item, locale, to }: { item: HistoryItem; locale: string; to: AnnouncementRun }) {
   const buttons = [item.card.primary, item.card.secondary].flatMap((button, index) => button ? [<button key={index} type="button" className={index === 0 ? PRIMARY_BUTTON : QUIET_BUTTON}
-    onClick={() => run(button.action, to)}>{localized(button.label, locale)}</button>] : []);
+    onClick={() => { countAnnouncement(item.card, index === 0 ? "primary" : "secondary"); run(button.action, to); }}>{localized(button.label, locale)}</button>] : []);
   return <li data-announcement-item={item.id} className="flex items-start gap-3 px-3 py-3">
     <Mark item={item} />
     <div className="min-w-0 flex-1">
@@ -68,6 +69,7 @@ export function AnnouncementsPage() {
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => { back.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => { if (found.unread) found.markRead(); }, [found.unread]);
+  useEffect(() => { for (const item of found.items) countAnnouncement(item.card, "shown"); }, [found.items]);
   const to: AnnouncementRun = {
     url: url => void openExternalLink(url).catch(() => undefined),
     place: place => dispatch(announcementPlaceAction(place)),

@@ -35,6 +35,14 @@ wins over the key saved in Settings → People, and Settings shows it read-only.
 engines, bot boxes and tools never receive it. See
 [How many people can sign in](self-hosting.md#how-many-people-can-sign-in).
 
+## Glance top inset
+
+`SEIRA_GLANCE_TOP_INSET` (Linux desktop only) is the height in pixels of a top panel that Glance should stay below.
+It must be a whole number from 0 to 400; anything else is ignored. It is only used when the desktop does not report
+the panel itself, so it has no effect on GNOME, KDE or X11 sessions that do. It wins over the automatic Hyprland and
+Sway lookup, which makes it the setting for other compositors. Set it before starting Seira. See
+[linux-desktop.md](linux-desktop.md#glance-on-tiling-wayland-compositors).
+
 ## What the harness keeps to itself
 
 Both prefixes are reserved, and names are matched without regard to letter case, as Windows does. A custom MCP server cannot be given a variable that starts with `SEIRA_` or `OMB_`, a bot's

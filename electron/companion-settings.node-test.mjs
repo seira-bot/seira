@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  COMPANION_SETTINGS_VERSION, RECENT_DEVICE_MS, anyRouteOn, companionDevicesFile, countPairedPhones, defaultCompanionSettings, directRoutesOn,
+  COMPANION_SETTINGS_VERSION, RECENT_DEVICE_MS, anyRouteOn, companionDevicesFile, countPairedPhones, defaultCompanionSettings, defaultStartRoutes, directRoutesOn,
   hasTailnetAddress, phoneLinkShouldSleep, phoneLinkStartsAtLaunch, readCompanionSettings, setRoute,
 } from "./companion-settings.mjs";
 
@@ -123,4 +123,10 @@ test("a Tailscale route the share turned on is marked, keeps the mark through a 
   assert.deepEqual(setRoute(shared, "tailscale", false).routes.tailscale, { on: false, since: null });
   assert.equal(readCompanionSettings({ version: COMPANION_SETTINGS_VERSION, routes: shared.routes }).routes.tailscale.forShare, true);
   assert.equal(readCompanionSettings({ version: COMPANION_SETTINGS_VERSION, routes: { tailscale: { on: true, since: 5, forShare: "yes" } } }).routes.tailscale.forShare, undefined);
+});
+
+test("a first start turns the relay on only where the relay can run", () => {
+  assert.deepEqual(defaultStartRoutes(true), ["wifi", "relay"]);
+  assert.deepEqual(defaultStartRoutes(undefined), ["wifi", "relay"]);
+  assert.deepEqual(defaultStartRoutes(false), ["wifi"]);
 });

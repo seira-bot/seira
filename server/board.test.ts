@@ -9,7 +9,7 @@ type Handoff = ReturnType<BoardSources["handoffs"]>[number];
 type Thread = BoardSources["threads"][number]["task"];
 type Run = ReturnType<BoardSources["runs"]>[number];
 
-const everyone: BoardViewer = { thread: () => true, bot: () => true, routine: () => true };
+const everyone: BoardViewer = { thread: () => true, bot: () => true, audience: () => true, routine: () => true };
 const handoff = (over: Partial<Handoff> & { id: string }): Handoff => ({
   parentId: "root", threadId: `t-${over.id}`, botId: "scout", text: "Find the numbers", createdAt: NOW - 5 * HOUR,
   status: "running", result: "", mode: "work", ...over,
@@ -163,7 +163,7 @@ describe("window, limit, order and visibility", () => {
   });
 
   it("hides what the viewer may not see", () => {
-    const viewer: BoardViewer = { thread: (id) => id !== "t-hidden" && id !== "hid", bot: (id) => id !== "secret", routine: (r) => r.botId !== "secret" };
+    const viewer: BoardViewer = { thread: (id) => id !== "t-hidden" && id !== "hid", bot: (id) => id !== "secret", audience: () => true, routine: (r) => r.botId !== "secret" };
     const cards = board({
       handoffs: [handoff({ id: "hidden" }), handoff({ id: "shown" })],
       threads: [{ botId: "atlas", task: thread({ threadId: "hid", activity: "working" }) }, { botId: "atlas", task: thread({ threadId: "vis", activity: "working" }) }],
@@ -245,5 +245,28 @@ describe("which bot may move a card to Done", () => {
     expect(botMayClose(card, chief, undefined, true)).toBe(false);
     expect(botMayClose(card, { id: "chief", chiefOfStaff: true }, {}, true)).toBe(false);
     expect(botMayClose(card, { id: "chief", chiefOfStaff: true, section: " " }, { section: " " }, true)).toBe(false);
+  });
+});
+
+describe("todo cards and the viewer", () => {
+  const todo = (over: Record<string, unknown>) => ({
+    id: "t1", title: "Plan", status: "done", start: { kind: "free" }, rank: 1, madeBy: { kind: "person", name: "R" }, botId: "atlas",
+    attempts: 1, depth: 0, createdAt: NOW - HOUR, updatedAt: NOW - HOUR, finishedAt: NOW - HOUR, result: "Reply text", ...over,
+  }) as unknown as import("../shared/todo.ts").Todo;
+  const view = (todos: import("../shared/todo.ts").Todo[], viewer: BoardViewer) =>
+    boardView({ handoffs: () => [], threads: [], runs: () => [], todos: () => ({ todos, picker: null }) }, viewer, NOW).cards;
+
+  it("hides a todo, with its result, when the viewer cannot see the conversation where it ran (security)", () => {
+    const viewer: BoardViewer = { thread: (id) => id !== "work-private", bot: () => true, audience: () => true, routine: () => true };
+    expect(view([todo({ threadId: "work-private" })], viewer)).toEqual([]);
+    expect(view([todo({ threadId: "work-open" })], viewer)).toHaveLength(1);
+  });
+
+  it("hides a todo of an audience the viewer is not in, and counts no hidden todo in a place in the queue (security)", () => {
+    const viewer: BoardViewer = { thread: () => true, bot: () => true, audience: (audience) => audience === "team", routine: () => true };
+    const queued = (id: string, rank: number, audience: string) => todo({ id, title: id, status: "queued", rank, result: undefined, finishedAt: undefined, audience });
+    const cards = view([queued("private-1", 1, "member:other"), queued("shared", 2, "team")], viewer);
+    expect(cards.map((card) => card.todoId)).toEqual(["shared"]);
+    expect(cards[0]).toMatchObject({ state: "queued", place: 1 });
   });
 });

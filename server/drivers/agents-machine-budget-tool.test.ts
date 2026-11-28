@@ -4,7 +4,7 @@ import { isReadOnlyAgentTool } from "../agent-tool-policy.ts";
 import { callTool, type ToolCallContext } from "./agents-call.ts";
 import { availableTools } from "./agents-catalog.ts";
 import { catalogProfileFromEnv } from "./agents-catalog-profile.ts";
-import { callMachineBudgetTool, MACHINE_BUDGET_TOOL } from "./agents-usage-tool.ts";
+import { callMachineBudgetTool, MACHINE_BUDGET_TOOL, MACHINE_BUDGET_TOOL_DEFINITION } from "./agents-usage-tool.ts";
 
 const context = (answer: { ok: boolean; body: Record<string, unknown> }) => ({ client: { apiResponse: vi.fn(async () => answer) } }) as unknown as ToolCallContext;
 
@@ -21,5 +21,16 @@ describe("the machine_budget tool", () => {
     await expect(callTool(MACHINE_BUDGET_TOOL, {}, asked)).resolves.toEqual({ text: '{"suggestedWorkers":2}' });
     expect(asked.client.apiResponse).toHaveBeenCalledWith("/api/internal/machine-budget");
     await expect(callMachineBudgetTool(context({ ok: false, body: { error: "no" } }))).resolves.toEqual({ text: "no", isError: true });
+  });
+  it("adds a query only for the arguments given", async () => {
+    const asked = context({ ok: true, body: { text: "{}" } });
+    await callTool(MACHINE_BUDGET_TOOL, { task: "local_model", size_gb: 4.5, count: 2 }, asked);
+    expect(asked.client.apiResponse).toHaveBeenCalledWith("/api/internal/machine-budget?task=local_model&size_gb=4.5&count=2");
+    const only = context({ ok: true, body: { text: "{}" } });
+    await callMachineBudgetTool(only, { task: "build" });
+    expect(only.client.apiResponse).toHaveBeenCalledWith("/api/internal/machine-budget?task=build");
+  });
+  it("takes a task, a size and a count", () => {
+    expect(Object.keys(MACHINE_BUDGET_TOOL_DEFINITION.inputSchema.properties)).toEqual(["task", "size_gb", "count"]);
   });
 });

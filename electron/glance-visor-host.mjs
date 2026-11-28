@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import { TOP_INSET_MAX } from "./glance-top-inset.mjs";
 import { createGlanceWindow } from "./glance-window.mjs";
 
 const VISOR_FLAG = "--seira-glance-visor";
@@ -48,6 +49,7 @@ export function runGlanceVisorHost({ app, BrowserWindow, ipcMain, screen, input 
     if (!message || typeof message !== "object" || !visor) return;
     if (message.t === "render") visor.render(message.payload);
     else if (message.t === "hide") visor.hide();
+    else if (message.t === "inset") { if (Number.isInteger(message.top) && message.top >= 0 && message.top <= TOP_INSET_MAX) visor.setTopInset(message.top); }
     else if (message.t === "acted" && typeof message.id === "string") {
       const found = waiting.get(message.id);
       if (!found) return;

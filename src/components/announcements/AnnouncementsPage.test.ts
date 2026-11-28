@@ -11,6 +11,7 @@ const f = vi.hoisted(() => ({ found: null as unknown as Announcements, dispatch:
 vi.mock("./use-announcements", () => ({ useAnnouncements: () => f.found }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: f.dispatch }), api: vi.fn() }));
 const { AnnouncementsPage } = await import("./AnnouncementsPage");
+const { api } = await import("@/state/store");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const NOW = Date.parse("2026-11-18T10:00:00Z");
@@ -86,5 +87,32 @@ describe("Announcements", () => {
     await open();
     expect(rows()[0]!.textContent).toContain("Seira no seu celular");
     expect(document.querySelector("h1")?.textContent).toBe("Anúncios");
+  });
+
+  it("AC-02 counts a listed card as shown once, and each button once", async () => {
+    vi.mocked(api).mockResolvedValue({});
+    const counted = { ...card, id: "count-card-a", secondary: { label: "Visit", action: { open_url: "https://example.com/more" } } } as AnnouncementCard;
+    f.found = found([counted]);
+    await open();
+    await act(async () => root?.unmount()); root = null;
+    await open();
+    const posted = () => vi.mocked(api).mock.calls.filter(([path]) => path === "/api/announcements/events").map(([, init]) => JSON.parse(String(init?.body)));
+    expect(posted()).toEqual([{ id: "count-card-a", action: "shown" }]);
+    const buttons = [...rows()[0]!.querySelectorAll("button")];
+    await click(buttons.find(button => button.textContent === "Open"));
+    await click(buttons.find(button => button.textContent === "Open"));
+    await click(buttons.find(button => button.textContent === "Visit"));
+    expect(posted()).toEqual([{ id: "count-card-a", action: "shown" }, { id: "count-card-a", action: "primary" }, { id: "count-card-a", action: "secondary" }]);
+  });
+
+  it("AC-03 counts nothing on the page while Usage analytics is off", async () => {
+    vi.mocked(api).mockResolvedValue({});
+    localStorage.setItem("seira-analytics-opt-out", "1");
+    try {
+      f.found = found([{ ...card, id: "count-card-b" } as AnnouncementCard]);
+      await open();
+      await click(rows()[0]!.querySelector("button"));
+      expect(vi.mocked(api).mock.calls.filter(([path]) => path === "/api/announcements/events")).toEqual([]);
+    } finally { localStorage.removeItem("seira-analytics-opt-out"); }
   });
 });

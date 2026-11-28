@@ -33,11 +33,34 @@ function httpError(status) {
   return error;
 }
 
-function fakeApi({ issues = [], events = {}, comments = {}, linked = {}, cannotAssign = [], dropAssign = [], ghostLabels = false, failOn } = {}) {
+function fakeApi({
+  issues = [],
+  events = {},
+  comments = {},
+  linked = {},
+  reviews = {},
+  commits = {},
+  pullCloses = {},
+  incomplete = {},
+  absent = {},
+  listed = {},
+  cannotAssign = [],
+  dropAssign = [],
+  ghostLabels = false,
+  failOn,
+} = {}) {
   const state = {
     issues: issues.map((each) => ({ state: "open", labels: [], assignees: [], created_at: ago(100), ...each })),
     comments: Object.fromEntries(Object.entries(comments).map(([key, list]) => [key, [...list]])),
     calls: [],
+  };
+  const counters = {};
+  const pick = (store, kind, number) => {
+    const value = store[number];
+    if (typeof value !== "function") return value ?? [];
+    const key = `${kind}:${number}`;
+    counters[key] = (counters[key] ?? 0) + 1;
+    return value(counters[key] - 1);
   };
   const shape = (each) => ({
     ...each,
@@ -66,14 +89,16 @@ function fakeApi({ issues = [], events = {}, comments = {}, linked = {}, cannotA
             .filter((each) => each.state === params.get("state"))
             .filter((each) => labels.every((name) => each.labels.includes(name)))
             .filter((each) => assignee === null || each.assignees.includes(assignee))
-            .map(shape),
+            .map((each) => shape({ ...each, ...listed[each.number] })),
         );
       }
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)$/.exec(route)) && method === "GET") return shape(find(match[1]));
-      if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(route))) return paged(events[match[1]] ?? []);
+      if ((match = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/reviews$/.exec(route))) return paged(pick(reviews, "reviews", match[1]));
+      if ((match = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)\/commits$/.exec(route))) return paged(pick(commits, "commits", match[1]));
+      if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/events$/.exec(route))) return paged(pick(events, "events", match[1]));
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments$/.exec(route))) {
         if (method === "GET") return paged(state.comments[match[1]] ?? []);
-        (state.comments[match[1]] ??= []).push({ body: body.body, created_at: NOW.toISOString(), fake: true });
+        (state.comments[match[1]] ??= []).push({ body: body.body, created_at: NOW.toISOString(), user: { login: "github-actions[bot]", type: "Bot" }, fake: true });
         return {};
       }
       if ((match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/assignees\/([^/]+)$/.exec(route))) {
@@ -105,8 +130,15 @@ function fakeApi({ issues = [], events = {}, comments = {}, linked = {}, cannotA
     },
     async graphql(query, variables) {
       state.calls.push({ method: "POST", path: "/graphql", variables });
-      const nodes = linked[variables.number] ?? [];
-      return { repository: { issue: { closedByPullRequestsReferences: { nodes } } } };
+      if (query.includes("pullRequest(")) {
+        const nodes = pick(pullCloses, "pullCloses", variables.number);
+        const pageInfo = (absent.pageInfo ?? []).includes(variables.number) ? undefined : { hasNextPage: (incomplete.pullCloses ?? []).includes(variables.number) };
+        const references = (absent.references ?? []).includes(variables.number) ? undefined : { pageInfo, nodes };
+        return { repository: { pullRequest: { closingIssuesReferences: references } } };
+      }
+      const nodes = pick(linked, "linked", variables.number);
+      const pageInfo = (absent.pageInfo ?? []).includes(variables.number) ? undefined : { hasNextPage: (incomplete.linked ?? []).includes(variables.number) };
+      return { repository: { issue: { closedByPullRequestsReferences: { pageInfo, nodes } } } };
     },
   };
   return { api, state, writes, posted, issue: (number) => find(number) };
@@ -241,11 +273,21 @@ describe("labeled issue", () => {
     const fake = fakeApi({
       issues: [{ number: 5, labels: ["P3"] }],
       events: { 5: [labeledAt("P3", ago(1))] },
-      comments: { 5: [{ body: "Open for human contributors.\n\n<!-- issue-claims:window -->", created_at: ago(2) }] },
+      comments: { 5: [{ body: "Open for human contributors.\n\n<!-- issue-claims:window -->", created_at: ago(2), user: { login: "github-actions[bot]", type: "Bot" } }] },
     });
     await run(fake, labeled(5, "P3"));
     expect(fake.issue(5).labels).toContain("human-window");
     expect(fake.posted(5)).toEqual([]);
+  });
+
+  it("stale: a window marker pasted by a person does not stop the window comment", async () => {
+    const fake = fakeApi({
+      issues: [{ number: 5, labels: ["P3"] }],
+      events: { 5: [labeledAt("P3", ago(1))] },
+      comments: { 5: [{ body: "x\n\n<!-- issue-claims:window -->", created_at: ago(2), user: { login: "mallory", type: "User" } }] },
+    });
+    await run(fake, labeled(5, "P3"));
+    expect(fake.posted(5)).toHaveLength(1);
   });
 
   it("AC-01: starts the window at the first P2 or P3 label, not at the last one", async () => {
@@ -515,7 +557,7 @@ describe("comments that do nothing", () => {
 });
 
 describe("sweep", () => {
-  const sweepAt = (fake, now = NOW) => sweep({ api: fake.api, now, error: () => {} });
+  const sweepAt = (fake, now = NOW, options = {}) => sweep({ api: fake.api, offset: 0, now, error: () => {}, ...options });
 
   it("AC-04: replaces human-window with agent-ready when the first P2 or P3 label is 24 hours old", async () => {
     const fake = fakeApi({
@@ -598,7 +640,7 @@ describe("sweep", () => {
       const fake = fakeApi({
         issues: [claimed()],
         events: claimEvents(48),
-        comments: { 60: [{ body: "old\n\n<!-- issue-claims:reminder -->", created_at: ago(60) }] },
+        comments: { 60: [{ body: "old\n\n<!-- issue-claims:reminder -->", created_at: ago(60), user: { login: "github-actions[bot]", type: "Bot" } }] },
       });
       await sweepAt(fake);
       expect(fake.posted(60)).toHaveLength(1);
@@ -663,6 +705,21 @@ describe("sweep", () => {
       expect(fake.issue(60).labels).toEqual(["P2", "human-window"]);
     });
 
+    it("stale AC-18: keeps the claim label when the issue got an assignee after the list was read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: ["bob"] })], listed: { 60: { assignees: [] } }, events: claimEvents(2) });
+      const lines = [];
+      await sweep({ api: fake.api, now: NOW, log: (line) => lines.push(line), error: () => {}, offset: 0 });
+      expect(fake.writes()).toEqual([]);
+      expect(fake.issue(60).labels).toContain("claimed: human");
+      expect(lines).toContain("#60: held, issue changed");
+    });
+
+    it("stale AC-18: makes no write when the claim label left after the list was read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: [], labels: ["P2"] })], listed: { 60: { assignees: [], labels: ["P2", "claimed: human"] } } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+
     it("AC-02: keeps a claim when the priority rises to P0", async () => {
       const fake = fakeApi({ issues: [claimed({ labels: ["P0", "claimed: human"] })], events: claimEvents(2) });
       await sweepAt(fake);
@@ -676,10 +733,890 @@ describe("sweep", () => {
       failOn: (method, path) => (method === "POST" && path.includes("/issues/70/labels") ? 500 : undefined),
     });
     const errors = [];
-    const failed = await sweep({ api: fake.api, now: NOW, error: (line) => errors.push(line) });
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
     expect(failed).toBe(1);
     expect(errors).toEqual([`#70: failed with HTTP 500`]);
     expect(fake.issue(71).labels).toContain("agent-ready");
+  });
+});
+
+const days = (count) => 24 * count;
+const MARK = {
+  assign: "<!-- issue-claims:assign-reminder -->",
+  review1: "<!-- issue-claims:review-1 -->",
+  review2: "<!-- issue-claims:review-2 -->",
+  stale: "<!-- issue-claims:stale-reminder -->",
+};
+const assignedEvent = (login, hours) => ({ event: "assigned", assignee: { login }, created_at: ago(hours) });
+const marked = (marker, hours, extra = {}) => ({ body: `text\n\n${marker}`, created_at: ago(hours), user: { login: "github-actions[bot]", type: "Bot" }, ...extra });
+const authorComment = (login, hours) => ({ body: "update", created_at: ago(hours), user: { login, type: "User" }, author_association: "CONTRIBUTOR" });
+const review = (login, state, hours, { type = "User", association = "NONE" } = {}) => ({
+  user: { login, type },
+  author_association: association,
+  state,
+  submitted_at: ago(hours),
+});
+const pullItem = (number, extra = {}) => ({
+  number,
+  pull_request: {},
+  draft: false,
+  user: { login: "carol", type: "User" },
+  author_association: "CONTRIBUTOR",
+  created_at: ago(days(20)),
+  ...extra,
+});
+const openIssue = (number) => ({ number, state: "OPEN", repository: { nameWithOwner: REPO } });
+const sweepAt = (fake, now = NOW, options = {}) => sweep({ api: fake.api, offset: 0, now, error: () => {}, ...options });
+
+describe("assigned issues", () => {
+  const assigned = (extra = {}) => ({ number: 100, labels: ["P0"], assignees: ["alice"], ...extra });
+
+  it("stale AC-01: posts one reminder after 5 days that names every assignee and a release time", async () => {
+    const fake = fakeApi({ issues: [assigned({ assignees: ["alice", "bob"] })], events: { 100: [assignedEvent("alice", days(5)), assignedEvent("bob", days(5))] } });
+    await sweepAt(fake);
+    expect(fake.posted(100)).toEqual([
+      `@alice @bob This issue has no draft PR yet. Open a draft PR that says \`Closes #100\` by 2026-12-02 10:00 UTC, or unassign yourself if you stop.\n\n${MARK.assign}`,
+    ]);
+    expect(fake.issue(100).assignees).toEqual(["alice", "bob"]);
+  });
+
+  it("stale AC-01: waits until 5 days have passed", async () => {
+    const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(5) - 1)] } });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-01: posts no second reminder", async () => {
+    const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(5))] } });
+    await sweepAt(fake);
+    await sweepAt(fake);
+    expect(fake.posted(100)).toHaveLength(1);
+  });
+
+  it("stale AC-01: ignores a reminder from before the latest assignment", async () => {
+    const fake = fakeApi({
+      issues: [assigned()],
+      events: { 100: [assignedEvent("alice", days(30)), assignedEvent("alice", days(6))] },
+      comments: { 100: [marked(MARK.assign, days(20))] },
+    });
+    await sweepAt(fake);
+    expect(fake.posted(100)).toHaveLength(1);
+  });
+
+  it("stale AC-01: counts only the assigned event of a current assignee, in any letter case", async () => {
+    const fake = fakeApi({
+      issues: [assigned({ assignees: ["Alice"] })],
+      events: { 100: [assignedEvent("alice", days(6)), assignedEvent("bob", 1)] },
+    });
+    await sweepAt(fake);
+    expect(fake.posted(100)).toHaveLength(1);
+  });
+
+  it("stale AC-02: an old assignment gets a reminder first and is not released in the same run", async () => {
+    const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(30))] } });
+    await sweepAt(fake);
+    expect(fake.issue(100).assignees).toEqual(["alice"]);
+    expect(fake.posted(100)[0]).toContain("by 2026-12-02 10:00 UTC");
+    expect(fake.writes().some((call) => call.method === "DELETE")).toBe(false);
+  });
+
+  it("stale AC-02: removes every assignee after 7 days and 48 hours after the reminder, and applies the window state", async () => {
+    const fake = fakeApi({
+      issues: [assigned({ assignees: ["alice", "bob"] })],
+      events: { 100: [assignedEvent("alice", days(8)), assignedEvent("bob", days(8))] },
+      comments: { 100: [marked(MARK.assign, 49)] },
+    });
+    const lines = [];
+    await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+    expect(fake.issue(100).assignees).toEqual([]);
+    expect(fake.issue(100).labels).toEqual(["P0", "agent-ready"]);
+    expect(fake.posted(100)).toEqual(["@alice @bob We unassigned this issue because no draft PR came in for 7 days. The issue is free again."]);
+    expect(lines).toContain("#100: unassigned");
+  });
+
+  it("stale AC-02: keeps the assignee before 48 hours after the reminder", async () => {
+    const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(8))] }, comments: { 100: [marked(MARK.assign, 47)] } });
+    await sweepAt(fake);
+    expect(fake.issue(100).assignees).toEqual(["alice"]);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-02: keeps the assignee before 7 days", async () => {
+    const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("alice", days(6))] }, comments: { 100: [marked(MARK.assign, 49)] } });
+    await sweepAt(fake);
+    expect(fake.issue(100).assignees).toEqual(["alice"]);
+  });
+
+  it("stale AC-01: a marker pasted by a person does not count, so the bot posts its own reminder and does not release", async () => {
+    const person = { user: { login: "mallory", type: "User" } };
+    const fake = fakeApi({
+      issues: [assigned()],
+      events: { 100: [assignedEvent("alice", days(8))] },
+      comments: { 100: [marked(MARK.assign, 60, person)] },
+    });
+    await sweepAt(fake);
+    expect(fake.issue(100).assignees).toEqual(["alice"]);
+    expect(fake.posted(100)).toHaveLength(1);
+  });
+
+  describe("AC-03 skips", () => {
+    const events = { 100: [assignedEvent("alice", days(30))] };
+
+    it("stale AC-03: an issue with claimed: human", async () => {
+      const fake = fakeApi({ issues: [assigned({ labels: ["P0", "claimed: human"] })], events });
+      await sweepAt(fake);
+      expect(fake.posted(100)).toEqual([]);
+    });
+
+    it("stale AC-03: an issue with sub-issues", async () => {
+      const fake = fakeApi({ issues: [assigned({ sub_issues_summary: { total: 2 } })], events });
+      await sweepAt(fake);
+      expect(fake.posted(100)).toEqual([]);
+    });
+
+    it("stale AC-03: an issue with no priority label", async () => {
+      const fake = fakeApi({ issues: [assigned({ labels: ["bug"] })], events });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+
+    it("stale AC-03: an issue with an active linked pull request", async () => {
+      const fake = fakeApi({ issues: [assigned()], events, linked: { 100: [{ number: 9, state: "OPEN" }] } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+
+    it("stale AC-03: an issue with no assigned event for a current assignee", async () => {
+      const fake = fakeApi({ issues: [assigned()], events: { 100: [assignedEvent("bob", days(30))] } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+  });
+
+  it("stale AC-12: a stalled linked pull request does not block the assignment rule", async () => {
+    const fake = fakeApi({
+      issues: [assigned()],
+      events: { 100: [assignedEvent("alice", days(6))] },
+      linked: { 100: [{ number: 9, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }] },
+    });
+    await sweepAt(fake);
+    expect(fake.posted(100)).toHaveLength(1);
+  });
+
+  it("stale AC-12: a stalled linked pull request does not block /take", async () => {
+    const fake = fakeApi({
+      issues: [{ number: 101, labels: ["P2"] }],
+      linked: { 101: [{ number: 9, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }] },
+    });
+    await takeBy(fake, 101);
+    expect(fake.issue(101).assignees).toEqual(["alice"]);
+  });
+
+  it("stale AC-12: a stalled linked pull request does not keep a claim past its deadline", async () => {
+    const fake = fakeApi({
+      issues: [{ number: 102, labels: ["P2", "claimed: human"], assignees: ["alice"] }],
+      events: { 102: [labeledAt("claimed: human", ago(150))] },
+      linked: { 102: [{ number: 9, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }] },
+    });
+    await sweepAt(fake);
+    expect(fake.issue(102).assignees).toEqual([]);
+  });
+
+  describe("release checks", () => {
+    const due = { events: { 100: [assignedEvent("alice", days(8)), assignedEvent("bob", days(8))] }, comments: { 100: [marked(MARK.assign, 49)] } };
+    const noRelease = (fake) => {
+      expect(fake.writes().some((call) => call.method === "DELETE")).toBe(false);
+      expect(fake.posted(100)).toEqual([]);
+    };
+
+    it("stale AC-18: holds the release when the issue got another assignee after the list was read", async () => {
+      const fake = fakeApi({ issues: [assigned({ assignees: ["alice", "bob"] })], listed: { 100: { assignees: ["alice"] } }, ...due });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      noRelease(fake);
+      expect(fake.issue(100).assignees).toEqual(["alice", "bob"]);
+      expect(lines).toContain("#100: held, issue changed");
+    });
+
+    it("stale AC-18: holds the release when the assignee left after the list was read", async () => {
+      const fake = fakeApi({ issues: [assigned({ assignees: [] })], listed: { 100: { assignees: ["alice"] } }, ...due });
+      await sweepAt(fake);
+      noRelease(fake);
+    });
+
+    it("stale AC-18: holds the release when the issue got a claim label after the list was read", async () => {
+      for (const current of [{ labels: ["P0", "claimed: agent"] }, { labels: ["P0", "claimed: human"] }]) {
+        const fake = fakeApi({ issues: [assigned(current)], listed: { 100: { labels: ["P0"] } }, ...due });
+        await sweepAt(fake);
+        noRelease(fake);
+      }
+    });
+
+    it("stale AC-18: holds the release when a linked pull request shows up on the second read", async () => {
+      const fake = fakeApi({
+        issues: [assigned()],
+        linked: { 100: (index) => (index === 0 ? [] : [{ number: 9, state: "OPEN" }]) },
+        events: { 100: [assignedEvent("alice", days(8))] },
+        comments: { 100: [marked(MARK.assign, 49)] },
+      });
+      await sweepAt(fake);
+      noRelease(fake);
+      expect(fake.issue(100).assignees).toEqual(["alice"]);
+    });
+
+    it("stale AC-19: counts an incomplete list of linked pull requests as active work", async () => {
+      const closedOnly = [{ number: 9, state: "CLOSED" }, { number: 10, state: "OPEN", labels: { nodes: [{ name: "stalled" }] } }];
+      const fake = fakeApi({
+        issues: [assigned()],
+        linked: { 100: closedOnly, 101: closedOnly },
+        incomplete: { linked: [100, 101] },
+        events: { 100: [assignedEvent("alice", days(8))] },
+        comments: { 100: [marked(MARK.assign, 49)] },
+      });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+      const other = fakeApi({ issues: [{ number: 101, labels: ["P2"] }], linked: { 101: closedOnly }, incomplete: { linked: [101] } });
+      await takeBy(other, 101);
+      expect(other.issue(101).assignees).toEqual([]);
+      expect(other.posted(101)).toEqual(["@alice Someone already works on this issue. Please pick another one."]);
+    });
+
+    it("stale AC-18: holds the release when a newer assigned event shows up for the same assignee", async () => {
+      const fake = fakeApi({
+        issues: [assigned()],
+        events: { 100: (index) => (index === 0 ? [assignedEvent("alice", days(8))] : [assignedEvent("alice", days(8)), assignedEvent("alice", 1)]) },
+        comments: { 100: [marked(MARK.assign, 49)] },
+      });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      noRelease(fake);
+      expect(fake.issue(100).assignees).toEqual(["alice"]);
+      expect(lines).toContain("#100: held, issue changed");
+    });
+
+    it("stale AC-19: does not release or take an issue when the link data has no page info", async () => {
+      const fake = fakeApi({ issues: [assigned(), { number: 101, labels: ["P2"] }], absent: { pageInfo: [100, 101] }, ...due });
+      await sweepAt(fake);
+      noRelease(fake);
+      await takeBy(fake, 101);
+      expect(fake.issue(101).assignees).toEqual([]);
+      expect(fake.posted(101)).toEqual(["@alice Someone already works on this issue. Please pick another one."]);
+    });
+  });
+
+  describe("claim release checks", () => {
+    const claimed = (extra = {}) => ({ number: 102, labels: ["P2", "claimed: human"], assignees: ["alice"], ...extra });
+    const claimEvents = { 102: [labeledAt("claimed: human", ago(150))] };
+    const kept = (fake) => {
+      expect(fake.writes().some((call) => call.method === "DELETE")).toBe(false);
+      expect(fake.posted(102)).toEqual([]);
+    };
+
+    it("stale AC-18: releases a due claim when nothing changed", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents });
+      await sweepAt(fake);
+      expect(fake.issue(102).assignees).toEqual([]);
+    });
+
+    it("stale AC-18: holds the claim release when the claim label was set again", async () => {
+      const fake = fakeApi({
+        issues: [claimed()],
+        events: { 102: (index) => (index === 0 ? claimEvents[102] : [...claimEvents[102], labeledAt("claimed: human", ago(100))]) },
+      });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      kept(fake);
+      expect(lines).toContain("#102: held, issue changed");
+    });
+
+    it("stale AC-18: holds the claim release when the claim label is gone on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed({ labels: ["P2"] })], listed: { 102: { labels: ["P2", "claimed: human"] } }, events: claimEvents });
+      await sweepAt(fake);
+      kept(fake);
+    });
+
+    it("stale AC-18: holds the claim release when the assignee set changed on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed({ assignees: ["alice", "bob"] })], listed: { 102: { assignees: ["alice"] } }, events: claimEvents });
+      await sweepAt(fake);
+      kept(fake);
+      expect(fake.issue(102).assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("stale AC-18: holds the claim release when a linked pull request shows up on the second read", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents, linked: { 102: (index) => (index === 0 ? [] : [{ number: 9, state: "OPEN" }]) } });
+      await sweepAt(fake);
+      kept(fake);
+    });
+
+    it("stale AC-19: does not release a claim when the link data has no page info", async () => {
+      const fake = fakeApi({ issues: [claimed()], events: claimEvents, absent: { pageInfo: [102] } });
+      await sweepAt(fake);
+      kept(fake);
+    });
+  });
+});
+
+describe("first review of a pull request", () => {
+  const outside = (extra = {}) => pullItem(110, { created_at: ago(25), ...extra });
+  const asked = (fake, number = 110) => fake.posted(number);
+
+  it("stale AC-04: adds needs-review and asks the maintainers 24 hours after the pull request is ready", async () => {
+    const fake = fakeApi({ issues: [outside()] });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual(["needs-review"]);
+    expect(asked(fake)).toEqual([
+      `@${REPO.split("/")[0]}/maintainers This pull request has waited for a first review since 2026-11-29 09:00 UTC.\n\n${MARK.review1}`,
+    ]);
+  });
+
+  it("stale AC-04: waits until 24 hours have passed", async () => {
+    const fake = fakeApi({ issues: [outside({ created_at: ago(23) })] });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-04: counts from the latest ready_for_review event", async () => {
+    const fake = fakeApi({
+      issues: [outside({ created_at: ago(days(10)) })],
+      events: { 110: [{ event: "ready_for_review", created_at: ago(10) }] },
+    });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-04: asks once", async () => {
+    const fake = fakeApi({ issues: [outside()] });
+    await sweepAt(fake);
+    await sweepAt(fake);
+    expect(asked(fake)).toHaveLength(1);
+  });
+
+  it("stale AC-04: does nothing for a pull request from a maintainer or a bot", async () => {
+    const fake = fakeApi({
+      issues: [
+        outside({ author_association: "MEMBER" }),
+        outside({ number: 111, user: { login: "seira-lagus[bot]", type: "Bot" }, author_association: "NONE" }),
+      ],
+    });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-04: does not count a bot review as a maintainer response", async () => {
+    const fake = fakeApi({ issues: [outside()], reviews: { 110: [review("seira-roctis[bot]", "COMMENTED", 3, { type: "Bot", association: "MEMBER" })] } });
+    await sweepAt(fake);
+    expect(asked(fake)).toHaveLength(1);
+  });
+
+  it("stale AC-04: does not count a review from a person who is not a maintainer", async () => {
+    const fake = fakeApi({ issues: [outside()], reviews: { 110: [review("dave", "COMMENTED", 3, { association: "CONTRIBUTOR" })] } });
+    await sweepAt(fake);
+    expect(asked(fake)).toHaveLength(1);
+  });
+
+  it("stale AC-04: does not ask when the latest decisive review asks for changes", async () => {
+    const fake = fakeApi({ issues: [outside()], reviews: { 110: [review("seira-roctis[bot]", "CHANGES_REQUESTED", 20, { type: "Bot" })] } });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-17: an unapproved bot review does not stop the first ask", async () => {
+    const fake = fakeApi({ issues: [outside()], reviews: { 110: [review("other-app[bot]", "CHANGES_REQUESTED", 20, { type: "Bot" })] } });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual(["needs-review"]);
+    expect(asked(fake)).toHaveLength(1);
+    expect(asked(fake)[0]).toContain(MARK.review1);
+  });
+
+  it("stale AC-04: a first-review marker pasted by a person does not stop the first ask", async () => {
+    const fake = fakeApi({ issues: [outside()], comments: { 110: [marked(MARK.review1, 3, { user: { login: "mallory", type: "User" } })] } });
+    await sweepAt(fake);
+    expect(asked(fake)).toHaveLength(1);
+  });
+
+  it("stale AC-05: asks again 48 hours after ready and 24 hours after the first ask", async () => {
+    const fake = fakeApi({ issues: [outside({ created_at: ago(49), labels: ["needs-review"] })], comments: { 110: [marked(MARK.review1, 25)] } });
+    await sweepAt(fake);
+    expect(asked(fake)).toEqual([
+      `@${REPO.split("/")[0]}/maintainers This pull request still waits for a first review. It has waited since 2026-11-28 09:00 UTC.\n\n${MARK.review2}`,
+    ]);
+  });
+
+  it("stale AC-05: asks no third time", async () => {
+    const fake = fakeApi({
+      issues: [outside({ created_at: ago(100), labels: ["needs-review"] })],
+      comments: { 110: [marked(MARK.review1, 60), marked(MARK.review2, 30)] },
+    });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-05: does not ask again before 48 hours after ready", async () => {
+    const fake = fakeApi({ issues: [outside({ created_at: ago(47), labels: ["needs-review"] })], comments: { 110: [marked(MARK.review1, 25)] } });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-05: does not ask again before 24 hours after the first ask", async () => {
+    const fake = fakeApi({ issues: [outside({ created_at: ago(60), labels: ["needs-review"] })], comments: { 110: [marked(MARK.review1, 23)] } });
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-06: removes needs-review after a maintainer comment", async () => {
+    const fake = fakeApi({
+      issues: [outside({ labels: ["needs-review"] })],
+      comments: { 110: [{ body: "Looks good", created_at: ago(2), user: { login: "rama", type: "User" }, author_association: "OWNER" }] },
+    });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual([]);
+    expect(asked(fake)).toEqual([]);
+  });
+
+  it("stale AC-06: removes needs-review after a maintainer review of any state", async () => {
+    const fake = fakeApi({ issues: [outside({ labels: ["needs-review"] })], reviews: { 110: [review("rama", "COMMENTED", 2, { association: "MEMBER" })] } });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual([]);
+  });
+
+  it("stale AC-06: removes needs-review when the pull request is a draft", async () => {
+    const fake = fakeApi({ issues: [outside({ labels: ["needs-review"], draft: true })] });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual([]);
+    expect(asked(fake)).toEqual([]);
+  });
+
+  it("stale AC-06: removes needs-review when the pull request waits for its author", async () => {
+    const fake = fakeApi({
+      issues: [outside({ labels: ["needs-review"] })],
+      reviews: { 110: [review("rama", "CHANGES_REQUESTED", 3, { association: "OWNER" })] },
+    });
+    await sweepAt(fake);
+    expect(fake.issue(110).labels).toEqual([]);
+  });
+});
+
+describe("pull request that waits for its author", () => {
+  const author = "carol";
+  const waiting = (extra = {}) => pullItem(120, { draft: true, ...extra });
+  const closes = { 120: [openIssue(80)] };
+  const base = (extra = {}) => ({ issues: [waiting()], pullCloses: closes, ...extra });
+
+  it("stale AC-07: counts a draft from its creation when nobody did anything", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(8)) })] }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toEqual([
+      `@carol This pull request waits for your update. Push a change or reply here by 2026-12-06 10:00 UTC. After that, its linked issues become free for other people. The pull request stays open.\n\n${MARK.stale}`,
+    ]);
+  });
+
+  it("stale AC-07: counts a draft from its latest convert_to_draft event", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], events: { 120: [{ event: "convert_to_draft", created_at: ago(days(6)) }] } }));
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-07: a commit moves the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [{ commit: { committer: { date: ago(days(3)) } } }] } }));
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-07: an author comment, an author review and a force push move the idle start", async () => {
+    for (const extra of [
+      { comments: { 120: [authorComment(author, days(2))] } },
+      { reviews: { 120: [review(author, "COMMENTED", days(2))] } },
+      { events: { 120: [{ event: "head_ref_force_pushed", actor: { login: author }, created_at: ago(days(2)) }] } },
+    ]) {
+      const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], ...extra }));
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    }
+  });
+
+  it("stale AC-07: a commit dated in the future does not move the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [{ commit: { committer: { date: ago(-48) } } }] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-07: a commit by another user does not move the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [{ author: { login: "rama" }, commit: { committer: { date: ago(days(2)) } } }] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-07: a commit with no author object still counts, and one by the author in another letter case counts", async () => {
+    for (const commit of [{ commit: { committer: { date: ago(days(2)) } } }, { author: { login: "CAROL" }, commit: { committer: { date: ago(days(2)) } } }]) {
+      const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], commits: { 120: [commit] } }));
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    }
+  });
+
+  it("stale AC-07: a comment from someone else does not move the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(30)) })], comments: { 120: [authorComment("rama", days(2))] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-08: counts from a CHANGES_REQUESTED review from a bot", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ draft: false })], reviews: { 120: [review("seira-roctis[bot]", "CHANGES_REQUESTED", days(8), { type: "Bot" })] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-17: counts a CHANGES_REQUESTED review from the other approved bot", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ draft: false })], reviews: { 120: [review("Seira-Raskreia[bot]", "CHANGES_REQUESTED", days(8), { type: "Bot" })] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120).filter((body) => body.includes(MARK.stale))).toHaveLength(1);
+  });
+
+  it("stale AC-17: a CHANGES_REQUESTED review from an unapproved bot does not make it wait", async () => {
+    const fake = fakeApi(
+      base({
+        issues: [waiting({ draft: false })],
+        reviews: { 120: [review("other-app[bot]", "CHANGES_REQUESTED", days(8), { type: "Bot" })] },
+        comments: { 120: [marked(MARK.stale, 60)] },
+      }),
+    );
+    await sweepAt(fake);
+    expect(fake.posted(120).filter((body) => body.includes(MARK.stale))).toEqual([]);
+    expect(fake.issue(120).labels).not.toContain("stalled");
+    expect(fake.issue(120).labels).toContain("needs-review");
+  });
+
+  it("stale AC-08: an author commit after the review means it does not wait", async () => {
+    const fake = fakeApi(
+      base({
+        issues: [waiting({ draft: false, author_association: "OWNER" })],
+        reviews: { 120: [review("rama", "CHANGES_REQUESTED", days(8), { association: "OWNER" })] },
+        commits: { 120: [{ commit: { committer: { date: ago(days(2)) } } }] },
+      }),
+    );
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-08: a later approval, a comment-only review and a review from an outsider do not make it wait", async () => {
+    const outsider = review("dave", "CHANGES_REQUESTED", days(9), { association: "CONTRIBUTOR" });
+    const rama = review("rama", "CHANGES_REQUESTED", days(9), { association: "OWNER" });
+    for (const list of [
+      [rama, review("rama", "APPROVED", days(8), { association: "OWNER" })],
+      [review("rama", "COMMENTED", days(9), { association: "OWNER" })],
+      [outsider],
+      [review(author, "CHANGES_REQUESTED", days(9), { association: "CONTRIBUTOR" })],
+    ]) {
+      const fake = fakeApi(base({ issues: [waiting({ draft: false, author_association: "OWNER" })], reviews: { 120: list } }));
+      await sweepAt(fake);
+      expect(fake.posted(120)).toEqual([]);
+    }
+  });
+
+  it("stale AC-09: waits 7 days", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(7) - 1) })] }));
+    await sweepAt(fake);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("stale AC-09: posts one reminder", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(8)) })] }));
+    await sweepAt(fake);
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-09: ignores a reminder from before the idle start", async () => {
+    const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(8)) })], comments: { 120: [marked(MARK.stale, days(9))] } }));
+    await sweepAt(fake);
+    expect(fake.posted(120)).toHaveLength(1);
+  });
+
+  it("stale AC-09: asks for no reminder when no open issue of this repository is linked", async () => {
+    const closed = { number: 80, state: "CLOSED", repository: { nameWithOwner: REPO } };
+    const other = { number: 81, state: "OPEN", repository: { nameWithOwner: "someone/else" } };
+    for (const nodes of [[], [closed], [other]]) {
+      const fake = fakeApi(base({ issues: [waiting({ created_at: ago(days(20)) })], pullCloses: { 120: nodes }, comments: { 120: [marked(MARK.stale, 60)] } }));
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    }
+  });
+
+  describe("release", () => {
+    const stalledSetup = (extra = {}) =>
+      fakeApi({
+        issues: [{ number: 80, labels: ["P2", "claimed: human"], assignees: ["carol"] }, waiting({ created_at: ago(days(20)) })],
+        pullCloses: closes,
+        comments: { 120: [marked(MARK.stale, 49)] },
+        ...extra,
+      });
+
+    it("stale AC-10: labels the pull request, frees the issue and posts both texts", async () => {
+      const fake = stalledSetup();
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.issue(120).labels).toContain("stalled");
+      expect(fake.issue(80).assignees).toEqual([]);
+      expect(fake.issue(80).labels).toEqual(["P2", "agent-ready"]);
+      expect(fake.posted(80)).toEqual(["This issue is free again because pull request #120 had no update for 14 days."]);
+      expect(fake.posted(120)).toEqual([
+        "@carol This pull request had no update for 14 days, so it no longer holds its linked issues. The pull request stays open. Push a change to continue.",
+      ]);
+      expect(lines).toContain("#120: stalled");
+      expect(fake.writes()).toContainEqual({ method: "DELETE", path: `/repos/${REPO}/issues/80/assignees`, body: { assignees: ["carol"] } });
+    });
+
+    it("stale AC-10: keeps claimed: human and posts no free text when another assignee is left", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, labels: ["P2", "claimed: human"], assignees: ["carol", "bob"] }, waiting({ created_at: ago(days(20)) })] });
+      await sweepAt(fake);
+      expect(fake.issue(80).assignees).toEqual(["bob"]);
+      expect(fake.issue(80).labels).toEqual(["P2", "claimed: human"]);
+      expect(fake.posted(80)).toEqual([]);
+    });
+
+    it("stale AC-10: frees an issue that was assigned by hand", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, labels: ["P0"], assignees: ["carol"] }, waiting({ created_at: ago(days(20)) })] });
+      await sweepAt(fake);
+      expect(fake.issue(80).assignees).toEqual([]);
+      expect(fake.posted(80)).toHaveLength(1);
+    });
+
+    it("stale AC-10: applies to a pull request from a maintainer", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, labels: ["P0"], assignees: ["carol"] }, waiting({ created_at: ago(days(20)), author_association: "OWNER" })] });
+      await sweepAt(fake);
+      expect(fake.issue(120).labels).toContain("stalled");
+    });
+
+    it("stale AC-10: waits 14 days of idle time", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, labels: ["P0"], assignees: ["carol"] }, waiting({ created_at: ago(days(14) - 1) })] });
+      await sweepAt(fake);
+      expect(fake.issue(120).labels).toEqual([]);
+    });
+
+    it("stale AC-10: waits 48 hours after the reminder", async () => {
+      const fake = stalledSetup({ comments: { 120: [marked(MARK.stale, 47)] } });
+      await sweepAt(fake);
+      expect(fake.issue(120).labels).toEqual([]);
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+    });
+
+    it("stale AC-10: does not release without a linked open issue", async () => {
+      const fake = stalledSetup({ pullCloses: { 120: [] } });
+      await sweepAt(fake);
+      expect(fake.issue(120).labels).toEqual([]);
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+    });
+
+    it("stale AC-19: holds everything when the list of linked issues is incomplete", async () => {
+      const fake = stalledSetup({ incomplete: { pullCloses: [120] }, comments: {} });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.writes()).toEqual([]);
+      expect(lines).toContain("#120: held, linked issues incomplete");
+      const released = stalledSetup({ incomplete: { pullCloses: [120] } });
+      await sweepAt(released);
+      expect(released.writes()).toEqual([]);
+      expect(released.issue(80).assignees).toEqual(["carol"]);
+    });
+
+    it("stale AC-18: holds the release when the author pushed a commit before the release", async () => {
+      const fake = stalledSetup({ commits: { 120: (index) => (index === 0 ? [] : [{ commit: { committer: { date: ago(1) } } }]) } });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.issue(120).labels).toEqual([]);
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+      expect(fake.posted(80)).toEqual([]);
+      expect(fake.posted(120)).toEqual([]);
+      expect(lines).toContain("#120: held, pull request changed");
+    });
+
+    it("stale AC-18: keeps an issue that has another active pull request", async () => {
+      const fake = stalledSetup({ linked: { 80: [{ number: 120, state: "OPEN" }, { number: 121, state: "OPEN" }] } });
+      await sweepAt(fake);
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+      expect(fake.posted(80)).toEqual([]);
+      expect(fake.issue(120).labels).toContain("stalled");
+    });
+
+    it("stale AC-18: keeps an issue when the author was assigned again after the pull request went idle", async () => {
+      const fake = stalledSetup({ events: { 80: [assignedEvent("carol", 1)] } });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.issue(80).assignees).toEqual(["carol"]);
+      expect(fake.posted(80)).toEqual([]);
+      expect(lines).toContain("#80: held, claim renewed");
+    });
+
+    it("stale AC-18: makes no write to a linked issue that is closed on the second read", async () => {
+      const fake = stalledSetup({ issues: [{ number: 80, state: "closed", labels: ["P2", "claimed: human"], assignees: ["carol"] }, waiting({ created_at: ago(days(20)) })] });
+      await sweepAt(fake);
+      expect(fake.writes().filter((call) => call.path.includes("/issues/80/"))).toEqual([]);
+    });
+
+    it("stale AC-19: holds the release when the link data has no references", async () => {
+      const fake = stalledSetup({ absent: { references: [120] } });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+      const reminder = stalledSetup({ absent: { references: [120] }, comments: {} });
+      await sweepAt(reminder);
+      expect(reminder.writes()).toEqual([]);
+    });
+
+    it("stale AC-18: resumes after a failure and posts the free text once", async () => {
+      let broken = true;
+      const fake = stalledSetup({
+        issues: [
+          { number: 80, labels: ["P2", "claimed: human"], assignees: ["carol"] },
+          { number: 81, labels: ["P2", "claimed: human"], assignees: ["carol"] },
+          waiting({ created_at: ago(days(20)) }),
+        ],
+        pullCloses: { 120: [openIssue(80), openIssue(81)] },
+        failOn: (method, path) => (broken && method === "DELETE" && path.endsWith("/issues/81/assignees") ? 500 : undefined),
+      });
+      const errors = [];
+      expect(await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) })).toBe(1);
+      expect(errors).toEqual(["#120: failed with HTTP 500"]);
+      expect(fake.issue(120).labels).not.toContain("stalled");
+      expect(fake.issue(81).assignees).toEqual(["carol"]);
+      broken = false;
+      expect(await sweepAt(fake)).toBe(0);
+      expect(fake.issue(120).labels).toContain("stalled");
+      expect(fake.issue(81).assignees).toEqual([]);
+      expect(fake.posted(80)).toHaveLength(1);
+      expect(fake.posted(81)).toHaveLength(1);
+      expect(fake.posted(120)).toHaveLength(1);
+    });
+  });
+
+  describe("stalled label", () => {
+    const stalled = (extra = {}) => waiting({ created_at: ago(days(20)), labels: ["stalled"], ...extra });
+    const labeledEvent = { 120: [labeledAt("stalled", ago(48))] };
+
+    it("stale AC-11: removes stalled after author activity that follows the label", async () => {
+      const fake = fakeApi({ issues: [stalled()], events: labeledEvent, comments: { 120: [authorComment(author, 24)] }, pullCloses: closes });
+      const lines = [];
+      await sweep({ api: fake.api, offset: 0, now: NOW, log: (line) => lines.push(line), error: () => {} });
+      expect(fake.issue(120).labels).toEqual([]);
+      expect(fake.posted(120)).toEqual([]);
+      expect(lines).toContain("#120: stalled label removed");
+    });
+
+    it("stale AC-11: removes stalled when the pull request no longer waits for its author", async () => {
+      const fake = fakeApi({ issues: [stalled({ draft: false, author_association: "OWNER" })], events: labeledEvent, pullCloses: closes });
+      await sweepAt(fake);
+      expect(fake.issue(120).labels).toEqual([]);
+    });
+
+    it("stale AC-11: keeps stalled while the pull request still waits", async () => {
+      const fake = fakeApi({ issues: [stalled()], events: labeledEvent, pullCloses: closes });
+      await sweepAt(fake);
+      expect(fake.writes()).toEqual([]);
+    });
+  });
+});
+
+describe("pull request sweep limits", () => {
+  it("stale AC-13: makes no call for a pull request from a bot", async () => {
+    const fake = fakeApi({
+      issues: [pullItem(130, { user: { login: "seira-lagus[bot]", type: "Bot" }, author_association: "NONE", draft: true, labels: ["needs-review"] })],
+    });
+    await sweepAt(fake);
+    expect(fake.state.calls).toHaveLength(1);
+  });
+
+  it("stale AC-14: logs a failing pull request, continues, and counts the failure", async () => {
+    const fake = fakeApi({
+      issues: [pullItem(131, { created_at: ago(25) }), pullItem(132, { created_at: ago(25) })],
+      failOn: (method, path) => (path.includes("/pulls/131/reviews") ? 500 : undefined),
+    });
+    const errors = [];
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
+    expect(failed).toBe(1);
+    expect(errors).toEqual(["#131: failed with HTTP 500"]);
+    expect(fake.issue(132).labels).toContain("needs-review");
+  });
+
+  it("stale AC-14: reads each endpoint of a pull request once", async () => {
+    const fake = fakeApi({ issues: [pullItem(133, { created_at: ago(25), draft: true })], pullCloses: { 133: [openIssue(80)] } });
+    await sweepAt(fake);
+    const reads = fake.state.calls.filter((call) => call.method === "GET").map((call) => call.path);
+    expect(new Set(reads).size).toBe(reads.length);
+  });
+});
+
+describe("sweep budget", () => {
+  const three = () => fakeApi({ issues: [131, 132, 133].map((number) => pullItem(number, { created_at: ago(25) })) });
+  const untouched = (fake, numbers) => numbers.every((number) => !fake.state.calls.some((call) => call.path.includes(`/${number}`)));
+
+  it("stale AC-20: stops at an item boundary when the request limit is reached", async () => {
+    const fake = three();
+    const errors = [];
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 3, hardRequests: 1e9, maxMs: 1e9 } });
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(errors).toEqual(["Stopped after 1 of 3 items: the sweep limit was reached."]);
+    expect(fake.issue(131).labels).toContain("needs-review");
+    expect(untouched(fake, [132, 133])).toBe(true);
+  });
+
+  it("stale AC-20: stops at an item boundary when the time limit is reached", async () => {
+    const fake = three();
+    const errors = [];
+    let reads = 0;
+    const clock = () => (reads++ < 2 ? 0 : 1e9);
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 1e9, maxMs: 1000 }, clock });
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(errors).toEqual(["Stopped after 1 of 3 items: the sweep limit was reached."]);
+    expect(untouched(fake, [132, 133])).toBe(true);
+  });
+
+  it("stale AC-20: makes no call past the hard request limit and resumes safely", async () => {
+    const fake = fakeApi({ issues: [pullItem(131, { created_at: ago(25) })] });
+    const errors = [];
+    const failed = await sweepAt(fake, NOW, { error: (line) => errors.push(line), limits: { maxRequests: 1e9, hardRequests: 5, maxMs: 1e9 } });
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(errors).toEqual(["#131: The sweep request limit was reached.", "Stopped after 0 of 1 items: the sweep limit was reached."]);
+    expect(fake.state.calls).toHaveLength(5);
+    expect(fake.issue(131).labels).toEqual(["needs-review"]);
+    expect(fake.posted(131)).toEqual([]);
+    expect(await sweepAt(fake)).toBe(0);
+    expect(fake.posted(131)).toHaveLength(1);
+    expect(fake.issue(131).labels).toEqual(["needs-review"]);
+  });
+
+  it("stale AC-20: visits the items in a rotated order", async () => {
+    const fake = three();
+    await sweepAt(fake, NOW, { offset: 1 });
+    const first = fake.state.calls.find((call, index) => index > 0 && /\/13\d/.test(call.path));
+    expect(first.path).toContain("/132");
+  });
+
+  it("stale AC-20: different offsets make progress on different items under a soft limit", async () => {
+    const limits = { maxRequests: 3, hardRequests: 1e9, maxMs: 1e9 };
+    const touched = async (offset) => {
+      const fake = three();
+      await sweepAt(fake, NOW, { offset, limits, error: () => {} });
+      return [131, 132, 133].filter((number) => fake.issue(number).labels.includes("needs-review"));
+    };
+    expect(await touched(0)).toEqual([131]);
+    expect(await touched(1)).toEqual([132]);
+  });
+
+  it("stale AC-20: stops at once on a rate limit", async () => {
+    const fake = three();
+    const rest = fake.api.rest;
+    fake.api.rest = async (method, path, body) => {
+      if (path.includes("/pulls/131/reviews")) {
+        const error = httpError(403);
+        error.rateLimited = true;
+        throw error;
+      }
+      return rest(method, path, body);
+    };
+    const errors = [];
+    const failed = await sweep({ api: fake.api, offset: 0, now: NOW, error: (line) => errors.push(line) });
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(errors).toEqual(["#131: failed with HTTP 403", "Stopped: GitHub rate limit."]);
+    expect(untouched(fake, [132, 133])).toBe(true);
   });
 });
 
@@ -774,5 +1711,33 @@ describe("createApi", () => {
       expect(error.status).toBe(502);
       expect(error.message).not.toContain("t0ken");
     });
+  });
+
+  const failing = (status, headers = {}) => async () => ({ ok: false, status, headers: new Headers(headers) });
+
+  it("stale AC-20: marks a rate limit error", async () => {
+    for (const [status, headers] of [
+      [403, { "x-ratelimit-remaining": "0" }],
+      [403, { "retry-after": "30" }],
+      [429, {}],
+    ]) {
+      const api = createApi({ token: "t0ken", repository: REPO, fetch: failing(status, headers) });
+      await expect(api.rest("GET", "/x")).rejects.toMatchObject({ status, rateLimited: true });
+    }
+  });
+
+  it("stale AC-20: does not mark another failure as a rate limit", async () => {
+    for (const fetch of [failing(403), failing(403, { "x-ratelimit-remaining": "12" }), failing(500), async () => ({ ok: false, status: 403 })]) {
+      const api = createApi({ token: "t0ken", repository: REPO, fetch });
+      await expect(api.rest("GET", "/x")).rejects.toSatisfy((error) => !error.rateLimited);
+    }
+  });
+
+  it("stale AC-20: marks a GraphQL rate limit error", async () => {
+    const answer = (errors) => async () => ({ ok: true, status: 200, json: async () => ({ errors }) });
+    const limited = createApi({ token: "t0ken", repository: REPO, fetch: answer([{ type: "RATE_LIMITED" }]) });
+    await expect(limited.graphql("query {}", {})).rejects.toMatchObject({ rateLimited: true });
+    const other = createApi({ token: "t0ken", repository: REPO, fetch: answer([{ type: "NOT_FOUND" }]) });
+    await expect(other.graphql("query {}", {})).rejects.toSatisfy((error) => !error.rateLimited);
   });
 });

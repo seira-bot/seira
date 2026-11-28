@@ -199,7 +199,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       const threadId = m[1]!;
       const directBot = store.botByThread(threadId);
       const group = directBot ? undefined : store.groupByThread(threadId);
-      if (!directBot && !group) return json(res, 404, { error: "no such conversation" });
+      if ((!directBot && !group) || !visible.thread(threadId)) return json(res, 404, { error: "no such conversation" });
 
       const message = store.messagesFor(threadId).find((candidate) => candidate.id === m![2]);
       if (!message) return json(res, 404, { error: "no such message" });

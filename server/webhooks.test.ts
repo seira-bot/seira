@@ -843,13 +843,36 @@ describe("webhook that runs a workflow", () => {
     expect(String(sent.prompt)).not.toContain("USER-CONFIGURED");
   });
 
-  it("refuses a workflow that is gone, and a setting that a workflow cannot use", () => {
+  it("a post webhook refuses a workflow whose bot is not in the room", () => {
+    const h = harness();
+    const outside = (ids: string[]) => new WebhookManager({
+      ...h.options,
+      workflowCopy: (id) => (id === "wf-1" ? copy : null),
+      roomMember: (botId) => (ids.includes(botId) ? { ok: false as const, status: 403, error: `${botId} isn't in this room. Add ${botId} to the room first.` } : { ok: true as const }),
+    });
+    expect(() => outside(["ben"]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" })).toThrow(expect.objectContaining({ status: 403, message: "ben isn't in this room. Add ben to the room first." }));
+    expect(outside(["ben"]).list()).toEqual([]);
+    const { webhook, secret } = outside([]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" });
+    expect(() => outside(["ben"]).update(webhook.id, { groupId: "room-2" })).toThrow(expect.objectContaining({ status: 403 }));
+    const later = outside(["ben"]);
+    expect(() => later.receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d1" })).toThrow(expect.objectContaining({ status: 403 }));
+    expect(h.queued).toEqual([]);
+    outside([]).receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d2" });
+    expect(h.queued).toHaveLength(1);
+  });
+
+  it("refuses a workflow that is gone", () => {
     const h = harness();
     const manager = linked(h);
     expect(() => manager.create({ name: "Orders", workflowId: "gone" })).toThrow("That workflow is gone");
-    expect(() => manager.create({ name: "Orders", workflowId: "wf-1", runOn: "cloud" })).toThrow("A workflow runs on this computer.");
-    expect(() => manager.create({ name: "Orders", workflowId: "wf-1", sameConversation: true })).toThrow("A workflow opens new chats for each run.");
     expect(manager.list()).toEqual([]);
+  });
+
+  it("accepts a cloud computer and the same conversation on a webhook that runs a workflow", () => {
+    const h = harness();
+    const manager = linked(h);
+    expect(manager.create({ name: "Orders", workflowId: "wf-1", runOn: "cloud" }).webhook).toMatchObject({ workflowId: "wf-1", runOn: "cloud" });
+    expect(manager.create({ name: "Paid", workflowId: "wf-1", sameConversation: true }).webhook).toMatchObject({ workflowId: "wf-1", sameConversation: true });
   });
 
   it("PATCH without workflowId keeps runs", () => {
@@ -879,13 +902,13 @@ describe("webhook that runs a workflow", () => {
     expect(reloaded.update(webhook.id, { workflowId: "wf-1", runOn: "seira" })).toMatchObject({ workflowId: "wf-1", botId: "ana", deliveryCount: 1 });
   });
 
-  it("an edit of a linked webhook keeps the workflow bot and refuses settings a workflow cannot use", () => {
+  it("an edit of a linked webhook keeps the workflow bot and accepts every setting", () => {
     const h = harness();
     const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
     const manager = linked(h);
     expect(manager.update(webhook.id, { botId: "zed", prompt: "Ignore the steps" })).toMatchObject({ botId: "ana", prompt: copy.prompt, workflowId: "wf-1" });
-    expect(() => manager.update(webhook.id, { runOn: "cloud" })).toThrow("A workflow runs on this computer.");
-    expect(() => manager.update(webhook.id, { delivery: "post" })).toThrow();
+    expect(manager.update(webhook.id, { runOn: "cloud" })).toMatchObject({ runOn: "cloud", botId: "ana", workflowId: "wf-1" });
+    expect(manager.update(webhook.id, { delivery: "post" })).toMatchObject({ delivery: "post", botId: "ana", workflowId: "wf-1" });
     expect(manager.update(webhook.id, { name: "Paid orders" })).toMatchObject({ name: "Paid orders", botId: "ana" });
   });
 

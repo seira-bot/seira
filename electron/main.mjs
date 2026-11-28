@@ -29,13 +29,13 @@ import { CRASH_REPORTS_ARG, createCrashReports } from "./crash-report.mjs";
 import { migrateWorkspaceConfigFile, workspaceCredentialEnv } from "./workspace-credentials.mjs";
 import { evictStartupCacheOnce } from "./startup-cache-eviction.mjs";
 import { activateExistingWindow, releaseSingleInstanceLock } from "./single-instance.mjs";
-import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TIMEOUT_MS, SERVER_LISTENING_GRACE_MS } from "./server-boot-probe.mjs";
+import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TIMEOUT_MS } from "./server-boot-probe.mjs";
 import { startupTimeline } from "./startup-timeline.mjs";
 import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
 import { postToServer } from "./server-message.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
-import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installPairLinks } from "./pair-link-main.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs"; import { createRemoteVisor } from "./glance-remote-visor.mjs"; import { spawn } from "node:child_process";
+import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installPairLinks } from "./pair-link-main.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs"; import { installGlance, isWaylandSession } from "./glance-main.mjs"; import { createRemoteVisor } from "./glance-remote-visor.mjs"; import { resolveTopInset } from "./glance-top-inset.mjs"; import { spawn } from "node:child_process";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
 import { windowBackground, windowChromeOptions } from "./window-chrome.mjs";
 import { createAllWindowsClosedQuit } from "./window-all-closed.mjs";
@@ -97,6 +97,7 @@ import { buildApplicationMenu } from "./menu.mjs"; import { createMainTextSize }
 import { createComputerSharing, isHomeFolder, validateSharedFolders } from "./computer-sharing.mjs"; import { installServerLending } from "./server-lending.mjs"; import { ownEnvironmentIds } from "./lent-mcp.mjs";
 import { createHostScreenLease } from "./host-screen-lease.mjs";
 import { acquireDataDirLease } from "./data-dir-lease.mjs";
+import { acquireDataDirLeaseWhenFree } from "./boot-lease.mjs";
 import { reviveAfterFailedSwitch, switchLocalEnvironment } from "./environment-switch.mjs";
 import { createManagedDesktopClient, createManagedDesktopRelay, createManagedDesktopStore } from "./managed-desktop.mjs";
 import { seiraCloudSells } from "./seira-cloud-sale.mjs";
@@ -463,7 +464,7 @@ let logStream = null;
 let desktopShutdownStarted = false;
 import { companionAdvertisedHostedUrl, companionEnabledAtRest, companionOriginTarget, companionPairing, companionPairingRenew, companionDeviceRoutes, companionStartsAtLaunch, companionCloudDesktopAccess, companionRouteOn, dismissCompanionNotice, rememberCompanionRoute, setCompanionMigrationFacts,
   companionBrowserControlAccess, companionRevoke, companionRunning, companionSettings, companionState, rememberCompanionKeepAwake, setCompanionHostedUrl, setCompanionLifecycleListener, startCompanion, stopCompanion, postCompanionMessage, setCompanionWorkspaceHooks } from "./companion.mjs";
-import { createDesktopCompanionE2E, deviceCounts } from "./companion-e2e-desktop.mjs"; import { startCheckedManagedConnection } from "./managed-companion-start.mjs"; import { createCompanionWorkspaces } from "./companion-workspaces.mjs";
+import { defaultStartRoutes } from "./companion-settings.mjs"; import { createDesktopCompanionE2E, deviceCounts } from "./companion-e2e-desktop.mjs"; import { startCheckedManagedConnection } from "./managed-companion-start.mjs"; import { createCompanionWorkspaces } from "./companion-workspaces.mjs";
 import { autoStartCompanion } from "./companion-autostart.mjs";
 import { migrateHomeFolders, migrateInnerFiles } from "./legacy-migrate.mjs";
 import { createPhoneLinkRoutes } from "./phone-link-routes.mjs"; import { reachableForKeepAwake, createCompanionAwakeHold } from "./keep-awake.mjs";
@@ -573,7 +574,7 @@ function publicManagedCompanionState() {
 
 function decorateDesktopCompanionState(state) {
   syncCompanionKeepAwake(reachableForKeepAwake(state, tailnetShare.state()), state.keepAwake === true);
-  return { ...state, managedConnection: publicManagedCompanionState(), tailnetShare: tailnetShare.state(), relayToken: companionE2E?.relayToken ?? null };
+  return { ...state, managedConnection: publicManagedCompanionState(), tailnetShare: tailnetShare.state(), relayToken: companionE2E?.relayToken ?? null, ...(companionE2E ? { anywhere: companionE2E.configured ? "relay" : "https" } : {}) };
 }
 
 async function desktopCompanionState() {
@@ -655,7 +656,7 @@ async function startManagedCompanionConnection({ waitForVerification = true } = 
   return publicManagedCompanionState();
 }
 
-async function startDesktopCompanion({ waitForHosted = true, remember = true, routes = ["wifi", "relay"] } = {}) {
+async function startDesktopCompanion({ waitForHosted = true, remember = true, routes = defaultStartRoutes(companionE2E?.configured) } = {}) {
   const refusal = managedRemoteAccessRefusal();
   if (refusal) throw new Error(refusal);
   companionDesiredThisLaunch = true;
@@ -1163,8 +1164,6 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
     pid: () => proc.pid,
     bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
     isExited: () => exited || desktopShutdownStarted,
-    isListening: listening.heard,
-    listeningGraceMs: SERVER_LISTENING_GRACE_MS,
   });
   if (identity.outcome === "ready") startupTimeline.mark("server-healthy");
   if (identity.outcome === "ready" && serverSupervisor.isCurrent(proc)) return { proc };
@@ -2606,7 +2605,7 @@ const rail = installCloudRail({ t: nativeT, ipcMain, clipboard, openCloud: openO
     probe: serverConnect.probe, run: (choice, link, code) => (choice === "link" ? (link ? (code === null ? connectHostedWorkspace(link) : serverConnect.connect(link, code)) : addServerFromClipboard()) : choice === "address" ? showConnectSheet() : homeWindow.cloudOrigin() ? undefined : openCloudAdd("app_menu")) } });
 const announceAddedCloud = createAddedCloudNotice({ t: nativeT, Notification, focused: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()), sheetOpen: rail.sheetOpen,
   open: id => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); void openOwnCloud(id); }, shown: () => cloudAccount?.addDone() }); const desktopNotifications = installDesktopNotifications({ ipcMain, Notification, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), window: () => mainWindow, mayNotify: (contents, url) => appPermissions?.check(contents, "notifications", url, { isMainFrame: true }) === true, reveal: revealForLink, openPlace: origin => (origin === homeWindow.cloudOrigin() ? showHome({ place: "cloud" }) : workspaceMenuAction(() => switchEnvironment(origin === rendererOrigin() ? LOCAL_ID : environmentsState.environments.find(entry => entry.origin === origin)?.id))) });
-glanceControl = installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), getMainWindow: () => mainWindow, prefs: nativeText.prefs, t: nativeT, onHiddenChange: refreshApplicationMenu,
+glanceControl = installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, resolveInset: () => resolveTopInset({ platform: process.platform, env: process.env, display: screen.getPrimaryDisplay() }), fetch: (...args) => session.defaultSession.fetch(...args), getMainWindow: () => mainWindow, prefs: nativeText.prefs, t: nativeT, onHiddenChange: refreshApplicationMenu,
   revealChat: target => { revealForLink(); mainWindow?.webContents.send("desktop-notifications:open", target); }, isWayland: isWaylandSession({ platform: process.platform, env: process.env, switches: Object.fromEntries(["ozone-platform", "ozone-platform-hint"].map(name => [name, app.commandLine.getSwitchValue(name)])), }), x11Available: Boolean(process.env.DISPLAY), createHelperVisor: hooks => createRemoteVisor({ spawn, execPath: process.execPath, appArgs: process.defaultApp ? [app.getAppPath()] : [], switches: app.commandLine.hasSwitch("no-sandbox") ? ["--no-sandbox"] : [], env: process.env, folder: path.join(app.getPath("userData"), "glance-helper"), ...hooks }) });
 // A place's colour (place-look.mjs): the Admin's for a Cloud, this app's for This computer and a server connected by
 // hand; changed on the place's own page or from the window's rail, whatever that server runs.
@@ -2828,11 +2827,13 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     try {
       // Acquire before either plaintext credential migration touches config.json.
-      desktopDataDirLease = acquireDataDirLease(bootDataDir, { t: nativeT,
+      desktopDataDirLease = await acquireDataDirLeaseWhenFree(bootDataDir, { t: nativeT,
         legacyDataDir: path.join(app.getPath("home"), ".opengrokbot"),
-      });
+      }, { log: slog });
       runningDataDir = bootDataDir;
     } catch (error) {
+      slog(`data folder lease refused: ${error?.message ?? error}`);
+      if (desktopShutdownStarted) return;
       dialog.showErrorBox(
         nativeT("native.boot.unsafe.title"),
         error?.message ?? nativeT("native.boot.unsafe.fallback"),
@@ -2841,6 +2842,7 @@ app.whenReady().then(async () => {
       return;
     }
   }
+  if (desktopShutdownStarted) return;
   installServerSessions({ app, defaultSession: session.defaultSession, serverPort: () => SERVER_PORT,
     ownerToken: () => (app.isPackaged && serverReady ? desktopMutationToken : null) });
   if (app.isPackaged) app.setAsDefaultProtocolClient("seira");

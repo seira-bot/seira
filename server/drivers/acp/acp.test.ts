@@ -859,6 +859,21 @@ describe("ACP turns (fake CLI)", () => {
     expect(lastTurn().filter((event) => event.type === "item.started")).toHaveLength(1);
   });
 
+  it("reports how many entries of an agent's plan are done, with plan lines off", async () => {
+    const { report, send, lastTurn } = await reportingThread("plan-counts");
+    report(
+      plan(["in_progress", "SECRET_ENTRY"], ["pending", "Write the tests"]),
+      plan(["in_progress", "SECRET_ENTRY"], ["pending", "Write the tests"]),
+      plan(["completed", "SECRET_ENTRY"], ["in_progress", "Write the tests"]),
+      { sessionUpdate: "plan", entries: [] },
+    );
+    await send("turn 1");
+    const plans = lastTurn().filter((event) => event.type === "turn.plan") as any[];
+    expect(plans.map((event) => `${event.done}/${event.total}`)).toEqual(["0/2", "0/2", "1/2"]);
+    expect(plans.every((event) => typeof event.turnId === "string")).toBe(true);
+    expect(JSON.stringify(plans)).not.toContain("SECRET");
+  });
+
   it("shows one finished step each time an agent's plan reads differently", async () => {
     process.env.SEIRA_ACP_PLAN_LINES = "1";
     const { report, send, lastTurn } = await reportingThread("plan-lines");

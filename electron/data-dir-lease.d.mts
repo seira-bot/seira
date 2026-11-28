@@ -15,6 +15,7 @@ export interface DelegatedDataDirLease extends DataDirLease {
 
 export declare class DataDirLeaseError extends Error {
   override readonly name: "DataDirLeaseError";
+  readonly busy: boolean;
 }
 
 export declare function acquireDataDirLease(

@@ -9,6 +9,7 @@ import { batchSaves } from "../save-batch.ts";
 import { capThreadLog, currentThreadLogCap } from "../thread-log-rotation.ts";
 import { newId, type ProviderAdapter, type ProviderInstance, type RuntimeEvent, type RuntimeEventListener } from "../contracts.ts";
 import { LiveSteps } from "./live-steps.ts";
+import { PlanGate } from "./plan-gate.ts";
 import { ProgressGate } from "./progress-gate.ts";
 import { TextItems } from "./text-items.ts";
 
@@ -62,10 +63,8 @@ export class EventBus {
   private readonly drainWaiters: Array<() => void> = [];
   private readonly queuedLogWarnings = new Map<string, RuntimeEvent>();
   // A status-line report is live only: delivered to listeners, never queued for the log.
-  private readonly progress = new ProgressGate((event) => {
-    if (this.pendingText.has(event.threadId)) this.flushThread(event.threadId);
-    this.deliver(event);
-  });
+  private readonly progress = new ProgressGate((event) => this.deliverLive(event));
+  private readonly plans = new PlanGate();
   private readonly adapters = new Map<string, ProviderAdapter>();
   private readonly steps = new LiveSteps({
     offer: (event) => this.progress.offer(event),
@@ -106,11 +105,16 @@ export class EventBus {
       this.progress.offer(this.steps.progress(raw));
       return;
     }
+    if (raw.type === "turn.plan") {
+      if (this.plans.changed(raw)) this.deliverLive(raw);
+      return;
+    }
     if (raw.type === "item.output") {
       this.steps.output(raw);
       return;
     }
     const event = this.steps.observe(raw, isTerminalEvent(raw));
+    if (event.type === "turn.started" || isTerminalEvent(event)) this.plans.forget(event.threadId);
     if (STATUS_LINE_EVENTS.has(event.type) || isTerminalEvent(event)) this.progress.supersede(event.threadId, isTerminalEvent(event));
     const pending = this.pendingText.get(event.threadId);
     if (event.type === "content.delta") {
@@ -145,6 +149,12 @@ export class EventBus {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /** Delivered to listeners at once, never queued for the log; text that waits to merge goes out first, to keep the order. */
+  private deliverLive(event: RuntimeEvent) {
+    if (this.pendingText.has(event.threadId)) this.flushThread(event.threadId);
+    this.deliver(event);
   }
 
   private flushThread(threadId: string) {

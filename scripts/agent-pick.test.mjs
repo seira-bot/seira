@@ -137,6 +137,7 @@ function makeWorld({ issues = [], prs = [], windowLabel = true, events = {}, com
           number: each.number,
           isDraft: each.isDraft,
           author: each.author,
+          labels: { nodes: each.stalled ? [{ name: "stalled" }] : [] },
           closingIssuesReferences: { nodes: each.closes.map((number) => ({ number })) },
         })),
       },
@@ -217,6 +218,16 @@ describe("evaluate", () => {
       free: false,
       reason: "open pull request #42",
     });
+  });
+
+  it("AC-12 stalled: a stalled pull request that closes an issue does not hold it", async () => {
+    const w = makeWorld({
+      issues: [issue(1, ["P1"]), issue(2, ["P1"])],
+      prs: [pr(50, "alice", [1], { stalled: true }), pr(51, "alice", [2])],
+    });
+    const { out } = await run(["list", "--json", "--agent", "seira-lagus"], w);
+    const result = JSON.parse(out[0]);
+    expect(result.free.map((each) => each.number)).toEqual([1]);
   });
 
   it("AC-04 skips an issue that another agent holds", () => {
@@ -700,6 +711,17 @@ describe("sweep", () => {
       ["POST", `/repos/${REPO}/issues/1/comments`, { body: expiredText("seira-lagus") }],
       ["DELETE", `/repos/${REPO}/issues/1/labels/claimed%3A%20agent`],
     ]);
+  });
+
+  it("AC-12 stalled: releases an expired agent claim whose only linked pull request is stalled", async () => {
+    const w = makeWorld({
+      issues: [claimed(1)],
+      prs: [pr(50, "seira-lagus[bot]", [1], { stalled: true })],
+      comments: { 1: [claimComment(1, "seira-lagus", ago(30))] },
+    });
+    const { out } = await run(["sweep"], w);
+    expect(out).toEqual(["released: #1 (seira-lagus)"]);
+    expect(w.issue(1).labels).toEqual(["P1"]);
   });
 
   it("AC-13 uses the label event time when no claim comment exists", async () => {

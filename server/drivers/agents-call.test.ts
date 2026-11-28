@@ -692,3 +692,46 @@ describe("blank optional arguments", () => {
     ]);
   });
 });
+
+describe("capacity_ok on create_bot and propose_team_setup", () => {
+  const recording = (calls: Array<{ path: string; body: any }>, answer: Record<string, unknown>) => context({
+    client: {
+      api: async (path, init) => { calls.push({ path, body: JSON.parse(String(init?.body)) }); return answer; },
+      apiResponse: async () => ({ ok: true, status: 200, body: {} }),
+    },
+  });
+  const plan = { reason: "Team", operations: [{ action: "create", key: "a", fields: { name: "A" } }] };
+  const held = { state: "held", applied: false, capacityHold: "Nothing was created. This computer is small." };
+
+  it("keeps capacity_ok out of the plan and sends it as capacityOk only when true", async () => {
+    const yes: Array<{ path: string; body: any }> = [], no: Array<{ path: string; body: any }> = [];
+    await callTool("propose_team_setup", { ...plan, capacity_ok: true }, recording(yes, { state: "applied" }));
+    await callTool("propose_team_setup", { ...plan, capacity_ok: false }, recording(no, { state: "applied" }));
+    expect(yes[0].body.capacityOk).toBe(true);
+    expect(yes[0].body.plan).toEqual(plan);
+    expect(no[0].body).not.toHaveProperty("capacityOk");
+    expect(no[0].body.plan).toEqual(plan);
+  });
+  it("sends capacityOk from create_bot only when true", async () => {
+    const yes: Array<{ path: string; body: any }> = [], no: Array<{ path: string; body: any }> = [];
+    await callTool("create_bot", { name: "A", role: "r", instructions: "i", capacity_ok: true }, recording(yes, { id: "b", name: "A" }));
+    await callTool("create_bot", { name: "A", role: "r", instructions: "i" }, recording(no, { id: "b", name: "A" }));
+    expect(yes[0].body.capacityOk).toBe(true);
+    expect(no[0].body).not.toHaveProperty("capacityOk");
+  });
+  it("returns a hold as text, not as an error, from both tools", async () => {
+    for (const result of [
+      await callTool("propose_team_setup", plan, recording([], held)),
+      await callTool("create_bot", { name: "A", role: "r", instructions: "i" }, recording([], held)),
+    ]) expect(result).toEqual({ text: held.capacityHold });
+  });
+  it("adds the note to what the bot reads after a setup applied", async () => {
+    const note = "The team now has 40 bots.";
+    const proposed = await callTool("propose_team_setup", plan, recording([], { state: "applied", result: { state: "applied" }, capacityNote: note }));
+    expect(proposed.text).toContain("Applied the requested team setup.");
+    expect(proposed.text.endsWith(note)).toBe(true);
+    const created = await callTool("create_bot", { name: "A", role: "r", instructions: "i" }, recording([], { id: "b", name: "A", capacityNote: note }));
+    expect(created.text).toContain("Created @A");
+    expect(created.text.endsWith(note)).toBe(true);
+  });
+});

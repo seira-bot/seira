@@ -112,6 +112,8 @@ const TRIGGER_FIELDS_SCHEMA = {
 } as const;
 
 const CHIEF_PROFILE_TARGET = " A Chief of Staff may pass for_bot_id (from list_bots) for a requested change to another bot in its section.";
+const CAPACITY_NOTE = " If the result says this computer is small for the team, tell the person and ask; pass capacity_ok true only after they agree.";
+const CAPACITY_OK = { type: "boolean", description: "true only after the person agreed to a team bigger than this computer runs well." };
 const APPLIES_AT_ONCE = " It applies at once, with an Undo where possible: read the result before saying it did.";
 const APPLIES_OUTCOME = APPLIES_AT_ONCE + " It never raises another bot's execution permissions.";
 
@@ -334,10 +336,11 @@ const TOOL_DEFINITIONS = [
   {
     name: "create_bot",
     description:
-      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn." + CAPACITY_NOTE,
     inputSchema: {
       type: "object",
       properties: {
+        capacity_ok: CAPACITY_OK,
         name: { type: "string", description: "Short, unique display name for the specialist." },
         role: { type: "string", description: "The specialist's job title or role." },
         instructions: { type: "string", description: "What this specialist is responsible for and how it should work." },
@@ -367,10 +370,11 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "propose_team_setup",
-    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes." + APPLIES_AT_ONCE,
+    description: "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes." + APPLIES_AT_ONCE + CAPACITY_NOTE,
     inputSchema: {
       type: "object", additionalProperties: false,
       properties: {
+        capacity_ok: CAPACITY_OK,
         reason: { type: "string", minLength: 1, maxLength: 500 },
         newTeams: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 60 } },
         operations: { type: "array", minItems: 1, maxItems: 40, items: {

@@ -2245,6 +2245,21 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(types.indexOf("turn.progress")).toBeGreaterThan(types.indexOf("item.started"));
   });
 
+  it("reports how many steps of the turn's plan are done", async () => {
+    process.env.FAKE_CODEX_PLANS = JSON.stringify([["inProgress", "pending"], ["completed", "inProgress"], ["completed", "inProgress"], []]);
+    try {
+      await create();
+      await instance.adapter.sendTurn({ threadId: "t-plan", text: "plan it" });
+      await recorder.until((e) => e.type === "turn.completed");
+    } finally {
+      delete process.env.FAKE_CODEX_PLANS;
+    }
+    const plans = recorder.events.filter((e) => e.type === "turn.plan") as any[];
+    expect(plans.map((e) => `${e.done}/${e.total}`)).toEqual(["0/2", "1/2", "1/2"]);
+    expect(plans.every((e) => typeof e.turnId === "string" && e.threadId === "t-plan")).toBe(true);
+    expect(JSON.stringify(plans)).not.toContain("step ");
+  });
+
   it("streams a running command's output to the bus, and names its app-server while the turn runs", async () => {
     const gate = join(scratch, "command-done");
     Object.assign(process.env, { FAKE_CODEX_COMMAND: "/bin/zsh -lc 'pnpm test'", FAKE_CODEX_COMMAND_OUTPUT: JSON.stringify(["RUN v3\n", " ✓ a.test.ts\n"]), FAKE_CODEX_COMMAND_GATE: gate });

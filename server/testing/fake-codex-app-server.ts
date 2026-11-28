@@ -26,6 +26,8 @@
 //   FAKE_STREAM_SCRIPT, FAKE_STREAM_CADENCE  a scripted reply chosen by a marker in the prompt (as stream-script.ts)
 //   FAKE_CODEX_PATCH_BYTES  each turn first writes web/index.html by apply_patch, streamed as two
 //     item/fileChange/patchUpdated notifications (codex-cli 0.160.1's schema) of half and all this many bytes
+//   FAKE_CODEX_PLANS  JSON [[status, ...], ...] each turn first sends one turn/plan/updated per list (steps named "step <n>",
+//     status pending | inProgress | completed), as codex-cli 0.172.0's schema
 //   FAKE_CODEX_IGNORE_FEATURES  "1": config/read reports no `-c features.*` override
 //   FAKE_CODEX_SHELL_ENVIRONMENT_POLICY  JSON config/read reports, every field present and null unless set (codex-cli 0.160)
 //   FAKE_CODEX_APPROVAL_REQUEST  JSON {method, params} override in approval mode
@@ -396,6 +398,10 @@ const dump = () => {
 };
 
 const finishTurn = () => {
+  const plans: unknown = process.env.FAKE_CODEX_PLANS ? JSON.parse(process.env.FAKE_CODEX_PLANS) : [];
+  for (const statuses of Array.isArray(plans) ? plans : []) {
+    notify("turn/plan/updated", { turnId: nativeTurnId, explanation: null, plan: statuses.map((status: string, i: number) => ({ step: `step ${i + 1}`, status })) });
+  }
   const patchBytes = Number(process.env.FAKE_CODEX_PATCH_BYTES);
   if (patchBytes > 0) {
     const change = (bytes: number) => [{ path: `${process.cwd()}/web/index.html`, kind: { type: "add" }, diff: "+".repeat(bytes) }];

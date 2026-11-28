@@ -3,6 +3,16 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { TODO_DONE_WINDOW_MS, TODO_UNDO_MS, type Todo } from "../shared/todo.ts";
 import { writeFileAtomic } from "./atomic.ts";
+import { TEAM_AUDIENCE, type Audience } from "./audience.ts";
+import type { Viewer } from "./bot-visibility.ts";
+
+/** Whom a todo works for: the person who wrote it, or the person of the conversation a bot made it in. */
+export interface TodoPerson {
+  /** The key its conversation opens as (a thread starter): it decides who reads the work and whether it is confined. */
+  key?: string;
+  /** A person's own todo: who wrote it. Any bot that gets the todo must be one this person may chat with. */
+  viewer?: Viewer;
+}
 
 /** A stored todo: the public fields plus what only the server needs. */
 export interface TodoRecord extends Todo {
@@ -12,6 +22,10 @@ export interface TodoRecord extends Todo {
   offeredAt?: number;
   /** The last time the work on this todo showed life; the lease counts from here. */
   leaseAt?: number;
+  /** Who may read this todo on a Team Cloud (audience.ts). A record without one takes its source conversation's. */
+  audience?: Audience;
+  /** Absent on a todo stored before it was recorded: it then counts as nobody's, which may do the least. */
+  person?: TodoPerson;
 }
 
 interface TodoMeta {
@@ -33,7 +47,7 @@ export interface TodoBotInfo {
 
 const FILE = "todos.json";
 
-const INTERNAL_KEYS = ["deletedAt", "offeredIn", "offeredAt", "leaseAt"] as const;
+const INTERNAL_KEYS = ["deletedAt", "offeredIn", "offeredAt", "leaseAt", "audience", "person"] as const;
 
 export function publicTodo(record: TodoRecord): Todo {
   const todo: Record<string, unknown> = { ...record };
@@ -266,11 +280,22 @@ export function readyQueue(todos: readonly Todo[], botId: string, now: number): 
 export interface TodoViewer {
   bot(botId: string): boolean;
   thread(threadId: string): boolean;
+  audience(audience: Audience): boolean;
 }
 
-/** A viewer sees a todo when they see its bot, if it has one, and the conversation it came from, if it has one. */
-export function todoVisible(todo: Pick<Todo, "botId" | "source">, viewer: TodoViewer): boolean {
-  return (!todo.botId || viewer.bot(todo.botId)) && (!todo.source || viewer.thread(todo.source.threadId));
+/** A viewer sees a todo when they see its bot, if it has one, the conversation it came from, if it has one, the
+ * conversation where the work runs, if it has one, and its audience. The title, note, question and result all follow
+ * this rule. */
+export function todoVisible(todo: Pick<Todo, "botId" | "source" | "threadId"> & { audience?: Audience }, viewer: TodoViewer): boolean {
+  return (!todo.botId || viewer.bot(todo.botId))
+    && (!todo.source || viewer.thread(todo.source.threadId))
+    && (!todo.threadId || viewer.thread(todo.threadId))
+    && (!todo.audience || viewer.audience(todo.audience));
+}
+
+/** The audience a todo carries: its own, else the one of the conversation it came from, else the team's. */
+export function todoAudienceFrom(todo: Pick<TodoRecord, "audience" | "source">, audienceOf: (threadId: string) => Audience): Audience {
+  return todo.audience ?? (todo.source ? audienceOf(todo.source.threadId) : TEAM_AUDIENCE);
 }
 
 export function sameTitle(a: string, b: string): boolean {

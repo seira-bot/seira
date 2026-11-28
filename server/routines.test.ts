@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import { isRoutineProblemRun, ROUTINE_CHECKS } from "../shared/routines.ts";
 import { ROUTINE_SUPERSEDED } from "./routine-execution.ts";
+import { createReadAndDraft } from "./read-and-draft.ts";
 import { loadRoutine } from "./routine-load.ts";
 import { noStartSpacing } from "./routine-no-start.ts";
 import { RUN_PROGRESS_WINDOW_MS } from "./routine-progress-save.ts";
@@ -4522,21 +4523,17 @@ describe("a routine linked to a workflow", () => {
     expect(h.manager.listRuns()[0]).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"], target: "bot", status: "running", prompt: copy.prompt });
   });
 
-  it("refuses a workflow that is gone, and settings a workflow cannot honour", () => {
+  it("refuses a workflow that is gone", () => {
     const { h, input, gone } = setup();
-    expect(() => h.manager.create({ ...input, runOn: "cloud" as never })).toThrow("A workflow runs on this computer.");
     gone();
     expect(() => h.manager.create(input)).toThrow("That workflow is gone. Choose another one.");
   });
 
-  it("refuses read-only access, whose fence covers one chat only", () => {
+  it("accepts read-only access, checks and a cloud computer", () => {
     const { h, input } = setup();
-    expect(() => h.manager.create({ ...input, access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
-  });
-
-  it("refuses checks", () => {
-    const { h, input } = setup();
-    expect(() => h.manager.create({ ...input, checks: [ROUTINE_CHECKS[0]!] })).toThrow("A workflow can't use checks.");
+    expect(h.manager.create({ ...input, access: "read-and-draft" })).toMatchObject({ workflowId: "wf-1", access: "read-and-draft" });
+    expect(h.manager.create({ ...input, checks: [ROUTINE_CHECKS[0]!] })).toMatchObject({ workflowId: "wf-1", checks: [ROUTINE_CHECKS[0]] });
+    expect(h.manager.create({ ...input, runOn: "cloud" as never })).toMatchObject({ workflowId: "wf-1", runOn: "cloud" });
   });
 
   it("keeps the copy when the routine is updated, and drops the link on null", () => {
@@ -4565,21 +4562,17 @@ describe("a routine linked to a workflow", () => {
     expect(() => h.manager.update(routine.id, { workflowId: "wf-1" })).toThrow("That workflow is gone. Choose another one.");
   });
 
-  it("refuses a setting a workflow cannot honour on a routine that is already linked", () => {
+  it("accepts a setting on a routine that is already linked", () => {
     const { h, input } = setup();
     const routine = h.manager.create(input);
-    expect(() => h.manager.update(routine.id, { access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
+    expect(h.manager.update(routine.id, { access: "read-and-draft" })).toMatchObject({ workflowId: "wf-1", access: "read-and-draft" });
   });
 
-  it("loses its link at load when it holds a setting a workflow refuses", () => {
+  it("keeps its link at load when it holds any setting", () => {
     const schedule = { type: "interval" as const, everyMinutes: 60, anchorAt: start };
     const linked = { id: "r1", name: "Morning", prompt: copy.prompt, target: "bot", botId: "ana", runOn: "seira", enabled: true, schedule, durationMinutes: 30, attachments: [], workflowId: "wf-1", workflowBotIds: ["ana", "ben"], createdAt: 1, updatedAt: 1, nextRunAt: null } as unknown as Routine;
-    expect(loadRoutine(linked, start)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
-    for (const change of [{ access: "read-and-draft" }, { checks: [ROUTINE_CHECKS[0]!] }, { runOn: "cloud" }, { sameConversation: true }, { deliver: "brief" }]) {
-      const loaded = loadRoutine({ ...linked, ...change } as unknown as Routine, start)!;
-      expect(loaded, JSON.stringify(change)).not.toHaveProperty("workflowId");
-      expect(loaded).not.toHaveProperty("workflowBotIds");
-      expect(loaded.prompt).toBe(copy.prompt);
+    for (const change of [{}, { access: "read-and-draft" }, { checks: [ROUTINE_CHECKS[0]!] }, { runOn: "cloud" }, { sameConversation: true }, { deliver: "brief" }]) {
+      expect(loadRoutine({ ...linked, ...change } as unknown as Routine, start), JSON.stringify(change)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
     }
   });
 
@@ -4613,6 +4606,77 @@ describe("a routine linked to a workflow", () => {
     await h.manager.tick();
     expect(h.manager.workflowRunState(runId, "failed", "Ben could not start")).toMatchObject({ status: "failed", error: "Ben could not start" });
     expect(h.failed).toHaveLength(1);
+  });
+
+  it("read-and-draft access confines every step thread of the run", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create({ ...input, access: "read-and-draft" });
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    const own = h.manager.listRuns()[0]!.threadId!;
+    h.manager.bindStepThread(runId, "step-ben");
+    const gate = createReadAndDraft({
+      runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+      mayDraft: () => false, drafted: () => {},
+    });
+    const ben = { id: "ben", name: "Ben" };
+    for (const threadId of [own, "step-ben"]) {
+      expect(gate.confines(threadId)).toBe(true);
+      expect(gate.refusesRoute(ben, threadId, "POST", "/api/internal/memory")).toBe(true);
+    }
+    expect(gate.confines("elsewhere")).toBe(false);
+    expect(h.manager.isActiveThread("step-ben")).toBe(true);
+    expect(new RoutineManager(h.options).runForThread("step-ben")).toMatchObject({ id: runId, access: "read-and-draft" });
+  });
+
+  it("gives the stricter access to every turn in a chat that a waiting older run and a newer run share, either way", async () => {
+    for (const [olderAccess, newerAccess] of [["read-and-draft", undefined], [undefined, "read-and-draft"]] as const) {
+      const { h, input } = setup();
+      const older = h.manager.create({ ...input, name: "Older", ...(olderAccess ? { access: olderAccess } : {}) });
+      const newer = h.manager.create({ ...input, name: "Newer", ...(newerAccess ? { access: newerAccess } : {}) });
+      const olderRun = h.manager.runNow(older.id)!.id;
+      await h.manager.tick();
+      h.manager.workflowRunState(olderRun, "waiting", "Waiting 5 minutes");
+      const newerRun = h.manager.runNow(newer.id)!.id;
+      await h.manager.tick();
+      for (const runId of [olderRun, newerRun]) h.manager.bindStepThread(runId, "shared");
+      const gate = createReadAndDraft({
+        runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+        mayDraft: () => false, drafted: () => {},
+      });
+      expect(Object.fromEntries(h.manager.listRuns().map((run) => [run.id, run.status]))).toEqual({ [olderRun]: "waiting", [newerRun]: "running" });
+      expect(gate.confines("shared")).toBe(true);
+      expect(gate.refusesRoute({ id: "ana", name: "Ana" }, "shared", "POST", "/api/internal/memory")).toBe(true);
+      expect(h.manager.runForThread("shared")).toMatchObject({ id: newerRun, access: "read-and-draft" });
+    }
+  });
+
+  it("a step thread of a read-and-draft run cannot use a write tool", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create({ ...input, access: "read-and-draft" });
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(runId, "step-ben");
+    const gate = createReadAndDraft({
+      runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+      mayDraft: () => false, drafted: () => {},
+    });
+    const send = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "COMPOSIO_MULTI_EXECUTE_TOOL", arguments: { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: {} }] } } };
+    expect(gate.refusesConnectorCall({ id: "ben", name: "Ben" }, "step-ben", send)).toBe(true);
+  });
+
+  it("gives a step its own access on a run that has none, and never loosens a run that has it", async () => {
+    const { h, input } = setup();
+    const plain = h.manager.runNow(h.manager.create(input).id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(plain, "step-ben", "read-and-draft");
+    h.manager.bindStepThread(plain, "step-cat");
+    expect(h.manager.runForThread("step-ben")?.access).toBe("read-and-draft");
+    expect(h.manager.runForThread("step-cat")?.access).toBeUndefined();
+    const strict = h.manager.runNow(h.manager.create({ ...input, name: "Strict", access: "read-and-draft" }).id)!.id;
+    await h.manager.tick();
+    h.manager.bindStepThread(strict, "step-dee");
+    expect(h.manager.runForThread("step-dee")?.access).toBe("read-and-draft");
   });
 
   it("ignores a bot turn's events: only its workflow ends it", async () => {

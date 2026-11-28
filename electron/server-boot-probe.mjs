@@ -3,9 +3,9 @@ import { acceptedWireNames } from "./phone-wire-names.mjs";
 export const BOOT_PROBE_FAST_INTERVAL_MS = 25;
 export const BOOT_PROBE_FAST_WINDOW_MS = 5_000;
 export const BOOT_PROBE_INTERVAL_MS = 500;
+export const BOOT_PROBE_REQUEST_TIMEOUT_MS = 30_000;
 
-export const SERVER_BOOT_TIMEOUT_MS = 60_000;
-export const SERVER_LISTENING_GRACE_MS = 180_000;
+export const SERVER_BOOT_TIMEOUT_MS = 600_000;
 const LISTENING_LINE = "seira server on ";
 
 export function listeningSignal() {
@@ -38,8 +38,6 @@ const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  *   pid: () => number | undefined,
  *   bootTimeoutMs: number,
  *   isExited?: () => boolean,
- *   isListening?: () => boolean,
- *   listeningGraceMs?: number,
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<void>,
  *   fetchImpl?: typeof fetch,
@@ -51,33 +49,31 @@ export async function pollServerIdentity({
   pid,
   bootTimeoutMs,
   isExited = () => false,
-  isListening = () => false,
-  listeningGraceMs = 0,
   now = Date.now,
   sleep = defaultSleep,
   fetchImpl = globalThis.fetch,
 }) {
   const startedAt = now();
-  const deadline = () => startedAt + bootTimeoutMs + (isListening() ? listeningGraceMs : 0);
+  const deadline = startedAt + bootTimeoutMs;
   for (;;) {
     if (isExited()) return { outcome: "exited" };
-    const remainingMs = Math.max(0, deadline() - now());
+    const remainingMs = Math.max(0, deadline - now());
     if (remainingMs <= 0) return { outcome: "timeout", waitedMs: now() - startedAt };
 
+    const signal = AbortSignal.timeout(Math.min(remainingMs, BOOT_PROBE_REQUEST_TIMEOUT_MS));
     let res;
     try {
-      res = await fetchImpl(`http://127.0.0.1:${port}/api/health`, {
-        signal: AbortSignal.timeout(remainingMs),
-      });
+      res = await fetchImpl(`http://127.0.0.1:${port}/api/health`, { signal });
     } catch {
       const intervalMs =
         now() - startedAt < BOOT_PROBE_FAST_WINDOW_MS ? BOOT_PROBE_FAST_INTERVAL_MS : BOOT_PROBE_INTERVAL_MS;
-      await sleep(Math.min(intervalMs, Math.max(1, deadline() - now())));
+      await sleep(Math.min(intervalMs, Math.max(1, deadline - now())));
       continue;
     }
     const body = await res.json().catch(() => null);
     // Past the deadline a null body is a timeout, not another process answering.
-    if (now() >= deadline()) return { outcome: "timeout", waitedMs: now() - startedAt };
+    if (now() >= deadline) return { outcome: "timeout", waitedMs: now() - startedAt };
+    if (signal.aborted) continue;
     // Read now: Electron's utilityProcess sets proc.pid only on the async `spawn` event, so undefined is not our child.
     const expectedPid = pid();
     const identified =
@@ -87,7 +83,7 @@ export async function pollServerIdentity({
       body.pid === expectedPid &&
       body.static;
     if (!identified) return { outcome: "foreign-owner" };
-    if (now() >= deadline()) return { outcome: "timeout", waitedMs: now() - startedAt };
+    if (now() >= deadline) return { outcome: "timeout", waitedMs: now() - startedAt };
     return { outcome: "ready", latencyMs: now() - startedAt };
   }
 }
