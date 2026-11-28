@@ -227,7 +227,7 @@ describe("codexBackgroundProviderArgs", () => {
   it("reads quoted keys, escapes and literal strings by their value, and writes each value again as a fresh string", () => {
     const { env, args, overrides } = argsFor([
       "[model_providers.mygw]",
-      '"name" = "Gat\\u00e9 \\"one\\"\\tX"',
+      '"name" = "Gat\\u00e9 \\"one\\" X"',
       "base_url = 'https://gw.example/v1'",
       '"wire_api" = "resp\\u006fnses"',
       "[model_providers.mygw.http_headers]",
@@ -235,27 +235,26 @@ describe("codexBackgroundProviderArgs", () => {
       "'X-Lit' = 'C:\\path\\to'",
       '"X-D\\u0045L" = "del\\u007fvalue"',
       "[model_providers.mygw.query_params]",
-      '"api-version" = "v1\\u007f"',
+      '"api-version" = "v\\u0031"',
     ].join("\n"));
     expect(overrides).toEqual([
-      'model_providers.mygw.name="Gaté \\"one\\"\\tX"',
+      'model_providers.mygw.name="Gaté \\"one\\" X"',
       'model_providers.mygw.base_url="https://gw.example/v1"',
       'model_providers.mygw.wire_api="responses"',
       'model_providers.mygw.env_http_headers.X-Team="SEIRA_CODEX_MYGW_HEADER_1"',
       'model_providers.mygw.env_http_headers.X-Lit="SEIRA_CODEX_MYGW_HEADER_2"',
       'model_providers.mygw.env_http_headers.X-DEL="SEIRA_CODEX_MYGW_HEADER_3"',
-      'model_providers.mygw.query_params.api-version="v1\\u007f"',
+      'model_providers.mygw.query_params.api-version="v1"',
     ]);
     expect(env.SEIRA_CODEX_MYGW_HEADER_1).toBe("line1\nline2");
     expect(env.SEIRA_CODEX_MYGW_HEADER_2).toBe("C:\\path\\to");
     expect(env.SEIRA_CODEX_MYGW_HEADER_3).toBe("del\u007fvalue");
-    expect(args.join("\n")).not.toContain("\u007f");
   });
 
   it("forwards a field of the allowed list only with its own type, and nothing else", () => {
     const { env, args, overrides } = argsFor([
       "[model_providers.mygw]",
-      "name = 5", "base_url = [ 'https://a.example', 'https://b.example' ]", "wire_api = { x = 'synthetic-wire' }", "env_key_instructions = true",
+      "name = 5", "wire_api = { x = 'synthetic-wire' }", "env_key_instructions = true",
       'requires_openai_auth = "true"', 'request_max_retries = "2"', "stream_max_retries = -1", "stream_idle_timeout_ms = 1.5", "experimental_bearer_token = 12345",
       'unknown_field = "synthetic-unknown"', 'command = "synthetic-command"', "auth = { command = 'synthetic-auth' }", "supports_websockets = true",
       "[model_providers.mygw.aws]", 'profile = "synthetic-aws"',
@@ -310,15 +309,77 @@ describe("codexBackgroundProviderArgs", () => {
     const { args } = argsFor([
       "[model_providers.mygw] # model_providers.mygw.experimental_bearer_token = 'synthetic-comment'",
       'name = "a" # b = "synthetic-trailing"',
-      'base_url = "https://gw.example/v1\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
+      'wire_api = "responses"',
+      'env_key_instructions = "Set it\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
       "[model_providers.mygw.\"odd.key\"]", 'x = "synthetic-odd"',
       "[[model_providers.mygw.list]]", 'x = "synthetic-list"',
     ].join("\n"));
     expect(args).toEqual([
       "-c", 'model_providers.mygw.name="a"',
-      "-c", 'model_providers.mygw.base_url="https://gw.example/v1\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
+      "-c", 'model_providers.mygw.wire_api="responses"',
+      "-c", 'model_providers.mygw.env_key_instructions="Set it\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
     ]);
-    expect(args.filter((arg) => arg === "-c")).toHaveLength(2);
+    expect(args.filter((arg) => arg === "-c")).toHaveLength(3);
+  });
+
+  it("forwards a plain http or https endpoint as written", () => {
+    for (const url of ["https://gw.example/v1", "http://localhost:8080/v1/", "https://gw.example:8443/api/v1", "https://gw.example"]) {
+      expect(argsFor(`[model_providers.mygw]\nbase_url = "${url}"\n`).overrides, url).toEqual([`model_providers.mygw.base_url="${url}"`]);
+    }
+  });
+
+  it("drops the whole provider when the endpoint is not a plain http or https address", () => {
+    const endpoints = [
+      "https://user:synthetic-pw-1@gw.example/v1", "https://synthetic-tok-2@gw.example/v1", "https://@gw.example/v1", "http://:synthetic-pw-3@gw.example/v1",
+      "ftp://gw.example/v1", "file:///etc/hosts", "javascript:alert(1)", "wss://gw.example/v1", "gw.example/v1", "//gw.example/v1", "https:gw.example",
+      "https://gw.example/v1?key=synthetic-q-4", "https://gw.example/v1?", "https://gw.example/v1#synthetic-frag-5", "https://gw.example/v1#",
+      "https://gw.example/v 1", "https://gw.example/v1\\n", " https://gw.example/v1", "https://gw.example/\\u0007", "https://gw.example/\\u0085", "https://gw.example/\\u2028",
+      "https://", "https:///v1", "https://[::1", "not a url", "",
+    ];
+    for (const url of endpoints) {
+      const { env, args } = argsFor(`[model_providers.mygw]\nname = "GW"\nbase_url = "${url}"\nexperimental_bearer_token = "synthetic-tok-6"\nhttp_headers = { X = "synthetic-h-7" }\n`);
+      expect(args, JSON.stringify(url)).toEqual([]);
+      expect(Object.keys(env), JSON.stringify(url)).toEqual(["CODEX_HOME"]);
+    }
+    // An endpoint of the wrong type drops it too, and so does one that is only a quoted number or array.
+    for (const value of ["5", "true", "[ 'https://gw.example/v1' ]", "{ url = 'https://gw.example/v1' }"]) {
+      expect(argsFor(`[model_providers.mygw]\nname = "GW"\nbase_url = ${value}\n`).args, value).toEqual([]);
+    }
+  });
+
+  it("forwards a text field only when it fits what the field is for", () => {
+    const only = (lines: string[]) => argsFor(["[model_providers.mygw]", 'base_url = "https://gw.example/v1"', ...lines].join("\n")).overrides.slice(1);
+    const text = (count: number) => "x".repeat(count);
+    // name: 1 to 64 printable characters
+    expect(only([`name = "${text(64)}"`])).toEqual([`model_providers.mygw.name="${text(64)}"`]);
+    expect(only([`name = "${text(65)}"`])).toEqual([]);
+    expect(only(['name = ""'])).toEqual([]);
+    for (const bad of ["a\\nb", "a\\tb", "a\\u0007b", "a\\u001bb", "a\\u007fb", "a\\u0085b", "a\\u2028b"]) expect(only([`name = "${bad}"`]), bad).toEqual([]);
+    // env_key_instructions: at most 512 characters, no control character
+    expect(only([`env_key_instructions = "${text(512)}"`])).toHaveLength(1);
+    expect(only([`env_key_instructions = "${text(513)}"`])).toEqual([]);
+    expect(only(['env_key_instructions = "export\\nGW_KEY=x"'])).toEqual([]);
+    expect(only(['env_key_instructions = "export \\u001b[0m"'])).toEqual([]);
+    // env_key: an environment variable name
+    expect(only(['env_key = "GW_KEY_2"'])).toEqual(['model_providers.mygw.env_key="GW_KEY_2"']);
+    for (const bad of ["1GW", "GW KEY", "GW-KEY", "GW.KEY", "GW=1", "", "GW\\n"]) expect(only([`env_key = "${bad}"`]), bad).toEqual([]);
+    // wire_api: responses or chat
+    for (const good of ["responses", "chat"]) expect(only([`wire_api = "${good}"`])).toEqual([`model_providers.mygw.wire_api="${good}"`]);
+    for (const bad of ["completions", "Responses", "responses ", "", "chat\\n"]) expect(only([`wire_api = "${bad}"`]), bad).toEqual([]);
+    // a field that fails its check leaves the others alone
+    expect(only(['name = "bad\\nname"', 'wire_api = "responses"', 'env_key = "1BAD"'])).toEqual(['model_providers.mygw.wire_api="responses"']);
+  });
+
+  it("forwards only the api-version query parameter, with a short plain value", () => {
+    const only = (inline: string) => argsFor(`[model_providers.mygw]\nbase_url = "https://gw.example/v1"\nquery_params = ${inline}\n`).overrides.slice(1);
+    expect(only("{ 'api-version' = '2026-01-01' }")).toEqual(['model_providers.mygw.query_params.api-version="2026-01-01"']);
+    expect(only(`{ 'api-version' = '${"v".repeat(128)}' }`)).toHaveLength(1);
+    expect(only(`{ 'api-version' = '${"v".repeat(129)}' }`)).toEqual([]);
+    for (const bad of ["a b", " 1", "1 ", "", "1\\n2", "1\\u0007", "1\\u007f", "1\\u0085"]) expect(only(`{ 'api-version' = "${bad}" }`), bad).toEqual([]);
+    for (const name of ["api_version", "API-VERSION", "version", "key", "api-key", "token", "model", "x-api-version"]) {
+      expect(only(`{ '${name}' = 'synthetic-q' }`), name).toEqual([]);
+    }
+    expect(only("{ 'api-version' = '2', code = 'synthetic-q', 'x-key' = 'synthetic-q' }")).toEqual(['model_providers.mygw.query_params.api-version="2"']);
   });
 
   it("adds nothing for OpenAI, Codex's own providers or a provider config.toml does not declare", () => {
