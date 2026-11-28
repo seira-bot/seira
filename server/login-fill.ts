@@ -764,9 +764,13 @@ class LoginRun {
     if (!settled(state) && !(state !== "silent" && sending(state))) {
       const control = await this.page(MARK_SUBMIT, key);
       this.checkActive();
-      if (control?.disabled === true) return { kind: "disabled" };
-      if (control?.found !== true) return { kind: "no-control" };
-      await this.deps.click(`[${MARK}="${key}submit"]`);
+      if (control?.disabled === true) {
+        state = await watch(OUTCOME_WAIT_MS, false);
+        if (state !== "silent" && !settled(state)) return { kind: "disabled" };
+      } else {
+        if (control?.found !== true) return { kind: "no-control" };
+        await this.deps.click(`[${MARK}="${key}submit"]`);
+      }
     }
     if (!settled(state)) state = await watch(OUTCOME_WAIT_MS, false);
     if (state === "silent") return { kind: "done", changed: true, href: before, title: "", alert: "", human: false };

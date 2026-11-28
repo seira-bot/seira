@@ -151,6 +151,25 @@ describe("fill_login fills and submits in one call", () => {
     expect(page.field("[name=password]").value).toBe("");
   });
 
+  it("waits for a page whose script turns its own sign-in button off while it sends the login", async () => {
+    const { page, fill } = setup("https://example.com/login",
+      `<header><button type="button" id="header">Sign in</button></header>
+       <div role="dialog"><input name="email" type="email" autocomplete="username"><input name="password" type="password"><button type="button" id="go">Sign in</button></div>`,
+      [{ host: "example.com", username: "alice@example.com" }]);
+    let polls = 0;
+    page.onKey = (key) => { if (key === "Enter") page.window.document.querySelector("#go")!.setAttribute("disabled", ""); };
+    const engine = page.engine.bind(page);
+    page.engine = async (args) => {
+      if (args[0] === "eval" && args[1]!.includes("present:") && page.window.document.querySelector("#go[disabled]") && ++polls === 12) page.navigate(DASHBOARD.url, DASHBOARD.html);
+      return engine(args);
+    };
+    const outcome = await fill();
+    expect(outcome).toMatchObject({ ok: true, filled: ["username", "password"] });
+    expect(page.clicked).toEqual([]);
+    expect(polls).toBe(12);
+    expect(outcome.text).toContain("the page is now https://example.com/dashboard");
+  });
+
   it("waits for a page that sends the login by its own script, instead of pressing its button as well", async () => {
     const { page, fill } = setup("https://example.com/login",
       `<div><input name="email" type="email" autocomplete="username"><input name="password" type="password"><button type="button" id="go">Log in</button></div>`,
