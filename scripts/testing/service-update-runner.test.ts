@@ -105,7 +105,7 @@ case "$url" in
     version=$(cat "${root}/active")
     [ -e "${root}/broken-$version" ] && exit 7
     case "$url" in
-      */api/health) echo '{"app":"seira","legacyApp":"openmausbot"}' ;;
+      */api/health) echo '{"app":"seira"}' ;;
       */api/health/engines) echo '{"engines":1}' ;;
       */.well-known/seira/environment) echo "{\\"environmentId\\":\\"e\\",\\"server\\":{\\"version\\":\\"9.9.9\\"},\\"version\\":\\"$version\\"}" ;;
       *) exit 22 ;;
