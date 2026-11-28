@@ -262,7 +262,7 @@ else console.log(`✓ frame — the sidebar's colour in all ${skins.size} skins,
 // their own inherited context: the editor, labels, quotes and file chips
 // explicitly use these tokens, not parent color.
 for (const skinId of ["daylight", "pop"]) {
-  const scope = css.match(new RegExp(`@scope \\(\\[data-skin="${skinId}"\\]\\) to \\(\\[data-skin\\]\\)\\s*\\{\\s*\\.bg-bubble-user\\s*\\{([^}]*)\\}`))?.[1];
+  const scope = css.match(new RegExp(`@scope \\(\\[data-skin="${skinId}"\\](?::not\\([^)]*\\))?\\) to \\(\\[data-skin\\]\\)\\s*\\{\\s*\\.bg-bubble-user\\s*\\{([^}]*)\\}`))?.[1];
   if (!scope) {
     failed = true;
     console.log(`✗ ${skinId} bubble — no @scope block for the inverted bubble`);
