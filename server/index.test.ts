@@ -11479,7 +11479,11 @@ describe("bot memory API", () => {
         body: JSON.stringify({ command: "ls" }),
       });
       expect(exec.status).toBe(409);
-      expect(((await exec.json()) as { error: string }).error).toContain("no Local VM desktop");
+      const refusal = ((await exec.json()) as { error: string }).error;
+      expect(refusal).toContain("no Local VM desktop");
+      expect(refusal).toContain("choose a CLI engine");
+      expect(refusal).toContain("set up a Local VM");
+      expect(refusal).toContain("Do not ask a teammate");
 
       for (let count = 2; count < 10; count += 1) expect((await attach({ path: "song.mp3" })).status).toBe(200);
       const flooded = await attach({ path: "song.mp3" });

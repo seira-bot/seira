@@ -76,8 +76,38 @@ describe("New bot", () => {
     setTeamPeople({ ...team, admin: false });
     const { calls, request } = server();
     const sent = await newBot(request, { section: "Sales" });
-    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: {} }]);
+    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { retryKey: expect.stringMatching(/^[\w-]{16,128}$/) } }]);
     expect(sent[0]).toMatchObject({ type: "botAdded", bot: { id: "created" } });
+  });
+
+  it("makes one bot when the answer is lost and the request is sent again with the same retry key", async () => {
+    vi.useFakeTimers();
+    try {
+      setTeamPeople({ ...team, admin: false });
+      const saved = new Map<string, Bot>();
+      const posted: string[] = [];
+      const request = vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/bots" && init?.method === "POST") {
+          const body = JSON.parse(String(init.body));
+          posted.push(body.retryKey);
+          const known = saved.get(body.retryKey);
+          if (known) return { bot: known };
+          saved.set(body.retryKey, { id: "made", threadId: "made-main", name: "Pixel", messages: [] } as unknown as Bot);
+          if (posted.length === 1) throw new TypeError("Failed to fetch");
+          return { bot: saved.get(body.retryKey) };
+        }
+        return {};
+      });
+      const dispatch = vi.fn<(action: Action) => void>();
+      const made = makeNewBot({ type: "newBot" }, [], dispatch, false, request as never);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await made;
+      expect(saved.size).toBe(1);
+      expect(new Set(posted).size).toBe(1);
+      expect(dispatch.mock.calls.map(([sent]) => sent.type)).toEqual(["botAdded"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("makes a bot at once from the New bot defaults and opens its chat", async () => {
@@ -174,7 +204,7 @@ describe("New bot", () => {
     vi.stubGlobal("window", { ogb: { remoteClient: { active: true } } });
     const { calls, request } = server();
     const sent = await newBot(request, { section: "Sales" });
-    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { section: "Sales" } }]);
+    expect(calls).toEqual([{ method: "POST", path: "/api/bots", body: { section: "Sales", retryKey: expect.stringMatching(/^[\w-]{16,128}$/) } }]);
     expect(sent.map((action) => action.type)).toEqual(["botAdded"]);
   });
 });

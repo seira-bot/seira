@@ -78,6 +78,11 @@ describe("ConnectorCard ask card", () => {
     expect(view({ source: "mcp", superseded: true })).toBe("");
   });
 
+  it("shows Not now as a button on an MCP sign-in card, so a card that cannot finish can be set aside", () => {
+    const mcp = view({ source: "mcp", slug: "linear", label: "Linear" });
+    expect(mcp).toMatch(/<button[^>]*>(?:(?!<\/button>)[^])*Not now<\/button>/);
+  });
+
   it("draws nothing once dismissed", () => {
     expect(view({ dismissed: true })).toBe("");
   });

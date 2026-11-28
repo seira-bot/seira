@@ -39,7 +39,7 @@ function manager(label: string, more: Partial<LinkedServersDeps> = {}) {
     openThread: () => undefined, hasThread: () => false, personName: () => undefined, sentRow: () => {}, resultRow: () => {}, kick: () => {},
     serverName: () => "Head office", selfId: () => `${label}-environment`, publicOrigin: () => "https://head.example/",
     audit: (row) => { rows.push(row); }, attemptAllowed: () => true, attemptFailed: (key) => { failed.push(key); }, log: (line) => { logs.push(line); },
-    timing: { holdMs: 200, firstRetryMs: 20, pace: { gapMs: 20, freshMs: 20 } },
+    timing: { holdMs: 200, firstRetryMs: 20, pace: { gapMs: 20, freshMs: 20 } }, allowLoopback: true,
     ...more,
   });
   closers.push(() => { made.close(); try { coordinator?.close(); } catch { /* closed */ } });
@@ -157,16 +157,32 @@ describe("the link record", () => {
     expect(decodeInvite(`seira-link:${Buffer.from(JSON.stringify({ v: 1, origin: "https://a.example", name: "A", code: "A".repeat(43), more: 1 })).toString("base64url")}`)).toBeNull();
   });
 
-  it("asks another server only at https or at this machine's loopback", () => {
+  it("asks another server only at an https address that is public", () => {
     expect(guestOrigin("https://a.example/path")).toBe("https://a.example");
-    expect(guestOrigin("http://127.0.0.1:8123")).toBe("http://127.0.0.1:8123");
-    expect(guestOrigin("http://localhost:8123")).toBe("http://localhost:8123");
-    expect(guestOrigin("http://[::1]:8123")).toBe("http://[::1]:8123");
+    expect(guestOrigin("https://93.184.216.34:8443")).toBe("https://93.184.216.34:8443");
+    expect(guestOrigin("https://[2606:2800:220:1:248:1893:25c8:1946]")).toBe("https://[2606:2800:220:1:248:1893:25c8:1946]");
     expect(guestOrigin("http://lan-host.example:8123")).toBeNull();
     expect(guestOrigin("http://a.example")).toBeNull();
     expect(guestOrigin("https://user:pass@a.example")).toBeNull();
     expect(guestOrigin("ftp://a.example")).toBeNull();
     expect(guestOrigin("not an address")).toBeNull();
+  });
+
+  it("refuses a private, loopback or link-local address, even over https", () => {
+    for (const address of [
+      "https://10.0.0.5", "https://172.16.4.1", "https://192.168.1.20:8443", "https://100.64.0.9", "https://169.254.169.254", "https://0.0.0.0",
+      "https://127.0.0.1", "https://127.1", "https://2130706433", "https://[::1]", "https://[::ffff:127.0.0.1]", "https://[::ffff:10.0.0.1]",
+      "https://[fe80::1]", "https://[fc00::1]", "https://[fd12:3456::1]", "https://localhost:8123", "https://app.localhost",
+      "http://127.0.0.1:8123", "http://localhost:8123", "http://[::1]:8123", "http://10.0.0.5",
+    ]) expect(guestOrigin(address, false), address).toBeNull();
+  });
+
+  it("allows this machine's loopback only when a test asks for it", () => {
+    expect(guestOrigin("http://127.0.0.1:8123", true)).toBe("http://127.0.0.1:8123");
+    expect(guestOrigin("http://localhost:8123", true)).toBe("http://localhost:8123");
+    expect(guestOrigin("http://[::1]:8123", true)).toBe("http://[::1]:8123");
+    expect(guestOrigin("http://10.0.0.5", true)).toBeNull();
+    expect(guestOrigin("https://192.168.1.20", true)).toBeNull();
   });
 
   it("keeps a far name to one clean line", () => {
@@ -481,7 +497,7 @@ describe("the linked servers manager", () => {
     };
 
     for (const origin of ["http://lan-host.example:8123", "http://head.example", "ftp://head.example"]) {
-      expect(await failure(invite(origin))).toMatchObject({ status: 400, message: "That invite points to an address that is not secure, so it was not used." });
+      expect(await failure(invite(origin))).toMatchObject({ status: 400, message: "That invite points to an address that is not secure or not public, so it was not used." });
     }
     expect(await failure("seira-link:not-an-invite")).toMatchObject({ status: 400 });
     expect(asked).toEqual([]);
@@ -496,6 +512,52 @@ describe("the linked servers manager", () => {
     expect((await failure(invite("https://head.example"))).status).toBe(502);
     expect(JSON.stringify([...logs, ...rows])).not.toContain("remote secret words");
     expect(made.list()).toEqual([]);
+  });
+
+  it("refuses to join an invite whose address is private, or whose name resolves to one", async () => {
+    const answers: Record<string, string[]> = {
+      "public.example": ["93.184.216.34"], "rebound.example": ["10.0.0.5"], "mixed.example": ["93.184.216.34", "10.0.0.5"], "mapped.example": ["::ffff:10.0.0.5"],
+      "linklocal.example": ["169.254.169.254"], "loopback.example": ["127.0.0.1"], "loopback6.example": ["::1"], "unique-local.example": ["fd00::1"], "none.example": [],
+    };
+    const asked: string[] = [];
+    const lookup = async (host: string) => { asked.push(host); return (answers[host] ?? []).map((address) => ({ address, family: address.includes(":") ? 6 : 4 })); };
+    const { made, logs } = manager("branch", { lookup, allowLoopback: false });
+    const join = async (origin: string) => {
+      try { await made.join(encodeInvite({ origin, name: "Head", code: "C".repeat(43) }), { kind: "cli" }); } catch (error) { if (error instanceof LinkedServerError) return error; throw error; }
+      throw new Error("the join worked");
+    };
+
+    for (const origin of ["https://10.0.0.5", "https://192.168.1.20:8443", "https://169.254.169.254", "https://127.0.0.1:8123", "https://[::1]", "https://[fe80::1]", "https://localhost", "http://127.0.0.1:8123"]) {
+      expect(await join(origin), origin).toMatchObject({ status: 400, message: "That invite points to an address that is not secure or not public, so it was not used." });
+    }
+    expect(asked).toEqual([]);
+
+    for (const name of ["rebound", "mixed", "mapped", "linklocal", "loopback", "loopback6", "unique-local"]) {
+      expect(await join(`https://${name}.example`), name).toMatchObject({ status: 400, message: expect.stringContaining("not a public internet address") });
+    }
+    expect(await join("https://none.example")).toMatchObject({ status: 400, message: expect.stringContaining("could not be found") });
+    expect(asked).toEqual(["rebound.example", "mixed.example", "mapped.example", "linklocal.example", "loopback.example", "loopback6.example", "unique-local.example", "none.example"]);
+    expect(made.list()).toEqual([]);
+    expect(JSON.stringify(logs)).not.toContain("10.0.0.5");
+  });
+
+  it("does not dial a saved link again when its address is no longer public", async () => {
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      if (new URL(String(input)).pathname === "/api/linked-servers/accept") return new Response(JSON.stringify({ token: `lsk_${"F".repeat(43)}`, place: { id: "head-environment", name: "Head" } }), { status: 200 });
+      throw new Error("no other request is made here");
+    }) as typeof fetch;
+    const first = manager("branch", { fetch: fake });
+    await first.made.join(encodeInvite({ origin: "https://head.example", name: "Head", code: "C".repeat(43) }), { kind: "cli" });
+    first.made.close();
+
+    const asked: string[] = [];
+    const lookup = async (host: string) => { asked.push(host); return [{ address: "10.0.0.5", family: 4 }]; };
+    const again = manager("branch", { dataDir: first.dataDir, lookup, allowLoopback: false });
+    expect(again.made.list()).toHaveLength(1);
+    again.made.start();
+    await until(() => again.logs.some((line) => line.includes("not public")), "the saved link is refused");
+    expect(asked).toContain("head.example");
+    expect(again.made.list()[0]?.state).toBe("offline");
   });
 
   it("keeps the credential a join got in the link's own file, and shows the link as ended once the other server refuses it", async () => {

@@ -51,7 +51,7 @@ export function systemdUnit(spec: ServiceSpec): string {
     "# Written by `seira service install`. Re-run it to change the options.",
     "[Unit]",
     `Description=Seira${spec.label ? ` (${spec.label})` : ""}`,
-    "After=network-online.target",
+    "After=network-online.target nginx.service caddy.service apache2.service httpd.service traefik.service",
     "Wants=network-online.target",
     "",
     "[Service]",

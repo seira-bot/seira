@@ -16,8 +16,8 @@ import { FILE_PATH, HOLD_MS, LEVEL_HEADER, PROTOCOL_LEVEL, SYNC_PATH, TAKEN_HEAD
 
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 60_000;
-/** What the Cloud marks a held answer with while it goes to sleep (server/cloud-power.ts). */
-const POWER_HEADER = "x-omb-cloud-power";
+/** What the Cloud marks a held answer with while it goes to sleep. A Cloud that has not been updated sends only the old name. */
+const POWER_HEADER = "x-seira-cloud-power";
 const BACKGROUND_HEADER = "x-seira-background";
 /** One file may take this long to cross; on a guest link its bytes may stop for no longer than FILE_IDLE_MS. */
 const FILE_MS = 10 * 60_000;
@@ -60,6 +60,12 @@ export interface SendPace {
   sent(frames: readonly Numbered[]): void;
   /** The other side took `taken` of the `work` work frames of the last batch. */
   took(work: number, taken: number): void;
+}
+
+/** A 503 that says the Cloud is going to sleep. The new name wins when both are present. */
+export function cloudAsleepAnswer(response: Pick<Response, "status" | "headers">): boolean {
+  const mark = response.headers.get(POWER_HEADER) ?? response.headers.get("x-omb-cloud-power");
+  return response.status === 503 && mark === "asleep";
 }
 
 export interface DialerOptions {
@@ -228,7 +234,7 @@ export function createDialer({ link, fetch: fetchImpl = fetch, log = () => {}, h
       clearTimeout(timeout);
       if (held === controller) held = null;
     }
-    if (response.status === 503 && response.headers.get(POWER_HEADER) === "asleep") {
+    if (cloudAsleepAnswer(response)) {
       await response.body?.cancel();
       asleep = true; fresh = true;
       link.setSleeps(true);

@@ -255,6 +255,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_TEST_APPROVAL_CLOCK === "1") childEnv.SEIRA_TEST_APPROVAL_CLOCK = "1";
   // The stall watchdog fires on a marker file, not after 20 minutes of silence.
   if (parentEnv.SEIRA_TEST_STALL_CLOCK === "1") childEnv.SEIRA_TEST_STALL_CLOCK = "1";
+  // Two servers of different owners on this machine dial each other on loopback; only a test allows that.
+  if (parentEnv.SEIRA_TEST_LINKED_LOOPBACK === "1") childEnv.SEIRA_TEST_LINKED_LOOPBACK = "1";
   // Date.now() jumps when a marker file says so, as it does when a suspended machine wakes; timers don't.
   if (parentEnv.SEIRA_TEST_RESUME_CLOCK === "1") childEnv.SEIRA_TEST_RESUME_CLOCK = "1";
   // The memory gate runs here too, on the memory a fixture file says this machine has.

@@ -2262,7 +2262,7 @@ sleeps: true}`; `cloud.state` stays `ready`. Without `cloud.power`, nothing belo
 - **Files sync and lending pause** while the session says `asleep`, and also at once when My Cloud answers a held poll
   `503` with `x-omb-cloud-power: asleep` (it does just before it sleeps). They make no request to My Cloud then, not even
   a retry, and the session is read every 15 s instead of 60 s while they wait. They resume when it says awake. Files and
-  lending show "My Cloud is asleep" meanwhile.
+  lending show "My Cloud is asleep" meanwhile. The app reads the same word from `x-seira-cloud-power` too, and that name wins when both are present.
 - **Opening My Cloud while it sleeps** asks the Admin to wake it first (`POST /api/cloud/desktop/wake`), shows "Waking
   your Cloud…" after 1.5 s, and gives its sign-in check 30 s instead of 5 (a stopped machine takes about 20 s), so a slow
   wake never causes a needless new pairing.

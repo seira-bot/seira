@@ -239,13 +239,43 @@ describe("MCP tool execution", () => {
   it("creates a bot through the safe profile boundary", async () => {
     const fetcher = vi.fn(async (path: string, options?: RequestInit) => {
       if (path === "/api/bots" && options?.method === "POST") {
-        expect(JSON.parse(String(options.body))).toEqual({ name: "Mira", title: "Researcher", section: "Work" });
+        expect(JSON.parse(String(options.body))).toEqual({ name: "Mira", title: "Researcher", section: "Work", retryKey: expect.stringMatching(/^[\w-]{16,128}$/) });
         return { bot: { id: "bot-new", name: "Mira", title: "Researcher", section: "Work", threadId: "task-new", tasks: [] } };
       }
       throw new Error(`unexpected path ${path}`);
     });
     const result: any = await handleToolCall("create_bot", { name: "Mira", title: "Researcher", section: "Work" }, fetcher);
     expect(result.bot).toMatchObject({ id: "bot-new", name: "Mira", section: "Work" });
+  });
+
+  it("makes one bot when the answer to its creation is lost and the tool sends it again with the same retry key", async () => {
+    const saved = new Map<string, Record<string, unknown>>();
+    const keys: unknown[] = [];
+    const fetcher = vi.fn(async (path: string, options?: RequestInit) => {
+      if (path === "/api/bots" && options?.method === "POST") {
+        const body = JSON.parse(String(options.body));
+        expect(body).not.toHaveProperty("id");
+        keys.push(body.retryKey);
+        const known = saved.get(body.retryKey);
+        if (known) return { bot: known };
+        saved.set(body.retryKey, { id: "bot-new", name: body.name, threadId: "task-new", tasks: [] });
+        if (keys.length === 1) throw new TypeError("fetch failed");
+        return { bot: saved.get(body.retryKey) };
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+    vi.useFakeTimers();
+    try {
+      const pending = handleToolCall("create_bot", { name: "Mira" }, fetcher);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result: any = await pending;
+      expect(result.bot).toMatchObject({ name: "Mira" });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(saved.size).toBe(1);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(1);
   });
 
   it("leaves single-request bot-create failures to the server without destructive rollback", async () => {

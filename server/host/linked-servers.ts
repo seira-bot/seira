@@ -43,6 +43,7 @@
 // - A sender that fails too many tries is refused, also when it shares its address with a linked server.
 // - A bot at work for a linked server can create a routine. The rule against handing that work on to another server
 //   does not see the work that routine starts later.
+import type { LookupAddress } from "node:dns";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -63,6 +64,7 @@ import type { Outcome } from "../runtime/types.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { ADMIT, createAdmission, createFrameBudget, createIntake, createPace, createRefusalRecord, createSendPace, kindOf, limitLog } from "./linked-servers-admit.ts";
 import { FULL_HERE, LinkedServerError, a2aKey, createLinkedA2a, type A2aInput, type A2aPatch, type A2aPeerView, type CardUrl } from "./linked-a2a.ts";
+import { LinkedServerDestinationError, publicFetch } from "./linked-servers-egress.ts";
 import { createSpoolRoom, type SpoolLimits } from "./linked-servers-spool.ts";
 import { farFileName, farFrame, readFar } from "./linked-servers-text.ts";
 import {
@@ -157,7 +159,12 @@ export interface LinkedServersDeps extends InstanceDeps {
   ownPeer?(key: string): boolean;
   power?(): { sleeping(): boolean; sleepSignal(): AbortSignal } | null | undefined;
   fetch?: typeof fetch;
+  /** Resolves a host name for the public-address check. A test stands in for DNS with it. */
+  lookup?(host: string): Promise<LookupAddress[]>;
+  /** Allow loopback addresses. Tests only; default: SEIRA_TEST_LINKED_LOOPBACK is 1. */
+  allowLoopback?: boolean;
   now?: () => number;
+
   log?(line: string): void;
   /** Shorter waits for tests: how long an exchange is held, a joiner's first retry, and when a peer counts as gone. */
   timing?: { holdMs?: number; firstRetryMs?: number; seenMs?: number; pace?: { gapMs: number; freshMs: number } };
@@ -184,6 +191,8 @@ export type LinkedServers = ReturnType<typeof createLinkedServers>;
 export function createLinkedServers(deps: LinkedServersDeps) {
   const now = deps.now ?? Date.now;
   const log = deps.log ?? (() => {});
+  /** Security invariant: every request to another server goes through a fetch that dials only public addresses, so a saved link is checked at every connect, not only when it was made. */
+  const dial = deps.fetch ?? publicFetch({ ...(deps.lookup ? { lookup: deps.lookup } : {}), ...(deps.allowLoopback !== undefined ? { allowLoopback: deps.allowLoopback } : {}) });
   const timing = deps.timing ?? {};
   const file = readLinks(deps.dataDir, log);
   const instances = new Map<string, Instance>();
@@ -307,9 +316,13 @@ export function createLinkedServers(deps: LinkedServersDeps) {
   });
 
   function dialerFor(id: string, key: string, dataDir: string, link: BotLink, linkLog: (line: string) => void) {
-    const ask = deps.fetch ?? fetch;
     const watched = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const response = await ask(input, init);
+      let response: Response;
+      try { response = await dial(input, init); }
+      catch (error) {
+        if (error instanceof LinkedServerDestinationError) linkLog("linked servers: a saved link points to an address that is not public; it is not dialed");
+        throw error;
+      }
       const url = input instanceof Request ? input.url : String(input);
       if ((response.status === 401 || response.status === 403) && new URL(url).pathname === GUEST_PATHS.sync) setTimeout(() => endedThere(id), 0);
       return response;
@@ -470,9 +483,10 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     const unreachable = new LinkedServerError("The other side could not be reached. Try again later.", 502);
     let response: Response;
     try {
-      response = await (deps.fetch ?? fetch)(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
+      response = await dial(`${origin}${ACCEPT_PATH}`, { method: "POST", redirect: "error", signal: AbortSignal.timeout(JOIN_MS),
         headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ code, place: self }) });
-    } catch {
+    } catch (error) {
+      if (error instanceof LinkedServerDestinationError) throw new LinkedServerError(`${error.message} Ask for an invite with a public address.`, 400);
       log("linked servers: the other server could not be reached to join it");
       throw unreachable;
     }
@@ -521,7 +535,7 @@ export function createLinkedServers(deps: LinkedServersDeps) {
 
     invite(actor: AdminActor): { invite: string; expiresAt: number } | { error: "no_address" } | { error: "full" } {
       const address = deps.publicOrigin();
-      const origin = address ? guestOrigin(address) : null;
+      const origin = address ? guestOrigin(address, deps.allowLoopback) : null;
       if (!origin) return { error: "no_address" };
       if (full()) return { error: "full" };
       const { code, expiresAt } = addInvite(file, now());
@@ -534,8 +548,8 @@ export function createLinkedServers(deps: LinkedServersDeps) {
     async join(text: string, actor: AdminActor): Promise<SeiraLinkView> {
       const invite = decodeInvite(text);
       if (!invite) throw new LinkedServerError("That invite is not valid. Copy the whole invite and try again.", 400);
-      const origin = guestOrigin(invite.origin);
-      if (!origin) throw new LinkedServerError("That invite points to an address that is not secure, so it was not used.", 400);
+      const origin = guestOrigin(invite.origin, deps.allowLoopback);
+      if (!origin) throw new LinkedServerError("That invite points to an address that is not secure or not public, so it was not used.", 400);
       if (full()) throw new LinkedServerError(FULL_HERE, 409);
       const self = selfPlace();
       const answer = await askToJoin(origin, invite.code, self);

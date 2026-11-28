@@ -5,7 +5,8 @@ The logo face rule applies to seira-head.png.
 It must show two eye blobs and one mouth blob in the official red, inside the visor.
 A 2D face with pointed eyes and no mouth fails this check.
 App icons must come from brand/logo/app-icon-source.png.
-Each app icon must match that image and show two red eyes, one on each side of the centre.
+Each app icon must match that image and show the icon face: an open eye left of the centre,
+a winking eye right of the centre, and a mouth below them.
 
 Run: python3 brand/check_logo.py   Exit 0 on pass, 1 on fail.
 """
@@ -100,6 +101,25 @@ def check_face(im, label, visor, min_area):
         fail(f"{label}: the mouth is not below and between the eyes")
 
 
+def check_icon_face(im, label, min_area):
+    blobs = red_blobs(im, min_area)
+    if len(blobs) != 3:
+        fail(f"{label}: found {len(blobs)} red blobs, expected 3 (open eye, winking eye, mouth)")
+        return
+    blobs.sort(key=lambda b: (b[2] + b[4]) / 2)
+    eyes = sorted(blobs[:2], key=lambda b: b[1])
+    mouth = blobs[2]
+    mid = im.width / 2
+    if not (eyes[0][3] < mid < eyes[1][1]):
+        fail(f"{label}: the eyes are not on both sides of the centre")
+    open_eye, wink = eyes
+    if open_eye[4] - open_eye[2] <= open_eye[3] - open_eye[1]:
+        fail(f"{label}: the left eye is not open (it must be taller than it is wide)")
+    if wink[3] - wink[1] < 1.5 * (wink[4] - wink[2]):
+        fail(f"{label}: the right eye does not wink (it must be at least 1.5 times as wide as it is tall)")
+    if mouth[2] <= max(open_eye[4], wink[4]) or not open_eye[1] < (mouth[1] + mouth[3]) / 2 < wink[3]:
+        fail(f"{label}: the mouth is not below and between the eyes")
+
 @functools.cache
 def load_source():
     if not ICON_SOURCE.exists():
@@ -128,12 +148,7 @@ def check_icon(im, label, source):
         if diff > MAX_SOURCE_DIFF:
             fail(f"{label}: does not match brand/logo/app-icon-source.png (mean difference {diff:.2f}, limit {MAX_SOURCE_DIFF})")
     if size >= 128:
-        blobs = red_blobs(im, 3 if size < 512 else 12)
-        mid = size / 2
-        left = [b for b in blobs if b[3] < mid]
-        right = [b for b in blobs if b[1] > mid]
-        if len(blobs) != 2 or len(left) != 1 or len(right) != 1:
-            fail(f"{label}: found {len(blobs)} red blobs, expected 2 eyes, one on each side of the centre")
+        check_icon_face(im, label, 3 if size < 512 else 12)
 
 
 def check_png_set():
@@ -152,7 +167,7 @@ def check_png_set():
         (LOGO / "png/icon-512.png", 512), (LOGO / "png/icon-1024.png", 1024),
         (ROOT / "build/icon-1024.png", 1024), (ROOT / "electron/resources/app-icon.png", 1024),
         (ROOT / "public/app-icon-512.png", 512), (ROOT / "public/app-icon-192.png", 192),
-        (ROOT / "public/apple-touch-icon.png", 180),
+        (ROOT / "public/apple-touch-icon.png", 180), (ROOT / "apps/docs/public/app-icon-96.png", 96),
     ]
     for base in (16, 32, 64, 128, 256, 512):
         icons.append((ROOT / f"build/icon.iconset/icon_{base}x{base}.png", base))
@@ -183,7 +198,7 @@ def check_appx():
         if im and height >= 128:
             left = (width - height) // 2
             square = im.crop((left, 0, left + height, height))
-            check_face(square, rel(path), scaled_visor(height, ICON_HEAD_SCALE), 3)
+            check_icon_face(square, rel(path), 3)
     if out.exists():
         for path in sorted(out.iterdir()):
             if path.suffix != ".png":

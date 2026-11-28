@@ -71,8 +71,8 @@ describe("a guest link between two servers", () => {
   let atlasAddress = "";
 
   beforeAll(async () => {
-    fixtures = [await launchVerificationServer({ SEIRA_PUBLIC_URL: "https://head.example" }, undefined, undefined, undefined, undefined, { scripted: true }),
-      await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true })];
+    fixtures = [await launchVerificationServer({ SEIRA_PUBLIC_URL: "https://head.example", SEIRA_TEST_LINKED_LOOPBACK: "1" }, undefined, undefined, undefined, undefined, { scripted: true }),
+      await launchVerificationServer({ SEIRA_TEST_LINKED_LOOPBACK: "1" }, undefined, undefined, undefined, undefined, { scripted: true })];
     head = place(fixtures[0]!);
     branch = place(fixtures[1]!);
     await head.api("PATCH", "/api/config", { computerName: "Head office" });

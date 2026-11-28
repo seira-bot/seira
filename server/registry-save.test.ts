@@ -1,4 +1,6 @@
-import { rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RegistrySaveError } from "./registry-save.ts";
@@ -296,5 +298,28 @@ describe("groups.json save failures", () => {
     expect(room).toMatchObject({ threadId: first.threadId, pinnedMessageId: "pin-one" });
     expect(new Store(selection).group(room.id)?.tasks?.map((task) => task.threadId)).toEqual([first.threadId]);
     expect(new Store(selection).messagesFor(second.threadId)).toEqual([]);
+  });
+});
+
+describe("a temp file left by a crash during a save", () => {
+  const uuid = "0b9c3a52-7d1e-4f6a-9b2c-5e8d1a3f7c60";
+  const deadPid = 4_000_001;
+  beforeEach(() => {
+    rmSync(DATA_DIR, { recursive: true, force: true });
+  });
+
+  it("goes at the next start, and the saved bots stay", () => {
+    const bot = new Store(selection).createBot();
+    const stale = [`bots.json.${deadPid}.${uuid}.tmp`, `groups.json.${deadPid}.${uuid}.tmp`];
+    for (const name of stale) writeFileSync(join(DATA_DIR, name), "[]");
+    const mine = `bots.json.${process.pid}.${uuid}.tmp`;
+    writeFileSync(join(DATA_DIR, mine), "[]");
+
+    const restarted = new Store(selection);
+
+    for (const name of stale) expect(existsSync(join(DATA_DIR, name))).toBe(false);
+    expect(existsSync(join(DATA_DIR, mine))).toBe(true);
+    expect(readdirSync(DATA_DIR).filter((name) => name.endsWith(".tmp"))).toEqual([mine]);
+    expect(restarted.bot(bot.id)?.id).toBe(bot.id);
   });
 });

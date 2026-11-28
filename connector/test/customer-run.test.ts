@@ -163,6 +163,11 @@ describe("a customer-run server: the jobs Seira may run", () => {
       expect(checkCustomerRunJob({ id: "u2", type: "update", args: { image } }, "admin"), image).toMatchObject({ ok: false, code: "invalid_args" });
     }
     expect(checkCustomerRunJob({ id: "u3", type: "update", args: { image: NEXT, env } }, "admin")).toMatchObject({ ok: false, code: "invalid_args" });
+    const named = `ghcr.io/seira-bot/seira@sha256:${"e".repeat(64)}`;
+    expect(checkCustomerRunJob({ id: "u4", type: "update", args: { image: named } }, "admin")).toEqual({ ok: true, job: { id: "u4", type: "update", args: { image: named } } });
+    for (const image of ["ghcr.io/seira-bot/seira:v0.1.1", `ghcr.io/seira-bot/seira-cloud-home@sha256:${"e".repeat(64)}`, `ghcr.io/seira-bots/seira@sha256:${"e".repeat(64)}`]) {
+      expect(checkCustomerRunJob({ id: "u5", type: "update", args: { image } }, "admin"), image).toMatchObject({ ok: false, code: "invalid_args", message: "image must be ghcr.io/seira-bot/seira@sha256:<digest>" });
+    }
     expect(checkCustomerRunJob({ id: "bad id", type: "start" }, "admin")).toMatchObject({ ok: false, id: null, code: "invalid_job" });
     expect(checkCustomerRunJob({ id: "r1", type: "restore", args: { backupId: "../etc" } }, "local")).toMatchObject({ ok: false, code: "invalid_args" });
   });
@@ -310,6 +315,9 @@ describe("a customer-run server: the home its owner installed", () => {
     await fixture.install();
     expect(await standaloneServerPresent(fixture.docker)).toBe(true);
     expect(await findInstall(fixture.docker)).toMatchObject({ ok: true, install: { dataDir: fixture.dataDir } });
+    const renamed = await server({ image: "ghcr.io/seira-bot/seira:v0.1.192" });
+    await renamed.install();
+    expect(await findInstall(renamed.docker)).toMatchObject({ ok: true, install: { dataDir: renamed.dataDir } });
     const built = await server({ image: "deploy-seira" });
     await built.install();
     expect(await findInstall(built.docker)).toMatchObject({ ok: false, why: expect.stringContaining("was built here") });

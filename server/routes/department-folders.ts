@@ -17,13 +17,15 @@ export interface DepartmentFolderRouteDeps {
   /** What holds a limited bot to its folders: the bot box for every bot, the box for limited bots only, or the AI's own
    * file tools. */
   enforcement(): FolderEnforcement;
+  /** `no-bwrap` when the bot box is off because this computer has no bubblewrap; the app then says what to install. */
+  boxMissing?(): "no-bwrap" | null;
 }
 
 export function createDepartmentFolderRoutes(deps: DepartmentFolderRouteDeps): RouteHandler {
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (path !== "/api/department-folders" || (method !== "GET" && method !== "PUT")) return PASS;
     if (!auth.scopes.includes("admin")) return json(res, 403, { error: "Only an admin can change folder access." });
-    if (method === "GET") return json(res, 200, { departments: deps.folders.all(), enforcement: deps.enforcement(), setHere: !deps.setElsewhere() });
+    if (method === "GET") return json(res, 200, { departments: deps.folders.all(), enforcement: deps.enforcement(), boxMissing: deps.boxMissing?.() ?? null, setHere: !deps.setElsewhere() });
     if (deps.setElsewhere()) return json(res, 409, { error: FOLDER_ACCESS_SET_ELSEWHERE });
     const section = url.searchParams.get("section")?.trim();
     if (!section || !deps.store.sections.includes(section)) return json(res, 404, { error: "No such department" });

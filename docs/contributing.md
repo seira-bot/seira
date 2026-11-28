@@ -8,7 +8,10 @@ This guide holds the code rules for Seira. Read [CONTRIBUTING.md](../CONTRIBUTIN
   refactors will be asked to split. Big changes: open an issue first and agree on the approach.
 - **Match the altitude.** This codebase is deliberately small and direct — plain Node, no frameworks
   on the server, one store, one event bus. Don't introduce a dependency where thirty lines of code
-  will do. New runtime dependencies need a reason in the PR description.
+  will do. New runtime dependencies need a reason in the PR description. pnpm installs no npm
+  version that is younger than 7 days, or that has less publish trust than the versions before it
+  (`minimumReleaseAge` and `trustPolicy` in `pnpm-workspace.yaml`). For an urgent security fix, add
+  the package to `minimumReleaseAgeExclude` in the same pull request.
 - **Keep it green.** `pnpm typecheck && pnpm test` must pass. Server changes need tests (see below).
 - **UI changes follow [`DESIGN.md`](../DESIGN.md).** Tokens, type, spacing, components, words and
   states. Before/after screenshots in Midnight and Daylight go in the PR body; video for anything animated.

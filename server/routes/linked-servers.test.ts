@@ -58,7 +58,7 @@ async function side(label: string, bots: Bot[], now?: () => number, more: Partia
     resultRow: (_parent, child, name) => { results.push({ name, status: child.status, result: child.result }); },
     kick: () => { queueMicrotask(tick); },
     serverName: () => label, selfId: () => `${label}-environment`, publicOrigin: () => `http://127.0.0.1:${port}`,
-    audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask,
+    audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask, allowLoopback: true,
     timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000, pace: { gapMs: 20, freshMs: 20 } },
     ...(now ? { now } : {}), ...more,
   });
@@ -290,7 +290,7 @@ describe("two linked servers", () => {
 
     const insecure = encodeInvite({ origin: "http://lan-host.example:8123", name: "head", code: decodeInvite(String(later.body.invite))!.code });
     const asked = c.asked.length;
-    expect(await c.api("POST", "/api/linked-servers/join", { invite: insecure })).toEqual({ status: 400, body: { error: "That invite points to an address that is not secure, so it was not used." } });
+    expect(await c.api("POST", "/api/linked-servers/join", { invite: insecure })).toEqual({ status: 400, body: { error: "That invite points to an address that is not secure or not public, so it was not used." } });
     expect(c.asked).toHaveLength(asked);
     expect(c.asked.some((one) => one.url.includes("lan-host"))).toBe(false);
     expect(a.manager.list()).toHaveLength(1);

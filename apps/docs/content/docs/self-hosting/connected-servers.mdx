@@ -14,7 +14,7 @@ The whole list of what the Admin may run, ask and learn in this mode is one file
 
 ## The connector
 
-- One container, `seira-connector`, from `ghcr.io/milind-soni/mausbot-connector`, pinned by digest.
+- One container, `seira-connector`, from `ghcr.io/seira-bot/seira-connector`, pinned by digest. A connector that still runs the image under its older name keeps working: the old name stays accepted until a removal date is set.
 - It only calls out: one HTTPS request to enrol, then one WebSocket to the Admin. It opens no port.
 - It makes its own Ed25519 key at enrolment. The private key stays on your server. It pins the Admin's signing keys.
 - It runs with every Linux capability dropped, a read-only file system and no new privileges.
@@ -56,7 +56,7 @@ Two jobs exist on your server and are refused when Seira sends them. Root on the
 | `restore` | It puts older data back over what is there, after a safety copy |
 
 ```sh
-docker exec seira-connector seira-connector job self-update '{"image":"ghcr.io/milind-soni/mausbot-connector@sha256:…"}'
+docker exec seira-connector seira-connector job self-update '{"image":"ghcr.io/seira-bot/seira-connector@sha256:…"}'
 docker exec seira-connector seira-connector job restore '{"backupId":"20261028-104512-3fa9"}'
 ```
 

@@ -25,6 +25,8 @@ const OWN_PEER = "abcdef01", HELPER = linkedId(OWN_PEER, "helper");
 const ADMIN = { kind: "cli" } as const;
 
 const cleanups: Array<() => Promise<void> | void> = [];
+// Two servers on this machine dial each other on loopback. Only a test may allow that.
+process.env.SEIRA_TEST_LINKED_LOOPBACK = "1";
 afterEach(async () => { for (const clean of cleanups.splice(0).reverse()) await clean(); });
 
 const until = async (what: () => boolean, label: string, ms = 20_000) => {

@@ -1,7 +1,7 @@
 import { existsSync, rmSync, unlinkSync } from "node:fs"; import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
-import { writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
+import { removeDeadTempFiles, writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
 import { commitRegistryChange, deferrablePatch, keptRevocation, saveRegistryFor, touchesPermissions } from "./registry-save.ts";
 import { parseToolScope, toolScopeWidens } from "../shared/tool-scope.ts"; import { grantScopedApps } from "../shared/connector-scopes.ts"; import { dropRetiredApps } from "./retired-apps.ts";
 import { reorderInPlace } from "../shared/bot-order.ts"; import { trimOutboundPolicy } from "../shared/outbound.ts";
@@ -288,6 +288,7 @@ export class Store {
     this.initialLanguage = initialLanguage;
     this.personName = personName;
     ensurePrivateDir(DATA_DIR);
+    removeDeadTempFiles(DATA_DIR, ["bots.json", "groups.json"]); // what a crash during a save left: a whole copy of the file
     // An unreadable bots.json must never read as "every member was deleted".
     let botsLoaded = false;
     try {

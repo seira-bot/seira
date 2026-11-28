@@ -59,6 +59,13 @@ describe("BotFolderAccess", () => {
     expect(fixture.api).not.toHaveBeenCalled();
   });
 
+  it("tells an admin who limited a bot to chosen folders that bubblewrap is missing", async () => {
+    fixture.api.mockResolvedValue({ departments: {}, enforcement: "ai", boxMissing: "no-bwrap", setHere: true });
+    await mount(createElement(BotFolderAccess, { bot: { ...bot, folderAccess: { limited: true, folders: [] } }, variant: "card" }));
+    expect(host.textContent).toContain("bubblewrap is not installed");
+    expect(host.querySelector("code")?.textContent).toBe("sudo apt install bubblewrap");
+  });
+
   it("hides the editor where this server cannot set folders", async () => {
     fixture.api.mockResolvedValue({ departments: {}, enforcement: "ai", setHere: false });
     await mount(createElement(BotFolderAccess, { bot, variant: "panel" }));

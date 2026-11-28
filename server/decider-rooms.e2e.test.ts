@@ -155,6 +155,15 @@ const roomState = async (roomId: string) => {
   return { room, messages: (room?.messages ?? []) as RoomMessage[] };
 };
 
+const loggedRows = (): any[] => {
+  const dir = join(data, "decider-log");
+  if (!existsSync(dir)) return [];
+  const log = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("").trim();
+  return log ? log.split("\n").map((line) => JSON.parse(line)) : [];
+};
+/** The server writes a log row after it answers, so a row is waited for, never read at once. */
+const logged = (match: (row: any) => boolean) => expect.poll(() => loggedRows().some(match), { timeout: 10_000 }).toBe(true);
+
 async function round(roomId: string, text: string): Promise<{ post: any; replies: RoomMessage[] }> {
   const before = new Set((await roomState(roomId)).messages.map((message) => message.id));
   const post = await api("POST", `/api/groups/${roomId}/messages`, { text });
@@ -281,11 +290,9 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
     const dump = readFileSync(engineDump, "utf8");
     expect(JSON.parse(dump).env).not.toHaveProperty("SEIRA_JEV_API_KEY");
     expect(dump).not.toContain(KEY);
-    const dir = join(data, "decider-log");
-    const log = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("");
-    const rows = log.trim().split("\n").map((line) => JSON.parse(line));
-    expect(rows.some((row) => row.seam === "roomRouting" && row.ok && row.choice === bots.Theo!.id)).toBe(true);
-    expect(rows.some((row) => row.seam === "roomRouting" && !row.ok && row.reason === "overloaded")).toBe(true);
+    await logged((row) => row.seam === "roomRouting" && row.ok && row.choice === bots.Theo!.id);
+    await logged((row) => row.seam === "roomRouting" && !row.ok && row.reason === "overloaded");
+    const log = JSON.stringify(loggedRows());
     expect(log).not.toContain(KEY);
     expect(log).not.toContain("Safari");
     expect(output).not.toContain(KEY);
@@ -403,10 +410,8 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
         .toEqual([bots.Maya!.id, bots.Theo!.id, bots.Ravi!.id, "__everyone__"]);
       expect(jevRequests.every((jevRequest) => jevRequest.auth !== `Bearer ${OR_KEY}`)).toBe(true);
 
-      const dir = join(data, "decider-log");
-      const log = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("");
-      const rows = log.trim().split("\n").map((line) => JSON.parse(line));
-      expect(rows.some((row) => row.provider === "openrouter" && row.model === MODEL && row.seam === "roomRouting" && row.ok && row.choice === bots.Theo!.id)).toBe(true);
+      await logged((row) => row.provider === "openrouter" && row.model === MODEL && row.seam === "roomRouting" && row.ok && row.choice === bots.Theo!.id);
+      const log = JSON.stringify(loggedRows());
       expect(log).not.toContain(OR_KEY);
       expect(log).not.toContain("pricing page");
       expect(output).not.toContain(OR_KEY);
@@ -417,9 +422,7 @@ describe("Auto rooms ask the decision model who answers", { timeout: 90_000 }, (
       const { replies } = await round(room.id, "Who owns the invoice emails?");
       expect(replies.map((reply) => reply.from!.name)).toEqual(["Ravi"]);
       expect(replies[0]!.routedBy).toBeUndefined();
-      const dir = join(data, "decider-log");
-      const rows = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("").trim().split("\n").map((line) => JSON.parse(line));
-      expect(rows.some((row) => row.provider === "openrouter" && !row.ok && row.reason === "http_error" && row.status === 402)).toBe(true);
+      await logged((row) => row.provider === "openrouter" && !row.ok && row.reason === "http_error" && row.status === 402);
     });
 
     it("a decisions model is tested through the Decisions API, and saved with its API", async () => {
