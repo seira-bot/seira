@@ -179,6 +179,52 @@ describe("redactSecrets", () => {
     expect(record).toContain("install-7");
   });
 
+  it("masks credentials in a custom server's address and keeps the rest readable", () => {
+    const out = redactSecrets({
+      mcpServers: {
+        remote: { type: "http", url: "https://user:synthetic-pw-1@mcp.example.com/s/a1b2c3d4e5f6g7h8i9j0/sse?key=synthetic-q-2&mode=fast#synthetic-frag-3" },
+        bare: { url: "https://synthetic-bare-4@mcp.example.com/v1" },
+        broken: { url: "not a url synthetic-broken-5" },
+      },
+    }) as { mcpServers: Record<string, { url: string }> };
+    const urls = out.mcpServers;
+    expect(urls.remote!.url).toMatch(/^https:\/\/«redacted \d+ chars»@mcp\.example\.com\/s\/«redacted 20 chars»\/sse\?key=«redacted 13 chars»&mode=«redacted 4 chars»#«redacted \d+ chars»$/);
+    expect(urls.bare!.url).toBe("https://«redacted 16 chars»@mcp.example.com/v1");
+    expect(urls.broken!.url).not.toContain("synthetic-broken-5");
+    const all = flat(out);
+    for (const secret of ["synthetic-pw-1", "a1b2c3d4e5f6g7h8i9j0", "synthetic-q-2", "synthetic-frag-3", "synthetic-bare-4"]) expect(all).not.toContain(secret);
+  });
+
+  it("masks the value of a secret-named flag in a custom server's args, in both argument forms", () => {
+    const record = redactSecrets({ mcpServers: { s: { command: "npx", args: ["-y", "some-mcp", "--api-key", "synthetic-a-1", "--token=synthetic-b-2", "--region", "eu", "--endpoint=https://h.example.com/x?access_token=synthetic-c-3", "https://h.example.com/y?sig=synthetic-d-4"] } } }) as {
+      mcpServers: { s: { command: string; args: string[] } };
+    };
+    const { command, args } = record.mcpServers.s;
+    expect(command).toBe("npx");
+    expect(args.slice(0, 3)).toEqual(["-y", "some-mcp", "--api-key"]);
+    expect(args[3]).toBe("«redacted 13 chars»");
+    expect(args[4]).toBe("--token=«redacted 13 chars»");
+    expect(args.slice(5, 7)).toEqual(["--region", "eu"]);
+    expect(args[8]).toBe("https://h.example.com/y?sig=«redacted 13 chars»");
+    const all = flat(record);
+    for (const secret of ["synthetic-a-1", "synthetic-b-2", "synthetic-c-3", "synthetic-d-4"]) expect(all).not.toContain(secret);
+  });
+
+  it("applies the same address and args rules to the ACP array form, and leaves Seira's own servers alone", () => {
+    const out = flat(redactSecrets({
+      params: {
+        mcpServers: [
+          { name: "ext", url: "https://mcp.example.com/sse?token=synthetic-e-5", args: ["--password", "synthetic-f-6"] },
+          { name: "agents", command: "node", args: ["server.js", "--port", "8080"], url: "http://127.0.0.1:8080/mcp?id=local-1" },
+        ],
+      },
+    }));
+    expect(out).not.toContain("synthetic-e-5");
+    expect(out).not.toContain("synthetic-f-6");
+    expect(out).toContain("--port");
+    expect(out).toContain("http://127.0.0.1:8080/mcp?id=local-1");
+  });
+
   it("does not treat env and headers outside mcpServers as MCP values", () => {
     const update = { params: { env: { RETRIES: "3" }, headers: { accept: "text/plain" } } };
     expect(redactSecrets(update)).toEqual(update);
