@@ -13,8 +13,9 @@ import { csvCell, monthKey } from "./usage-ledger.ts";
 export const ADMIN_ACTIVITY_CATEGORIES = ["config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility", "linked-server"] as const;
 export type AdminActivityCategory = typeof ADMIN_ACTIVITY_CATEGORIES[number];
 
-/** Another server that acted through its link to this one; `name` is the name that server gave itself. */
-export type LinkedServerActor = { kind: "linked-server"; linkId: string; name: string };
+/** Another server that acted through its link to this one; `name` is the name that server gave itself. `a2a`: an A2A
+ * agent, and `name` is the name an admin gave it here. */
+export type LinkedServerActor = { kind: "linked-server"; linkId: string; name: string; a2a?: true };
 export type AdminActor = DecisionActor | { kind: "cli" } | { kind: "auto-update" } | LinkedServerActor;
 
 export interface AdminActionRow {
@@ -343,6 +344,7 @@ export function readAdminActivityRange(dataDir: string, range: { from: Date; to:
 export function adminActorLabel(actor: AdminActor | undefined): string {
   if (actor?.kind === "cli") return "Command line";
   if (actor?.kind === "auto-update") return "Automatic update";
+  if (actor?.kind === "linked-server" && actor.a2a) return actor.name ? `${actor.name} (A2A agent)` : "An A2A agent";
   if (actor?.kind === "linked-server") return actor.name ? `${actor.name} (another Seira)` : "Another Seira";
   return actorLabel(actor as DecisionActor | undefined);
 }
