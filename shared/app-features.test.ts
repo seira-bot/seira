@@ -117,9 +117,16 @@ describe("findAppFeatures", () => {
   });
 
   it("AC-10: says that a bot sets the AI pool when asked and only the person adds a pay-per-use AI", () => {
-    const feature = APP_FEATURES.find((one) => one.id === "ai-engines")!;
-    expect(feature.does).toMatch(/AI pool/);
+    const feature = APP_FEATURES.find((one) => one.id === "ai-pool")!;
+    expect(feature.place).toBe("Settings → AI → AI pool");
     expect(feature.does).toMatch(/bot sets it when you ask/i);
     expect(feature.does).toMatch(/only you add a pay-per-use AI/i);
+    expect(feature.releaseNotes).toEqual(expect.arrayContaining(["aiPool", "aiPoolEasy", "aiPoolBot"]));
+  });
+
+  it("finds the AI pool first", () => {
+    for (const query of ["AI pool", "AI Pool", "pool AI", "pool", "pool akun"]) {
+      expect(findAppFeatures(query)[0]?.id, query).toBe("ai-pool");
+    }
   });
 });
