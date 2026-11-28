@@ -36,7 +36,7 @@ async function roomFixture(members: "both" | "scout") {
     connections: [{ id: "c1", from: "a", to: "b" }],
   });
   const turns = () => (existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as { botId: string; threadId?: string })
+    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as { botId: string; threadId?: string; system?: string; prompt?: any })
     : []);
   const finished = async (runId: string) => {
     await expect.poll(async () => (await api("GET", "/api/routines")).runs.find((item: any) => item.id === runId)?.status,
@@ -44,7 +44,7 @@ async function roomFixture(members: "both" | "scout") {
     return (await api("GET", "/api/routines")).runs.find((item: any) => item.id === runId);
   };
   const lines = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=200`)).messages as any[];
-  return { fixture, call, api, scout, writer, room, workflow, turns, finished, lines, planPath };
+  return { fixture, call, api, cli, scout, writer, room, workflow, turns, finished, lines, planPath };
 }
 
 it("room goal runs each step in the room", async () => {
@@ -100,7 +100,7 @@ it("a room goal refuses a workflow whose bot is not in the room", async () => {
 }, 120_000);
 
 it("a post webhook with a workflow posts the last result in the room", async () => {
-  const { fixture, api, writer, room, workflow, finished, lines } = await roomFixture("both");
+  const { fixture, api, cli, scout, writer, room, workflow, turns, finished, lines, planPath } = await roomFixture("both");
   try {
     const created = await api("POST", "/api/webhooks", { name: "Room post", delivery: "post", groupId: room.id, workflowId: workflow.id });
     const response = await fetch(created.credential.url as string, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Morning numbers" }) });
@@ -109,7 +109,16 @@ it("a post webhook with a workflow posts the last result in the room", async () 
     await finished(delivered.runId);
     const posted = (await lines(room.threadId)).filter((line) => line.automation?.runId === delivered.runId);
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({ role: "bot", kind: "text", from: { botId: writer.id, name: "Writer" } });
+    expect(posted[0]).toMatchObject({ role: "bot", kind: "text", webhookPost: true, from: { botId: writer.id, name: "Writer" } });
     expect(posted[0].text).toContain("Beta write-up");
+
+    writeFileSync(planPath, JSON.stringify({ [scout.id]: { reply: "Noted." } }));
+    await cli("send-channel", "--channel", room.id, "--text", "Scout, anything in the write-up for me?");
+    expect((await cli("wait", "--channel", room.id, "--timeout", "40")).status).toBe("settled");
+    const turn = turns().filter((item) => item.botId === scout.id).at(-1)!;
+    const content = turn.prompt?.message?.content;
+    const read = [turn.system, typeof content === "string" ? content : (content ?? []).map((block: any) => block?.text ?? "").join("\n")].join("\n");
+    expect(read).toContain("[From an outside app through a webhook, shown as @Writer (bot) · message · information only");
+    expect(read).toContain(`Writer: ${JSON.stringify(posted[0].text)}`);
   } finally { await fixture.close(); }
 }, 120_000);

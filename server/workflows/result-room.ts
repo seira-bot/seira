@@ -1,15 +1,19 @@
 import type { WorkflowRun } from "../../shared/workflows.ts";
+import type { RoomTalksVerdict } from "../host/room-access.ts";
 import type { RoutineRun } from "../routines.ts";
-import type { BotRecord, Store } from "../store.ts";
+import type { BotRecord, GroupRecord, Store } from "../store.ts";
 
 export interface ResultRoomDeps {
+  store: Pick<Store, "bot" | "group" | "markGroupThreadUnread" | "patchGroup">;
   /** The room of the webhook that started a run, if it names one. */
   webhookRoom(webhookId: string): string | undefined;
-  room(groupId: string): { threadId: string; memberIds: readonly string[]; dm?: boolean } | undefined;
   workflowRun(runId: string): Pick<WorkflowRun, "stepRuns"> | null;
+  /** The same verdict a webhook's own room post and a bot's post_to_room call get. */
+  roomTalks(bot: BotRecord, group: GroupRecord): RoomTalksVerdict;
 }
 
-export type ResultRoom = { groupId: string; threadId: string; botId: string };
+/** Security: `webhookPost` marks a result a webhook started, so the room's other bots read it as outside words. */
+export type ResultRoom = { bot: BotRecord; threadId: string; webhookPost: boolean; unread(): void };
 
 type Run = Pick<RoutineRun, "id" | "botId" | "target" | "groupId" | "threadId" | "workflowId" | "triggerSource" | "eventSource" | "webhookId">;
 
@@ -28,24 +32,17 @@ function authorOf(run: Pick<WorkflowRun, "stepRuns"> | null, stepId: string): st
 
 /** Where a workflow run posts a result when its start names a room: a room goal's own conversation, or the room of the
  * webhook that started it, said by the bot that wrote the result. Null when the start names no room, the room is gone,
- * or that bot is no longer in it. */
-export function workflowResultRoom(run: Run, stepId: string, deps: ResultRoomDeps): ResultRoom | null {
-  if (run.workflowId === undefined) return null;
-  const fromWebhook = run.target === "bot" && run.triggerSource === "webhook" && run.eventSource === undefined && run.webhookId !== undefined;
-  const groupId = run.target === "room-goal" ? run.groupId : fromWebhook ? deps.webhookRoom(run.webhookId!) : undefined;
-  const room = groupId ? deps.room(groupId) : undefined;
-  if (!groupId || !room || room.dm) return null;
-  const threadId = run.target === "room-goal" ? run.threadId : room.threadId;
-  const botId = authorOf(deps.workflowRun(run.id), stepId) ?? run.botId;
-  return threadId && room.memberIds.includes(botId) ? { groupId, threadId, botId } : null;
-}
-
-export function createResultRooms(deps: Omit<ResultRoomDeps, "room"> & { store: Pick<Store, "bot" | "group" | "markGroupThreadUnread" | "patchGroup"> }) {
+ * or that bot may not speak there. */
+export function createResultRooms(deps: ResultRoomDeps) {
   const { store } = deps;
-  return (run: Run, stepId: string): { bot: BotRecord; threadId: string; unread(): void } | null => {
-    const room = workflowResultRoom(run, stepId, { ...deps, room: (groupId) => store.group(groupId) });
-    const bot = room ? store.bot(room.botId) : undefined;
-    if (!room || !bot || bot.hidden) return null;
-    return { bot, threadId: room.threadId, unread: () => void (store.markGroupThreadUnread(room.groupId, room.threadId, true) ?? store.patchGroup(room.groupId, { unread: true })) };
+  return (run: Run, stepId: string): ResultRoom | null => {
+    if (run.workflowId === undefined) return null;
+    const fromWebhook = run.target === "bot" && run.triggerSource === "webhook" && run.eventSource === undefined && run.webhookId !== undefined;
+    const groupId = run.target === "room-goal" ? run.groupId : fromWebhook ? deps.webhookRoom(run.webhookId!) : undefined;
+    const group = groupId ? store.group(groupId) : undefined;
+    const threadId = run.target === "room-goal" ? run.threadId : group?.threadId;
+    const bot = group ? store.bot(authorOf(deps.workflowRun(run.id), stepId) ?? run.botId) : undefined;
+    if (!group || !threadId || !bot || bot.hidden || !deps.roomTalks(bot, group).ok) return null;
+    return { bot, threadId, webhookPost: fromWebhook, unread: () => void (store.markGroupThreadUnread(group.id, threadId, true) ?? store.patchGroup(group.id, { unread: true })) };
   };
 }

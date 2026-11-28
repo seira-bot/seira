@@ -13,6 +13,7 @@ import { needsInputQuestion } from "./runtime-coordinator.ts";
 import type { RoutineManager, RoutineRun } from "./routines.ts";
 import { serverLine } from "./server-lines.ts";
 import { isWorkflowRest } from "./workflows/rest-text.ts";
+import type { ResultRoom } from "./workflows/result-room.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
 import { hostTimeZone } from "./turn-clock.ts";
 import { AUTHORITY, fromNote, routineWho } from "./provenance-label.ts";
@@ -113,7 +114,7 @@ export interface AutomationReportDeps {
   threadLanguage?(threadId: string): string | undefined;
   /** A workflow run whose start names a room posts its results there, as the bot that wrote them; null posts in its
    * own chats. `unread` marks the room after the line lands. */
-  resultRoom?(run: RoutineRun, stepId: string): { bot: BotRecord; threadId: string; unread(): void } | null;
+  resultRoom?(run: RoutineRun, stepId: string): ResultRoom | null;
 }
 
 export function createAutomationReports(deps: AutomationReportDeps) {
@@ -208,7 +209,7 @@ export function createAutomationReports(deps: AutomationReportDeps) {
       line.onWritten(existing?.id ?? "");
       return true;
     }
-    const from = room ? { from: { botId: room.bot.id, name: room.bot.name, color: room.bot.color } } : {};
+    const from = room ? { from: { botId: room.bot.id, name: room.bot.name, color: room.bot.color }, ...(room.webhookPost ? { webhookPost: true } : {}) } : {};
     const posted = store.appendMessage(target.threadId, { role: "bot", kind: "text", text, ...from, automation: { ...lineOf(run, {}), workflowStepId: stepId } });
     if (room) room.unread();
     else deps.wrote(target.bot, target.threadId);
