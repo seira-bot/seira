@@ -566,6 +566,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/workspace\/banner$/ },
   // the announcement cards, the same public feeds for everyone (routes/announcements.ts)
   { methods: ["GET"], path: /^\/api\/announcements$/ },
+  // one anonymous card count from the page; the handler drops any card the server does not serve (routes/announcements.ts)
+  { methods: ["POST"], path: /^\/api\/announcements\/events$/ },
   // a teammate's picture: the handler serves it to the team's own members only
   { methods: ["GET"], path: /^\/api\/team\/people\/p_[\w-]{22}\/picture$/ },
   { methods: ["PUT"], path: /^\/api\/bots\/[\w-]+\/reports-to$/ },

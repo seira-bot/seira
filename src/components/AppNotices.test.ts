@@ -27,7 +27,7 @@ vi.mock("react", async original => ({ ...await original<typeof import("react")>(
 }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: f.dispatch }), api: vi.fn().mockResolvedValue({}),
   CLOUD_LINK_SETTINGS: { type: "toggleAppSettings", open: true, section: "cloudAccount", cloudLink: true } }));
-vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false, track: vi.fn() }));
+vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false, track: vi.fn(), usageAnalyticsChoice: () => false }));
 vi.mock("@/lib/updater", () => ({ useUpdaterState: () => f.updater }));
 vi.mock("./cloud-buy/NightCard", () => ({ NightCard: ({ children }: { children: unknown }) => children }));
 vi.mock("./whats-new/TeamPicture", () => ({ TeamPicture: () => null }));

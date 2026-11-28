@@ -130,7 +130,19 @@ describe("a build without a project key", () => {
     expect(analytics.analyticsEnabled()).toBe(false);
     expect(ph.loads).toBe(0);
     expect(ph.calls).toEqual([]);
-    expect(store.size).toBe(0);
+    expect([...store.keys()]).toEqual(["seira-analytics-opt-out"]);
+  });
+
+  it("keeps the choice, so the card count can be turned off", async () => {
+    const analytics = await freshAnalytics();
+    expect(analytics.usageAnalyticsChoice()).toBe(true);
+    analytics.setAnalyticsEnabled(false);
+    expect(analytics.usageAnalyticsChoice()).toBe(false);
+    expect(store.get("seira-analytics-opt-out")).toBe("1");
+    analytics.setAnalyticsEnabled(true);
+    expect(analytics.usageAnalyticsChoice()).toBe(true);
+    expect(store.get("seira-analytics-opt-out")).toBe("0");
+    expect(ph.loads).toBe(0);
   });
 
   it("is off for a key made of spaces", async () => {
@@ -142,6 +154,16 @@ describe("a build without a project key", () => {
 });
 
 describe("a build with a project key", () => {
+  it("opts a running client out and keeps the choice", async () => {
+    const analytics = await freshAnalytics();
+    await analytics.initAnalytics();
+    ph.calls = [];
+    analytics.setAnalyticsEnabled(false);
+    expect(ph.calls).toEqual(["opt_out_capturing"]);
+    expect(analytics.usageAnalyticsChoice()).toBe(false);
+    expect(store.get("seira-analytics-opt-out")).toBe("1");
+  });
+
   it("starts the client with that key and no other", async () => {
     vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", "  phc_seira_key  ");
     const analytics = await freshAnalytics();
