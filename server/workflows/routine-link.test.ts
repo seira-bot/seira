@@ -161,10 +161,18 @@ describe("accepts every setting", () => {
 });
 
 describe("a room goal", () => {
-  it("is refused on a workflow with steps, with plain words", () => {
-    const lookup = () => workflowCopy({ id: "w1", name: "M", createdAt: 1, updatedAt: 1, steps: [{ id: "a", kind: "bot", botId: "ana", instruction: "Go", position: at }], connections: [] }, botName);
-    expect(() => sanitizeInput({ name: "M", workflowId: "w1", prompt: "x", botId: "ana", target: "room-goal", groupId: "room-1", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 } } as never, 0, lookup))
-      .toThrow("A room goal can't run a workflow's steps. Use a bot routine instead.");
+  const lookup = () => workflowCopy({ id: "w1", name: "M", createdAt: 1, updatedAt: 1, steps: [{ id: "a", kind: "bot", botId: "ana", instruction: "Go", position: at }], connections: [] }, botName);
+  const goal = (change: Record<string, unknown> = {}) =>
+    sanitizeInput({ name: "M", workflowId: "w1", prompt: "x", botId: "ana", target: "room-goal", groupId: "room-1", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 }, ...change } as never, 0, lookup);
+  const refusal = (change: Record<string, unknown>) => { try { goal(change); } catch (error) { return { message: (error as Error).message, status: (error as { status?: number }).status }; } return null; };
+
+  it("keeps the workflow and the room of a goal that runs steps", () => {
+    expect(goal()).toMatchObject({ target: "room-goal", groupId: "room-1", workflowId: "w1", workflowBotIds: ["ana"] });
+  });
+
+  it("refuses steps without a room, and reads and drafts only, with plain words and a 400", () => {
+    expect(refusal({ groupId: "" })).toEqual({ message: "Choose a room for this goal.", status: 400 });
+    expect(refusal({ access: "read-and-draft" })).toEqual({ message: "A room goal can't be set to reads and drafts only. Turn that off for the automation and each step.", status: 400 });
   });
 });
 

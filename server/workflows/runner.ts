@@ -54,7 +54,7 @@ export interface WorkflowRunnerDeps {
   /** The run owns this chat: its limits and its access apply there. */
   bindThread?(run: RoutineRun, threadId: string, access?: RoutineAccess): void;
   startTurn(turn: StepTurn): void;
-  stopTurn(botId: string, threadId: string): Promise<void>;
+  stopTurn(botId: string, threadId: string, runId: string): Promise<void>;
   post(run: RoutineRun, stepId: string, text: string, onWritten: () => void): void;
   /** The run ended well: its last bot step's chat holds the result the briefing reads. */
   brief?(run: RoutineRun, threadId: string): void;
@@ -215,7 +215,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     saveRun(run);
     if (turn) {
       try {
-        void Promise.resolve(deps.stopTurn(turn.botId, turn.threadId)).catch(() => {});
+        void Promise.resolve(deps.stopTurn(turn.botId, turn.threadId, run.runId)).catch(() => {});
       } catch { /* the chat may already be idle */ }
     }
   }

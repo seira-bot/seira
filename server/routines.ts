@@ -368,7 +368,7 @@ export class RoutineManager {
     let restarts = 0;
     for (const run of this.runs.filter((candidate) => candidate.status === "running" || candidate.status === "waiting")) {
       settleAsk(run, undefined, this.now());
-      if (run.threadId && run.target === "bot" && (run.workflowId !== undefined || this.options.hasPendingDelegations?.(run.threadId) === true)) {
+      if (run.threadId && (run.workflowId !== undefined || (run.target === "bot" && this.options.hasPendingDelegations?.(run.threadId) === true))) {
         this.wait(run, ROUTINE_HANDOFF_WAIT);
         continue;
       }
@@ -557,10 +557,10 @@ export class RoutineManager {
     const at = this.now();
     const clean = sanitizeInput(input, at, this.options.workflowCopy);
     clean.schedule = this.timedSchedule(clean.schedule);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const nextRunAt = clean.enabled ? this.initialOccurrence(clean.schedule, at) : null;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const routine: Routine = {
       id: randomUUID(),
@@ -621,7 +621,7 @@ export class RoutineManager {
       deliver: Object.hasOwn(patch, "deliver") ? patch.deliver : routine.deliver, workflowId: Object.hasOwn(patch, "workflowId") ? patch.workflowId : routine.workflowId,
     }, now, workflowLookupFor(patch, routine, this.options.workflowCopy));
     clean.schedule = this.timedSchedule(clean.schedule, routine.id);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const scheduleChanged = JSON.stringify(clean.schedule) !== JSON.stringify(routine.schedule);
     const enabledChanged = clean.enabled !== routine.enabled;
     if (enabledChanged && clean.enabled && clean.schedule.type === "once" && clean.schedule.at <= now) throw new RoutineScheduleError("Its time has passed. Edit it to pick a new time.");
@@ -629,7 +629,7 @@ export class RoutineManager {
       ? this.initialOccurrence(clean.schedule, now)
       : routine.nextRunAt;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const destination = { ...routine, ...clean };
     if (destination.botId !== routine.botId) delete destination.resultsThreadId;

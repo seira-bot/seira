@@ -607,7 +607,7 @@ import { offerTaskSuggestions, TaskSuggestionTurns } from "./task-suggestions.ts
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
-import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost } from "./host/workflow-host.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
+import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost, type WorkflowRoomTurn } from "./host/workflow-host.ts"; import { roomGoalSaveRefusal } from "./workflows/room-goal.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
 import { createTaskRoutes } from "./routes/tasks.ts";
@@ -3778,6 +3778,39 @@ function runRoomNode(node: HandoffView, group: GroupRecord, bot: BotRecord, sign
       error => finish({ ok: false, text: error instanceof Error ? error.message : String(error) }),
     );
   });
+}
+
+function workflowRoom(groupId: string): { memberIds: readonly string[]; dm: boolean } | null {
+  const group = store.group(groupId);
+  return group ? { memberIds: group.memberIds, dm: group.dm === true } : null;
+}
+
+/** A bot step of a room goal's workflow: that bot's own turn in the goal's room conversation, where its reply shows. */
+function startWorkflowRoomTurn(turn: WorkflowRoomTurn): void {
+  const group = store.group(turn.groupId), bot = store.bot(turn.botId);
+  if (!group || group.dm || !store.groupTaskByThread(group.id, turn.threadId)) return turn.settle({ ok: false, error: "This goal's room no longer exists." });
+  if (!bot || bot.hidden) return turn.settle({ ok: false, error: "This step's bot is no longer available." });
+  if (!group.memberIds.includes(bot.id)) return turn.settle({ ok: false, error: `${bot.name} isn't in this room anymore. Add ${bot.name} to the room, then run again.` });
+  const operation = Object.assign(beginGroupTurnOperation(group.id, turn.threadId, [bot.id]), { speaking: false, continuesRun: turn.continuesRun });
+  const result: GroupTurnOrchestration["result"] = {};
+  let waited: "run" | "skip" | "stop" = "run";
+  const run = (groupQueues.get(turn.threadId) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    if (operation.cancelled) return;
+    waited = await waitForChatRoomMember(operation, turn.threadId, bot);
+    if (waited !== "run") return;
+    operation.speaking = true;
+    await runGroupMemberTurn(group.id, turn.threadId, bot.id, 0, new Set(), turn.prompt, (error) => { result.stopReason = error; }, () => operation.cancelled,
+      () => groupProviderHandshakeStarted(operation), () => groupProviderHandshakeSettled(operation), undefined,
+      { systemInstructions: "", followMentions: false, result, goalRunId: turn.runId }, operation);
+  });
+  const tracked = run.finally(() => finishGroupTurnOperation(group.id, operation));
+  groupQueues.set(turn.threadId, tracked.catch(() => {}));
+  tracked.then(() => {
+    if (result.outcome === "settled") return turn.settle(result.approvalAsk ? { ok: false, needsPerson: true, error: result.approvalAsk } : { ok: true, text: result.replyText ?? "" });
+    if (result.outcome === "busy") return turn.settle({ ok: false, busy: true, error: `${bot.name} is busy.` });
+    const stopped = operation.cancelled || waited === "stop";
+    turn.settle({ ok: false, error: result.stopReason || (stopped ? "The step was stopped." : waited === "skip" ? `${bot.name} is no longer available.` : "The step could not run in the room.") });
+  }, (error) => turn.settle({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 }
 
 function runRoomRootTurn(node: HandoffView, group: GroupRecord, bot: BotRecord, signal: AbortSignal, composed: ComposedTurn): Promise<HostTurnResult> {
@@ -8847,7 +8880,8 @@ const validateModelProposal = (selection: ModelSelection, current?: BotRecord): 
   }
   return null;
 };
-const ownThreads = createOwnThreads({ store, registry, node: (id) => coordinator.node(id), current: turnSelection, proposalRefusal: validateModelProposal, givesWay: modelGivesWay, modelName }); const burst = createBurstHost({ dataDir: DATA_DIR, cloudHome: Boolean(CLOUD_HOME), tier: () => cloudPlanTier.tier(), maxParallel: () => cfg.burst?.maxParallel, hasRoom: () => engineMemory.laneHasRoom(), store, language: (threadId) => threadLanguage(threadId), startTurn: (botId, text, opts) => startTurn(botId, text, opts), stop: (botId, threadId, cause) => { void interruptDirectThread(botId, threadId, cause).catch(() => {}); }, threadBusy, opened: (threadId, parent) => threadStarters.set(threadId, openerFrom(parent)), origin: (run) => withPerson({ kind: "user", request: quoteInNote(run.task, 400) }, threadPersonKey(run.threadId)), approval: (bot, selection) => ownThreads.approvalFor(bot, selection), defaultModel: (bot, threadId) => burstDefaultModel({ own: store.taskByThread(bot.id, threadId)?.modelSelection ?? bot.modelSelection, catalog: (id) => registry.get(id)?.models, refused: (id) => quickFallback.refused(id), usable: (selection) => ownThreads.refusal(selection, bot) === null }), modelName, route: (notification) => teamMessages.route(notification, { routine: true }), announce: (notification) => { broadcast({ kind: "notify", notification: logNotification(notification) }); } }); workflows = createWorkflowHost({ dataDir: DATA_DIR, store, routines: () => routines, routineHooks: () => routineHooks, botState: unattendedDispatchState, startTurn, shuttingDown: () => companyShutdown, routinesUnreadable: () => routines?.schedulerState().unreadable ?? false, reports: automationReports, starts: () => workflowStarts, emit: broadcast });
+const ownThreads = createOwnThreads({ store, registry, node: (id) => coordinator.node(id), current: turnSelection, proposalRefusal: validateModelProposal, givesWay: modelGivesWay, modelName }); const burst = createBurstHost({ dataDir: DATA_DIR, cloudHome: Boolean(CLOUD_HOME), tier: () => cloudPlanTier.tier(), maxParallel: () => cfg.burst?.maxParallel, hasRoom: () => engineMemory.laneHasRoom(), store, language: (threadId) => threadLanguage(threadId), startTurn: (botId, text, opts) => startTurn(botId, text, opts), stop: (botId, threadId, cause) => { void interruptDirectThread(botId, threadId, cause).catch(() => {}); }, threadBusy, opened: (threadId, parent) => threadStarters.set(threadId, openerFrom(parent)), origin: (run) => withPerson({ kind: "user", request: quoteInNote(run.task, 400) }, threadPersonKey(run.threadId)), approval: (bot, selection) => ownThreads.approvalFor(bot, selection), defaultModel: (bot, threadId) => burstDefaultModel({ own: store.taskByThread(bot.id, threadId)?.modelSelection ?? bot.modelSelection, catalog: (id) => registry.get(id)?.models, refused: (id) => quickFallback.refused(id), usable: (selection) => ownThreads.refusal(selection, bot) === null }), modelName, route: (notification) => teamMessages.route(notification, { routine: true }), announce: (notification) => { broadcast({ kind: "notify", notification: logNotification(notification) }); } }); workflows = createWorkflowHost({ dataDir: DATA_DIR, store, routines: () => routines, routineHooks: () => routineHooks, botState: unattendedDispatchState, startTurn, shuttingDown: () => companyShutdown, routinesUnreadable: () => routines?.schedulerState().unreadable ?? false, reports: automationReports, starts: () => workflowStarts, emit: broadcast,
+  rooms: { room: workflowRoom, startTurn: startWorkflowRoomTurn, stopTurn: (groupId, threadId) => interruptRoutineGroupGoal(groupId, threadId) } });
 const teamMemory = new TeamMemory(join(DATA_DIR, "team-memory.json"));
 const teamMemoryRequests = createTeamMemoryRequests({ teamMemory, store, sectionKey: sectionContextKey, decide: (row) => appendDecision(DATA_DIR, row) });
 const outsideWrites = createOutsideWrites({ store, notify, language: (threadId) => threadLanguage(threadId), decide: (row) => appendDecision(DATA_DIR, row),
@@ -11835,6 +11869,7 @@ const closerName = (auth: RequestAuth) => (CLOUD_TEAM && auth.kind === "session"
 const routineBodyRefusalFor = (auth: RequestAuth, visible: ReturnType<typeof visibleTo>, body: unknown, existing?: Routine): { status: number; error: string } | null => {
   const hidden = hiddenRoutineTarget(body, visible) ?? workflowTargetHidden(body, visible, workflows), notYours = teamRoutines.bodyRefusal(auth, body), elsewhere = standInAmong(store.standIns, [(body as { botId?: unknown } | null)?.botId]); if (elsewhere) return { status: 409, error: elsewhere.error };
   const linkShort = hidden ? null : workflowLinkRefusal(body, existing, auth, workflows, botAccess); if (linkShort) return { status: 403, error: linkShort };
+  const roomShort = hidden ? null : roomGoalSaveRefusal(body, existing, { workflow: (id) => workflows?.get(id), room: workflowRoom, botName: (id) => store.bot(id)?.name }); if (roomShort) return roomShort;
   return hidden ? { status: 404, error: hidden } : notYours ?? routineModelRefusal(body, routineModelChecks, existing);
 };
 const createRoutineAs = (auth: RequestAuth, body: unknown): Routine => {

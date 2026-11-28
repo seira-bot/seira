@@ -1,3 +1,4 @@
+import { PublicError } from "../public-error.ts";
 import type { Routine, RoutineInput } from "../routines.ts";
 import type { Workflow, WorkflowProblem } from "../../shared/workflows.ts";
 import { botIdsOf, outgoing, startSteps, stepById, stepLabel, stepOrder } from "./graph.ts";
@@ -57,8 +58,8 @@ export function workflowCopy(workflow: Workflow, botName: (botId: string) => str
 export function linkWorkflow(input: Pick<RoutineInput, "workflowId">, lookup: WorkflowCopyLookup | undefined): WorkflowCopy | null {
   if (input.workflowId == null) return null;
   const found = lookup?.(input.workflowId) ?? null;
-  if (!found) throw new Error("That workflow is gone. Choose another one.");
-  if ("code" in found) throw new Error(found.message);
+  if (!found) throw new PublicError("That workflow is gone. Choose another one.", 409);
+  if ("code" in found) throw new PublicError(found.message, 409);
   return found;
 }
 

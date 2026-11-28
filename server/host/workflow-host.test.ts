@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowFrame, WorkflowInput, WorkflowStep } from "../../shared/workflows.ts";
 import type { HostTurnResult } from "../coordinator.ts";
 import type { Routine, RoutineRun } from "../routines.ts";
-import { createWorkflowHost, type WorkflowHost, type WorkflowHostDeps, type WorkflowTurnOptions } from "./workflow-host.ts";
+import { createWorkflowHost, type WorkflowHost, type WorkflowHostDeps, type WorkflowRoomTurn, type WorkflowTurnOptions } from "./workflow-host.ts";
 
 const at = { x: 0, y: 0 };
 const bot = (id: string, botId: string, instruction: string): WorkflowStep => ({ id, kind: "bot", botId, instruction, position: at });
@@ -315,6 +315,71 @@ describe("the workflow host's runs", () => {
     r.tick(43_200 * 60_000);
     vi.advanceTimersByTime(2 ** 31);
     expect(r.turns).toHaveLength(2);
+  });
+});
+
+describe("a room goal that runs steps", () => {
+  const roomRig = (memberIds = ["ana", "ben"]) => {
+    const roomTurns: WorkflowRoomTurn[] = [];
+    const stopped: Array<[string, string]> = [];
+    const interrupted: Array<[string, string]> = [];
+    const r = rig({
+      rooms: { room: (id) => (id === "room-1" ? { memberIds } : null), startTurn: (turn) => { roomTurns.push(turn); }, stopTurn: async (groupId, threadId) => { stopped.push([groupId, threadId]); } },
+      routineHooks: () => ({ createTask: (() => ({ threadId: "t-new" })) as never, interruptTurn: async (botId: string, threadId: string) => { interrupted.push([botId, threadId]); } }),
+    });
+    const begin = async () => {
+      const made = r.host.create(noPost());
+      const row = r.run({ workflowId: made.id, target: "room-goal", groupId: "room-1", threadId: "t-room" });
+      const errors: string[] = [];
+      await r.host.start(row, "t-room", (message) => errors.push(message));
+      return { row, errors };
+    };
+    const seen = () => roomTurns.map((turn) => [turn.groupId, turn.threadId, turn.botId, turn.continuesRun]);
+    return { r, roomTurns, stopped, interrupted, begin, seen };
+  };
+
+  it("room goal runs each step in the room", async () => {
+    const { r, roomTurns, begin, seen } = roomRig();
+    const { row, errors } = await begin();
+    expect(errors).toEqual([]);
+    expect(r.turns).toEqual([]);
+    expect(seen()).toEqual([["room-1", "t-room", "ana", false]]);
+    expect(roomTurns[0]).toMatchObject({ runId: row.id });
+    expect(roomTurns[0]!.prompt).toContain("Collect the news");
+    roomTurns[0]!.settle({ ok: true, text: "Three stories" });
+    expect(seen()).toEqual([["room-1", "t-room", "ana", false], ["room-1", "t-room", "ben", true]]);
+    expect(roomTurns[1]!.prompt).toContain("Three stories");
+    expect(r.created).toEqual([]);
+    roomTurns[1]!.settle({ ok: true, text: "digest" });
+    expect(r.host.run(row.id)).toMatchObject({ status: "completed" });
+    expect(r.host.run(row.id)!.stepRuns.map((step) => [step.stepId, step.status, step.output])).toEqual([["a", "done", "Three stories"], ["b", "done", "digest"]]);
+    expect(r.states.at(-1)).toEqual([row.id, "completed", "digest"]);
+  });
+
+  it("a room goal refuses a workflow whose bot is not in the room", async () => {
+    const { r, roomTurns, begin } = roomRig(["ana"]);
+    const { row, errors } = await begin();
+    expect(errors).toEqual(["Ben isn't in this room. Add Ben to the room first."]);
+    expect(roomTurns).toEqual([]);
+    expect(r.host.run(row.id)).toBeNull();
+  });
+
+  it("fails a room goal's step that its room could not run, with the room's reason", async () => {
+    const { r, roomTurns, begin } = roomRig();
+    const { row } = await begin();
+    roomTurns[0]!.settle({ ok: false, error: "Ana is no longer available." });
+    expect(r.host.run(row.id)!.stepRuns[0]).toMatchObject({ status: "failed", error: "Ana is no longer available." });
+    expect(r.host.run(row.id)).toMatchObject({ status: "failed" });
+  });
+
+  it("stopping a room-goal workflow run stops the room turn", async () => {
+    const { r, stopped, interrupted, begin } = roomRig();
+    const { row } = await begin();
+    r.host.routineRunChanged({ ...row, status: "cancelled", error: "Stopped by you" });
+    await Promise.resolve();
+    expect(r.host.run(row.id)).toMatchObject({ status: "stopped" });
+    expect(stopped).toEqual([["room-1", "t-room"]]);
+    expect(interrupted).toEqual([]);
   });
 });
 

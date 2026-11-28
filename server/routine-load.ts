@@ -90,9 +90,9 @@ export function loadModelSelection(value: unknown): ModelSelection | undefined {
 }
 
 const WORKFLOW_REF = /^[\w-]{1,128}$/;
-function loadWorkflowLink(record: { workflowId?: unknown; workflowBotIds?: unknown }, target: RoutineTarget): Pick<Routine, "workflowId" | "workflowBotIds"> {
+function loadWorkflowLink(record: { workflowId?: unknown; workflowBotIds?: unknown }): Pick<Routine, "workflowId" | "workflowBotIds"> {
   const bots = Array.isArray(record.workflowBotIds) ? record.workflowBotIds.filter((id): id is string => typeof id === "string" && WORKFLOW_REF.test(id)).slice(0, 50) : [];
-  return target === "bot" && typeof record.workflowId === "string" && WORKFLOW_REF.test(record.workflowId) && bots.length > 0
+  return typeof record.workflowId === "string" && WORKFLOW_REF.test(record.workflowId) && bots.length > 0
     ? { workflowId: record.workflowId, workflowBotIds: bots } : { workflowId: undefined, workflowBotIds: undefined };
 }
 
@@ -121,7 +121,7 @@ export function loadRoutine(routine: Routine, now: number): Routine | null {
     checkTroubleCode: typeof routine.checkTrouble === "string" && routine.checkTrouble && typeof routine.checkTroubleCode === "string" ? routine.checkTroubleCode.slice(0, 80) : undefined,
     wakeAt: instant(routine.wakeAt),
     heldFor: isRoutineHoldCause(routine.heldFor) ? routine.heldFor : undefined,
-    ...loadWorkflowLink(routine, target),
+    ...loadWorkflowLink(routine),
   };
   delete loaded.failureStreak;
   delete loaded.noStartStreak;
@@ -147,7 +147,7 @@ export function loadRun(run: RoutineRun): RoutineRun {
     busyMs: instant(run.busyMs),
     workedMs: instant(run.workedMs),
     skipped: loadSkips(run.skipped),
-    ...loadWorkflowLink(run, target),
+    ...loadWorkflowLink(run),
   };
   return withoutUndefined(loaded, ["timeoutMinutes", "access", "deliver", "checkKey", "busyMs", "workedMs", "skipped", "workflowId", "workflowBotIds"]);
 }
