@@ -253,11 +253,36 @@
     },
     {
       "name": "machine_budget",
-      "description": "Free memory (GB), CPUs, suggested parallel workers and heavy work running now. Call before a heavy job. unknown: not readable.",
+      "description": "This computer's memory, processors, disk, suggested parallel workers, heavy work running now, and how many bots can work at once. With task: whether this computer fits that job, and a lighter way. Call before a heavy job or a big team. unknown: not readable.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {}
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "tests",
+              "e2e_tests",
+              "build",
+              "mobile_build",
+              "docker",
+              "video",
+              "local_model",
+              "browsers",
+              "large_files",
+              "more_bots"
+            ],
+            "description": "The kind of job to check."
+          },
+          "size_gb": {
+            "type": "number",
+            "description": "local_model: the model's size; large_files: the files' size."
+          },
+          "count": {
+            "type": "integer",
+            "description": "browsers: pages at once; more_bots: new bots."
+          }
+        }
       },
       "annotations": {
         "readOnlyHint": true,
@@ -763,10 +788,14 @@
     },
     {
       "name": "create_bot",
-      "description": "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn.",
+      "description": "Chief of Staff only: add a specialist to your section now; the person can undo it. instructions become its soul. Omit modelSelection for the workspace default, or use exact IDs from list_team_setup. It starts with your connected apps, at the default access level. Assign work with coordinate_bots. At most four per turn. If the result says this computer is small for the team, tell the person and ask; pass capacity_ok true only after they agree.",
       "inputSchema": {
         "type": "object",
         "properties": {
+          "capacity_ok": {
+            "type": "boolean",
+            "description": "true only after the person agreed to a team bigger than this computer runs well."
+          },
           "name": {
             "type": "string",
             "description": "Short, unique display name for the specialist."
@@ -841,11 +870,15 @@
     },
     {
       "name": "propose_team_setup",
-      "description": "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes. It applies at once, with an Undo where possible: read the result before saying it did.",
+      "description": "Chief of Staff only: create specialists and change bots' profiles, models, Chiefs and teams as the person asked, all in ONE plan, with exact ids from list_team_setup. One operation per bot, at most 40 (8 new). A new team goes in newTeams with a specialist in this plan; teams you are not authorized for cannot be included. Models change defaults for new threads; mcpServers sets an existing bot's MCP servers; no other execution permission changes. It applies at once, with an Undo where possible: read the result before saying it did. If the result says this computer is small for the team, tell the person and ask; pass capacity_ok true only after they agree.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "capacity_ok": {
+            "type": "boolean",
+            "description": "true only after the person agreed to a team bigger than this computer runs well."
+          },
           "reason": {
             "type": "string"
           },
