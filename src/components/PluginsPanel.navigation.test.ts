@@ -173,7 +173,7 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "sales funnel", "comment", "join request"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "sales funnel", "join request"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
@@ -187,6 +187,11 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "broadcast");
     expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["konektor", "wapilot"]);
+  });
+  it("finds the two hosted cards whose text mentions a comment", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "comment");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["repliz", "tebar"]);
   });
   it("finds the two hosted cards whose text mentions a landing page", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);

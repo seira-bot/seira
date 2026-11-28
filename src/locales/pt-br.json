@@ -11873,6 +11873,8 @@
   "grupy.notice": "Entre com o Grupy.chat. Não é preciso ter uma chave de API. Um bot que pode usar o Grupy.chat pode ler os resumos e os membros dos seus grupos. Se você permitir no Grupy.chat, ele também pode ler mensagens, aprovar pedidos de entrada e alterar ajustes dos grupos. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "wapilot.description": "Envie mensagens pelo WhatsApp, leia conversas e use respostas automáticas, transmissões e lembretes pela extensão do WAPilot no Chrome.",
   "wapilot.notice": "Entre com o WAPilot. Não é preciso ter uma chave de API. O WAPilot funciona pela extensão dele no Chrome, então mantenha o WhatsApp Web aberto no Chrome. Um bot que tem o WAPilot pode ler suas conversas, contatos e grupos e enviar mensagens pelo WhatsApp em seu nome. Ele também pode alterar suas respostas automáticas, transmissões e lembretes. Os comandos passam pelo WAPilot Remote Control, que os processa nos servidores do WAPilot, não neste computador.",
+  "tebar.description": "Posts agendados, comentários, mensagens e estatísticas do Instagram, TikTok, Threads, YouTube e mais 6 plataformas sociais no Tebar.",
+  "tebar.notice": "Entre com o Tebar e escolha acesso somente leitura ou leitura e escrita. Não é preciso ter uma chave de API. Um bot que pode usar o Tebar pode agendar e publicar posts e responder comentários nas suas contas sociais. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "aiImport.title": "Migrar de outra IA",
   "aiImport.subtitle": "Traga a persona, as memórias, as habilidades, as ferramentas, as rotinas e as conversas de outra IA.",
   "aiImport.source.chatgpt": "ChatGPT",

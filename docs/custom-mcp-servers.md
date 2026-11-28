@@ -68,6 +68,7 @@ recognized rather than replaced.
 | **Dalekta**, WhatsApp ads tracking: leads, closing, revenue and conversions | `https://mcp.dalekta.id/mcp` | Browser sign-in |
 | **Grupy.chat**, WhatsApp groups: AI summaries, members and join requests | `https://mcp.grupy.chat/mcp` | Browser sign-in |
 | **WAPilot**, WhatsApp Web through a Chrome extension: messages, chats, auto replies and broadcasts | `https://integrator.wapilot.id/v1/mcp` | Browser sign-in |
+| **Tebar**, social media: scheduled posts, comments, messages and stats on 10 platforms | `https://api.tebar.app/mcp` | Browser sign-in |
 
 A Konektor.id server added earlier with a pasted key keeps working and counts as
 connected. **Disconnect** deletes that server and its key. Connect again to use
