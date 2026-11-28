@@ -167,12 +167,12 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   const actorOf = (peer: A2aPeer): LinkedServerActor => ({ kind: "linked-server", linkId: peer.id, name: peer.name, a2a: true });
   const origin = () => { const raw = deps.origin(); return raw ? guestOrigin(raw, allowLoopback) : null; };
   const full = () => deps.seiraLinks() + file.peers.length >= LINKS_MAX;
-  const outboundToken = (rt: Runtime) => rt.link.dial()?.token ?? "";
+  const outboundToken = (rt: Sides) => rt.link.dial()?.token ?? "";
   const originOfUrl = (href: string): string => new URL(href).origin;
   /** The token goes only to the origin it was confirmed for. */
   const tokenFits = (peer: A2aPeer): boolean => peer.url !== undefined && peer.tokenOrigin === originOfUrl(peer.url);
   /** The token this server may send to the peer now: "" when none is held or it was confirmed for another origin. */
-  const sendableToken = (rt: Runtime): string => { const peer = recordOf(rt.id); return peer && tokenFits(peer) ? outboundToken(rt) : ""; };
+  const sendableToken = (rt: Sides): string => { const peer = recordOf(rt.id); return peer && tokenFits(peer) ? outboundToken(rt) : ""; };
 
   function cardUrls(peer: A2aPeer): CardUrl[] {
     const base = origin();
