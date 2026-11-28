@@ -120,7 +120,7 @@ export const POPULAR_THEMES: readonly PopularTheme[] = [
       name: "Night Owl",
       skin: "system",
       dark: { canvas: "#011627", accent: "#82aaff", colors: { success: "#addb67", "success-ink": "#111111", danger: "#f05c59", "danger-ink": "#111111", warning: "#ecc48d" } },
-      light: { canvas: "#fbfbfb", accent: "#4876d6", colors: { success: "#07835f", "success-ink": "#ffffff", danger: "#d33a38", "danger-ink": "#ffffff", warning: "#b05a58" } },
+      light: { canvas: "#fbfbfb", accent: "#4470d0", colors: { success: "#07835f", "success-ink": "#ffffff", danger: "#d33a38", "danger-ink": "#ffffff", warning: "#b05a58" } },
     },
   },
 ];

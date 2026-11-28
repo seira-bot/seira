@@ -25,7 +25,7 @@ describe("theme store", () => {
     const { store } = fixture();
     expect(store.save("owner", "neon", { name: "Neon", canvas: "#0b1020" })).toBeNull();
     expect(store.setActive("owner", "neon")).toBeNull();
-    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: {} }] });
+    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: { canvas: "#0b1020" } }] });
     expect(store.list("p_aaaaaaaaaaaaaaaaaaaaaa")).toEqual({ active: null, themes: [] });
     expect(store.setActive("p_aaaaaaaaaaaaaaaaaaaaaa", "neon")).toMatchObject({ refusal: expect.stringContaining("neon") });
   });
@@ -136,7 +136,7 @@ describe("theme store", () => {
     expect(store.history("owner")[0]).toMatchObject({ kind: "deleted", name: "Neon" });
     expect(store.missingAssets("owner", 1)).toEqual(["stars.png"]);
     expect(store.restore("owner", 1)).toEqual({});
-    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: {} }] });
+    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: { canvas: "#000000" } }] });
   });
 
   it("reads a theme and look changes that name a retired skin as the default look, and keeps every change", () => {
