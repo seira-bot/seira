@@ -60,6 +60,8 @@ export interface BoardViewer {
   thread(threadId: string): boolean;
   bot(botId: string): boolean;
   routine(run: { botId?: unknown; groupId?: unknown; threadId?: unknown }): boolean;
+  /** Whether this viewer may see a todo: a person's own todo is theirs. Absent: yes. */
+  todo?(todoId: string): boolean;
 }
 
 const BRIEF_CHARS = 2000;

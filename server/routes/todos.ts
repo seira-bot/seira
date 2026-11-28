@@ -22,12 +22,14 @@ export interface TodoRouteDeps {
   /** Why this person may not change, start, delete or restore this todo; null when they may. The same rule as writing
    * in a conversation: on a Cloud a guest touches only their own. */
   changeRefusal(auth: RequestAuth, todo: TodoRecord): string | null;
+  /** Whether this person may see this todo at all: on a Cloud a person's own todo is theirs. Absent: yes. */
+  readable?(auth: RequestAuth, todoId: string): boolean;
 }
 
 const ITEM = /^\/api\/todos\/([\w-]+)(\/start|\/restore)?$/;
 
-function viewerOf(visible: VisibleSet) {
-  return { bot: (botId: string) => visible.bot(botId), thread: (threadId: string) => visible.thread(threadId) };
+function viewerOf(visible: VisibleSet, readable?: (todoId: string) => boolean) {
+  return { bot: (botId: string) => visible.bot(botId), thread: (threadId: string) => visible.thread(threadId), ...(readable ? { todo: readable } : {}) };
 }
 
 /** GET and POST /api/todos, PATCH, DELETE and POST …/start and …/restore on one todo, and PUT /api/todos/picker.
@@ -36,9 +38,14 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
   const { store, host } = deps;
   const mayChat = (visible: VisibleSet, botId: string | undefined) => !botId || atLeast(visible.level(botId), "chat");
 
-  function seen(visible: VisibleSet, todo: TodoRecord | undefined): TodoRecord {
-    if (!todo || !todoVisible(todo, viewerOf(visible))) throw new TodoError(404, "That todo is gone.");
+  function seen(visible: VisibleSet, auth: RequestAuth, todo: TodoRecord | undefined): TodoRecord {
+    if (!todo || !todoVisible(todo, viewerFor(visible, auth))) throw new TodoError(404, "That todo is gone.");
     return todo;
+  }
+
+  function viewerFor(visible: VisibleSet, auth: RequestAuth) {
+    const readable = deps.readable;
+    return viewerOf(visible, readable ? (todoId) => readable(auth, todoId) : undefined);
   }
 
   function guardRoutine(auth: RequestAuth, routineId: string | undefined): void {
@@ -66,7 +73,7 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
       if (path === "/api/todos") {
         if (method === "GET") {
           const cutoff = store.now() - TODO_DONE_WINDOW_MS;
-          const todos = store.live().filter((todo) => todoVisible(todo, viewerOf(visible)) && (todo.status !== "done" || (todo.finishedAt ?? todo.updatedAt) >= cutoff));
+          const todos = store.live().filter((todo) => todoVisible(todo, viewerFor(visible, auth)) && (todo.status !== "done" || (todo.finishedAt ?? todo.updatedAt) >= cutoff));
           return json(res, 200, { todos: todos.map(publicTodo), picker: host.picker() });
         }
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
@@ -92,12 +99,12 @@ export function createTodoRoutes(deps: TodoRouteDeps): RouteHandler {
       if (action === "/restore") {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         const gone = store.getDeleted(id!);
-        if (gone && (!todoVisible(gone, viewerOf(visible)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
+        if (gone && (!todoVisible(gone, viewerFor(visible, auth)) || !mayChat(visible, gone.botId))) throw new TodoError(404, "That todo is gone.");
         if (gone) guardChange(auth, gone);
         guardRoutine(auth, gone?.routineId);
         return json(res, 200, { todo: publicTodo(deps.withPerson(auth, () => host.restore(id!))) });
       }
-      const current = seen(visible, store.get(id!));
+      const current = seen(visible, auth, store.get(id!));
       if (action === "/start") {
         if (method !== "POST") return json(res, 405, { error: "method not allowed" });
         if (!mayChat(visible, current.botId)) throw new TodoError(403, "You cannot start work for this bot.");

@@ -4,12 +4,13 @@ import type { VisibleSet } from "../bot-visibility.ts";
 import type { BoardSources } from "../board.ts";
 import type { BoardClosure, BoardClosures } from "../board-closed.ts";
 import { requiredScope, type RequestAuth } from "../request-auth.ts";
-import { createBoardRoutes } from "./board.ts";
+import type { Todo } from "../../shared/todo.ts";
+import { createBoardRoutes, type BoardRouteDeps } from "./board.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
 const NOW = 1_800_000_000_000;
 
-function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]> } = {}) {
+function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: Todo[]; deps?: Partial<BoardRouteDeps> } = {}) {
   const closed = new Map<string, BoardClosure>();
   const closures: BoardClosures = {
     get: (id) => closed.get(id),
@@ -22,6 +23,7 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
       ...(options.more ?? []),
     ],
     threads: [{ botId: "atlas", task: { threadId: "t-chat", title: "Chat", createdAt: NOW - 5000, activity: "working" } }],
+    ...(options.todos ? { todos: () => ({ todos: options.todos!, picker: null }) } : {}),
     runs: () => [
       { id: "r1", routineId: "rt", routineName: "Digest", botId: "atlas", status: "queued", scheduledFor: NOW - 10 },
       { id: "r2", routineId: "rt", routineName: "Secret digest", botId: "ghost", status: "queued", scheduledFor: NOW - 10 },
@@ -37,7 +39,7 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
     group: () => true,
     level: (id: string) => ((hidden.bots ?? []).includes(id) ? "none" : options.level ?? "chat"),
   } as unknown as VisibleSet;
-  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW });
+  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW, ...options.deps });
   const call = async (method: string, path: string, body: unknown = {}) => {
     const sent: { status?: number; body?: any } = {};
     const out = await route({
@@ -116,5 +118,37 @@ describe("POST /api/board/close", () => {
     expect(await call("POST", "/api/board/close", {})).toMatchObject({ status: 400 });
     expect(await close(call, "handoff:h3", "x".repeat(201))).toMatchObject({ status: 400 });
     expect(closed.size).toBe(0);
+  });
+});
+
+describe("security: a person's todo on the Board", () => {
+  const todo = (id: string): Todo => ({
+    id, title: `Todo ${id}`, botId: "atlas", status: "needs-you", stuck: "unassigned", start: { kind: "free" }, rank: 1,
+    madeBy: { kind: "person", name: "Pat" }, attempts: 0, depth: 0, createdAt: NOW - 100, updatedAt: NOW - 100,
+  });
+
+  it("shows only the todos this person may read, and a hidden one cannot be closed", async () => {
+    const closedTodos: string[] = [];
+    const { call } = setup({}, { todos: [todo("mine"), todo("theirs")], deps: { todoReadable: (_auth, id) => id === "mine", closeTodo: (id) => { closedTodos.push(id); } } });
+    const board = await call("GET", "/api/board");
+    const ids = (board.body.cards as Array<{ id: string }>).map((card) => card.id);
+    expect(ids).toContain("todo:mine");
+    expect(ids).not.toContain("todo:theirs");
+    expect(await call("POST", "/api/board/close", { cardId: "todo:theirs" })).toMatchObject({ status: 404 });
+    expect(closedTodos).toEqual([]);
+  });
+
+  it("refuses to close a todo the person may not change, and keeps it open", async () => {
+    const closedTodos: string[] = [];
+    const { call } = setup({}, { todos: [todo("owners")], deps: { todoCloseRefusal: () => "On this Cloud you can only change todos you made.", closeTodo: (id) => { closedTodos.push(id); } } });
+    expect(await call("POST", "/api/board/close", { cardId: "todo:owners" })).toMatchObject({ status: 403, body: { error: "On this Cloud you can only change todos you made." } });
+    expect(closedTodos).toEqual([]);
+  });
+
+  it("closes a todo the person may change", async () => {
+    const closedTodos: string[] = [];
+    const { call } = setup({}, { todos: [todo("mine")], deps: { todoReadable: () => true, todoCloseRefusal: () => null, closeTodo: (id) => { closedTodos.push(id); } } });
+    expect(await call("POST", "/api/board/close", { cardId: "todo:mine" })).toMatchObject({ status: 200 });
+    expect(closedTodos).toEqual(["mine"]);
   });
 });

@@ -387,10 +387,22 @@ describe("security: a person's todo reaches only bots that person may chat with"
     expect(seen).toEqual([undefined]);
   });
 
-  it("leaves a todo a bot made to the bot's own reach", () => {
+  it("leaves a bot's todo from a conversation of no one person to the bot's own reach", () => {
     const { host } = setup({ levelFor: () => "none" });
-    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up" }], { key: "p_pat" }).todos[0]!;
-    expect(todo.person).toEqual({ key: "p_pat" });
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up" }], { key: "p_team" }).todos[0]!;
+    expect(todo.person).toEqual({ key: "p_team" });
     expect(host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }).botId).toBe("scout");
+  });
+
+  it("keeps a bot's todo from one person's conversation to bots that person may chat with", () => {
+    const { host, store } = setup({ levelFor: patLevels({ atlas: "chat", scout: "view", chief: "chat" }) });
+    expect(() => host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Read the payroll", assigneeBotId: "scout" }], pat)).toThrow(TodoError);
+    expect(store.live()).toHaveLength(0);
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Read the payroll" }], pat).todos[0]!;
+    expect(todo.person).toEqual(pat);
+    expect(() => host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" })).toThrow("cannot give work to Scout");
+    expect(() => host.patch(todo.id, { botId: "scout" }, { kind: "person", name: "Admin" })).toThrow("cannot give work to this bot");
+    expect(store.get(todo.id)!.botId).toBeUndefined();
+    expect(host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "chief", reason: "fits" }).botId).toBe("chief");
   });
 });

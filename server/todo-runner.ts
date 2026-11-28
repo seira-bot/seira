@@ -326,6 +326,9 @@ export interface TodosRuntimeDeps {
   levelFor: TodosHostDeps["levelFor"];
   openTask: TodoLauncherDeps["openTask"];
   pickerMayRead?: TodoRunnerDeps["pickerMayRead"];
+  /** May this todo's own conversation hold its words: on a Team Cloud it must not be read by more people than the place
+   * the todo came from. Absent: yes. */
+  mayRun?(todo: TodoRecord): boolean;
   startTurn: TodoLauncherDeps["startTurn"];
   admits: TodoLauncherDeps["admits"];
   queue: TodoLauncherDeps["queue"];
@@ -362,7 +365,7 @@ export function createTodosRuntime(deps: TodosRuntimeDeps) {
     lastReply,
     // The picker reads a person's todo only if that person may give it work.
     pickerMayRead: (botId, threadId, todo) => host.personMayGive(todo, botId) && (deps.pickerMayRead?.(botId, threadId, todo) ?? true),
-    mayStart: (todo) => host.personMayGive(todo, todo.botId!),
+    mayStart: (todo) => host.personMayGive(todo, todo.botId!) && (deps.mayRun?.(todo) ?? true),
     startsTodosOf: (botId) => deps.store.bots.find((bot) => bot.id === botId)?.startsTodos,
     askPicker: async ({ botId, threadId, text, onThread }) => {
       const id = threadId && deps.store.taskByThread(botId, threadId) ? threadId : deps.store.createTask(botId, PICKER_THREAD_TITLE, false)?.threadId;

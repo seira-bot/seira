@@ -14,6 +14,10 @@ export interface BoardRouteDeps {
   closerName: (auth: RequestAuth) => string;
   /** Moves a todo to Done by hand; the Board keeps no closure record for a todo card. */
   closeTodo?: (todoId: string, by: { kind: "person"; name: string }, reason?: string) => void;
+  /** Whether this person may see this todo: on a Cloud a person's own todo is theirs. Absent: yes. */
+  todoReadable?: (auth: RequestAuth, todoId: string) => boolean;
+  /** Why this person may not close this todo; null when they may. The same rule as changing it on its own page. */
+  todoCloseRefusal?: (auth: RequestAuth, todoId: string) => string | null;
   now?: () => number;
 }
 
@@ -22,23 +26,29 @@ const closeBody = z.object({ cardId: z.string().min(1).max(200), reason: z.strin
 /** GET /api/board: every open or recently finished piece of work this viewer may see, as cards in four columns.
  * POST /api/board/close: move one of the viewer's Needs you cards to Done. */
 export function createBoardRoutes(deps: BoardRouteDeps): RouteHandler {
-  const viewerOf = (visible: VisibleSet): BoardViewer => ({
-    thread: (threadId) => visible.thread(threadId),
-    bot: (botId) => visible.bot(botId),
-    routine: (run) => routineRunVisible(run, visible),
-  });
-  const view = (visible: VisibleSet) =>
-    boardView({ ...deps.sources(), closed: (cardId) => deps.closures.get(cardId) }, viewerOf(visible), deps.now?.() ?? Date.now());
+  const viewerOf = (visible: VisibleSet, auth: RequestAuth): BoardViewer => {
+    const readable = deps.todoReadable;
+    return {
+      thread: (threadId) => visible.thread(threadId),
+      bot: (botId) => visible.bot(botId),
+      routine: (run) => routineRunVisible(run, visible),
+      ...(readable ? { todo: (todoId: string) => readable(auth, todoId) } : {}),
+    };
+  };
+  const view = (visible: VisibleSet, auth: RequestAuth) =>
+    boardView({ ...deps.sources(), closed: (cardId) => deps.closures.get(cardId) }, viewerOf(visible, auth), deps.now?.() ?? Date.now());
   return async ({ req, res, path, method, auth, json, readBody }) => {
     if (path === "/api/board/close") {
       if (method !== "POST") return json(res, 405, { error: "method not allowed" });
       const parsed = closeBody.safeParse(await readBody(req));
       if (!parsed.success) return json(res, 400, { error: "cardId is required and reason is at most 200 characters" });
       const visible = deps.visibleFor(auth);
-      const card = view(visible).cards.find((candidate) => candidate.id === parsed.data.cardId);
+      const card = view(visible, auth).cards.find((candidate) => candidate.id === parsed.data.cardId);
       if (!card) return json(res, 404, { error: "no such card" });
       if (card.column !== "needs-you") return json(res, 409, { error: "only a card in Needs you can be moved to Done" });
       if (!atLeast(visible.level(card.botId), "chat")) return json(res, 403, { error: "you cannot chat with this card's bot" });
+      const refused = card.kind === "todo" && card.todoId ? deps.todoCloseRefusal?.(auth, card.todoId) : null;
+      if (refused) return json(res, 403, { error: refused });
       const by = { kind: "person" as const, name: deps.closerName(auth) };
       if (card.kind === "todo" && card.todoId && deps.closeTodo) deps.closeTodo(card.todoId, by, parsed.data.reason);
       else deps.closures.close(card.id, by, parsed.data.reason);
@@ -46,6 +56,6 @@ export function createBoardRoutes(deps: BoardRouteDeps): RouteHandler {
     }
     if (path !== "/api/board") return PASS;
     if (method !== "GET") return json(res, 405, { error: "method not allowed" });
-    return json(res, 200, view(deps.visibleFor(auth)));
+    return json(res, 200, view(deps.visibleFor(auth), auth));
   };
 }

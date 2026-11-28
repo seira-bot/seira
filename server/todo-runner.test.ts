@@ -165,7 +165,7 @@ describe("picker", () => {
 describe("runtime: whom a person's todo may reach (security)", () => {
   const pat: TodoPerson = { key: "p_pat", viewer: { kind: "member", email: "pat@example.com" } };
 
-  function runtime(levels: Record<string, BotAccessLevel>) {
+  function runtime(levels: Record<string, BotAccessLevel>, more: { mayRun?: (todo: TodoRecord) => boolean; pickerMayRead?: (todo: TodoRecord) => boolean } = {}) {
     const dir = mkdtempSync(join(tmpdir(), "todo-runtime-"));
     dirs.push(dir);
     const opened: string[] = [];
@@ -181,6 +181,8 @@ describe("runtime: whom a person's todo may reach (security)", () => {
       openTask: (todo) => { opened.push(todo.id); return { threadId: `th-${todo.id}` }; },
       startTurn: async (botId, text) => { turns.push({ botId, text }); },
       admits: () => true, queue: () => {}, botReady: () => true, threadBusy: () => false, reachable: () => true, changed: () => {},
+      ...(more.mayRun ? { mayRun: more.mayRun } : {}),
+      ...(more.pickerMayRead ? { pickerMayRead: (_botId: string, _threadId: string | undefined, todo: TodoRecord) => more.pickerMayRead!(todo) } : {}),
     });
     // The store wakes the runner on a timer; let that pass finish before the folder goes.
     const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
@@ -207,6 +209,30 @@ describe("runtime: whom a person's todo may reach (security)", () => {
     await runner.tick();
     expect(opened).toEqual([]);
     expect(store.get(todo.id)).toMatchObject({ status: "needs-you", stuck: "unassigned" });
+    await settle();
+  });
+
+  it("does not start a todo whose own conversation would reach more people than the todo, and asks for a person", async () => {
+    const { host, runner, store, opened, settle } = runtime({ atlas: "chat", chief: "chat" }, { mayRun: (todo) => todo.title !== "From the room" });
+    const room = host.add([{ title: "From the room", botId: "atlas" }], person, { person: pat }).todos[0]!;
+    await expect(runner.startNow(room.id)).rejects.toMatchObject({ status: 403 });
+    await settle();
+    await runner.tick();
+    expect(opened).toEqual([]);
+    expect(store.get(room.id)).toMatchObject({ status: "needs-you", stuck: "unassigned" });
+    await settle();
+  });
+
+  it("keeps from the picker a todo its conversation may not read, and leaves it for a person", async () => {
+    const { host, runner, store, turns, settle } = runtime({ atlas: "chat", chief: "chat" }, { pickerMayRead: (todo) => todo.title !== "Private plan" });
+    const secret = host.add([{ title: "Private plan" }], person, { person: pat }).todos[0]!;
+    const shared = host.add([{ title: "Team plan" }], person, { person: pat }).todos[0]!;
+    await settle();
+    await runner.tick();
+    expect(turns.some((turn) => turn.text.includes("Private plan"))).toBe(false);
+    expect(turns.some((turn) => turn.text.includes("Team plan"))).toBe(true);
+    expect(store.get(secret.id)).toMatchObject({ status: "needs-you", stuck: "unassigned" });
+    expect(store.get(shared.id)!.status).toBe("open");
     await settle();
   });
 

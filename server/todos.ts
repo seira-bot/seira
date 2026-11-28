@@ -9,7 +9,8 @@ import type { Viewer } from "./bot-visibility.ts";
 export interface TodoPerson {
   /** The key its conversation opens as (a thread starter): it decides who reads the work and whether it is confined. */
   key?: string;
-  /** A person's own todo: who wrote it. Any bot that gets the todo must be one this person may chat with. */
+  /** The person it works for: who wrote it, or whose own conversation a bot made it in. Absent on a bot's todo from a
+   * conversation of no one person. Any bot that gets the todo must be one this person may chat with. */
   viewer?: Viewer;
 }
 
@@ -277,11 +278,14 @@ export function readyQueue(todos: readonly Todo[], botId: string, now: number): 
 export interface TodoViewer {
   bot(botId: string): boolean;
   thread(threadId: string): boolean;
+  /** Whether the person it works for lets this viewer see it (a person's own todo is theirs). Absent: yes. */
+  todo?(todoId: string): boolean;
 }
 
-/** A viewer sees a todo when they see its bot, if it has one, and the conversation it came from, if it has one. */
-export function todoVisible(todo: Pick<Todo, "botId" | "source">, viewer: TodoViewer): boolean {
-  return (!todo.botId || viewer.bot(todo.botId)) && (!todo.source || viewer.thread(todo.source.threadId));
+/** A viewer sees a todo when they see its bot, if it has one, the conversation it came from, if it has one, and the
+ * person it works for lets them. */
+export function todoVisible(todo: Pick<Todo, "id" | "botId" | "source">, viewer: TodoViewer): boolean {
+  return (!todo.botId || viewer.bot(todo.botId)) && (!todo.source || viewer.thread(todo.source.threadId)) && (!viewer.todo || viewer.todo(todo.id));
 }
 
 export function sameTitle(a: string, b: string): boolean {

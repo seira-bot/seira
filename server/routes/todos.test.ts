@@ -14,7 +14,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const BOTS: TodoBot[] = [{ id: "atlas", name: "Atlas" }, { id: "scout", name: "Scout" }];
 
-function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines; routineRefusal?: string; changeRefusal?: (todo: TodoRecord) => string | null } = {}) {
+function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level?: string; routine?: TodoRoutines; routineRefusal?: string; changeRefusal?: (todo: TodoRecord) => string | null; readable?: (todoId: string) => boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "todo-routes-"));
   dirs.push(dir);
   let n = 0;
@@ -33,6 +33,7 @@ function setup(options: { hiddenThreads?: string[]; hiddenBots?: string[]; level
     store, host, runner: { startNow: async (id) => { started.push(id); return store.get(id)!; }, wake: () => {} }, visibleFor: () => visible, personName: () => "Rama",
     todoPerson: () => ({ key: "p_rama", viewer: { kind: "member", email: "rama@example.com" } }),
     changeRefusal: (_auth, todo) => options.changeRefusal?.(todo) ?? null,
+    ...(options.readable ? { readable: (_auth: RequestAuth, todoId: string) => options.readable!(todoId) } : {}),
     routineRefusal: () => options.routineRefusal ?? null,
     withPerson: (auth, work) => { gated.push(auth.kind); return work(); },
   });
@@ -125,6 +126,20 @@ describe("todo routes", () => {
     expect(store.get("o")!.note).toBeUndefined();
     store.remove("o");
     expect((await call("POST", "/api/todos/o/restore")).status).toBe(403);
+    expect(store.get("o")).toBeUndefined();
+  });
+
+  it("hides a todo the person may not read, and treats it as gone for every change (security)", async () => {
+    const { call, store, started } = setup({ readable: (todoId) => todoId !== "o" });
+    store.insert({ id: "o", title: "Owner's", status: "queued", botId: "atlas", start: { kind: "free" }, rank: 1, madeBy: { kind: "person", name: "Owner" }, person: { key: "p_owner" }, attempts: 0, depth: 0, createdAt: 1, updatedAt: 1 });
+    await call("POST", "/api/todos", { todos: [{ title: "Mine", botId: "atlas" }] });
+    expect((await call("GET", "/api/todos")).body.todos.map((todo: { title: string }) => todo.title)).toEqual(["Mine"]);
+    for (const [method, path, body] of [["PATCH", "/api/todos/o", { note: "Read it" }], ["POST", "/api/todos/o/start", {}], ["DELETE", "/api/todos/o", {}]] as const) {
+      expect((await call(method, path, body)).status).toBe(404);
+    }
+    expect(started).toEqual([]);
+    store.remove("o");
+    expect((await call("POST", "/api/todos/o/restore")).status).toBe(404);
     expect(store.get("o")).toBeUndefined();
   });
 

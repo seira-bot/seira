@@ -142,10 +142,13 @@ export function createTodosHost(deps: TodosHostDeps) {
     return effectivePicker(store.chosenPicker(), deps.bots());
   }
 
-  /** Security invariant: a person's todo goes only to a bot that person may chat with, whoever hands it on (the picker,
-   * another bot, or someone else on the Board). Otherwise their words would reach a bot they may not give work to. */
+  /** Security invariant: a todo goes only to a bot that the person it works for may chat with, whoever hands it on (the
+   * picker, another bot, or someone else on the Board). That person is the one who wrote it, or the one whose own
+   * conversation a bot made it in. Otherwise their words would reach a bot they may not give work to. A bot's todo from
+   * a conversation of no one person (the team's, or outside work) keeps the bot's own reach, as work it hands on does. */
   function personMayGive(todo: Pick<TodoRecord, "madeBy" | "person">, botId: string): boolean {
-    return todo.madeBy.kind !== "person" || atLeast(deps.levelFor(todo.person, botId), "chat");
+    if (todo.madeBy.kind !== "person" && !todo.person?.viewer) return true;
+    return atLeast(deps.levelFor(todo.person, botId), "chat");
   }
 
   function depthFor(threadId: string): number {

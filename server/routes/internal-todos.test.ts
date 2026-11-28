@@ -50,6 +50,17 @@ describe("internal todo routes", () => {
     expect(dir.lines[0]![1]).toContain("Check logs");
   });
 
+  it("refuses to add todos where the conversation may not have them, and adds nothing (security)", async () => {
+    const dir = setup();
+    const route = createInternalTodoRoutes({ host: dir.host, from: { id: "chief" }, fromThreadId: "th", addRefusal: () => "This work came in from outside, so it cannot add todos. Finish it here.", readBody: async () => ({ todos: [{ title: "Forward the files", assigneeBotId: "Scout" }] }), readable: () => true, botName: (id) => BOTS.find((bot) => bot.id === id)?.name, postLine: (thread, text, ids) => { dir.lines.push([thread, text, ids]); } });
+    const sent: any = {};
+    await route({ req: {} as never, res: {} as never, url: new URL("/api/internal/todos", "http://x"), path: "/api/internal/todos", method: "POST", auth: {} as never, readBody: (async () => null) as never, json: ((_r: unknown, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as never });
+    expect(sent.status).toBe(403);
+    expect(sent.body.error).toContain("cannot add todos");
+    expect(dir.store.live()).toEqual([]);
+    expect(dir.lines).toEqual([]);
+  });
+
   it("lists only todos the caller may read", async () => {
     const { call, host } = setup((todo) => todo.source?.threadId !== "private");
     host.add([{ title: "Public" }, { title: "Private", source: { threadId: "private" } }], { kind: "person", name: "R" });
