@@ -43,7 +43,10 @@ function fixture(url: string, ai: boolean, bots: number): unknown {
     ], groups: [], sections: [] };
   }
   if (path === "/api/instances") {
-    return { instances: [{
+    return { instances: [...(ai ? [] : [{
+      instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", install: { docsUrl: "https://opencode.ai" },
+      snapshot: { state: "available", authenticated: true, freeFallback: true }, models: { default: "opencode/big-pickle", options: [] },
+    }]), {
       instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", install: { docsUrl: "https://docs.anthropic.com" },
       authentication: { method: "paste-code" }, capabilities: { agentsMcp: true },
       snapshot: { state: "available", authenticated: ai }, models: { default: "sonnet", options: [] },

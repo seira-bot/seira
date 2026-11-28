@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, Copy, LoaderCircle } from "lucide-react";
 import { claudeSignInLink } from "@/components/ClaudeSignIn";
 import { chatgptPlanLink, deviceSignInProvider, type DeviceSignInStatus } from "@/components/DeviceSignIn";
+import { engineReady } from "@/components/EngineLibrary";
 import { needsSignIn } from "@/components/EngineSetup";
 import { openExternalLink } from "@/lib/app-links";
 import { useCopyFeedback } from "@/lib/copy-text";
@@ -27,6 +28,7 @@ type Slot =
 /** How the first screen's pill connects `instance`: in place for a website sign-in or an install the app does itself,
  * else through the Connect an AI dialog. */
 export function pillWay(instance: InstanceInfo | undefined): "install" | "sign-in" | "dialog" {
+  if (instance && engineReady(instance)) return instance.authentication && instance.authentication.method !== "callback-url" ? "sign-in" : "dialog";
   if (!instance || !plainSignIn(instance)) return "dialog";
   if (!needsSignIn(instance)) return "install";
   // A sign-in that may need its redirect pasted back has no room in the pill.
@@ -46,6 +48,10 @@ export function useSignInPill(instance: InstanceInfo | undefined) {
   const base = `/api/instances/${encodeURIComponent(id)}`;
   const live = useRef(true);
   useEffect(() => () => { live.current = false; }, []);
+  useEffect(() => {
+    setSlot({ kind: "start" });
+    setError(null);
+  }, [id]);
 
   const done = useCallback(async () => {
     engineSignedIn(method === "paste-code" ? "claude" : provider,

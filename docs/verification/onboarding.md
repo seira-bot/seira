@@ -1,8 +1,9 @@
 # Welcome flow and guided tour
 
 The first run is two screens, then the chat (Oct 27 2026): "Meet Seira"
-(a composer typing one sentence and Next; with no AI working, the same pill
-signs one in, with "Other ways to connect · Set up later" under it), then
+(a composer typing one sentence and Next; with no AI working, it offers
+OpenCode (free, selected), Claude and Codex, the pill acts on the selected one,
+and "Other ways to connect · Set up later" sits under it), then
 "Introducing your Chief of Staff" over an empty app (Create Chief of Staff, and
 Choose an existing bot where the person has bots). The Chief step shows only
 for a Seira not yet introduced where no other bot is the Chief. It lands in
@@ -173,7 +174,8 @@ pnpm exec vitest run src/lib/onboarding.test.ts src/lib/welcome-draft.test.ts sr
 - `src/components/onboarding/WelcomeFlow.test.ts` renders the flow in
   happy-dom: two screens with an AI working (Next, then Create, landing in the
   Chief's chat with its first messages staged); with none, the first screen
-  holding Connect an AI, Next held until one connects and Later moving on;
+  offering OpenCode (free, selected), Claude and Codex, the pill acting on the
+  selected one, Next held until one connects and Later moving on;
   Escape and Enter; a reload on the second screen; a hosted admin's one screen;
   a replay saving nothing about a first chat.
 - `src/components/onboarding/ChiefIntro.test.ts` covers Create (Seira made the

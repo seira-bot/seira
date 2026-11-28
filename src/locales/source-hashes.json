@@ -4050,7 +4050,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "es": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -10501,7 +10508,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "fr": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -14342,7 +14356,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "hi": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -18063,7 +18084,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "ja": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -25968,7 +25996,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -38468,7 +38503,14 @@
       "automations.cal.new.daily": "67a03c1ea9dca4bdfee5566bcd02db67a819348254aeaccd80bf90c8856320a0",
       "automations.cal.new.append": "1dd174412827dc9a789670d77349c4579963608af6318ed4cf3de03e2df040ea",
       "automations.cal.panel.when": "1a88956dc3c694e80d047085c5547c660cac1c15baa77781203dbdee4e5c98c3",
-      "automations.cal.toggleFailed": "2a855bcb4a225e56752ad429c652a5922197a3b7193819cc2e49cdba35165f99"
+      "automations.cal.toggleFailed": "2a855bcb4a225e56752ad429c652a5922197a3b7193819cc2e49cdba35165f99",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "zh": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -48499,7 +48541,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "zh-tw": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -58620,7 +58669,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "uk": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -62760,7 +62816,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "vi": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -68713,7 +68776,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "tr": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -74666,7 +74736,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "pl": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -81755,7 +81832,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "ru": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -88893,7 +88977,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "it": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -95849,7 +95940,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     },
     "ko": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",
@@ -103450,7 +103548,14 @@
       "server.appSettings.confirm.chosenIn": "18a3de9827133154c9e337519ed284c399b4a220282636b042cf1f2a5b4f3263",
       "server.appSettings.confirm.adminIn": "ab35527c05c89d7f97c6be7794a3b84308feff1d60d6c16cb8ec92d9b4010803",
       "server.appSettings.confirm.personOut": "3a86e65cfc5cdad5e97cfb608567da9f4144788d468f2690df96b5d72a279cf7",
-      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba"
+      "server.appSettings.confirm.domainIn": "12d91c1b9aaa12954c7feb59d50e33019e0dfe61bc75c1df9f6951a05f36feba",
+      "onboarding.meet.choices": "05c0bb815c307606749fb1878c1365434a6f2265d728206acd7ebbea31aff01f",
+      "onboarding.meet.choice.free": "ce8102481762286a5b27c5eac19f86adb8aa41ab95dbaf082031066620475290",
+      "onboarding.meet.choice.claude": "5061a643d80326c66755a733b26b8e63e986e295f4925c8d7e0c7afab8452384",
+      "onboarding.meet.choice.chatgpt": "b0361b1344118bb39f4784e58b7a81de1b954b16bfaf3631086e074b6bbbba72",
+      "onboarding.meet.choice.silent": "9a3590896653554615c2e90f12250367d385175bf128894fc1d4c5c682969dc3",
+      "onboarding.meet.startFree": "f6a219fe1f9f081f682d2108bb6ca10fbacd9746897ca86bd5fbf69733dc3c8d",
+      "onboarding.meet.preparing": "51313fa261a1bad5b7b7077deb25a634c1fece0d15dbf1eeae986cd6179179bd"
     }
   }
 }
