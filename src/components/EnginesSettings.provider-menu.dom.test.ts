@@ -52,6 +52,7 @@ vi.mock("@/state/store", async (original) => {
 });
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 const { EnginesSettings } = await import("./EnginesSettings");
+const { ProviderMenu } = await import("./ProviderMenu");
 
 const ready = (instanceId: string, displayName: string, extra: Partial<InstanceInfo> = {}): InstanceInfo => ({
   instanceId, driverKind: "kimiAgent", displayName, cliDefault: instanceId, access: "subscription",
@@ -266,5 +267,54 @@ describe("a refused Hide", () => {
     const button = document.body.querySelector<HTMLButtonElement>("[data-provider-hide-anyway]");
     expect(button?.disabled).toBe(true);
     expect(document.body.querySelector("[data-provider-hide-anyway-reason]")?.textContent).toBe(t("provider.hideAnywayWait", { bots: "Pen", name: "Kimi" }));
+  });
+});
+
+describe("Move and hide picker", () => {
+  const claude = (instanceId: string, displayName: string, extra: Partial<InstanceInfo> = {}) => ready(instanceId, displayName, { driverKind: "claudeAgent", ...extra });
+  const codex = ready("codex", "Codex", { driverKind: "codex" });
+  const setup = async (accounts: InstanceInfo[]) => {
+    server.all = [claude("claude-1", "Claude 1"), ...accounts, codex];
+    fixture.state = { instances: [...server.all], bots: [bot("a", "claude-1")], config: {} };
+    await act(async () => { root.render(createElement(ProviderMenu, { instance: server.all[0]! })); });
+    await click(container.querySelector('button[aria-haspopup="menu"]'));
+  };
+  const click = async (target: Element | null | undefined) => {
+    expect(target).toBeTruthy();
+    await act(async () => { (target as HTMLElement).click(); });
+    await act(async () => { await new Promise((done) => setTimeout(done, 0)); });
+  };
+  const picker = () => item("[data-provider-move-picker]");
+
+  it("offers a picker with the other account of the same provider first, then the other AI", async () => {
+    await setup([claude("claude-2", "Claude 2", { snapshot: { state: "available", authenticated: true, account: { email: "work@example.com" } } as InstanceInfo["snapshot"] })]);
+    expect(item("[data-provider-move]")).toBeNull();
+    await click(item("[data-provider-move-choose]"));
+    expect(picker()).toBeTruthy();
+    const targets = [...picker()!.querySelectorAll("[data-provider-move-to]")].map((row) => row.getAttribute("data-provider-move-to"));
+    expect(targets).toEqual(["claude-2", "codex"]);
+    expect(picker()!.textContent).toContain(t("provider.moveOtherAi"));
+    expect(picker()!.textContent).toContain("work@example.com");
+    await click(picker()!.querySelector('[data-provider-move-to="codex"]'));
+    expect(server.persisted.map((entry) => entry.patch.modelSelection)).toEqual([{ instanceId: "codex", model: "codex-model" }]);
+    expect(patches()).toContainEqual({ method: "PATCH", path: "/api/instances/claude-1", body: { hidden: true } });
+  });
+
+  it("shows an account that cannot run a task as a disabled row with its reason", async () => {
+    await setup([claude("claude-2", "Claude 2"), claude("claude-3", "Claude 3", { snapshot: { state: "available", authenticated: false, version: "1" } })]);
+    await click(item("[data-provider-move-choose]"));
+    const row = picker()!.querySelector('[data-provider-move-to="claude-3"]') as HTMLButtonElement;
+    expect(row.disabled).toBe(true);
+    expect(row.textContent).toContain(t("model.signInRequired"));
+    await click(row);
+    expect(server.persisted).toEqual([]);
+  });
+
+  it("goes back to the menu with Back", async () => {
+    await setup([claude("claude-2", "Claude 2")]);
+    await click(item("[data-provider-move-choose]"));
+    await click(picker()!.querySelector("[data-provider-move-back]"));
+    expect(picker()).toBeNull();
+    expect(item("[data-provider-move-choose]")).toBeTruthy();
   });
 });

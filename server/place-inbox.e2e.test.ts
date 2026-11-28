@@ -4,12 +4,13 @@
 // reply reaches the bot. A guest's conversation left on a shared Cloud reaches the owner labelled, not as their own. It
 // proves where things land, not a model's judgement.
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { markLeftBehind } from "./testing/cloud-left-behind.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ENGINE = `const dir = process.env.FAKE_CLAUDE_FIXTURE_DIR;
 process.env.FAKE_CLAUDE_ROOM_PLAN = dir + "/room-plan.json";`;
@@ -41,7 +42,7 @@ function place(call: Call, home: () => string) {
   };
   const turns = (botId: string): Array<{ planKey?: string; threadId?: string; prompt: unknown }> => {
     const path = `${file()}.evidence.jsonl`;
-    return existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((turn) => turn.botId === botId) : [];
+    return readJsonLines(path).filter((turn) => turn.botId === botId);
   };
   const inbox = async () => (await call("GET", "/api/inbox")).body as { rows: Row[]; threadId: string | null };
   const count = async () => (await call("GET", "/api/inbox/count")).body.count as number;

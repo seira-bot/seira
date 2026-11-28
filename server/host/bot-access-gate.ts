@@ -13,6 +13,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { Store } from "../store.ts";
 import { userError, userErrorFields, type UserError } from "../user-errors.ts";
+import { PublicError } from "../public-error.ts";
 
 type Target = { botId?: unknown; groupId?: unknown };
 
@@ -35,7 +36,7 @@ export function levelNeeded(method: string, path: string): Exclude<BotAccessLeve
   if (verb === "GET" || verb === "HEAD") return "view";
   if (/^\/api\/bots\/[\w-]+$/.test(path)) return null;
   if (/^\/api\/bots\/[\w-]+\/(?:access|bot-api(?:\/new-key)?)$/.test(path)) return "edit";
-  if (/^\/api\/routines\/[\w-]+$/.test(path)) return null;
+  if (/^\/api\/routines\/[\w-]+(?:\/skip)?$/.test(path)) return null;
   if (/^\/api\/(?:bots|groups)\/[\w-]+\/read$/.test(path) || /^\/api\/bots\/[\w-]+\/(?:access-request|data\/page)$/.test(path)) return "view";
   if (verb === "POST" && OPEN_CONVERSATION.test(path)) return "view";
   if (/^\/api\/routine-runs\/[\w-]+\/seen$/.test(path)) return "view";
@@ -85,7 +86,7 @@ export function createBotAccessGate(deps: BotAccessGateDeps) {
       const targeted = path === "/api/routines" || routine !== null ? targetBots(record) : [];
       const threads = bodyThreadIds(body).flatMap((threadId) => ownerBots(deps.threadOwner(threadId)));
       const error = short(visible, [...added, ...targeted, ...threads], bodyNeeds);
-      if (error) throw Object.assign(new Error(error.error), { status: 403 }, userErrorFields(error));
+      if (error) throw Object.assign(new PublicError(error.error, 403), userErrorFields(error));
       return null;
     });
     return null;

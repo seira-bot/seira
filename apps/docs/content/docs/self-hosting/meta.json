@@ -6,6 +6,7 @@
     "deploy-vps",
     "networking",
     "data-and-backups",
-    "connected-servers"
+    "connected-servers",
+    "benchmarks"
   ]
 }

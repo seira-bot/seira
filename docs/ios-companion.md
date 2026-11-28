@@ -445,6 +445,54 @@ in a sentence is not caught, and it knows only the listed domains. The boundary 
 text in the composer and nothing else. It never sends on receipt or on render, and it never reaches a command, a tool, a
 link or an approval handler: the person reads the text and sends it through the normal message path.
 
+## Tasks I could help with
+
+A bot line can carry a card of tasks that the bot offers to do. The card has two fields.
+
+- `taskSuggestions` is on the bot line. It holds an optional `intro` (at most 200 characters) and `suggestions`: at most 5
+  entries. Each entry has an `id` (`s1` to `s5`, stable inside the card), a `title` (at most 80 characters), an optional
+  `description` (at most 240 characters), an `icon` and a `state`. A changed entry also carries `changedAt` (an ISO time),
+  and a started entry can carry `startedMessageId`. The `text` of the line lists the same tasks, for a client that does not
+  draw the card.
+- `fromTaskSuggestion` is on the person's line that Start sent. It holds `{ messageId, suggestionId }`: the card line and
+  the entry it came from.
+
+The `state` of an entry is `open`, `hidden` or `started`. A `started` entry is final. A client draws the icon `idea` for
+an icon name that it does not know. A client does not draw a `hidden` entry.
+
+The bot fills the card with the `suggest_tasks` tool. The server accepts one card for each turn, and only for a turn that a
+person started in a direct chat with a bot. It does not accept a card in a room.
+
+A client answers with `POST /api/bots/:botId/task-suggestions` and this body:
+
+```json
+{ "threadId": "…", "messageId": "…", "suggestionId": "s1", "action": "start" }
+```
+
+`action` is `start`, `hide` or `show`. `show` is Undo after `hide`.
+
+| Status | Body | Meaning |
+|--------|------|---------|
+| 200 | `{ ok, message }` | The action applied. `message` is the new card line. Start adds `sent`, the person's line, when the server stored it at once. |
+| 400 | `{ error }` | A field is missing or `action` is not known. |
+| 403 | `{ error }` | The caller may not write in this chat. |
+| 404 | `{ error }` | The bot, the chat, the message or the suggestion is unknown. |
+| 409 | `{ error, message }` | The action does not apply, for example Start on a started entry. `message` is the current card line. While a Start on the same card is on its way, the body is `{ error }` only. |
+
+The state lives on the card line. Every client gets a change as a `message.patch` frame for the card line, so a second
+phone and the desktop show the same card. Start also sends the person's line as a normal `message` frame. If the bot is
+busy, the person's line waits in the queue, and the entry has no `startedMessageId`.
+
+The fixture `server/testing/fixtures/task-suggestions.json` holds one capture of the card, each answer and the frames.
+`server/testing/fixtures/task-suggestions.test.ts` checks its shape, so a new suggestion field is a deliberate change.
+Capture the fixtures for the phone apps with:
+
+```bash
+node scripts/capture-companion-fixtures.mjs --out <seira-mobile>/ios/Tests/CompanionCoreTests/Fixtures
+```
+
+The command now also writes `task-suggestions.json`.
+
 ## Phone apps as bot tools
 
 The phone registers the apps it allows with `PUT /api/phones/self`. Behind the sidecar it is identified by the companion header; on a Cloud home it uses its own session. It long-polls `GET /api/phones/self/jobs` (20 s), leases a job with `POST /api/phones/self/jobs/:id/lease`, and answers with `POST /api/phones/self/jobs/:id/result`, sending `{ ok: true, result }` or `{ ok: false, error, code }`. Results over 256 KB are refused as `too_large`. The SSE frame `{ kind: "device.job", phone, id }` tells an open app to poll now.

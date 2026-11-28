@@ -1,7 +1,7 @@
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Stats } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
-import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 
 export const REQUIRED_LINUX_TOOLS = ["click", "get_window_state", "list_apps", "type_text"];
 // Keep in sync with DRIVER_FILE_IDENTITY_KEYS in electron/cua-linux.cjs: Electron publishes it, the server revalidates it.
@@ -33,7 +33,7 @@ export function gatedLocalComputer(
 ): LocalComputerConnection {
   return {
     ...connection,
-    command: process.execPath,
+    command: ownNode(),
     args: ["--experimental-strip-types", SPAWNED_PROXIES.localComputer],
     env: {
       ...connection.env,

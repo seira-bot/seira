@@ -38,6 +38,7 @@ import type {
   RoutineRequestSnapshot,
   RoutineRequestUndo,
 } from "../shared/routine-request.ts";
+import { PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
 
 const WEEKDAY_NUMBER = {
   sunday: 0,
@@ -176,6 +177,7 @@ export type UndoRoutineRequestResult =
     };
 
 export class RoutineRequestError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly terminal: boolean;
 
@@ -1188,7 +1190,7 @@ export class RoutineRequestService {
       readiness = await this.cloudReady(targetBotId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new RoutineRequestError(`Could not verify cloud readiness: ${detail}`, 503);
+      throw withheld(new RoutineRequestError(`Could not verify cloud readiness: ${detail}`, 503));
     }
     if (readiness.ready) return;
     throw new RoutineRequestError(

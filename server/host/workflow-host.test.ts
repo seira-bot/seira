@@ -38,6 +38,7 @@ function rig(over: Partial<WorkflowHostDeps> = {}) {
   const posts: Array<{ stepId: string; text: string }> = [];
   const cancelled: string[] = [];
   const states: Array<[string, string, string | undefined]> = [];
+  const enqueued: unknown[] = [];
   const routineRows: Routine[] = [];
   const runRows: RoutineRun[] = [];
   const state = { startTurn: undefined as undefined | ((botId: string) => Promise<unknown>), failUpdate: false };
@@ -48,6 +49,7 @@ function rig(over: Partial<WorkflowHostDeps> = {}) {
       listRoutines: () => routineRows,
       listRuns: () => runRows,
       runNow: () => runRows[0] ?? null,
+      enqueueWebhook: ((input: unknown) => { enqueued.push(input); return { id: "run-2" }; }) as never,
       cancelRun: async (id: string) => { cancelled.push(id); return null; },
       update: ((id: string, patch: unknown) => { if (state.failUpdate) throw new Error("nope"); updates.push([id, patch]); return null; }) as never,
       workflowRunState: ((runId: string, s: string, detail?: string) => { states.push([runId, s, detail]); return runRows.find((row) => row.id === runId) ?? null; }) as never,
@@ -68,7 +70,7 @@ function rig(over: Partial<WorkflowHostDeps> = {}) {
     runRows.splice(0, runRows.length, row);
     return row;
   };
-  return { host, frames, turns, patched, created, updates, logs, posts, cancelled, states, routineRows, runRows, run, state, tick: (ms: number) => { now += ms; } };
+  return { host, enqueued, frames, turns, patched, created, updates, logs, posts, cancelled, states, routineRows, runRows, run, state, tick: (ms: number) => { now += ms; } };
 }
 
 describe("the workflow host's workflows", () => {
@@ -326,6 +328,20 @@ describe("running again from a step", () => {
     const second = r.run({ id: "run-2", workflowId: made.id, threadId: "t-ana" });
     r.runRows.push(row);
     expect(r.host.runAgain("run-1", "b", { id: "r-1" } as Routine, made)).toBe(second);
+    expect(r.host.run("run-2")).toMatchObject({ startStepId: "b", fromRunId: "run-1" });
+  });
+
+  it("queues a webhook run again with the stored event and prepares it at the step", async () => {
+    const r = rig();
+    const made = r.host.create(input());
+    const row = r.run({ workflowId: made.id, routineId: "hook-1", webhookId: "hook-1", triggerSource: "webhook", prompt: "EVENT order 42", routineName: "Orders" });
+    await r.host.start(row, "t-ana", () => {});
+    r.turns[0]!.opts.onSettled({ ok: true, text: "news" });
+    r.turns[1]!.opts.onSettled({ ok: false, text: "boom" });
+    const second = r.run({ id: "run-2", workflowId: made.id, routineId: "hook-1", webhookId: "hook-1", triggerSource: "webhook", prompt: "EVENT order 42", threadId: "t-ana" });
+    r.runRows.push(row);
+    expect(r.host.runAgainFromEvent("run-1", "b", "hook-1", made, "ben")).toBe(second);
+    expect(r.enqueued[0]).toMatchObject({ botId: "ben", webhookId: "hook-1", prompt: "EVENT order 42", workflowId: made.id });
     expect(r.host.run("run-2")).toMatchObject({ startStepId: "b", fromRunId: "run-1" });
   });
 

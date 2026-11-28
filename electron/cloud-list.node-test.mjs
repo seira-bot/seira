@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cloudMachine, cloudSetupProgress, cloudState, homeLook, listedColors, MAX_CLOUDS, olderRelease, otherOwnClouds, ownCloudPlaces, parseCloudList, parseCloudRenewal, parseOrganizations, releaseVersion, withoutOldCloudHome, signedInServers, swatchColor } from "./cloud-list.mjs";
+import { cloudMachine, cloudSetupProgress, cloudState, homeLook, listedColors, MAX_CLOUDS, olderRelease, otherOwnClouds, ownCloudPlaces, parseCloudList, parseCloudRenewal, parseOrganizations, releaseVersion, withoutOldCloudHome, signedInServers, swatchColor, teamCloud } from "./cloud-list.mjs";
 import environments from "./environments.cjs";
 import { createHomePlaces } from "./home-places.mjs";
 
@@ -83,6 +83,14 @@ test("the Admin's colour for My Cloud and each team's Cloud, once one was chosen
     cloud({ id: "c-t2", name: "Beta", teamId: "team-beta", role: "admin", origin: "https://seira-t-beta.fly.dev", color: null })]);
   assert.deepEqual(listedColors(list), [{ home: true, color: "red" }, { teamId: "team-acme", color: null }], "slate is none; a team's Cloud with no colour chosen is not listed");
   assert.deepEqual(listedColors(null), []);
+});
+
+test("a team's Cloud on the session's list, by its address; never the person's own Cloud, a server, or an address the list lacks", () => {
+  const team = cloud({ id: "c-t", name: "Acme", origin: TEAM, teamId: "t-acme", role: "member" });
+  const clouds = [primary, cloud(), team, cloud({ id: "c-s", origin: "https://box.example.test", managed: false, teamId: "t-acme" })];
+  assert.equal(teamCloud(clouds, TEAM), true);
+  for (const origin of [HOME, CLIENT_A, "https://box.example.test", CLIENT_B, "", null]) assert.equal(teamCloud(clouds, origin), false, String(origin));
+  assert.equal(teamCloud(null, TEAM), false);
 });
 
 test("at most twenty Clouds, each once, and one primary only, of the person's own", () => {

@@ -82,7 +82,39 @@ const staleRoutineCard = (card: OptionCardData) => Boolean(card.routineRequest &
 
 /** Cards whose server-written title and first option say what approving does. */
 export const titledCard = (card: OptionCardData | undefined) =>
-  Boolean(card?.teamSetupRequest || card?.mcpRequest || card?.lendingLift || isSkillSwitchAction(card?.skillRequest?.action));
+  Boolean(card?.teamSetupRequest || card?.mcpRequest || card?.lendingLift || waitingSetting(card) || isSkillSwitchAction(card?.skillRequest?.action));
+
+/** A bot's settings change that applies only once the owner taps the card's first option. */
+export const waitingSetting = (card: OptionCardData | undefined) => Boolean(card?.appSettingRequest && !card.autoApplied);
+export const privateReviewCard = (card: OptionCardData | undefined) => waitingSetting(card) && card?.appSettingRequest?.privateReview === true && !card.answered && !card.dismissed && !card.expired;
+
+/** Shows the owner the current and the new value of a card whose text leaves the current value out. */
+export function SettingReview({ threadId, requestId }: { threadId?: string; requestId?: string }) {
+  const [state, setState] = useState<{ before: string; after: string } | { error: string } | "loading">();
+  if (!threadId || !requestId) return null;
+  const open = () => {
+    setState("loading");
+    api<{ before: string; after: string }>(`/api/threads/${threadId}/app-settings/${requestId}/review`, { method: "POST" })
+      .then((values) => setState({ before: values.before, after: values.after }))
+      .catch((failure: unknown) => setState({ error: failure instanceof Error && failure.message ? failure.message : t("approval.review.failed") }));
+  };
+  const notSet = (value: string) => value || t("server.appSettings.notSet");
+  return (
+    <div className="mt-2" data-setting-review>
+      {state === undefined || state === "loading" || "error" in state ? (
+        <button type="button" onClick={open} disabled={state === "loading"} className={cn(TEXT_ACTION, "text-accent disabled:opacity-60")}>
+          {t("approval.review.show")}
+        </button>
+      ) : (
+        <pre tabIndex={0} aria-label={t("approval.review.show")}
+          className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-inset px-3 py-2 font-mono text-[12px] leading-[18px] text-ink">
+          {`${notSet(state.before)}\n→\n${notSet(state.after)}`}
+        </pre>
+      )}
+      {state !== undefined && state !== "loading" && "error" in state && <div role="alert" className="mt-1 text-[13px] text-warning">{state.error}</div>}
+    </div>
+  );
+}
 
 export function titledCardAction(card: OptionCardData): string {
   if (card.mcpRequest) return mcpRequestActionLabel(card.mcpRequest.action);
@@ -568,6 +600,7 @@ export function ApprovalCard({
       >
         {approvalDetailText(card)}
       </pre>
+      {privateReviewCard(card) && <SettingReview threadId={threadId} requestId={card.requestId} />}
 
       {card.skillRequest && <SkillRequestPreview request={card.skillRequest} />}
 

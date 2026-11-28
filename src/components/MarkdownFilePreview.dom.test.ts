@@ -57,6 +57,18 @@ describe("Markdown file preview errors and encodings", () => {
     expect(alertText()).not.toContain("Check your connection");
   });
 
+  it("explains a link outside the workspace and offers no Save or Retry", async () => {
+    await open(async () => new Response(JSON.stringify({ error: "the linked file is outside this conversation's workspace", code: "outside_workspace" }), { status: 403, headers: { "content-type": "application/json" } }));
+    expect(alertText()).toContain("outside this chat's working folder");
+    expect(alertText()).toContain("share the file as an attachment");
+    expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("keeps Save and Retry for other refusals", async () => {
+    await open(async () => new Response(JSON.stringify({ error: "gone", code: "not_found" }), { status: 404, headers: { "content-type": "application/json" } }));
+    expect(host.querySelectorAll("button")).toHaveLength(2);
+  });
+
   it("keeps the connection hint when the request itself fails", async () => {
     await open(async () => { throw new TypeError("Failed to fetch"); });
     expect(alertText()).toContain("Check your connection");

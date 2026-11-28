@@ -16,6 +16,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
 import { withAnswer } from "./testing/your-computer.ts";
 import { isTitleCall } from "./testing/title-call.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const RERUN_NOTE = "Seira restarted while your previous turn here was running";
@@ -29,8 +30,7 @@ const INTERRUPTED_OUTWARD = "Interrupted by a Seira restart after it already";
 const SETTLED = "Your downstream room requests have settled.";
 const REPORT_FROM_MIRA = "[From @Mira (bot) · report on assignment";
 
-const jsonl = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string): any[] => readJsonLines(path);
 
 type Row = Record<string, any>;
 interface RuntimeDb {

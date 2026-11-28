@@ -1233,7 +1233,7 @@ describe("OpenCode access to folders Seira owns", () => {
     });
     const recorder = recordEvents(instance.adapter);
     const cwd = join(scratch, "work");
-    const readOnly = join(scratch, "ro"), canChange = join(scratch, "rw");
+    const readOnly = join(scratch, "grant-read-only"), canChange = join(scratch, "grant-can-change");
     mkdirSync(cwd, { recursive: true });
     try {
       await instance.adapter.sendTurn({ threadId: "t-folders", botId: "bot-7", text: "hi", model: "opencode/big-pickle", approvalMode, cwd,
@@ -1250,7 +1250,7 @@ describe("OpenCode access to folders Seira owns", () => {
       expect(policy.edit[join(readOnly, "**")]).toBe("deny");
       expect(policy.edit[readOnly]).toBe("deny");
       expect(policy.edit[join(relative(cwd, readOnly), "**")]).toBe("deny");
-      expect(Object.keys(policy.edit).some((pattern) => pattern.includes("rw"))).toBe(false);
+      expect(Object.keys(policy.edit).some((pattern) => pattern.includes("grant-can-change"))).toBe(false);
       if (approvalMode === "full") expect(policy.edit["*"]).toBe("allow");
     } finally {
       recorder.stop();

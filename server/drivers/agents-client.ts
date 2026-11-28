@@ -29,7 +29,8 @@ function send(url: URL, init: HarnessRequest): Promise<{ status: number; text: s
   });
 }
 
-export function createHarnessClient(baseUrl: string, token: string): HarnessClient {
+/** `stop` ends every request of this client, as the end of a spawned server's process does. */
+export function createHarnessClient(baseUrl: string, token: string, stop?: AbortSignal): HarnessClient {
   async function api(path: string, init?: HarnessRequest): Promise<Json> {
     const { ok, status, body } = await apiResponse(path, init);
     if (!ok) throw new Error(String(body.error ?? `HTTP ${status}`));
@@ -37,8 +38,10 @@ export function createHarnessClient(baseUrl: string, token: string): HarnessClie
   }
 
   async function apiResponse(path: string, init: HarnessRequest = {}): Promise<{ ok: boolean; status: number; body: Json }> {
+    const signal = stop && init.signal ? AbortSignal.any([stop, init.signal]) : (stop ?? init.signal);
     const { status, text } = await send(new URL(baseUrl + path), {
       ...init,
+      signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...init.headers },
     });
     let body: Json = {};
@@ -52,6 +55,6 @@ export function createHarnessClient(baseUrl: string, token: string): HarnessClie
 /** The client a spawned proxy was given:
  *   SEIRA_HARNESS_URL  base URL of the harness (http://127.0.0.1:8799)
  *   SEIRA_COMMS_TOKEN  the capability token for the internal endpoints */
-export function harnessClientFromEnv(env: NodeJS.ProcessEnv): HarnessClient {
-  return createHarnessClient(env.SEIRA_HARNESS_URL ?? "http://127.0.0.1:8799", env.SEIRA_COMMS_TOKEN ?? "");
+export function harnessClientFromEnv(env: NodeJS.ProcessEnv, stop?: AbortSignal): HarnessClient {
+  return createHarnessClient(env.SEIRA_HARNESS_URL ?? "http://127.0.0.1:8799", env.SEIRA_COMMS_TOKEN ?? "", stop);
 }

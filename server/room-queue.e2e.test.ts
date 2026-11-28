@@ -3,13 +3,14 @@
 // run one at a time and where each one stands, and the room itself shows who
 // waits on whom ("Queued · waiting for X (2 of 3)"), on an isolated fixture
 // with the real coordination proxy.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("with parallel room jobs off, tells the requester and the room that three same-room jobs run in turn", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -38,7 +39,7 @@ it("with parallel room jobs off, tells the requester and the room that three sam
 
     // The requester's receipts: each job's place in the room's line, and a
     // message that says they run in turn, not in parallel.
-    const turns = () => readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const turns = () => readJsonLines(`${planPath}.evidence.jsonl`);
     await expect.poll(() => existsSync(`${planPath}.evidence.jsonl`) && turns().some((t: any) => t.botId === lead.id), { timeout: 15_000 }).toBe(true);
     const step = turns().find((t: any) => t.botId === lead.id).evidence.find((e: any) => e.step);
     const answer = JSON.parse(step.response.result.content[0].text);
@@ -137,7 +138,7 @@ it("by default, runs each member's job in its own thread at once and posts the r
     const firstJob: any = jobs().find((n: any) => n.botId === first.id && n.text === "Each of you, cut one part");
     expect(trailer).toMatchObject({ status: "queued", threadId: firstJob.threadId });
 
-    const lines = () => readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const lines = () => readJsonLines(`${planPath}.evidence.jsonl`);
     const leadTurn = lines().find((t: any) => t.botId === lead.id && !t.resumed);
     const answer = JSON.parse(leadTurn.evidence.find((e: any) => e.step).response.result.content[0].text);
     expect(answer.message).toContain("These run in parallel, each in a thread of its own beside this room");

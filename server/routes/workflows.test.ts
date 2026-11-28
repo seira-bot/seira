@@ -61,7 +61,7 @@ function fixture(over: { workflows?: Workflow[]; runs?: WorkflowRun[]; routines?
     runAgain: over.again ?? ((runId: string, stepId: string) => { calls.push(`again ${runId} ${stepId}`); return { id: "run-new" } as RoutineRun; }),
   } as unknown as WorkflowHost;
   const visible = new VisibleSet(bots, [], over.viewer ?? BOB);
-  const routes = createWorkflowRoutes({ visible: () => visible, botName: (id) => names[id], workflows: () => host, routines: () => ({ listRoutines: () => routines }),
+  const routes = createWorkflowRoutes({ visible: () => visible, botName: (id) => names[id], workflows: () => host, routines: () => ({ listRoutines: () => routines, update: () => null }), starts: () => null,
     routineEdits: over.edits ?? { writer: () => "me", refusal: () => null, edit: (_auth, _routines, change) => change() },
     botsRefusal: (_auth, ids, needed) => (ids.some((id) => !atLeast(over.levels?.[id] ?? "edit", needed)) ? "You can't change this bot." : null),
     routineNeeds: (_auth, id) => (id === undefined || over.own?.includes(id) ? "chat" : "edit") });
@@ -314,7 +314,7 @@ describe("workflow routes", () => {
     const { host, visible } = fixture();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ workflowId: "open" }, visible, host)).toBeNull();
-    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBeNull();
+    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ name: "plain" }, visible, host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, new VisibleSet(bots, [], { kind: "all" }), host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, null)).toBeNull();

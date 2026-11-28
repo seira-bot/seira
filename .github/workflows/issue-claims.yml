@@ -1,0 +1,49 @@
+name: Issue claims
+
+# Lets people claim an open issue with a /take comment (CONTRIBUTING.md).
+# - A P2 or P3 issue stays open to people for 24 hours. A claim holds for 72 hours without a draft pull request.
+# - The job runs scripts/issue-claims.mjs from main only. It installs no dependency and reads no secret.
+# - The job condition drops comments on pull requests, comments from bots and other labels before a runner starts.
+# - One run per issue, and one for the hourly sweep. A newer event can replace a waiting run. The sweep repairs the labels.
+# scripts/ci-workflow.test.ts holds these rules.
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue-claims-${{ github.event.issue.number || 'sweep' }}
+  cancel-in-progress: false
+
+jobs:
+  claims:
+    name: handle issue claims
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && contains(fromJSON('["P0","P1","P2","P3"]'), github.event.label.name)) ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && github.event.comment.user.type != 'Bot' &&
+       (startsWith(github.event.comment.body, '/take') || startsWith(github.event.comment.body, '/untake')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: scripts/issue-claims.mjs
+          sparse-checkout-cone-mode: false
+      - name: Handle issue claims
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/issue-claims.mjs

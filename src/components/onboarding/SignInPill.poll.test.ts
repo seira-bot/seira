@@ -1,17 +1,19 @@
 // @vitest-environment happy-dom
 // The pill's status poll: a dead server or network slows the poll and then says so, instead of spinning forever.
-import { createElement } from "react";
-import { flushSync } from "react-dom";
+import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstanceInfo } from "@/state/store";
 
-const fixture = vi.hoisted(() => ({ responses: [] as Array<{ ok?: boolean; body?: unknown; hang?: boolean; status?: number; message?: string }> }));
+const fixture = vi.hoisted(() => ({
+  responses: [] as Array<{ ok?: boolean; body?: unknown; hang?: boolean; status?: number; message?: string }>,
+  store: { refreshInstances: vi.fn(), refreshModels: vi.fn() },
+}));
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return {
     ...original,
-    useStore: () => ({ refreshInstances: vi.fn(), refreshModels: vi.fn() }),
+    useStore: () => fixture.store,
     api: vi.fn(async (url: string, init?: { timeoutMs?: number }) => {
       const entry = fixture.responses.shift();
       if (!entry) throw new Error(`unexpected call ${url}`);
@@ -33,6 +35,8 @@ vi.mock("@/components/ClaudeSignIn", () => ({ claudeSignInLink: () => null }));
 import { api } from "@/state/store";
 import { useSignInPill } from "./SignInPill";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 const instance = {
   instanceId: "kimi-1",
   driverKind: "kimiAgent",
@@ -47,11 +51,9 @@ function Probe({ instance }: { instance: InstanceInfo | undefined }) {
   probe.pill = useSignInPill(instance);
   return createElement("div", null, probe.pill.slot.kind);
 }
-const render = () => flushSync(() => root.render(createElement(Probe, { instance })));
-/** Let React commit the state a poll callback just set before the test reads it. */
-const settle = async () => {
-  for (let i = 0; i < 3; i++) await vi.advanceTimersByTimeAsync(0);
-};
+const render = () => act(async () => root.render(createElement(Probe, { instance })));
+const start = () => act(() => probe.pill!.start());
+const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const calls = () => vi.mocked(api).mock.calls as unknown as string[][];
 
 beforeEach(() => {
@@ -62,7 +64,7 @@ beforeEach(() => {
   root = createRoot(container);
 });
 afterEach(async () => {
-  flushSync(() => root.unmount());
+  await act(async () => root.unmount());
   container.remove();
   document.body.innerHTML = "";
   vi.useRealTimers();
@@ -76,11 +78,11 @@ describe("the sign-in pill's status poll", () => {
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(2_000);
-    await vi.advanceTimersByTimeAsync(2_000);
+    await render();
+    await start();
+    await advance(0);
+    await advance(2_000);
+    await advance(2_000);
     expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(2);
     expect(probe.pill!.slot.kind).toBe("waiting");
   });
@@ -90,20 +92,19 @@ describe("the sign-in pill's status poll", () => {
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
       { ok: false }, { ok: false }, { ok: false },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
+    await render();
+    await start();
+    await advance(0);
     expect(probe.pill!.slot.kind).toBe("waiting");
-    await vi.advanceTimersByTimeAsync(2_000);
-    await vi.advanceTimersByTimeAsync(4_000);
-    await vi.advanceTimersByTimeAsync(8_000);
-    await settle();
+    await advance(2_000);
+    await advance(4_000);
+    await advance(8_000);
     const status = calls().filter((c) => c[0].includes("/auth/status")).length;
     expect(status).toBe(3);
     expect(probe.pill!.slot.kind).toBe("start");
     expect(probe.pill!.error).toBe("Lost touch with the server during sign-in. Check the connection and start again.");
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect((await calls()).filter((c) => c[0].includes("/auth/status")).length).toBe(3);
+    await advance(60_000);
+    expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(3);
   });
 
   it("counts a request that never came back as a miss, through its own deadline", async () => {
@@ -111,13 +112,12 @@ describe("the sign-in pill's status poll", () => {
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
       { hang: true }, { hang: true }, { hang: true },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(2_000 + 10_000);
-    await vi.advanceTimersByTimeAsync(4_000 + 10_000);
-    await vi.advanceTimersByTimeAsync(8_000 + 10_000);
-    await settle();
+    await render();
+    await start();
+    await advance(0);
+    await advance(2_000 + 10_000);
+    await advance(4_000 + 10_000);
+    await advance(8_000 + 10_000);
     expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(3);
     expect(probe.pill!.slot.kind).toBe("start");
     expect(probe.pill!.error).toBe("Lost touch with the server during sign-in. Check the connection and start again.");
@@ -128,11 +128,10 @@ describe("the sign-in pill's status poll", () => {
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
       { status: 404, message: "This sign-in flow is gone." },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(2_000);
-    await settle();
+    await render();
+    await start();
+    await advance(0);
+    await advance(2_000);
     expect(probe.pill!.slot.kind).toBe("start");
     expect(probe.pill!.error).toBe("This sign-in flow is gone.");
     expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(1);
@@ -143,13 +142,13 @@ describe("the sign-in pill's status poll", () => {
       { ok: true, body: { auth: { phase: "waiting", flowId: "f1" } } },
       { hang: true },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(2_000);
+    await render();
+    await start();
+    await advance(0);
+    await advance(2_000);
     expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(1);
-    flushSync(() => root.unmount());
-    await vi.advanceTimersByTimeAsync(60_000);
+    await act(async () => root.unmount());
+    await advance(60_000);
     expect(calls().filter((c) => c[0].includes("/auth/status")).length).toBe(1);
   });
 
@@ -159,12 +158,11 @@ describe("the sign-in pill's status poll", () => {
       { ok: false },
       { ok: true, body: { auth: { phase: "succeeded", flowId: "f1" } } },
     ];
-    render();
-    await probe.pill!.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(2_000);
-    await vi.advanceTimersByTimeAsync(4_000);
-    await settle();
+    await render();
+    await start();
+    await advance(0);
+    await advance(2_000);
+    await advance(4_000);
     expect(probe.pill!.slot.kind).toBe("start");
     expect(probe.pill!.error).toBeNull();
   });

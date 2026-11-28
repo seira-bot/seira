@@ -14,6 +14,7 @@ import { serverLine } from "../server-lines.ts";
 import { retriesTeammateThread, type RoutineFailureFacts } from "../routine-recovery.ts";
 import { queueSteeredMessage } from "../steer-queue.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
+import { PublicError } from "../public-error.ts";
 
 type PeerAsk = NonNullable<Message["peerAsk"]>;
 
@@ -123,7 +124,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
    * start it here, after the same refusal checks. Throws the refusal, or why the start failed. */
   async function retryThread(input: { chief: BotRecord; bot: BotRecord; threadId: string; unattended: boolean; note?: string; automatic?: true }): Promise<void> {
     const refused = retryRefusal(input.bot.id, input.threadId);
-    if (refused) throw new Error(refused);
+    if (refused) throw new PublicError(refused, 409);
     const chief = peerName(input.chief.name);
     const lead = input.automatic
       ? `${AUTO_RETRY_LEAD}, once, before telling ${chief}, your Chief of Staff, that this thread's last run failed.`

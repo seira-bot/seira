@@ -1,3 +1,4 @@
+import { MAX_EVENT_CHARS } from "../app-events.ts";
 import {
   WORKFLOW_FRAME_OUTPUT_CHARS,
   WORKFLOW_STEP_OUTPUT_CHARS,
@@ -137,12 +138,14 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
 
   const previousOutput = (run: WorkflowRun, step: WorkflowStepRun): string | undefined => {
     if (step.stepId === run.startStepId && run.input) return run.input.output;
+    if (step.stepId === run.startStepId && run.event !== undefined && step.fromStepId === undefined) return run.event;
     return step.fromStepId === undefined ? undefined : run.stepRuns.find((candidate) => candidate.stepId === step.fromStepId)?.output;
   };
   const previousOf = (run: WorkflowRun, step: WorkflowStepRun): { label: string; output: string } | undefined => {
     const output = previousOutput(run, step);
     const from = step.fromStepId === undefined ? undefined : stepById(run.graph, step.fromStepId);
-    return output && from ? { label: stepLabel(from, deps.botName), output } : undefined;
+    if (output && from) return { label: stepLabel(from, deps.botName), output };
+    return output && step.stepId === run.startStepId && run.event !== undefined && !run.input ? { label: "event", output } : undefined;
   };
 
   const settleUnreached = (run: WorkflowRun, status: "skipped" | "not_run") => {
@@ -454,8 +457,13 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       if (problem) return onDispatchError(problem.message);
       const graph = structuredClone({ steps: workflow.steps, connections: workflow.connections });
       const now = deps.now();
+      const fromEvent = routineRun.triggerSource === "webhook" && routineRun.webhookId !== undefined;
       const run: WorkflowRun = {
         runId: routineRun.id, workflowId: workflow.id, routineId: routineRun.routineId, workflowName: workflow.name, status: "active", graph,
+        start: fromEvent
+          ? { kind: routineRun.eventSource === "app" ? "app" : "webhook", id: routineRun.webhookId! }
+          : { kind: routineRun.manual ? "manual" : "schedule", id: routineRun.routineId },
+        ...(fromEvent && routineRun.prompt ? { event: routineRun.prompt.slice(0, MAX_EVENT_CHARS) } : {}),
         botIds: botIdsOf(graph), startStepId: startSteps(graph)[0]!.id, threads: { [routineRun.botId]: threadId }, stepRuns: [], createdAt: now, updatedAt: now,
       };
       saveRun(run);
@@ -475,6 +483,8 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       const run: WorkflowRun = {
         runId: routineRun.id, workflowId: workflow.id, routineId: routineRun.routineId, workflowName: workflow.name, status: "active", graph,
         botIds: botIdsOf(graph), startStepId: stepId, fromRunId: from.runId,
+        ...(from.start === undefined ? {} : { start: from.start }),
+        ...(from.event !== undefined && stepId === from.startStepId ? { event: from.event } : {}),
         ...(old?.fromStepId === undefined ? {} : { input: { fromStepId: old.fromStepId, output: giver?.output ?? "" } }),
         threads: {}, stepRuns: carried, createdAt: now, updatedAt: now,
       };

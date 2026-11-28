@@ -6,6 +6,7 @@ import { parseJson, type JsonValue } from "./schema.ts";
 import type { WebhookManager } from "./webhooks.ts";
 import { LEGACY_WEBHOOK_AUTH_HEADER } from "../electron/legacy-names.mjs";
 import { IDLE_HTTP_SERVER } from "./due-timer.ts";
+import { PublicError } from "./public-error.ts";
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const statusErrorSchema = z.object({ status: z.number().int().optional() });
@@ -38,14 +39,14 @@ export async function readRawBody(req: IncomingMessage): Promise<string> {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       bytes += buffer.length;
       if (bytes > MAX_WEBHOOK_BODY_BYTES) {
-        throw Object.assign(new Error("Webhook body is too large"), { status: 413 });
+        throw new PublicError("Webhook body is too large", 413);
       }
       chunks.push(buffer);
     }
   } catch (error) {
     const parsed = statusErrorSchema.safeParse(error);
     if (parsed.success && parsed.data.status === 413) throw error;
-    throw Object.assign(new Error("Could not read webhook body"), { status: 400 });
+    throw new PublicError("Could not read webhook body", 400);
   }
   return Buffer.concat(chunks, bytes).toString("utf8");
 }
@@ -56,7 +57,7 @@ function parsePayload(raw: string, contentType: string): JsonValue {
     try {
       return parseJson(raw);
     } catch {
-      throw Object.assign(new Error("Invalid JSON webhook body"), { status: 400 });
+      throw new PublicError("Invalid JSON webhook body", 400);
     }
   }
   if (contentType.includes("application/x-www-form-urlencoded")) {

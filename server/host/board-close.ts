@@ -10,9 +10,11 @@ export interface BoardCloseDeps {
   teamCloud: boolean;
   /** Whether the calling turn may read this card: a card it may not read looks like a missing one. */
   readable: (card: BoardCard) => boolean;
+  /** Moves a todo to Done as closed by a bot. */
+  closeTodo?: (todoId: string, botId: string, reason: string) => void;
 }
 
-const EVERYTHING = { thread: () => true, bot: () => true, routine: () => true };
+const EVERYTHING = { thread: () => true, bot: () => true, audience: () => true, routine: () => true };
 
 /** What a bot's board_close call gets: with no body, the Needs you cards that bot may close; with one, the close itself. */
 export function boardCloseAnswer(deps: BoardCloseDeps, body: Record<string, unknown> | null): { status: number; body: Record<string, unknown> } {
@@ -30,6 +32,7 @@ export function boardCloseAnswer(deps: BoardCloseDeps, body: Record<string, unkn
   const card = cards.find((candidate) => candidate.id === cardId);
   if (!card) return { status: 409, body: { error: "that card is not in Needs you, so it cannot be moved to Done" } };
   if (!mayClose(card)) return { status: 403, body: { error: "you can close only cards of your own work, work you handed over, or (as Chief of Staff) your team's" } };
-  deps.closures.close(card.id, { kind: "bot", botId: deps.bot.id }, reason);
+  if (card.kind === "todo" && card.todoId && deps.closeTodo) deps.closeTodo(card.todoId, deps.bot.id, reason);
+  else deps.closures.close(card.id, { kind: "bot", botId: deps.bot.id }, reason);
   return { status: 200, body: { ok: true, title: card.title, botName: botName(card.botId) } };
 }

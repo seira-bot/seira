@@ -1,17 +1,18 @@
 // More preferences the app window keeps, or reaches through the desktop app's bridge, each applied with Undo on a card
 // saying what it does. A window that can't apply one (a browser has no desktop bridge) refuses it.
 import { PLACE_SWATCHES, TALK_KEYS } from "../../shared/app-settings.ts";
+import type { ConsequenceCode } from "./confirm.ts";
 import { personOnly, type SettingEntry, type WindowPref } from "./registry.ts";
 
 const turn = (on: boolean, yes: string, no: string) => (on ? yes : no);
 
 export function windowEntries(windowPref: WindowPref): SettingEntry[] {
-  const flag = (id: Parameters<WindowPref>[0], label: string, help: string, where: Parameters<WindowPref>[3], synonyms: string[], yes: string, no: string) =>
-    windowPref(id, label, help, where, synonyms, "true or false", { says: (on: boolean) => turn(on, yes, no) });
+  const flag = (id: Parameters<WindowPref>[0], label: string, help: string, where: Parameters<WindowPref>[3], synonyms: string[], yes: string, no: string, onConfirm?: ConsequenceCode) =>
+    windowPref(id, label, help, where, synonyms, "true or false", { says: (on: boolean) => turn(on, yes, no), ...(onConfirm ? { confirm: (on: boolean) => (on ? { code: onConfirm } : null) } : {}) });
   /** A way in to this computer: a bot may turn it on, but turning it off can cut off the device the person is using now. */
   const wayIn = (id: Parameters<WindowPref>[0], label: string, help: string, where: Parameters<WindowPref>[3], synonyms: string[], yes: string) =>
     windowPref(id, label, help, where, synonyms, "true (turning it off is done by the person, in Settings)",
-      { says: () => yes, refusal: (on: boolean) => (on ? null : personOnly(`Turning off ${label}`, where)) });
+      { says: () => yes, refusal: (on: boolean) => (on ? null : personOnly(`Turning off ${label}`, where)), confirm: () => ({ code: "wayIn" }) });
   return [
     flag("appearance.userBubbles", "Coloured messages", "Your own messages take the bot's colour.", "bubbles", ["bubbles", "message color", "my messages"],
       "Colour your messages with each bot's colour", "Show your messages in plain grey"),
@@ -41,7 +42,7 @@ export function windowEntries(windowPref: WindowPref): SettingEntry[] {
     flag("general.notificationFeed", "Notification feed", "Keep a feed of what bots did in the notifications panel.", "notifications", ["feed", "notification feed", "inbox"],
       "Keep a feed of bot updates", "Turn off the feed of bot updates"),
     flag("general.analytics", "Usage analytics", "Send anonymous usage data to Seira (PostHog) to improve the app.", "analytics", ["analytics", "telemetry", "privacy", "tracking"],
-      "Send anonymous usage data from this app to Seira's analytics (PostHog), off this computer", "Stop sending usage analytics"),
+      "Send anonymous usage data from this app to Seira's analytics (PostHog), off this computer", "Stop sending usage analytics", "usageData"),
     flag("general.openAtLogin", "Open at login", "Start Seira when you log in to this computer (desktop app).", "startup", ["startup", "launch", "login", "open at login"],
       "Open Seira when you log in", "Don't open Seira at login"),
     windowPref("general.talkShortcut", "Talk shortcut", "A key held anywhere on this Mac to talk to Seira (desktop app).", "talk", ["talk", "voice", "dictation", "microphone", "hotkey"],
@@ -49,7 +50,7 @@ export function windowEntries(windowPref: WindowPref): SettingEntry[] {
         says: ({ enabled, key }: { enabled: boolean; key: string }) => (enabled ? `Hold ${key.replaceAll("-", "+")} anywhere to talk to Seira` : "Turn off the talk shortcut"),
       }),
     flag("account.productEmails", "Product update emails", "Seira emails you product updates.", "emails", ["emails", "newsletter", "product updates", "email updates"],
-      "Get Seira product update emails (your email address is sent to Seira)", "Stop Seira product update emails"),
+      "Get Seira product update emails (your email address is sent to Seira)", "Stop Seira product update emails", "emailOut"),
     wayIn("remote.wifi", "Same Wi-Fi", "Paired phones reach this computer on the same Wi-Fi network.", "wifi", ["wifi", "wi-fi", "lan", "local network", "remote access"],
       "Let your paired phones reach this computer on the same Wi-Fi"),
     wayIn("remote.relay", "Reach from anywhere", "Paired phones reach this computer from anywhere through Seira's relay (needs a Seira sign-in).", "relay", ["relay", "anywhere", "away", "remote access"],

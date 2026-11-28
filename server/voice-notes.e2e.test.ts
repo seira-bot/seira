@@ -9,6 +9,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { request } from "../scripts/mcp-server.ts";
 import { lastNonReceipt } from "../src/lib/receipts.ts";
 import { listSystemVoices } from "./tts/system-voices.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,9 +47,7 @@ async function withVoiceFixture(test: (f: any) => Promise<void>, options?: { fai
         return existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".mp3")) : [];
       },
       savePlan: (plan: Record<string, unknown>) => writeFileSync(planPath, JSON.stringify(plan)),
-      evidence: () => existsSync(planPath + ".evidence.jsonl")
-        ? readFileSync(planPath + ".evidence.jsonl", "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-        : [],
+      evidence: () => readJsonLines(planPath + ".evidence.jsonl"),
       messages: async (threadId: string) => (await api("/api/threads/" + threadId + "/messages")).messages,
       serveTts: async (options?: { holdUntil?: string; audio?: { mime: string; bytes: Buffer } }) => {
         const server = createServer((req, res) => {

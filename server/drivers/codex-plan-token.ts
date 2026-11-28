@@ -1,6 +1,6 @@
 // A ChatGPT plan run's sign-in, renewed while Codex works: Codex asks its `auth.command` for a token whenever it needs
 // one, and that command reads the current token from a local bridge only this run holds the secret for.
-import { SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import { startChatGptTokenBridge } from "./chatgpt-plan-token-bridge.ts";
 
 /** What a bridged run adds to Codex's environment; none of it may reach the agent's shell. */
@@ -19,7 +19,7 @@ export function chatgptPlanCodexArgs(renewing = false): string[] {
     "-c", 'model_providers.openai_chatgpt_plan.name="ChatGPT plan"',
     "-c", 'model_providers.openai_chatgpt_plan.base_url="https://api.openai.com/v1"',
     ...(renewing ? [
-      "-c", `model_providers.openai_chatgpt_plan.auth.command=${JSON.stringify(process.execPath)}`,
+      "-c", `model_providers.openai_chatgpt_plan.auth.command=${JSON.stringify(ownNode())}`,
       "-c", `model_providers.openai_chatgpt_plan.auth.args=[${JSON.stringify(SPAWNED_PROXIES.chatgptPlanToken)}]`,
       "-c", "model_providers.openai_chatgpt_plan.auth.refresh_interval_ms=30000",
       "-c", "model_providers.openai_chatgpt_plan.auth.timeout_ms=60000",

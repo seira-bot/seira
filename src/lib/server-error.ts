@@ -18,3 +18,7 @@ export function serverErrorText(body: unknown, fallback: string): string {
   if (typeof errorKey !== "string" || !errorKey.startsWith("serverError.")) return fallback;
   return tFromServer(errorKey, fallback, textParams(errorParams));
 }
+
+export function isOutsideWorkspaceFailure(code: unknown): boolean {
+  return code === "outside_workspace";
+}
