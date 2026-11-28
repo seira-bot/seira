@@ -1542,9 +1542,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
                   title: b.name,
                   summary: commandSummary(b.input),
                   input: toolDetailPreview(b.input),
-                });
-                const plan = b.name === "TodoWrite" && !o.parent_tool_use_id ? claudeTodoPlan(b.input) : null;
-                if (plan) emit({ ...base(threadId, currentTurnId()), ...plan });
+                }); const plan = b.name === "TodoWrite" && !o.parent_tool_use_id ? claudeTodoPlan(b.input) : null; if (plan) emit({ ...base(threadId, currentTurnId()), ...plan });
               }
             }
             if (msg.usage) {
