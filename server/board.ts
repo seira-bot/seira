@@ -1,3 +1,4 @@
+import type { Audience } from "./audience.ts";
 import type { BoardClosure } from "./board-closed.ts";
 import type { Todo } from "../shared/todo.ts";
 import { readyQueue, todoVisible } from "./todos.ts";
@@ -53,12 +54,13 @@ export interface BoardSources {
   runs(from: number): readonly RunRow[];
   closed?: (cardId: string) => BoardClosure | undefined;
   /** The todos and the bot picker (null: nobody hands out open todos, so they wait for the person). */
-  todos?: () => { todos: readonly Todo[]; picker: string | null };
+  todos?: () => { todos: ReadonlyArray<Todo & { audience?: Audience }>; picker: string | null };
 }
 
 export interface BoardViewer {
   thread(threadId: string): boolean;
   bot(botId: string): boolean;
+  audience(audience: Audience): boolean;
   routine(run: { botId?: unknown; groupId?: unknown; threadId?: unknown }): boolean;
 }
 
@@ -140,15 +142,17 @@ function runCards(runs: readonly RunRow[], viewer: BoardViewer): BoardCard[] {
 }
 
 function todoCards(source: NonNullable<BoardSources["todos"]>, viewer: BoardViewer, now: number): BoardCard[] {
-  const { todos, picker } = source();
+  const { picker, ...all } = source();
+  const shown = (todo: Todo & { audience?: Audience }) => todoVisible(todo, viewer);
+  const todos = all.todos.filter(shown);
   const ready = new Set<string>();
   const place = new Map<string, number>();
   for (const botId of new Set(todos.map((todo) => todo.botId).filter((id): id is string => Boolean(id)))) {
-    readyQueue(todos, botId, now).forEach((todo, index) => { ready.add(todo.id); place.set(todo.id, index + 1); });
+    // Readiness looks at every todo; a place in the queue counts only the todos the viewer sees.
+    readyQueue(all.todos, botId, now).filter(shown).forEach((todo, index) => { ready.add(todo.id); place.set(todo.id, index + 1); });
   }
   const cards: BoardCard[] = [];
   for (const todo of todos) {
-    if (!todoVisible(todo, viewer)) continue;
     const base = {
       id: `todo:${todo.id}`, kind: "todo" as const, todoId: todo.id, title: plainTitle(todo.title), botId: todo.botId ?? "",
       ...(todo.madeBy.kind === "bot" && viewer.bot(todo.madeBy.botId) ? { fromBotId: todo.madeBy.botId } : {}),
