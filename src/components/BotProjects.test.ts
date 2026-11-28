@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreProvider, type Bot } from "@/state/store";
 import { BotProjectDialog, FolderActions, FolderIcon, NewThreadButton } from "./BotProjects";
+import { shortcutLabel } from "./ShortcutHint";
 
 vi.mock("react-dom", async (original) => ({ ...await original<object>(), createPortal: (children: unknown) => children }));
 const dispatch = vi.hoisted(() => vi.fn());
@@ -54,6 +55,13 @@ describe("folder controls", () => {
     expect(markup).not.toContain("aria-haspopup");
     expect(markup).not.toContain("Choose folder");
     expect(markup.match(/<button /g)).toHaveLength(1);
+  });
+  it("names the New thread shortcut in the tooltip outside a folder, where the shortcut starts the same thread", () => {
+    const outside = renderToStaticMarkup(createElement(StoreProvider, null,
+      createElement(NewThreadButton, { bot: { ...bot, tasks: [{ ...bot.tasks![0]!, projectId: undefined }] } })));
+    expect(outside).toContain(`title="New thread (${shortcutLabel("new-thread")})"`);
+    const inFolder = renderToStaticMarkup(createElement(StoreProvider, null, createElement(NewThreadButton, { bot })));
+    expect(inFolder).not.toContain(shortcutLabel("new-thread")!);
   });
   it.each([
     { projectId: "mail", expected: { type: "newTask", botId: "seira", projectId: "mail" } },

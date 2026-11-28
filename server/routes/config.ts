@@ -2,7 +2,7 @@ import { machineMemoryBytes, maxBotMemoryGb, validBotMemoryGb } from "../bot-mem
 import { liveSavePatch } from "../live-config.ts";
 import { signInEnvRefusal } from "../sign-in-env.ts";
 import { browserEngineStatus, browserSessionId } from "../browser-engine.ts";
-import { browserEngineKind } from "../browser/config.ts";
+import type { BrowserEngineKind } from "../browser/config.ts";
 import type { BrowserCleanupCoordinator, BrowserCleanupRequest } from "../browser-lifecycle-cleanup.ts";
 import { finalizeBrowserCleanupMutation, requireBrowserCleanupAcknowledged } from "../browser-lifecycle-cleanup.ts";
 import type { BrowserLive } from "../browser-live.ts";
@@ -35,6 +35,7 @@ import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import { forgetKey } from "../key-rejections.ts";
 import type { ComputerIdleTimer } from "../computer-idle.ts";
 import { PROVIDER_KEY_KINDS } from "../provider-key-check.ts";
+import type { PeopleLimit } from "../people-limit.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { SharedComputerControl } from "../shared-computer-control.ts";
 import type { SharedComputers } from "../shared-computers.ts";
@@ -46,6 +47,7 @@ import * as vps from "../vps-computer.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface BusyFlag {
   get(): boolean;
@@ -63,6 +65,7 @@ export interface ConfigRouteDeps {
   cfg: AppConfig;
   registry: Pick<ProviderRegistry, "get" | "forgetSnapshots">;
   sessions: Pick<SessionRegistry, "revalidateEmailSessions">;
+  people: Pick<PeopleLimit, "listsChanging">;
   browserCleanup: Pick<BrowserCleanupCoordinator, "hasPendingProfile" | "prepare" | "abort" | "commit" | "ensure">;
   browserLive: Pick<BrowserLive, "closeAll" | "closeForSession">;
   browserRuntime: Pick<BrowserRuntime, "heldBy">;
@@ -70,6 +73,8 @@ export interface ConfigRouteDeps {
   closeBrowser(session: string, spec: { command: string; env: Record<string, string> }): Promise<boolean>;
   /** After browserEngine.engine changed: closes the viewers and the browsers the other engine ran. */
   browserEngineSwitched(): void;
+  /** The engine that runs bots' browsers now, whether the person chose it or the host did. */
+  browserEngine(): BrowserEngineKind;
   decider: Pick<Decider, "testKey">;
   sharedComputers: Pick<SharedComputers, "close">;
   sharedComputerControl: Pick<SharedComputerControl, "close">;
@@ -115,8 +120,8 @@ export interface ConfigRouteDeps {
 
 export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
   const {
-    store, cfg, registry, sessions, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
-    closeBrowser, browserEngineSwitched, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
+    store, cfg, registry, sessions, people, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
+    closeBrowser, browserEngineSwitched, browserEngine, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy, localVmModeChanging,
     providerConfigBusy, computerProviderConfigTransitions, managedComputerOwners, providerOperationConflict,
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
@@ -161,6 +166,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       // Saved, it would be overruled by the environment at once: say so instead of answering 200 with nothing changed.
       const signInPinned = signInEnvRefusal(patch.signIn);
       if (signInPinned) return json(res, 409, { error: signInPinned, code: "signin_env" });
+      const peopleFull = (limit: number) => json(res, 409, { ...userError("serverError.people.full", { limit }), code: "people_full" });
+      let peopleChange = patch.signIn ? people.listsChanging(patch.signIn) : null;
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       if (patch.newBotDefaults) {
         if (patch.newBotDefaults.profile.modelSelection) {
           const checked = checkedModelSelection(patch.newBotDefaults.profile.modelSelection);
@@ -211,7 +219,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         }
       }
       const disablingBuiltInBrowser = patch.features?.browser === false && builtInBrowserEnabled(cfg);
-      const switchingBrowserEngine = patch.browserEngine?.engine !== undefined && patch.browserEngine.engine !== browserEngineKind(cfg);
+      const switchingBrowserEngine = patch.browserEngine?.engine !== undefined && patch.browserEngine.engine !== browserEngine();
       const removedBrowserProfileIds = patch.browserProfiles === undefined
         ? []
         : (cfg.browserProfiles ?? [])
@@ -314,7 +322,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
             const prepared = await composio.prepareProjectSession(requestedComposioKey, cfg.composio, undefined, { reuseEarlierUser: !sharedMembership() });
             patch.composio = { ...patch.composio, ...prepared };
           } catch (error) {
-            return json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+            return json(res, 400, { error: publicErrorText(error, "PATCH config (Composio key)", "Composio did not accept this key, or could not be reached. Check the key and try again.") });
           }
         } else {
           patch.composio = { ...patch.composio, apiKey: "", sessionId: "" };
@@ -363,6 +371,9 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         const conflict = providerOperationConflict(provider);
         if (conflict) return json(res, 409, { error: conflict });
       }
+      // Asked again after the awaits: someone who signed in meanwhile may now hold the last place.
+      if (patch.signIn) peopleChange = people.listsChanging(patch.signIn);
+      if (peopleChange && "refusal" in peopleChange) return peopleFull(peopleChange.refusal.limit);
       // Only the named keys change; merged with no await before the save.
       if (patch.opencodeGo?.providerKeys) {
         const merged = mergeOpenCodeProviderKeys(cfg, patch.opencodeGo.providerKeys);
@@ -463,6 +474,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       }
       let browserReferenceCleanupError: unknown = null;
       if (patch.signIn !== undefined) {
+        if (peopleChange && "saved" in peopleChange) peopleChange.saved();
         sessions.revalidateEmailSessions();
         resyncOpenCodeProviderKeys();
       }

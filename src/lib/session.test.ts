@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   BROWSER_SIGN_IN_FAILED, cloudOwnerOf, isConnected, isOwnerOrAdmin, previewBrowserSignIn, profileForSession, readSessionState, reasonWorthShowing, SERVICE_TRUST_REASON, signInWithBrowserGrant,
-  takeBrowserSignInFromLocation, takeInvitedEmailFromLocation, takePairingCodeFromLocation,
+  startEmailSignIn, takeBrowserSignInFromLocation, takeInvitedEmailFromLocation, takePairingCodeFromLocation, verifyEmailSignIn,
   type SessionState,
 } from "./session";
 
@@ -180,5 +180,14 @@ describe("an SSH tunnel to a server that treats local requests as a service", ()
     expect(isConnected({ kind: "unauthenticated", error: "pair" })).toBe(false);
     expect(isConnected(null)).toBe(false);
     expect(reasonWorthShowing(SERVICE_TRUST_REASON)).toBe(SERVICE_TRUST_REASON);
+  });
+});
+
+describe("a new person on a full workspace", () => {
+  it("is told the workspace is full, at the code request and at the code check (AC-05)", async () => {
+    const refusal = { error: "This installation is full. Ask your admin to make room for you.", errorKey: "serverError.email.workspaceFull", code: "workspace_full" };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(refusal), { status: 403, headers: { "content-type": "application/json" } }));
+    expect(await startEmailSignIn("sam@example.test", fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin to make room for you." });
+    expect(await verifyEmailSignIn({ email: "sam@example.test", code: "12345678", label: "Laptop" }, fetchImpl)).toEqual({ ok: false, error: "This installation is full. Ask your admin to make room for you." });
   });
 });

@@ -121,6 +121,8 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   // Set me up under a new bot's greeting and the x on its chip: no more than a typed /setup.
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/setup-request$/ },
   { method: "DELETE", path: /^\/api\/bots\/[\w-]+\/setup-request$/ },
+  // Start, Hide or Show on a task card: Start sends the shown title as a typed line would.
+  { method: "POST", path: /^\/api\/bots\/[\w-]+\/task-suggestions$/ },
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/tasks$/ },
   { method: "POST", path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+$/ },
   { method: "PATCH", path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+$/ },
@@ -216,9 +218,11 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "PUT", path: /^\/api\/phones\/self$/ },
   { method: "GET", path: /^\/api\/phones\/self$/ },
   { method: "DELETE", path: /^\/api\/phones\/self$/ },
-  // Sidecar-owned: the workspaces of this computer, and a request to open one. The proxy answers both locally.
+  // Sidecar-owned: the workspaces of this computer, a request to open one, and the read of that request. The proxy answers all three locally.
   { method: "GET", path: /^\/api\/phones\/self\/workspaces$/ },
   { method: "POST", path: /^\/api\/phones\/self\/workspaces\/switch$/ },
+  // A phone reads how its own switch ended, by the operation id. No other path below the switch route.
+  { method: "GET", path: /^\/api\/phones\/self\/workspaces\/switch\/[^/]+$/ },
   { method: "GET", path: /^\/api\/phones\/self\/jobs$/ },
   { method: "POST", path: /^\/api\/phones\/self\/jobs\/[\w-]+\/(?:lease|result)$/ },
   // The phone's closed-app alert registration: its own device token, never another phone's.

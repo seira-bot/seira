@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { api, type Bot, type InstanceInfo, type ModelSelection } from "@/state/store";
 import type { BotUpdatePatch } from "@/state/bot-patch-queue";
-import { configuredModelInstances, splitEngineRail } from "./engine-rail";
+import { configuredModelInstances, signInFamily, splitEngineRail } from "./engine-rail";
 import { t } from "./i18n";
 import { applyTeamPlan, type TeamPlanRow } from "./team-bulk-settings";
 import { byHealth, type HealthOf } from "./provider-health";
@@ -34,6 +34,7 @@ export interface ProviderOffResult {
   moved: MovedBot[];
   stayed: Array<{ name: string; reason: string }>;
   hidden: boolean;
+  moveOnly?: true;
   error?: string;
 }
 
@@ -45,29 +46,59 @@ export function providerUses(instanceId: string, bots: readonly Bot[]): Bot[] {
   return bots.filter((bot) => uses(bot, instanceId));
 }
 
-/** The first other provider that can run a task now and has a model to offer. */
-export function moveTarget(instanceId: string, instances: readonly InstanceInfo[], health: HealthOf): MoveTarget | null {
-  const { subscription, api: keys, custom } = splitEngineRail(configuredModelInstances(instances.filter((instance) => instance.instanceId !== instanceId)));
-  for (const instance of byHealth([...subscription, ...keys, ...custom], health)) {
-    if (!health(instance).usable) return null;
-    const model = instance.models.default || instance.models.options.find((option) => !option.orgBlocked && !option.needsCliUpdate)?.id;
-    if (model) return { instance, selection: { instanceId: instance.instanceId, model } };
-  }
-  return null;
+/** A provider the bots can move to; one that cannot run a task now carries the reason. */
+export interface MoveChoice extends MoveTarget {
+  usable: boolean;
+  reason?: string;
+  sameProvider: boolean;
 }
 
-/** Each bot moves to the target for its model and its backups; a bot that is working stays until it is done. */
+const sameProviderAs = (from: InstanceInfo | undefined, other: InstanceInfo): boolean => {
+  if (!from) return false;
+  const family = signInFamily(from);
+  if (family) return signInFamily(other) === family;
+  return other.driverKind === from.driverKind && other.access === from.access && from.access !== "custom";
+};
+
+/** Every other provider with a model to offer: accounts of the same provider first, then the rest; usable ones first in each group. */
+export function moveChoices(instanceId: string, instances: readonly InstanceInfo[], health: HealthOf): MoveChoice[] {
+  const from = instances.find((instance) => instance.instanceId === instanceId);
+  const { subscription, api: keys, custom } = splitEngineRail(configuredModelInstances(instances.filter((instance) => instance.instanceId !== instanceId)));
+  const candidates = [...subscription, ...keys, ...custom];
+  const same = candidates.filter((instance) => sameProviderAs(from, instance));
+  const other = candidates.filter((instance) => !same.includes(instance));
+  const choices: MoveChoice[] = [];
+  for (const instance of [...byHealth(same, health), ...byHealth(other, health)]) {
+    const model = instance.models.default || instance.models.options.find((option) => !option.orgBlocked && !option.needsCliUpdate)?.id;
+    if (!model) continue;
+    const { usable, reason } = health(instance);
+    choices.push({ instance, selection: { instanceId: instance.instanceId, model }, usable, ...(reason ? { reason } : {}), sameProvider: same.includes(instance) });
+  }
+  return choices;
+}
+
+/** The first other provider that can run a task now and has a model to offer; another account of the same provider comes first. */
+export function moveTarget(instanceId: string, instances: readonly InstanceInfo[], health: HealthOf): MoveTarget | null {
+  const choice = moveChoices(instanceId, instances, health).find((entry) => entry.usable);
+  return choice ? { instance: choice.instance, selection: choice.selection } : null;
+}
+
+const keepModel = (target: MoveTarget, current: ModelSelection): ModelSelection =>
+  target.instance.models.options.some((option) => option.id === current.model && !option.orgBlocked && !option.needsCliUpdate)
+    ? { ...current, instanceId: target.instance.instanceId } : target.selection;
+
+/** Each bot moves to the target for its model and its backups, and keeps its model when the target offers it; a bot that is working stays until it is done. */
 export function planProviderOff(instanceId: string, bots: readonly Bot[], target: MoveTarget | null): ProviderOffPlan {
   const used = providerUses(instanceId, bots);
   if (!target) return { uses: used, target, rows: [] };
   const rows = used.map((bot): TeamPlanRow => {
     if (bot.busy) return { bot, status: "skip", reason: t("teamSettings.skip.busy") };
     const patch: BotUpdatePatch = { keepThreadModels: true };
-    const model = bot.modelSelection.instanceId === instanceId ? target.selection : bot.modelSelection;
+    const model = bot.modelSelection.instanceId === instanceId ? keepModel(target, bot.modelSelection) : bot.modelSelection;
     if (model !== bot.modelSelection) patch.modelSelection = model;
     if (bot.fallback?.some((backup) => backup.instanceId === instanceId)) {
       const taken = new Set([model.instanceId]);
-      patch.fallback = bot.fallback.map((backup) => backup.instanceId === instanceId ? target.selection : backup)
+      patch.fallback = bot.fallback.map((backup) => backup.instanceId === instanceId ? keepModel(target, backup) : backup)
         .filter((backup) => !taken.has(backup.instanceId) && taken.add(backup.instanceId));
     }
     return { bot, status: "apply", patch };
@@ -77,7 +108,7 @@ export function planProviderOff(instanceId: string, bots: readonly Bot[], target
 
 export interface ProviderOffActions {
   persist: (bot: Bot, patch: BotUpdatePatch) => Promise<unknown>;
-  hide: () => Promise<unknown>;
+  hide?: () => Promise<unknown>;
   followBotModel: (bot: Bot) => Promise<unknown>;
 }
 
@@ -98,6 +129,10 @@ export async function runProviderOff(instance: Pick<InstanceInfo, "instanceId" |
     moved, stayed, hidden: false,
   };
   if (stayed.length > 0) return result;
+  if (!actions.hide) {
+    result.moveOnly = true;
+    return result;
+  }
   try {
     await actions.hide();
     result.hidden = true;

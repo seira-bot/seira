@@ -12,6 +12,7 @@ import type { Cdp, CdpListeners } from "./browser-sites.ts";
 import { relay } from "./browser-relay.ts";
 import { HOLD_LIMITS, HoldClock, type HoldLimits } from "./browser/hold.ts";
 import { BROWSER_HELD_ELSEWHERE } from "../shared/browser-held.ts";
+import { PUBLIC_ERROR_MARK, withheld } from "./public-error.ts";
 
 const execute = promisify(execFile);
 /** A frame of the largest page the view sizes (MAX_PAGE_PIXELS) is up to about 2.8 MB of base64 for a page of noise, and two
@@ -40,6 +41,7 @@ export const BROWSER_ASLEEP_ERROR = { type: "error", retryable: false, asleep: t
 export const BROWSER_WAITING = { type: "waiting", reason: "busy" };
 
 export class BrowserLiveError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status = 400) { super(message); this.name = "BrowserLiveError"; this.status = status; }
 }
@@ -611,7 +613,7 @@ export class BrowserLive {
     if (resetting) await resetting;
     await this.runtime.settled(viewer.session);
     await this.runtime.launchReady(viewer.spec).catch((error: unknown) => {
-      throw new BrowserLiveError(error instanceof Error ? error.message : "The browser is not ready yet.", 503);
+      throw withheld(new BrowserLiveError(error instanceof Error ? error.message : "The browser is not ready yet.", 503));
     });
     let status: ObjectValue;
     try { status = await this.command(viewer, ["stream", "status"], STATUS_PROBE_MS); }

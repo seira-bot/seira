@@ -464,6 +464,14 @@ export async function companionCloudDesktopAccess(deviceId, allowed) {
   return companionState();
 }
 
+/** Off for one phone: it lists only the current workspace and cannot switch. */
+export async function companionWorkspaceAccess(deviceId, allowed) {
+  if (!proc) return companionState();
+  if (!/^[\w-]{1,64}$/.test(String(deviceId ?? ""))) return companionState();
+  await control(allowed ? "POST" : "DELETE", `/devices/${deviceId}/other-workspaces`).catch(() => {});
+  return companionState();
+}
+
 /** Browser access is its own per-device grant, never inherited from VM access. */
 export async function companionBrowserControlAccess(deviceId, allowed) {
   if (!proc) return companionState();

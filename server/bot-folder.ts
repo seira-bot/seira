@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
 import { BOT_PROFILE_LIMITS } from "../shared/bot-profile.ts";
+import { PublicError } from "./public-error.ts";
 
 export const BOTS_DIR = join(DATA_DIR, "bots");
 export const SOUL_FILE = "SOUL.md";
@@ -46,7 +47,7 @@ export function readSoulDrift(botId: string, soul: string, hash: string): SoulDr
         length += count;
       }
       if (length > BOT_PROFILE_LIMITS.soul) {
-        throw Object.assign(new Error("SOUL.md exceeds 24000 bytes; shorten it in your editor"), { status: 400 });
+        throw new PublicError("SOUL.md exceeds 24000 bytes; shorten it in your editor", 400);
       }
       fileText = bytes.subarray(0, length).toString("utf8");
     } finally { closeSync(fd); }

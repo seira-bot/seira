@@ -113,6 +113,20 @@ export function PhoneRow({ device, connected, state, c, onRemoved, onPairAgain, 
               onClick={() => void c.act((companion) => companion.cloudDesktop(device.id, !device.cloudDesktopAccess))}
             />
           </div>
+          {state.workspaces === true && (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[13px] leading-[18px] text-ink">{t("remote.devices.allowWorkspaces")}</div>
+                <div className="text-[12px] leading-4 text-ink-secondary">{t("remote.devices.allowWorkspacesDetail")}</div>
+              </div>
+              <Switch
+                checked={device.otherWorkspaces === true}
+                aria-label={t("remote.devices.workspacesAria", { name: device.name })}
+                disabled={c.busy}
+                onClick={() => void c.act((companion) => (companion.workspaceAccess ? companion.workspaceAccess(device.id, device.otherWorkspaces !== true) : companion.state()))}
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[13px] leading-[18px] text-ink">{t("remote.devices.allowBrowser")}</div>

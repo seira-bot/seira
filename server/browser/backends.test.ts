@@ -1,13 +1,14 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { removeTempDir } from "../testing/cleanup.ts";
 import { LocalBackend } from "./backends.ts";
 import type { ChromeProcess } from "./chrome/launch.ts";
 import { ProcessRegistry } from "./chrome/processes.ts";
-import { browserRoot, profileDir } from "./chrome/profile.ts";
+import { browserRoot, ensureProfile, profileDir } from "./chrome/profile.ts";
+import { SourceStillOpen } from "./chrome/seed.ts";
 import { FAKE_IDENTITY, FakeChrome } from "./testing/fake-chrome.ts";
 
 const folders: string[] = [];
@@ -88,5 +89,136 @@ describe("a local browser's profile folder", () => {
     await expect(local.open({ key: "temp:a", mode: "headless", fresh: false, viewport: { width: 1280, height: 800 }, downloadDir: join(dataDir, "downloads") })).rejects.toThrow("Chrome did not start");
     expect(held).toEqual([true, true]);
     expect(registry.reserved(dir)).toBe(false);
+  });
+});
+
+describe("a local browser's first open of a profile", () => {
+  function seeded(seed: (key: string) => Promise<string | null>, { product = "Chrome/153.0.8010.12" } = {}) {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-backends-test-"));
+    folders.push(dataDir);
+    const log = vi.fn();
+    const local = new LocalBackend({
+      dataDir,
+      host: "desktop",
+      binary: async () => ({ path: "/fake/chrome", identity: { ...FAKE_IDENTITY, product } }),
+      screen: async () => ({ width: 1920, height: 1080, deviceScaleFactor: 1 }),
+      egressPort: async () => null,
+      seed,
+      log,
+      launch: async () => {
+        const chrome = new FakeChrome();
+        const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => chrome.onClose(() => resolve({ code: 0, signal: null })));
+        const launched: ChromeProcess = {
+          pid: 1, argv: [], transport: chrome, version: { product, userAgent: "", protocolVersion: "1.3", revision: "" },
+          exited, output: () => "", close: async () => { chrome.exit(); return exited; }, kill: async () => { chrome.exit(); return exited; },
+        };
+        return launched;
+      },
+    });
+    const open = async (key: string) => (await local.open({ key, mode: "headless", fresh: false, viewport: { width: 1280, height: 800 }, downloadDir: join(dataDir, "downloads") })).close();
+    return { dataDir, local, open, log };
+  }
+
+  function earlierProfile(dataDir: string, lastVersion?: string): string {
+    const dir = join(dataDir, "earlier-profile");
+    mkdirSync(join(dir, "Default"), { recursive: true });
+    writeFileSync(join(dir, "Default", "Cookies"), "saved sign-in");
+    writeFileSync(join(dir, "SingletonLock"), "lock");
+    writeFileSync(join(dir, "DevToolsActivePort"), "9222");
+    if (lastVersion) writeFileSync(join(dir, "Last Version"), lastVersion);
+    return dir;
+  }
+
+  it("copies the earlier browser's profile before Chrome starts, and not again once the profile exists", async () => {
+    let folder = "";
+    const seed = vi.fn(async () => folder);
+    const fx = seeded(seed);
+    folder = earlierProfile(fx.dataDir, "152.0.1.1");
+    await fx.open("bot:scout");
+    const dir = profileDir(fx.dataDir, "bot:scout");
+    expect(readFileSync(join(dir, "Default", "Cookies"), "utf8")).toBe("saved sign-in");
+    expect(existsSync(join(dir, "SingletonLock"))).toBe(false);
+    expect(existsSync(join(dir, "DevToolsActivePort"))).toBe(false);
+    expect(existsSync(join(dir, "seira-profile.json"))).toBe(true);
+    writeFileSync(join(dir, "Default", "Cookies"), "new sign-in");
+    await fx.open("bot:scout");
+    expect(seed).toHaveBeenCalledTimes(1);
+    expect(readFileSync(join(dir, "Default", "Cookies"), "utf8")).toBe("new sign-in");
+  });
+
+  it("copies into a shared profile as well", async () => {
+    let folder = "";
+    const fx = seeded(async () => folder);
+    folder = earlierProfile(fx.dataDir);
+    await fx.open("shared:work");
+    expect(existsSync(join(profileDir(fx.dataDir, "shared:work"), "Default", "Cookies"))).toBe(true);
+  });
+
+  it("never copies into a temporary profile", async () => {
+    const seed = vi.fn(async () => "/unused");
+    const fx = seeded(seed);
+    await fx.open("temp:guest-1");
+    expect(seed).not.toHaveBeenCalled();
+  });
+
+  it("does not ask for a copy of a profile that has a record already", async () => {
+    const seed = vi.fn(async () => "/unused");
+    const fx = seeded(seed);
+    ensureProfile(fx.dataDir, "bot:scout");
+    await fx.open("bot:scout");
+    expect(seed).not.toHaveBeenCalled();
+  });
+
+  it("opens an empty profile and logs one line when a newer Chrome last opened the earlier profile", async () => {
+    let folder = "";
+    const fx = seeded(async () => folder);
+    folder = earlierProfile(fx.dataDir, "158.0.1.1");
+    await fx.open("bot:scout");
+    expect(existsSync(join(profileDir(fx.dataDir, "bot:scout"), "Default", "Cookies"))).toBe(false);
+    expect(fx.log).toHaveBeenCalledTimes(1);
+    expect(fx.log.mock.calls[0]![0]).toContain("newer Chrome");
+  });
+
+  it("opens an empty profile when there is nothing to copy", async () => {
+    const fx = seeded(async () => null);
+    await fx.open("bot:scout");
+    expect(existsSync(join(profileDir(fx.dataDir, "bot:scout"), "seira-profile.json"))).toBe(true);
+    expect(fx.log).not.toHaveBeenCalled();
+  });
+
+  it("opens the browser when finding or copying the earlier profile fails", async () => {
+    const asking = seeded(async () => { throw new Error("could not close the earlier browser"); });
+    await asking.open("bot:scout");
+    expect(existsSync(join(profileDir(asking.dataDir, "bot:scout"), "seira-profile.json"))).toBe(true);
+    expect(asking.log).toHaveBeenCalledTimes(1);
+    expect(asking.log.mock.calls[0]![0]).toContain("could not close the earlier browser");
+    const copying = seeded(async () => join(tmpdir(), "seira-no-such-profile-folder"));
+    await copying.open("bot:scout");
+    expect(existsSync(join(profileDir(copying.dataDir, "bot:scout"), "seira-profile.json"))).toBe(true);
+    expect(copying.log).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops when the earlier browser is still open: no browser starts, no profile is made, the next open tries again", async () => {
+    let open = true;
+    const seed = vi.fn(async () => {
+      if (open) throw new SourceStillOpen();
+      return null;
+    });
+    const fx = seeded(seed);
+    await expect(fx.open("bot:scout")).rejects.toThrow(/still open/);
+    expect(existsSync(profileDir(fx.dataDir, "bot:scout"))).toBe(false);
+    expect(fx.log).not.toHaveBeenCalled();
+    open = false;
+    await fx.open("bot:scout");
+    expect(seed).toHaveBeenCalledTimes(2);
+    expect(existsSync(join(profileDir(fx.dataDir, "bot:scout"), "seira-profile.json"))).toBe(true);
+  });
+
+  it("copies nothing when the earlier browser is still open", async () => {
+    const fx = seeded(async () => { throw new SourceStillOpen(); });
+    const earlier = earlierProfile(fx.dataDir);
+    await expect(fx.open("bot:scout")).rejects.toBeInstanceOf(SourceStillOpen);
+    expect(existsSync(join(profileDir(fx.dataDir, "bot:scout"), "Default"))).toBe(false);
+    expect(readFileSync(join(earlier, "Default", "Cookies"), "utf8")).toBe("saved sign-in");
   });
 });

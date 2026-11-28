@@ -13,6 +13,7 @@ import {
   isMemoryTopicName,
   workspaceDir,
 } from "./workspace.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export const MEMORY_INDEX = "MEMORY.md";
 
@@ -27,6 +28,7 @@ export interface MemoryDocRef {
 export type MemoryStoreErrorCode = "path" | "conflict" | "too-large" | "forbidden";
 
 export class MemoryStoreError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly code: MemoryStoreErrorCode;
   readonly currentHash?: string;

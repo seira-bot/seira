@@ -16,14 +16,33 @@ function systemReducedMotion() {
   try { return createRequire(import.meta.url)("electron").systemPreferences?.getAnimationSettings().prefersReducedMotion === true; } catch { return false; }
 }
 
-export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", reducedMotion = false } = {}) {
+const SPLASH_WIDTH = 440;
+const SPLASH_HEIGHT = 300;
+
+// On Linux (seen on Wayland), Chromium (Electron 43) folds the GNOME text-scaling-factor into devicePixelRatio but sizes a window it
+// places itself without it, so the page draws larger than the window and the compositor crops it. The page undoes the
+// extra factor with CSS zoom; Electron's own zoom is saved per origin and would leak into later starts.
+export const fitScript = `(() => { const root = document.documentElement, scale = Number(root.dataset.displayScale);
+if (!(scale > 0)) return; const extra = devicePixelRatio / scale; if (Math.abs(extra - 1) < 0.01) return;
+root.style.zoom = String(1 / extra); root.classList.add("fit"); })();`;
+
+function electronScreen() {
+  try { return createRequire(import.meta.url)("electron").screen ?? null; } catch { return null; }
+}
+
+function windowDisplayScale(screen, win) {
+  try { return screen?.getDisplayMatching(win.getBounds()).scaleFactor ?? null; } catch { return null; }
+}
+
+export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", reducedMotion = false, displayScale = null } = {}) {
   const still = fs.readFileSync(resource("splash-seira.webp")).toString('base64');
   const kit = readResource("splash-kit.json", "utf8");
   const page = readResource("splash-page.js", "utf8");
-  return `<!doctype html><html lang="${attribute(lang)}" data-reduced-motion="${reducedMotion}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><title>Seira</title><style>
+  return `<!doctype html><html lang="${attribute(lang)}" data-reduced-motion="${reducedMotion}"${displayScale > 0 ? ` data-display-scale="${attribute(displayScale)}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><title>Seira</title><style>
   *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Segoe UI,system-ui,sans-serif;color:#f5f5f5;background:transparent}
   main{--p:0;height:100%;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #ffffff16;border-radius:20px;overflow:hidden;isolation:isolate;background:radial-gradient(ellipse at 50% 22%,#242529 0,#161719 54%,#111214 100%);-webkit-app-region:drag}
   main::before{content:"";position:absolute;z-index:-1;left:50%;top:92px;width:300px;height:220px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,#ff2a5733,#ff2a5712 55%,transparent 100%);opacity:calc(.25 + var(--p) * .75);transition:opacity 400ms ease-out}
+  .fit main{width:${SPLASH_WIDTH}px;height:${SPLASH_HEIGHT}px}
   .hero{position:relative;width:176px;height:176px;margin:-34px 0 -12px}
   .bot{position:absolute;inset:0;opacity:0;transition:opacity 160ms ease-out}.bot canvas{width:100%;height:100%;display:block}
   .still{position:absolute;left:50%;top:50%;width:99px;height:116px;margin:-58px 0 0 -49px;object-fit:contain;user-select:none;-webkit-user-drag:none}
@@ -44,18 +63,19 @@ export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", r
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.fill::after,.head::after{display:none}}
   :root[data-reduced-motion="true"] *,:root[data-reduced-motion="true"] *::before,:root[data-reduced-motion="true"] *::after{animation:none!important;transition:none!important}
   :root[data-reduced-motion="true"] .fill::after,:root[data-reduced-motion="true"] .head::after{display:none}
-  </style></head><body><main><button aria-label="${attribute(t("native.common.close"))}" onclick="window.startupScreen.close()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="hero"><img class="still" src="data:image/webp;base64,${still}" alt=""><div class="bot"></div></div><h1>Seira</h1><div class="line" aria-hidden="true"><div class="fill"></div><span class="head"></span></div><div class="status" role="status"><span>Opening your workspace…</span></div>${kit ? `<script>window.__SEIRA_KIT=${inlineJson(kit)};</script>` : ""}${page ? `<script>${page}</script>` : ""}</main></body></html>`;
+  </style><script>${fitScript}</script></head><body><main><button aria-label="${attribute(t("native.common.close"))}" onclick="window.startupScreen.close()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button><div class="hero"><img class="still" src="data:image/webp;base64,${still}" alt=""><div class="bot"></div></div><h1>Seira</h1><div class="line" aria-hidden="true"><div class="fill"></div><span class="head"></span></div><div class="status" role="status"><span>Opening your workspace…</span></div>${kit ? `<script>window.__SEIRA_KIT=${inlineJson(kit)};</script>` : ""}${page ? `<script>${page}</script>` : ""}</main></body></html>`;
 }
 
 export function createStartupScreen({
   BrowserWindow, iconPath, platform = process.platform, isQuitting, onQuit,
   onHide, isHidden = () => false, onShow, onFinished, t, lang, reducedMotion = systemReducedMotion,
+  screen = electronScreen(), displayScale = (win) => windowDisplayScale(screen, win),
 }) {
   let disposed = false, revealed = false, fallback, finishTimer, resolveReady;
   let reached = -1, finished = false;
   const ready = new Promise(resolve => { resolveReady = resolve; });
   const splash = new BrowserWindow({
-    width: 440, height: 300, resizable: false, maximizable: false,
+    width: SPLASH_WIDTH, height: SPLASH_HEIGHT, resizable: false, maximizable: false,
     fullscreenable: false, frame: false, transparent: true,
     backgroundColor: "#00000000", show: false, icon: iconPath,
     title: "Seira", autoHideMenuBar: true,
@@ -111,7 +131,7 @@ export function createStartupScreen({
   splash.webContents.on("did-finish-load", () => { say(); sendProgress(); });
   const startupFallback = setTimeout(resolveReady, 10_000);
   startupFallback.unref?.();
-  void splash.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(startupScreenHtml({ t, lang, reducedMotion: reducedMotion() })))
+  void splash.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(startupScreenHtml({ t, lang, reducedMotion: reducedMotion(), displayScale: platform === "linux" ? displayScale(splash) : null })))
     .catch(resolveReady);
   /** Moves the glow line to a startup step. The line never moves back. */
   const progress = (step) => {

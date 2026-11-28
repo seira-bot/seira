@@ -29,6 +29,9 @@ describe("what the app may do", () => {
   const calls: Array<[string, string]> = [
     ["GET", "/api/health"],
     ["PUT", "/api/phones/self"],
+    ["GET", "/api/phones/self/workspaces"],
+    ["POST", "/api/phones/self/workspaces/switch"],
+    ["GET", "/api/phones/self/workspaces/switch/0123456789abcdef0123456789abcdef"],
     ["GET", "/api/phones/self/jobs"],
     ["POST", "/api/phones/self/jobs/j1/result"],
     ["PUT", "/api/push/device"],
@@ -70,6 +73,7 @@ describe("what the app may do", () => {
     ["POST", "/api/bots/bot_123/compact"],
     ["POST", "/api/bots/bot_123/setup-request"],
     ["DELETE", "/api/bots/bot_123/setup-request"],
+    ["POST", "/api/bots/bot_123/task-suggestions"],
     ["POST", "/api/bots/bot_123/tasks"],
     ["POST", "/api/bots/bot_123/tasks/th_1"],
     ["PATCH", "/api/bots/bot_123/tasks/th_1"],
@@ -471,5 +475,16 @@ describe("browser control", () => {
     expect(allowed("GET", "/api/bots/b1/browser/live/../../config")).toBe(false);
     expect(allowed("GET", "/api/bots/b1/browser/live?x=1")).toBe(false);
     expect(isBrowserControlAccess("GET", "/api/bots/b1/browser/live/extra")).toBe(false);
+  });
+});
+
+describe("the read of a workspace switch", () => {
+  it("is one GET below the switch route, and nothing else below it", () => {
+    const base = "/api/phones/self/workspaces/switch";
+    expect(allowed("GET", `${base}/0123456789abcdef0123456789abcdef`)).toBe(true);
+    for (const [method, path] of [["POST", `${base}/0123456789abcdef0123456789abcdef`], ["DELETE", `${base}/x`], ["GET", `${base}/`], ["GET", `${base}/a/b`], ["GET", `${base}/x/more`]] as const) {
+      expect(ask(method, path)?.status, `${method} ${path}`).toBe(404);
+    }
+    expect(ask("GET", `${base}/x`, false)?.status).toBe(401);
   });
 });

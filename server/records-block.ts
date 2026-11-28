@@ -52,6 +52,9 @@ export const SETUP_RECORDS_SOURCE =
 export const SETTINGS_CARD_RECORDS_SOURCE =
   "a settings control Seira (the app) showed to the person in this chat because you asked for it; the person works it themselves, and nothing it shows is sent to you";
 
+export const UI_PLACE_RECORDS_SOURCE =
+  "a place card Seira (the app) showed to the person in this chat because you asked for it; the person clicks it themselves, and nothing they do with it is sent to you";
+
 /** Security invariant: a card the server built from records replays into a turn only through this block. */
 export function cardRecords(text: string, source = CARD_RECORDS_SOURCE): string {
   return recordsBlock(source, text.split("\n"));

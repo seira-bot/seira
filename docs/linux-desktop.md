@@ -116,6 +116,52 @@ A full desktop install (for example EndeavourOS with KDE or GNOME) usually has a
 `--needed` skips the ones that are present. This was checked with the v0.1.138 AppImage on a current Arch
 Linux image (fuse3 3.18, gtk3 3.24, mesa 26.2): the app opens to the welcome screen.
 
+### Add the AppImage to your launcher
+
+The AppImage does not install system files, so launchers such as GNOME's, `walker` on Omarchy, `rofi` or
+`wofi` only show it if you give them a desktop entry. A hand-written entry without an `Icon=` line shows a
+generic gear icon. The AppImage carries the icon and the right window class, so copy them out once:
+
+```sh
+mkdir -p ~/Applications ~/.local/share/icons/hicolor/scalable/apps ~/.local/share/applications
+mv Seira.AppImage ~/Applications/Seira.AppImage
+
+cd "$(mktemp -d)"
+~/Applications/Seira.AppImage --appimage-extract 'usr/share/icons/hicolor/scalable/apps/seira.svg'
+cp squashfs-root/usr/share/icons/hicolor/scalable/apps/seira.svg ~/.local/share/icons/hicolor/scalable/apps/
+```
+
+Then write the desktop entry. `Exec=` needs an absolute path, because desktop entries do not expand `~`, so this
+command fills in your home folder:
+
+```sh
+cat > ~/.local/share/applications/seira.desktop <<EOF
+[Desktop Entry]
+Name=Seira
+Comment=Your own team of AI agents in one chat app
+Exec=$HOME/Applications/Seira.AppImage %U
+Icon=seira
+StartupWMClass=bot.seira.app
+Terminal=false
+Type=Application
+Categories=Utility;
+MimeType=x-scheme-handler/seira;
+EOF
+```
+
+- `Icon=seira` finds the icon you copied by name in the `hicolor` theme.
+- `StartupWMClass=bot.seira.app` ties the open window to this entry, so the launcher and taskbar show one Seira.
+  On Hyprland you can confirm the class with `hyprctl clients | grep class`.
+- Add `--ozone-platform-hint=auto` before `%U` if your Wayland session needs it.
+- An in-app update replaces the AppImage at the same path, so the entry keeps working.
+
+If the launcher still shows the old icon, refresh the caches and restart it (on Omarchy, `omarchy-restart-walker`):
+
+```sh
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
+update-desktop-database ~/.local/share/applications
+```
+
 ### Updating
 
 The app checks for updates in the background and downloads them by itself. Nothing restarts until you click
@@ -138,6 +184,7 @@ The snap is a classic snap: it uses the libraries of the host and runs with the 
 packages. It never turns the sandbox off and ships no setuid helper. `electron-builder` adds `--no-sandbox` to every
 classic snap, so `scripts/finish-snap.mjs` removes it after the build and fails the build if the switch is still in the
 launcher or in `meta/snap.yaml`. Classic confinement needs a store review before a public release.
+The `snap publish` workflow uploads the snap when a release is published (see [Releasing](releasing.md#publish-to-the-snap-store)).
 
 Install a local build with `sudo snap install --dangerous --classic Seira-*.snap`, and start it with `seira`.
 `scripts/linux-store/snap-vm-test.sh` installs the snap in an Ubuntu 24.04 VM and records whether the app and the bot
@@ -233,6 +280,21 @@ offer an **Open Settings** action on Linux.
 
 Local computer control is independent from preview. It is available after explicit opt-in on Xorg and remains
 fail-closed on Wayland. XWayland's `DISPLAY` never bypasses the Wayland safety gate.
+
+### Glance on tiling Wayland compositors
+
+On Wayland, Glance runs in a small helper window on XWayland so it can stay on top. Tiling compositors such as
+Hyprland and Sway do not tell XWayland where a top panel (Waybar and similar) sits, so Seira asks the compositor
+for the panel's height when the visor opens and each time it appears again:
+
+- **Hyprland** (when `HYPRLAND_INSTANCE_SIGNATURE` is set): the monitor's reserved top space from `hyprctl monitors -j`.
+- **Sway** (when `SWAYSOCK` is set): the offset of the focused workspace from `swaymsg -t get_workspaces`.
+- **Any other compositor** (river, niri and so on): set `SEIRA_GLANCE_TOP_INSET` to the panel height in pixels,
+  for example `SEIRA_GLANCE_TOP_INSET=35`. See [environment-variables.md](environment-variables.md#glance-top-inset).
+
+GNOME and KDE already report the work area, so they need nothing. If the compositor tool is missing or does not
+answer within 1.5 seconds, Glance keeps the last panel height it found (the top of the screen the first time) and
+asks again the next time it appears.
 
 ## Enable local control
 
@@ -433,3 +495,26 @@ If it prints `No suitable fusermount binary found on the $PATH` or `Cannot mount
 setup`, install the distribution's FUSE 3 package (`fuse3` on Ubuntu, Debian and Arch). If it then names a missing
 `lib*.so` file, install the desktop libraries listed under
 [Arch Linux and EndeavourOS](#arch-linux-and-endeavouros-appimage), or your distribution's packages for them.
+
+### Xvfb aborts in a container or sandbox without a GPU
+
+A test run that starts `Xvfb` inside a container or a bubblewrap sandbox can stop with `Caught signal 11
+(Segmentation fault). Server aborting`. The backtrace names `libEGL_nvidia.so` or `libnvidia-egl-gbm.so`. The host
+has an NVIDIA EGL vendor file, but the sandbox has no GPU device, so the X server crashes while it starts GLAMOR.
+The message `_XSERVTransmkdir: ERROR: euid != 0,directory /tmp/.X11-unix will not be created` can appear in the same
+log. It means the sandbox has a fresh `/tmp` that does not hold the socket directory.
+
+Create the socket directory and turn off the EGL vendor before you start the server:
+
+```sh
+mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+export __EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent LIBGL_ALWAYS_SOFTWARE=1
+Xvfb :99 -screen 0 1280x800x24 -nolisten tcp &
+./Seira-*-x86_64.AppImage --appimage-extract
+DISPLAY=:99 ./squashfs-root/seira --disable-gpu --disable-dev-shm-usage
+```
+
+Do not point `DISPLAY` at the host X server, and do not bind the host `/tmp/.X11-unix` into the sandbox. A message
+that `/tmp/.X11-unix` is not owned by root is a warning, not an error. If the AppImage cannot start the Chromium
+sandbox inside a nested sandbox, run the window smoke outside the nested sandbox, or use the CI package
+validation. Do not add `--no-sandbox`.

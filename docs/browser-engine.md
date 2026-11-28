@@ -1,13 +1,32 @@
 # The bots' browser
 
-By default every bot browser is driven by [agent-browser](https://github.com/vercel-labs/agent-browser)
-(Apache-2.0), a pinned Rust daemon that controls Chrome over the DevTools
-protocol. The same engine and the same tools run on the desktop app, on a
-self-hosted server and in the Docker image, so a skill written on one runs on
-the others. This page covers how Seira uses it.
+By default every bot browser runs on Seira's own Chrome driver in
+`server/browser/`. A bot browser runs on
+[agent-browser](https://github.com/vercel-labs/agent-browser) (Apache-2.0), a
+pinned Rust daemon that controls Chrome over the DevTools protocol, in three
+cases: the person turns "New browser" off in Settings
+(`browserEngine.engine: "agent-browser"` in `config.json`), this host has no
+Chrome for Seira's own driver, or the profile uses the person's own Chrome (My
+Chrome). The same tools run on the desktop app, on a self-hosted server and in
+the Docker image, so a skill written on one runs on the others. This page
+covers how Seira uses them.
 
-`browserEngine.engine: "chrome"` in `config.json` runs the bots' browsers on
-Seira's own Chrome driver in `server/browser/` instead. It is an early test.
+agent-browser sends `Runtime.enable` to every page, and some sites refuse a
+browser that does. Seira's own driver never sends it. `browserEngine.engine`
+set to `"chrome"` or `"agent-browser"` is the person's saved choice and always
+wins; unset, the driver is used wherever it has a Chrome to run. Under vitest
+and in a sealed test fixture the default stays agent-browser, so a test's fake
+engine stands for the bots' browser and no test finds this machine's Chrome.
+`SEIRA_BROWSER_ENGINE_DEFAULT` set to `chrome` or `agent-browser` names the
+default everywhere; a test that starts its own server names `agent-browser`.
+
+The first time Seira's own driver opens a bot's profile, it copies the bot's
+agent-browser profile folder into the new profile, so saved sign-ins come along.
+It skips lock files, the DevTools port file and cache folders, and it closes the
+bot's agent-browser browser first if that still runs. It does not copy when the
+agent-browser profile was last opened by a newer Chrome, and never copies into a
+temporary browser. The sign-ins that agent-browser keeps in its own encrypted
+restore state do not carry over. The two profiles are separate after the copy.
 The routers in `server/browser/engines.ts` keep the agent-browser engine's API,
 so the callers below do not change. Packaging, which Chrome is
 chosen, the network gate, signed-in sites, My Chrome and process hygiene are in

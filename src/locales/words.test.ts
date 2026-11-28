@@ -6,7 +6,7 @@ import en from "./en.json";
 
 /** A workspace of this computer's own is the owner's own word for what ＋ adds to the rail: the choice, its first names and
  * the Server menu's entry. */
-const OWNER_WORKSPACE = new Set(["rail.local", "rail.localNumbered", "native.menu.newLocal"]);
+const OWNER_WORKSPACE = new Set(["rail.local", "rail.localNumbered", "native.menu.newLocal", "remote.devices.allowWorkspaces", "remote.devices.allowWorkspacesDetail", "remote.devices.workspacesAria"]);
 
 it("English copy says Organization and installation, not Organisation or workspace", () => {
   const offending = Object.entries(en)

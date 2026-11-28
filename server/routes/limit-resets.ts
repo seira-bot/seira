@@ -10,6 +10,7 @@ import type { LimitResetClock } from "../limit-resets.ts";
 import type { RoutineRequestService } from "../routine-requests.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface LimitResetRouteDeps {
   clock: LimitResetClock;
@@ -81,7 +82,7 @@ export function createLimitResetRoutes(deps: LimitResetRouteDeps): RouteHandler 
         return json(res, 201, { routine, messageId: submitted.messageId });
       } catch (error) {
         const status = (error as { status?: unknown }).status;
-        return json(res, typeof status === "number" ? status : 400, { error: error instanceof Error ? error.message : String(error) });
+        return json(res, typeof status === "number" ? status : 400, { error: publicErrorText(error, "POST limit reset routine", "The routine could not be made.") });
       }
     }
     if (path === "/api/limit-resets/after-reset" && method === "POST") {

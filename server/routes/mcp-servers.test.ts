@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { ONE_BOT_MCP_REFUSAL, WAPILOT_MCP_URL } from "../../shared/one-bot-mcp.ts";
 import { createServer, request as httpRequest, type RequestOptions, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -46,6 +47,7 @@ async function serve(options: { ownsVault?: boolean; keys?: Parameters<typeof cr
     mcpPolicyRefusal: () => undefined,
     persistMcpServers: (next) => { cfg.mcpServers = next; },
     savedCustomDomain: () => null,
+    botExists: (id) => options.bots?.some((bot) => bot.id === id) === true,
     connectionsChanged: (change) => { changes.push(change); },
     changed: () => {},
     ...(options.botsPath ? { botsPath: options.botsPath } : {}),
@@ -328,5 +330,109 @@ describe("a bot's tool budget and a command server's Test", () => {
     expect(await (await post("/api/mcp/servers/notes/test", {})).json()).toMatchObject({ ok: true, tools: [{ name: "read_notes" }] });
     expect(await (await post("/api/mcp/servers/own/test", {})).json()).toMatchObject({ ok: true });
     expect(seen).toEqual(["any bot", "ada"]);
+  });
+});
+
+describe("an app that serves one bot only", () => {
+  const bots = [{ id: "alpha" }, { id: "beta" }];
+  const wa = { type: "http", url: WAPILOT_MCP_URL };
+  const json = { "content-type": "application/json" };
+
+  it("is refused on create without a bot, with a missing bot, or under another name or address form", async () => {
+    const { post, cfg } = await serve({ bots });
+    for (const body of [
+      { name: "wa", ...wa },
+      { name: "notes", ...wa },
+      { name: "wa", type: "http", url: `${WAPILOT_MCP_URL}/?x=1` },
+      { name: "wa", ...wa, bot: "gone" },
+    ]) {
+      const refused = await post("/api/mcp/servers", body);
+      expect(refused.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(cfg.mcpServers).toEqual({});
+    const kept = await post("/api/mcp/servers", { name: "wa", ...wa, bot: "alpha" });
+    expect(kept.status, await kept.clone().text()).toBe(201);
+  });
+
+  it("leaves another hosted app with no bot as it was", async () => {
+    const { post } = await serve({ bots });
+    expect((await post("/api/mcp/servers", { name: "other", type: "http", url: "https://data.example.com/mcp" })).status).toBe(201);
+  });
+
+  it("is refused on import, which cannot name a bot", async () => {
+    const { post, cfg } = await serve({ bots });
+    const refused = await post("/api/mcp/servers/import", { json: JSON.stringify({ mcpServers: { wa } }) });
+    expect(refused.status, await refused.clone().text()).toBe(400);
+    expect(cfg.mcpServers).toEqual({});
+  });
+
+  it("is refused on replace when the bot is missing or gone, and is not switched on without a bot", async () => {
+    const { cfg, base } = await serve({ bots });
+    cfg.mcpServers = { wa: { ...wa, bot: "alpha", enabled: false }, legacy: { ...wa, enabled: false }, orphan: { ...wa, bot: "gone", enabled: false } } as never;
+    const send = (method: string, name: string, body: unknown) => fetch(`${base}/api/mcp/servers/${name}`, { method, headers: json, body: JSON.stringify(body) });
+    expect((await send("PUT", "wa", { ...wa })).status).toBe(200);
+    expect((cfg.mcpServers as Record<string, { bot?: string }>).wa!.bot).toBe("alpha");
+    expect((await send("PUT", "wa", { ...wa, bot: "gone" })).status).toBe(400);
+    expect((await send("PUT", "legacy", { ...wa })).status).toBe(400);
+    expect((await send("PATCH", "legacy", { enabled: true })).status).toBe(400);
+    expect((await send("PATCH", "orphan", { enabled: true })).status).toBe(400);
+    expect((cfg.mcpServers as Record<string, { enabled: boolean }>).legacy!.enabled).toBe(false);
+    expect((await send("PUT", "legacy", { ...wa, bot: "beta" })).status).toBe(200);
+    expect((await send("PATCH", "legacy", { enabled: true })).status).toBe(200);
+    expect((await send("PATCH", "legacy", { enabled: false })).status).toBe(200);
+  });
+
+  it("does not start a sign-in for an entry with no bot", async () => {
+    const { cfg, post } = await serve({ bots });
+    cfg.mcpServers = { legacy: { ...wa, enabled: false } } as never;
+    const refused = await post("/api/mcp/servers/legacy/sign-in", {});
+    expect(refused.status, await refused.clone().text()).toBe(400);
+    expect(await refused.json()).toEqual({ error: ONE_BOT_MCP_REFUSAL });
+  });
+
+  describe("connection test", () => {
+    // A spy on the first things a test would touch: the key store and the bot path. A refused test touches neither.
+    const spies = (swap?: Record<string, unknown>) => {
+      const touched: string[] = [];
+      const keys = {
+        warm: async (name: string) => { touched.push(`warm:${name}`); },
+        resolve: (_name: string, target: Record<string, unknown>) => {
+          touched.push("resolve");
+          return swap ? { ok: true as const, server: { ...target, ...swap } } : { ok: false as const, why: "no key (fixture)" };
+        },
+      };
+      return { touched, keys: keys as never, botsPath: () => { touched.push("botsPath"); return null; } };
+    };
+
+    it("is refused for a legacy entry with no bot, or whose bot is gone, before any key is read", async () => {
+      const spy = spies();
+      const { cfg, post } = await serve({ bots, keys: spy.keys, botsPath: spy.botsPath });
+      cfg.mcpServers = { legacy: { ...wa, enabled: false }, orphan: { ...wa, bot: "gone", enabled: false } } as never;
+      for (const name of ["legacy", "orphan"]) {
+        const refused = await post(`/api/mcp/servers/${name}/test`, {});
+        expect(refused.status, name).toBe(400);
+        expect(await refused.json()).toEqual({ error: ONE_BOT_MCP_REFUSAL });
+      }
+      expect(spy.touched).toEqual([]);
+    });
+
+    it("still tests an entry that has a bot of this workspace", async () => {
+      const spy = spies();
+      const { cfg, post } = await serve({ bots, keys: spy.keys, botsPath: spy.botsPath });
+      cfg.mcpServers = { wa: { ...wa, bot: "alpha", enabled: false } } as never;
+      const result = await post("/api/mcp/servers/wa/test", {});
+      expect(result.status).toBe(200);
+      expect(spy.touched).toContain("resolve");
+    });
+
+    it("checks the address that will be called after a key swaps it, not only the saved one", async () => {
+      const spy = spies({ type: "http", url: WAPILOT_MCP_URL });
+      const { cfg, post } = await serve({ bots, keys: spy.keys, botsPath: spy.botsPath });
+      cfg.mcpServers = { plain: { type: "http", url: "https://data.example.com/mcp", enabled: false } } as never;
+      const refused = await post("/api/mcp/servers/plain/test", {});
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toEqual({ error: ONE_BOT_MCP_REFUSAL });
+      expect(spy.touched).not.toContain("botsPath");
+    });
   });
 });

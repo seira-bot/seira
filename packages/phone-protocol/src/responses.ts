@@ -25,6 +25,7 @@ export interface PairedDevice {
   lastSeenAt: number;
   cloudDesktopAccess?: boolean;
   browserControlAccess?: boolean;
+  otherWorkspaces?: boolean;
   routes?: "any" | "local";
   e2eAt?: number;
 }

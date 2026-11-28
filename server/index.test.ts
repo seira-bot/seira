@@ -1,5 +1,6 @@
 // The config pins one deliberately unknown driver, so the suite is deterministic with or without agent CLIs installed.
 import { EMAIL_TOOLS } from "./email/tools.ts";
+import { GITHUB_TOOLS } from "./github/tools.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -10,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { GENERIC_PUBLIC_ERROR } from "./public-error.ts";
 import {
   Aes256Gcm,
   CipherSuite,
@@ -633,6 +635,9 @@ beforeAll(async () => {
   writeFileSync(linkedVideo, "0123456789".repeat(100));
   writeFileSync(generatedImage, "generated image bytes");
   writeFileSync(userAttachment, "%PDF shared from the phone\n", { mode: 0o600 });
+  // The video a teammate returned to a group chat, copied into the attachment store as attach_file does.
+  const handoffVideo = join(privateAttachments, "7c1e2b9a-3d44-4f0e-8a51-2f6b9d0c4e18.mp4");
+  writeFileSync(handoffVideo, "teammate video bytes");
   // A picture a bot saved outside the room's folders, and the copy attach_file made of it.
   const outsideImage = join(home, "Downloads", "sideboard.png");
   const deliveredImage = join(privateAttachments, "5e1dbd0a-7c3a-4f1e-9b2d-6a0c4f8e2b71.png");
@@ -724,6 +729,15 @@ beforeAll(async () => {
           text: `[Clip](<${pathToFileURL(linkedVideo).href}>) and [notes](<${pathToFileURL(linkedFile).href}>)`,
           from: { botId: "test-bot-a", name: "Test bot A", color: "purple" },
         },
+        // A teammate's result row: stored as an activity row, with the files it returned.
+        {
+          id: "handoff-result-video-message", at: 14, parentId: "linked-video-message", role: "bot", kind: "activity",
+          roomRequest: { id: "handoff-result-request", phase: "result" },
+          tool: { name: "Test bot A finished", ok: true },
+          attachments: [{ kind: "file", path: handoffVideo, mime: "video/mp4", name: "demo.mp4" }],
+        },
+        { id: "handoff-result-plain-message", at: 15, parentId: "handoff-result-video-message", role: "bot", kind: "activity",
+          roomRequest: { id: "handoff-result-request", phase: "result" }, tool: { name: "Test bot A finished", ok: true } },
       ],
     }),
   );
@@ -1059,6 +1073,7 @@ beforeAll(async () => {
       SEIRA_PORT: String(PORT),
       SEIRA_WEBHOOK_PORT: String(WEBHOOK_PORT),
       SEIRA_EXTRA_PATH: fakeDockerDir,
+      SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser",
       SEIRA_COMPOSIO_API: `http://127.0.0.1:${providerStubPort}/api/v3.1`,
       SEIRA_COMPOSIO_TOOLKITS_API: `http://127.0.0.1:${providerStubPort}/api/v3`,
       // A managed connected-apps broker on the stub, so relayed MCP frames are observable without any network.
@@ -6269,6 +6284,26 @@ describe("harness HTTP API", () => {
     }
   });
 
+  it("marks a conversation for the AI pool or pins it, with the model pick", async () => {
+    const claude = (model: string) => ({ instanceId: "claude", model });
+    const bot = (await api("POST", "/api/bots", { modelSelection: claude("pool-start") })).body.bot;
+    try {
+      const path = `/api/bots/${bot.id}/tasks/${bot.threadId}`;
+      const auto = await api("PATCH", path, { modelSelection: claude("pool-a"), aiPool: true });
+      expect(auto.status).toBe(200);
+      expect(auto.body.task.aiPool).toBe("auto");
+      const pinned = await api("PATCH", path, { modelSelection: claude("pool-b"), aiPool: false });
+      expect(pinned.status).toBe(200);
+      expect(pinned.body.task.aiPool).toBe("pinned");
+      expect((await api("PATCH", path, { aiPool: true })).status).toBe(400);
+      expect((await api("PATCH", path, { modelSelection: claude("pool-c"), aiPool: "yes" })).status).toBe(400);
+      const plain = await api("PATCH", path, { modelSelection: claude("pool-d") });
+      expect(plain.body.task.aiPool).toBe("pinned");
+    } finally {
+      await api("DELETE", `/api/bots/${bot.id}`);
+    }
+  });
+
   it("moves a team's following threads to a new bot model and leaves each thread's own model, on screen or not", async () => {
     const claude = (model: string) => ({ instanceId: "claude", model });
     type WireBot = { modelSelection: { model: string }; tasks: Array<{ threadId: string; modelSelection: { model: string }; followsBotModel: boolean }> };
@@ -8023,7 +8058,7 @@ describe("harness HTTP API", () => {
   it("keeps skill authoring on by default and persists an explicit opt-out", async () => {
     const before = await api("GET", "/api/config");
     expect(before.status).toBe(200);
-    expect(before.body.features).toEqual({ browser: false, skillAuthoring: true, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", usbPhoneTakeover: false });
+    expect(before.body.features).toEqual({ browser: false, skillAuthoring: true, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", newAutomations: false, usbPhoneTakeover: false });
     const untouched = JSON.parse(readFileSync(join(home, ".seira", "config.json"), "utf8"));
     expect(untouched.features?.skillAuthoring).toBeUndefined();
     expect(untouched.features?.skillReview).toBeUndefined();
@@ -8033,7 +8068,7 @@ describe("harness HTTP API", () => {
       features: { skillAuthoring: false },
     });
     expect(saved.status).toBe(200);
-    expect(saved.body.features).toEqual({ browser: false, skillAuthoring: false, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", usbPhoneTakeover: false });
+    expect(saved.body.features).toEqual({ browser: false, skillAuthoring: false, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", newAutomations: false, usbPhoneTakeover: false });
 
     const disk = JSON.parse(readFileSync(join(home, ".seira", "config.json"), "utf8"));
     // Earlier browser coverage may have persisted its own toggle: opting out must preserve sibling settings.
@@ -8041,7 +8076,7 @@ describe("harness HTTP API", () => {
 
     const tools = await api("PATCH", "/api/config", { features: { showToolCalls: true } });
     expect(tools.status).toBe(200);
-    expect(tools.body.features).toEqual({ browser: false, skillAuthoring: false, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", showToolCalls: true, sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", usbPhoneTakeover: false });
+    expect(tools.body.features).toEqual({ browser: false, skillAuthoring: false, skillReview: false, skillReviewSteps: 10, skillsLibrary: false, shareLearnedSkills: "off", showToolCalls: true, sharedComputers: false, claudeUserMcp: false, claudeUserSkills: false, autoRecall: true, roomMemoryCapture: false, parallelRoomJobs: true, phonePush: false, savedSteps: true, savedStepsHere: process.platform === "darwin", newAutomations: false, usbPhoneTakeover: false });
 
     const bot = (await api("POST", "/api/bots", {})).body.bot;
     try {
@@ -8373,7 +8408,8 @@ describe("harness HTTP API", () => {
     { mode: "batch", sizes: Array(5).fill(21 * 1024 * 1024) as number[], message: "Uploads are limited to 100 MiB per batch.", status: 200 },
     { mode: "changed", sizes: [1024], message: expect.stringContaining("changed while staging"), status: 200 },
     { mode: "stop", sizes: [1024], message: expect.stringContaining("turn has already ended"), status: 401 },
-    { mode: "disk", sizes: [1024], message: expect.stringMatching(/ENOTDIR|EEXIST/), status: 500 },
+    // A file-system error is internal: the reply is the generic text, and the detail stays in the server log.
+    { mode: "disk", sizes: [1024], message: GENERIC_PUBLIC_ERROR, status: 500 },
   ])("returns the correct browser upload result for $mode", async ({ mode, sizes, message, status }) => {
     const bot = (await api("POST", "/api/bots")).body.bot;
     const gate = join(home, "browser-upload-read-gate");
@@ -10553,7 +10589,7 @@ describe("harness HTTP API", () => {
 
     const rejected = await api("PUT", "/api/config", { composio: { apiKey: "ak_wrong" } });
     expect(rejected.status).toBe(400);
-    expect(rejected.body.error).toMatch(/invalid project key/i);
+    expect(rejected.body.error).toBe("Composio did not accept this key, or could not be reached. Check the key and try again.");
 
     const saved = await api("PUT", "/api/config?secretStorage=external", {
       composio: { apiKey: "ak_good" },
@@ -11152,6 +11188,7 @@ describe("harness HTTP API", () => {
         slack: [{ name: "SLACK_POST_MESSAGE", description: "a".repeat(240) }],
         // Email's tools are listed wherever a mailbox can be connected here, so grants can be set before connecting.
         email: EMAIL_TOOLS.map(({ name, description }) => ({ name, description })),
+        github_app: GITHUB_TOOLS.map(({ name, description }) => ({ name, description })),
       },
     });
   });
@@ -12766,6 +12803,30 @@ describe("message pages", () => {
     });
     expect(saved.status).toBe(200);
     expect(await saved.text()).toBe("delivered photo bytes");
+  });
+
+  it("serves a file a teammate's result row carries, and only that file, only from its own conversation", async () => {
+    const threadId = "test-linked-file-room-thread";
+    const route = `/api/threads/${threadId}/messages/handoff-result-video-message/file`;
+    const video = join(home, ".seira", "attachments", "7c1e2b9a-3d44-4f0e-8a51-2f6b9d0c4e18.mp4");
+    const served = await fetch(`${BASE}${route}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: video }),
+    });
+    expect(served.status).toBe(200);
+    expect(await served.text()).toBe("teammate video bytes");
+    const link = await fetch(`${BASE}${route}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: video, media: true }),
+    });
+    expect(link.status).toBe(200);
+    expect(link.headers.get("x-seira-media")).toBe("1");
+
+    // The row grants only the files it carries: not a sibling file, not another message's file.
+    expect((await api("POST", route, { path: join(home, ".seira", "attachments", "shared-notes.pdf") })).status).toBe(403);
+    expect((await api("POST", route, { path: pathToFileURL(join(home, ".seira", "workspaces", "test-bot-a", "clip.mp4")).href })).status).toBe(403);
+    // An activity row that carries no file grants nothing.
+    expect((await api("POST", `/api/threads/${threadId}/messages/handoff-result-plain-message/file`, { path: video })).status).toBe(403);
+    // Another conversation cannot ask for this row.
+    expect((await api("POST", "/api/threads/test-bot-seed-thread/messages/handoff-result-video-message/file", { path: video })).status).toBe(404);
   });
 
   it("downloads an exact user attachment only from the private attachment store", async () => {

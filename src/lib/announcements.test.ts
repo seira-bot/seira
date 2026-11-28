@@ -3,8 +3,8 @@ import { EMPTY_ONBOARDING, type OnboardingStatus } from "@/lib/onboarding";
 import { localeChoices } from "@/locales";
 import { ANNOUNCEMENT_LOCALES, parseAnnouncementCard, type AnnouncementCard, type AnnouncementFacts } from "../../shared/announcements";
 
-vi.mock("@/lib/analytics", () => ({ track: vi.fn(), emailGateDone: () => true }));
-vi.mock("@/state/store", () => ({ api: vi.fn() }));
+vi.mock("@/lib/analytics", () => ({ track: vi.fn(), emailGateDone: () => true, usageAnalyticsChoice: () => true }));
+vi.mock("@/state/store", () => ({ api: vi.fn().mockResolvedValue({}) }));
 import { track } from "@/lib/analytics";
 import {
   announcementConditions, announcementPlan, announcementPlatform, announcementSurface, cardSeen, hintsWith, lastSponsorDay, launchAnnouncement, markLaunchAnnouncement,
@@ -179,6 +179,14 @@ describe("what the page knows", () => {
 it("counts one event per card and step, with the card's public id and nothing else", () => {
   reportAnnouncement(make("card-a", { kind: "tip" }), "primary");
   expect(track).toHaveBeenCalledWith("announcement", { id: "card-a", kind: "tip", action: "primary" });
+});
+
+it("AC-01 counts the card's step beside the PostHog event", async () => {
+  const { api } = await import("@/state/store");
+  vi.mocked(api).mockClear();
+  reportAnnouncement(make("card-count", { kind: "tip" }), "shown");
+  expect(track).toHaveBeenCalledWith("announcement", { id: "card-count", kind: "tip", action: "shown" });
+  expect(api).toHaveBeenCalledWith("/api/announcements/events", expect.objectContaining({ method: "POST", body: JSON.stringify({ id: "card-count", action: "shown" }) }));
 });
 
 it("a card's texts may be in any of the app's languages, and only those", () => {

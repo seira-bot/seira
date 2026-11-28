@@ -17,6 +17,7 @@ import { ConfirmDialogCard } from "./ConfirmDialog";
 import { BotDeleteMenuItem } from "./BotMenuDelete";
 import { BotListItem, botConfirmCopy, botRowProps, currentArchivableBot } from "./Sidebar";
 import { endCall } from "@/lib/call";
+import { shortcutLabel } from "./ShortcutHint";
 import { configureLiveMedia, resetLiveMedia, startLiveCall } from "@/lib/live-call-media";
 
 const bot = (overrides: Partial<Bot> = {}): Bot => ({
@@ -95,6 +96,12 @@ describe("BotListItem", () => {
     expect(markup).toContain('aria-label="New folder under Atlas"');
     expect(markup).toContain('aria-label="Actions for Atlas"');
     expect(markup).toContain('aria-haspopup="menu"');
+  });
+  it("names the New thread shortcut in the tooltip only for the bot it applies to", () => {
+    const draw = (selected: boolean) => renderToStaticMarkup(createElement(BotListItem, botRowProps(
+      selected ? { ...initialState, activeView: "chat", selectedId: "atlas" } : initialState, vi.fn(), bot(), { density: "comfortable", query: "", onMenu: vi.fn() })));
+    expect(draw(true)).toContain(`aria-label="New thread" title="New thread (${shortcutLabel("new-thread")})"`);
+    expect(draw(false)).toContain('aria-label="New thread" title="New thread"');
   });
   const twoThreads = (): Partial<Bot> => ({
     tasks: [{ threadId: "thread-atlas", title: "Current", createdAt: 2 }, { threadId: "thread-earlier", title: "Earlier", createdAt: 1 }],

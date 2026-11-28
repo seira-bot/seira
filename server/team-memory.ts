@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { redactSecretsInText } from "./redact.ts";
+import { PublicError } from "./public-error.ts";
 import { tooLongRefusal } from "./too-long.ts";
 import { USER_ERROR, type UserErrorKey } from "./user-errors.ts";
 import { recallTerms } from "./message-db.ts";
@@ -76,11 +77,10 @@ type TeamMemoryFile = z.infer<typeof fileSchema>;
 const emptyFile = (): TeamMemoryFile => ({ version: 2, sections: Object.create(null) });
 
 const clean = (value: unknown, max: number): string => (typeof value === "string" ? redactSecretsInText(value).replace(/\s+/g, " ").trim().slice(0, max + 1) : "");
-export class TeamMemoryConflict extends Error {
-  readonly status = 409;
+export class TeamMemoryConflict extends PublicError {
   declare readonly errorKey?: UserErrorKey;
   constructor(message?: string) {
-    super(message ?? USER_ERROR["serverError.department.memoryChanged"]);
+    super(message ?? USER_ERROR["serverError.department.memoryChanged"], 409);
     if (message === undefined) this.errorKey = "serverError.department.memoryChanged";
   }
 }
@@ -134,7 +134,7 @@ export class TeamMemory {
 
   private save(): void {
     try {
-      if (!this.readable) throw new Error("Saved team memory could not be read; the existing file was left unchanged");
+      if (!this.readable) throw new PublicError("Saved team memory could not be read; the existing file was left unchanged");
       writeFileAtomic(this.file, JSON.stringify(this.data, null, 2), { mode: 0o600 });
       this.saved = this.snapshot();
     } catch (error) {
@@ -180,16 +180,16 @@ export class TeamMemory {
   }
 
   static normalize(input: TeamMemoryInput): Required<TeamMemoryInput> {
-    if (!TEAM_MEMORY_KINDS.includes(input.kind)) throw new Error(`kind must be one of ${TEAM_MEMORY_KINDS.join(", ")}`);
+    if (!TEAM_MEMORY_KINDS.includes(input.kind)) throw new PublicError(`kind must be one of ${TEAM_MEMORY_KINDS.join(", ")}`);
     const name = clean(input.name, TEAM_MEMORY_NAME_MAX);
-    if (!name) throw new Error("name is required");
-    if (name.length > TEAM_MEMORY_NAME_MAX) throw new Error(tooLongRefusal("name", TEAM_MEMORY_NAME_MAX, "Use a short title, then send it again."));
+    if (!name) throw new PublicError("name is required");
+    if (name.length > TEAM_MEMORY_NAME_MAX) throw new PublicError(tooLongRefusal("name", TEAM_MEMORY_NAME_MAX, "Use a short title, then send it again."));
     const detail = clean(input.detail, TEAM_MEMORY_DETAIL_MAX);
-    if (detail.length > TEAM_MEMORY_DETAIL_MAX) throw new Error(tooLongRefusal("detail", TEAM_MEMORY_DETAIL_MAX, "Keep the fact, its context and why it matters, then send it again."));
+    if (detail.length > TEAM_MEMORY_DETAIL_MAX) throw new PublicError(tooLongRefusal("detail", TEAM_MEMORY_DETAIL_MAX, "Keep the fact, its context and why it matters, then send it again."));
     const aliases = [...new Set((input.aliases ?? []).map((alias) => clean(alias, TEAM_MEMORY_NAME_MAX)).filter((alias) => alias && !sameName(alias, name)))].slice(0, TEAM_MEMORY_ALIASES_MAX);
-    if (aliases.some(alias => alias.length > TEAM_MEMORY_NAME_MAX)) throw new Error(tooLongRefusal("one of the aliases", TEAM_MEMORY_NAME_MAX, "Use short names, then send it again."));
+    if (aliases.some(alias => alias.length > TEAM_MEMORY_NAME_MAX)) throw new PublicError(tooLongRefusal("one of the aliases", TEAM_MEMORY_NAME_MAX, "Use short names, then send it again."));
     const key = clean(input.key, 240) || `${input.kind}:${name.toLowerCase()}`;
-    if (key.length > 240) throw new Error(tooLongRefusal("key", 240, "Use a short stable key, then send it again."));
+    if (key.length > 240) throw new PublicError(tooLongRefusal("key", 240, "Use a short stable key, then send it again."));
     return { kind: input.kind, name, detail, aliases, key };
   }
 
@@ -270,7 +270,7 @@ export class TeamMemory {
     Object.assign(next, normalized, { pinned: patch.pinned ?? entry.pinned, updatedAt: Date.now() });
     if (entry.status === "proposed") this.acceptEntry(entries, next);
     else if (entries.some(candidate => candidate.id !== id && candidate.status === "accepted" && (candidate.key === next.key || (candidate.kind === next.kind && sameName(candidate.name, next.name))))) {
-      throw new Error("an entry with this kind and name already exists");
+      throw new PublicError("an entry with this kind and name already exists");
     }
     entries[index] = next;
     this.save();

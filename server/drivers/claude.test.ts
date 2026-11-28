@@ -764,6 +764,23 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(types.lastIndexOf("turn.progress")).toBeLessThan(types.indexOf("item.started"));
   });
 
+  it("reports how many items of its TodoWrite list are done, as counts only", async () => {
+    const list = (...statuses: string[]) => ({ todos: statuses.map((status, i) => ({ content: `SECRET_TASK_${i}`, status, activeForm: `doing ${i}` })) });
+    await create(undefined, {
+      FAKE_CLAUDE_TOOL_CALLS: JSON.stringify([
+        { name: "TodoWrite", input: list("in_progress", "pending", "pending") },
+        { name: "TodoWrite", input: list("completed", "in_progress", "pending") },
+        { name: "TodoWrite", input: { todos: [] } },
+      ]),
+    });
+    await instance.adapter.sendTurn({ threadId: "t-plan", text: "plan it" });
+    await recorder.until((e) => e.type === "turn.completed");
+    const plans = recorder.events.filter((e) => e.type === "turn.plan") as any[];
+    expect(plans.map((e) => `${e.done}/${e.total}`)).toEqual(["0/3", "1/3"]);
+    expect(plans.every((e) => typeof e.turnId === "string" && e.threadId === "t-plan")).toBe(true);
+    expect(JSON.stringify(plans)).not.toContain("SECRET");
+  });
+
   it("turns a signed-out CLI into a setup error, not a bot reply", async () => {
     const dump = join(scratch, "signed-out-session.json");
     process.env.FAKE_CLAUDE_DUMP = dump;

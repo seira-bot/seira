@@ -23,8 +23,25 @@ To find what still uses the old prefix on a server, start it and search its log 
 ## Access log
 
 `SEIRA_ACCESS_LOG=1` (or `seira serve --access-log`) makes the server write one line for each request it answers:
-time, method, path, status, duration and the way in (`local` or `tunnel`). The query string, cookies, headers and bodies
+time, method, route, status, duration and the way in (`local` or `tunnel`). The route is the shape of the path, taken from
+the list of known routes: a word stays only when no known route reads that position as a name or an id, any other name or id is written as `:id`, and the part of a
+path that matches no known route is written as `<other>`. The query string, cookies, headers and bodies
 are never written. It is off unless you set it.
+
+## Premium key
+
+`SEIRA_TEAM_KEY` sets the Premium key that lets more than 5 people sign in with an email on a self-hosted server. It
+wins over the key saved in Settings → People, and Settings shows it read-only. Only the server process reads it:
+engines, bot boxes and tools never receive it. See
+[How many people can sign in](self-hosting.md#how-many-people-can-sign-in).
+
+## Glance top inset
+
+`SEIRA_GLANCE_TOP_INSET` (Linux desktop only) is the height in pixels of a top panel that Glance should stay below.
+It must be a whole number from 0 to 400; anything else is ignored. It is only used when the desktop does not report
+the panel itself, so it has no effect on GNOME, KDE or X11 sessions that do. It wins over the automatic Hyprland and
+Sway lookup, which makes it the setting for other compositors. Set it before starting Seira. See
+[linux-desktop.md](linux-desktop.md#glance-on-tiling-wayland-compositors).
 
 ## What the harness keeps to itself
 

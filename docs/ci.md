@@ -8,7 +8,8 @@ number of runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
-[Package workflows](#package-workflows)).
+[Package workflows](#package-workflows)). The `Release` workflow starts them
+by itself (see [Release workflow](#release-workflow)).
 
 ## Jobs
 
@@ -122,6 +123,13 @@ A `gate` job with read-only permissions runs the release gate (see
 [The release gate](#the-release-gate)). The `redispatch` job of
 `npm-publish.yml` has `actions: write` and no environment. It starts the
 workflow again on `main`.
+One more workflow reads a secret outside the `release` environment:
+`snap-publish.yml` reads `SNAPCRAFT_STORE_CREDENTIALS` in its `publish` job,
+which uses the `snap-store` environment (see [Snap publish workflow](#snap-publish-workflow)).
+`msstore-publish.yml` reads four `MSSTORE_*` secrets in its `publish` job,
+which uses the `microsoft-store` environment (see
+[Microsoft Store publish workflow](#microsoft-store-publish-workflow)).
+
 Two workflows read secrets in the `release` environment:
 
 - `package-macos.yml` reads the Apple signing secrets;
@@ -190,6 +198,45 @@ holds these rules for every `package-*.yml` file:
 - The workflow packages only through a `pnpm package:*` script, and each such
   script in `package.json` ends with `electron-builder ... --publish never`.
 - It has one `actions/upload-artifact` step with `if-no-files-found: error`.
+
+## Release workflow
+
+`.github/workflows/release.yml` turns a merged version bump into a published
+release (see [Releasing](releasing.md#automatic-release)). It runs on a push to
+`main` that changes `package.json`, and on a manual start from `main`. It never
+runs on a pull request.
+
+- The `gate` job runs the [release gate](#the-release-gate). A run that the
+  gate flags waits for the wait timer of the `release-approval` environment.
+  A maintainer can cancel the run during the wait.
+- The `blockers` job and the `publish` job run `scripts/release-blockers.mjs`.
+  The script stops the release while a `P0` issue is open, or while a draft or
+  triage security advisory of high or critical severity does not show that the
+  release version is safe: its vulnerable version range covers the version, does
+  not parse, or is missing, and no patched version covers the version. The
+  Actions log is public, so the script prints the issue number but only the
+  number of blocking advisories. `--details` also prints the advisory id,
+  severity and state. Use it only where the output stays private. The release
+  App needs the `Repository security advisories: read` permission. Without it,
+  the script exits with 2 and the release stops.
+- Each job that writes mints its own App token in the `release` environment.
+  A job with write access runs only the scripts `release-assets.mjs`,
+  `release-blockers.mjs`, and `release-preflight.mjs`, taken from the workflow
+  commit. It never runs code from the commit that it releases.
+- The `flatpak` job is the only job that reads the `flatpak` environment. It
+  signs and uploads the Flatpak repository.
+- `package-windows.yml` and `package-macos.yml` have a `workflow_call` trigger
+  with the inputs `ref` and `gated`. The `Release` workflow passes
+  `gated: true`, because it already ran the gate and the wait on that commit.
+  Another repository can call these workflows, but it cannot use the
+  environments or secrets of this repository. A manual start has no `gated`
+  input.
+- Every job is safe to run again. A manual start continues a release that
+  stopped half way.
+- The workflow does not delete a tag or a release, does not roll back, and
+  does not force-push. An organization admin does these by hand.
+
+`scripts/ci-workflow.test.ts` holds these rules.
 
 ## Server image workflows
 
@@ -373,8 +420,10 @@ its tag.
 
 ### The `release` environment
 
-`package-macos.yml` reads the Apple signing secrets from the environment
-`release`, its `attach` job writes to the draft release in it, the `publish` job of `server-image.yml` uses it to write to
+`release.yml` reads the secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`
+from the environment `release`. They belong to the GitHub App that creates the tag and publishes
+the release. `package-macos.yml` reads the Apple signing secrets from the same environment,
+its `attach` job writes to the draft release in it, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
 npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 
@@ -382,7 +431,7 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 | --- | --- |
 | Required reviewers | None. The `release-approval` environment holds the wait for a flagged run. |
 | Deployment branches and tags | Selected branches and tags: `main` only |
-| Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
+| Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)), `RELEASE_APP_ID`, and `RELEASE_APP_PRIVATE_KEY` |
 
 - A job in `release` never waits. The `gate` and `approval` jobs before it
   decide if the run waits.
@@ -391,9 +440,17 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
 
+### The `flatpak` environment
+
+The `flatpak` job of `release.yml` uses this environment. An organization admin
+creates it with `main` as the only deployment ref and no required reviewer. It
+holds the secrets `FLATPAK_GPG_PRIVATE_KEY` and `FLATPAK_RCLONE_CONF`. Set the
+variable `RELEASE_HUMAN_REVIEWERS` at repository level, as for the other
+release workflows.
+
 ### The `release-approval` environment
 
-The `approval` jobs of `npm-publish.yml`, `package-macos.yml`, and `server-image.yml` use the
+The `approval` jobs of `release.yml`, `npm-publish.yml`, `package-macos.yml`, `package-windows.yml`, and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
 GitHub **Settings → Environments**:
 
@@ -436,8 +493,11 @@ The gate checks:
 - The release commit is on `main`. If not, the gate refuses the run.
 - Each commit comes from a merged pull request into `main`. A commit without
   one flags the run.
-- The author of each pull request is an owner or member of the organization.
-  Another author flags the run.
+- The author of each pull request is a trusted author. Another author flags the run.
+  See [Trusted authors](#trusted-authors).
+- A trusted author needs one more fact: the reviewer App `seira-roctis[bot]` has an
+  approval whose `commit_id` is the final head commit of the pull request. Without it,
+  the gate flags the run.
 - Each pull request leaves these paths alone: `.github/**`, `scripts/release-*`,
   `scripts/git-hooks/**`, `pnpm-workspace.yaml`, and `.npmrc` files.
   A change to one of them flags the run.
@@ -445,9 +505,40 @@ The gate checks:
 - A tag run has at least one commit since the baseline. If not, the gate flags the run.
 - GitHub returns the full list of commits and of changed files. A cut list flags the run.
 
-A pull request that breaks a rule passes when a listed human reviewer approved
-it. The latest review of that reviewer must be an approval of the final commit
-of the pull request.
+#### Trusted authors
+
+The file `.github/release-trusted-authors.json` is the only list. The gate reads it
+from `main` through the API (`contents/...?ref=main`). It never reads the file from the
+pull request under review. The file is under `.github/**`, so each change to it flags
+the run that ships it.
+
+- `botAuthors`: GitHub Apps. A pull request author counts only when its `type` is `Bot`
+  and its numeric `id` and its login both match one entry. The login alone never counts.
+- `adminAuthors`: people. The author must match the `id` and login, have the type `User`,
+  and the API must report `admin` for the account on the repository. The gate asks
+  `GET repos/{repo}/collaborators/{login}/permission`. This call needs `Metadata: read`,
+  which every `GITHUB_TOKEN` has. The gate does not use public organization membership.
+- `reviewerApps`: the Apps whose approval counts. Same match rule as `botAuthors`.
+
+The gate fails closed. A missing or invalid list means that no author is trusted, so
+the run is flagged. An error from the API for the list, the files, or the reviews
+refuses the run (exit status 2). An error from the permission call counts as "not admin".
+A path that matches a sensitive pattern flags the run for any author, and a bot review
+never clears it.
+
+A listed human reviewer can clear only the author rules: an author who is not
+trusted, and a missing reviewer App approval. The latest review of that reviewer
+must be an approval of the final commit of the pull request. A human approval
+never clears an incomplete file list or a sensitive path: these always flag the
+run. The shared account `RamaAditya49` (ID 213913142) is never counted as a human
+reviewer. This is fixed in the gate code, so it holds also when that account is
+missing from the list. When the trusted-author list is invalid or missing, no human
+review clears anything and every pull request stays flagged.
+
+The trusted-author file must be fully valid: `version` is 1, the three lists are
+arrays, each entry has exactly a string `login` and a positive integer `id`, and no
+list repeats an ID or a login (case-insensitive). One bad entry makes the whole file
+invalid, so every pull request is flagged.
 
 The gate has three results:
 
@@ -467,3 +558,66 @@ Do not add a bot account to it.
 - A published release starts `npm-publish.yml` again on `main`. The
   `redispatch` job does it with the workflow token. GitHub makes a new run for
   this kind of start.
+
+## Snap publish workflow
+
+`snap-publish.yml` is the one workflow that uploads a package to a store without
+the `release` environment. It follows `npm-publish.yml`. A published release (not
+a draft, not a prerelease) starts it through a `redispatch` job that runs it again
+on `main`. A person can also start it by hand from `main` with a tag and a channel.
+`scripts/ci-workflow.test.ts` holds these rules, and runs the shell of the
+`commit` job with fake `gh` and `git` commands to test them:
+
+- The `commit` job fails on any ref other than `main`. It resolves the tag once
+  to a commit SHA, and fails when the SHA is not in the history of `main`. For the
+  `stable` channel it also fails without a published release that is not a draft
+  and not a prerelease.
+- The `gate` job runs the release gate on the SHA. The `approval` job holds the
+  wait of a flagged run in the `release-approval` environment.
+- The `build` and `publish` jobs run only on `main`, after the gate passed or
+  after an approval in the same attempt. They use the SHA, never the tag name.
+- The `build` job has `contents: read`, no secret and no environment. It runs
+  `scripts/check-snap.mjs`.
+- The `publish` job uses the `snap-store` environment. It does no checkout, so
+  it runs no code of the repository. It reads `SNAPCRAFT_STORE_CREDENTIALS` in
+  the `env` of one step, and fails when the value is empty.
+- The channel is `stable`, `candidate`, `beta` or `edge`. A release always
+  uses `stable`.
+- Every action is pinned to a full commit SHA, and every checkout drops its
+  credentials.
+
+See [Releasing](releasing.md#publish-to-the-snap-store) for the one-time setup.
+
+## Microsoft Store publish workflow
+
+`msstore-publish.yml` submits the Windows Store package to the Microsoft Store.
+It follows `snap-publish.yml`. A published release (not a draft, not a
+prerelease) starts it through a `redispatch` job that runs it again on `main`.
+A person can also start it by hand from `main` with a tag. There is no channel.
+`scripts/ci-workflow.test.ts` holds these rules, and runs the shell of the
+`commit` job with fake `gh` and `git` commands to test them:
+
+- The `commit` job fails on any ref other than `main`. It resolves the tag once
+  to a commit SHA, and fails when the SHA is not in the history of `main`. It
+  also fails without a published release that is not a draft and not a
+  prerelease.
+- The `gate` job runs the release gate on the SHA. The `approval` job holds the
+  wait of a flagged run in the `release-approval` environment.
+- The `build` and `publish` jobs run only on `main`, after the gate passed or
+  after an approval in the same attempt. They use the SHA, never the tag name.
+- The `build` job runs on `windows-2025`. It has `contents: read`, no secret
+  and no environment. It runs `scripts/check-appx.mjs`, and it writes the
+  What's new text with `scripts/store-whats-new.mjs`.
+- The `publish` job runs on `windows-2025` and uses the `microsoft-store`
+  environment. It does no checkout, so it runs no code of the repository. It
+  reads the four `MSSTORE_*` secrets in the `env` of three steps.
+- Two steps of the `publish` job are inline Node scripts. The test runs them
+  with a fake `fetch`. The first stops when a secret is empty, and when Partner
+  Center already holds a submission in progress. The second sets the What's new
+  text of each listing, commits the submission, and waits for the commit. It
+  fails on `CommitFailed`, on a refused call, and after 30 minutes.
+- Every action is pinned to a full commit SHA, and every checkout drops its
+  credentials.
+
+See [Releasing](releasing.md#microsoft-store-msix) for the steps and
+[the one-time setup](releasing.md#one-time-microsoft-store-setup).

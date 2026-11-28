@@ -80,6 +80,23 @@ server it found ("✓ hetzner-1 · Seira 0.1.147 · HTTPS"), and **Connect to
 hetzner-1** finishes. You can also type the address (`seira.example.com`,
 `192.168.1.20:8799`) and the pairing code in their own fields.
 
+The **Open in the Seira app** button on a server's `/pair` page makes an
+`seira://pair?address=…` link. The page never adds the code that you typed
+there to this link. The desktop app opens it from the system. It
+asks first, and it names the server (scheme, host and port) before it sends
+any request. If you choose **Cancel**, nothing is saved. After you confirm,
+the app opens that server's own pairing page, and you enter the pairing code
+there. The code goes only to the server that you confirmed.
+
+A link never carries a pairing code. The system gives a link to the app as a
+launch argument, and other programs on the computer can read the arguments of
+a running program. The app therefore refuses a link that has a `code` or
+`token` part, and it takes every `seira://pair` link out of the arguments that
+it keeps for a restart. The app accepts only an exact `https://` or `http://`
+address, with no user name, path, query or fragment, and the `address` and
+`name` parts. Any other link shows one fixed error. The link is not written to
+the app log.
+
 `serve` with no way in mints no code. It lists the ways in instead. Every
 command the CLI prints starts the way you started it (`npx @seira-bot/seira`,
 `seira`, `pnpm seira`, or `docker compose exec seira seira`), so you
@@ -609,6 +626,8 @@ and the small helper programs that give it its tools:
 | Each bot that is working | 6 or more | about 45, more while it runs commands | about 700 MB |
 | Each open browser | about 13 | about 165 | about 400 MB |
 
+These memory values are budgets. On a 2 vCPU server with small tasks, the
+measured memory was lower: see [Benchmarks](benchmarks.md#results-real-models-on-a-small-vps).
 An engine stays loaded for ten minutes after its bot's last turn, so count
 the bots that work within the same ten minutes, not only in the same second.
 Leave room for the commands bots run: budget about 80 per working bot.
@@ -663,12 +682,15 @@ engine would not fit, and starts it by itself when there is room:
 
 | Value | What it does |
 | --- | --- |
-| unset | In a container with a memory or process limit: a number worked out from those limits (below). Anywhere else: no limit, as before. |
-| `auto` | The worked-out number on any self-hosted server, with or without a container limit. |
+| unset | On a Linux server, in a container or not: a number worked out from the memory and the process limit (below). On Windows and macOS: no limit. |
+| `auto` | The worked-out number on any self-hosted server. |
 | a number | That many turns at once. The live checks on memory and processes still apply. |
 | `off` or `0` | No waiting at all. |
 
-The worked-out number is the smaller of two: the memory limit less a tenth
+At start the server logs one line that names `SEIRA_TURNS_MAX_RUNNING=off`, the way to turn the waiting off. A server
+with a lot of memory and many bots can see turns wait where they did not wait before: set a larger number, or `off`.
+
+The worked-out number is the smaller of two: the memory (the container's limit, or the machine's) less a tenth
 (at least 320 MB), divided by 700 MB for an engine; and the process limit
 less a tenth (at least 32) and 40 for the server, divided by 60. A 4 GB
 container runs 5 turns at once, an 8 GB one 10; a process limit of 512 allows
@@ -1204,21 +1226,55 @@ never on a command line.
 
 ### Inviting people
 
-**Settings → People** lists who may sign in, their role, when they were last
-seen, and what each person spent this month. **Invite** adds an address (or
-`@company.com` for everyone there) and shows a link like
-`https://your.host/pair?email=name%40company.com`: it opens the sign-in page
-with the address filled in, and the one-time code still goes to that address.
-Roles change with one click; removing someone stops new sign-ins.
+**Settings → People** lists who may sign in, their role, what they can reach,
+when they were last seen, and what each person spent this month. Roles change
+with one click. Removing someone stops new sign-ins.
 
-A user can be limited to chosen departments: pick **Chosen departments** when
-you invite them, or **Change access** on their row. They then see only the
-bots, rooms, workflows and conversations of those departments, and cannot see
-team files or restore a workspace backup. Admins always see the whole team.
-Bots in a department that is named in any user's list can reach only bots in
-their own department. A bot in a chosen department can still read files outside
-its folders unless the department uses **Only chosen folders**. If the list of
-departments cannot be read, users see nothing until it is fixed. Teams in
+To invite a person, choose **Invite**. The dialog asks for an address (or
+`@company.com` for everyone there), a role (**User** or **Admin**) and the
+access. When you save, the dialog shows a link like
+`https://your.host/pair?email=name%40company.com`. The link opens the sign-in
+page with the address filled in. The one-time code still goes to that address.
+
+Access has three choices:
+
+- **Whole team**: the person can use every bot that is shared with the team.
+- **Chosen departments**: the person sees only the bots, rooms, workflows and
+  conversations of the departments you tick. General is one of them.
+- **Chosen bots**: the person sees only the bots you tick.
+
+Each chosen department or bot has a level. **Can chat** lets the person chat
+with the bot. **Can view** lets the person read the bot and its conversations,
+but not send a message. Admins always see the whole team, so the dialog hides
+the choice for an admin.
+
+You can also start from the sidebar. Open the menu of a department and choose
+**Invite to this department**, or open the menu of a bot and choose **Invite to
+this bot**. The dialog opens with that department or bot already ticked. These
+two entries show only to an admin on a server that signs people in by email.
+
+Inviting also works in the desktop app, after you add the server with **Connect
+to a server**. The desktop app's own computer has no invite. To work with other
+people, start a Team on Seira Cloud, or run Seira on a server of your own and
+invite them there.
+
+You can also ask a bot in your own chat, for example "invite name@company.com
+to Sales, can chat". The bot posts a card that names the person, the role and the
+access. Nothing changes until you tap **Apply**, in the desktop app or on a phone
+paired with full access. A bot of a person who is not an admin cannot invite.
+
+To change what a person can reach, choose **Change access** on their row.
+If you invite a person by address to a bot that is shared with only some people,
+Seira adds the person to those people, after you confirm.
+When you remove that bot from their access, or remove the person, Seira removes
+them from those people again.
+An `@company.com` entry cannot get such a bot, so invite each person by address.
+
+A person with chosen departments or bots cannot see team files, restore a
+workspace backup, or approve a change to a bot's setup. An admin approves it. Bots in a department that is named in any user's list can reach only
+bots in their own department. A bot in a chosen department can still read files
+outside its folders unless the department uses **Only chosen folders**. If the
+saved choices cannot be read, users see nothing until it is fixed. Teams in
 Seira Cloud do not support this.
 
 On a hosted workspace whose members your organization's Admin manages
@@ -1227,6 +1283,50 @@ People shows, read-only, who has signed in and what they spent, with a
 **Manage people in Admin** link to that workspace in Admin → People. Remote
 access there lists signed-in devices and offers no pairing codes, since a
 hosted workspace refuses them.
+
+### How many people can sign in
+
+A self-hosted server is free for up to 5 people who sign in with an email.
+Settings → People shows the count next to **Invite**, for example "3 of 5
+people". At 5, **Invite** stops and links to Premium.
+
+To let more people sign in, get a Premium key at
+<https://cloud.seira.bot/premium> and paste it into **Premium key** in
+Settings → People. Settings keeps it in the data folder (`team-key`, readable
+only by the server's user). You can also set it where the server starts. It
+then wins over the key in Settings, and Settings shows it read-only:
+
+```sh
+SEIRA_TEAM_KEY="seira-team.…"
+```
+
+- Every feature is the same on every plan. Premium changes only how many
+  people can sign in.
+- The server checks the key on this machine. It sends no request to check it.
+  The key is not tied to one server.
+- A person counts once, on any number of devices. A device paired with a code
+  and an access token from `seira token create` do not count.
+- A person who signs in through an `@domain` entry counts from their first
+  sign-in. To free that place, remove them on their row in Settings → People.
+  The `@domain` entry then no longer lets that address in. To let the person in
+  again, add their address itself in Settings or with `seira access add`.
+  If the server cannot save this removal, it says so and removes nobody. If it
+  cannot read `sign-in-removed.json` in the data folder, an `@domain` entry
+  alone lets nobody in until you fix or delete that file.
+- An address that only `SEIRA_SIGNIN_EMAILS`, `SEIRA_SIGNIN_MEMBER_EMAILS`, a
+  hand edit of `config.json` or `seira fleet users add` lists also counts from
+  its first sign-in. An address that Settings or `seira access add` adds counts
+  at once.
+- An address taken off the list in any way loses its place. If a list names it
+  again, it counts from its next sign-in, while there is a free place.
+- Settings and `seira access add` refuse an address that would go past the
+  limit. A new person who would go past it when they sign in sees
+  "This installation is full. Ask your admin to make room for you."
+- The limit never takes access away. A server that already has more than 5
+  people when it updates keeps all of them. When a key ends, people stay
+  unlimited for 7 more days; after that, the limit applies to new people only.
+- A Team Cloud, My Cloud, and a hosted workspace whose members your
+  organization's Admin manages have no such limit.
 
 ### Who may answer a card
 
@@ -1328,10 +1428,12 @@ and one link.
 ## Announcements from the project
 
 When someone opens the app, the server downloads the project's public announcements file from GitHub
-(`raw.githubusercontent.com`, at most once an hour, a plain GET with nothing of yours in it) and its pages may show one of
-its cards in the corner: product news, a tip, or a sponsor's offer, each once per person
-([docs/announcements.md](announcements.md)). Set `SEIRA_DISABLE_ANNOUNCEMENTS=1` in the server's environment to never
-download it and never show those cards.
+(`raw.githubusercontent.com`) and the Seira team's announcement list (`cloud.seira.bot`), each at most once an hour, a
+plain GET with nothing of yours in it. Its pages may show one of the cards in the corner: product news, a tip, or a
+sponsor's offer, each once per person ([docs/announcements.md](announcements.md)). Set `SEIRA_DISABLE_ANNOUNCEMENTS=1`
+in the server's environment to never download them and never show those cards.
+Set `SEIRA_DISABLE_ANNOUNCEMENT_COUNTS=1` to keep the cards but never send the anonymous count of how many devices saw
+or used each card ([what it sends](announcements.md#counting)).
 
 ## Attachment storage
 
@@ -2100,3 +2202,15 @@ computer and are not part of a workspace backup.
 As a server starts, the doctor reads `messages.db` through and copies it before
 a checkpoint only while it and its write-ahead log come to 256 MB or less, so an update never waits on a large database;
 `seira doctor --data` does both at any size.
+
+### A bots.json or groups.json that does not load
+
+When `bots.json` or `groups.json` is in the data folder and does not read as a
+list (cut short, empty, not JSON, or a file this user cannot read), the server does
+not start. It prints one line, exits with code 1, and does not change the file.
+The server never replaces `bots.json` with the default bot, and never replaces
+`groups.json` with an empty list of rooms. When it can read the file, it keeps a
+copy as `bots.json.damaged-<id>` or `groups.json.damaged-<id>` in the same folder
+(one copy for each content). Restore the file from a backup, fix its
+permissions, or move it away, then start the server again. A data folder with no
+`bots.json` or no `groups.json` starts as a new place.

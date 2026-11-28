@@ -6,6 +6,7 @@ import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../shared/wire.ts";
 import { isModelVariant } from "./contracts.ts";
 import { normalizeCronSchedule } from "../shared/routine-schedule.ts";
 import { parseToolScope, type ToolScope } from "../shared/tool-scope.ts";
+import { PublicError } from "./public-error.ts";
 
 const strings = (max: number, length: number) => z.array(z.string().max(length)).max(max);
 const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
@@ -53,6 +54,7 @@ export const botDefaultsProfileSchema = z.preprocess(withoutRetiredFields, profi
   toolScope: z.custom<ToolScope>((value) => value !== undefined && parseToolScope(value).ok, "Invalid tool selection")
     .transform((value) => { const parsed = parseToolScope(value); return parsed.ok ? parsed.scope! : value; }).nullable().optional(),
   parkDirectMessages: z.boolean().optional(),
+  startsTodos: z.enum(["manual", "auto"]).transform((value) => (value === "manual" ? "manual" as const : undefined)).optional(),
   voiceNotes: z.boolean({ error: "voiceNotes must be true or false" }).optional(),
   voiceNoteEveryReply: z.boolean({ error: "voiceNoteEveryReply must be true, false or null" }).nullable().optional(),
   /** At creation, so a copy of a bot kept off the helper model is off it from its first moment. */
@@ -125,14 +127,14 @@ function settingsError(error: z.ZodError): Error {
   if (!issue) return userErrorThrown("serverError.botDefaults.invalid");
   if (issue.code === "too_big" && issue.path[0] === "name") return userErrorThrown("serverError.botDefaults.nameLength");
   if (issue.code === "too_big" && issue.path[0] === "section") return userErrorThrown("serverError.botDefaults.sectionLength");
-  if (issue.code === "unrecognized_keys") return new Error(`unsupported bot field: ${issue.keys[0] ?? "unknown"}`);
+  if (issue.code === "unrecognized_keys") return new PublicError(`unsupported bot field: ${issue.keys[0] ?? "unknown"}`);
   const field = issue.path.join(".");
-  return new Error(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
+  return new PublicError(field && issue.message.startsWith(String(issue.path[0])) ? issue.message : `${field || "the bot"} is not valid`);
 }
 
 export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, body: Record<string, unknown>) {
   if (body.useDefaults !== undefined && typeof body.useDefaults !== "boolean") {
-    throw Object.assign(new Error("useDefaults must be true or false"), { status: 400 });
+    throw new PublicError("useDefaults must be true or false", 400);
   }
   const template = newBotDefaultsSchema.parse(body.useDefaults === false ? {} : saved ?? {});
   const checked = botDefaultsProfileSchema.safeParse(body.settings === undefined ? {} : body.settings);
@@ -147,3 +149,13 @@ export function resolveBotCreationDefaults(saved: NewBotDefaults | undefined, bo
   if (!resolved.data.name?.trim()) delete resolved.data.name;
   return { ...template, profile: resolved.data };
 }
+
+/** The level a bot made by team setup or an import starts at, under bot creation's rules for the saved New bot level: no Custom, no Full in a hosted
+ * workspace, and no Auto, which needs a warning only a person confirms. A level creation refuses becomes Ask; undefined is the workspace default. */
+export function newBotApprovalLevel(saved: NewBotDefaults | undefined, hostedWorkspace: boolean): "ask" | "full" | undefined {
+  const level = saved?.profile.approvalMode;
+  if (level === undefined) return undefined;
+  return level === "full" && !hostedWorkspace ? "full" : "ask";
+}
+
+export type NewBotApproval = NonNullable<ReturnType<typeof newBotApprovalLevel>>;

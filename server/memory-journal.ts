@@ -5,7 +5,7 @@ import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync } fro
 import { appendFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { writeFileAtomic } from "./atomic.ts";
+import { settleBehind, writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
 import {
   MEMORY_INDEX,
@@ -172,6 +172,7 @@ function enqueue(botId: string, entry: MemoryJournalEntry): void {
       console.error(`memory-journal: could not append for ${botId}:`, error instanceof Error ? error.message : error);
     });
   writeQueues.set(botId, queued);
+  settleBehind(queued);
   void queued.finally(() => {
     if (writeQueues.get(botId) === queued) writeQueues.delete(botId);
   });

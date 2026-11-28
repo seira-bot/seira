@@ -28,6 +28,7 @@ import type { BotLink, LinkEvent, LinkPolicy } from "../bot-link/link.ts";
 import { guestFrameSchema, peerKey, type Place } from "../bot-link/protocol.ts";
 import type { Coordinator } from "../coordinator.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 import { PEER_NAME_MAX, newA2aToken, outboundUrl, peerByToken, readA2aPeers, writeA2aPeers, type A2aPeer, type EndedPeer } from "./a2a-peers-store.ts";
 import { ADMIT, createFrameBudget, limitLog } from "./linked-servers-admit.ts";
 import { ENDED_MAX, LINKS_MAX, botIdSchema, cleanName, guestOrigin, instanceDir, type ApprovalCap } from "./linked-servers-store.ts";
@@ -48,6 +49,7 @@ const EXPOSED_MAX = 500;
 
 /** A change an admin asked for that was not made, with a message the person can read. */
 export class LinkedServerError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status: number) {
     super(message);

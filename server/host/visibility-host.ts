@@ -5,7 +5,8 @@
 import { basename } from "node:path";
 
 import { baseBotId } from "../audience.ts";
-import { audienceEquals, narrowestAudience, roomFeeds, routineRunVisible, routineVisible, SEES_EVERYTHING, VisibleSet, type PathSubject, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
+import { audienceEquals, narrowestAudience, roomFeeds, routineRunVisible, routineVisible, SEES_EVERYTHING, VisibleSet, type PathSubject, type ResolvedGrant, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
+import { walledApart } from "../peer-roster.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
@@ -18,8 +19,8 @@ export interface VisibilityHostDeps {
   team: boolean;
   audiencesFor(viewer: Viewer): ThreadAudiences | undefined;
   threadsReferencing(name: string): readonly string[];
-  /** The departments a member is limited to (host/department-access-host.ts); null: the whole team. */
-  departmentsFor?(email: string | undefined): ReadonlySet<string> | null;
+  /** What a member is limited to (host/department-access-host.ts); null: the whole team. */
+  grantFor?(email: string | undefined): ResolvedGrant | null;
 }
 
 export function createVisibilityHost(deps: VisibilityHostDeps) {
@@ -48,7 +49,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     const key = viewer.kind === "all" ? (viewer.email === undefined ? "*" : `admin:${viewer.email.trim().toLowerCase()}`) : `member:${viewer.email?.trim().toLowerCase() ?? ""}`;
     let set = visibleSets.get(key);
     if (!set) {
-      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), viewer.kind === "member" ? deps.departmentsFor?.(viewer.email) ?? null : null);
+      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), viewer.kind === "member" ? deps.grantFor?.(viewer.email) ?? null : null);
       if (visibleSets.size >= 1_000) visibleSets.clear();
       visibleSets.set(key, set);
     }
@@ -124,8 +125,11 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
       return member ? [member.visibility] : [];
     });
   }
-  function roomFeedsBot(group: GroupRecord, bot: Pick<BotRecord, "visibility">): boolean {
-    return roomFeeds([...roomMemberAudiences(group), group.audienceFloor], bot.visibility);
+  /** Security invariant: a room feeds a bot's memory only when everyone who sees the bot sees the room too: by the
+   * audiences, and with no department or grant wall between the bot and another bot of the room. */
+  function roomFeedsBot(group: GroupRecord, bot: Pick<BotRecord, "id" | "section" | "visibility">): boolean {
+    if (!roomFeeds([...roomMemberAudiences(group), group.audienceFloor], bot.visibility)) return false;
+    return group.memberIds.every((id) => { const member = store.bot(id); return !member || !walledApart(bot, member); });
   }
   /** A room's floor stays at the narrowest audience it ever had, set before a restricted bot can leave; only an admin's
    * explicit reset widens it. */

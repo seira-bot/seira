@@ -37,7 +37,7 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { CopyButton, MESSAGE_ROW, MessageActions, messageActionClass, ReplyAction } from "./MessageActions";
 import { ReactAction, ReactionChips, useCanReact } from "./Reactions";
 import { ClusterLabel } from "./RoomClusterLabel";
-import { replyAndCopy, roomPin, useBotMessageMenu, userMessageMenu } from "./message-menu";
+import { replyAndCopy, roomPin, useBotMessageMenu, userMessageMenu, userSaveItems } from "./message-menu";
 import { forkMessageItem, ForkLinks } from "./ForkMessage";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import { RawMarkdownView, RawToggleAction } from "./RawMarkdownToggle";
@@ -90,7 +90,7 @@ import { splitTranscriptCitations, type CitationAttachment } from "@/lib/citatio
 import { highlightCitationSource } from "@/lib/citations-dom";
 import { latestFailure, latestReply, type TranscriptSnapshot } from "@/lib/transcript-announcer";
 import { pendingApprovals } from "./PendingApproval";
-import { DataResultChip } from "./DataResultChip"; import { PublishedPageCard } from "./PublishedPageCard"; import { TemplateChatCard } from "./TemplateCard"; import { RoomRichRow, UserLineNote } from "./RichMessageRow";
+import { DataResultChip } from "./DataResultChip"; import { PublishedPageCard } from "./PublishedPageCard"; import { TemplateChatCard } from "./TemplateCard"; import { RoomRichRow, UserLineNote } from "./RichMessageRow"; import { TodoChips, useTodoChips } from "./todo/TodoChips"; import { TodoBatchCard } from "./todo/TodoBatchCard";
 import { TranscriptAnnouncer } from "./TranscriptAnnouncer";
 import { dayLabel, localDay } from "@/lib/transcript-derivations";
 import { roomThreadSpeakerId, roomThreadWorking } from "@/lib/room-threads";
@@ -181,6 +181,7 @@ function RoomTextMessage({
   const botMenu = useBotMessageMenu({
     text: botText,
     botId: speakerBot?.id,
+    todo: { threadId: group.threadId, groupId: group.id, who: user ? undefined : m.from?.name ?? speakerBot?.name, at: m.at, user },
     messageId: m.id,
     voiceId: speakerBot?.voice,
     tts: state.config?.tts,
@@ -208,7 +209,7 @@ function RoomTextMessage({
       {speaker && <div className="mb-0.5 px-1 text-right text-[13px] [overflow-wrap:anywhere] font-semibold text-ink-secondary">{speaker}</div>}
       <div className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
         {user && (
-          <MessageActions side="user" menu={[...userMessageMenu({ messageId: m.id, pin }), ...forkAction]} contextItems={replyAndCopy(() => onReply(m), display)}>
+          <MessageActions side="user" menu={[...userMessageMenu({ messageId: m.id, pin, save: userSaveItems(botMenu) }), ...forkAction]} contextItems={replyAndCopy(() => onReply(m), display)}>
             <ReplyAction onReply={() => onReply(m)} />
             {Boolean(display.trim()) && <CopyButton text={display} className={messageActionClass} />}
           </MessageActions>
@@ -255,7 +256,7 @@ function RoomTextMessage({
                 data-citation-thread={group.threadId}
               >
                 <ThreadRefText text={display} peers={peers} everyone={!group.dm} />
-              </div>{m.bugOffer ? <BugOfferLine message={m} /> : m.bugReport ? <BugReportNote report={m.bugReport} /> : m.pointed?.length ? <UserLineNote message={m} /> : null}
+              </div>{m.bugOffer ? <BugOfferLine message={m} /> : m.bugReport ? <BugReportNote report={m.bugReport} /> : m.pointed?.length || m.fromTodo ? <UserLineNote message={m} /> : null}
               {cited && <SentCitations
                 citations={cited.citations}
                 onNavigate={async (citation: CitationAttachment) => {
@@ -366,6 +367,7 @@ export const Transcript = memo(function Transcript({
     return newest && isCancelledTranscriptRow(newest) ? roomRetryRequest(transcript, retryableIndex) : null;
   }, [transcript, retryableIndex]);
   const liveTools = useLiveToolIds(transcript, { busy: roomBusy, turnStartedAt: group.turnStartedAt });
+  const todoChips = useTodoChips();
   const retryRoom = useCallback(() => {
     if (!retryRequest || roomBusy) return;
     dispatch({
@@ -487,7 +489,7 @@ export const Transcript = memo(function Transcript({
             <CompactionChip message={m} />
           ) : m.kind === "digest" ? (
             showToolCalls && !traces?.absorbed.has(m.id) ? <DigestChip message={m} /> : null
-          ) : (m.kind === "app" || m.kind === "widget") && m.from ? <RoomRichRow message={m} from={m.from} threadId={group.threadId} /> : m.template ? <TemplateChatCard message={m} /> : m.publishedPage ? <PublishedPageCard message={m} /> : m.kind === "text" && (m.text || m.attachments?.length) ? (
+          ) : (m.kind === "app" || m.kind === "widget") && m.from ? <RoomRichRow message={m} from={m.from} threadId={group.threadId} /> : m.todoBatch ? <TodoBatchCard message={m} /> : m.template ? <TemplateChatCard message={m} /> : m.publishedPage ? <PublishedPageCard message={m} /> : m.kind === "text" && (m.text || m.attachments?.length) ? (
             !user && isPureLeakedSystemHarnessMessage(m.text) && !m.attachments?.length ? null : (
               <RoomTextMessage
                 group={group}
@@ -541,6 +543,7 @@ export const Transcript = memo(function Transcript({
               </TurnNarrationRun>
             )}
             {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}
+            <TodoChips messageId={m.id} chips={todoChips} end={user} />
             {m.bugOffer && !user && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}
           </div>
         );

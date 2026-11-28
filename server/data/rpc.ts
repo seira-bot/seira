@@ -2,6 +2,7 @@
 import { DATA_INSTRUCTIONS } from "./instructions.ts";
 import type { DataCard } from "../../shared/data-surface.ts";
 import { DATA_TOOLS, dataErrorResult, dataToolCallProblem, runDataTool, type DataContext, type DataToolResult } from "./tools.ts";
+import { PublicError } from "../public-error.ts";
 
 export const DATA_INTERNAL_MCP_PATH = "/api/internal/data/mcp";
 
@@ -20,7 +21,7 @@ export async function dataRpc(
     deps.assertActive();
     return { tools: DATA_TOOLS, instructions: DATA_INSTRUCTIONS };
   }
-  if (request?.method !== "tools/call") throw Object.assign(new Error("unsupported data method"), { status: 400 });
+  if (request?.method !== "tools/call") throw new PublicError("unsupported data method", 400);
   const params = (request.params && typeof request.params === "object" ? request.params : {}) as { name?: unknown; arguments?: unknown };
   const args = params.arguments ?? {};
   const problem = dataToolCallProblem(params.name, args);

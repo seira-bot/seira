@@ -17,7 +17,10 @@ export type MessageMenuItem = {
   key: string;
   icon: ReactNode;
   label: string;
-  onSelect: () => void;
+  /** `selection`: the text selected inside the message when the menu opened. */
+  onSelect: (selection?: string) => void;
+  /** Offered only while some text of this message is selected. */
+  selectionOnly?: boolean;
   title?: string;
   disabled?: boolean;
   /** Offered only while the chat's turn is not running. */
@@ -34,6 +37,14 @@ export const MESSAGE_ROW = "data-message-row";
 const INTERACTIVE = "a, button, input, textarea, select, summary, label, [role=button], [contenteditable=true]";
 const OWN_MENU_MEDIA = "img, video, audio";
 const LONG_PRESS_MS = 450;
+
+function selectedTextIn(row: HTMLElement | null): string {
+  const selection = window.getSelection();
+  const text = selection && !selection.isCollapsed && selection.rangeCount ? selection.toString().trim() : "";
+  if (!text || !row) return "";
+  const within = selection!.getRangeAt(0).commonAncestorContainer;
+  return [...row.querySelectorAll("[data-chat-bubble]")].some((bubble) => bubble.contains(within)) ? text : "";
+}
 
 function focusVisible(target: EventTarget | null): boolean {
   try {
@@ -66,7 +77,9 @@ export function MessageActions({
   const menuId = useId();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pointAt, setPointAt] = useState<{ x: number; y: number; clientX: number; clientY: number } | null>(null);
-  const offered = pointAt ? [...contextItems, ...items] : items;
+  const [selection, setSelection] = useState("");
+  const pressedSelection = useRef("");
+  const offered = (pointAt ? [...contextItems, ...items] : items).filter((item) => !item.selectionOnly || selection);
   // use() may run conditionally: a closed menu has no reason to follow the turn.
   const busy = menuOpen && offered.some((item) => item.idleOnly) ? use(ChatBusyContext) : false;
   const menu = busy ? offered.filter((item) => !item.idleOnly) : offered;
@@ -123,10 +136,12 @@ export function MessageActions({
       if (!canPointRef.current || (event as Partial<PointerEvent>).pointerType === "touch") return;
       const target = event.target;
       if (!(target instanceof Element) || !target.closest("[data-chat-bubble]") || target.closest(INTERACTIVE) || target.closest(OWN_MENU_MEDIA)) return;
-      if (window.getSelection()?.toString().trim()) return;
+      const picked = selectedTextIn(row);
+      if (!picked && window.getSelection()?.toString().trim()) return;
       const box = rootRef.current?.getBoundingClientRect();
       if (!box) return;
       event.preventDefault();
+      setSelection(picked);
       setPointAt({ x: event.clientX - box.left, y: event.clientY - box.top, clientX: event.clientX, clientY: event.clientY });
       setMenuOpen(true);
     };
@@ -218,8 +233,11 @@ export function MessageActions({
           ref={moreRef}
           type="button"
           data-ui={ui("message.actions")}
+          onPointerDown={() => { pressedSelection.current = selectedTextIn(rowRef.current); }}
           onClick={() => {
             setPointAt(null);
+            setSelection(selectedTextIn(rowRef.current) || pressedSelection.current);
+            pressedSelection.current = "";
             setMenuOpen((value) => !value);
           }}
           aria-label={t("chat.messageActions")}
@@ -255,7 +273,7 @@ export function MessageActions({
               disabled={item.disabled}
               title={item.title}
               onClick={() => {
-                item.onSelect();
+                item.onSelect(selection || undefined);
                 setMenuOpen(false);
                 moreRef.current?.focus();
               }}

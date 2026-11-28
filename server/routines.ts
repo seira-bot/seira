@@ -8,12 +8,13 @@ import { OwnedFile } from "./atomic.ts"; import { saveSoon } from "./save-batch.
 import { redactSecretsInText } from "./redact.ts";
 import { activeRunsOf, nextDueOf, schedulerDueOf, wakeHoldOf } from "./routine-due.ts";
 import { startDueTimer, type DueTimer } from "./due-timer.ts";
+import { clockWentBack, pullBackNextRuns } from "./routine-clock-back.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import { intervalAllowsOccurrence, intervalHasRestrictions, isSameLocalDay, latestIntervalOccurrence } from "./routine-intervals.ts";
 import { limitResetOccurrence, mergeScheduleUpdate, nextOccurrence, RoutineScheduleError, type RoutineSchedule, type RoutineScheduleInput } from "./routine-schedules.ts";
-import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts";
+import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts"; import { nextAfterSkips, occurrenceSkipped } from "./routine-skip-occurrence.ts";
 import {
   ROUTINE_HANDOFF_WAIT, isRoutineProblemRun, type RoutineAccess, type RoutineCheck, type RoutineContextAttachment, type RoutineDelivery, type RoutineIntervalWindow, type RoutineRetryCause,
   type RoutineHoldCause, type RoutineRunReport, type RoutineRunStatus, type RoutineRunTrigger,
@@ -38,10 +39,12 @@ import { loadInstalledPackage, matchingRequestReceipt, rememberRequest } from ".
 import { applyHolds, holdCauses, type AppliedHolds } from "./routine-holds.ts";
 import { cancelUnfinishedRuns, interruptRunTurns } from "./routine-stops.ts";
 import { sanitizeInput, workflowLookupFor } from "./routine-input.ts";
+import { bindThread, isLiveThread, runOfThread, type StepThreads } from "./routine-step-threads.ts";
 import { startRoutineWork, type WorkflowRoutineOptions } from "./routine-dispatch.ts"; import { cloneRoutine, cloneRun } from "./routine-clone.ts";
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
 import { resolveRoutineResultsThread, routineRunDefinition, type ResultsThreadAllocation } from "./routine-run-definition.ts";
+import { PublicError } from "./public-error.ts";
 
 export type { RoutineContextAttachment, RoutineIntervalWindow, RoutineRunStatus, RoutineRunTrigger };
 export { intervalHasRestrictions } from "./routine-intervals.ts";
@@ -79,7 +82,7 @@ export interface Routine extends RoutineTroubleCode {
   checkTrouble?: string;
   wakeAt?: number;
   skippedRuns?: number;
-  lastSkippedAt?: number;
+  lastSkippedAt?: number; skippedOccurrences?: number[];
   failureStreak?: number;
   /** Its newest runs in a row whose cloud computer did not start, while its scheduled runs are spaced out for it. */
   noStartStreak?: number;
@@ -141,6 +144,7 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   deliveryId?: string;
   sourceThreadId?: string;
   resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
+  postsResult?: true; stepThreads?: StepThreads;
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -247,7 +251,7 @@ export interface RoutineManagerOptions extends WorkflowRoutineOptions {
   botState: (botId: string) => "ready" | "busy" | "missing";
   /** Why this bot takes no runs now, in the person's words (a Starter Cloud keeps only so many bots awake); null when it does. */ pausedText?: (botId: string) => string | null; /** The person paused this bot: its runs are let go quietly, not failed into To review. */ held?: (botId: string) => boolean; /** A reached usage cap (host/usage-cap-gate.ts): `capSkip` for a scheduled occurrence, which is counted on one `missed` row per cap and period and never switches the routine off; `capText` for a run already queued. */ capSkip?: (botId: string, routineId: string) => { behind: string; resetsAt: number; words(count: number): RoutineLine } | null; capText?: (botId: string, trigger: RoutineRunTrigger) => string | null;
   goalState?: (groupId: string | undefined, coordinatorBotId: string) => "ready" | "busy" | "missing";
-  createTask: (botId: string, title: string, run?: RoutineRun) => { threadId: string } | null;
+  createTask: (botId: string, title: string, run?: RoutineRun, modelSelection?: ModelSelection) => { threadId: string } | null;
   joinConversation?: (run: RoutineRun) => string | null;
   createGoalTask?: (groupId: string, title: string) => { threadId: string } | null;
   isResultsThread?: (botId: string, threadId: string) => boolean;
@@ -339,13 +343,13 @@ export class RoutineManager {
   private frozenPending = false;
   private readonly bootedAt: number;
   private readonly checking = new Set<string>(); private readonly progress = new RunProgressSave(() => this.file, () => this.save()); private readonly gate = createRunGate<RoutineRun>((run, signal) => this.options.prepareRun?.(cloneRun(run), signal) ?? null, () => this.tickInBackground());
-  private readonly ledger: Occurrences; private readonly watch: RunWatch; private passedAt = -Infinity;
+  private readonly ledger: Occurrences; private readonly watch: RunWatch; private passedAt = -Infinity; private clockSeenAt: number;
 
   constructor(options: RoutineManagerOptions) {
     this.options = withBoundedStops(options, this.slowStops);
     this.file = options.file ?? join(DATA_DIR, "routines.json"); this.disk = new OwnedFile(this.file, { mode: 0o600 });
     this.now = options.now ?? Date.now;
-    this.bootedAt = this.now(); this.ledger = new Occurrences(this.file, this.now, options.home?.machine); this.watch = new RunWatch(options.turnLive);
+    this.bootedAt = this.now(); this.clockSeenAt = this.bootedAt; this.ledger = new Occurrences(this.file, this.now, options.home?.machine); this.watch = new RunWatch(options.turnLive);
     this.load();
   }
 
@@ -364,7 +368,7 @@ export class RoutineManager {
     let restarts = 0;
     for (const run of this.runs.filter((candidate) => candidate.status === "running" || candidate.status === "waiting")) {
       settleAsk(run, undefined, this.now());
-      if (run.threadId && run.target === "bot" && (run.workflowId !== undefined || this.options.hasPendingDelegations?.(run.threadId) === true)) {
+      if (run.threadId && (run.workflowId !== undefined || (run.target === "bot" && this.options.hasPendingDelegations?.(run.threadId) === true))) {
         this.wait(run, ROUTINE_HANDOFF_WAIT);
         continue;
       }
@@ -521,16 +525,13 @@ export class RoutineManager {
     return removed;
   }
 
-  isActiveThread(threadId: string): boolean {
-    return this.runs.some(
-      (run) => run.threadId === threadId && ["running", "waiting"].includes(run.status),
-    );
-  }
+  isActiveThread(threadId: string): boolean { return isLiveThread(this.runs, threadId); }
 
-  runForThread(threadId: string): RoutineRun | null {
-    const run = this.runs.findLast((candidate) => candidate.threadId === threadId && ["running", "waiting"].includes(candidate.status)) ??
-      this.runs.findLast((candidate) => candidate.threadId === threadId);
-    return run ? cloneRun(run) : null;
+  runForThread(threadId: string): RoutineRun | null { return runOfThread(this.runs, threadId); }
+
+  bindStepThread(runId: string, threadId: string, access?: RoutineAccess): void {
+    const run = this.runs.find((candidate) => candidate.id === runId);
+    if (run && bindThread(run, threadId, access)) this.saveLater();
   }
 
   noteReport(id: string, report: RoutineRunReport | undefined): RoutineRun | null {
@@ -556,10 +557,10 @@ export class RoutineManager {
     const at = this.now();
     const clean = sanitizeInput(input, at, this.options.workflowCopy);
     clean.schedule = this.timedSchedule(clean.schedule);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const nextRunAt = clean.enabled ? this.initialOccurrence(clean.schedule, at) : null;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const routine: Routine = {
       id: randomUUID(),
@@ -620,7 +621,7 @@ export class RoutineManager {
       deliver: Object.hasOwn(patch, "deliver") ? patch.deliver : routine.deliver, workflowId: Object.hasOwn(patch, "workflowId") ? patch.workflowId : routine.workflowId,
     }, now, workflowLookupFor(patch, routine, this.options.workflowCopy));
     clean.schedule = this.timedSchedule(clean.schedule, routine.id);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const scheduleChanged = JSON.stringify(clean.schedule) !== JSON.stringify(routine.schedule);
     const enabledChanged = clean.enabled !== routine.enabled;
     if (enabledChanged && clean.enabled && clean.schedule.type === "once" && clean.schedule.at <= now) throw new RoutineScheduleError("Its time has passed. Edit it to pick a new time.");
@@ -628,7 +629,7 @@ export class RoutineManager {
       ? this.initialOccurrence(clean.schedule, now)
       : routine.nextRunAt;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const destination = { ...routine, ...clean };
     if (destination.botId !== routine.botId) delete destination.resultsThreadId;
@@ -641,7 +642,7 @@ export class RoutineManager {
         // updatedAt doubles as the confirmation cards' optimistic revision: keep it monotonic within one ms.
         updatedAt: Math.max(now, routine.updatedAt + 1),
       });
-      if (patch.enabled !== undefined) delete routine.heldFor;
+      if (patch.enabled !== undefined) delete routine.heldFor; if (scheduleChanged) delete routine.skippedOccurrences;
       if (placeCleared) delete routine.placeLost;
       for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver", "workflowId", "workflowBotIds"] as const) if (!clean[key]) delete routine[key];
       if (!clean.checks) for (const key of ["checks", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt"] as const) delete routine[key];
@@ -769,18 +770,24 @@ export class RoutineManager {
     eventSource?: "app" | "wait"; sameConversation?: boolean; byPerson?: boolean;
     /** Where the run reports, instead of the event's own results chat. */
     resultsThreadId?: string;
+    /** The workflow whose steps the run executes; the event text is the first step's input. */
+    workflowId?: string;
+    postsResult?: true;
   }): { id: string } {
     this.assertWritable();
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
     if (existing) return existing;
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned bot no longer exists"), { status: 410 });
+      throw new PublicError("The assigned bot no longer exists", 410);
     }
+    const copy = input.workflowId === undefined ? null : this.options.workflowCopy?.(input.workflowId);
+    if (input.workflowId !== undefined && (!copy || "code" in copy)) throw new PublicError(copy && "code" in copy ? copy.message : "The workflow this runs is gone", 409);
     const run: RoutineRun = {
       id: randomUUID(), routineId: input.webhookId, routineName: input.webhookName, prompt: input.prompt, target: "bot",
       botId: input.botId, runOn: input.runOn, scheduledFor: input.receivedAt, status: "queued", manual: false,
       triggerSource: "webhook", webhookId: input.webhookId, deliveryId: input.deliveryId, attachments: [], createdAt: this.now(),
       resultsThreadId: input.resultsThreadId ?? this.options.eventResultsThread?.(input), ...(input.eventSource ? { eventSource: input.eventSource } : {}), ...(input.sameConversation ? { sameConversation: true } : {}), ...(input.byPerson ? { byPerson: true } : {}),
+      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(input.postsResult ? { postsResult: true as const } : {}), ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
     };
     this.commitEvent(run, input.deliveryId, () => { this.runs.push(run); });
     return cloneRun(run);
@@ -804,7 +811,7 @@ export class RoutineManager {
     const previousReceipts = this.webhookRunReceipts;
     const receipts = previousReceipts.filter((receipt) => receipt.acceptedAt >= this.now() - EVENT_RETRY_WINDOW_MS);
     // Never evict a promised retry identity to admit fresh work.
-    if (receipts.length >= MAX_EVENT_RECEIPTS) throw Object.assign(new Error("Webhook retry history is full; try again later"), { status: 429 });
+    if (receipts.length >= MAX_EVENT_RECEIPTS) throw new PublicError("Webhook retry history is full; try again later", 429);
     receipts.push({ webhookId: run.webhookId!, deliveryId, runId: run.id, acceptedAt: this.now() });
     const previousRuns = this.runs.slice();
     apply();
@@ -906,6 +913,17 @@ export class RoutineManager {
     return moved.length;
   }
 
+  /** The wall clock went back since the last look: a bad clock was set right (routine-clock-back.ts). Returns how many next runs moved. */
+  followClock(): number {
+    const now = this.now(), seen = this.clockSeenAt;
+    this.clockSeenAt = now;
+    if (this.unreadable || !clockWentBack(now, seen)) return 0;
+    const moved = pullBackNextRuns(this.routines, now);
+    if (moved.length) this.saveLater();
+    for (const routine of moved) this.emitRoutine(routine);
+    return moved.length;
+  }
+
   /** The engines' reset times changed: each limit-reset routine that is on takes its engine's new time, once the run it owes a passed reset was made (limit-reset-owed.ts). */
   retimeLimitResets(): number {
     const moved = this.routines.filter((routine) => {
@@ -958,7 +976,7 @@ export class RoutineManager {
     if (this.closing || this.timer) return;
     if (!this.startupRunsQueued) this.startupRunsQueued = this.queueStartupRuns();
     this.timer = startDueTimer({ run: () => this.tick(), now: this.now, onError: (error) => console.error("routines: a scheduler pass failed", error),
-      next: () => this.unreadable ? this.now() + UNREADABLE_RETRY_MS : earliest(schedulerDueOf(this.routines, this.runs, this.now(), this.bootedAt + CHECK_BOOT_HOLD_MS, (routine) => this.targetState(routine) === "missing"), this.ledger.beatDueAt(), this.watch.dueAt(this.runs, this.now())) });
+      next: () => { this.followClock(); return this.unreadable ? this.now() + UNREADABLE_RETRY_MS : earliest(schedulerDueOf(this.routines, this.runs, this.now(), this.bootedAt + CHECK_BOOT_HOLD_MS, (routine) => this.targetState(routine) === "missing"), this.ledger.beatDueAt(), this.watch.dueAt(this.runs, this.now())); } });
   }
 
   stop() {
@@ -1039,6 +1057,7 @@ export class RoutineManager {
       if (dueRoutines.length > 0) {
         this.commitMutation(() => {
           for (const routine of dueRoutines) {
+            if (routine.nextRunAt != null && routine.nextRunAt <= now && occurrenceSkipped(routine, routine.nextRunAt)) { this.advancePastOccurrence(routine, now, routine.nextRunAt); continue; }
             // A routine with checks never misses: however late, one check reads everything since the last.
             if (routine.checks) {
               if (!this.checking.has(routine.id)) checks.push({ id: routine.id, hold: checkHold(this.runs, routine.id, now) });
@@ -1371,7 +1390,7 @@ export class RoutineManager {
   private advancePastOccurrence(routine: Routine, now: number, occurrence: number) {
     if (routine.schedule.type === "limit_reset" && routine.schedule.repeat === "every_reset") routine.schedule = this.timedSchedule(routine.schedule, routine.id, occurrence);
     routine.nextRunAt =
-      runsOnce(routine.schedule) ? null : nextOccurrence(routine.schedule, Math.max(now, occurrence));
+      runsOnce(routine.schedule) ? null : nextAfterSkips(routine, Math.max(now, occurrence), now);
     // Not a definition edit: bumping updatedAt here would stale a pending confirmation card.
     if (runsOnce(routine.schedule)) {
       routine.enabled = false;
@@ -1438,7 +1457,7 @@ export class RoutineManager {
 
   private applyResultsInput(routine: Routine, value: RoutineInput["resultsThreadId"]) {
     if (routine.target !== "bot") {
-      if (value != null) throw Object.assign(new Error("Results threads are only available for bot routines"), { status: 400 });
+      if (value != null) throw new PublicError("Results threads are only available for bot routines", 400);
       delete routine.resultsThreadId;
       return;
     }
@@ -1453,7 +1472,7 @@ export class RoutineManager {
       return () => this.options.discardResultsThread?.(routine.botId, destination.threadId);
     }
     if (typeof value !== "string" || !value.trim() || !this.options.isResultsThread?.(routine.botId, value.trim())) {
-      throw Object.assign(new Error("Choose a visible results thread belonging to this bot"), { status: 400 });
+      throw new PublicError("Choose a visible results thread belonging to this bot", 400);
     }
     routine.resultsThreadId = value.trim();
   }
@@ -1490,7 +1509,7 @@ export class RoutineManager {
   }
 
   private assertWritable(): void {
-    if (this.unreadable) throw Object.assign(new Error("Saved routines could not be read. Repair routines.json before changing them."), { status: 503 });
+    if (this.unreadable) throw new PublicError("Saved routines could not be read. Repair routines.json before changing them.", 503);
   }
 
   /** Rolls memory back when the write fails, so a retry never mistakes an uncommitted action for a durable one. */

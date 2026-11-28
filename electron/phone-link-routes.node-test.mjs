@@ -5,7 +5,7 @@ import { createPhoneLinkRoutes, PHONE_LINK_SLEEP_GRACE_MS } from "./phone-link-r
 import { checkTailscale, magicDnsName, readTailscaleStatus, TAILSCALE_CLI_PATHS, tailscaleEnvironment, tailscaleInstall } from "./tailscale-check.mjs";
 
 function world({ check = async () => ({ state: "ready", name: "mac.tail1.ts.net" }), tailscaleOn = false, sidecar = null } = {}) {
-  const w = { routes: { tailscale: tailscaleOn }, forShare: false, marks: [], names: [], computers: [], shares: 0, checks: 0, wakes: 0, sleeps: 0, changed: [], clock: 1_000_000, sidecar, running: sidecar !== null };
+  const w = { routes: { tailscale: tailscaleOn }, forShare: false, marks: [], names: [], computers: [], access: [], shares: 0, checks: 0, wakes: 0, sleeps: 0, changed: [], clock: 1_000_000, sidecar, running: sidecar !== null };
   w.links = createPhoneLinkRoutes({
     tailscaleRoute: () => ({ on: w.routes.tailscale === true, forShare: w.forShare }),
     rememberRoute: async (route, on, extra) => {
@@ -15,6 +15,7 @@ function world({ check = async () => ({ state: "ready", name: "mac.tail1.ts.net"
     shareChanged: async () => { w.shares++; },
     routeOn: (route) => w.routes[route] === true,
     dismissNotice: () => {},
+    workspaceAccess: async (deviceId, allowed) => { w.access.push([deviceId, allowed]); },
     state: async () => ({ routes: w.routes, ...(w.sidecar ?? { enabled: false }) }),
     running: () => w.running,
     wake: async () => { w.wakes++; },
@@ -121,6 +122,17 @@ test("other routes switch on their own, tell main which changed, and wake only w
   assert.deepEqual(w.changed, [["relay", true], ["https", false]]);
   assert.equal(w.wakes, 1);
   assert.equal(w.routes.nonsense, undefined);
+});
+
+test("the workspace switch of one phone reaches the sidecar and answers with the state, over its own channel", async () => {
+  const w = world();
+  const handlers = new Map();
+  w.links.install({ handle: (channel, run) => handlers.set(channel, run) }, (_channel, run) => run);
+  await handlers.get("companion:workspace-access")({}, "phone-1", false);
+  await handlers.get("companion:workspace-access")({}, "phone-1", "yes");
+  assert.deepEqual(w.access, [["phone-1", false], ["phone-1", false]]);
+  assert.deepEqual((await w.links.setWorkspaceAccess("phone-1", true)).routes, w.routes);
+  assert.deepEqual(w.access.at(-1), ["phone-1", true]);
 });
 
 test("an empty sidecar goes back to sleep after the grace for a code, never one with a device or a code open", async () => {

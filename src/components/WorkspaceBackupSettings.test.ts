@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceBackupSummary } from "../../shared/workspace-backup";
 
-const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], api: vi.fn() }));
+const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], api: vi.fn(), dispatch: vi.fn() }));
 vi.mock("react", async (original) => ({ ...await original<typeof import("react")>(),
   useState: (initial: unknown) => {
     const index = fixture.index++;
@@ -12,7 +12,7 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
   },
   useEffect: (effect: EffectCallback) => { fixture.effects.push(effect); },
 }));
-vi.mock("@/state/store", () => ({ api: fixture.api }));
+vi.mock("@/state/store", () => ({ api: fixture.api, useStore: () => ({ dispatch: fixture.dispatch }) }));
 import { WorkspaceBackupRecovery, WorkspaceBackupRestartNotice, WorkspaceBackupSettings, WorkspaceBackupSummaryView } from "./WorkspaceBackupSettings";
 
 type Node = ReactElement<{ children?: ReactNode; type?: string; disabled?: boolean; value?: string; onChange?: (event: unknown) => void; onSubmit?: (event: unknown) => void; onClick?: () => void }>;
@@ -36,7 +36,7 @@ const change = (input: Node, value: string) => input.props.onChange!({ target: {
 const summary: WorkspaceBackupSummary = { format: "seira.workspace-backup", version: 1, id: "archive-id", createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 9, directories: 3, bytes: 1234, bots: 2, groups: 1, threads: 4, messages: 8, warnings: ["Fixture warning"], exclusions: ["Saved account credentials and connections", "External CLI sign-ins"] };
 let storage: Map<string, string>;
 beforeEach(() => {
-  fixture.values = []; fixture.index = 0; fixture.effects = []; fixture.api.mockReset();
+  fixture.values = []; fixture.index = 0; fixture.effects = []; fixture.api.mockReset(); fixture.dispatch.mockReset();
   storage = new Map();
   vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
   vi.stubGlobal("window", { location: { reload: vi.fn() } });
@@ -81,8 +81,8 @@ describe("Settings full backups", () => {
     fixture.api.mockResolvedValueOnce({ id: "download-id", filename: "fixture.seirabackup" });
     const form = formOf("backup-export");
     submit(form); submit(form); await flush();
-    expect(fixture.api).toHaveBeenCalledTimes(2); // one status, one export
-    const [path, init] = fixture.api.mock.calls[1];
+    expect(fixture.api).toHaveBeenCalledTimes(3); // one status, one size report, one export
+    const [path, init] = fixture.api.mock.calls[2];
     expect(path).toBe("/api/workspace-backup/export");
     expect(JSON.parse(init.body)).toEqual({ password: "correct horse battery", clientState: { "seira-drafts": "private draft" } });
     expect(link.href).toBe("/api/workspace-backup/download/download-id");
@@ -90,6 +90,185 @@ describe("Settings full backups", () => {
     expect([...storage.values()]).not.toContain("correct horse battery");
     expect(render().html).not.toContain('value="correct horse battery"');
     expect(render().html).not.toContain('id="backup-export"');
+  });
+
+  describe("size of each part and the leave-out switch", () => {
+    // The shape of GET /api/workspace-backup/sizes (seira#513).
+    const sizesReply = { parts: { chats: 1200, memory: 3000, attachments: 5_000_000, "work-folders": 2_000_000_000, other: 500 }, total: 2_005_004_700, canLeaveOut: ["work-folders"] };
+    const leaveOutSwitch = () => render().nodes.find((node) => (node.props as Record<string, unknown>)["data-backup-leave-out"] === "work-folders")!;
+    async function openWithSizes(reply: unknown) {
+      await ready();
+      if (reply instanceof Error) fixture.api.mockRejectedValueOnce(reply); else fixture.api.mockResolvedValueOnce(reply);
+      open("export"); await flush();
+    }
+    const link = { click: vi.fn(), remove: vi.fn(), href: "", download: "" };
+    /** A new server confirms the choice in the summary of the backup (`summary.leftOut`, seira#513): by default the reply echoes it. */
+    async function exportNow(summaryFor: (leaveOut: string[] | undefined) => unknown = (leaveOut) => leaveOut ? { leftOut: leaveOut } : undefined) {
+      const passwords = render().nodes.filter((node) => node.type === "input" && node.props.type === "password");
+      change(passwords[0], "correct horse battery"); change(passwords[1], "correct horse battery");
+      link.click.mockReset(); link.href = "";
+      vi.stubGlobal("document", { createElement: () => link, body: { append: vi.fn() } });
+      fixture.api.mockImplementationOnce(async (_path: string, init: { body: string }) => ({ id: "download-id", filename: "fixture.seirabackup", summary: summaryFor((JSON.parse(init.body) as { leaveOut?: string[] }).leaveOut) }));
+      submit(formOf("backup-export")); await flush();
+      return JSON.parse(fixture.api.mock.calls.at(-1)![1].body) as Record<string, unknown>;
+    }
+
+    it("reads the size report when the export form opens and shows each part, the total and that sizes are an upper bound", async () => {
+      await openWithSizes(sizesReply);
+      expect(fixture.api.mock.calls[1][0]).toBe("/api/workspace-backup/sizes");
+      const html = render().html;
+      for (const text of ["Conversations and settings", "Bot memory", "Attachments", "Conversation work folders", "Other files", "1.2 KB", "2.9 KB", "4.8 MB", "1.9 GB", "500 B", "Sizes are an upper bound", "more than twice the total"]) expect(html).toContain(text);
+      expect(html).toMatch(/data-backup-total=""[^>]*>1\.9 GB</);
+      expect(html).not.toContain("Left-out files are not in the backup.");
+    });
+
+    it("lowers the shown total and warns when work folders are switched off, and sends only that part name", async () => {
+      await openWithSizes(sizesReply);
+      leaveOutSwitch().props.onClick!();
+      const html = render().html;
+      expect(html).toMatch(/data-backup-total=""[^>]*>4\.8 MB</);
+      expect(html).toContain("Left-out files are not in the backup.");
+      expect(html).toContain('aria-checked="true"');
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {}, leaveOut: ["work-folders"] });
+    });
+
+    it("switches the part on again, and a default export has no left-out part", async () => {
+      await openWithSizes(sizesReply);
+      expect(leaveOutSwitch().props).toMatchObject({ checked: false });
+      leaveOutSwitch().props.onClick!(); leaveOutSwitch().props.onClick!();
+      expect(render().html).toMatch(/data-backup-total=""[^>]*>1\.9 GB</);
+      expect(render().html).not.toContain("Left-out files are not in the backup.");
+      const body = await exportNow();
+      expect(body).toEqual({ password: "correct horse battery", clientState: {} });
+      expect(body).not.toHaveProperty("leaveOut");
+    });
+
+    it("starts with the switch off each time the form opens", async () => {
+      await openWithSizes(sizesReply);
+      leaveOutSwitch().props.onClick!();
+      render().nodes.find((node) => node.type === "button" && node.props.children === "Cancel")?.props.onClick?.();
+      fixture.api.mockResolvedValueOnce(sizesReply);
+      open("export"); await flush();
+      expect(render().html).not.toContain("Left-out files are not in the backup.");
+      expect(render().html).toMatch(/data-backup-total=""[^>]*>1\.9 GB</);
+    });
+
+    it("works as today, with no sizes and no switch, on an older server that has no size report", async () => {
+      await openWithSizes(Object.assign(new Error("Not found"), { status: 404 }));
+      const html = render().html;
+      expect(html).not.toContain("data-backup-sizes");
+      expect(html).not.toContain("Sizes are an upper bound");
+      expect(html).toContain('id="backup-export"');
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {} });
+    });
+
+    it("shows no sizes when the reply has a shape this app does not know", async () => {
+      await openWithSizes({ parts: { chats: "big" }, total: 1, canLeaveOut: ["work-folders"] });
+      expect(render().html).not.toContain("data-backup-sizes");
+    });
+
+    it("never sends a part that the server did not list as one it can leave out", async () => {
+      await openWithSizes({ ...sizesReply, canLeaveOut: [] });
+      expect(render().nodes.some((node) => (node.props as Record<string, unknown>)["data-backup-leave-out"] !== undefined)).toBe(false);
+      expect(await exportNow()).not.toHaveProperty("leaveOut");
+    });
+
+    it("shows a line and no numbers, no switch and a normal export when the server answers 403 (Team Cloud)", async () => {
+      await openWithSizes(Object.assign(new Error("Backup sizes are not available on a Team Cloud"), { status: 403 }));
+      const html = render().html;
+      expect(html).toContain("data-backup-sizes-unavailable");
+      expect(html).toContain("Sizes are not shown here");
+      expect(html).not.toContain("data-backup-sizes=");
+      expect(html).not.toContain("data-backup-total");
+      expect(html).not.toMatch(/\d+(\.\d)? (B|KB|MB|GB)/);
+      expect(render().nodes.some((node) => (node.props as Record<string, unknown>)["data-backup-leave-out"] !== undefined)).toBe(false);
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {} });
+    });
+
+    it("drops the late size reply of an earlier opening of the form and keeps the choice the person made", async () => {
+      await ready();
+      let lateReply!: (value: unknown) => void;
+      fixture.api.mockReturnValueOnce(new Promise((resolve) => { lateReply = resolve; }));
+      open("export");
+      render().nodes.find((node) => node.type === "button" && node.props.children === "Cancel")?.props.onClick?.();
+      fixture.api.mockResolvedValueOnce(sizesReply);
+      open("export"); await flush();
+      leaveOutSwitch().props.onClick!();
+      lateReply({ parts: { chats: 1, memory: 1, attachments: 1, "work-folders": 1, other: 1 }, total: 5, canLeaveOut: [] }); await flush();
+      const html = render().html;
+      expect(html).toMatch(/data-backup-total=""[^>]*>4\.8 MB</);
+      expect(leaveOutSwitch().props).toMatchObject({ checked: true });
+      expect(await exportNow()).toEqual({ password: "correct horse battery", clientState: {}, leaveOut: ["work-folders"] });
+    });
+
+    it("drops a size reply that arrives after the form was closed", async () => {
+      await ready();
+      let lateReply!: (value: unknown) => void;
+      fixture.api.mockReturnValueOnce(new Promise((resolve) => { lateReply = resolve; }));
+      open("export");
+      render().nodes.find((node) => node.type === "button" && node.props.children === "Cancel")?.props.onClick?.();
+      lateReply(sizesReply); await flush();
+      expect(render().html).not.toContain("data-backup-sizes");
+    });
+
+    it("stops with a message, and sends nothing, when the chosen part can no longer be left out", async () => {
+      await openWithSizes(sizesReply);
+      leaveOutSwitch().props.onClick!();
+      const slot = fixture.values.findIndex((value) => !!value && typeof value === "object" && "request" in (value as object));
+      const state = fixture.values[slot] as { sizes: { canLeaveOut: string[] } };
+      fixture.values[slot] = { ...state, sizes: { ...state.sizes, canLeaveOut: [] } };
+      const passwords = render().nodes.filter((node) => node.type === "input" && node.props.type === "password");
+      change(passwords[0], "correct horse battery"); change(passwords[1], "correct horse battery");
+      const calls = fixture.api.mock.calls.length;
+      submit(formOf("backup-export")); await flush();
+      expect(fixture.api.mock.calls.length).toBe(calls);
+      const html = render().html;
+      expect(html).toMatch(/role="alert"[^>]*>The server can no longer leave out the part you chose, so no backup was made/);
+      expect(html).toContain('id="backup-export"');
+    });
+
+    describe("a backup that does not confirm the choice", () => {
+      // Each reply is HTTP 200 with an id and a file name. Only a summary that lists the chosen part may reach a download.
+      for (const [name, summaryFor] of [
+        ["has no summary", () => undefined],
+        ["has a summary without leftOut (an older server that ignored the choice)", () => ({ files: 3 })],
+        ["has an empty leftOut", () => ({ leftOut: [] })],
+        ["lists another part", () => ({ leftOut: ["other"] })],
+        ["has a leftOut that is not a list", () => ({ leftOut: "work-folders" })],
+      ] as const) {
+        it(`gives no download when the reply ${name}`, async () => {
+          await openWithSizes(sizesReply);
+          leaveOutSwitch().props.onClick!();
+          const body = await exportNow(summaryFor);
+          expect(body).toMatchObject({ leaveOut: ["work-folders"] });
+          expect(link.click).not.toHaveBeenCalled();
+          expect(link.href).toBe("");
+          const html = render().html;
+          expect(html).toMatch(/role="alert"[^>]*>The backup came back without a confirmation that the part you chose was left out, so it was not downloaded/);
+          expect(html).not.toContain("Download fixture.seirabackup");
+          expect(html).toContain('id="backup-export"');
+        });
+      }
+
+      it("downloads when the summary lists the chosen part, and when nothing was chosen and there is no summary", async () => {
+        await openWithSizes(sizesReply);
+        leaveOutSwitch().props.onClick!();
+        await exportNow(() => ({ leftOut: ["other", "work-folders"] }));
+        expect(link.click).toHaveBeenCalledOnce();
+        fixture.values = [];
+        await openWithSizes(sizesReply);
+        await exportNow(() => undefined);
+        expect(link.click).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("lists the parts that a backup left out in the restore preview, and nothing when it left none out", () => {
+      const left = renderToStaticMarkup(createElement(WorkspaceBackupSummaryView, { summary: { ...summary, leftOut: ["work-folders"] } }));
+      expect(left).toContain("Left out on purpose");
+      expect(left).toContain("Conversation work folders");
+      expect(renderToStaticMarkup(createElement(WorkspaceBackupSummaryView, { summary }))).not.toContain("Left out on purpose");
+      expect(renderToStaticMarkup(createElement(WorkspaceBackupSummaryView, { summary: { ...summary, leftOut: [] } }))).not.toContain("Left out on purpose");
+    });
   });
 
   it("keeps the export dialog open with its reason when the export fails, so it can be tried again", async () => {
@@ -370,5 +549,99 @@ describe("Settings full backups", () => {
     expect(render(true).html).toContain("Storage unavailable"); expect(render(true).html).not.toContain("Normal app");
     expect(storage.get("seira-drafts")).toBe("keep"); expect(storage.get("seira-pending-workspace-restore")).toBe("stage-id");
     expect(window.location.reload).not.toHaveBeenCalled();
+  });
+});
+
+describe("Settings after-restore checklist", () => {
+  const withStatus = async (status: Record<string, unknown>) => { fixture.api.mockResolvedValueOnce({ busy: false, ...status }); render(); fixture.effects[0](); await flush(); };
+  const checklistProps = () => render().nodes.find((node) => (node.type as { name?: string }).name === "WorkspaceRestoreChecklist")!.props as unknown as { onToggle: (id: string) => void; onOpen: () => void };
+
+  it("shows one row for each paused kind and for left-behind work folders, and draws only fixed text and a count", async () => {
+    await withStatus({ lastRestoreId: "r1", leftBehind: { bots: 1, paths: ["C:\\Work"] },
+      needsAction: [{ kind: "routines-on", count: 2, name: "secret-token-name" }, { kind: "webhooks-on", count: 3 }, { kind: "mystery", count: 9 }, { kind: "routines-on", count: 5 }] });
+    const html = render().html;
+    expect(html).toContain("After the restore");
+    expect(html).toContain("Turn routines back on");
+    expect(html).toContain("Paused: 2");
+    expect(html).not.toContain("Paused: 5");
+    expect(html).toContain("Turn webhooks back on");
+    expect(html).toContain("Paused: 3");
+    expect(html).toContain("Choose a work folder on this computer");
+    expect(html).toContain("Bots with a work folder that stayed on the old computer: 1");
+    expect(html).not.toContain("mystery");
+    expect(html).not.toContain("secret-token-name");
+    expect(html).not.toContain("C:");
+    expect(html.match(/data-restore-open=/g)).toHaveLength(2);
+  });
+
+  it("opens Automations from a row", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }] });
+    checklistProps().onOpen();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines" });
+  });
+
+  it("keeps done marks on this device for this restore only, and can undo them", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }, { kind: "webhooks-on", count: 1 }] });
+    checklistProps().onToggle("routines-on");
+    expect(JSON.parse(storage.get("seira-restore-checklist:r1")!)).toEqual(["routines-on"]);
+    let html = render().html;
+    expect(html).toContain("data-restore-done=\"routines-on\"");
+    expect(html).not.toContain("data-restore-done=\"webhooks-on\"");
+    checklistProps().onToggle("webhooks-on");
+    expect(render().html).toContain("All items are marked done.");
+    checklistProps().onToggle("routines-on");
+    html = render().html;
+    expect(html).not.toContain("data-restore-done=\"routines-on\"");
+    expect(JSON.parse(storage.get("seira-restore-checklist:r1")!)).toEqual(["webhooks-on"]);
+    // A new restore starts with a clean list.
+    fixture.values = []; await withStatus({ lastRestoreId: "r2", needsAction: [{ kind: "routines-on", count: 1 }] });
+    expect(render().html).not.toContain("data-restore-done");
+    // The first restore's marks come back when its status is read again.
+    fixture.values = []; await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }, { kind: "webhooks-on", count: 1 }] });
+    expect(render().html).toContain("data-restore-done=\"webhooks-on\"");
+  });
+
+  it("never says that nothing needs attention when the list is empty: an older restore has no list, so the warning stays", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [], leftBehind: null });
+    const html = render().html;
+    expect(html).not.toContain("Nothing needs your attention");
+    expect(html).toContain("A restore from an older version has no list, so they can still be paused");
+    expect(html.match(/data-restore-open=/g)).toHaveLength(1);
+    checklistProps().onOpen();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines" });
+  });
+
+  it("keeps the warning next to a left-behind row when no automation kind is listed, and drops it when one is", async () => {
+    await withStatus({ lastRestoreId: "r1", needsAction: [], leftBehind: { bots: 1 } });
+    let html = render().html;
+    expect(html).toContain("Bots with a work folder that stayed on the old computer: 1");
+    expect(html).toContain("can still be paused");
+    fixture.values = []; await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "webhooks-on", count: 1 }], leftBehind: { bots: 1 } });
+    html = render().html;
+    expect(html).not.toContain("can still be paused");
+  });
+
+  it("keeps the backup buttons on when the browser throws as the localStorage property is read", async () => {
+    const saved = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new DOMException("denied", "SecurityError"); } });
+    try {
+      await withStatus({ lastRestoreId: "r1", needsAction: [{ kind: "routines-on", count: 1 }] });
+      const html = render().html;
+      expect(html).toContain("Turn routines back on");
+      expect(html).not.toContain("data-restore-done");
+      const exportButton = render().nodes.find((node) => (node.props as Record<string, unknown>)["data-backup-export"] === "")!;
+      expect(exportButton.props.disabled).toBeFalsy();
+      expect(() => checklistProps().onToggle("routines-on")).not.toThrow();
+      expect(render().html).toContain("data-restore-done=\"routines-on\"");
+    } finally {
+      if (saved) Object.defineProperty(globalThis, "localStorage", saved); else delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
+
+  it("shows the old static line when the server sends no list, and nothing when there was no restore", async () => {
+    await withStatus({ lastRestoreId: "r1" });
+    expect(render().html).toContain("arrive paused after a restore. Turn them on again in Automations");
+    fixture.values = []; await withStatus({});
+    expect(render().html).not.toContain("After the restore");
   });
 });

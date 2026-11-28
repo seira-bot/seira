@@ -10,7 +10,7 @@ import { BUILT_IN_INSTANCE_DRIVERS } from "@/lib/built-in-instances";
 import { rememberProviderOff } from "@/lib/provider-off";
 
 const server = vi.hoisted(() => ({
-  all: [] as InstanceInfo[], hidden: new Set<string>(), calls: [] as Array<{ method: string; path: string; body?: unknown }>, refuseUnhide: false,
+  all: [] as InstanceInfo[], hidden: new Set<string>(), calls: [] as Array<{ method: string; path: string; body?: unknown }>, refuseUnhide: false, persisted: [] as Array<{ id: string; patch: Record<string, unknown> }>,
 }));
 const fixture = vi.hoisted(() => ({ state: { instances: [] as InstanceInfo[], bots: [] as Bot[], config: {} as Record<string, unknown> } }));
 vi.mock("@/state/store", async (original) => {
@@ -18,9 +18,17 @@ vi.mock("@/state/store", async (original) => {
   const refresh = async () => { fixture.state = { ...fixture.state, instances: visible() }; };
   return {
     ...await original<typeof import("@/state/store")>(),
+    desktopApprovalBridge: () => undefined,
+    persistBotUpdate: async (id: string, patch: Record<string, unknown>, _signal: unknown, _api: unknown, _bridge: unknown, bot: Bot) => {
+      server.persisted.push({ id, patch });
+      return { ...bot, ...patch };
+    },
     useStore: () => ({
       state: fixture.state,
-      dispatch: (action: { type: string; instances?: InstanceInfo[] }) => { if (action.type === "instances" && action.instances) fixture.state = { ...fixture.state, instances: action.instances }; },
+      dispatch: (action: { type: string; instances?: InstanceInfo[]; bot?: Bot }) => {
+        if (action.type === "instances" && action.instances) fixture.state = { ...fixture.state, instances: action.instances };
+        if (action.type === "botPatched" && action.bot) fixture.state = { ...fixture.state, bots: fixture.state.bots.map((bot) => bot.id === action.bot!.id ? action.bot! : bot) };
+      },
       refreshInstances: refresh, refreshModels: async () => {},
     }),
     api: async (path: string, init?: { method?: string; body?: string }) => {
@@ -35,6 +43,10 @@ vi.mock("@/state/store", async (original) => {
         return { instances: visible() };
       }
       const patch = /^\/api\/instances\/([\w.-]+)$/.exec(path);
+      if (patch && method === "DELETE") {
+        server.all = server.all.filter((instance) => instance.instanceId !== patch[1]);
+        return { instances: visible() };
+      }
       if (patch && method === "PATCH") {
         const { hidden } = JSON.parse(init!.body!) as { hidden?: boolean };
         if (hidden === false && server.refuseUnhide) throw new Error("provider settings are already being updated");
@@ -66,6 +78,7 @@ beforeEach(() => {
   server.all = [codex, kimi(true)];
   server.hidden = new Set();
   server.calls = [];
+  server.persisted = [];
   server.refuseUnhide = false;
   rememberProviderOff(null);
   fixture.state = { instances: [...server.all], bots: [], config: {} };
@@ -286,6 +299,38 @@ describe("Settings → AI → ChatGPT: the built-in account rows can be hidden",
     expect(container.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "1" }));
     expect(container.querySelector("[data-provider-move]")?.textContent).toBe(t("provider.moveAndHide", { count: "1", target: "Codex" }));
     expect(container.querySelector("[data-provider-hide]")).toBeNull();
+  });
+
+  it("moves the bots of an added account without hiding it, and then Remove is enabled", async () => {
+    const worker = { id: "w", name: "w", modelSelection: { instanceId: "chatgpt-work", model: "gpt" } } as Bot;
+    fixture.state = { ...fixture.state, bots: [worker] };
+    await openCard();
+    const removeButton = () => [...container.querySelectorAll('[data-account="chatgpt-work"] button')].find((button) => button.textContent === "Remove") as HTMLButtonElement;
+    expect(removeButton().disabled).toBe(true);
+    await menuItems("chatgpt-work");
+    expect(container.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "1" }));
+    expect(container.querySelector("[data-provider-hide]")).toBeNull();
+    expect(container.querySelector("[data-provider-move]")?.textContent).toBe(t("provider.move", { count: "1", target: "Codex" }));
+    await click(container.querySelector("[data-provider-move]"));
+    expect(server.persisted).toEqual([{ id: "w", patch: expect.objectContaining({ modelSelection: { instanceId: "codex", model: "gpt" } }) }]);
+    expect(server.calls.filter((call) => call.method === "PATCH")).toEqual([]);
+    expect(removeButton().disabled).toBe(false);
+  });
+
+  it("drops the Undo of a move once the moved account is removed", async () => {
+    const worker = { id: "w", name: "w", modelSelection: { instanceId: "chatgpt-work", model: "gpt" } } as Bot;
+    fixture.state = { ...fixture.state, bots: [{ ...worker }] };
+    await openCard();
+    await menuItems("chatgpt-work");
+    await click(container.querySelector("[data-provider-move]"));
+    expect(container.querySelector("[data-provider-undo]")).toBeTruthy();
+    const removeButton = [...container.querySelectorAll('[data-account="chatgpt-work"] button')].find((button) => button.textContent === "Remove");
+    await click(removeButton);
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "Remove").at(-1));
+    expect(server.calls).toContainEqual({ method: "DELETE", path: "/api/instances/chatgpt-work" });
+    expect(accounts()).toEqual(["codex", "chatgpt"]);
+    expect(container.querySelector("[data-provider-undo]")).toBeNull();
+    expect(container.querySelector("[data-provider-off-status]")).toBeNull();
   });
 
   it("counts an account a bot only keeps as a backup AI as in use", async () => {

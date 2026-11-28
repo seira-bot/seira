@@ -6,7 +6,7 @@ import { isOutboundTool } from "../../shared/outbound.ts";
 import { PHONE_MCP_SERVER, phoneToolCapability, type PhoneCapability, type PhoneToolName } from "../../shared/phone-apps.ts";
 import { appendDecision } from "../decision-log.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { BotRecord } from "../store.ts";
 import type { PromptPart } from "../system-prompt.ts";
 import { capName, phoneAccess, phoneAppsFor, phoneSystemPrompt, phoneWithheldPrompt, type PhoneAccess, type PhoneBot, type PhonePlace } from "./access.ts";
@@ -83,7 +83,7 @@ export function createPhoneHost(deps: PhoneHostDeps): PhoneHost {
       if (!mounts(bot, owner)) return null;
       const token = mint();
       return {
-        command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, PHONE_MCP_SERVER],
+        command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, PHONE_MCP_SERVER],
         env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("device")]: token, SEIRA_HARNESS_URL: harnessUrl },
       };
     },

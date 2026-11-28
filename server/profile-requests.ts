@@ -14,6 +14,7 @@ import { profileRevision, profileSnapshot } from "./profile-revision.ts";
 import { recordProfileChange } from "./profile-versions.ts";
 import { redactSecretsInText } from "./redact.ts";
 import type { BotRecord } from "./store.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 const MAX_REASON = 500;
 const STALE = "This bot's profile changed after this card was prepared. Ask the bot to review it and propose again.";
@@ -77,6 +78,7 @@ export interface ProfileRequestServiceOptions {
 }
 
 export class ProfileRequestError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly terminal: boolean;
 

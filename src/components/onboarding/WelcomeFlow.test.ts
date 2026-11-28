@@ -266,6 +266,18 @@ describe("with no AI working yet", () => {
 });
 
 describe("other first runs", () => {
+  it("names bubblewrap and the command that installs it on the first screen only when the server says it is missing", async () => {
+    const notice = "Commands are not isolated because bubblewrap is not installed. On Debian or Ubuntu, install it and restart Seira:";
+    await show();
+    expect(text()).not.toContain(notice);
+    expect(host.querySelector("[data-box-missing]")).toBeNull();
+    f.state = { ...f.state, config: { ...(f.state.config as object), boxMissing: "no-bwrap" } };
+    await show();
+    expect(text()).toContain(notice);
+    expect(host.querySelector("[data-box-missing] code")?.textContent).toBe("sudo apt install bubblewrap");
+    expect(button("Next")!.disabled).toBe(false);
+  });
+
   it("gives a hosted place's admin the first screen only, then the chat", async () => {
     await show({ hosted: true });
     expect(text()).toContain("This is your team's shared Seira");

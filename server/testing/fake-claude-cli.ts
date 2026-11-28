@@ -14,6 +14,7 @@
 //   FAKE_CLAUDE_ANSWER_MODEL  the `model` of its assistant frames, as when the CLI answers with another model than asked
 //   FAKE_CLAUDE_RELEASE  with hang: the turn ends normally once this file exists; a scripted call's `hold` ends then too
 //   FAKE_CLAUDE_DUMP  path for the latest turn's {argv, env, cwd, prompt, systemPrompt, mcpConfig}
+//   FAKE_CLAUDE_DUMP_DIR  directory: every turn also writes its own <pid>-<n>.json dump there, so a later turn of another run cannot overwrite it
 //   FAKE_CLAUDE_ELICIT  JSON request body: a "hang" turn (or a failing FAKE_CLAUDE_TRANSIENTS launch) first asks it
 //     as control_request "elicit-1"
 //   FAKE_CLAUDE_CONTEXT_USAGE  JSON answered to a get_context_usage control_request; unset, the request is refused as
@@ -46,6 +47,8 @@
 //     burns CPU, sleeps, holds a loopback TCP connection, or takes 64 MB more memory every 100 ms until it is stopped, as
 //     the call's command would
 //   FAKE_CLAUDE_TOOL_CALLS_FILE  path of the same JSON, read again each turn (a warm process's turns differ); missing: none
+//   FAKE_CLAUDE_TOOL_ROUTES  path of {"marker": [calls]} (the same calls), read again each turn: a prompt whose text contains
+//     a marker plays that marker's calls; no match, a missing file or bad JSON leaves the turn as it is without this knob
 //   FAKE_STREAM_SCRIPT, FAKE_STREAM_CADENCE  a scripted reply chosen by a marker in the prompt (stream-script.ts)
 //   FAKE_CLAUDE_STREAM_CADENCE  "chars:ms" (happy mode): stream each scripted reply as
 //     text_delta chunks of `chars` chars every `ms` ms before its assistant message
@@ -202,11 +205,27 @@ const parseToolCalls = (raw: string | undefined): ScriptedToolCall[] | null => {
   }
 };
 const scriptedToolCallsAtStart = parseToolCalls(process.env.FAKE_CLAUDE_TOOL_CALLS);
-const turnToolCalls = (): ScriptedToolCall[] | null => {
+const routedToolCalls = (prompt: JsonValue): ScriptedToolCall[] | null => {
+  const file = process.env.FAKE_CLAUDE_TOOL_ROUTES;
+  if (!file) return null;
+  try {
+    const routes: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!routes || typeof routes !== "object" || Array.isArray(routes)) return null;
+    const text = steeredText(prompt);
+    for (const [marker, calls] of Object.entries(routes)) {
+      if (marker !== "" && text.includes(marker)) return parseToolCalls(JSON.stringify(calls));
+    }
+  } catch {}
+  return null;
+};
+const turnToolCalls = (prompt: JsonValue): ScriptedToolCall[] | null => {
+  const routed = routedToolCalls(prompt);
+  if (routed) return routed;
   const file = process.env.FAKE_CLAUDE_TOOL_CALLS_FILE;
   if (!file) return scriptedToolCallsAtStart;
   try { return parseToolCalls(readFileSync(file, "utf8")) ?? []; } catch { return []; }
 };
+let dumpCount = 0;
 let toolUseCount = 0;
 let scriptedReplyIndex = 0;
 const nextScriptedReply = (): string[] => {
@@ -909,15 +928,14 @@ const playTurn = (prompt: JsonValue, late = false) => {
   volatileNote = volatileNoteIn(prompt) ?? volatileNote;
   const homeFiles = process.env.FAKE_CLAUDE_HOME_FILES === "1";
   const signedInAs = homeFiles ? homeSignIn() : undefined;
-  if (!late && process.env.FAKE_CLAUDE_DUMP) {
+  if (!late && (process.env.FAKE_CLAUDE_DUMP || process.env.FAKE_CLAUDE_DUMP_DIR)) {
     launchFiles ??= readLaunchFiles();
     // systemPrompt: what the model is instructed with, the system prompt file plus the
     // volatile half a user message carries (claude.ts keeps the file stable for the cache)
     const systemPrompt = volatileNote && typeof launchFiles.systemPrompt === "string" ? `${launchFiles.systemPrompt}\n\n${volatileNote}` : launchFiles.systemPrompt;
-    writeDumpAtomic(
-      process.env.FAKE_CLAUDE_DUMP,
-      JSON.stringify({ pid: process.pid, argv, env: process.env, cwd: process.cwd(), prompt, ...launchFiles, systemPrompt, systemPromptFile: launchFiles.systemPrompt, ...(homeFiles ? { signedInAs } : {}) }, null, 2),
-    );
+    const dump = JSON.stringify({ pid: process.pid, argv, env: process.env, cwd: process.cwd(), prompt, ...launchFiles, systemPrompt, systemPromptFile: launchFiles.systemPrompt, ...(homeFiles ? { signedInAs } : {}) }, null, 2);
+    if (process.env.FAKE_CLAUDE_DUMP) writeDumpAtomic(process.env.FAKE_CLAUDE_DUMP, dump);
+    if (process.env.FAKE_CLAUDE_DUMP_DIR) writeDumpAtomic(join(process.env.FAKE_CLAUDE_DUMP_DIR, `${process.pid}-${dumpCount++}.json`), dump);
   }
 
   if (process.env.FAKE_CLAUDE_ROUTER_PING === "1" && process.env.ANTHROPIC_BASE_URL) {
@@ -1266,7 +1284,7 @@ const playTurn = (prompt: JsonValue, late = false) => {
     emitPart(0);
     return;
   }
-  const scriptedToolCalls = turnToolCalls();
+  const scriptedToolCalls = turnToolCalls(prompt);
   if (scriptedToolCalls?.some((call) => call.hold)) {
     playHeldCalls(scriptedToolCalls, usage, () => {
       for (const text of replyParts) out({ type: "assistant", message: { content: [{ type: "text", text }], usage } });

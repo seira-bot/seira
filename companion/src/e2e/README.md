@@ -213,6 +213,29 @@ This uses the yamux wire format (`hashicorp/yamux` spec): a 12-byte header of `v
     - `setSoTimeout` MUST be honoured, so OkHttp's existing read timeouts (90 s for SSE) keep working.
     - The outer WebSocket client is a separate `OkHttpClient` that uses the normal socket factory.
 
+### 8a. Workspace switch proof
+
+A switch to another workspace can end on a different server, and that server can copy the expected `environmentId`. So the
+phone does not trust the id that the endpoint announces. It moves its pin only on a proof that the paired computer signs.
+
+- **Request:** `POST /api/phones/self/workspaces/switch/<operationId>/proof` with `{ "nonce": "<b64u, 32 bytes>" }`.
+  - The phone sends it inside the Noise session and sends no bearer.
+  - The sidecar answers only for an E2E device peer whose session has a 32-byte handshake hash.
+  - A connection that is not an E2E session gets 403 `secure_channel_required`, with or without a bearer. A session that has no handshake hash gets the same answer.
+  - A pairing session gets 401 (it has no device). A legacy plain LAN request from a device that already completed E2E gets 426 `update_app` before the route is reached.
+- **Signature:** ECDSA P-256 / SHA-256, `r ‖ s` (64 bytes), made with the transport key `T`. The phone verifies it with the
+  `T.pub` that it pinned from the QR descriptor `k`.
+- **Signed bytes:** see `phoneWorkspaceSwitchProofMessage` (`packages/phone-protocol/src/workspaces.ts`). They hold the label
+  `seira-switch-proof v1`, `keyId`, the session handshake hash `h`, the device id, the operation, the old and new workspace
+  and environment, the nonce, and the issue and expiry times.
+  - `h` binds the proof to one session. A proof that is copied to another session fails.
+  - The nonce binds the proof to one request.
+- **Answers once for each switch:**
+  - Only when the switch ended `done` for this device, the device may still open other workspaces, and the target is the open one.
+  - A second request for the same switch gets 409 `proof_used`.
+  - A proof is valid for 2 minutes, and never longer than the operation.
+- **Compatibility:** an old computer answers 404 and an old phone never asks. Both keep the earlier behaviour. No proof means no pin change.
+
 ## 9. Relay protocol (outside the encryption)
 
 - **Hosts.** The relay nodes are `relay1.seira.bot` and `relay2.seira.bot`, WSS on 443. Caddy terminates TLS and proxies to the

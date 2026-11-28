@@ -37,9 +37,10 @@ import { namedUploadPaths } from "../browser-upload.ts";
 import { createBrowserDaemons } from "./browser-daemons.ts";
 import type { BrowserSitesRef } from "../routes/browser-sites.ts";
 import { chromeLauncher } from "../browser/chrome/launcher.ts";
+import { SourceStillOpen } from "../browser/chrome/seed.ts";
 import { LAUNCHER_SECCOMP_FD, browserLanguage, type LauncherBox } from "../browser/chrome/wrapper.ts";
 import type { HostKind } from "../browser/chrome/flags.ts";
-import { browserEngineKind, type BrowserEngineKind } from "../browser/config.ts";
+import { effectiveBrowserEngine, type BrowserEngineKind } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
 import { ChromeEngine, chromeTarget, LiveRouter, profileKey, RuntimeRouter } from "../browser/engines.ts";
 import { CHROME_BROWSER_SYSTEM_PROMPT } from "../browser/prompt.ts";
@@ -52,7 +53,7 @@ import { idleAfter } from "../drivers/session-idle.ts";
 import { augmentedPath } from "../env-path.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
 import type { FillLoginDeps } from "../login-fill.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { Store } from "../store.ts";
 import type { TurnOwner, TurnResources } from "../turn-resources.ts";
 
@@ -170,7 +171,18 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     language: deps.language,
     held: (session) => !turnResources.free(`browser:${session}`),
     log: (line) => console.warn(line),
+    seed: (key) => agentBrowserProfileFor(key),
   });
+  const agentBrowserSessions = new Map<string, string>();
+  /** The agent-browser profile folder that becomes a new profile's start: the same bot's or shared profile's, with its browser closed first. */
+  async function agentBrowserProfileFor(key: string): Promise<string | null> {
+    const session = agentBrowserSessions.get(key);
+    if (!session) return null;
+    const folder = browserProfileDirectory(session, DATA_DIR);
+    if (!existsSync(folder)) return null;
+    if (!await closeLeftover(session, "before its profile was copied to the new browser", true)) throw new SourceStillOpen();
+    return folder;
+  }
   const lendRefusal = deps.lendRefusal ?? ((): LendRefusal => "unproven");
   const mayLend = (turn: TurnOwner) => lendRefusal(turn) === null;
   const lentChrome = deps.lentChrome;
@@ -193,17 +205,24 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     // A browser already running when this server first opens the session's door was told another address: an earlier
     // server's door, gone after a restart, or none. An attached browser is never swept or idle-closed, so it is closed
     // before anything uses the new door.
-    if (!doors.owns(session)) leftovers.set(session, closeLeftover(session));
+    if (!doors.owns(session)) leftovers.set(session, closeLeftover(session).then(() => undefined));
     const url = await doors.door(session);
     await leftovers.get(session);
     doorUrls.set(session, url);
     return url;
   }
-  async function closeLeftover(session: string): Promise<void> {
+  /** False only when a browser is running for the session and did not close. A profile copy (`copying`) also counts a
+   * browser it can't close because the engine is not ready; the door path leaves such a browser alone. */
+  async function closeLeftover(session: string, reason = "before its door to your Chrome opened", copying = false): Promise<boolean> {
     const engine = browserEngineStatus();
-    if (engine.kind !== "ready" || !browserRunning(session, undefined)) return;
+    if (!browserRunning(session, undefined)) return true;
+    if (engine.kind !== "ready") {
+      if (copying) console.warn(`browser ${session}: a browser is running and the engine can't close it ${reason}`);
+      return !copying;
+    }
     const closed = await closeBrowserSession(engine.binaryPath, browserRuntimeEnv({ AGENT_BROWSER_SESSION: session })).catch(() => false);
-    if (!closed) console.warn(`browser ${session}: could not close the browser left running before its door to your Chrome opened`);
+    if (!closed) console.warn(`browser ${session}: could not close the browser left running ${reason}`);
+    return closed;
   }
   /** A profile switched back to the built-in browser keeps its session name and its door, but its calls no longer use it. */
   function viaDoor(session: string, spec: { env: NodeJS.ProcessEnv }): boolean {
@@ -284,7 +303,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
       gateTimer = setInterval(() => void releaseGates().catch(() => undefined), 60_000);
       gateTimer.unref?.();
       agentBrowserSweep.start();
-      chromeEngine.start({ inUse: browserEngineKind(cfg) === "chrome", prepare: builtInBrowserEnabled(cfg) });
+      chromeEngine.start({ inUse: browserEngine() === "chrome", prepare: builtInBrowserEnabled(cfg) });
       return browserSweep;
     },
     closeAll: () => {
@@ -381,15 +400,21 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     const target = profile && profile !== "guest" ? browserProfilePartitionTarget(cfg, profile) : null;
     return target?.profileId ?? profile;
   }
-  /** The new engine runs a bot's browser when the flag is on, except in the person's own Chrome. */
+  /** The engine that runs bots' browsers now; asked each time, as a Chrome can appear or go while the server runs. */
+  function browserEngine(): BrowserEngineKind {
+    return effectiveBrowserEngine(cfg, () => chromeEngine.launcher.plan().kind !== "legacy", { boxed });
+  }
+  /** Seira's own driver runs a bot's browser when it is the engine, except in the person's own Chrome. */
   function onChrome(profile: string | undefined): boolean {
-    return browserEngineKind(cfg) === "chrome" && !usesMyChrome(browserProfileIdOf(profile));
+    return browserEngine() === "chrome" && !usesMyChrome(browserProfileIdOf(profile));
   }
   function chromeSpec(botId: string, profile: string | undefined, audience: Audience): { session: string; spec: ReturnType<ChromeEngine["spec"]> } {
     const suffix = noted(audience);
     const session = sessionFor(botId, profile, suffix);
     const target = profile && profile !== "guest" ? browserProfilePartitionTarget(cfg, profile) : null;
-    return { session, spec: chromeEngine.spec(session, profileKey(botId + suffix, session, { guest: profile === "guest", partitionId: target ? target.partitionId + suffix : null })) };
+    const key = profileKey(botId + suffix, session, { guest: profile === "guest", partitionId: target ? target.partitionId + suffix : null });
+    agentBrowserSessions.set(key, session);
+    return { session, spec: chromeEngine.spec(session, key) };
   }
   /** Chrome for the new engine, the installed agent-browser otherwise. */
   function browserReady(profile: string | undefined): boolean {
@@ -399,7 +424,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     const token = mintInternalCapability({ botId, ...turn, browserSession: session,
       kind: "browser", depth: 0, skillAuthoring: false, createdBots: 0, openedThreads: 0 });
     return {
-      command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: {
+      command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: {
         ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("browser")]: token, SEIRA_HARNESS_URL: `http://127.0.0.1:${PORT}`,
       },
     };
@@ -474,8 +499,8 @@ export function createBrowserHost(deps: BrowserHostDeps) {
         if (!closed) console.warn(`browser ${session}: could not close it after the browser engine changed`);
       });
     }
-    if (browserEngineKind(cfg) !== "chrome") void chromeEngine.service.closeAll().catch(() => undefined);
-    chromeEngine.start({ inUse: browserEngineKind(cfg) === "chrome", prepare: builtInBrowserEnabled(cfg) });
+    if (browserEngine() !== "chrome") void chromeEngine.service.closeAll().catch(() => undefined);
+    chromeEngine.start({ inUse: browserEngine() === "chrome", prepare: builtInBrowserEnabled(cfg) });
   }
   function browserRunning(session: string, spec: Spec | undefined): boolean {
     if (chromeTarget(session, spec)) return chromeEngine.service.runs(session);
@@ -628,14 +653,15 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     return { binaryPath: engine.binaryPath, session, env: browserSessionSpec(engine.binaryPath, session, profile, await browserEgress.open(session)).env, encryptionKey: browserEngineEncryptionKey() };
   }
   /** What Settings shows of the engine that runs bots' browsers here; My Chrome stays on agent-browser. */
-  function engineSummary<T extends { myChrome: boolean }>(agentBrowser: T): (T | (ReturnType<ChromeEngine["summary"]> & { myChrome: boolean })) & { engine: BrowserEngineKind; serverSites?: boolean; proxyConfigured?: boolean; proxySaved?: boolean } {
+  function engineSummary<T extends { myChrome: boolean }>(agentBrowser: T): (T | (ReturnType<ChromeEngine["summary"]> & { myChrome: boolean })) & { engine: BrowserEngineKind; engineFixed?: true; serverSites?: boolean; proxyConfigured?: boolean; proxySaved?: boolean } {
     const serverSites = sitesSwitch ? { serverSites: cfg.browserEngine?.egress?.localNetwork === true } : {};
-    const engine = browserEngineKind(cfg);
+    const engine = browserEngine();
     const proxyValue = cfg.browserEngine?.egress?.proxy;
     const proxySaved = typeof proxyValue === "string" && proxyValue.trim().length > 0;
     const proxyConfigured = builtInBrowserEnabled(cfg) && !hostedServer && parseSocks5Proxy(proxyValue) !== null;
     return {
       ...(engine === "chrome" ? { ...chromeEngine.summary(), myChrome: agentBrowser.myChrome, ...lentChromeSummary(), engine } : { ...agentBrowser, engine }),
+      ...(boxed ? { engineFixed: true as const } : {}),
       ...serverSites,
       ...(proxyConfigured ? { proxyConfigured: true } : {}),
       ...(proxySaved ? { proxySaved: true } : {}),
@@ -645,7 +671,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
   return {
     browserRuntime, browserLive, browserRoom, usedBrowserSessions, browserSweep, temporaryBrowserSessions, browserIdleMs: idleMs,
     currentBrowserSession, forgetTemporaryBrowser, myChromeAvailable, lentChromeSummary, usesMyChrome, browserSessionSpec, browserIntegration,
-    browserReady, currentBrowserSpec, loginInput, browserSystemPrompt, signedInSitesRefusal, closeBrowser, browserEngineSwitched,
+    browserReady, currentBrowserSpec, loginInput, browserSystemPrompt, signedInSitesRefusal, closeBrowser, browserEngineSwitched, browserEngine, agentBrowserProfileFor,
     eraseDeletedBrowser, engineSummary, engineBrowsers, browserAudience, browserSessionsOf, signedInSitesTarget, uploadPaths,
     eraseAudienceBrowsers, browserOwners, closeCapBrowsers,
   };

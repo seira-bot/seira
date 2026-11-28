@@ -11,6 +11,7 @@ import { defuse } from "./records-block.ts";
 import { redactSecretsInText } from "../shared/redact.ts";
 import { API_OWNER_WHO, API_WHO, AUTHORITY, fromNote } from "./provenance-label.ts";
 import { parseJson } from "./schema.ts";
+import { PublicError } from "./public-error.ts";
 
 export const BOT_API_RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
@@ -259,7 +260,7 @@ export class BotApiManager {
   }
 
   private assertWritable(): void {
-    if (this.unreadable) throw Object.assign(new Error("The saved Bot API settings could not be read. Repair bot-api.json before changing them."), { status: 503 });
+    if (this.unreadable) throw new PublicError("The saved Bot API settings could not be read. Repair bot-api.json before changing them.", 503);
   }
 
   private save(): void {

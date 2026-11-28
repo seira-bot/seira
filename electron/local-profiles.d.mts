@@ -8,7 +8,7 @@ export declare const SETTLE_POLL_MS: number;
 export declare const PHONE_LOCAL_ID: "local";
 
 /** A workspace as a paired phone lists it (packages/phone-protocol/src/workspaces.ts). */
-export interface PhoneWorkspaceFact { id: string; name?: string; color?: string; current: boolean; state: "ready" | "waiting" | "unavailable"; waitingFor?: string }
+export interface PhoneWorkspaceFact { id: string; environmentId?: string; name?: string; color?: string; current: boolean; state: "ready" | "waiting" | "unavailable"; waitingFor?: string }
 
 /** One workspace of this computer's own, as the registry keeps it: `name` null is This Mac's own (This Mac or This PC). */
 export interface ProfileEntry { id: string; name: string | null; color: CloudSwatch | null; createdAt: number }
@@ -31,12 +31,16 @@ export interface ProfileRow { id: string; name: string | null; color: string | n
 
 export interface LocalProfiles {
   places(input: { activeLocal: boolean }): ProfileRow[];
-  settling(): { id: string | null; name: string } | null;
+  settling(): { id: string | null; name: string; turn?: number } | null;
   phoneFacts(): PhoneWorkspaceFact[] | null;
   creatable(): boolean;
-  open(id: string): Promise<boolean | null>;
-  computer(): Promise<boolean | null>;
-  cancel(): void;
+  /** `cause`: the request that asks, an object; none for the rail. */
+  /** `hurryTurn`: the `turn` of the wait the caller means to hurry; false, and no turn changes, unless that wait is the active switch's. */
+  open(id: string, cause?: object, hurryTurn?: number): Promise<boolean | null>;
+  computer(cause?: object, hurryTurn?: number): Promise<boolean | null>;
+  cancel(cause?: object): void;
+  /** What took the turn of `cause`: undefined while nothing has, null when the rail did, else that request's cause. */
+  takenBy(cause: object): object | null | undefined;
   create(input: { name: unknown; color?: unknown }): { outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" };
   rename(id: string, name: unknown): { outcome: "saved" | ProfileRefusal };
   recolor(id: string, color: unknown): { outcome: "saved" | ProfileRefusal };

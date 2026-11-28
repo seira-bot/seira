@@ -83,7 +83,8 @@ connects to a path inside the box.
 `SEIRA_BOT_BOX=0` turns the box off. The box is never on without a working unprivileged bubblewrap: if the kernel
 refuses user namespaces or there is no `bwrap` on `PATH`, the box reports `off` with the reason, and the Admin shows it.
 With no `bwrap`, `GET /api/department-folders` also returns `boxMissing: "no-bwrap"`, and the folder card names the
-package to install.
+package to install. When every bot was meant to be boxed (a Cloud home, or `SEIRA_BOT_BOX=1`), the config
+response carries the same `boxMissing`, and the first screen shows the install command once.
 Scope `limited` is also off in the Flatpak (reason `flatpak`) and on macOS and Windows (reason `not-cloud`). The
 cloud-home image installs `bubblewrap` and `socat` (the in-box bridges; without socat a bundled Node bridge does the
 same).

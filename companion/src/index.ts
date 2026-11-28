@@ -168,6 +168,8 @@ const proxy = createProxyHandler({
     e2eDescriptor: (deviceId) => e2e.descriptor(deviceId),
     e2ePaired: (context, deviceId) => e2e.paired(context, deviceId),
     workspaces,
+    proofSigner: () => e2e.switchProofSigner(),
+    otherWorkspacesAllowed: (deviceId) => devices.records().find((device) => device.id === deviceId)?.otherWorkspaces === true,
   });
 const e2eOrigin = createE2EOrigin((req, res) => proxy(req, res), (req, socket, head) => proxy.upgrade(req, socket, head));
 const companion = createServer((req, res) => proxy(req, res, "lan"));
@@ -270,6 +272,7 @@ const control = createControlServer({
   },
   discovery: () => ({ advertising: mdns.advertising, name: service().name }),
   connectedDeviceIds: connectedDevices.ids,
+  workspacesOffered: () => workspaces.list() !== null,
   disconnectDevice,
   revoked: deviceRevoked,
   setDirectRoutes: (body) => {

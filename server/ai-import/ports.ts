@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { removeMemoryFile } from "../message-db.ts";
 import { mcpServerNameError, parseStoredMcpServer } from "../mcp-registry.ts";
+import type { NewBotApproval } from "../new-bot-defaults.ts";
 import type { RoutineInput, RoutineScheduleInput } from "../routines.ts";
 import type { SkillFolderFile } from "../skill-folder.ts";
 import { installSkill, isSkillName, listSkills, readSkillFile, readSkillReferences, removeSkill, setSkillEnabled } from "../skills.ts";
@@ -78,6 +79,8 @@ export interface ImportPorts {
 }
 
 export interface StorePortDeps {
+  /** The saved New bot level each created bot starts at; undefined keeps the workspace default. */
+  newBotApproval?(): NewBotApproval | undefined;
   mcp: {
     servers(): Record<string, unknown>;
     refusal(name: string, server: Record<string, unknown>): string | null;
@@ -98,7 +101,10 @@ export function createStorePorts(store: Store, deps: StorePortDeps): ImportPorts
       exists: (botId) => Boolean(store.bot(botId)),
       name: (botId) => store.bot(botId)?.name ?? "",
       names: () => store.bots.map((bot) => bot.name),
-      create: (name) => store.createBot({ name }, { seedMessages: false }).id,
+      create: (name) => {
+        const approval = deps.newBotApproval?.();
+        return store.createBot({ name, ...(approval ? { approvalMode: approval } : {}) }, { seedMessages: false }).id;
+      },
       remove: (botId) => { store.deleteBot(botId); },
       busy: (botId, imported) => {
         const bot = store.bot(botId);

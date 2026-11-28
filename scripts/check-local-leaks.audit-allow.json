@@ -1,0 +1,188 @@
+[
+  {
+    "path": "apps/docs/content/docs/connected-apps/self-hosted-composio.mdx",
+    "rule": "secret value in an assignment",
+    "match": "410e1cea91548da50fedd0e91ef972a15bd63414b894e6b822d35db5de1f25e4",
+    "reason": "Docs example: the key value is a placeholder."
+  },
+  {
+    "path": "cloudflare/composio-broker/src/test-harness.ts",
+    "rule": "secret value in an assignment",
+    "match": "9fdd6ec603f398a81cc2ba47e19544714f53800ba556e7667b9e935314792827",
+    "reason": "Fixed test values in a test harness, not real secrets."
+  },
+  {
+    "path": "cloudflare/composio-broker/src/test-harness.ts",
+    "rule": "secret value in an assignment",
+    "match": "e55cf845281f5704e7cbbd696a2f50d5357e462716fe665c702cc779703da064",
+    "reason": "Fixed test values in a test harness, not real secrets."
+  },
+  {
+    "path": "cloudflare/composio-broker/src/test-harness.ts",
+    "rule": "secret value in an assignment",
+    "match": "4e0bfeb154e7668a7483c4128a801125aa2d56470ab6d3d1d8f9f2f88a6a5d95",
+    "reason": "Fixed test values in a test harness, not real secrets."
+  },
+  {
+    "path": "cloudflare/control-plane/.dev.vars.example",
+    "rule": "secret value in an assignment",
+    "match": "cc955589c2280360ce74d51fe873e0bd2ca5a49001baa7cc8b2cf84eb75b75ad",
+    "reason": "Example file with placeholder values."
+  },
+  {
+    "path": "cloudflare/control-plane/.dev.vars.example",
+    "rule": "secret value in an assignment",
+    "match": "c4535831ad66ccad39a538b47e717a2dd5af8094de2b574ca64e3169361ea38a",
+    "reason": "Example file with placeholder values."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push-fcm.ts",
+    "rule": "secret value in an assignment",
+    "match": "4503eb4e54054aff0bc50c8feee36fb0a9dc0d40beb6cf7c617c3243952b5424",
+    "reason": "A token URL constant named GOOGLE_TOKEN_URL, not a secret."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push-fcm.ts",
+    "rule": "private key",
+    "match": "625247d325d02dc04a5b00a453b5031c3bd20646a7574b45bfc8e3a9b9542f1f",
+    "reason": "A regex that validates the PEM header; it holds no key."
+  },
+  {
+    "path": "cloudflare/control-plane/src/push.ts",
+    "rule": "private key",
+    "match": "0437681d585d5338979732c100cb8779b6703b500a9983d8ff97a5681793ef41",
+    "reason": "A regex that validates the PEM header; it holds no key."
+  },
+  {
+    "path": "cloudflare/control-plane/vitest.config.ts",
+    "rule": "secret value in an assignment",
+    "match": "4f28d6f3ee70a7e3b8cbf8114dbf0d6dbde648eb47799c18f7f4f5e86ad13e01",
+    "reason": "Fixed values that are marked test-only."
+  },
+  {
+    "path": "cloudflare/control-plane/vitest.config.ts",
+    "rule": "secret value in an assignment",
+    "match": "7954a59e422fa49e0c91bd8aa70a69e14eca83aa47616557c2ec5252473a9cb8",
+    "reason": "Fixed values that are marked test-only."
+  },
+  {
+    "path": "companion/src/index.ts",
+    "rule": "secret value in an assignment",
+    "match": "b43b90d5ef8c934710997ebfe0543a7d6b4d5dad6b8125866fa07c34a996f42e",
+    "reason": "A constant that reads a value by function call; the value is not in the source."
+  },
+  {
+    "path": "docs/composio.md",
+    "rule": "secret value in an assignment",
+    "match": "410e1cea91548da50fedd0e91ef972a15bd63414b894e6b822d35db5de1f25e4",
+    "reason": "Docs example: the key value is a placeholder."
+  },
+  {
+    "path": "electron/companion-account-documents.mjs",
+    "rule": "secret value in an assignment",
+    "match": "da56e57b2e610c2b6d9cd635ff3b74ed24d9c830638e165d7d997b58eb724fe0",
+    "reason": "A constant whose value is a field name, not a secret."
+  },
+  {
+    "path": "electron/lent-folders.mjs",
+    "rule": "home folder path (Windows)",
+    "match": "cecd1c71240e65cdd892d66873cd6fb26d9b87096414904ed2c3724c2bda4956",
+    "reason": "A code comment that explains case folding, with a made-up path."
+  },
+  {
+    "path": "electron/managed-companion-tunnel.mjs",
+    "rule": "secret value in an assignment",
+    "match": "c0c8941bf659d27214c476acb6ec0510263d90bc9a82c483fe3e17c1a06426ff",
+    "reason": "Constants whose values are field names, not secrets."
+  },
+  {
+    "path": "electron/move-failure.mjs",
+    "rule": "secret value in an assignment",
+    "match": "1d2a18808a97cb0c17275c0ebcbbf9f5eb0e5637d85f1baeefd9d5a9f9689273",
+    "reason": "A regex constant named TOKEN that redacts long strings."
+  },
+  {
+    "path": "scripts/capture-companion-fixtures.mjs",
+    "rule": "secret value in an assignment",
+    "match": "0a417e4198e03e3377965c27f9d589896c4cf44ff875b1238aa336f6a5d90a60",
+    "reason": "A random token made at run time for a local fixture run."
+  },
+  {
+    "path": "scripts/verify-company-backups.mjs",
+    "rule": "secret value in an assignment",
+    "match": "621d46d1a96ab72dd587d161dba8dd2f1fc963889530c2ad032b154a7e0eafab",
+    "reason": "A fixed password for an isolated local backup check."
+  },
+  {
+    "path": "server/browser-steps.ts",
+    "rule": "secret value in an assignment",
+    "match": "5bc30ebbf2b9437c137706eaf2aa31851a4db16745f7ff0fc49b887edf828202",
+    "reason": "Regex constants that detect secret-like field names."
+  },
+  {
+    "path": "server/browser-steps.ts",
+    "rule": "secret value in an assignment",
+    "match": "73bc4fa82edac86d588b90e210e51693dac69a511b635cf124023e4b44ed2fa2",
+    "reason": "Regex constants that detect secret-like field names."
+  },
+  {
+    "path": "server/drivers/acp/exit-report.ts",
+    "rule": "secret value in an assignment",
+    "match": "31842c99325162d609bb60db3e1384a9c17ac8ca297e58dae0497c48120bdf70",
+    "reason": "A constant that lists secret-like names for redaction."
+  },
+  {
+    "path": "server/drivers/acp/exit-report.ts",
+    "rule": "private key",
+    "match": "29bca68f63188f7adb9d3ed68d30ce65a19bff51c1612a7a8f90b3a9e3cd40ba",
+    "reason": "A redaction placeholder string; it holds no key."
+  },
+  {
+    "path": "server/drivers/acp/kimi.ts",
+    "rule": "secret value in an assignment",
+    "match": "4b316dd009d1e7bc7759f281125abbe3d62beb769357f0fbdde7d1d724726780",
+    "reason": "Code that sets an env variable from a function result; no literal value."
+  },
+  {
+    "path": "server/drivers/antigravity-skills.ts",
+    "rule": "home folder path (Windows)",
+    "match": "1164c5980f0c6c1f4d3d5175249d42675bfdb7b43c8c4614b243525bfa40565d",
+    "reason": "A code comment with a made-up runner path."
+  },
+  {
+    "path": "server/mcp-gate-config.ts",
+    "rule": "secret value in an assignment",
+    "match": "bcd25fb969b6e90aca83356d4df98a28ec322aa976d9ad586912b65d451f61ef",
+    "reason": "Code that sets a token-count limit, not a secret."
+  },
+  {
+    "path": "server/safety-floor.ts",
+    "rule": "home folder path (Windows)",
+    "match": "f0102875b965da3ba63edad218f801c2c588064eca72ff560afbfeee4fe570f9",
+    "reason": "A code comment that shows how Git Bash spells a path, with a made-up user."
+  },
+  {
+    "path": "server/setup-import.ts",
+    "rule": "secret value in an assignment",
+    "match": "a16b80d9b0819ed09146c95248333eae157e36695a2067f15089209202afac71",
+    "reason": "A regex constant that detects secret-like words."
+  },
+  {
+    "path": "server/vault-store.ts",
+    "rule": "secret value in an assignment",
+    "match": "8ea367c0c3bb9faa078b93ad2334989466146ddc917fe5bc17fadeb5ce7e539b",
+    "reason": "A file-name constant, not a secret."
+  },
+  {
+    "path": "shared/grok-import.ts",
+    "rule": "secret value in an assignment",
+    "match": "fa5c2105a33692ac9b23cb744200dddbf609de4a2f97775abfb86e3a85403f1d",
+    "reason": "A regex constant that detects secret-like URL parameters."
+  },
+  {
+    "path": "shared/redact.ts",
+    "rule": "secret value in an assignment",
+    "match": "0e7c556e2e64376727f72ed1961da3dd582bc569365303368fb0afbb65fa7180",
+    "reason": "A regex constant that redacts secret flags."
+  }
+]

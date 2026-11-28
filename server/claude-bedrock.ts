@@ -8,6 +8,7 @@ import { assertSeparateClaudeAccount } from "./claude-accounts.ts";
 import { DATA_DIR, persistableInstanceConfigs, type AppConfig } from "./config.ts";
 import type { InstanceConfig, InstanceConfigMap } from "./contracts.ts";
 import { CLAUDE_MODEL_ID } from "./drivers/claude-model-extras.ts";
+import { PublicError } from "./public-error.ts";
 
 const displayName = z.string().trim().min(1).max(80).refine((value) => !/\p{Cc}/u.test(value), "Name cannot contain control characters");
 const awsProfile = z.string().trim().regex(/^[A-Za-z0-9._+=,@-]{1,128}$/, "Enter the AWS profile name from this computer's ~/.aws config.");
@@ -137,10 +138,10 @@ export function newClaudeBedrock(cfg: AppConfig, body: z.infer<typeof claudeBedr
 export function updateClaudeBedrock(cfg: AppConfig, instanceId: string, body: BedrockFields) {
   const instances = persistableInstanceConfigs(cfg);
   const entry = instances[instanceId];
-  if (!entry) throw Object.assign(new Error("unknown instance"), { status: 404 });
-  if (!isClaudeBedrock(entry)) throw Object.assign(new Error("This Claude instance is not an Amazon Bedrock engine."), { status: 400 });
+  if (!entry) throw new PublicError("unknown instance", 404);
+  if (!isClaudeBedrock(entry)) throw new PublicError("This Claude instance is not an Amazon Bedrock engine.", 400);
   const saved = claudeBedrockInfo(entry);
-  if (!saved.awsProfile || !saved.awsRegion) throw Object.assign(new Error("This engine is missing its AWS profile or region. Remove it and add it again."), { status: 409 });
+  if (!saved.awsProfile || !saved.awsRegion) throw new PublicError("This engine is missing its AWS profile or region. Remove it and add it again.", 409);
   const fields: ResolvedBedrockFields = {
     awsProfile: body.awsProfile ?? saved.awsProfile,
     awsRegion: body.awsRegion ?? saved.awsRegion,

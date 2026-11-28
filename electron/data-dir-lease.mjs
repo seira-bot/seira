@@ -18,10 +18,16 @@ const MACHINE_ID = /^[0-9a-f]{32}$/;
 
 export class DataDirLeaseError extends Error {
   name = "DataDirLeaseError";
+  /** A live process on this machine holds the folder, so a later attempt can succeed once it exits. */
+  busy = false;
 }
 
 function leaseError(message, cause) {
   return Object.assign(new DataDirLeaseError(message), { cause });
+}
+
+function busyLeaseError(message) {
+  return Object.assign(new DataDirLeaseError(message), { busy: true });
 }
 
 function isPid(value) {
@@ -595,7 +601,7 @@ function assertNoLiveDelegatedChild(dataDir, t) {
     );
   }
   if (ownerIsAlive(child)) {
-    throw leaseError(
+    throw busyLeaseError(
       `Seira's previous server process ${child.pid} is still shutting down. Try again shortly.`,
     );
   }
@@ -700,12 +706,12 @@ function acquireDataDirLeaseInternal(dataDir, options = {}) {
         );
       }
       if (ownerIsAlive(current)) {
-        throw leaseError(
+        throw busyLeaseError(
           `Seira is already using this data directory (process ${current.pid}). Close the other instance first. If no Seira is running, delete this lease record and start again: ${JSON.stringify(leasePath)}.`,
         );
       }
       if (!retireDeadOwner(leasePath, current)) {
-        throw leaseError("A stale Seira data-directory lease is already being recovered; try again shortly.");
+        throw busyLeaseError("A stale Seira data-directory lease is already being recovered; try again shortly.");
       }
     }
   } finally {

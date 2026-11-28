@@ -110,8 +110,10 @@ fleet   many client workspaces on one Linux server, each its own account,
         USER manages the others from Settings → Installations.
 
 --access-log  write one line for each request the server answers (time,
-              method, path, status, duration), to see what reaches it. Never
-              the query string, cookies, headers or bodies. SEIRA_ACCESS_LOG=1
+              method, route, status, duration), to see what reaches it. A name
+              or an id in the path is written as :id, and a part that
+              matches no known route as <other>. Never the query string,
+              cookies, headers or bodies. SEIRA_ACCESS_LOG=1
               does the same. Off by default.
 
 Ways in (pick one; --lan can join any):

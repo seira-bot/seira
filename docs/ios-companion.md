@@ -411,6 +411,88 @@ cursor is committed only after a cold hydration succeeds; replayed streams
 advance it one folded frame at a time, so a disconnect during recovery cannot
 skip the remaining gap.
 
+## Suggested replies
+
+The last bot line of a finished turn may carry `suggestedReplies`: a list of at most 4 chips, each with a `title` (the
+label, at most 40 characters) and a `prompt` (the text a tap puts in the composer, at most 500 characters). The field is
+optional. A line without it, and a turn that failed, was cancelled or has no useful next step, gets no field; then the
+client shows its own saved chips. A client that does not know the field ignores it.
+
+The server fills the field. During a turn in a direct chat with a bot, the bot can call the `suggest_replies` tool with
+up to 4 `title` and `prompt` pairs. The server cleans the list with `cleanSuggestedReplies`, drops, whole, any entry
+that holds a secret, and holds the rest for the thread. When the turn ends well, the server puts the list on the last
+bot text line of that turn only. It sends no list when the turn failed or was stopped, or when the turn is internal, a
+routine run, or work that another bot assigned. A new turn forgets an unused list.
+
+The text is written by a model, so every side runs `cleanSuggestedReplies`
+(`packages/phone-protocol/src/suggested-replies.ts`) before a chip exists. It replaces control characters, trims
+whitespace and drops, whole and never cut, an entry with an empty or over-limit part, or with one of these in the title
+or the prompt:
+
+- A link: a scheme with `://`, `www.`, or `javascript:`, `data:`, `vbscript:`, `mailto:`, `tel:`, `sms:`, `file:` or
+  `blob:`.
+- A bare web address with no scheme and no `www.`: `name.tld` for one of the listed top-level domains (`BARE_ADDRESS_TLDS`
+  in the module: com, net, org, io, dev, app, ai, co, xyz, info, biz, gov, edu, uk, us, de, fr, jp, cn, ru, tv, id, me,
+  link, site, online, top, store, tech, cloud, page), an email address on one of them, `localhost`, or an IPv4 address.
+  A word such as `README.md` or `Node.js` is kept, and so is a domain that is not in the list.
+- A slash command: text that starts with `/` and a character.
+- Shell syntax: a backtick, `$(`, `${`, `&&`, `||`, `|`, a leading `$ `, `>>`, or `>` or `<` before a path.
+- A command line: text whose first word is one of `SHELL_WORDS` in the module (sudo, rm, curl, git, npm and the like).
+- An action payload: text that starts with `{` or `[`, or has a `"action"`, `"tool"`, `"command"`, `"cmd"` or `"url"` key.
+
+This filter is best effort, not a security boundary. It reads only the first word of a command line, so a command later
+in a sentence is not caught, and it knows only the listed domains. The boundary is the client rule: a tap puts the exact
+text in the composer and nothing else. It never sends on receipt or on render, and it never reaches a command, a tool, a
+link or an approval handler: the person reads the text and sends it through the normal message path.
+
+## Tasks I could help with
+
+A bot line can carry a card of tasks that the bot offers to do. The card has two fields.
+
+- `taskSuggestions` is on the bot line. It holds an optional `intro` (at most 200 characters) and `suggestions`: at most 5
+  entries. Each entry has an `id` (`s1` to `s5`, stable inside the card), a `title` (at most 80 characters), an optional
+  `description` (at most 240 characters), an `icon` and a `state`. A changed entry also carries `changedAt` (an ISO time),
+  and a started entry can carry `startedMessageId`. The `text` of the line lists the same tasks, for a client that does not
+  draw the card.
+- `fromTaskSuggestion` is on the person's line that Start sent. It holds `{ messageId, suggestionId }`: the card line and
+  the entry it came from.
+
+The `state` of an entry is `open`, `hidden` or `started`. A `started` entry is final. A client draws the icon `idea` for
+an icon name that it does not know. A client does not draw a `hidden` entry.
+
+The bot fills the card with the `suggest_tasks` tool. The server accepts one card for each turn, and only for a turn that a
+person started in a direct chat with a bot. It does not accept a card in a room.
+
+A client answers with `POST /api/bots/:botId/task-suggestions` and this body:
+
+```json
+{ "threadId": "…", "messageId": "…", "suggestionId": "s1", "action": "start" }
+```
+
+`action` is `start`, `hide` or `show`. `show` is Undo after `hide`.
+
+| Status | Body | Meaning |
+|--------|------|---------|
+| 200 | `{ ok, message }` | The action applied. `message` is the new card line. Start adds `sent`, the person's line, when the server stored it at once. |
+| 400 | `{ error }` | A field is missing or `action` is not known. |
+| 403 | `{ error }` | The caller may not write in this chat. |
+| 404 | `{ error }` | The bot, the chat, the message or the suggestion is unknown. |
+| 409 | `{ error, message }` | The action does not apply, for example Start on a started entry. `message` is the current card line. While a Start on the same card is on its way, the body is `{ error }` only. |
+
+The state lives on the card line. Every client gets a change as a `message.patch` frame for the card line, so a second
+phone and the desktop show the same card. Start also sends the person's line as a normal `message` frame. If the bot is
+busy, the person's line waits in the queue, and the entry has no `startedMessageId`.
+
+The fixture `server/testing/fixtures/task-suggestions.json` holds one capture of the card, each answer and the frames.
+`server/testing/fixtures/task-suggestions.test.ts` checks its shape, so a new suggestion field is a deliberate change.
+Capture the fixtures for the phone apps with:
+
+```bash
+node scripts/capture-companion-fixtures.mjs --out <seira-mobile>/ios/Tests/CompanionCoreTests/Fixtures
+```
+
+The command now also writes `task-suggestions.json`.
+
 ## Phone apps as bot tools
 
 The phone registers the apps it allows with `PUT /api/phones/self`. Behind the sidecar it is identified by the companion header; on a Cloud home it uses its own session. It long-polls `GET /api/phones/self/jobs` (20 s), leases a job with `POST /api/phones/self/jobs/:id/lease`, and answers with `POST /api/phones/self/jobs/:id/result`, sending `{ ok: true, result }` or `{ ok: false, error, code }`. Results over 256 KB are refused as `too_large`. The SSE frame `{ kind: "device.job", phone, id }` tells an open app to poll now.

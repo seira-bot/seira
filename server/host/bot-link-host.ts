@@ -21,6 +21,7 @@ import { botLinkDeps, type BotLinkStoreDeps } from "./bot-link-deps.ts";
 import { createLinkedRooms, type LinkedRoomsDeps } from "./bot-link-rooms.ts";
 import type { HandoffFiles } from "./handoff-files.ts";
 import { CHAINED, createLinkedServers, type GuestRequest } from "./linked-servers.ts";
+import { testSwitchOn } from "../test-switches.ts";
 
 export interface BotLinkHostDeps extends Omit<BotLinkStoreDeps, "store" | "files"> {
   dataDir: string;
@@ -101,7 +102,7 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
     ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, rooms, directoryChanged: () => { syncStandIns(); }, revoke: (sessionId) => { deps.sessions.revoke(sessionId); },
     notMine: (botId) => linked.instances().some((one) => one.link.claims(botId)),
   });
-  const loopback = deps.a2a?.allowLoopback ?? process.env.SEIRA_TEST_A2A_LOOPBACK === "1";
+  const loopback = deps.a2a?.allowLoopback ?? testSwitchOn("SEIRA_TEST_A2A_LOOPBACK");
   const testPort = process.env.SEIRA_PORT;
   const linked = createLinkedServers({
     ...shared, dataDir: deps.dataDir, coordinator: deps.coordinator, kick: deps.kick, log: deps.log, power: deps.power,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { analyticsEnabled, setAnalyticsEnabled } from "@/lib/analytics";
+import { setAnalyticsEnabled, usageAnalyticsChoice } from "@/lib/analytics";
 import { analyticsAvailable } from "@/lib/analytics-token";
 import { t } from "@/lib/i18n";
 import { SettingRow, Switch } from "./SettingsPrimitives";
@@ -7,11 +7,13 @@ import { SettingRow, Switch } from "./SettingsPrimitives";
 const ANALYTICS_DOC_URL = "https://github.com/seira-bot/seira/blob/main/docs/analytics.md";
 
 export function AnalyticsRow({ simple = false }: { simple?: boolean }) {
-  const [on, setOn] = useState(analyticsEnabled);
-  if (!analyticsAvailable()) return null;
+  const [on, setOn] = useState(usageAnalyticsChoice);
+  const text = analyticsAvailable()
+    ? t(simple ? "settings.simple.analytics" : "settings.analytics.subtitle")
+    : t(simple ? "settings.simple.analyticsCountsOnly" : "settings.analytics.countsOnly");
   const subtitle = (
     <>
-      {t(simple ? "settings.simple.analytics" : "settings.analytics.subtitle")}{" "}
+      {text}{" "}
       <a href={ANALYTICS_DOC_URL} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
         {t(simple ? "settings.simple.analyticsLink" : "settings.analytics.link")}
       </a>

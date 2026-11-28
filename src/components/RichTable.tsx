@@ -23,9 +23,18 @@ export interface RichTableProps {
   card?: boolean;
 }
 
-/** The native modal supplies focus containment, Escape, an inert background and focus restoration. */
+/** A point outside the dialog's box: a press there lands on the dialog element, but on its dim backdrop. */
+function onBackdrop(dialog: HTMLDialogElement, event: { target: EventTarget; clientX: number; clientY: number }) {
+  if (event.target !== dialog) return false;
+  const box = dialog.getBoundingClientRect();
+  return event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+}
+
+/** The native modal supplies focus containment, Escape, an inert background and focus restoration. A click on the dim
+ * area around it closes it too, but only when the press started there, so a text selection dragged out of it does not. */
 export function TableDialog({ title, onClose, children, returnFocus }: { title: string; onClose: () => void; children: ReactNode; returnFocus: HTMLElement | null }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const pressedOnBackdrop = useRef(false);
   const id = useId();
   useEffect(() => {
     const dialog = ref.current!;
@@ -35,10 +44,12 @@ export function TableDialog({ title, onClose, children, returnFocus }: { title: 
   return createPortal(
     <dialog ref={ref} aria-labelledby={id} onCancel={onClose} onClose={onClose}
       onKeyDown={(event) => { if (event.key === "Escape") event.stopPropagation(); }}
+      onMouseDown={(event) => { pressedOnBackdrop.current = onBackdrop(event.currentTarget, event); }}
+      onClick={(event) => { if (pressedOnBackdrop.current && onBackdrop(event.currentTarget, event)) onClose(); pressedOnBackdrop.current = false; }}
       className="m-auto flex max-h-[94dvh] w-[min(96vw,1400px)] max-w-none flex-col overflow-hidden rounded-2xl border border-hairline bg-panel p-0 text-ink shadow-2xl backdrop:bg-black/55">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline/40 px-4 py-3">
         <h2 id={id} className="min-w-0 truncate text-sm font-medium">{title}</h2>
-        <button type="button" autoFocus onClick={onClose} className="table-action" aria-label={t("table.close")}><X size={16} /></button>
+        <button type="button" autoFocus onClick={onClose} className="table-action -my-2 -me-2 size-11" aria-label={t("table.close")}><X size={16} /></button>
       </header>
       <div className="min-h-0 overflow-auto p-3 sm:p-5">{children}</div>
     </dialog>, document.body,

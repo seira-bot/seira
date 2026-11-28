@@ -6,11 +6,13 @@ sent.
 
 ## When it is on
 
-A build sends nothing unless it has a PostHog project key. The key is the build setting `VITE_SEIRA_POSTHOG_TOKEN`,
+A build sends no PostHog event unless it has a PostHog project key. The key is the build setting `VITE_SEIRA_POSTHOG_TOKEN`,
 read when the app is built. This repository does not contain a key.
 
-A build without a key has no analytics switch in Settings, never downloads `posthog-js`, and sends no event, whatever
-you choose. Everything below describes a build that has a key.
+A build without a key never downloads `posthog-js` and sends no event, whatever you choose. Its **Usage analytics**
+switch is still in Settings, and the switch stops the one thing that build sends: the anonymous count of announcement
+cards (see [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md#counting)). Everything
+below describes a build that has a key.
 
 ## What it is
 
@@ -27,8 +29,8 @@ you choose. Everything below describes a build that has a key.
 
 ## Turning it off
 
-**Usage analytics** in **Settings → General → Privacy**. When it is off, nothing loads and nothing is sent: no events, no daily
-snapshot, and none of the snapshot's requests.
+**Usage analytics** in **Settings → General → Privacy**. Every build has this switch. When it is off, nothing loads and
+nothing is sent: no events, no daily snapshot, none of the snapshot's requests, and no announcement card count.
 
 The desktop app keeps the switch for this computer's page itself, so it holds whichever port the app serves that page on
 (it moves to another when its usual one is taken). It is read before anything loads, and before any email is tied to
@@ -48,7 +50,8 @@ on there lasts until that page reloads. In a browser, switch it off on each serv
   campaign parameters (`utm_*`, `gclid` and the like) and their `$initial_*` and `$session_entry_*` copies are removed
   before an event leaves the app.
 - File paths, and ids of any kind: bot, room, conversation, instance, account or computer. (An `announcement` event
-  names the card, by the id the public announcements file gives it, never anything of yours.)
+  names the card, by the id the public announcements give it, never anything of yours. The anonymous card count is
+  separate from PostHog: see [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md#counting).)
 - Instructions, prompts, message content, model output and error messages.
 
 ## Allowed values
@@ -164,7 +167,7 @@ use their own Composio project, and how many bots run on cloud computers, withou
 | `cloud_welcome_ended` | A new Cloud's welcome ends | `reason`: `done`, `skipped`; `at`: the step it ended on |
 | `product_hunt_card` | You act on the Product Hunt card | `action`: `upvote`, `not_now`, `close` |
 | `modelgo_offer` | ModelGo: its first-run option is shown, or you act on the first-run option or the ModelGo row in Settings → AI → Other services | `action`: `shown` (the first-run option), `get_key` (ModelGo's site opened), `add_key` (Settings: a key was saved there; first run: you opened the ModelGo row to add one); `place`: `onboarding`, `settings` |
-| `announcement` | A card from the project's public announcements file (sponsor offers, product news, tips; [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md)) is shown, or you act on it | `id`: the card's own id from that file, the same for everyone who sees the card; `kind`: `sponsor`, `product`, `tip`; `action`: `shown`, `primary` (its main button), `secondary` (its second button), `close` (Not now, the X or Escape) |
+| `announcement` | A card from the project's public announcements (its file on GitHub or the Seira team's list; sponsor offers, product news, tips; [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md)) is shown, or you act on it | `id`: the card's own id from its list, the same for everyone who sees the card; `kind`: `sponsor`, `product`, `tip`; `action`: `shown`, `primary` (its main button), `secondary` (its second button), `close` (Not now, the X or Escape) |
 | `simple_mode_prompt` | The Simple mode popup, shown once in each browser after an update when nothing else is on screen, is shown, its Simple mode switch is flipped, or it is closed (Done, the X, Escape or a click outside) | `action`: `shown`, `toggled`, `closed`; `mode`: `simple`, `advanced`, the mode it was shown or closed in, or the one a flip turned on |
 | `new_look_notice` | The notice that Simple is now the only look, shown once in each browser that was on Advanced mode, when nothing else is on screen, is shown or closed (Done, the X, Escape or a click outside) | `action`: `shown`, `closed` |
 | `advanced_back_notice` | The notice that Advanced mode is back, shown once in each browser that was on Advanced mode before Simple became the only look and is put back on it, when nothing else is on screen, is shown or closed (Done, the X, Escape or a click outside) | `action`: `shown`, `closed` |

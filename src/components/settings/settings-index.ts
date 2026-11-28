@@ -72,8 +72,8 @@ export const SETTINGS_PAGES: readonly SettingsPage[] = [
   { id: "data", owner: "place", labelKey: "settings.page.data", icon: Archive, when: advancedOnly(adminPage),
     synonyms: ["data", "storage", "attachments", "activity", "audit"] },
   { id: "people", owner: "place", labelKey: "settings.section.people", icon: Users,
-    when: (ctx) => !ctx.client && ctx.admin && (ctx.team || (!ctx.desktop && !ctx.cloud)),
-    synonyms: ["people", "members", "invite", "roles", "bot access", "sharing", "team"] },
+    when: (ctx) => !ctx.client && ctx.admin && (ctx.team || (!ctx.here && !ctx.cloud)),
+    synonyms: ["people", "members", "invite", "roles", "bot access", "sharing", "team", "premium", "plan", "upgrade"] },
   { id: "installations", owner: "place", labelKey: "settings.section.workspaces", icon: Server, when: (ctx) => !ctx.client && ctx.installations,
     synonyms: ["installations", "fleet", "clients", "tenants"] },
   { id: "account", owner: "account", labelKey: "settings.page.account", when: () => true,
@@ -111,6 +111,7 @@ export const LEGACY_SETTINGS: Record<Exclude<AppSettingsSection, SettingsPageId>
   decisionModel: () => ({ page: "ai", anchor: "routing" }),
   imageGeneration: () => ({ page: "ai", anchor: "images" }),
   engines: () => ({ page: "ai", anchor: "providers" }),
+  aiPool: () => ({ page: "ai", anchor: "ai-pool" }),
   companion: () => ({ page: "phone" }),
   remote: (ctx) => (ctx.client ? { page: "app", anchor: "your-computers" } : { page: "phone" }),
   computer: () => ({ page: "desktops" }),
@@ -135,8 +136,8 @@ export function needsAdvanced(target: SettingsTarget, ctx: SettingsContext): boo
 
 /** Where a request for Settings lands here: its page (or Overview when that page can't exist on this place) and the
  * section to scroll to. A page or row only Advanced mode shows comes back with `advanced`: opening it turns Advanced on. */
-export function resolveSettingsTarget(requested: AppSettingsSection, ctx: SettingsContext): SettingsTarget & { missing?: SettingsPageId; advanced?: true } {
-  const target = isSettingsPage(requested) ? { page: requested } : LEGACY_SETTINGS[requested](ctx);
+export function resolveSettingsTarget(requested: AppSettingsSection, ctx: SettingsContext, anchor?: string | null): SettingsTarget & { missing?: SettingsPageId; advanced?: true } {
+  const target: SettingsTarget = isSettingsPage(requested) ? { page: requested, ...(anchor ? { anchor } : {}) } : LEGACY_SETTINGS[requested](ctx);
   if (needsAdvanced(target, ctx)) return { ...target, advanced: true };
   if (pageById(target.page).when(ctx)) return target;
   return { page: "overview", missing: target.page };
@@ -176,7 +177,7 @@ const browserAdmin = (ctx: SettingsContext) => !ctx.desktop && ctx.admin;
 export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "pair", page: "phone", anchor: "pair", labelKey: "phone.pair.button", sectionKey: "phone.pair.section", topFor: ["phone", "pair", "pairing", "qr", "iphone", "android", "this server", "pair a device", "connect your phone"],
     synonyms: ["code", "mobile", "tablet", "companion", "get the phone app"] },
-  { id: "paired", page: "phone", anchor: "paired", labelKey: "devices.paired", synonyms: ["devices", "remove", "revoke", "pair again"] },
+  { id: "paired", page: "phone", anchor: "paired", labelKey: "devices.paired", synonyms: ["devices", "remove", "revoke", "pair again", "rename"] },
   { id: "phone-push", page: "phone", anchor: "phone-push", labelKey: "phone.push.title", topFor: ["push", "push notifications", "phone notifications"], synonyms: ["notifications", "alerts", "app closed", "locked phone"] },
   { id: "wifi", page: "phone", anchor: "reach", labelKey: "devices.route.wifi", sectionKey: "phone.reach.title", when: hereOnly, synonyms: ["wifi", "wi-fi", "lan", "local network"] },
   { id: "relay", page: "phone", anchor: "reach", labelKey: "devices.route.relay", sectionKey: "phone.reach.title", when: hereOnly, synonyms: ["anywhere", "relay", "away"] },
@@ -196,7 +197,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "providers", page: "ai", anchor: "providers", labelKey: "settings.ai.providers", topFor: ["ollama", "lm studio", "local model", "model providers"], synonyms: ["models", "engines", "claude", "codex", "sign in", "subscription", "cli", "kimi", "cursor", "hidden providers", "unhide"] },
   { id: "keys", page: "ai", anchor: "ai-keys", labelKey: "settings.ai.otherServices", topFor: ["api keys", "api key"], synonyms: ["keys", "key", "openai", "anthropic", "xai", "openrouter", "router", "base url", "mistral", "groq", "cerebras", "deepseek", "opencode", "composio", "elevenlabs"] },
   { id: "backup-model", page: "ai", anchor: "backup-model", labelKey: "settings.recovery.title", sectionKey: "settings.ai.backupModel", advanced: true, synonyms: ["backup model", "fallback", "recovery"] },
-  { id: "ai-pool", page: "ai", anchor: "ai-pool", labelKey: "settings.pool.title", sectionKey: "settings.ai.pool", advanced: true, synonyms: ["ai pool", "share usage", "usage limit", "balance", "spread"] },
+  { id: "ai-pool", page: "ai", anchor: "ai-pool", labelKey: "settings.pool.title", sectionKey: "settings.ai.pool", synonyms: ["ai pool", "share usage", "usage limit", "balance", "spread", "round robin", "take turns", "reserve"] },
   { id: "routing", page: "ai", anchor: "routing", labelKey: "settings.ai.routing", advanced: true, synonyms: ["decision and extraction", "decision", "extraction", "routing", "who answers", "jev", "typesafe", "cloudflare", "workers ai", "system one", "decision key"] },
   { id: "images", page: "ai", anchor: "images", labelKey: "settings.ai.images", advanced: true, synonyms: ["image generation", "images", "generate", "picture", "image key", "picture key", "gpt image", "nano banana"] },
   { id: "about-you", page: "bots", anchor: "about-you", labelKey: "settings.bots.aboutYou", topFor: ["name", "my name", "photo", "avatar", "picture", "profile", "profile picture", "about me"], synonyms: ["rules", "rules for every bot"] },

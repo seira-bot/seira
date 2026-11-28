@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import { REDDIT_REFUSAL } from "./egress/reddit.ts";
 import { BrowserEgress, OwnListeners } from "./egress/registry.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { ProcessRegistry } from "./chrome/processes.ts";
-import { browserRoot } from "./chrome/profile.ts";
+import { browserRoot, profileDir, seedingDir } from "./chrome/profile.ts";
 import { CHROME_ENGINE, ChromeEngine, chromeTarget, LiveRouter, profileKey, RuntimeRouter, type RuntimeRouterOptions } from "./engines.ts";
 
 const AGENT_BROWSER = { command: "/opt/agent-browser", args: ["--session", "s"], env: { AGENT_BROWSER_SESSION: "s" } };
@@ -265,8 +265,26 @@ describe("the new engine's minute", () => {
     const closeIdle = vi.spyOn(value.service, "closeIdle").mockResolvedValue([]);
     const registry = new ProcessRegistry(browserRoot(dataDir));
     const launched = () => registry.add({ pid: process.pid, startTime: null, userDataDir: join(browserRoot(dataDir), "profiles", "p"), ownerPid: process.pid, launchedAt: new Date().toISOString() });
-    return { value, closeIdle, launched, exited: () => registry.remove(process.pid) };
+    return { value, closeIdle, launched, exited: () => registry.remove(process.pid), dataDir };
   }
+
+  it("removes the half copy of another browser's profile that a stopped process left, at the next start", () => {
+    const { value, dataDir } = engine();
+    const left = seedingDir(profileDir(dataDir, "bot:scout"));
+    mkdirSync(join(left, "Default"), { recursive: true });
+    writeFileSync(join(left, "Default", "Cookies"), "half a copy");
+    value.start({ inUse: false, prepare: false });
+    expect(existsSync(left)).toBe(false);
+  });
+
+  it("removes the half copy that an earlier version left beside the profile, at the next start", () => {
+    const { value, dataDir } = engine();
+    const left = `${profileDir(dataDir, "bot:scout")}.seeding`;
+    mkdirSync(join(left, "Default"), { recursive: true });
+    writeFileSync(join(left, "Default", "Cookies"), "half a copy");
+    value.start({ inUse: false, prepare: false });
+    expect(existsSync(left)).toBe(false);
+  });
 
   it("closes idle browsers every minute while the engine is in use", async () => {
     vi.useFakeTimers();

@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
 import { readBackupMagic, withCurrentSummary } from "./workspace-backup-legacy.ts";
@@ -18,9 +19,12 @@ import { cjkSearchText } from "./cjk-search.ts";
 import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEnginePath, managedTaskSkillLink, portableWorkspaceConfig, redownloadedOrgLibraryPath, restoredWorkspaceConfig } from "./workspace-backup-policy.ts";
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
-import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
+import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind, WorkspaceNeedsAction } from "../shared/workspace-backup.ts";
+import { backupPartOf, LEAVE_OUT_PARTS, parseLeaveOut, type LeaveOutPart } from "./workspace-backup-parts.ts";
+import { databaseCounts } from "./workspace-backup-counts.ts";
+import { archiveBlocks, copyRegular, hashRegular, type HashScope, type StreamSource } from "./workspace-backup-stream.ts";
 import { assertBackupSpace, backupProblemsError, type FreeSpace } from "./workspace-backup-space.ts";
-import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts";
+import { userHome } from "./env-path.ts"; import { restoreBeat, withRestoreBeat } from "./restore-progress.ts"; import { cleanNeedsAction, readNeedsAction, recordNeedsAction } from "./workspace-backup-needs-action.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
@@ -86,15 +90,18 @@ export interface CreateWorkspaceBackupOptions {
   password: string;
   clientState?: WorkspaceBackupClientState;
   appVersion?: string;
+  /** Parts of the data folder to leave out. Only "work-folders" is allowed. Absent or empty: nothing is left out. */
+  leaveOut?: readonly string[];
 }
-type CreatedWorkspaceBackup = { id: string; path: string; summary: WorkspaceBackupSummary };
+/** `sha256` is the hash of the whole encrypted file as written, for a check after a copy or an upload. */
+type CreatedWorkspaceBackup = { id: string; path: string; summary: WorkspaceBackupSummary; sha256: string };
 export interface WorkspaceRestoreResult {
   restored: boolean;
   rolledBack?: boolean;
   id?: string;
   safetyCopyPath?: string;
   summary?: WorkspaceBackupSummary;
-  leftBehind?: WorkspaceLeftBehind;
+  leftBehind?: WorkspaceLeftBehind; /** null: a receipt from before the list existed. [] only for a restore that has nothing to do by hand. */ needsAction?: WorkspaceNeedsAction[] | null;
   clientState?: WorkspaceBackupClientState;
 }
 /** `pathsRewritten`: the source data folder was rewritten in text too, by the restore or by repairMovedWorkspacePaths. */
@@ -215,39 +222,6 @@ function passwordKey(password: string, salt: Buffer): Promise<Buffer> {
 }
 
 // No link following, and a synchronous copy so this server cannot interleave a mutation.
-function copyRegular(source: string, destination: string): { size: number; mode: number; sha256: string } {
-  const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW);
-  let output: number | undefined;
-  try {
-    const before = fstatSync(input);
-    if (!before.isFile() || before.size > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("A workspace file is not regular or exceeds the 10 GB backup limit.");
-    const mode = before.mode & 0o100 ? 0o700 : 0o600;
-    output = openSync(destination, "wx", mode);
-    const chunk = Buffer.allocUnsafe(1024 * 1024);
-    const hash = createHash("sha256");
-    let size = 0;
-    for (;;) {
-      const count = readSync(input, chunk, 0, chunk.length, null);
-      if (!count) break;
-      size += count;
-      if (size > before.size) throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-      hash.update(chunk.subarray(0, count)); restoreBeat();
-      let offset = 0;
-      while (offset < count) offset += writeSync(output, chunk, offset, count - offset);
-    }
-    const after = fstatSync(input);
-    const current = lstatSync(source);
-    if (size !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs ||
-      current.ino !== before.ino || current.dev !== before.dev || current.isSymbolicLink()) {
-      throw new Error("A workspace file changed during backup. Stop its writer and retry.");
-    }
-    fsyncSync(output);
-    return { size, mode, sha256: hash.digest("hex") };
-  } finally {
-    closeSync(input);
-    if (output !== undefined) closeSync(output);
-  }
-}
 function hashFile(path: string): string {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
@@ -261,9 +235,9 @@ function hashFile(path: string): string {
     }
   } finally { closeSync(fd); }
 }
-function countJsonArray(path: string): number {
-  if (!existsSync(path)) return 0;
-  const value = privateJson(path);
+function countJsonArray(path: string, text?: string): number {
+  if (text === undefined && !existsSync(path)) return 0;
+  const value = text === undefined ? privateJson(path) : JSON.parse(text);
   if (!Array.isArray(value)) throw new Error("A workspace roster is not a valid JSON array.");
   const ids = new Set<string>();
   for (const item of value) {
@@ -273,18 +247,6 @@ function countJsonArray(path: string): number {
     if (item.tasks !== undefined && (!Array.isArray(item.tasks) || !item.tasks.every((task) => record(task) && typeof task.threadId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(task.threadId)))) throw new Error("A workspace roster contains invalid task records.");
   }
   return value.length;
-}
-function databaseCounts(path: string): { threads: number; messages: number } {
-  if (!existsSync(path)) return { threads: 0, messages: 0 };
-  const db = new DatabaseSync(path, { readOnly: true });
-  try {
-    const check = db.prepare("PRAGMA quick_check").all();
-    if (check.length !== 1 || Object.values(check[0])[0] !== "ok") throw new Error("The message database failed its integrity check.");
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages', 'thread_state')").all();
-    if (tables.length !== 2) throw new Error("The backup does not contain a supported message database.");
-    const counts = db.prepare("SELECT COUNT(*) AS messages, COUNT(DISTINCT thread_id) AS threads FROM messages").get()!;
-    return { threads: Number(counts.threads), messages: Number(counts.messages) };
-  } finally { db.close(); }
 }
 
 /** The existing maintenance gate owns exclusivity until this worker has exited.
@@ -318,14 +280,15 @@ export async function createWorkspaceBackup(dataDir: string, options: CreateWork
   }
 }
 
-export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string, deps: { statfs?: FreeSpace } = {}): Promise<CreatedWorkspaceBackup> {
+export async function createWorkspaceBackupSnapshot(dataDir: string, options: CreateWorkspaceBackupOptions, jobId?: string, deps: { statfs?: FreeSpace; /** Test seam: runs after pass 1 has read every file and before pass 2 streams them. */ betweenReads?: () => void } = {}): Promise<CreatedWorkspaceBackup> {
   if (Object.hasOwn(options, "credentials")) throw new Error("Workspace backups do not transfer credentials.");
   assertLocalAuthOutsideSnapshot(dataDir);
+  const leaveOut = parseLeaveOut(options.leaveOut);
   const salt = randomBytes(16);
   const key = await passwordKey(options.password, salt);
   const job = newJob(dataDir, jobId);
   const snapshot = join(job.directory, "snapshot");
-  const entries: Entry[] = [];
+  const entries: Entry[] = []; const streams = new Map<string, StreamSource>(); const rosters = new Map<string, string>();
   const foldedPaths = new Map<string, string>(); const problems: string[] = [];
   const warnings = ["Stop external editors and managed desktops before exporting; files written outside this server cannot be frozen by the backup gate.", "Conversation text and user files are not redacted and may contain secrets you pasted. Keep the encrypted backup private.", RESTORE_WARNING];
   let bytes = 0;
@@ -335,7 +298,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
   let copiedLinks = 0;
   try {
     const root = realpathSync(dataDir);
-    assertBackupSpace(job.directory, root, deps.statfs);
+    assertBackupSpace(job.directory, root, deps.statfs, leaveOut, Object.keys(SNAPSHOT_DATABASES));
     folder(join(snapshot, "data"));
     for (const [name, snapshotName] of Object.entries(SNAPSHOT_DATABASES)) {
       const sourceDb = join(root, name);
@@ -355,12 +318,21 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     const snapshotOf = (name: string) => join(snapshot, SNAPSHOT_DATABASES[name]!);
     const privateWorkflowRuns = privacy ? stripTeamPrivate({ messages: snapshotOf("messages.db"), runtime: snapshotOf("runtime.db"), workflows: snapshotOf("workflows.db") }, privacy) : new Set<string>();
     if (privacy) warnings.push(TEAM_PRIVATE_NOTE);
+    // Pass 1. A roster is counted from the bytes this read saw; pass 2 proves the archive holds the same bytes.
+    const hashed = (file: string, origin: string, path: string, scope: HashScope) => {
+      // A roster is kept in memory, and the restore reads it with the metadata limit: the same limit applies here, before any byte is read.
+      const keep = path === "bots.json" || path === "groups.json";
+      const read = hashRegular(file, origin, keep ? MAX_METADATA_BYTES : MAX_WORKSPACE_BACKUP_BYTES, path, { ...scope, keep });
+      if (read.bytes) rosters.set(path, read.bytes.toString("utf8"));
+      return read;
+    };
     const walk = (directory: string, prefix = "", chain: string[] = [root]) => {
       for (const name of readdirSync(directory).sort()) {
         if (!prefix && excluded(name)) continue;
         const path = prefix ? `${prefix}/${name}` : name;
         if (excludedWorkspaceAuthPath(path) || ephemeralWorkspaceTokenPath(path) || redownloadedOrgLibraryPath(path) || liveDataEnginePath(path)) continue;
         if (privacy && omittedAsTeamPrivate(path, privacy)) continue;
+        if (leaveOut.length && leaveOut.includes(backupPartOf(path) as LeaveOutPart)) continue;
         // Reject noncanonical spellings: a case-sensitive host must not export auth paths active on Windows/Mac.
         if (forbiddenArchivePath(path)) { problems.push(`A workspace filename conflicts with a protected authentication or runtime path: ${path}`); continue; }
         if (!validRelative(path)) { problems.push(`Cannot back up a name that cannot be restored on every supported platform, such as one with ":" or "\\", a trailing dot or space, or a Windows device name like CON or AUX; rename it first: ${path}`); continue; }
@@ -414,7 +386,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
           entries.push({ path, type: "directory", size: 0, mode: 0o700 });
           walk(source, path, [...chain, source]);
         } else if (stat.isFile()) {
-          let copied: { size: number; mode: number; sha256: string };
+          let copied: { size: number; mode: number; sha256: string }; let stream: StreamSource;
           if (path === "config.json" || path === "webhooks.json" || (privacy && (path === "bots.json" || path === "routines.json"))) {
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
@@ -426,8 +398,10 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
               if (Array.isArray(value.deleted)) for (const entry of value.deleted) if (record(entry) && record(entry.webhook)) delete entry.webhook.sealedSecret;
               writeJson(destination, value);
             }
-            copied = { size: lstatSync(destination).size, mode: 0o600, sha256: hashFile(destination) };
-          } else copied = copyRegular(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, destination);
+            ({ copied, stream } = hashed(destination, destination, path, { root: snapshot }));
+          } else ({ copied, stream } = hashed(SNAPSHOT_DATABASES[path] ? join(snapshot, SNAPSHOT_DATABASES[path]) : source, join(directory, name), path,
+            SNAPSHOT_DATABASES[path] ? { root: snapshot } : { root, walked: { dev: stat.dev, ino: stat.ino }, allowed: (rel) => !omittedFromWorkspaceBackup(rel) && !forbiddenArchivePath(rel) }));
+          streams.set(path, stream);
           bytes += copied.size;
           if (bytes > MAX_WORKSPACE_BACKUP_BYTES) throw new Error("The workspace exceeds the 10 GB backup limit.");
           entries.push({ path, type: "file", ...copied });
@@ -439,13 +413,15 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     if (skippedDependencies) warnings.push(`${skippedDependencies} installed dependency folder(s) (node_modules) were omitted; reinstall them in the project after restoring.`);
     if (copiedLinks) warnings.push(`${copiedLinks} symbolic link(s) inside a workspace were saved as copies of what they point to; restoring creates regular files and folders there.`);
     if (skippedWorkLinks) warnings.push(`${skippedWorkLinks} symbolic link(s) in conversation work folders were omitted; what they point to is outside this backup.`);
+    if (leaveOut.includes("work-folders")) warnings.push("Conversation work folders were left out by choice. Their files are not in this backup, and restoring does not bring them back.");
     const summary: WorkspaceBackupSummary = {
       format: "seira.workspace-backup", version: 1, id: job.id, createdAt: new Date().toISOString(),
       appVersion: options.appVersion ?? "unknown", files: entries.filter((entry) => entry.type === "file").length,
       directories: entries.filter((entry) => entry.type === "directory").length, bytes,
-      bots: countJsonArray(join(snapshot, "data", "bots.json")), groups: countJsonArray(join(snapshot, "data", "groups.json")),
-      ...databaseCounts(join(snapshot, "data", "messages.db")),
+      bots: countJsonArray("", rosters.get("bots.json") ?? "[]"), groups: countJsonArray("", rosters.get("groups.json") ?? "[]"),
+      ...databaseCounts(join(snapshot, SNAPSHOT_DATABASES["messages.db"]!)),
       exclusions: EXCLUSION_NOTES, warnings,
+      ...(leaveOut.length ? { leftOut: leaveOut } : {}),
     };
     const manifest: Manifest = {
       summary, sourceDataDir: resolve(dataDir), clientState: options.clientState ?? {}, entries,
@@ -458,12 +434,15 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     const cipher = createCipheriv("aes-256-gcm", key, iv);
     cipher.setAAD(header);
     writeFileSync(path, header, { mode: 0o600, flag: "wx" });
-    const tar = await import("tar");
-    await pipeline(tar.c({ cwd: snapshot, portable: true, strict: true }, ["manifest.json", "data"]), cipher, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    const fileHash = createHash("sha256").update(header);
+    const tap = new Transform({ transform(chunk, _encoding, callback) { fileHash.update(chunk); callback(null, chunk); } });
+    deps.betweenReads?.();
+    await pipeline(Readable.from(archiveBlocks(hashRegular(join(snapshot, "manifest.json"), join(snapshot, "manifest.json"), MAX_WORKSPACE_BACKUP_BYTES, "manifest.json", { root: snapshot }), entries, streams)), cipher, tap, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    const tag = cipher.getAuthTag();
     const fd = openSync(path, "a");
-    try { writeSync(fd, cipher.getAuthTag()); fsyncSync(fd); } finally { closeSync(fd); }
+    try { writeSync(fd, tag); fsyncSync(fd); } finally { closeSync(fd); }
     rmSync(snapshot, { recursive: true, force: true });
-    return { id: job.id, path, summary };
+    return { id: job.id, path, summary, sha256: fileHash.update(tag).digest("hex") };
   } catch (error) {
     rmSync(job.directory, { recursive: true, force: true });
     throw error;
@@ -480,7 +459,7 @@ function validateManifest(value: unknown): Manifest {
     value.sourceDataDir === posix.parse(value.sourceDataDir).root || value.sourceDataDir === win32.parse(value.sourceDataDir).root ||
     value.sourceDataDir.replaceAll("\\", "/").split("/").some((part) => part === "." || part === "..") ||
     Object.keys(value).some((key) => !["summary", "sourceDataDir", "clientState", "entries"].includes(key)) ||
-    Object.keys(value.summary).some((key) => !["format", "version", "id", "createdAt", "appVersion", "files", "directories", "bytes", "bots", "groups", "threads", "messages", "exclusions", "warnings"].includes(key)) || !record(value.clientState) ||
+    Object.keys(value.summary).some((key) => !["format", "version", "id", "createdAt", "appVersion", "files", "directories", "bytes", "bots", "groups", "threads", "messages", "exclusions", "warnings", "leftOut"].includes(key)) || !record(value.clientState) ||
     !Object.values(value.clientState).every((item) => typeof item === "string") || !Array.isArray(value.entries) ||
     value.entries.length > MAX_WORKSPACE_BACKUP_FILES) throw new Error("Invalid or unsupported workspace backup metadata.");
   if (Object.keys(value.clientState).some((key) => !WORKSPACE_BACKUP_CLIENT_KEYS.includes(key as typeof WORKSPACE_BACKUP_CLIENT_KEYS[number])) ||
@@ -490,6 +469,10 @@ function validateManifest(value: unknown): Manifest {
   }
   for (const key of ["exclusions", "warnings"] as const) {
     if (!Array.isArray(value.summary[key]) || !value.summary[key].every((item) => typeof item === "string")) throw new Error("Invalid workspace backup summary.");
+  }
+  if (value.summary.leftOut !== undefined) {
+    const left = value.summary.leftOut;
+    if (!Array.isArray(left) || !left.every((item) => typeof item === "string" && (LEAVE_OUT_PARTS as readonly string[]).includes(item))) throw new Error("Invalid workspace backup summary.");
   }
   const names = new Map<string, string>();
   let bytes = 0;
@@ -732,7 +715,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
   for (const entry of installed.filter((entry) => entry.type === "directory")) folder(join(prepared, entry.path));
   for (const entry of installed) {
     const destination = join(prepared, entry.path);
-    if (entry.type === "file") copyRegular(join(job, "staged", "data", entry.path), destination);
+    if (entry.type === "file") copyRegular(join(job, "staged", "data", entry.path), destination, MAX_WORKSPACE_BACKUP_BYTES);
   }
   const changeJson = (name: string, change: (value: unknown) => void) => {
     const path = join(prepared, name);
@@ -782,6 +765,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     folder(join(prepared, home));
     cpSync(source, join(prepared, home, ".browser-profiles"), { recursive: true, dereference: false, verbatimSymlinks: true, errorOnExist: true, force: false });
   }
+  recordNeedsAction(prepared, job);
   changeJson("routines.json", (value) => {
     if (!record(value)) throw new Error("Invalid routine definitions in workspace backup.");
     if (Array.isArray(value.routines)) for (const routine of value.routines) if (record(routine)) {
@@ -886,8 +870,7 @@ function prepareRestore(dataDir: string, id: string, manifest: Manifest): string
     } finally { db.close(); }
   }
   const leftBehind = paths.leftBehind();
-  if (leftBehind) writeJson(join(job, "left-behind.json"), leftBehind);
-  else rmSync(join(job, "left-behind.json"), { force: true });
+  if (leftBehind) writeJson(join(job, "left-behind.json"), leftBehind); else rmSync(join(job, "left-behind.json"), { force: true });
   return prepared;
 }
 
@@ -897,7 +880,7 @@ export function readLastWorkspaceRestore(dataDir: string): LastWorkspaceRestore 
   if (!existsSync(path)) return null;
   const raw = privateJson(path);
   if (!record(raw) || raw.restored !== true || typeof raw.id !== "string" || !ID.test(raw.id)) throw new Error("Invalid workspace restore receipt.");
-  return raw as unknown as LastWorkspaceRestore;
+  return { ...raw, needsAction: Array.isArray(raw.needsAction) ? cleanNeedsAction(raw.needsAction) : null } as unknown as LastWorkspaceRestore;
 }
 function finishRestore(dataDir: string, id: string, consumePending = true): LastWorkspaceRestore {
   const root = backupRoot(dataDir);
@@ -912,7 +895,7 @@ function finishRestore(dataDir: string, id: string, consumePending = true): Last
     } catch {}
   }
   const leftBehind = join(jobPath(dataDir, id), "left-behind.json");
-  const result: LastWorkspaceRestore = { restored: true, id, safetyCopyPath: join(root, `safety-${id}`), summary, clientState, pathsRewritten: true,
+  const result: LastWorkspaceRestore = { restored: true, id, safetyCopyPath: join(root, `safety-${id}`), summary, clientState, pathsRewritten: true, needsAction: readNeedsAction(jobPath(dataDir, id)),
     ...(existsSync(leftBehind) ? { leftBehind: privateJson(leftBehind) as WorkspaceLeftBehind } : {}) };
   writeJson(join(root, "last-restore.json"), result);
   if (consumePending) rmSync(join(root, "pending-restore.json"), { force: true });

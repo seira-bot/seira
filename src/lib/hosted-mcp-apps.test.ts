@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { isOneBotMcpServer } from "../../shared/one-bot-mcp";
 import { HOSTED_MCP_APPS, hostedConnections, hostedMcpApp, hostedServerName, type HostedApp } from "./hosted-mcp-apps";
 
 describe("hosted MCP apps", () => {
+  it("asks the server to keep each one-bot app to one bot, and only those", () => {
+    for (const app of HOSTED_MCP_APPS) {
+      expect(isOneBotMcpServer({ type: "http", url: app.url }), app.id).toBe("perBot" in app && app.perBot === true);
+    }
+  });
+
   it("has unique ids that are valid server names and unique https endpoints", () => {
     const ids = HOSTED_MCP_APPS.map((app) => app.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -57,9 +64,18 @@ describe("hosted MCP apps", () => {
       ["repliz", "https://mcp.repliz.com/mcp"],
       ["dalekta", "https://mcp.dalekta.id/mcp"],
       ["grupy", "https://mcp.grupy.chat/mcp"],
+      ["wapilot", "https://integrator.wapilot.id/v1/mcp"],
+      ["tebar", "https://api.tebar.app/mcp"],
+      ["tiktok", "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-organic-social"],
+      ["tiktok-ads", "https://business-api.tiktok.com/open_mcp/tt-ads-mcp-layer"],
     ]);
     const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
     for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);
+  });
+
+  it("gives only a service that can read and send as the person a per-bot card, with no logo of its own", () => {
+    expect(HOSTED_MCP_APPS.filter((app) => "perBot" in app).map((app) => app.id)).toEqual(["wapilot"]);
+    expect("image" in HOSTED_MCP_APPS.find((app) => app.id === "wapilot")!.icon).toBe(false);
   });
 
   it("counts each app on its own server", () => {

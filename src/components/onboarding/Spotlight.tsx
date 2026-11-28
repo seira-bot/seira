@@ -11,9 +11,12 @@ const GAP = 12;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
-function measure(anchor: string): Rect | null {
+/** `tour` reads the `data-tour` anchors, `ui` the `data-ui` ones of the UI map. */
+export type SpotlightAttr = "tour" | "ui";
+
+function measure(anchor: string, attr: SpotlightAttr): Rect | null {
   const all = Array.from(
-    document.querySelectorAll<HTMLElement>(`[data-tour="${anchor}"]`),
+    document.querySelectorAll<HTMLElement>(`[data-${attr}="${anchor}"]`),
   ).filter((el) => el.getClientRects().length > 0);
   const el = all[all.length - 1];
   if (!el) return null;
@@ -43,6 +46,7 @@ interface Action {
 
 export function Spotlight({
   anchor,
+  attr = "tour",
   placement,
   character = "idle",
   children,
@@ -52,6 +56,7 @@ export function Spotlight({
   onDone,
 }: {
   anchor: string | null;
+  attr?: SpotlightAttr;
   placement: "above" | "below" | "right";
   character?: SeiraState;
   children: ReactNode;
@@ -72,11 +77,11 @@ export function Spotlight({
     const update = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() =>
-        setRect((prev) => measure(anchor) ?? prev),
+        setRect((prev) => measure(anchor, attr) ?? prev),
       );
     };
     update();
-    const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
+    const el = document.querySelector<HTMLElement>(`[data-${attr}="${anchor}"]`);
     const ro = el ? new ResizeObserver(update) : null;
     if (el) ro?.observe(el);
     const mo = new MutationObserver(update);
@@ -95,7 +100,7 @@ export function Spotlight({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchor]);
+  }, [anchor, attr]);
 
   useEffect(() => {
     if (reducedMotion()) {

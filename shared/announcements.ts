@@ -13,6 +13,12 @@ import { z } from "zod";
 export const ANNOUNCEMENTS_FILE = "announcements/announcements.json";
 export const ANNOUNCEMENTS_SCHEMA_FILE = "announcements/announcements.schema.json";
 export const ANNOUNCEMENTS_URL = `https://raw.githubusercontent.com/seira-bot/seira/main/${ANNOUNCEMENTS_FILE}`;
+/** The Seira team's own feed: the same shape as the project file, served anonymously by Seira Cloud. */
+export const CLOUD_ANNOUNCEMENTS_URL = "https://cloud.seira.bot/api/public/announcements";
+/** Where the server sends the anonymous card counts (card id and action only). */
+export const CLOUD_ANNOUNCEMENT_EVENTS_URL = "https://cloud.seira.bot/api/public/announcements/events";
+export const ANNOUNCEMENT_COUNT_ACTIONS = ["shown", "primary", "secondary", "close"] as const;
+export type AnnouncementCountAction = (typeof ANNOUNCEMENT_COUNT_ACTIONS)[number];
 /** Pictures: files in the repository's announcements/ folder on main, as raw.githubusercontent.com serves them. */
 export const ANNOUNCEMENT_IMAGE_PREFIX = "https://raw.githubusercontent.com/seira-bot/seira/main/announcements/";
 

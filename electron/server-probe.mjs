@@ -3,6 +3,7 @@
 import { EXAMPLE_ADDRESS, isLoopbackHost, parseServerInput, serverTransport } from "./server-address.mjs";
 import { inTailscaleRange, isTailnetName } from "./tailnet.mjs";
 import { sentWireName } from "./phone-wire-names.mjs";
+import { isPlainOriginText } from "./pair-link.mjs";
 
 const DESCRIPTOR = sentWireName("environmentPath");
 /** A Seira desktop app's Remote access (companion/src/routes.ts) refuses the descriptor with this until a phone pairs. */
@@ -148,6 +149,16 @@ export async function probeServer({ address, code = "", fetch: fetchImpl, ownEnv
   return { outcome: "problem", ...failure };
 }
 
+/** The one origin an outside link names (scheme, host and port, normalized), or null for anything else. The spelling is checked
+ * before the URL parser normalizes it, so a path or marker that the parser would drop does not pass. */
+function linkOrigin(address) {
+  if (!isPlainOriginText(address)) return null;
+  let url;
+  try { url = new URL(address); } catch { return null; }
+  const parsed = parseServerInput(address, "");
+  return parsed.ok && parsed.candidates.length === 1 && parsed.candidates[0] === url.origin ? url.origin : null;
+}
+
 /** The window's bundle reads this file too, so the module that runs Tailscale's tool loads only here, in the app's main process. */
 const TAILSCALE_CHECK = "./tailscale-check.mjs";
 const readMagicDns = async () => (await import(/* @vite-ignore */ TAILSCALE_CHECK)).magicDnsEnabled();
@@ -155,7 +166,8 @@ const readMagicDns = async () => (await import(/* @vite-ignore */ TAILSCALE_CHEC
 /**
  * Connecting from the desktop: `probe` for the sheet's line under the field; `connect` for its button, which names the
  * server already, so it opens exactly what it finds or resolves with the problem; `connectAsking` for a link from the
- * clipboard or Settings, which names the server in main's own dialog (`ask(found)`) first and throws a problem's sentence.
+ * clipboard or Settings, which names the server in main's own dialog (`ask(found)`) first and throws a problem's sentence;
+ * `connectFromLink` for a link another app opened, which names the normalized origin in `confirmLink` before any request.
  * `open(found, name)` saves the server and opens its /pair page.
  */
 export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, open, t, tailnet, magicDns = readMagicDns }) {
@@ -173,6 +185,20 @@ export function createServerConnect({ fetch: fetchImpl, ownEnvironmentId, ask, o
       if (found.outcome !== "found") throw new Error(t(CONNECT_PROBLEM_KEYS[found.problem], { host: found.host ?? "", example: EXAMPLE_ADDRESS }));
       if (!(await ask(found))) return false;
       open(found, name);
+      return true;
+    },
+    /**
+     * An `{ address }` an outside link carried. Only an http(s) origin is taken, and `confirmLink({ origin })` must say yes before
+     * any request goes out. A link that is not that throws one fixed sentence that repeats nothing from it. No pairing code
+     * comes with a link: the server's own page asks for it after this, at the confirmed origin only.
+     */
+    async connectFromLink({ address }, confirmLink) {
+      const origin = linkOrigin(address);
+      if (!origin) throw new Error(t(CONNECT_PROBLEM_KEYS.notAnAddress, { host: "", example: EXAMPLE_ADDRESS }));
+      if (!(await confirmLink({ origin }))) return false;
+      const found = await probe(origin, "");
+      if (found.outcome !== "found") throw new Error(t(CONNECT_PROBLEM_KEYS[found.problem], { host: found.host ?? "", example: EXAMPLE_ADDRESS }));
+      open(found);
       return true;
     },
   };

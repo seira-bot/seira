@@ -10,7 +10,7 @@ export const REMOTE_KILL_GRACE_MS = 2_000;
  * It has the same shape as `createGlanceWindow`, and it asks `onAct` for every action the helper reports.
  */
 export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = [], env = process.env, onAct, onFail, setTimer = setTimeout, clearTimer = clearTimeout, readyMs = REMOTE_READY_MS, folder, makeFolder = (path) => mkdirSync(path, { recursive: true, mode: 0o700 }) }) {
-  let child = null, ready = false, closed = false, failed = false, shown = false, pending = null, waitReady = null, buffer = "";
+  let child = null, ready = false, closed = false, failed = false, shown = false, pending = null, waitReady = null, buffer = "", topInset = null;
 
   const write = (message) => {
     try { child?.stdin?.write(`${JSON.stringify(message)}\n`); } catch {}
@@ -49,6 +49,7 @@ export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = []
       ready = true;
       if (waitReady) clearTimer(waitReady);
       waitReady = null;
+      if (topInset !== null) write({ t: "inset", top: topInset });
       if (pending) { write(pending); pending = null; }
     } else if (message.t === "act" && typeof message.id === "string") {
       const id = message.id;
@@ -96,6 +97,8 @@ export function createRemoteVisor({ spawn, execPath, appArgs = [], switches = []
   return {
     render(payload) { send({ t: "render", payload }); shown = true; },
     hide() { if (!child) return; send({ t: "hide" }); shown = false; },
+    /** Sent before the first command once the helper is ready, and at once after that. It starts no helper by itself. */
+    setTopInset(top) { topInset = top; if (ready && child) write({ t: "inset", top }); },
     setSize: () => false,
     close() {
       closed = true;

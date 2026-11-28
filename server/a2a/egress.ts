@@ -7,6 +7,7 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 
 import { isPublicDomainAddress } from "../custom-domain.ts";
+import { testSwitchOn } from "../test-switches.ts";
 
 export type EgressReason = "refused" | "redirect" | "too-large" | "timeout" | "aborted" | "network";
 
@@ -53,7 +54,7 @@ const isLoopback = (address: string): boolean => {
   return family !== 0 && loopback.check(address, family === 4 ? "ipv4" : "ipv6");
 };
 
-const allowLoopbackOf = (deps: EgressDeps): boolean => deps.allowLoopback ?? process.env.SEIRA_TEST_A2A_LOOPBACK === "1";
+const allowLoopbackOf = (deps: EgressDeps): boolean => deps.allowLoopback ?? testSwitchOn("SEIRA_TEST_A2A_LOOPBACK");
 
 const refused = (message: string) => new A2aEgressError("refused", message, false);
 

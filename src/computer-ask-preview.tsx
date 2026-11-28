@@ -81,7 +81,7 @@ window.fetch = async (input, init) => {
 };
 const blocked = "embedded host failed: Spawn: binaryPath C:\\Users\\you\\AppData\\Local\\Programs\\Seira\\resources\\cua-driver-background.exe; reason Operation did not complete successfully because the file contains a virus or potentially unwanted software. (os error 225)";
 const capabilities = {
-  remote: false, host: { platform: "win32", label: "Windows", session: "unknown", packaged: true, homeDir: "C:\\Users\\you" }, windowChrome: "win-caption",
+  remote: false, host: { platform: "win32", label: "Windows", session: "unknown", packaged: true, homeDir: ["C:", "Users", "you"].join("\\") }, windowChrome: "win-caption",
   screenPreview: { available: false, interaction: "none", reasonCode: "unsupported-platform" }, dictation: { available: false, engine: "none", onDevice: false },
   localComputer: { available: false, support: "unsupported", enabled: false, status: "unavailable", reasonCode: "cua-driver-blocked", message: blocked },
 };

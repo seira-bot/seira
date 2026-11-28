@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { FILE_MAX_BYTES, sanitizeSharedFileName, saveFile, type SavedFile } from "./attachments.ts";
 import { extractZipMember, readZipDirectory } from "./zip-archive.ts";
+import { PublicError } from "./public-error.ts";
 
 export const XMIND_MIME = "application/vnd.xmind.workbook";
 
@@ -29,7 +30,7 @@ interface Sheet {
 }
 
 function statusError(status: number, message: string): Error & { status: number } {
-  return Object.assign(new Error(message), { status });
+  return new PublicError(message, status);
 }
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");

@@ -1,21 +1,24 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, MoreHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MoreHorizontal, X } from "lucide-react";
 import { api, desktopApprovalBridge, persistBotUpdate, useStore, type Bot, type InstanceInfo } from "@/state/store";
 import type { BotUpdatePatch } from "@/state/bot-patch-queue";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { engineDisplayName } from "@/lib/engine-name";
+import { SIGN_IN_FAMILY_LABEL, signInFamily } from "@/lib/engine-rail";
 import { useProviderOrder } from "@/lib/provider-health";
 import {
-  followBotModelRequest, moveTarget, planProviderOff, providerUses, rememberProviderOff, runProviderOff, undoProviderOff, useProviderOffResult,
-  type MoveTarget, type MovedBot,
+  followBotModelRequest, moveChoices, planProviderOff, providerUses, rememberProviderOff, runProviderOff, undoProviderOff, useProviderOffResult,
+  type MoveChoice, type MoveTarget, type MovedBot,
 } from "@/lib/provider-off";
 import type { ProviderUse } from "../../shared/provider-uses";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { blockedUses, ProviderBlockers } from "./ProviderBlockers";
 import { hasSavedApiKey } from "./EngineSetup";
-import { MENU_SHEET } from "./menu-recipe";
+import { MENU_LABEL, MENU_SEPARATOR, MENU_SHEET, SIMPLE_MENU_META, SIMPLE_MENU_ROW } from "./menu-recipe";
+import { providerName } from "./EngineLibrary";
+import { InstanceProviderMark } from "./ProviderIcons";
 import { anchoredMenuPosition } from "./SidebarPopoverMenu";
 import { keyEntry, keyForInstance } from "./keys/key-catalog";
 import { saveKey } from "./keys/key-save";
@@ -35,7 +38,11 @@ async function setHidden(instanceId: string, hidden: boolean, apply: (instances:
 }
 
 export interface ProviderOff {
+  instance: InstanceInfo;
+  /** Whether the provider is hidden after its bots move; an account that can be removed only moves them. */
+  hides: boolean;
   used: Bot[];
+  choices: MoveChoice[];
   target: MoveTarget | null;
   busy: boolean;
   error: string | null;
@@ -43,11 +50,11 @@ export interface ProviderOff {
   blocked: ProviderUse[];
   dismissBlocked: () => void;
   hideAnyway: () => void;
-  run: () => void;
+  run: (to?: MoveTarget) => void;
 }
 
 /** Hide for a provider no bot uses; Move and hide for one that is in use. */
-export function useProviderOff(instance: InstanceInfo): ProviderOff {
+export function useProviderOff(instance: InstanceInfo, { hide = true }: { hide?: boolean } = {}): ProviderOff {
   const { state, dispatch, refreshInstances } = useStore();
   const { health } = useProviderOrder(state.instances);
   const persist = useBotSaver();
@@ -55,22 +62,24 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<ProviderUse[]>([]);
   const used = providerUses(instance.instanceId, state.bots);
-  const target = used.length > 0 ? moveTarget(instance.instanceId, state.instances, health) : null;
-  const run = async () => {
-    if (busy || (used.length > 0 && !target)) return;
+  const choices = used.length > 0 ? moveChoices(instance.instanceId, state.instances, health) : [];
+  const first = choices.find((choice) => choice.usable);
+  const target: MoveTarget | null = first ? { instance: first.instance, selection: first.selection } : null;
+  const run = async (to: MoveTarget | null = target) => {
+    if (busy || (used.length > 0 && !to)) return;
     setBusy(true);
     setError(null);
     setBlocked([]);
     let refused = false;
     try {
-      const result = await runProviderOff({ instanceId: instance.instanceId, displayName: engineDisplayName(instance) }, planProviderOff(instance.instanceId, state.bots, target), {
+      const result = await runProviderOff({ instanceId: instance.instanceId, displayName: engineDisplayName(instance) }, planProviderOff(instance.instanceId, state.bots, to), {
         persist,
         followBotModel: followBotModelRequest,
-        hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances).catch((cause) => {
+        ...(hide ? { hide: () => setHidden(instance.instanceId, true, (instances) => dispatch({ type: "instances", instances }), refreshInstances).catch((cause) => {
           const uses = blockedUses(cause);
           if (uses.length > 0) { refused = true; setBlocked(uses); }
           throw cause;
-        }),
+        }) } : {}),
       });
       if (!refused || result.moved.length > 0) rememberProviderOff(result);
       if (!result.hidden) await Promise.resolve(refreshInstances()).catch(() => {});
@@ -96,27 +105,101 @@ export function useProviderOff(instance: InstanceInfo): ProviderOff {
       setBusy(false);
     }
   };
-  return { used, target, busy, error, blocked, dismissBlocked: () => setBlocked([]), hideAnyway: () => void hideAnyway(), run: () => void run() };
+  return { instance, hides: hide, used, choices, target, busy, error, blocked, dismissBlocked: () => setBlocked([]), hideAnyway: () => void hideAnyway(), run: (to) => void run(to) };
 }
 
 const ITEM = "ui-menu-row w-full text-left text-ink disabled:cursor-not-allowed disabled:opacity-50";
 const NOTE = "px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary";
 
-/** The Hide part of a provider menu, in every menu that has one. */
-export function ProviderOffItems({ off, onDone }: { off: ProviderOff; onDone: () => void }) {
-  const { used, target, busy } = off;
+/** The Hide part of a provider menu, in every menu that has one. With `onChoose`, a person who has more than one place to
+ * move the bots to picks it in the picker that `onChoose` opens. */
+export function ProviderOffItems({ off, onDone, onChoose }: { off: ProviderOff; onDone: () => void; onChoose?: () => void }) {
+  const { used, target, busy, hides } = off;
   const go = (action: () => void) => () => { onDone(); action(); };
   if (used.length === 0) {
-    return <button type="button" role="menuitem" data-provider-hide disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(off.run)}>{t("engines.hide")}</button>;
+    if (!hides) return null;
+    return <button type="button" role="menuitem" data-provider-hide disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(() => off.run())}>{t("engines.hide")}</button>;
   }
+  const count = String(used.length);
+  const many = onChoose !== undefined && off.choices.filter((choice) => choice.usable).length > 1;
   return <>
-    <p data-provider-used className={NOTE}>{t("provider.usedBy", { count: String(used.length) })}</p>
-    {target
-      ? <button type="button" role="menuitem" data-provider-move disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(off.run)}>
-        {t("provider.moveAndHide", { count: String(used.length), target: engineDisplayName(target.instance) })}
-      </button>
-      : <p data-provider-no-target className={NOTE}>{t("provider.noTarget")}</p>}
+    <p data-provider-used className={NOTE}>{t("provider.usedBy", { count })}</p>
+    {!target
+      ? <p data-provider-no-target className={NOTE}>{t(hides ? "provider.noTarget" : "provider.noTargetMove")}</p>
+      : many
+        ? <button type="button" role="menuitem" data-provider-move-choose aria-haspopup="menu" disabled={busy} className={cn(ITEM, "flex items-center gap-2")} onClick={onChoose}>
+          <span className="min-w-0 flex-1 truncate">{t(hides ? "provider.moveAndHideChoose" : "provider.moveChoose", { count })}</span>
+          <ChevronRight size={14} className="shrink-0 text-ink-tertiary rtl:-scale-x-100" aria-hidden="true" />
+        </button>
+        : <button type="button" role="menuitem" data-provider-move disabled={busy} title={t("engines.hideHint")} className={ITEM} onClick={go(() => off.run())}>
+          {t(hides ? "provider.moveAndHide" : "provider.move", { count, target: engineDisplayName(target.instance) })}
+        </button>}
   </>;
+}
+
+const enabledItems = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).filter((item) => !item.disabled);
+
+/** Where the bots go: another account of the same provider first, then any other ready AI. */
+export function ProviderMovePicker({ off, onBack, onDone }: { off: ProviderOff; onBack: () => void; onDone: () => void }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const count = String(off.used.length);
+  const same = off.choices.filter((choice) => choice.sameProvider);
+  const other = off.choices.filter((choice) => !choice.sameProvider);
+  const family = signInFamily(off.instance);
+  const provider = family ? SIGN_IN_FAMILY_LABEL[family] : providerName(off.instance);
+  useEffect(() => { if (rootRef.current) enabledItems(rootRef.current).find((item) => item.hasAttribute("data-provider-move-to"))?.focus(); }, []);
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = enabledItems(event.currentTarget);
+    if (items.length === 0) return;
+    const at = items.findIndex((item) => item === document.activeElement);
+    const next = event.key === "ArrowDown" ? (at + 1) % items.length
+      : event.key === "ArrowUp" ? (at <= 0 ? items.length - 1 : at - 1)
+      : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    items[next]?.focus();
+  };
+  const row = (choice: MoveChoice) => {
+    const email = choice.instance.snapshot.account?.email;
+    const meta = choice.usable ? email : choice.reason;
+    return (
+      <button key={choice.instance.instanceId} type="button" role="menuitem" data-provider-move-to={choice.instance.instanceId}
+        disabled={!choice.usable || off.busy} title={choice.reason} className={cn(SIMPLE_MENU_ROW, "disabled:cursor-not-allowed")}
+        onClick={() => { onDone(); off.run({ instance: choice.instance, selection: choice.selection }); }}>
+        <InstanceProviderMark instance={choice.instance} size={16} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate">{engineDisplayName(choice.instance)}</span>
+          {meta && <span className={SIMPLE_MENU_META}>{meta}</span>}
+        </span>
+      </button>
+    );
+  };
+  const both = same.length > 0 && other.length > 0;
+  return (
+    <div ref={rootRef} data-provider-move-picker className="flex flex-col" onKeyDown={onKeyDown}>
+      <button type="button" role="menuitem" data-provider-move-back className={cn(ITEM, "flex items-center gap-2 text-ink-secondary hover:text-ink")} onClick={onBack}>
+        <ChevronLeft size={14} className="rtl:-scale-x-100" aria-hidden="true" />
+        <span>{t("model.simple.back")}</span>
+      </button>
+      <div className={MENU_SEPARATOR} role="separator" />
+      <p className="px-2 pb-1 pt-1.5 text-[13px] font-medium leading-5 text-ink">{t("provider.moveTo", { count })}</p>
+      {both && <p className={MENU_LABEL}>{t("provider.moveSameProvider", { provider })}</p>}
+      {same.map(row)}
+      {both && <>
+        <div className={MENU_SEPARATOR} role="separator" />
+        <p className={MENU_LABEL}>{t("provider.moveOtherAi")}</p>
+      </>}
+      {other.map(row)}
+    </div>
+  );
+}
+
+/** A provider menu that can swap its rows for the move picker. The picker resets when the menu closes and unmounts. */
+export function ProviderMenuBody({ off, onDone, children }: { off: ProviderOff; onDone: () => void; children: (choose: () => void) => ReactNode }) {
+  const [choosing, setChoosing] = useState(false);
+  return choosing
+    ? <ProviderMovePicker off={off} onBack={() => setChoosing(false)} onDone={onDone} />
+    : <>{children(() => setChoosing(true))}</>;
 }
 
 /** What the last Hide did, with Undo. It reads the app's one remembered result, because the provider it names has left
@@ -129,7 +212,10 @@ export function ProviderOffStatus({ className }: { className?: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   if (!result) return null;
   const text = result.error ? result.error
-    : result.stayed.length > 0 ? t("provider.partial", { moved: String(result.moved.length), stayed: String(result.stayed.length), name: result.name })
+    : result.stayed.length > 0 ? (result.moveOnly
+      ? t("provider.partialMove", { moved: String(result.moved.length), stayed: String(result.stayed.length) })
+      : t("provider.partial", { moved: String(result.moved.length), stayed: String(result.stayed.length), name: result.name }))
+    : result.moved.length > 0 && !result.hidden ? t("provider.moved", { count: String(result.moved.length), target: result.target ?? "" })
     : result.moved.length > 0 ? t("provider.movedHidden", { name: result.name, count: String(result.moved.length), target: result.target ?? "" })
     : t("provider.hidden", { name: result.name });
   const undo = async () => {
@@ -276,11 +362,13 @@ export function ProviderMenu({ instance, name: shown, compact = false, status = 
       {(open || error || off.blocked.length > 0 || (status && result)) && (
         <Floating anchor={buttonRef} panelRef={panelRef}>
           {open && (
-            <div role="menu" className={cn("w-[240px]", MENU_SHEET)}>
+            <div role="menu" className={cn("w-[260px]", MENU_SHEET)}>
+              <ProviderMenuBody off={off} onDone={close}>{(choose) => <>
               {signOut && <button type="button" role="menuitem" data-provider-sign-out className={ITEM} onClick={() => { close(); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
               {ownApp && <p data-provider-sign-out-note className={NOTE}>{t("provider.signOutInApp", { name })}</p>}
               {target && <button type="button" role="menuitem" data-provider-remove-key className={ITEM} onClick={() => { close(); setConfirm("removeKey"); }}>{t("provider.removeKey")}</button>}
-              <ProviderOffItems off={off} onDone={close} />
+              <ProviderOffItems off={off} onDone={close} onChoose={choose} />
+              </>}</ProviderMenuBody>
             </div>
           )}
           {off.blocked.length > 0 && <ProviderBlockers name={name} uses={off.blocked} onClose={off.dismissBlocked} hideAnyway={{ run: off.hideAnyway, busy: off.busy }} />}

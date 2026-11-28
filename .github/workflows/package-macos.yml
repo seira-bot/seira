@@ -12,6 +12,8 @@
 # A run that passes the gate does not wait.
 # A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait.
 # A run that the gate refuses does not build.
+# release.yml calls this workflow with `gated: true`, after it ran the same gate and the same wait on the same commit. The gate step then passes at once.
+# Another repository can call it, but it cannot use the environments or secrets of this repository. A manual start has no `gated` input.
 # The `package` and `attach` jobs run only on `main`. They run only if the gate passed, or if the wait ended in this same attempt.
 # A re-run therefore never reuses the wait of an earlier attempt.
 # The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
@@ -29,6 +31,17 @@ on:
         required: true
         default: main
         type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: The release tag to build. It must match the version in package.json.
+        required: true
+        type: string
+      gated:
+        description: True when the caller already ran the release gate and the wait on this commit.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -90,14 +103,18 @@ jobs:
           RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
           REF: ${{ inputs.ref }}
           SHA: ${{ needs.commit.outputs.sha }}
+          GATED: ${{ inputs.gated }}
         run: |
           set -uo pipefail
-          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA"
-          else
-            node scripts/release-gate.mjs --sha "$SHA"
+          if [ "${GATED:-}" = true ]; then
+            echo "pass=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          status=$?
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA" && status=0 || status=$?
+          else
+            node scripts/release-gate.mjs --sha "$SHA" && status=0 || status=$?
+          fi
           case "$status" in
             0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
             1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;

@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 import { managedEndpointNeed } from "./companion-account-service.mjs";
+import { defaultStartRoutes } from "./companion-settings.mjs";
 import localOrigin from "./local-origin.cjs";
 
 const source = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -169,6 +170,8 @@ test("starting the phone link checks a stored address first and waits on it only
     startManagedCompanionConnection: async () => ({}),
     startCheckedManagedConnection: async (options) => { starts.push(options); },
     desktopCompanionState: async () => ({ enabled: true }),
+    defaultStartRoutes,
+    companionE2E: { configured: true },
   });
   vm.runInContext(`${slice("async function startDesktopCompanion(", "async function stopDesktopCompanion(")}
     globalThis.start = startDesktopCompanion;`, context);
@@ -188,4 +191,11 @@ test("starting the phone link checks a stored address first and waits on it only
   assert.equal(typeof starts[0].check()?.then, "function");
   assert.equal(starts[0].start, context.startManagedCompanionConnection);
   assert.equal(starts[0].desired(), true);
+
+  // Without a relay, pairing's start turns on Same Wi-Fi only and waits for the HTTPS address, which is Anywhere then.
+  context.companionE2E = { configured: false };
+  routesOn.clear();
+  await context.start();
+  assert.deepEqual([...routesOn], ["wifi"]);
+  assert.equal(starts.at(-1).wait, true);
 });

@@ -82,3 +82,8 @@ export function detectBox(input: DetectInput): BoxDetection {
   if (!(input.probe ?? probeBwrap)(bwrap)) return { box: "off", reason: "userns-refused", tools: null };
   return { box: "bwrap", reason: null, tools: { bwrap, socat: which("socat") }, scope };
 }
+
+/** `no-bwrap` when every bot's commands were meant to be boxed (a Cloud home, or SEIRA_BOT_BOX on) and bubblewrap is missing. */
+export function boxMissingForEveryBot(detection: Pick<BoxDetection, "reason">, env: Record<string, string | undefined>): "no-bwrap" | null {
+  return detection.reason === "no-bwrap" && (boxWanted(env) === "on" || cloudRole(env)) ? "no-bwrap" : null;
+}

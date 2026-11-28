@@ -271,8 +271,12 @@ test("signed in, a checkout is the Admin's for this account, opened in the brows
   f.checkout = { status: 200, body: { url: DODO } };
   assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "failed", "no contract version");
   f.checkout = { status: 409, body: { error: "already_subscribed" } }; const sessions = f.requests.filter(row => row.route === "/api/cloud/desktop/session").length;
-  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "conflict");
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "already-subscribed");
   assert.equal(f.requests.filter(row => row.route === "/api/cloud/desktop/session").length, sessions + 1);
+  f.checkout = { status: 409, body: { error: "out_of_stock" } };
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "sold-out");
+  f.checkout = { status: 409, body: { error: "something_else" } };
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "conflict");
   f.checkout = { status: 429, body: { error: "rate_limited", interval: 600 } };
   assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "rate-limited");
   for (const status of [502, 503]) { f.checkout = { status, body: { error: "unavailable" } }; assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "failed"); }
@@ -691,6 +695,9 @@ test("pages access: this sign-in's own pages token on any plan, null without the
   f.pages = { status: 404, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
   f.pages = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/pages/token", token } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
+  const renamed = `seira_pd_${"a".repeat(43)}`;
+  f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: renamed } };
+  assert.deepEqual(await f.client.pagesAccess(), { url, token: renamed });
   f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: `seira_xd_${"a".repeat(43)}` } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
   f.pages = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.pagesAccess());
 });

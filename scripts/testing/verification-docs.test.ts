@@ -34,8 +34,10 @@ const ROUTES_DIR = join(ROOT, "server", "routes");
 const routeModules = readdirSync(ROUTES_DIR, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts")).sort()
   .map((name) => join(ROUTES_DIR, name));
-const featureRouteModules = ["data/routes.ts", "workspace-backup-http.ts", "cloud-move-http.ts"].map((name) => join(ROOT, "server", name));
-const serverSource = [join(ROOT, "server", "index.ts"), ...routeModules, ...featureRouteModules]
+const featureRouteModules = ["data/routes.ts", "workspace-backup-http.ts", "cloud-move-http.ts", "github/routes.ts"].map((name) => join(ROOT, "server", name));
+// A wire contract in shared/ that owns its route prefix as a constant.
+const routeContracts = [join(ROOT, "shared", "github-app.ts")];
+const serverSource = [join(ROOT, "server", "index.ts"), ...routeModules, ...featureRouteModules, ...routeContracts]
   .map((file) => readFileSync(file, "utf8")).join("\n");
 const hooksSource = readFileSync(join(ROOT, "server", "webhook-ingress.ts"), "utf8");
 // server/index.ts matches routes two ways: `path === "/api/x"` and

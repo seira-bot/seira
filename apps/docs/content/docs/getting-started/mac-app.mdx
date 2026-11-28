@@ -1,0 +1,65 @@
+---
+title: Mac app
+description: Install Seira on macOS 12 or later with the disk image for Apple silicon or Intel, and learn which permissions macOS asks for.
+icon: Laptop
+---
+
+Seira for Mac is the full desktop app. Your bots, the Seira server, and your agent engines all run on your Mac.
+
+## What you need
+
+- macOS 12 Monterey or later, on Apple silicon or Intel.
+- At least one agent CLI, such as Claude Code or Codex, installed and signed in. See [Install an agent CLI](./installation.mdx#install-an-agent-cli).
+
+## Install
+
+1. Download the disk image for your Mac:
+   - Apple silicon (M1 and later): [`Seira.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira.dmg)
+   - Intel: [`Seira-intel.dmg`](https://github.com/seira-bot/seira/releases/latest/download/Seira-intel.dmg)
+2. Open the disk image, then drag Seira to Applications.
+3. Open Seira from Applications or Launchpad.
+
+The app is signed and notarized by Apple. The first time you open it, macOS asks if you want to open an app downloaded from the internet. Select **Open**.
+
+To find your chip, open the Apple menu and select **About This Mac**.
+
+## What macOS asks you to allow
+
+macOS asks for each permission only when you use the feature that needs it. You can change each one later in **System Settings → Privacy & Security**.
+
+| Permission | When Seira asks |
+|---|---|
+| Microphone | You dictate a message into the composer. |
+| Speech Recognition | Seira turns your voice into text on your Mac. |
+| Accessibility | You let a bot control this Mac. |
+| Screen Recording | A bot looks at this Mac before it acts. |
+| Local Network | Seira connects to your phones and your other computers. |
+| Downloads folder | You move a bot from Grok Bot, and Seira looks for its saved file. |
+
+After you allow Accessibility or Screen Recording, restart the control session when Seira asks. macOS applies the new permission only after that.
+
+## Updates
+
+Seira downloads each update. Choose **Restart to update**, and the app replaces itself and reopens. When you are away from your Mac, Seira can install a downloaded update by itself.
+
+See [Desktop updates](../troubleshooting/updates.mdx) if an update gets stuck.
+
+## Open Seira when you log in
+
+Turn on **Open at login** in **Settings → General → Startup**.
+
+## What works on macOS
+
+| Capability | macOS |
+|---|---|
+| The app, the server inside it, and local engines | Supported |
+| Your own VPS as a cloud computer, and connected apps | Supported |
+| Bot control of this computer | Supported |
+| Preview of the local screen | Supported |
+| Dictation on the device | Supported |
+
+## Next steps
+
+- [Make your first bot](./first-bot.mdx).
+- [Give a bot a computer](../computers/index.mdx).
+- [Use Seira on your iPhone](../mobile/ios-companion.mdx).

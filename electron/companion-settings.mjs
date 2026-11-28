@@ -58,6 +58,9 @@ export function readCompanionSettings(raw, facts = {}) {
   return settings;
 }
 
+/** The ways in a first start turns on: Anywhere only where the relay can run. */
+export const defaultStartRoutes = (relayConfigured) => (relayConfigured === false ? ["wifi"] : ["wifi", "relay"]);
+
 export const anyRouteOn = (settings) => ROUTES.some((route) => settings?.routes?.[route]?.on === true);
 
 /** Same Wi-Fi and Tailscale are what the sidecar itself listens for; the relay and the HTTPS address reach it otherwise. */

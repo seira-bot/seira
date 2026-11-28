@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync, statSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
@@ -10,11 +10,15 @@ import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.
 import {
   createWorkspaceBackup, stageWorkspaceBackup, commitPendingWorkspaceRestore,
   MAX_WORKSPACE_BACKUP_UPLOAD_BYTES,
+  omittedFromWorkspaceBackup,
   removeWorkspaceBackupJob,
   type WorkspaceBackupSummary,
 } from "./workspace-backup.ts";
 import type { RequestAuth } from "./request-auth.ts";
+import { LEAVE_OUT_PARTS, parseLeaveOut, partSizesAsync, singleFlightSizes } from "./workspace-backup-parts.ts";
+import { teamCloudBackup } from "./workspace-backup-team-private.ts";
 import { userErrorFields } from "./user-errors.ts";
+import { PublicError } from "./public-error.ts";
 
 const PREFIX = "/api/workspace-backup";
 const MAX_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_UPLOAD_BYTES;
@@ -22,14 +26,22 @@ const MAX_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_UPLOAD_BYTES;
 const MAX_CHUNK_BYTES = 32 * 1024 ** 2;
 const MAX_CLIENT_STATE_BYTES = 2 * 1024 ** 2;
 const EXPIRES_MS = 60 * 60_000;
+/** setTimeout fires at once for a delay above this. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 const passwordSchema = z.string().min(12, "Use a password of at least 12 characters.").max(1024);
-const failure = (message: string, status = 400) => Object.assign(new Error(message), { status });
+const failure = (message: string, status = 400) => new PublicError(message, status);
 type Artifact = {
   owner: string; kind: "download" | "upload" | "uploading" | "staged"; path?: string; expires: number; summary?: WorkspaceBackupSummary;
   /** `uploading` only: the announced size, the bytes stored, and whether a part is being written. */
   total?: number; received?: number; writing?: boolean;
 };
-type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string> };
+/** The status shows only how many bots stayed behind. The folder paths stay in the private receipt. */
+function leftBehindCount(value: unknown): { bots: number } | null {
+  const bots = value && typeof value === "object" ? (value as { bots?: unknown }).bots : undefined;
+  return typeof bots === "number" && Number.isSafeInteger(bots) && bots >= 0 ? { bots } : null;
+}
+
+type RestoreResult = { id?: string; restored?: boolean; safetyCopyPath?: string; clientState?: Record<string, string>; leftBehind?: unknown; needsAction?: unknown[] | null };
 
 /** One `bytes=a-b`, `a-` or `-n` range; any other header, including a list of ranges, means the whole file. */
 function byteRange(header: string | undefined, size: number): { start: number; end: number } | "unsatisfiable" | undefined {
@@ -68,7 +80,18 @@ export function createWorkspaceBackupRoutes(options: {
   /** Starts this server again so startup installs a committed restore. Given only where a launcher always starts it
    * again (My Cloud), since the person there has no app to quit or process to restart. */
   restart?: () => void;
+  /** How long a finished export can be read. Default one hour; tests give a short time. */
+  exportLifetimeMs?: number;
+  /** Signs in a new server to read one export (server/workspace-backup-move-out.ts). */
+  moveOut?: {
+    issue(exportId: string, expiresAt: number): { token: string };
+    revoke(exportId: string): number;
+    /** Calls `ended` when sign-in `sessionId` ends, however it ends; returns the way to stop watching. */
+    watch(sessionId: string, ended: () => void): () => void;
+  };
 }) {
+  // The report skips the same paths as the export does: it calls the export's own rule.
+  const sizesOnce = singleFlightSizes((root) => partSizesAsync(root, [], omittedFromWorkspaceBackup));
   const artifacts = new Map<string, Artifact>();
   let operating = false;
   const json = (res: ServerResponse, status: number, body: unknown) => {
@@ -76,6 +99,8 @@ export function createWorkspaceBackupRoutes(options: {
     res.end(JSON.stringify(body));
   };
   const owner = (auth: RequestAuth) => auth.kind === "session" ? auth.session.id : "local-owner";
+  /** A move-out sign-in reads the one export it was made for, whoever made the export. */
+  const granted = (auth: RequestAuth, id: unknown) => auth.kind === "session" && typeof id === "string" && auth.session.moveOut === id;
   const check = (req: IncomingMessage, auth: RequestAuth) => {
     if (!options.authorized(req, auth)) throw failure("Your session changed. Reopen Backups and try again.", 403);
   };
@@ -83,6 +108,7 @@ export function createWorkspaceBackupRoutes(options: {
     if (artifact.path) { try { unlinkSync(artifact.path); } catch {} }
     if (artifact.kind === "download" || artifact.kind === "staged") { try { removeWorkspaceBackupJob(options.dataDir, id); } catch {} }
     artifacts.delete(id);
+    options.moveOut?.revoke(id);
   }
   // Reclaim only old app-named jobs, never safety copies or pending/committed recovery state.
   function reclaimAbandoned() {
@@ -115,7 +141,7 @@ export function createWorkspaceBackupRoutes(options: {
   const get = (id: unknown, auth: RequestAuth, kind: Artifact["kind"]) => {
     expire();
     const artifact = typeof id === "string" ? artifacts.get(id) : undefined;
-    if (!artifact || artifact.owner !== owner(auth) || artifact.kind !== kind) {
+    if (!artifact || !(artifact.owner === owner(auth) || granted(auth, id)) || artifact.kind !== kind) {
       throw failure("This backup has expired or belongs to another session. Select the file again.", 404);
     }
     return artifact;
@@ -146,7 +172,17 @@ export function createWorkspaceBackupRoutes(options: {
           ...(options.restart ? { restarts: true } : {}),
           lastRestoreId: options.restored.restored ? options.restored.id : null,
           safetyCopyPath: options.restored.safetyCopyPath ?? null,
+          leftBehind: leftBehindCount(options.restored.leftBehind),
+          needsAction: options.restored.needsAction ?? null,
         });
+        return true;
+      }
+      if (method === "GET" && path === `${PREFIX}/sizes`) {
+        // Read-only: bytes for each part of the data folder, so a person can see what makes a backup large.
+        // On a Team Cloud an export leaves out each member's private data, and a count of the raw folder would include it: give no numbers.
+        if (teamCloudBackup()) throw failure("Backup sizes are not available on a Team Cloud, because the totals would include other members' private data.", 403);
+        const parts = await sizesOnce(options.dataDir);
+        json(res, 200, { parts, total: Object.values(parts).reduce((sum, bytes) => sum + bytes, 0), canLeaveOut: [...LEAVE_OUT_PARTS] });
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/client-state`) {
@@ -157,19 +193,41 @@ export function createWorkspaceBackupRoutes(options: {
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/export`) {
-        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}) }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
+        const body = z.object({ password: passwordSchema, clientState: z.record(z.string(), z.string()).default({}), leaveOut: z.unknown().optional() }).parse(await options.readBody(req, MAX_CLIENT_STATE_BYTES + 8 * 1024));
         if (Buffer.byteLength(JSON.stringify(body.clientState)) > MAX_CLIENT_STATE_BYTES) throw failure("Saved drafts exceed the 2 MB backup preference limit.", 413);
+        let leaveOut: string[];
+        try { leaveOut = parseLeaveOut(body.leaveOut); } catch (error) { throw failure((error as Error).message); }
         const clientState = Object.fromEntries(Object.entries(body.clientState).filter(([key]) => WORKSPACE_BACKUP_CLIENT_KEYS.includes(key as typeof WORKSPACE_BACKUP_CLIENT_KEYS[number])));
         const result = await operate(() => options.exclusive(async () => {
           check(req, auth);
           replacePrevious(auth, ["download"]);
           if (artifacts.size >= 4) throw failure("There are already four backup files in progress. Restart or wait an hour before creating another.", 409);
-          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion });
+          return createWorkspaceBackup(options.dataDir, { password: body.password, clientState, appVersion: options.appVersion, leaveOut });
         }));
         try { check(req, auth); } catch (error) { removeWorkspaceBackupJob(options.dataDir, result.id); throw error; }
-        artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + EXPIRES_MS });
-        json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, summary: result.summary });
+        artifacts.set(result.id, { owner: owner(auth), kind: "download", path: result.path, summary: result.summary, expires: Date.now() + (options.exportLifetimeMs ?? EXPIRES_MS) });
+        json(res, 200, { id: result.id, filename: `Seira-${result.summary.createdAt.slice(0, 10)}.seirabackup`, bytes: statSync(result.path).size, sha256: result.sha256, summary: result.summary });
         return true;
+      }
+      const grant = /^\/api\/workspace-backup\/move-out(?:\/([\w-]+))?$/.exec(path);
+      if (grant) {
+        if (!options.moveOut) throw failure("This server cannot hand a backup to a new server.", 404);
+        // A move-out sign-in never makes another; the session check also refuses it before this point.
+        if (auth.kind === "session" && auth.session.moveOut) throw failure("This sign-in only reads one backup file.", 403);
+        if (method === "POST" && !grant[1]) {
+          const body = z.object({ id: z.string().uuid() }).strict().parse(await options.readBody(req));
+          check(req, auth);
+          const artifact = get(body.id, auth, "download");
+          options.moveOut.revoke(body.id);
+          const { token } = options.moveOut.issue(body.id, artifact.expires);
+          json(res, 200, { token, expiresAt: artifact.expires, path: `${PREFIX}/download/${body.id}` });
+          return true;
+        }
+        if (method === "DELETE" && grant[1]) {
+          get(grant[1], auth, "download");
+          json(res, 200, { ended: options.moveOut.revoke(grant[1]) });
+          return true;
+        }
       }
       const download = /^\/api\/workspace-backup\/download\/([\w-]+)$/.exec(path);
       if (method === "GET" && download) {
@@ -177,6 +235,15 @@ export function createWorkspaceBackupRoutes(options: {
         const file = artifact.path!;
         const size = statSync(file).size;
         const range = byteRange(req.headers.range, size);
+        // A download under way ends when its sign-in ends, and at the earlier of the export's expiry and the sign-in's
+        // expiry, even when nothing else touches the server: only a deadline sees a quiet expiry.
+        const stop = new AbortController();
+        const endsAt = Math.min(artifact.expires, auth.kind === "session" ? auth.session.expiresAt : Infinity);
+        const send = async (source: ReturnType<typeof createReadStream>) => {
+          const unwatch = granted(auth, download[1]) && auth.kind === "session" ? options.moveOut?.watch(auth.session.id, () => stop.abort()) : undefined;
+          const deadline = setTimeout(() => stop.abort(), Math.min(Math.max(endsAt - Date.now(), 0), MAX_TIMER_MS));
+          try { await pipeline(source, res, { signal: stop.signal }); } finally { clearTimeout(deadline); unwatch?.(); }
+        };
         const headers = {
           "content-type": "application/octet-stream",
           "accept-ranges": "bytes",
@@ -190,11 +257,11 @@ export function createWorkspaceBackupRoutes(options: {
         }
         if (range) {
           res.writeHead(206, { ...headers, "content-range": `bytes ${range.start}-${range.end}/${size}`, "content-length": range.end - range.start + 1 });
-          await pipeline(createReadStream(file, range), res);
+          await send(createReadStream(file, range));
           return true;
         }
         res.writeHead(200, { ...headers, "content-length": size });
-        await pipeline(createReadStream(file), res);
+        await send(createReadStream(file));
         return true;
       }
       if (method === "POST" && path === `${PREFIX}/upload`) {
@@ -249,6 +316,19 @@ export function createWorkspaceBackupRoutes(options: {
           if (!done) {
             if (artifact.writing) throw failure("This upload is still receiving data. Try again in a moment.", 409);
             if (artifact.received !== artifact.total || statSync(artifact.path!).size !== artifact.total) throw failure("The upload was incomplete. Select the file again.");
+            const expected = new URL(req.url ?? "", "http://localhost").searchParams.get("sha256");
+            if (expected !== null) {
+              if (!/^[0-9a-f]{64}$/.test(expected)) throw failure("The checksum must be 64 lowercase hexadecimal characters.");
+              artifact.writing = true;
+              try {
+                const actual = createHash("sha256");
+                for await (const block of createReadStream(artifact.path!)) actual.update(block);
+                if (actual.digest("hex") !== expected) {
+                  remove(id, artifact);
+                  throw failure("The uploaded file does not match its checksum. Select the file again.", 422);
+                }
+              } finally { artifact.writing = false; }
+            }
             artifact.kind = "upload";
             artifact.expires = Date.now() + EXPIRES_MS;
           }

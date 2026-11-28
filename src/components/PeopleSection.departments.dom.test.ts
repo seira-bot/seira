@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const fixture = vi.hoisted(() => ({ calls: [] as Array<{ path: string; init?: { method?: string; body?: string } }>, people: {} as Record<string, string[]>, members: [] as string[], fail: false }));
+const fixture = vi.hoisted(() => ({ calls: [] as Array<{ path: string; init?: { method?: string; body?: string } }>, people: {} as Record<string, unknown>, members: [] as string[], fail: false }));
 vi.mock("@/state/store", () => ({
+  useStore: () => ({ state: { bots: [{ id: "ani", name: "Ani", section: "Sales" }], config: null }, dispatch: () => {} }),
   api: async (path: string, init?: { method?: string; body?: string }) => {
     fixture.calls.push({ path, init });
     if (path === "/api/config" && init?.method === "PUT") {
@@ -16,8 +17,8 @@ vi.mock("@/state/store", () => ({
     }
     if (path === "/api/config") return { signIn: { admins: ["boss@acme.test"], members: fixture.members } };
     if (path === "/api/department-access" && init?.method === "PUT") {
-      const { entry, departments } = JSON.parse(init.body!) as { entry: string; departments: string[] | null };
-      if (departments) fixture.people[entry] = departments; else delete fixture.people[entry];
+      const { entry, access } = JSON.parse(init.body!) as { entry: string; access: unknown };
+      if (access) fixture.people[entry] = access; else delete fixture.people[entry];
       return {};
     }
     if (path === "/api/department-access") return { available: true, people: fixture.people, unreadable: false };
@@ -41,14 +42,11 @@ const type = async (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
-const choose = async (select: HTMLSelectElement, value: string) => {
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-};
-const button = (label: string) => [...host.querySelectorAll("button")].find((node) => node.textContent?.trim() === label || node.getAttribute("aria-label") === label)!;
+const button = (label: string, within: ParentNode = host) => [...within.querySelectorAll("button")].find((node) => node.textContent?.trim() === label || node.getAttribute("aria-label") === label)!;
+const dialog = () => document.body.querySelector<HTMLElement>("[data-invite-dialog]")!;
+const radio = (label: string) => [...dialog().querySelectorAll("label")].find((node) => node.querySelector("[data-invite-kind]")?.textContent?.trim() === label)!.querySelector("input")!;
 const writes = () => fixture.calls.filter((call) => call.init?.method === "PUT").map((call) => call.path);
+const access = () => [...host.querySelectorAll("[data-person-access]")].map((node) => node.textContent)[1];
 
 beforeEach(async () => {
   vi.stubGlobal("fetch", async () => ({ ok: false, json: async () => null }));
@@ -68,53 +66,45 @@ afterEach(() => {
   host.remove();
 });
 
-describe("inviting a person to chosen departments", () => {
-  it("saves who they see before it adds them to the sign-in list", async () => {
-    await type(host.querySelector<HTMLInputElement>('input[aria-label="Email or @domain"]')!, "ada@acme.test");
-    await choose(host.querySelector<HTMLSelectElement>('select[aria-label="Who they can see"]')!, "chosen");
-    const boxes = host.querySelectorAll<HTMLInputElement>('fieldset input[type="checkbox"]');
-    expect(boxes).toHaveLength(3);
-    await click(boxes[1]!);
-    expect(host.textContent).toContain("Bots in Sales can still read files outside their folders.");
+describe("the people list", () => {
+  it("holds the Invite and Refresh buttons in one row that a plan limit can switch off", () => {
+    const row = host.querySelector("[data-people-actions]")!;
+    expect([...row.querySelectorAll("button")].map((node) => node.textContent?.trim() || node.getAttribute("aria-label"))).toEqual(["Invite", "Refresh"]);
+    expect(host.querySelector("form, input")).toBeNull();
+  });
+
+  it("AC-01 opens the dialog, saves the access before the sign-in list, and lists the new access", async () => {
     await click(button("Invite"));
+    await type(dialog().querySelector<HTMLInputElement>("input[dir=auto]")!, "ada@acme.test");
+    await click(radio("Chosen departments"));
+    await click(dialog().querySelector('[data-invite-item="Sales"] input')!);
+    await click(button("Invite", dialog()));
     expect(writes()).toEqual(["/api/department-access", "/api/config"]);
-    expect(JSON.parse(fixture.calls.find((call) => call.path === "/api/department-access" && call.init)!.init!.body!)).toEqual({ entry: "ada@acme.test", departments: ["Sales"] });
-    expect(host.querySelector("[data-person-access]")?.textContent).toBe("Sales");
-  });
-
-  it("does not add the person when the choice cannot be saved first", async () => {
-    await type(host.querySelector<HTMLInputElement>('input[aria-label="Email or @domain"]')!, "ada@acme.test");
-    await choose(host.querySelector<HTMLSelectElement>('select[aria-label="Who they can see"]')!, "chosen");
-    await click(button("Invite"));
-    expect(host.textContent).toContain("Choose at least one department.");
-    expect(writes()).toEqual([]);
-  });
-
-  it("disables the choice for an admin and says why", async () => {
-    await choose(host.querySelector<HTMLSelectElement>('select[aria-label="Role"]')!, "admin");
-    expect(host.querySelector<HTMLSelectElement>('select[aria-label="Who they can see"]')!.disabled).toBe(true);
-    expect(host.textContent).toContain("Admins see the whole team.");
+    expect(JSON.parse(fixture.calls.find((call) => call.path === "/api/department-access" && call.init)!.init!.body!)).toEqual({ entry: "ada@acme.test", access: { departments: [{ name: "Sales", level: "chat" }], bots: [] } });
+    await click(button("Done", dialog()));
+    expect(document.body.querySelector("[data-invite-dialog]")).toBeNull();
+    expect(access()).toBe("Sales · Can chat");
   });
 });
 
 describe("changing and removing a user's access", () => {
   beforeEach(async () => {
     fixture.members = ["ada@acme.test"];
-    fixture.people = { "ada@acme.test": ["Sales"] };
+    fixture.people = { "ada@acme.test": { departments: [{ name: "Sales", level: "chat" }], bots: [{ id: "ani", level: "view" }] } };
     await click(button("Refresh"));
   });
 
-  it("shows the departments of a user and saves a change", async () => {
-    expect(host.querySelector("[data-person-access]")?.textContent).toBe("Sales");
+  it("AC-22 shows the departments and bots of a user with their levels and saves a change", async () => {
+    expect(access()).toBe("Sales · Can chat, Ani · Can view");
     await click(button("Change access"));
-    const editor = host.querySelector("[data-person-access-editor]")!;
-    await choose(editor.querySelector<HTMLSelectElement>("select")!, "whole");
-    await click([...editor.querySelectorAll("button")].find((node) => node.textContent === "Save")!);
+    expect(dialog().querySelector("h2")!.textContent).toBe("Change access");
+    await click(radio("Whole team"));
+    await click(button("Save", dialog()));
     expect(fixture.people).toEqual({});
-    expect(host.querySelector("[data-person-access]")?.textContent).toBe("Whole team");
+    expect(access()).toBe("Whole team");
   });
 
-  it("takes the person off the sign-in list before it removes their departments", async () => {
+  it("takes the person off the sign-in list before it removes their access", async () => {
     fixture.calls = [];
     await click([...host.querySelectorAll("button")].filter((node) => node.textContent === "Remove")[1]!);
     expect(writes()).toEqual(["/api/config", "/api/department-access"]);

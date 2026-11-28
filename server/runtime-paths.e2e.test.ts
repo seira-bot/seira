@@ -11,6 +11,7 @@ import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SETTLED = "Your downstream room requests have settled.";
@@ -19,8 +20,7 @@ const ROUTINE_TURN = "Execute this routine now";
 const TEAMMATES_CUT = "A restart cut these teammates' turns";
 const TOKEN = "runtime-paths-external-fixture-token-0123456789abcdef";
 
-const jsonl = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string): any[] => readJsonLines(path);
 
 async function scenario(test: (f: any) => Promise<void>) {
   const parentEnv: NodeJS.ProcessEnv = { ...process.env };

@@ -241,6 +241,11 @@ export class E2ESession<Id> {
     return this.#state;
   }
 
+  /** The handshake hash `h` of this session, once the handshake is done: what binds a proof to this connection. */
+  get handshakeHash(): Buffer | null {
+    return this.#keys?.handshakeHash ?? null;
+  }
+
   /** Records each way so far, for diagnostics. */
   get records(): { sent: number; received: number } {
     return { sent: this.#keys?.send.nonce ?? 0, received: this.#keys?.receive.nonce ?? 0 };

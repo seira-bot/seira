@@ -33,7 +33,7 @@ import {
 } from "@/lib/composer-attachments";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { serverErrorText } from "@/lib/server-error";
+import { isOutsideWorkspaceFailure, serverErrorText } from "@/lib/server-error";
 import { CopyImageButton } from "./CopyImageButton";
 import { FilePreviewButton } from "./FilePreviewButton";
 import { chipNameAction, SaveIconButton, useHtmlPreview } from "./HtmlFilePreview";
@@ -350,7 +350,7 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
     }
   }, [filePath, entry, message?.messageId, message?.threadId, name]);
 
-  const outsideWorkspace = failureCode === "outside_workspace"; // Retrying can't move a file into the folder or make it smaller.
+  const outsideWorkspace = isOutsideWorkspaceFailure(failureCode); // Retrying can't move a file into the folder or make it smaller.
   return { state, reason, savedTo, outsideWorkspace, retryable: state === "failed" && !outsideWorkspace && failureCode !== "file_too_large", folder, save };
 }
 
@@ -588,7 +588,7 @@ export function AttachmentPreviewDialog({
             )}
             <button
               onClick={onClose}
-              className="flex size-9 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white"
+              className="-my-1 flex size-11 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white"
               aria-label={t("attach.close")}
             >
               <X size={19} />

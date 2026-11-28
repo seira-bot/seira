@@ -1,6 +1,15 @@
 import { getBreadcrumbItems } from 'fumadocs-core/breadcrumb';
 import { source } from './source';
-import { appName, docsRoute, githubUrl, organizationName, organizationUrl, playStoreUrl, siteUrl } from './shared';
+import {
+  appName,
+  docsRoute,
+  githubUrl,
+  msStoreUrl,
+  organizationName,
+  organizationUrl,
+  playStoreUrl,
+  siteUrl,
+} from './shared';
 
 type Page = NonNullable<ReturnType<typeof source.getPage>>;
 
@@ -29,7 +38,7 @@ const organization = {
   name: organizationName,
   url: organizationUrl,
   logo: `${siteUrl}/app-icon-512.png`,
-  sameAs: [githubUrl, playStoreUrl],
+  sameAs: [githubUrl, msStoreUrl, playStoreUrl],
 };
 
 const website = {

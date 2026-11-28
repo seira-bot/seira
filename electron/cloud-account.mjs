@@ -441,7 +441,10 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       destination = checkoutDestination(result?.url, { fixture, staging, own });
       if (result?.cloudContractVersion !== 1 || !destination) return { outcome: "failed", state: state() };
     } catch (error) {
-      if (!error?.opaque && error?.status === 409) return { outcome: "conflict", state: await refresh() };
+      if (!error?.opaque && error?.status === 409) {
+        const outcome = error.code === "already_subscribed" ? "already-subscribed" : error.code === "out_of_stock" ? "sold-out" : "conflict";
+        return { outcome, state: await refresh() };
+      }
       if (!error?.opaque && error?.status === 429) return { outcome: "rate-limited", state: state() };
       if (signInEnded(error)) return { outcome: "failed", state: await refresh() };
       if (![404, 405, 501].includes(error?.status)) return { outcome: "failed", state: state() };
@@ -926,7 +929,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       catch (error) { if (error?.status === 404 || error?.status === 501) return null; throw error; }
       let target = null;
       try { target = typeof result?.url === "string" ? new URL(result.url) : null; } catch { target = null; }
-      if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
+      if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^(omb|seira)_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
         throw new Error("Invalid Cloud pages response.");
       }
       return { url: result.url, token: result.token };

@@ -1,5 +1,5 @@
 // Archive work is mocked so revocation can be held at a deterministic boundary.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -72,6 +72,7 @@ async function listen(extra: Partial<Parameters<typeof createWorkspaceBackupRout
     },
     status: () => ({ busy: maintenance.active, pendingRestore: maintenance.pendingRestore }),
     exclusive: (work, keepLocked) => maintenance.run(work, { idle: () => true, pause: () => {}, resume: () => {}, flush: async () => {} }, keepLocked),
+    moveOut: { issue: (exportId, expiresAt) => sessions.issueMoveOut({ exportId, expiresAt }), revoke: (exportId) => sessions.revokeMoveOuts(exportId), watch: (sessionId, ended) => sessions.onSessionRevoked((id) => { if (id === sessionId) ended(); }) },
     ...extra,
   });
   server = createServer(async (req, res) => {
@@ -116,6 +117,53 @@ it("carries a fixed backup refusal and its redacted string path to the client", 
   const response = await post("/api/workspace-backup/export", { password: PASSWORD });
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual(userError("serverError.backup.recursiveLink", params));
+});
+
+it("reports the size of each part in a read-only route", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "bot"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "bot", "clip.bin"), Buffer.alloc(1234));
+  const response = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } });
+  expect(response.status).toBe(200);
+  const body = await response.json() as { parts: Record<string, number>; total: number; canLeaveOut: string[] };
+  expect(body.parts["work-folders"]).toBe(1234);
+  expect(body.total).toBe(Object.values(body.parts).reduce((sum, bytes) => sum + bytes, 0));
+  expect(body.canLeaveOut).toEqual(["work-folders"]);
+});
+
+it("does not count what the export leaves out", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "bot"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "bot", "clip.bin"), Buffer.alloc(1234));
+  // The export skips these top-level folders, so the report must too.
+  for (const name of ["tools", "browser", "cache", "tmp"]) {
+    mkdirSync(join(dataDir, name), { recursive: true });
+    writeFileSync(join(dataDir, name, "big.bin"), Buffer.alloc(5000));
+  }
+  const body = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } }).then((response) => response.json()) as { parts: Record<string, number>; total: number };
+  expect(body.parts.other).toBe(0);
+  expect(body.total).toBe(1234);
+});
+
+it("gives no sizes on a Team Cloud, where the raw folder holds other members' private data", async () => {
+  mkdirSync(join(dataDir, "task-workspaces", "member-chat"), { recursive: true });
+  writeFileSync(join(dataDir, "task-workspaces", "member-chat", "private.bin"), Buffer.alloc(4321));
+  vi.stubEnv("SEIRA_CLOUD_ROLE", "team");
+  try {
+    const response = await fetch(`${url}/api/workspace-backup/sizes`, { headers: { authorization: `Bearer ${admin.token}` } });
+    expect(response.status).toBe(403);
+    const text = await response.text();
+    expect(text).toContain("not available on a Team Cloud");
+    expect(text).not.toContain("4321");
+    expect(text).not.toContain("parts");
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it("passes the parts to leave out to the export, and refuses an unknown part with a clear message", async () => {
+  expect((await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["work-folders"] })).status).toBe(200);
+  expect(archive.create).toHaveBeenLastCalledWith(dataDir, expect.objectContaining({ leaveOut: ["work-folders"] }));
+  const refused = await post("/api/workspace-backup/export", { password: PASSWORD, leaveOut: ["bots"] });
+  expect(refused.status).toBe(400);
+  expect(JSON.stringify(await refused.json())).toContain('Cannot leave out \\"bots\\". Allowed: work-folders.');
+  expect(archive.create).toHaveBeenCalledOnce();
 });
 
 it("names the exported file Seira-<date>.seirabackup in the reply and the download", async () => {
@@ -261,6 +309,26 @@ it("stores ordered parts and hands the joined file to validation", async () => {
   expect(joined).toBe("abcdefghij");
 });
 
+it("checks the checksum a caller sends at finish, and drops the file when it differs", async () => {
+  const good = "0".repeat(64);
+  const started = await startUpload(4);
+  await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
+  expect((await send(`${BASE}/${started.id}/finish?sha256=not-hex`)).status).toBe(400);
+  expect((await send(`${BASE}/${started.id}/finish?sha256=${good}`)).status).toBe(422);
+  expect(existsSync(uploadFile(started.id))).toBe(false);
+  expect((await send(`${BASE}/${started.id}/finish`)).status).toBe(404);
+  const again = await startUpload(4);
+  await send(`${BASE}/${again.id}/chunk?offset=0`, { body: "abcd" });
+  const sha256 = createHash("sha256").update("abcd").digest("hex");
+  expect((await send(`${BASE}/${again.id}/finish?sha256=${sha256}`)).status).toBe(200);
+});
+
+it("returns the checksum of the exported file in the export reply", async () => {
+  archive.create.mockImplementationOnce(async () => ({ ...fakeArchive(), sha256: "a".repeat(64) }));
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { sha256?: string };
+  expect(exported.sha256).toBe("a".repeat(64));
+});
+
 it("refuses a part whose offset is not the stored byte count", async () => {
   const started = await startUpload(10);
   await send(`${BASE}/${started.id}/chunk?offset=0`, { body: "abcd" });
@@ -393,4 +461,211 @@ it("still refuses a download without a session", async () => {
   const response = await fetch(`${url}/api/workspace-backup/download/${exported.id}`, { headers: { range: "bytes=0-3" } });
   expect(response.status).toBeGreaterThanOrEqual(401);
   await response.arrayBuffer();
+});
+
+it("shows how many bots a restore left behind and what needs action in the status, and no path", async () => {
+  expect(await status()).toMatchObject({ leftBehind: null, needsAction: null });
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111", leftBehind: { bots: 1, paths: ["C:\\Work"] }, needsAction: [{ kind: "routines-on", count: 2 }] } });
+  const shown = await status();
+  expect(shown).toMatchObject({ leftBehind: { bots: 1 }, needsAction: [{ kind: "routines-on", count: 2 }] });
+  expect(shown.leftBehind).toEqual({ bots: 1 });
+  expect(JSON.stringify(shown)).not.toContain("Work");
+});
+
+it("keeps an empty list for a new restore with nothing to do, and null for an old receipt", async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111", needsAction: [] } });
+  expect((await status()).needsAction).toEqual([]);
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ restored: { restored: true, id: "11111111-1111-4111-8111-111111111111" } });
+  expect((await status()).needsAction).toBeNull();
+});
+
+async function exportBackup(token = admin.token) {
+  return await post("/api/workspace-backup/export", { password: PASSWORD }, token).then((response) => response.json()) as { id: string };
+}
+async function grantFor(id: string, token = admin.token) {
+  const response = await post("/api/workspace-backup/move-out", { id }, token);
+  return { response, body: await response.json() as { token: string; expiresAt: number; path: string } };
+}
+const read = (path: string, token: string, headers: Record<string, string> = {}) => fetch(`${url}${path}`, { headers: { authorization: `Bearer ${token}`, ...headers } });
+
+it("gives a new server a sign-in that reads one export, in whole or by range", async () => {
+  const { id } = await exportBackup();
+  const { response, body } = await grantFor(id);
+  expect(response.status).toBe(200);
+  expect(body.path).toBe(`/api/workspace-backup/download/${id}`);
+  expect(body.expiresAt).toBeGreaterThan(Date.now());
+  expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 60 * 60_000);
+  const whole = await read(body.path, body.token);
+  expect(whole.status).toBe(200);
+  expect(await whole.text()).toBe("fixture encrypted bytes");
+  const part = await read(body.path, body.token, { range: "bytes=0-6" });
+  expect(part.status).toBe(206);
+  expect(await part.text()).toBe("fixture");
+});
+
+it("keeps that sign-in to the one download and nothing else", async () => {
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  for (const path of ["/api/workspace-backup/status", "/api/workspace-backup/sizes", "/api/auth/sessions"]) {
+    const refused = await read(path, body.token);
+    expect(refused.status, path).toBe(403);
+    await refused.arrayBuffer();
+  }
+  const other = await read(`/api/workspace-backup/download/${randomUUID()}`, body.token);
+  expect(other.status).toBe(403);
+  await other.arrayBuffer();
+  expect((await post("/api/workspace-backup/export", { password: PASSWORD }, body.token)).status).toBe(403);
+  expect((await post("/api/workspace-backup/move-out", { id }, body.token)).status).toBe(403);
+  expect((await fetch(`${url}${body.path}`, { method: "DELETE", headers: { authorization: `Bearer ${body.token}` } })).status).toBe(403);
+});
+
+it("makes a sign-in only for an export the caller made", async () => {
+  const { id } = await exportBackup();
+  const stranger = sessions.issue({ label: "Fixture other admin", scopes: ["admin", "client"] });
+  expect((await grantFor(id, stranger.token)).response.status).toBe(404);
+  expect((await grantFor(randomUUID())).response.status).toBe(404);
+  expect((await post("/api/workspace-backup/move-out", { id, extra: true })).status).toBe(400);
+  expect((await post("/api/workspace-backup/move-out", { id }, sessions.issue({ label: "Fixture reader", scopes: ["client"] }).token)).status).toBeGreaterThanOrEqual(403);
+});
+
+it("ends the sign-in on request, and makes a new one replace the old", async () => {
+  const { id } = await exportBackup();
+  const first = (await grantFor(id)).body;
+  const second = (await grantFor(id)).body;
+  expect((await read(first.path, first.token)).status).toBe(401);
+  expect((await read(second.path, second.token)).status).toBe(200);
+  const ended = await fetch(`${url}/api/workspace-backup/move-out/${id}`, { method: "DELETE", headers: { authorization: `Bearer ${admin.token}` } });
+  expect(ended.status).toBe(200);
+  expect(await ended.json()).toEqual({ ended: 1 });
+  expect((await read(second.path, second.token)).status).toBe(401);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("ends the sign-in when its export goes", async () => {
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  await exportBackup();
+  expect((await read(body.path, body.token)).status).toBe(401);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("refuses to make the sign-in where the server has no support for it", async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen({ moveOut: undefined });
+  const { id } = await exportBackup();
+  expect((await grantFor(id)).response.status).toBe(404);
+});
+
+it("refuses to make the sign-in when the caller loses authority while the request body is pending", async () => {
+  const { id } = await exportBackup();
+  const payload = JSON.stringify({ id });
+  const status = await new Promise<number>((resolve, reject) => {
+    const pending = request(`${url}/api/workspace-backup/move-out`, { method: "POST", headers: { authorization: `Bearer ${admin.token}`, "content-type": "application/json", "content-length": String(payload.length) }, signal: AbortSignal.timeout(5000) }, (response) => { response.resume(); resolve(response.statusCode!); });
+    pending.on("error", reject);
+    pending.write(payload.slice(0, 5));
+    setTimeout(() => { sessions.revoke(admin.session.id); pending.end(payload.slice(5)); }, 50);
+  });
+  expect(status).toBe(403);
+  expect(sessions.list().filter((session) => session.label === "Moving this server out")).toHaveLength(0);
+});
+
+it("cuts a download under way when its sign-in ends", async () => {
+  const { id, path } = fakeArchive();
+  writeFileSync(path, Buffer.alloc(48 * 1024 * 1024));
+  archive.create.mockImplementationOnce(async () => ({ id, path, summary: { ...fakeArchive().summary, id } }));
+  await exportBackup();
+  const { body } = await grantFor(id);
+  const received = await new Promise<number>((resolve) => {
+    let bytes = 0;
+    const download = request(`${url}${body.path}`, { headers: { authorization: `Bearer ${body.token}` }, signal: AbortSignal.timeout(10_000) }, (response) => {
+      response.pause();
+      setTimeout(() => {
+        sessions.revokeMoveOuts(id);
+        response.on("data", (chunk: Buffer) => { bytes += chunk.length; });
+        response.on("close", () => resolve(bytes));
+        response.on("error", () => {});
+        response.resume();
+      }, 100);
+    });
+    download.on("error", () => resolve(bytes));
+    download.end();
+  });
+  expect(received).toBeLessThan(48 * 1024 * 1024);
+});
+
+// A paused client holds the transfer open, so only a deadline can end it: nothing revokes, signs in or reaches the server meanwhile.
+async function relisten(extra: Parameters<typeof listen>[0]) {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await listen(extra);
+}
+async function bigExport() {
+  const { id, path } = fakeArchive();
+  writeFileSync(path, Buffer.alloc(48 * 1024 * 1024));
+  archive.create.mockImplementationOnce(async () => ({ id, path, summary: { ...fakeArchive().summary, id } }));
+  return id;
+}
+function pausedDownload(path: string, token: string, pauseMs: number) {
+  return new Promise<number>((resolve) => {
+    let bytes = 0;
+    const download = request(`${url}${path}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) }, (response) => {
+      response.pause();
+      setTimeout(() => {
+        response.on("data", (chunk: Buffer) => { bytes += chunk.length; });
+        response.on("close", () => resolve(bytes));
+        response.on("error", () => {});
+        response.resume();
+      }, pauseMs);
+    });
+    download.on("error", () => resolve(bytes));
+    download.end();
+  });
+}
+
+it("cuts a move-out download at the export's expiry, with no other activity", async () => {
+  await relisten({ exportLifetimeMs: 600 });
+  await bigExport();
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  const received = await pausedDownload(body.path, body.token, 1_500);
+  expect(received).toBeLessThan(48 * 1024 * 1024);
+});
+
+it("cuts a download at the sign-in's expiry when that comes before the export's", async () => {
+  await bigExport();
+  // An access token never renews, so its expiry stays where it was set.
+  const { code } = sessions.openPairing({ scopes: ["admin", "client"], tokenTtlMs: 800 });
+  const paired = sessions.exchange({ code, label: "Short script", source: "10.0.0.7" });
+  if (!paired.ok) throw new Error("expected a token");
+  const { id } = await exportBackup(paired.token);
+  const received = await pausedDownload(`/api/workspace-backup/download/${id}`, paired.token, 1_500);
+  expect(received).toBeLessThan(48 * 1024 * 1024);
+});
+
+it("lets a download that ends before the deadline finish, and clears the deadline", async () => {
+  const lifetime = 987_654;
+  const handles: unknown[] = [];
+  const realSet = globalThis.setTimeout;
+  vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: () => void, delay?: number) => {
+    const handle = realSet(handler, delay);
+    if (typeof delay === "number" && delay > lifetime - 5_000 && delay <= lifetime) handles.push(handle);
+    return handle;
+  }) as typeof setTimeout);
+  const cleared = vi.spyOn(globalThis, "clearTimeout");
+  await relisten({ exportLifetimeMs: lifetime });
+  const { id } = await exportBackup();
+  const { body } = await grantFor(id);
+  const response = await read(body.path, body.token);
+  expect(response.status).toBe(200);
+  await response.arrayBuffer();
+  expect(handles).toHaveLength(1);
+  // The server clears the deadline just after the last byte leaves.
+  await vi.waitFor(() => expect(cleared.mock.calls.map(([handle]) => handle)).toContain(handles[0]));
 });

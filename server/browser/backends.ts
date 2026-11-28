@@ -8,7 +8,8 @@ import { fitPage, pageLimit, type BrowserMode, type HostKind, type ScreenSpec } 
 import { launchChrome, type ChromeProcess, type LaunchOptions } from "./chrome/launch.ts";
 import { clearSingleton, staleSingletonLock, type ProcessRegistry } from "./chrome/processes.ts";
 import { languageList } from "./chrome/wrapper.ts";
-import { downgradeRefusal, ensureProfile, forgetOpenTabs, markCleanExit, profileDir, profileHash, recordOpenedBy, versionOf, workspaceId } from "./chrome/profile.ts";
+import { downgradeRefusal, ensureProfile, forgetOpenTabs, markCleanExit, profileDir, profileHash, profileKind, readProfileRecord, recordOpenedBy, versionOf, workspaceId } from "./chrome/profile.ts";
+import { SourceStillOpen, seedProfile } from "./chrome/seed.ts";
 
 export type BackendKind = "local" | "my-chrome" | "cdp-url";
 
@@ -74,6 +75,8 @@ export interface LocalBackendOptions {
   acceptLanguages?: () => string;
   handshakeTimeoutMs?: number;
   log?: (line: string) => void;
+  /** The folder of another browser's profile to copy into this key's profile the first time it opens; null for none. */
+  seed?: (key: string) => Promise<string | null>;
   /** Starts Chrome; tests pass a fake. */
   launch?: (options: LaunchOptions) => Promise<ChromeProcess>;
 }
@@ -101,11 +104,29 @@ export class LocalBackend implements Backend {
     }
   }
 
+  /** A failed copy opens the browser on an empty profile; it never stops the browser. A source browser that is still open does: the copy waits, so a profile is not made empty for good. */
+  async #seed(key: string, binaryVersion: string): Promise<void> {
+    const { dataDir, seed, log } = this.#options;
+    if (!seed || profileKind(key) === "temp") return;
+    const target = profileDir(dataDir, key);
+    if (readProfileRecord(target)) return;
+    try {
+      const source = await seed(key);
+      if (!source) return;
+      const outcome = await seedProfile(source, target, binaryVersion);
+      if (outcome === "newer-chrome") log?.(`browser profile ${key}: not copied, the earlier browser's profile was last opened by a newer Chrome than ${binaryVersion}`);
+    } catch (error) {
+      if (error instanceof SourceStillOpen) throw error;
+      log?.(`browser profile ${key}: not copied, ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   async #open(request: OpenRequest, platform: NodeJS.Platform): Promise<OpenedBrowser> {
     const options = this.#options;
     const binary = await options.binary();
-    const { dir, record, created } = ensureProfile(options.dataDir, request.key, { acceptLanguages: options.acceptLanguages?.() ?? "en-US,en" });
     const binaryVersion = versionOf(binary.identity.product);
+    await this.#seed(request.key, binaryVersion);
+    const { dir, record, created } = ensureProfile(options.dataDir, request.key, { acceptLanguages: options.acceptLanguages?.() ?? "en-US,en" });
     const refusal = downgradeRefusal(record, binaryVersion);
     if (refusal) throw new Error(refusal);
     if (staleSingletonLock(dir)) clearSingleton(dir);

@@ -679,6 +679,12 @@ describe("pages access", () => {
     expect(() => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: "http://cloud.example.test/x", token: FAKE_DESKTOP_TOKEN } })).toThrow();
     expect(() => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: "seira_xd_short" } })).toThrow();
     expect(applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } })).toBe(true);
+    for (const token of [`seira_pd_${"d".repeat(43)}`, `omb_pd_${"d".repeat(43)}`]) {
+      expect(applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token } })).toBe(true);
+    }
+    for (const token of [`other_pd_${"d".repeat(43)}`, `seira_pd_${"d".repeat(42)}`, `xseira_pd_${"d".repeat(43)}`]) {
+      expect(() => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token } })).toThrow();
+    }
   });
 
   it("signs a home's request exactly as the Admin checks it", () => {

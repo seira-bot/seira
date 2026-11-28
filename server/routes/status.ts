@@ -3,7 +3,7 @@ import { activityCsv, activityEntries, flushAdminActivity, parseActivityWhat, re
 import { loadBrand } from "../brand.ts";
 import { browserEngineStatus, ensureChrome, installAgentBrowserBinary, resolveAgentBrowserBinary } from "../browser-engine.ts";
 import { DATA_DIR, EVENTS_DIR, NATIVE_DIR, instanceConfigs, type AppConfig } from "../config.ts";
-import { boundRetentionDays, decisionsCsv, readDecisionRange, readDecisions, type DecisionRow } from "../decision-log.ts";
+import { boundRetentionDays, decisionsCsv, flushDecisionLog, readDecisionRange, readDecisions, type DecisionRow } from "../decision-log.ts";
 import { doctorSummary } from "../doctor/start.ts";
 import { flushNativeLog } from "../drivers/native.ts";
 import { editionForMembers, editionStatus, entitled } from "../enterprise.ts";
@@ -22,6 +22,7 @@ import type { PrivateRecords } from "../host/private-records.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { PHONE_WIRE_NAMES, sentWireName } from "../../electron/phone-wire-names.mjs";
+import { publicErrorText } from "../public-error.ts";
 
 export interface StatusRouteDeps {
   store: Pick<Store, "bot" | "bots" | "tasks" | "groupByThread">;
@@ -105,7 +106,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
         const reply = await fleetRequest(socket, forward.method, forward.path, forward.body);
         return json(res, reply.status, reply.body ?? {});
       } catch (error) {
-        return json(res, 502, { error: error instanceof Error ? error.message : String(error) });
+        return json(res, 502, { error: publicErrorText(error, "fleet request", "The fleet service could not answer.") });
       }
     }
 
@@ -185,6 +186,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
       if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit <= 0)) {
         return json(res, 400, { error: "limit must be a positive whole number" });
       }
+      await flushDecisionLog(DATA_DIR); // rows are appended in the background; a decision already answered is listed
       return json(res, 200, { decisions: readDecisions(DATA_DIR, parsedLimit ?? 200).map(decision) });
     }
     if (method === "GET" && (path === "/api/admin-activity" || path === "/api/admin-activity.csv")) {
@@ -223,6 +225,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
     if (method === "GET" && path === "/api/decisions.csv") {
       const range = parseUsageRange(url.searchParams.get("from"), url.searchParams.get("to"));
       if (!range) return json(res, 400, { error: "from and to must be YYYY-MM-DD, from no later than to, at most a year apart" });
+      await flushDecisionLog(DATA_DIR);
       const stamp = (date: Date) => date.toISOString().slice(0, 10);
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",

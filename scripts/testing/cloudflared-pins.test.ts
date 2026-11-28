@@ -7,10 +7,11 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const assets = Object.values(CLOUDFLARED_ASSETS);
 
 describe("cloudflared pins have one source", () => {
+  // msstore-publish.yml has no checkout, so its msstore tool digest stays in the step env (MSSTORE_CLI_SHA256); no other line or file is exempt.
   it("no workflow hard-codes a digest; they read scripts/prepare-cloudflared.mjs", () => {
     const dir = join(ROOT, ".github", "workflows");
     const pinned = readdirSync(dir).filter((name) => /\.ya?ml$/.test(name)).flatMap((name) =>
-      readFileSync(join(dir, name), "utf8").split("\n").filter((line) => !/^\s*-?\s*uses:/.test(line) && /\b[0-9a-f]{64}\b/.test(line)).map((line) => `${name}: ${line.trim()}`));
+      readFileSync(join(dir, name), "utf8").split("\n").filter((line) => !/^\s*-?\s*uses:/.test(line) && !(name === "msstore-publish.yml" && /^\s*MSSTORE_CLI_SHA256: [0-9a-f]{64}$/.test(line)) && /\b[0-9a-f]{64}\b/.test(line)).map((line) => `${name}: ${line.trim()}`));
     expect(pinned).toEqual([]);
   });
 

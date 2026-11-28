@@ -9,6 +9,7 @@ import { CAPTURE_MARKER } from "./memory-capture.ts";
 import { TIDY_MARKER } from "./memory-tidy.ts";
 import { REPLY_HABITS_PROMPT } from "./reply-habits.ts";
 import { REMEMBER_AND_FORGET } from "./workspace.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 type Step = { tool: string; arguments: Record<string, unknown> };
 
@@ -29,9 +30,7 @@ it("remembers at once, learns only what the person said, forgets everywhere, and
   const fixture = await launchVerificationServer({ ...process.env, TZ: "Asia/Kolkata", FAKE_CLAUDE_TEXT_ROUTES: routes, FAKE_CLAUDE_TEXT_LOG: learnerLog },
     undefined, undefined, undefined, undefined, { scripted: true });
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const evidence = () => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    : [];
+  const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {
       method, headers: { "content-type": "application/json", origin: fixture.info.url },

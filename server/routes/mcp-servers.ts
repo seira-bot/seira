@@ -1,3 +1,4 @@
+import { isOneBotMcpServer, oneBotMcpProblem } from "../../shared/one-bot-mcp.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
 import { hostedWorkspaceConfiguration } from "../enterprise.ts";
 import { runsElsewhere, type McpConfig, type McpConfigDeps, type McpConfigResult } from "../host/mcp-config.ts";
@@ -33,6 +34,14 @@ const vaultKeysOf = (body: unknown, ownsVault: boolean): string[] | undefined =>
   const keys = (body as { vaultKeys?: unknown } | null)?.vaultKeys;
   return ownsVault && Array.isArray(keys) ? keys.filter(isVaultItemId) : undefined;
 };
+
+/** On create, the body's `bot` is kept only for an app that serves one bot: the one choice a person makes when connecting
+ * it. Another server's owner is never taken from a create body. */
+function withOneBot(body: unknown, fields: Record<string, unknown>): Record<string, unknown> {
+  const bot = (body as { bot?: unknown } | null)?.bot;
+  const address = { type: fields.type as string | undefined, url: fields.url as string | undefined };
+  return typeof bot === "string" && isOneBotMcpServer(address) ? { ...fields, bot } : fields;
+}
 
 export interface McpServerRouteDeps extends Pick<McpConfigDeps, "cfg" | "sessions" | "mcpOAuth" | "teamConnections" | "cloudHome" | "fallbackPublicUrl" | "savedCustomDomain" | "appCatalog"> {
   config: McpConfig;
@@ -152,6 +161,8 @@ export function createMcpServerRoutes(deps: McpServerRouteDeps): RouteHandler {
           return json(res, 200, { auth: await mcpOAuth.completeCallback(name!, flowId, body.callbackUrl, owner) });
         }
         if (action === "sign-in" && method === "POST" && !flowId) {
+          const oneBot = oneBotMcpProblem(parsed.server, (id) => deps.bot(id) !== null);
+          if (oneBot) return json(res, 400, { error: oneBot });
           // A browser on another computer comes back to the https address it uses now, when this server vouches for it.
           const remote = auth.kind === "session" && (isProxied(req) || !isLoopbackHost(req.headers.host));
           const origin = remote
@@ -180,7 +191,7 @@ export function createMcpServerRoutes(deps: McpServerRouteDeps): RouteHandler {
       }
       const body = await readBody(req);
       const name = typeof body?.name === "string" ? body.name : "";
-      const parsed = parseMcpServerMutation(name, mcpServerBody(body));
+      const parsed = parseMcpServerMutation(name, withOneBot(body, mcpServerBody(body)));
       if (!parsed.ok) return json(res, 400, { error: parsed.error });
       const placed = deps.place ? await deps.place(parsed.server, auth) : { ok: true as const, server: parsed.server };
       if (!placed.ok) return json(res, 409, { error: placed.error });

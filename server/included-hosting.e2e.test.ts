@@ -10,6 +10,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { request } from "../scripts/mcp-server.ts";
 import { SITE_FILE } from "./host/netlify-sites.ts";
 import { startFakeAppHosting, type FakeAppHosting } from "./testing/fake-app-hosting.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const TOKEN = "seira_host_e2e_fixture_token_0123456789abcdef";
 const HOSTING_TOOLS = ["publish_app", "check_app_hosting"];
@@ -33,8 +34,7 @@ async function withFixture(test: (f: Fixture) => Promise<void>, options: { hosti
   const cli = (...args: string[]) => runControlSeira(args, { env: { SEIRA_URL: session.info.url } }) as Promise<any>;
   const planPath = join(session.info.dataDir, "room-plan.json");
   const turnFor = (botId: string) => {
-    const lines = existsSync(planPath + ".evidence.jsonl") ? readFileSync(planPath + ".evidence.jsonl", "utf8").trim().split("\n").filter(Boolean) : [];
-    return lines.map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId).at(-1);
+    return readJsonLines(planPath + ".evidence.jsonl").filter((entry: any) => entry.botId === botId).at(-1);
   };
   try {
     await test({

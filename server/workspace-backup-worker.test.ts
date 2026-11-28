@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
@@ -20,24 +20,41 @@ vi.mock("node:worker_threads", async importOriginal => {
 // Real encrypted backups of 800+ files: about 3 s on Linux and macOS, about 25 s on the Windows runners.
 const TIMEOUT_MS = 120_000;
 
-it("keeps the request loop running during the snapshot copy, not just encryption", async () => {
+it("keeps the request loop answering while the files are read and encrypted", async () => {
   const directory = mkdtempSync(join(tmpdir(), "seira-backup-worker-"));
-  const first = "file-0000.txt", last = "file-0319.txt";
   for (let i = 0; i < 320; i++) writeFileSync(join(directory, `file-${String(i).padStart(4, "0")}.txt`), "synthetic");
-  let observedCopy = false;
-  const timer = setInterval(() => {
-    const root = join(directory, ".backups");
-    if (!existsSync(root)) return;
-    for (const job of readdirSync(root)) {
-      const snapshot = join(root, job, "snapshot", "data");
-      if (existsSync(join(snapshot, first)) && !existsSync(join(snapshot, last))) observedCopy = true;
-    }
-  }, 1);
+  writeFileSync(join(directory, "big.bin"), Buffer.alloc(32 * 1024 * 1024, 7));
+  // Stands in for a request: the main thread must keep answering ticks until the export is done, because the work runs in a worker.
+  let ticks = 0, finished = false, ticksBeforeEnd = 0;
+  const timer = setInterval(() => { ticks++; }, 1);
   try {
-    const result = await createWorkspaceBackup(directory, { password: "fixture-backup-password-only" });
-    expect(result.summary.files).toBe(320);
+    const exporting = createWorkspaceBackup(directory, { password: "fixture-backup-password-only" }).finally(() => { finished = true; ticksBeforeEnd = ticks; });
+    // Progress marker: the encrypted archive is written as the files are read, so a partial archive with bytes in it
+    // proves hashing or encryption is running now. The main thread must still answer a request at that moment.
+    // The fixed header (magic, salt, IV) is written before the cipher starts, so only bytes past it show the cipher output.
+    const HEADER = Buffer.from("SEIRA-WORKSPACE-1\n").length + 16 + 12;
+    const archive = () => {
+      const root = join(directory, ".backups");
+      if (!existsSync(root)) return 0;
+      for (const id of readdirSync(root)) {
+        const file = join(root, id, "workspace.seirabackup");
+        if (existsSync(file)) return Math.max(0, statSync(file).size - HEADER);
+      }
+      return 0;
+    };
+    await expect.poll(() => finished || archive() > 0, { interval: 1, timeout: TIMEOUT_MS }).toBe(true);
+    expect(finished).toBe(false);
+    const written = archive();
+    expect(written).toBeGreaterThan(0);
+    await new Promise<void>(resolve => setTimeout(resolve, 1));
+    const answeredWhileRunning = !finished;
+    expect(answeredWhileRunning).toBe(true);
+    const result = await exporting;
+    expect(finished).toBe(true);
+    expect(statSync(result.path).size - HEADER).toBeGreaterThanOrEqual(written);
+    expect(result.summary.files).toBe(321);
     expect(existsSync(result.path)).toBe(true);
-    expect(observedCopy).toBe(true);
+    expect(ticksBeforeEnd).toBeGreaterThan(5);
   } finally {
     clearInterval(timer);
     rmSync(directory, { recursive: true, force: true });
@@ -92,7 +109,7 @@ it("removes only the failed worker's partial snapshot after an abrupt exit", asy
       .then(() => ({}), error => ({ error }));
     const root = join(directory, ".backups");
     await expect.poll(() => readdirSync(root).some(id => id !== earlier.id &&
-      existsSync(join(root, id, "snapshot", "data", "file-0000.txt"))), { interval: 1, timeout: 10_000 }).toBe(true);
+      existsSync(join(root, id, "snapshot", "data"))), { interval: 1, timeout: 10_000 }).toBe(true);
     await running.worker!.terminate();
     expect((await pending).error).toMatchObject({ message: "The backup worker stopped before completing. Try again." });
     expect(readdirSync(root)).toEqual([earlier.id]);

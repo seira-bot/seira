@@ -46,13 +46,31 @@ describe("rewriteManifest", () => {
     expect(count(out, "windows.startupTask")).toBe(1);
     expect(count(out, "<Extensions>")).toBe(1);
     expect(out).toContain(
-      '<desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension></Extensions>',
+      '<desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension>',
     );
   });
 
   it("creates Extensions before the end of Application when it is missing", () => {
     const out = rewriteManifest(MANIFEST.replace("EXTENSIONS", ""), { version: "0.1.179" });
     expect(out).toMatch(/<Extensions><desktop:Extension Category="windows.startupTask"[\s\S]*<\/Extensions><\/Application>/);
+  });
+
+  it("adds the app execution alias for the application executable, and its namespace", () => {
+    const out = rewriteManifest(MANIFEST.replace("EXTENSIONS", PROTOCOL), { version: "0.1.179" });
+    expect(count(out, "windows.appExecutionAlias")).toBe(1);
+    expect(count(out, 'xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"')).toBe(1);
+    expect(out).toContain(
+      '<uap3:Extension Category="windows.appExecutionAlias" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><uap3:AppExecutionAlias><desktop:ExecutionAlias Alias="seira-desktop.exe" /></uap3:AppExecutionAlias></uap3:Extension></Extensions>',
+    );
+  });
+
+  it("adds the alias to a manifest that already has the start-up task", () => {
+    const withTask = rewriteManifest(MANIFEST.replace("EXTENSIONS", PROTOCOL), { version: "0.1.179" })
+      .replace(/<uap3:Extension[\s\S]*?<\/uap3:Extension>/, "").replace(/ xmlns:uap3="[^"]*"/, "");
+    const out = rewriteManifest(withTask, { version: "0.1.179" });
+    expect(count(out, "windows.startupTask")).toBe(1);
+    expect(count(out, "windows.appExecutionAlias")).toBe(1);
+    expect(count(out, "xmlns:uap3=")).toBe(1);
   });
 
   it("gives the same output when it runs twice", () => {

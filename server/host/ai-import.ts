@@ -13,6 +13,7 @@ export interface AiImportHostDeps {
   dataDir: string;
   store: Store;
   mcp: StorePortDeps["mcp"];
+  newBotApproval: StorePortDeps["newBotApproval"];
   routines: () => RoutineManager | null;
   broadcast(payload: Record<string, unknown>, options: { adminOnly: true }): void;
   local: boolean;
@@ -28,6 +29,7 @@ export function createAiImportHost(deps: AiImportHostDeps): { jobs: AiImportJobs
     dir: join(deps.dataDir, "ai-import"),
     ports: createStorePorts(deps.store, {
       mcp: deps.mcp,
+      newBotApproval: deps.newBotApproval,
       routines: {
         create: (input) => manager().create(input),
         get: (id) => {

@@ -34,7 +34,7 @@ function fixture(options: { owner?: boolean; guest?: boolean; group?: boolean; h
   };
   const host = createAppSettings({
     store: store as never, dataDir, entries: [],
-    turnOwner: () => (options.owner === false ? null : "owner"),
+    asker: () => (options.owner === false ? { kind: "refused", code: "not-owner" } : { kind: "clean" }),
     guestDriven: () => options.guest === true,
     requestCredential: async () => ({ status: 500, body: {} }),
     connectorThread: () => (options.group ? { group: { id: "g", name: "Room" } as never } : null),
@@ -51,7 +51,7 @@ describe("app_settings show_card", () => {
     for (const card of ["phone-pairing", "keep-awake", "vault", "", undefined, 7, { id: "other-computers" }, "__proto__", "constructor"]) {
       const answer = await show(card);
       expect(answer.status, String(card)).toBe(404);
-      expect(String(answer.body.error)).toContain("Cards: other-computers, ai-sign-in.");
+      expect(String(answer.body.error)).toContain("Cards: other-computers, ai-sign-in, ai-pool.");
     }
     expect(messages).toEqual([]);
   });
@@ -79,6 +79,16 @@ describe("app_settings show_card", () => {
     expect(messages).toEqual([{ id: "m1", threadId: "t-kiwi", role: "bot", kind: "text", text: SETTINGS_CARDS["ai-sign-in"].text, settingsCard: { id: "ai-sign-in" } }]);
     expect(answer.body.text).toBe("Card shown: AI sign-in. Only the user can change it; you cannot, and you never see what the card shows. " + SETTINGS_CARDS["ai-sign-in"].guide);
     expect(String((await fixture({ group: true }).show("ai-sign-in")).body.text)).toContain("open Settings → AI → Providers in Seira");
+  });
+
+  it("AC-08: the AI pool card posts a row that names the card only, and tells the bot one fixed status that says nothing about on or off", async () => {
+    const { show, messages } = fixture({ here: true, on: null });
+    const answer = await show("ai-pool");
+    expect(answer.status).toBe(200);
+    expect(messages).toEqual([{ id: "m1", threadId: "t-kiwi", role: "bot", kind: "text", text: SETTINGS_CARDS["ai-pool"].text, settingsCard: { id: "ai-pool" } }]);
+    expect(answer.body.text).toBe("Card shown: AI pool. Only the user can change it; you cannot, and you never see what the card shows. " + SETTINGS_CARDS["ai-pool"].guide);
+    expect(SETTINGS_CARDS["ai-pool"].path).toBe("Settings → AI → AI pool");
+    expect(String((await fixture({ group: true }).show("ai-pool")).body.text)).toContain("open Settings → AI → AI pool in Seira");
   });
 
   it("in a room, where no control is drawn, posts nothing and tells the bot where the person finds it", async () => {
@@ -115,7 +125,7 @@ describe("app_settings show_card", () => {
     }
   });
 
-  it("shows only in a turn the server counts as the owner's own (turnOwner), and never where a guest drives the thread", async () => {
+  it("shows only in a turn the server counts as the owner's own (asker), and never where a guest drives the thread", async () => {
     for (const options of [{ owner: false }, { guest: true }]) {
       const { show, messages } = fixture(options);
       expect((await show("other-computers")).status).toBe(403);
@@ -135,7 +145,8 @@ describe("app_settings show_card", () => {
     expect(properties.card.enum).toEqual([...SETTINGS_CARD_IDS]);
     expect(Object.keys(SETTINGS_CARDS)).toEqual([...SETTINGS_CARD_IDS]);
     expect(properties.card.description).toBe("show_card: other-computers when the person asks how to connect or open this computer from another computer; "
-      + "ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out.");
+      + "ai-sign-in when the person wants to sign in to an AI account (Claude, ChatGPT or Codex, Antigravity), or one is signed out; "
+      + "ai-pool when the person wants to see or change the AI pool themselves, or a pay-per-use AI must join it.");
     expect(properties.action.enum).toContain("show_card");
     expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("you cannot change it or see what it shows");
     expect(APP_SETTINGS_TOOL_DEFINITION.description).toContain("places: where a button, menu or page is, in or outside Settings");

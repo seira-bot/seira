@@ -11,6 +11,7 @@ import { rebuiltSessionNotice } from "./resume-recovery.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { openSse } from "./testing/sse.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 /** A fixture turn's launch instructions plus its own message, where changed parts arrive when the process was kept warm. */
 const told = (turn: any): string => {
@@ -50,7 +51,7 @@ async function fixtureSession(test: (f: any) => Promise<void>, fakeEnv: NodeJS.P
         return (db.prepare("SELECT kind FROM assignment_events WHERE assignment_id = ? ORDER BY id").all(id) as Array<{ kind: string }>).map(row => row.kind);
       } finally { db.close(); }
     };
-    const evidence = () => existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+    const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`);
     const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages;
     const start = async () => { save(); return cli("send", "--bot", chief.id, "--task", chief.activeTaskId, "--text", "Please have Engineering build and independently verify a CSV export. Own the result."); };
     const wait = () => cli("wait", "--bot", chief.id, "--task", chief.activeTaskId, "--timeout", "30");
@@ -431,6 +432,39 @@ it("lets a bot rename only the thread it is working in", () => fixture(async f =
   expect(renamed.title).toBe("Acme: carousel design");
   expect(renamed.title).not.toBe(before);
 }), 45_000);
+
+const OFFERED = [
+  { title: "Show the steps", prompt: "Please show the steps you took." },
+  { title: "Open the page", prompt: "Open https://example.test/page for me." },
+  { title: "Shorter", prompt: "Make it shorter." },
+  { title: "Another", prompt: "Give me another example." },
+];
+
+it("puts suggested replies only on the last text line of a turn that ended well, cleaned", () => fixture(async f => {
+  f.plan[f.chief.id] = { steps: [{ tool: "suggest_replies", arguments: { replies: OFFERED } }], reply: "Here is the answer" };
+  f.save();
+  await f.cli("send", "--bot", f.chief.id, "--task", f.chief.activeTaskId, "--text", "Answer me.");
+  expect((await f.wait()).status).toBe("settled");
+  const lines = (await f.messages(f.chief.activeTaskId)).filter((m: any) => m.role === "bot" && m.kind === "text");
+  const last = lines.at(-1);
+  expect(last.text).toBe("Here is the answer");
+  // The link entry is dropped; the tool schema already refuses a list of more than 4.
+  expect(last.suggestedReplies).toEqual([OFFERED[0], OFFERED[2], OFFERED[3]]);
+  expect(lines.slice(0, -1).some((m: any) => m.suggestedReplies !== undefined)).toBe(false);
+}), 45_000);
+
+it("sends no suggested replies when the bot offers none or the turn fails", () => fixture(async f => {
+  f.plan[f.chief.id] = { steps: [{ tool: "suggest_replies", arguments: { replies: [{ title: "Run it", prompt: "sudo rm -rf /" }] } }], reply: "No chips here" };
+  f.save();
+  await f.cli("send", "--bot", f.chief.id, "--task", f.chief.activeTaskId, "--text", "Answer me.");
+  expect((await f.wait()).status).toBe("settled");
+  expect((await f.messages(f.chief.activeTaskId)).some((m: any) => m.suggestedReplies !== undefined)).toBe(false);
+  f.plan[f.chief.id] = { steps: [{ tool: "suggest_replies", arguments: { replies: OFFERED.slice(0, 1) } }, { tool: "list_threads", arguments: {}, expectError: true }], reply: "This turn fails" };
+  f.save();
+  await f.cli("send", "--bot", f.chief.id, "--task", f.chief.activeTaskId, "--text", "Answer me again.");
+  await f.wait();
+  expect((await f.messages(f.chief.activeTaskId)).some((m: any) => m.suggestedReplies !== undefined)).toBe(false);
+}), 60_000);
 
 it("does not treat self-opened work or an abandoned human branch as new human authority", () => fixture(async f => {
   await f.api("/api/config", { threads: { maxConcurrentPerBot: 1 } }, "PUT");

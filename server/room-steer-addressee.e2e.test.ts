@@ -1,11 +1,12 @@
 // A person's steer in a one-at-a-time room where the lead handed out jobs: it never folds into a member's job,
 // and nothing stops; the lead takes the line, on an isolated fixture with the real coordination proxy.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("with parallel room jobs off, an unnamed steer while a member works a handed job stays queued for the lead and stops nothing", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -48,7 +49,7 @@ it("with parallel room jobs off, an unnamed steer while a member works a handed 
     const messages = (await api(`/api/threads/${room.threadId}/messages`, undefined, "GET")).messages;
     expect(JSON.stringify(messages)).not.toContain("+ steered");
     expect(messages.find((m: any) => m.text === "Change of plan: drop the second part")?.steered).toBeUndefined();
-    const turns = readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const turns = readJsonLines(`${planPath}.evidence.jsonl`);
     const tookIt = turns.find((t: any) => JSON.stringify(t.prompt ?? "").includes("Change of plan: drop the second part"));
     expect(tookIt?.botId).toBe(lead.id);
   } finally {

@@ -20,6 +20,7 @@ import { join } from "node:path";
 
 import type { CacheWarmPingResult } from "../contracts.ts";
 import { killCliTree, spawnCli, type CliSpawnOptions } from "../procs.ts";
+import { ownNode } from "../proxy-paths.ts";
 import { USAGE_LIMIT } from "./retry.ts";
 
 export const KEEP_WARM_PROMPT = "Reply with the single word: warm";
@@ -163,7 +164,7 @@ export function runForkedPrompt<T>(opts: {
     const denyPath = join(dir, "deny-tools.mjs");
     writeFileSync(denyPath, KEEP_WARM_DENY_HOOK, { mode: 0o600 });
     const settingsPath = join(dir, "settings.json");
-    writeFileSync(settingsPath, JSON.stringify(keepWarmSettings(contract.settings, `"${process.execPath}" "${denyPath}"`)), { mode: 0o600 });
+    writeFileSync(settingsPath, JSON.stringify(keepWarmSettings(contract.settings, `"${ownNode()}" "${denyPath}"`)), { mode: 0o600 });
     let mcpConfigPath: string | null = null;
     if (contract.mcpServers) {
       mcpConfigPath = join(dir, "mcp.json");

@@ -10,6 +10,7 @@ import {
   type WorkflowProblemCode,
   type WorkflowStep,
 } from "../../shared/workflows.ts";
+import { loadModelSelection } from "../routine-load.ts";
 import { findLoop, startSteps, stepById, stepLabel, stepOrder } from "./graph.ts";
 
 export interface WorkflowFacts { botName(botId: string): string | undefined }
@@ -33,6 +34,7 @@ const inputSchema = z.object({
   name: z.string(),
   steps: z.array(stepSchema),
   connections: z.array(connectionSchema),
+  manual: z.boolean().optional(),
   ifUpdatedAt: z.number().optional(),
 });
 
@@ -67,6 +69,18 @@ export function validateWorkflowInput(body: unknown, facts: WorkflowFacts): Work
 
   for (const step of value.steps) {
     if (step.kind === "bot" && !facts.botName(step.botId)) add("workflow_bot_missing", `${label(step)}: choose a bot for this step.`, { stepId: step.id });
+  }
+  for (const step of value.steps) {
+    if (step.kind !== "bot") continue;
+    const own = step as { modelSelection?: unknown; access?: unknown };
+    if (own.modelSelection === null || own.modelSelection === undefined) delete own.modelSelection;
+    else {
+      const chosen = loadModelSelection(own.modelSelection);
+      if (chosen) own.modelSelection = chosen;
+      else add("workflow_shape", SHAPE_MESSAGE, { stepId: step.id });
+    }
+    if (own.access === null || own.access === undefined) delete own.access;
+    else if (own.access !== "read-and-draft") add("workflow_shape", SHAPE_MESSAGE, { stepId: step.id });
   }
   for (const step of value.steps) {
     if (step.kind === "bot" && !step.instruction.trim()) add("workflow_instruction_missing", `${label(step)}: tell the bot what to do in this step.`, { stepId: step.id });

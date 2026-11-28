@@ -7,7 +7,7 @@ import { handoffLimits } from "./runtime/handoff-limits.ts";
 import { Runtime } from "./runtime/runtime.ts";
 import { importLegacyDelegations, importLegacyHandoffs, type LegacyThreadResolver } from "./runtime/import-legacy.ts";
 import { openRuntimeStore, type RuntimeStore } from "./runtime/store.ts";
-import { personOnly, requesterDecides, withDefault } from "./runtime/questions.ts";
+import { noQuestion, personOnly, requesterDecides, withDefault } from "./runtime/questions.ts";
 import { isStatusOnly, mayBeStatusOnly, statusReplyPrompt } from "./runtime/status-reply.ts";
 import { answersSender, childrenSince, clip, isTerminal, ownThread, path } from "./runtime/tree.ts";
 import type { Answerer, Assignee, Assignment, EndResult, Origin, Owner, Reply, Requester, RunInput, RunResult, StatusView, TurnRunner } from "./runtime/types.ts";
@@ -76,7 +76,8 @@ function runtimeOrigin(origin: WorkOrigin | undefined, source: RoomAddress): Ori
 }
 
 
-/** The question a reply ends on: its last line starts with NEEDS INPUT:, or the line before a closing `Default:` line. */
+/** The question a reply ends on: its last line starts with NEEDS INPUT:, or the line before a closing `Default:` line.
+ * A line that says only that nothing is needed (`NEEDS INPUT: none`) is no question. */
 export function needsInputQuestion(text: string): string | undefined {
   const lines = text.split(/\r?\n/);
   const filled = (from: number) => { let at = from; while (at >= 0 && lines[at]!.trim() === "") at -= 1; return at; };
@@ -86,7 +87,7 @@ export function needsInputQuestion(text: string): string | undefined {
   const line = at < 0 ? "" : lines[at]!.trim();
   if (!NEEDS_INPUT.test(line)) return undefined;
   const question = [line.slice("NEEDS INPUT:".length), ...lines.slice(at + 1)].join("\n").trim();
-  return question || undefined;
+  return question && !noQuestion(question) ? question : undefined;
 }
 
 export function view(a: Assignment, parent?: Assignment): HandoffView {
