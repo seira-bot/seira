@@ -17,7 +17,6 @@ describe("the Windows-mode never-list blocks Format-Volume and Clear-Disk", () =
     "Clear-Disk -Number 0 -RemoveData:$true",
     "Clear-Disk -Number 0 –RemoveData",
     "Get-Disk 1 | Clear-Disk -RemoveData -RemoveOEM",
-    // main's wider storage block also stops Clear-Disk without -RemoveData
     "Clear-Disk -Number 0 -Confirm:$false",
     "Clear-Disk -Number 0 -RemoveOEM",
   ])("blocks %s", (line) => {
