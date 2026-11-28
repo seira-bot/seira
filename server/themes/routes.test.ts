@@ -121,6 +121,21 @@ describe("theme routes", () => {
     expect(changed.at(-1)).toEqual({ person: "p_ann", skin: "system" });
   });
 
+  it("saves and wears a theme in one change, and one step back puts the earlier look back", async () => {
+    const { routes, store, changed } = fixture();
+    const sari = { name: "Sari", light: { canvas: "#fff7f8", accent: "#c2335a" }, dark: { canvas: "#1a1416", accent: "#e4577a" } };
+    expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: "sari", theme: sari }, auth: ann })).toMatchObject({ status: 200 });
+    expect(store.list("p_ann")).toMatchObject({ active: "sari", themes: [{ id: "sari", name: "Sari" }] });
+    const listed = await callRoute(routes, { method: "GET", path: "/api/themes/history", auth: ann });
+    expect((listed.body as { items: Array<{ kind: string }> }).items.map((item) => item.kind)).toEqual(["made"]);
+    expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: null, theme: sari }, auth: ann })).toMatchObject({ status: 400 });
+    expect(await callRoute(routes, { method: "POST", path: "/api/themes/history", body: { steps: 1 }, auth: ann })).toMatchObject({ status: 200 });
+    expect(store.list("p_ann").active).toBeNull();
+    expect(changed.at(-1)).toEqual({ person: "p_ann" });
+    expect(await callRoute(routes, { method: "POST", path: "/api/themes/history", body: { steps: 9 }, auth: ann })).toMatchObject({ status: 400 });
+    expect(await callRoute(routes, { method: "POST", path: "/api/themes/history", body: { steps: 1, index: 1 }, auth: ann })).toMatchObject({ status: 400 });
+  });
+
   it("wears a popular theme through the active route, with the skin put back to system", async () => {
     const { routes, changed } = fixture();
     expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: "popular-catppuccin", skin: "system" }, auth: ann })).toMatchObject({ status: 200 });
