@@ -70,6 +70,6 @@ export function workflowLookupFor(
   lookup: WorkflowCopyLookup | undefined,
 ): WorkflowCopyLookup | undefined {
   if (Object.hasOwn(patch, "workflowId") || patch.rewriteWorkflow) return lookup;
-  return (workflowId) => (workflowId === routine.workflowId && routine.workflowBotIds
+  return (workflowId) => (workflowId === routine.workflowId && routine.workflowBotIds?.length
     ? { workflowId, prompt: routine.prompt, botId: routine.botId, botIds: routine.workflowBotIds } : null);
 }

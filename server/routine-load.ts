@@ -90,10 +90,14 @@ export function loadModelSelection(value: unknown): ModelSelection | undefined {
 }
 
 const WORKFLOW_REF = /^[\w-]{1,128}$/;
+/** A link to a workflow is kept even when its list of bots cannot be read whole: the list is then left out, and a record
+ * that names a workflow without its bots is shown to nobody but an admin. Dropping the link would turn it into a plain
+ * record that anyone who sees its bot may read. */
 function loadWorkflowLink(record: { workflowId?: unknown; workflowBotIds?: unknown }): Pick<Routine, "workflowId" | "workflowBotIds"> {
-  const bots = Array.isArray(record.workflowBotIds) ? record.workflowBotIds.filter((id): id is string => typeof id === "string" && WORKFLOW_REF.test(id)).slice(0, 50) : [];
-  return typeof record.workflowId === "string" && WORKFLOW_REF.test(record.workflowId) && bots.length > 0
-    ? { workflowId: record.workflowId, workflowBotIds: bots } : { workflowId: undefined, workflowBotIds: undefined };
+  if (typeof record.workflowId !== "string" || !WORKFLOW_REF.test(record.workflowId)) return { workflowId: undefined, workflowBotIds: undefined };
+  const listed = Array.isArray(record.workflowBotIds) ? record.workflowBotIds : undefined;
+  const whole = listed !== undefined && listed.length >= 1 && listed.length <= 50 && listed.every((id) => typeof id === "string" && WORKFLOW_REF.test(id));
+  return { workflowId: record.workflowId, workflowBotIds: whole ? [...(listed as string[])] : undefined };
 }
 
 export function loadRoutine(routine: Routine, now: number): Routine | null {

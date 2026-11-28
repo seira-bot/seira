@@ -456,7 +456,7 @@ import { asSchedule, RoutineRequestService } from "./routine-requests.ts"; impor
 import { activeRoutinesContext } from "./active-routines-context.ts";
 import { createRefusedHandoffs } from "./host/refused-handoffs.ts"; import { automationContextText, createAutomationReports, newestAutomationLines, routineRunNeedsReview } from "./automation-reports.ts"; import { createAutomationDestinations } from "./automation-destinations.ts"; import { createTeamRoutines } from "./host/team-routines.ts"; import { botOwner } from "../shared/bot-owner.ts"; import { forgetMember } from "./bot-owners.ts"; import { createProactive } from "./host/proactive.ts"; import { createFirstHourHooks, startFirstHour, welcomeDonePatch } from "./host/first-hour-host.ts"; import { greetingMessage } from "./host/first-hour.ts"; import { READ_AND_DRAFT_PARTS, READ_AND_DRAFT_REFUSAL, READ_AND_DRAFT_TOOLS, recordsAnswer } from "./read-and-draft.ts"; import { createPresenceRoutes } from "./routes/presence.ts"; import { needsYouNow } from "./today.ts"; import { createTeamPresenceHost } from "./host/team-presence-host.ts";
 import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, billsEachUse, limitBackupAllowed } from "./limit-failover.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts"; import { createAiPool } from "./host/ai-pool.ts"; import { markAfterPick, poolReading } from "./ai-pool.ts";
-import { parseTriggerRequest, triggerTarget } from "./trigger-tools.ts"; import { WebhookRequestError, WebhookRequestService } from "./webhook-requests.ts"; import { createAppTriggerHost } from "./app-trigger-host.ts";
+import { NO_SUCH_TRIGGER, parseTriggerRequest, triggerTarget } from "./trigger-tools.ts"; import { WebhookRequestError, WebhookRequestService } from "./webhook-requests.ts"; import { createAppTriggerHost } from "./app-trigger-host.ts";
 import { appliesNow, directApply, UNDO_STALE, type DirectApply } from "./direct-apply.ts";
 import { createTeamMemoryRequests } from "./team-memory-requests.ts";
 import { createAgentCard } from "./chat-widgets.ts";
@@ -564,7 +564,7 @@ import {
   noteSeen,
   notFoundFor,
   pathSubject,
-  routineForViewer, routineRunVisible, routineVisible, workflowVisible,
+  heldCopyCurrent, routineForViewer, routineVisible, startAttemptVisible, startRunVisible, startVisible, turnViewer, workflowVisible,
   sameAudience,
   VisibleSet,
   type FrameContext,
@@ -608,7 +608,7 @@ import { offerTaskSuggestions, TaskSuggestionTurns } from "./task-suggestions.ts
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
-import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost, type WorkflowRoomTurn } from "./host/workflow-host.ts"; import { roomGoalSaveRefusal } from "./workflows/room-goal.ts"; import { createResultRooms } from "./workflows/result-room.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
+import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost, type WorkflowRoomTurn } from "./host/workflow-host.ts"; import { roomGoalSaveRefusal } from "./workflows/room-goal.ts"; import { createResultRooms } from "./workflows/result-room.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowBotIds, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
 import { createTaskRoutes } from "./routes/tasks.ts";
@@ -864,6 +864,10 @@ function personNameIn(threadId: string): string | undefined {
 
 function sharedMembership(): boolean {
   return CLOUD_TEAM !== null || hostedWorkspaceConfiguration()?.portalMembership === true || signInAllowList().members.length > 0;
+}
+/** Whether more than one person may reach this server, for what a bot may tell about a workflow: the member list, but also a signed-in session that is not an admin's and department limits, which a server with an empty member list can still have. */
+function sharedForWorkflows(): boolean {
+  return sharedMembership() || departmentAccess.limited() || sessions.list().some((session) => !session.scopes.includes("admin"));
 } const ownHome = createOwnHome({ dataDir: DATA_DIR, facts: () => ({ managed: CLOUD_HOME !== null || HOSTED_WORKSPACE, shared: sharedMembership(), admins: signInAllowList().admins }) }); const placesElsewhere = createPlacesElsewhere({ dataDir: DATA_DIR });
 
 /** Everyone is "user" where one person uses the workspace; where several do, each reacts as their own key. */
@@ -1142,7 +1146,7 @@ async function answeringCardAs(auth: RequestAuth, threadId: string, requestId: s
   }
 }
 
-const departmentAccess = createDepartmentAccessHost({ access: new DepartmentAccess(join(DATA_DIR, "department-access.json")), sections: () => store.sections, keyOf: sectionMemoryKey, ensureKey: ensureSectionMemoryKey, elsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null, visible: (auth) => visibleTo(viewerFor(auth)), forgetVisibility: () => forgetVisibility(), closeStreams: (matches) => { audienceChanged(); for (const client of sseClients) { const email = client.sessionId ? sessions.record(client.sessionId)?.email : undefined; if (email && matches(email.toLowerCase())) client.close(); } }, bots: () => store.bots, record: (rows) => { const scope = adminActorScope.getStore(); if (scope && (scope.sharedAtStart || adminActivityRecording())) for (const row of rows) appendAdminAction(DATA_DIR, { ...row, actor: scope.actor }); }, setAudience: (botId, visibility) => { store.patchBot(botId, { visibility }); for (const group of store.groups.filter((candidate) => candidate.memberIds.includes(botId))) broadcast({ kind: "group", group: publicGroupState(group) }); broadcast({ kind: "sections", sections: store.sections }); audienceChanged(); } }); setAccessWalls(departmentAccess.wallBetween); const { viewerFor, threadOwner, visibleTo, forgetVisibility, threadShown, subjectVisible, hiddenRoutineTarget, roomFeedsBot, settleRoomFloor } = createVisibilityHost({ grantFor: departmentAccess.grantFor, store: () => store, routines: () => routines,
+const departmentAccess = createDepartmentAccessHost({ access: new DepartmentAccess(join(DATA_DIR, "department-access.json")), sections: () => store.sections, keyOf: sectionMemoryKey, ensureKey: ensureSectionMemoryKey, elsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null, visible: (auth) => visibleTo(viewerFor(auth)), forgetVisibility: () => forgetVisibility(), closeStreams: (matches) => { audienceChanged(); for (const client of sseClients) { const email = client.sessionId ? sessions.record(client.sessionId)?.email : undefined; if (email && matches(email.toLowerCase())) client.close(); } }, bots: () => store.bots, record: (rows) => { const scope = adminActorScope.getStore(); if (scope && (scope.sharedAtStart || adminActivityRecording())) for (const row of rows) appendAdminAction(DATA_DIR, { ...row, actor: scope.actor }); }, setAudience: (botId, visibility) => { store.patchBot(botId, { visibility }); for (const group of store.groups.filter((candidate) => candidate.memberIds.includes(botId))) broadcast({ kind: "group", group: publicGroupState(group) }); broadcast({ kind: "sections", sections: store.sections }); audienceChanged(); } }); setAccessWalls(departmentAccess.wallBetween); const { viewerFor, threadOwner, visibleTo, forgetVisibility, threadShown, subjectVisible, hiddenRoutineTarget, roomFeedsBot, settleRoomFloor } = createVisibilityHost({ grantFor: departmentAccess.grantFor, limited: departmentAccess.limited, store: () => store, routines: () => routines,
   team: Boolean(CLOUD_TEAM), audiencesFor: (viewer) => { const audiences = teamHost.audiencesFor(viewer), person = audiences?.person; return audiences && person ? { ...audiences, routineHome: teamRoutines.home, ownTask: (task) => conversationShares.forViewer(personRooms.taskForPerson(task, person), person, teamHost.personName) } : audiences && { ...audiences, routineHome: teamRoutines.home }; }, threadsReferencing }); if (CLOUD_TEAM) hideOthersSyncFolders(() => store.bots, threadShown); const notificationListed = notificationListedFor(threadShown, CLOUD_TEAM ? (auth, entry) => teamOwners.routing.notificationReaches(teamOwners.viewer(auth), entry) && conversationShares.reaches(entry, auth.kind === "session" ? personKey(auth.session) : null) : undefined, CLOUD_TEAM ? (auth) => (auth.kind === "session" ? personKey(auth.session) : null) : undefined); const botAccess = createBotAccessHost({ visibleFor: (auth) => visibleTo(viewerFor(auth)), store: () => store, routines: () => routines, threadOwner, routineWriter: (id) => cloudRoutineAuthors?.writer(id) }), { levelOf } = botAccess; const accessRequests = createAccessRequests({ team: CLOUD_TEAM, store: () => store, people: () => teamOwners.people?.list() ?? [], profileName: (email) => teamHost.people.profile(personKey({ id: "", email })).name, inbox: () => teamMessages.inbox, visibleTo, levelOf, writeAccess: (bot, access) => writeAccess({ store, publicGroupState, broadcast, audienceChanged }, bot, access), record: (row, by) => appendAdminAction(DATA_DIR, { ...row, actor: { kind: "session", sessionId: "", label: by, email: by } }) });
 
 function recentWorkFilter(threadId: string): { include?: (threadId: string) => boolean; privateThread?: (threadId: string) => boolean } {
@@ -1211,10 +1215,25 @@ function calendarAudienceConflict(body: unknown): string | null {
   return roomAudienceConflict(botIds as string[]);
 }
 
+/** The bots a workflow uses now; null when it is gone, or when the start asking holds a copy of its steps that is no longer the current one. */
+function workflowBotsOf(workflowId: string, start?: { botId?: unknown; prompt?: unknown }): readonly string[] | null {
+  const workflow = workflows?.get(workflowId);
+  if (!workflow) return null;
+  return heldCopyCurrent(workflows?.copyFor(workflowId), start) ? workflowBotIds(workflow.steps) : null;
+}
+
+/** A run of a routine, a webhook or an app trigger by its id. */
+function runById(runId: string): RoutineRun | undefined {
+  return routines?.listRuns().find((run) => run.id === runId);
+}
+
 function memberFrameContext(visible: VisibleSet): FrameContext {
   return {
     visible,
     webhook: (webhookId) => webhooks.list().find((webhook) => webhook.id === webhookId),
+    appTrigger: (triggerId) => appTriggers.manager.get(triggerId) ?? undefined,
+    workflowBots: workflowBotsOf,
+    run: runById,
     freshBot: (botId) => {
       const bot = store.bot(botId);
       return bot ? publicBot(bot) : undefined;
@@ -2969,7 +2988,7 @@ function previewSystemPrompt(bot: BotRecord) {
   };
 }
 
-async function botOverview(bot: BotRecord, shown: { routine(routine: Routine): boolean; run(run: RoutineRun): boolean } = { routine: () => true, run: () => true }): Promise<BotOverview> {
+async function botOverview(bot: BotRecord, shown: { routine(routine: Routine): boolean; run(run: RoutineRun): boolean; webhook(webhook: WebhookTrigger): boolean } = { routine: () => true, run: () => true, webhook: () => true }): Promise<BotOverview> {
   const connectedApps = await connectedAppsFacts(
     composio.configured(cfg),
     composio.connectorAvailability(cfg),
@@ -3017,7 +3036,7 @@ async function botOverview(bot: BotRecord, shown: { routine(routine: Routine): b
         scheduledFor: run.scheduledFor,
       })),
     webhooks: webhooks.list()
-      .filter((webhook) => webhook.botId === bot.id)
+      .filter((webhook) => webhook.botId === bot.id && shown.webhook(webhook))
       .map((webhook) => ({ name: webhook.name, enabled: webhook.enabled })),
     skills: listBotSkills(bot).map((skill) => ({
       name: skill.name,
@@ -8144,7 +8163,7 @@ async function beginTurn(
         { id: "recall", label: "Recall", text: recallPrompt },
         { id: "routine", label: "Routines", text: routinePrompt },
         { id: "active-routines", label: "Active automations", text: integrations.agents && !confined && (!CLOUD_HOME || cloudOwnerOnlyThread(threadId)) ? activeRoutinesContext({
-          botId: bot.id, routines: routines?.listRoutines() ?? [], appTriggers: appTriggers.manager.list(), webhooks: webhooks.list(),
+          botId: bot.id, routines: routines?.listRoutines() ?? [], appTriggers: appTriggers.manager.list(), webhooks: webhooks.list(), startShown: (start) => startShownInTurn(start, threadId), routineShown: (routine) => routineShownInTurn(routine, threadId),
           include: (CLOUD_TEAM || CLOUD_HOME) ? (id) => Boolean(threadOwner(id)) && (recentWorkFilter(threadId).include?.(id) ?? false) : undefined,
           title: (id) => store.taskByThread(bot.id, id)?.title ?? store.groupByThread(id)?.name,
         }) : "" },
@@ -9195,7 +9214,7 @@ const webhooks = new WebhookManager({
   }, ...createWebhookRoomPost({ store, cfg, roomTalks }) });
 const webhookRequests = new WebhookRequestService({ store, webhooks, botName: (botId) => store.bot(botId)?.name ?? "the bot" }); const botApi = createBotApiHost({ store, manager: botApiManager, actsAsOwner: { available: botApiAsOwnerAvailable, refusal: (auth) => !botApiAsOwnerAvailable() ? "A key can act as the owner only on a server one person uses (no members and at most one admin, named by address), not on a team's Cloud or a shared or hosted workspace." : (sharedWorkspaceFullAccessEnabled() ? auth.scopes.includes("admin") : ownHome.owner(auth) || (CLOUD_PERSONAL && cloudOwnerSession(auth)) || (auth.kind === "loopback" && auth.trust !== "service" && auth.scopes.includes("admin") && !CLOUD_HOME)) ? null : "Only this server's owner can let a key act as them." }, startTurn, threadBusy, canStart: canAdmitDirectTurn, canConfine: (botId) => registry.get(store.bot(botId)?.modelSelection.instanceId ?? "")?.adapter.capabilities.guestTurns === "confined", discard: (botId, threadId) => { store.deleteTask(botId, threadId); }, included: () => !cloudPlanTier.starter(), opened: (threadId) => { if (CLOUD_OWNER_KEY) threadStarters.set(threadId, CLOUD_OWNER_KEY); }, hooksBaseUrl: () => webhookIngressStatus().baseUrl, manageRefusal: (auth, botId) => auth.scopes.includes("admin") || (CLOUD_TEAM && levelOf(auth, botId) === "edit") ? null : refusalFor(store.bot(botId)?.name ?? "this bot", "edit").error, claimRequest: () => { cloudPower?.arrived("/hooks", {}); moveFreeze.assertTurns(); return workspaceMaintenance.request(); }, record: (auth, row) => appendAdminAction(DATA_DIR, { ...row, actor: decisionActorFor(auth) }) });
 const appTriggers = createAppTriggerHost({ store, webhooks, workflowName: (id) => workflows?.get(id)?.name, workflowCopy: (workflowId) => workflows?.copyFor(workflowId) ?? null, workflowGate: (auth, body, current) => startLinkRefusal(body, current, auth, workflows, visibleTo(viewerFor(auth)), botAccess), webhookBase: () => webhookIngressStatus().baseUrl, routines: () => routines!, botState: unattendedDispatchState, timeZone: routineTimeZone, emit: broadcast, connectionMode: () => composio.connectionMode(cfg),
-  access: composio.brokerAccess, connectedApps: () => composio.connectedServices(cfg), visibleBot: (auth, botId) => visibleTo(viewerFor(auth)).bot(botId),
+  access: composio.brokerAccess, connectedApps: () => composio.connectedServices(cfg), shown: (auth, trigger) => startVisible(trigger, visibleTo(viewerFor(auth)), workflowBotsOf), attemptShown: (auth, attempt, trigger) => startAttemptVisible(attempt, trigger, visibleTo(viewerFor(auth)), runById),
   audit: (row) => appendDecision(DATA_DIR, { ...row, decision: "auto-approved", source: "routine" }) });
 const workflowStarts = createWorkflowStarts({ routines: () => routines, webhooks: () => webhooks, appTriggers: () => appTriggers.manager, appAccessRefusal: appTriggers.accessRefusal, log: (line) => console.error(line) });
 tieAutomationsToBots(store, { routines: routines!, webhooks, apps: appTriggers.manager, waits: botWaits });
@@ -9223,7 +9242,7 @@ const webhookIngressStatus = () => ({
   baseUrl: webhookIngress?.baseUrl ?? `http://127.0.0.1:${WEBHOOK_PORT}`,
   ...(webhookIngressError ? { error: webhookIngressError } : {}),
 });
-ROUTES.push(createTeamFilesRoutes({ files: teamFilesHost.files, actor: (auth) => auth.kind === "session" && auth.session.email ? { person: personKey(auth.session), admin: auth.scopes.includes("admin") } : null, personName: (person) => teamHost.personName(person), botName: (botId) => store.bot(botId)?.name })); ROUTES.push(createWebhookRoutes({ webhooks, ingress: webhookIngressStatus, visible: (auth) => visibleTo(viewerFor(auth)), workflowGate: (auth, body, current) => startLinkRefusal(body, current, auth, workflows, visibleTo(viewerFor(auth)), botAccess) }), botApi.routes);
+ROUTES.push(createTeamFilesRoutes({ files: teamFilesHost.files, actor: (auth) => auth.kind === "session" && auth.session.email ? { person: personKey(auth.session), admin: auth.scopes.includes("admin") } : null, personName: (person) => teamHost.personName(person), botName: (botId) => store.bot(botId)?.name })); ROUTES.push(createWebhookRoutes({ webhooks, ingress: webhookIngressStatus, visible: (auth) => visibleTo(viewerFor(auth)), runOf: runById, workflowBots: workflowBotsOf, workflowGate: (auth, body, current) => startLinkRefusal(body, current, auth, workflows, visibleTo(viewerFor(auth)), botAccess) }), botApi.routes);
 
 const RUNTIME_KEEP_MS = 30 * 24 * 60 * 60_000;
 let runtimePrunedAt = 0;
@@ -11210,7 +11229,31 @@ function claimPhoneSecretBotDeletion(botId: string): (() => void) | null {
   };
 }
 
-const secretCards = createSecretCards({ store, cfg, botLogins, vaultStore: logins, vaultReader: vaultReaders.turn, phoneSecrets, phoneSecretSubmissions, connectorThread, answerCardNode, followCard: (threadId, from, to) => coordinator.followCard(threadId, from, to), threadLanguage, email: { connect: (request, reading) => emailService.connect(request, reading), refusal: () => emailService.status().reason, connected: (address) => { const one = emailService.store.get(address); return Boolean(one && !one.problem); }, sendingProblem: (address) => emailService.sendingProblem(address), account: (address) => emailService.status().accounts.find((one) => one.address.toLowerCase() === address.toLowerCase()), checkOutgoing: (address, fields) => emailService.checkOutgoing(address, fields), profileAddress: () => cfg.profile?.email?.trim() || undefined }, dataDir: DATA_DIR, providerKeysRefused: Boolean(hostedModels), layerFolder: (botId, threadId) => workspaceDir(teamHost.layer(botId, threadId)), turnVm: (threadId) => localVmThreadTargets.get(threadId)?.key, ...(CLOUD_HOME ? {} : { githubAccess: () => localGithubAccess() }) }); const workflowShownInTurn = (workflow: { steps?: unknown }, threadId: string): boolean => { if (!CLOUD_TEAM) return true; const key = teamHost.privateTo(threadId); const person = key ? (teamOwners.people?.list() ?? []).find((one) => personKey({ id: "", email: one.email }) === key) : undefined; return person ? workflowVisible(workflow, visibleTo(person.role === "member" ? { kind: "member", email: person.email } : { kind: "all", email: person.email })) : false; }; const workflowAgentRoutes = createWorkflowAgentRoutes({ shown: workflowShownInTurn, workflows: () => workflows, routines: () => routines, bot: (id) => store.bot(id), reachableName: (from, threadId, botId) => (botId === from.id ? store.bot(botId)?.name : personalReach.peers(store.bots, from, threadId).find((bot) => bot.id === botId)?.name), team: () => Boolean(CLOUD_TEAM), creator: () => CLOUD_OWNER_KEY ?? CLOUD_NOBODY_KEY, });
+const secretCards = createSecretCards({ store, cfg, botLogins, vaultStore: logins, vaultReader: vaultReaders.turn, phoneSecrets, phoneSecretSubmissions, connectorThread, answerCardNode, followCard: (threadId, from, to) => coordinator.followCard(threadId, from, to), threadLanguage, email: { connect: (request, reading) => emailService.connect(request, reading), refusal: () => emailService.status().reason, connected: (address) => { const one = emailService.store.get(address); return Boolean(one && !one.problem); }, sendingProblem: (address) => emailService.sendingProblem(address), account: (address) => emailService.status().accounts.find((one) => one.address.toLowerCase() === address.toLowerCase()), checkOutgoing: (address, fields) => emailService.checkOutgoing(address, fields), profileAddress: () => cfg.profile?.email?.trim() || undefined }, dataDir: DATA_DIR, providerKeysRefused: Boolean(hostedModels), layerFolder: (botId, threadId) => workspaceDir(teamHost.layer(botId, threadId)), turnVm: (threadId) => localVmThreadTargets.get(threadId)?.key, ...(CLOUD_HOME ? {} : { githubAccess: () => localGithubAccess() }) }); const workflowShownInTurn = (workflow: { steps?: unknown }, threadId: string): boolean => { const seen = turnVisibility(threadId); return seen === "open" || (seen !== "closed" && workflowVisible(workflow, seen)); }; /** A webhook or app trigger in a bot's turn: one that runs a workflow only when the person in the conversation may read every bot in it. */
+/** What the person in a bot's turn may see: everything where one person uses the server, else what a person we cannot name may see (a member with no address), so nothing is shown that they may not read. */
+const turnVisibility = (threadId: string): VisibleSet | "open" | "closed" => {
+  const key = CLOUD_TEAM ? teamHost.privateTo(threadId) : null;
+  const person = key ? (teamOwners.people?.list() ?? []).find((one) => personKey({ id: "", email: one.email }) === key) : undefined;
+  const viewer = turnViewer({ team: Boolean(CLOUD_TEAM), shared: sharedForWorkflows(), person });
+  return viewer === "open" || viewer === "closed" ? viewer : visibleTo(viewer);
+};
+const startShownInTurn = (start: { botId: string; workflowId?: string; prompt: string }, threadId: string): boolean => {
+  if (!start.workflowId) return true;
+  const seen = turnVisibility(threadId);
+  return seen === "open" || (seen !== "closed" && startVisible(start, seen, workflowBotsOf));
+};
+/** A scheduled routine in a bot's turn: one that runs a workflow only when the person in the conversation may read every bot the workflow uses now. */
+const routineShownInTurn = (routine: Routine, threadId: string): boolean => {
+  if (!routine.workflowId) return true;
+  const seen = turnVisibility(threadId);
+  return seen === "open" || (seen !== "closed" && routineVisible(routine, seen) && startVisible({ botId: routine.botId, workflowId: routine.workflowId }, seen, workflowBotsOf));
+};
+/** A run of a webhook or an app trigger in a bot's turn: shown by the bots and chats the run itself used. */
+const startRunShownInTurn = (run: RoutineRun, threadId: string): boolean => {
+  const seen = turnVisibility(threadId);
+  if (seen === "closed") return !run.workflowId;
+  return seen === "open" || startRunVisible(run, seen);
+}; const workflowAgentRoutes = createWorkflowAgentRoutes({ shown: workflowShownInTurn, workflows: () => workflows, routines: () => routines, bot: (id) => store.bot(id), reachableName: (from, threadId, botId) => (botId === from.id ? store.bot(botId)?.name : personalReach.peers(store.bots, from, threadId).find((bot) => bot.id === botId)?.name), team: () => Boolean(CLOUD_TEAM), creator: () => CLOUD_OWNER_KEY ?? CLOUD_NOBODY_KEY, });
 ROUTES.push(createRoutineSkipRoutes({ routines: () => routines, forViewer: (auth, routine) => routineForViewer(routine, visibleTo(viewerFor(auth))), refusal: (auth, routine) => { const visible = visibleTo(viewerFor(auth)), hidden = routineVisible(routine, visible) ? hiddenRoutineTarget(routine, visible) : "no such routine"; return hidden ? { status: 404, error: hidden } : teamRoutines.bodyRefusal(auth, { botId: routine.botId }); } }));
 ROUTES.push(createWorkflowRoutes({ visible: (auth) => visibleTo(viewerFor(auth)), botName: (id) => store.bot(id)?.name, workflows: () => workflows, routines: () => routines, starts: () => workflowStarts, botsRefusal: botAccess.botsRefusal, routineNeeds: botAccess.routineNeeds, routineEdits: createWorkflowRoutineEdits({ refusal: (auth, routine) => { const visible = visibleTo(viewerFor(auth)); return !routineVisible(routine, visible) ? "no such routine" : hiddenRoutineTarget(routine, visible) ?? teamRoutines.bodyRefusal(auth, { botId: routine.botId })?.error ?? null; }, writer: (auth) => cloudOwnerSession(auth) && CLOUD_OWNER_KEY ? CLOUD_OWNER_KEY : auth.kind === "session" ? actorKey(auth) : CLOUD_NOBODY_KEY, withWriter: withRoutineWriter, current: (id) => routines?.listRoutines().find((routine) => routine.id === id), edited: (auth, routine, writer) => { phones.routineEdited(auth, routine, true); if (cloudRoutineAuthors) { if (cloudOwnerSession(auth)) cloudRoutineAuthors.record(routine.id, routine); else cloudRoutineAuthors.forget(routine.id); cloudRoutineAuthors.wrote(routine.id, writer); } } }) })); ROUTES.push(createBugReportRoutes({ reports: devsReports, person: (auth) => reactorFor(auth).by, sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId) })); ROUTES.push(createBurstRoutes({ owner: (id) => burst.owner(id), sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), refusal: (auth, threadId, id, botId) => cardAnswerRefusal(auth, threadId, id, "allow") ?? botAccess.botsRefusal(auth, [botId], "chat"), view: (id) => burst.view(id), run: (id) => burst.run(id), cancel: (id) => burst.cancel(id), retry: (id) => burst.retryFailed(id), edit: (id, plan) => burst.edit(id, plan) })); ROUTES.push(createSecretCardRoutes({ cards: secretCards, phoneSecretSubmissions, threadVisible: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), answerContext: (auth, botId, threadId) => ({ personalCloud: Boolean(CLOUD_PERSONAL), shared: sharedMembership(), owner: (CLOUD_TEAM ? teamOwners.routing.askedPerson(botId, threadId) : null) ?? threadStarters.get(threadId) ?? null, person: auth.kind === "session" ? personKey(auth.session) : null }) })); ROUTES.push(createWorkflowDraftRoutes({ store, coordinator, visible: (auth) => visibleTo(viewerFor(auth)), botsRefusal: botAccess.botsRefusal, workflows: () => workflows }));
 
@@ -13098,7 +13141,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         }
         return json(res, 200, { rooms: rooms.slice(0, 50), unpostable: unpostable.slice(0, 50) });
       }
-      const triggerContext = { from: internalSender, threadId: internalCapability.threadId, ownsThread: (botId: string, threadId: string) => Boolean(connectorThread(botId, threadId)), guestDriven: cloudGuestDriven(internalCapability.threadId), outsideDriven: () => outsideDrivenThread(internalCapability.threadId), canCommit: () => internalCapabilityIsActive(internalCapability), routineShown: (routine: Routine) => teamRoutines.inTurn(routine, internalCapability.threadId) };
+      const triggerContext = { from: internalSender, threadId: internalCapability.threadId, ownsThread: (botId: string, threadId: string) => Boolean(connectorThread(botId, threadId)), guestDriven: cloudGuestDriven(internalCapability.threadId), outsideDriven: () => outsideDrivenThread(internalCapability.threadId), canCommit: () => internalCapabilityIsActive(internalCapability), routineShown: (routine: Routine) => teamRoutines.inTurn(routine, internalCapability.threadId) && routineShownInTurn(routine, internalCapability.threadId), startShown: (start: { botId: string; workflowId?: string; prompt: string }) => startShownInTurn(start, internalCapability.threadId), runShown: (run: RoutineRun) => startRunShownInTurn(run, internalCapability.threadId) };
       if (await dispatchRoutes([appTriggers.internalRoutes(triggerContext), workflowAgentRoutes(triggerContext)], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/trigger-requests") {
         const from = internalSender;
@@ -13108,6 +13151,9 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const request = parseTriggerRequest(await readInternalBody(), (id) => routines!.listRoutines().some((routine) => routine.id === id) ? "schedule" : appTriggers.isApp(id) ? "app" : "webhook");
         if (!request.ok) return json(res, 400, { error: request.error });
         const hiddenTrigger = teamRoutines.hiddenTrigger(request, fromThreadId); if (hiddenTrigger) return json(res, 404, { error: hiddenTrigger });
+        const namedStart = request.kind === "app" ? request.operation.triggerId : request.kind === "webhook" ? request.operation.webhookId : undefined;
+        const heldStart = namedStart ? (request.kind === "app" ? appTriggers.manager.get(namedStart) : webhooks.list().find((webhook) => webhook.id === namedStart)) : undefined;
+        if (heldStart && !startShownInTurn(heldStart, fromThreadId)) return json(res, 404, { error: NO_SUCH_TRIGGER });
         const target = triggerTarget(from, request.forBotId, (id) => store.bot(id));
         if ("error" in target) return json(res, target.status, { error: target.error });
         const forBot = target.forBot;
@@ -14345,7 +14391,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (path === "/api/routines" && method === "GET") {
       return json(res, 200, {
         routines: routines!.listRoutines().filter((routine) => routineVisible(routine, visible)).map((routine) => routineForViewer(routine, visible)),
-        runs: routineRunsFor((from, to) => routines!.listRuns(from, to), url.searchParams).filter((run) => routineRunVisible(run, visible)), ...routineHistoryFor(routines!, url.searchParams, (routine) => routineVisible(routine, visible)),
+        runs: routineRunsFor((from, to) => routines!.listRuns(from, to), url.searchParams).filter((run) => startRunVisible(run, visible)), ...routineHistoryFor(routines!, url.searchParams, (routine) => routineVisible(routine, visible)),
       });
     }
     const routineBodyRefusal = (body: unknown, existing?: Routine) => routineBodyRefusalFor(auth, visible, body, existing);
@@ -14375,7 +14421,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       return removed ? json(res, 200, { ok: true }) : json(res, 404, { error: "no such routine" });
     }
     if (path === "/api/routine-runs/seen-all" && method === "POST") {
-      return json(res, 200, { runs: routines!.markAllSeen((run) => routineVisible(run, visible)) });
+      return json(res, 200, { runs: routines!.markAllSeen((run) => startRunVisible(run, visible)) });
     }
     const runMatch = path.match(/^\/api\/routine-runs\/([\w-]+)\/(cancel|seen)$/);
     if (runMatch && method === "POST") {
@@ -14582,7 +14628,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (m && method === "GET") {
       const bot = store.bot(m[1]);
       if (!bot) return json(res, 404, { error: "no such bot" });
-      return json(res, 200, await botOverview(bot, { routine: (routine) => routineVisible(routine, visible), run: (run) => routineRunVisible(run, visible) }));
+      return json(res, 200, await botOverview(bot, { routine: (routine) => routineVisible(routine, visible), run: (run) => startRunVisible(run, visible), webhook: (webhook) => startVisible(webhook, visible, workflowBotsOf) }));
     }
 
     m = path.match(/^\/api\/bots\/([\w-]+)\/history$/);

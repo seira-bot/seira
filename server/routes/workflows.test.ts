@@ -49,7 +49,7 @@ function fixture(over: { workflows?: Workflow[]; runs?: WorkflowRun[]; routines?
   const flows = new Map((over.workflows ?? [workflow("open", "pub", "pub"), workflow("secret", "pub", "hr")]).map((flow) => [flow.id, flow]));
   const runs = over.runs ?? [run("run-open", "open"), run("run-secret", "secret", { botIds: ["pub", "hr"] })];
   const calls: string[] = [];
-  const routines = (over.routines ?? [{ id: "r1", botId: "pub", workflowId: "open" }]) as Routine[];
+  const routines = (over.routines ?? [{ id: "r1", botId: "pub", workflowId: "open", workflowBotIds: ["pub"] }]) as Routine[];
   const host = {
     list: () => [...flows.values()],
     get: (id: string) => flows.get(id) ?? null,
@@ -115,7 +115,7 @@ describe("workflow routes", () => {
   });
 
   it("returns 404 to run again when the run is open but its workflow became hidden", async () => {
-    const { call, calls } = fixture({ workflows: [workflow("open", "pub", "hr")], routines: [{ id: "r1", botId: "pub", workflowId: "open" }] });
+    const { call, calls } = fixture({ workflows: [workflow("open", "pub", "hr")], routines: [{ id: "r1", botId: "pub", workflowId: "open", workflowBotIds: ["pub"] }] });
     const answer = await call("POST", "/api/workflow-runs/run-open/steps/s2/run-again");
     expect(answer.status).toBe(404);
     expect(answer.body).toEqual({ error: "no such workflow" });
@@ -245,7 +245,7 @@ describe("workflow routes", () => {
     expect(await fixture({ routines: [] }).call("POST", again)).toMatchObject({ status: 404, body: { error: "no such routine" } });
     expect(await fixture({ routines: [{ id: "r1", botId: "hr", workflowId: "open" }] }).call("POST", again))
       .toMatchObject({ status: 404, body: { error: "no such routine" } });
-    expect(await fixture({ routines: [{ id: "r1", botId: "pub", workflowId: "other" }] }).call("POST", again))
+    expect(await fixture({ routines: [{ id: "r1", botId: "pub", workflowId: "other", workflowBotIds: ["pub"] }] }).call("POST", again))
       .toMatchObject({ status: 409, body: { error: "This routine now runs another workflow." } });
     expect(await fixture().call("POST", "/api/workflow-runs/run-open/steps/s1/run-again"))
       .toMatchObject({ status: 409, body: { error: "Only a failed step can run again." } });

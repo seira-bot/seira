@@ -5,7 +5,7 @@
 import { basename } from "node:path";
 
 import { baseBotId } from "../audience.ts";
-import { audienceEquals, narrowestAudience, roomFeeds, routineRunVisible, routineVisible, SEES_EVERYTHING, VisibleSet, type PathSubject, type ResolvedGrant, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
+import { audienceEquals, narrowestAudience, roomFeeds, routineVisible, SEES_EVERYTHING, startRunVisible, VisibleSet, type PathSubject, type ResolvedGrant, type ThreadAudiences, type ThreadOwner, type Viewer } from "../bot-visibility.ts";
 import { walledApart } from "../peer-roster.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
@@ -21,6 +21,8 @@ export interface VisibilityHostDeps {
   threadsReferencing(name: string): readonly string[];
   /** What a member is limited to (host/department-access-host.ts); null: the whole team. */
   grantFor?(email: string | undefined): ResolvedGrant | null;
+  /** Whether department limits are set (host/department-access-host.ts). */
+  limited?(): boolean;
 }
 
 export function createVisibilityHost(deps: VisibilityHostDeps) {
@@ -49,7 +51,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     const key = viewer.kind === "all" ? (viewer.email === undefined ? "*" : `admin:${viewer.email.trim().toLowerCase()}`) : `member:${viewer.email?.trim().toLowerCase() ?? ""}`;
     let set = visibleSets.get(key);
     if (!set) {
-      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), viewer.kind === "member" ? deps.grantFor?.(viewer.email) ?? null : null);
+      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), viewer.kind === "member" ? deps.grantFor?.(viewer.email) ?? null : null, viewer.kind === "member" && !viewer.email?.trim() && deps.limited?.() === true);
       if (visibleSets.size >= 1_000) visibleSets.clear();
       visibleSets.set(key, set);
     }
@@ -103,7 +105,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
       }
       case "routine-run": {
         const run = deps.routines()?.listRuns().find((candidate) => candidate.id === subject.id);
-        return !run || routineRunVisible(run, visible);
+        return !run || startRunVisible(run, visible);
       }
       case "attachment":
         return visible.attachment(subject.name, threadsUsingAttachment) && routineFileShown(subject.name, visible);

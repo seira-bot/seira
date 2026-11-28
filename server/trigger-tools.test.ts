@@ -45,6 +45,19 @@ describe("listTriggers", () => {
     expect(listed.find((one) => one.id === "r2")).not.toHaveProperty("workflow");
   });
 
+  it("leaves out the runs the person in this turn may not know of, in the list and in the history", () => {
+    const hook = webhook("h1", "bot-a");
+    const runs = [run("new", "h1", "bot-a", "hidden steps output"), run("old", "h1", "bot-a", "plain output")];
+    const input = { botId: "bot-a", routines: [], webhooks: [hook], appTriggers: [], runs, timeZone: "UTC", now, runShown: (one: RoutineRun) => one.id !== "new" };
+    const listed = listTriggers(input).triggers![0]! as { latestRun: { id: string } | null };
+    expect(listed.latestRun?.id).toBe("old");
+    const full = listTriggers({ ...input, triggerId: "h1" }).trigger!;
+    expect(full.recentFires.map((one) => one.id)).toEqual(["old"]);
+    expect(JSON.stringify(full)).not.toContain("hidden steps output");
+    // Without a rule every run is listed, as before.
+    expect(listTriggers({ ...input, runShown: undefined, triggerId: "h1" }).trigger!.recentFires).toHaveLength(2);
+  });
+
   it("redacts the entire detailed instruction text, including held secrets beyond the preview", () => {
     const secret = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
     const prompt = "Keep checking.\n".repeat(250) + `Use ${secret} and fixture-password.`;
