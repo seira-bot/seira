@@ -8,8 +8,7 @@ import { cn } from "@/lib/cn";
 import { activeLocale, t } from "@/lib/i18n";
 import { INSTALL_BWRAP } from "@/lib/folder-access";
 import { aiChoices, aiWorks, welcomeChoices } from "@/lib/onboarding";
-import type { InstanceInfo } from "@/state/store";
-import { useStore } from "@/state/store";
+import { useStore, type InstanceInfo } from "@/state/store";
 import { freeFallback } from "../../../shared/ai-ranking";
 import { ConnectAiDialog } from "./ConnectAi";
 import { PILL, SignInPill, useSignInPill } from "./SignInPill";
@@ -56,11 +55,12 @@ function DemoComposer({ reduced }: { reduced: boolean }) {
 }
 
 /** The first run's first screen: the app's name, Seira greeting the person and a composer typing one sentence, then one pill. With
- * no AI working yet the pill is the sign-in, and Next comes once the AI has answered its test message. */
+ * no AI working yet it offers OpenCode's free models (chosen first), Claude and Codex, and the pill starts, installs or signs in
+ * the chosen one; Next comes once an AI has answered its test message. */
 export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
-  // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does.
+  // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does: it is a choice below instead.
   const tested = useWelcomeAi(state.instances, !hosted);
   const ready = aiWorks(tested);
   const known = state.instances.length > 0;
@@ -106,6 +106,9 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           {t("onboarding.hosted.intro")}
         </p>
       )}
+      {signingIn && choices.length >= 2 && (
+        <WelcomeChoices choices={choices} selected={selected} onSelect={setPicked} line={choiceLine} />
+      )}
       <div className="absolute left-1/2 top-[calc(50%+200px)] flex w-[320px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col items-center">
         {asking && ready && tested && (
           <p role="status" data-ai-connected="" className="absolute -top-8 flex items-center gap-1.5 whitespace-nowrap text-[13px] leading-[18px] text-success">
@@ -142,9 +145,6 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           </div>
         )}
       </div>
-      {signingIn && choices.length >= 2 && (
-        <WelcomeChoices choices={choices} selected={selected} onSelect={setPicked} line={choiceLine} />
-      )}
       {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
     </div>
   );
