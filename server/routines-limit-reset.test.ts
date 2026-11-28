@@ -256,9 +256,10 @@ describe("a limit-reset automation with steps", () => {
     const at = { x: 0, y: 0 };
     const host = createWorkflowHost({
       dataDir,
-      store: { bot: (id: string) => ({ name: id === "scout" ? "Scout" : "Ben" }) as never, patchTask: (() => null) as never, taskByThread: (() => undefined) as never },
+      store: { bot: (id: string) => ({ name: id === "scout" ? "Scout" : "Ben" }) as never, patchTask: (() => null) as never, taskByThread: (() => undefined) as never, projectBotForTask: () => null },
       routines: () => h.manager,
       routineHooks: () => ({ createTask: () => ({ threadId: "step-chat" }), interruptTurn: async () => {} }),
+      chatModel: (_botId, _run, modelSelection) => modelSelection,
       botState: () => "ready",
       startTurn: async (botId, text, opts) => { turns.push({ botId, text, opts }); },
       reports: { postStep: (() => {}) as never, runSettled: () => {} },
