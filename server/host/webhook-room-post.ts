@@ -1,4 +1,5 @@
 import type { WebhookTrigger } from "../../shared/webhooks.ts";
+import { PublicError } from "../public-error.ts";
 
 export type RoomPostAttachment =
   | { kind: "image"; path: string; mime: string }
@@ -51,7 +52,7 @@ export interface RoomPostResult {
 export const WEBHOOK_IMAGE_MIMES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 function fail(status: number, message: string): never {
-  throw Object.assign(new Error(message), { status });
+  throw new PublicError(message, status);
 }
 
 /** A caller holds the webhook secret, so a declared mime is a preference, not proof: the bytes themselves decide. */

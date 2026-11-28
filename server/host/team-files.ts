@@ -29,6 +29,7 @@ const USAGE_TTL_MS = 10_000;
 const STAGING = join("tmp", "team-files-uploads");
 
 import type { TeamFileAction } from "../../shared/team-files.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 export type { TeamFileAction };
 
 /** One change: who (a person, a bot working for a person, or a bot alone), what and when. */
@@ -63,6 +64,7 @@ export interface TeamFileEntry {
 export interface TeamFilesActor { person: string; admin: boolean }
 
 export class TeamFilesError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly code: string;
   constructor(status: number, code: string, message: string) {

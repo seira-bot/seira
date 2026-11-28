@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { linkedAddress } from "../electron/bot-link-address.mjs";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 type Fixture = Awaited<ReturnType<typeof launchVerificationServer>>;
 
@@ -23,8 +24,7 @@ function place(fixture: Fixture) {
     url, dataDir, api,
     cli: (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>,
     plan(botId: string, ...turns: unknown[]) { (plans[botId] ??= { turns: [] }).turns.push(...turns); writeFileSync(planPath, JSON.stringify(plans)); },
-    providerTurns: (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [],
+    providerTurns: (): any[] => readJsonLines(`${planPath}.evidence.jsonl`),
     messages: async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as any[],
   };
 }

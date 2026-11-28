@@ -23,7 +23,7 @@ const SEEN_ON: Record<string, string> = {
   here: "the desktop app, on this computer's own page", "here,elsewhere": "the desktop app", "elsewhere,browser": "a Cloud's or server's own page", browser: "Seira in a browser",
 };
 const KINDS: ReadonlyArray<{ only: string; ctx: Partial<SettingsContext> }> = [
-  { only: "a team's or a self-hosted server's Settings, for admins", ctx: { team: true } },
+  { only: "a Team Cloud's or a self-hosted server's Settings, for admins, in a browser or in the desktop app through Connect to a server; never the desktop app's own computer", ctx: { team: true } },
   { only: "a company's managed Seira", ctx: { organization: true } },
   { only: "a place with the skills library on", ctx: { skills: true } },
   { only: "a server that manages installations", ctx: { installations: true } },
@@ -32,7 +32,8 @@ const KINDS: ReadonlyArray<{ only: string; ctx: Partial<SettingsContext> }> = [
 function onlyOn(shows: (ctx: SettingsContext) => boolean): string | undefined {
   const seen = (Object.keys(SEEN) as Array<keyof typeof SEEN>).filter((name) => shows(fullContext(SEEN[name])));
   if (seen.length === 3) return undefined;
-  if (seen.length) return SEEN_ON[seen.join(",")] ?? undefined;
+  const named = seen.length ? SEEN_ON[seen.join(",")] : undefined;
+  if (named) return named;
   return KINDS.find(({ ctx }) => shows(fullContext(ctx)))?.only;
 }
 

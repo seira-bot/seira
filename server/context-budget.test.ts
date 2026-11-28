@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { compactBudget, compactionReading, contextWindowFor, shouldCompact, DEFAULT_CONTEXT_WINDOW } from "./context-budget.ts";
+import { compactBudget, compactionReading, contextWindowFor, contextWindowSource, shouldCompact, DEFAULT_CONTEXT_WINDOW } from "./context-budget.ts";
 
 it("keeps compaction reachable below small model windows", () => {
   expect(compactBudget(8_000)).toBe(6_400);
@@ -45,4 +45,15 @@ it("times compaction from a driver's reading unless the driver reports it for th
   expect(window).toBe(DEFAULT_CONTEXT_WINDOW);
   expect(shouldCompact({ contextTokens: compactionReading({ contextReading: "meter" }, reading)?.tokens, estimatedBytes: 4_000,
     budget: compactBudget(window), window })).toBe(false);
+});
+
+it("names the source of a context window", () => {
+  const catalog = { options: [{ id: "listed", contextWindow: 64_000 }] } as unknown as Parameters<typeof contextWindowFor>[1];
+  expect(contextWindowSource("listed", catalog, 32_000)).toEqual({ tokens: 32_000, source: "reported" });
+  expect(contextWindowSource("listed", catalog)).toEqual({ tokens: 64_000, source: "catalog" });
+  expect(contextWindowSource("gpt-5")).toMatchObject({ source: "name" });
+  expect(contextWindowSource("fixture", catalog)).toEqual({ tokens: DEFAULT_CONTEXT_WINDOW, source: "default" });
+  for (const [model, reported] of [["listed", 32_000], ["listed", undefined], ["gpt-5", undefined], ["fixture", undefined]] as const) {
+    expect(contextWindowFor(model, catalog, reported)).toBe(contextWindowSource(model, catalog, reported).tokens);
+  }
 });

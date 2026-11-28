@@ -626,6 +626,8 @@ and the small helper programs that give it its tools:
 | Each bot that is working | 6 or more | about 45, more while it runs commands | about 700 MB |
 | Each open browser | about 13 | about 165 | about 400 MB |
 
+These memory values are budgets. On a 2 vCPU server with small tasks, the
+measured memory was lower: see [Benchmarks](benchmarks.md#results-real-models-on-a-small-vps).
 An engine stays loaded for ten minutes after its bot's last turn, so count
 the bots that work within the same ten minutes, not only in the same second.
 Leave room for the commands bots run: budget about 80 per working bot.
@@ -1247,6 +1249,16 @@ You can also start from the sidebar. Open the menu of a department and choose
 **Invite to this department**, or open the menu of a bot and choose **Invite to
 this bot**. The dialog opens with that department or bot already ticked. These
 two entries show only to an admin on a server that signs people in by email.
+
+Inviting also works in the desktop app, after you add the server with **Connect
+to a server**. The desktop app's own computer has no invite. To work with other
+people, start a Team on Seira Cloud, or run Seira on a server of your own and
+invite them there.
+
+You can also ask a bot in your own chat, for example "invite name@company.com
+to Sales, can chat". The bot posts a card that names the person, the role and the
+access. Nothing changes until you tap **Apply**, in the desktop app or on a phone
+paired with full access. A bot of a person who is not an admin cannot invite.
 
 To change what a person can reach, choose **Change access** on their row.
 If you invite a person by address to a bot that is shared with only some people,
@@ -2185,3 +2197,15 @@ computer and are not part of a workspace backup.
 As a server starts, the doctor reads `messages.db` through and copies it before
 a checkpoint only while it and its write-ahead log come to 256 MB or less, so an update never waits on a large database;
 `seira doctor --data` does both at any size.
+
+### A bots.json or groups.json that does not load
+
+When `bots.json` or `groups.json` is in the data folder and does not read as a
+list (cut short, empty, not JSON, or a file this user cannot read), the server does
+not start. It prints one line, exits with code 1, and does not change the file.
+The server never replaces `bots.json` with the default bot, and never replaces
+`groups.json` with an empty list of rooms. When it can read the file, it keeps a
+copy as `bots.json.damaged-<id>` or `groups.json.damaged-<id>` in the same folder
+(one copy for each content). Restore the file from a backup, fix its
+permissions, or move it away, then start the server again. A data folder with no
+`bots.json` or no `groups.json` starts as a new place.

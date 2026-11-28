@@ -57,6 +57,11 @@ export const MODEL_NO_ROUTE = /\bunsupported package for\b|\bprovider\.no-route\
 /** The same failure in the plain words a person is shown, which stay as final as the raw ones. */
 const MODEL_NO_ROUTE_PLAIN = /\bcan't use (?:the|this bot's) model\b/i;
 
+/** A provider refusing a thread's replayed history for a part it cannot read: DeepSeek answers session/prompt with
+ * "'file_id' refers to an object stored upstream, which is not supported; send the content inline instead". The same
+ * history is sent again on every start, so a second start meets the same refusal. */
+export const HISTORY_FILE_REF = /\bfile_id\W{0,4}refers to an object stored upstream\b/i;
+
 const TERMINAL_PATTERNS: Array<{ pattern: RegExp; reason: TerminalReason }> = [
   {
     pattern: /\b(?:40[13]|unauthorized|forbidden|invalid api key|missing bearer|authentication required|not logged in|logged out)\b/i,
@@ -68,6 +73,7 @@ const TERMINAL_PATTERNS: Array<{ pattern: RegExp; reason: TerminalReason }> = [
   { pattern: /\bmodel not found\b|\bunknown model\b|\bdoes not exist for model\b|\bunsupported model\b/i, reason: "unknown_model" },
   { pattern: MODEL_NO_ROUTE, reason: "unknown_model" },
   { pattern: MODEL_NO_ROUTE_PLAIN, reason: "unknown_model" },
+  { pattern: HISTORY_FILE_REF, reason: "invalid_request" },
   { pattern: /\b400\b|\b422\b|\binvalid request\b|\bmalformed\b/i, reason: "invalid_request" },
   { pattern: /\b404\b|\bno such thread\b|\bthread gone\b/i, reason: "not_found" },
   // A turn the user stopped must never come back as an auto-retry.

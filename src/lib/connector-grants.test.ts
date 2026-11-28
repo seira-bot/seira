@@ -1,3 +1,4 @@
+import { GITHUB_APP_TOOL_NAMES } from "../../shared/github-app";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -140,5 +141,24 @@ describe("editing one service's grant", () => {
   it("refuses to edit a record it cannot read", () => {
     expect(withServiceGrant(["gmail"], "gmail", { tools: "*" })).toBeUndefined();
     expect(withServiceGrant({ gmail: { tools: 3 } }, "gmail", { tools: "*" })).toBeUndefined();
+  });
+
+  it("sorts every GitHub tool into the verb a person expects", () => {
+    const expected: Record<string, string> = {
+      GITHUB_APP_LIST_REPOS: "read", GITHUB_APP_GET_FILE: "read", GITHUB_APP_SEARCH_CODE: "read", GITHUB_APP_LIST_ISSUES: "read",
+      GITHUB_APP_GET_ISSUE: "read", GITHUB_APP_LIST_PULLS: "read", GITHUB_APP_GET_PULL: "read",
+      GITHUB_APP_CREATE_COMMENT: "send", GITHUB_APP_CREATE_ISSUE: "draft", GITHUB_APP_CREATE_BRANCH: "draft",
+      GITHUB_APP_COMMIT_FILES: "draft", GITHUB_APP_CREATE_PULL: "draft", GITHUB_APP_MERGE_PULL: "modify",
+      GITHUB_APP_CLOSE_ISSUE_OR_PULL: "modify", GITHUB_APP_DELETE_BRANCH: "delete",
+    };
+    expect(Object.keys(expected).sort()).toEqual([...GITHUB_APP_TOOL_NAMES].sort());
+    for (const [name, verb] of Object.entries(expected)) expect(classifyConnectorTool(name), name).toBe(verb);
+  });
+
+  it("keeps the verbs of Composio GitHub tools that share words with the native ones", () => {
+    expect(classifyConnectorTool("GITHUB_GET_A_COMMIT")).toBe("read");
+    expect(classifyConnectorTool("GITHUB_CREATE_A_COMMIT")).toBe("draft");
+    expect(classifyConnectorTool("GITHUB_MERGE_A_PULL_REQUEST")).toBeNull();
+    expect(classifyConnectorTool("GITHUB_LIST_COMMITS")).toBe("read");
   });
 });

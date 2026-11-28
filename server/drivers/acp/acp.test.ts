@@ -1902,17 +1902,63 @@ describe("ACP turns (fake CLI)", () => {
     expect(await instance.adapter.respondToRequest(threadId, opened.requestId!, { behavior: "allow" })).toBe("unavailable");
   });
 
-  it("hands 'Always allow this session' to the agent's own allow_always option", async () => {
+  it("answers an approve-once request with allow_once, even when the agent also offers allow_always", async () => {
     process.env.FAKE_ACP_ALLOW_ALWAYS = "1";
-    const answer = join(scratch, "permission-answer.txt");
+    const answer = join(scratch, "permission-answer-once-only.txt");
     process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
     await create(GrokAgentDriver, "permission");
-    await instance.adapter.sendTurn({ threadId: "t-always-native", text: "go", approvalMode: "ask" });
+    await instance.adapter.sendTurn({ threadId: "t-once-only", text: "go", approvalMode: "ask" });
+    const opened = await recorder.until((e) => e.type === "request.opened");
+    await instance.adapter.respondToRequest("t-once-only", (opened as { requestId: string }).requestId, { behavior: "allow" });
+    await recorder.until((e) => e.type === "turn.completed");
+    expect(readFileSync(answer, "utf8")).toBe("allow-once");
+  });
+
+  it("keeps an approve-for-session grant in session memory and never sends the agent's allow_always option", async () => {
+    process.env.FAKE_ACP_ALLOW_ALWAYS = "1";
+    const answer = join(scratch, "permission-answer-session.txt");
+    process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
+    await create(GrokAgentDriver, "permission");
+    await instance.adapter.sendTurn({ threadId: "t-session-grant", text: "go", approvalMode: "ask" });
     const opened = await recorder.until((e) => e.type === "request.opened");
     expect(opened).toHaveProperty("allowSession", true);
-    await instance.adapter.respondToRequest("t-always-native", (opened as { requestId: string }).requestId, { behavior: "allow", always: true });
+    await instance.adapter.respondToRequest("t-session-grant", (opened as { requestId: string }).requestId, { behavior: "allow", always: true });
     await recorder.until((e) => e.type === "turn.completed");
-    expect(readFileSync(answer, "utf8")).toBe("allow-always");
+    expect(readFileSync(answer, "utf8")).toBe("allow-once");
+
+    const second = await instance.adapter.sendTurn({ threadId: "t-session-grant", text: "again", approvalMode: "ask", resumeCursor: "fake-acp-session" });
+    await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId);
+    expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(1);
+    expect(readFileSync(answer, "utf8")).toBe("allow-once");
+  });
+
+  it("refuses an approval when the agent offers only options wider than allow_once", async () => {
+    process.env.FAKE_ACP_PERMISSION_OPTIONS = JSON.stringify([
+      { optionId: "forever", kind: "allow_always" },
+      { optionId: "custom", kind: "allow_custom" },
+      { optionId: "reject", kind: "reject_once" },
+    ]);
+    const answer = join(scratch, "permission-answer-wide-only.txt");
+    process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
+    await create(GrokAgentDriver, "permission");
+    const threadId = "t-wide-only";
+    await instance.adapter.sendTurn({ threadId, text: "go", approvalMode: "ask" });
+    const opened = await recorder.until((event) => event.type === "request.opened");
+    expect(await instance.adapter.respondToRequest(threadId, opened.requestId!, { behavior: "allow" })).toBe("rejected");
+    await recorder.until((event) => event.type === "turn.completed");
+    expect(readFileSync(answer, "utf8")).toBe("cancelled");
+  });
+
+  it("denies with the agent's reject option", async () => {
+    process.env.FAKE_ACP_ALLOW_ALWAYS = "1";
+    const answer = join(scratch, "permission-answer-deny.txt");
+    process.env.FAKE_ACP_PERMISSION_ANSWER = answer;
+    await create(GrokAgentDriver, "permission");
+    await instance.adapter.sendTurn({ threadId: "t-deny", text: "go", approvalMode: "ask" });
+    const opened = await recorder.until((e) => e.type === "request.opened");
+    await instance.adapter.respondToRequest("t-deny", (opened as { requestId: string }).requestId, { behavior: "deny" });
+    await recorder.until((e) => e.type === "turn.completed");
+    expect(readFileSync(answer, "utf8")).toBe("reject");
   });
 
   it("remembers the exact operation for the session when the agent offers no allow_always", async () => {

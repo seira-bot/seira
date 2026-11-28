@@ -9,6 +9,7 @@ import { UNDO_STALE } from "./direct-apply.ts";
 import { redactSecretsInText } from "./redact.ts";
 import type { WebhookManager, WebhookTrigger } from "./webhooks.ts";
 import { placeLostAs } from "./place-lost.ts";
+import { PublicError } from "./public-error.ts";
 
 export interface WebhookRequestCard {
   title: string;
@@ -32,12 +33,10 @@ export interface WebhookRequestStore {
   patchMessage(threadId: string, messageId: string, patch: { card: WebhookRequestCard }): unknown;
 }
 
-export class WebhookRequestError extends Error {
-  readonly status: number;
-
+export class WebhookRequestError extends PublicError {
   constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
+    super(message, status);
+    this.name = "WebhookRequestError";
   }
 }
 

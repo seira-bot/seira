@@ -1,3 +1,4 @@
+import { PublicError } from "./public-error.ts";
 /** Turns each bot took in one room round, keyed by that round's `spoken` set, so a repeat @mention is answered once per reply. */
 const roundTurns = new WeakMap<Set<string>, Map<string, number>>();
 /** The last pass of a room message whose members take more than one turn, with how many turns each takes. */
@@ -26,10 +27,10 @@ export function roomTurnsPerMember(room: { turnsPerMember?: number } | undefined
 /** The room PATCH's `turnsPerMember` field, checked; empty when the body does not set it. */
 export function turnsPerMemberPatch(body: Record<string, unknown>, room: { dm?: boolean }): { turnsPerMember?: number } {
   if (!Object.prototype.hasOwnProperty.call(body, "turnsPerMember")) return {};
-  if (room.dm) throw Object.assign(new Error("direct-message channels cannot change turns per member"), { status: 400 });
+  if (room.dm) throw new PublicError("direct-message channels cannot change turns per member", 400);
   const turns = body.turnsPerMember;
   if (typeof turns !== "number" || !Number.isInteger(turns) || turns < 1 || turns > MAX_TURNS_PER_MEMBER) {
-    throw Object.assign(new Error(`turnsPerMember must be a whole number from 1 to ${MAX_TURNS_PER_MEMBER}`), { status: 400 });
+    throw new PublicError(`turnsPerMember must be a whole number from 1 to ${MAX_TURNS_PER_MEMBER}`, 400);
   }
   return { turnsPerMember: turns };
 }

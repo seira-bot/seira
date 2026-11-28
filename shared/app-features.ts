@@ -1,3 +1,5 @@
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
+
 /** One thing the app offers, in the words the person sees. A bot reads this catalog (app_settings action=features)
  * to answer where something is and what it does, so a page, tab, agent tool, slash command or release note with
  * no entry is a gap the drift test reports. */
@@ -24,7 +26,7 @@ export interface AppFeature {
 export const APP_FEATURE_DOES_MAX = 240;
 
 /** Agent tools that no person sees or asks about by name. */
-export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies"]);
+export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_read", "suggest_replies", "suggest_tasks"]);
 
 export const APP_FEATURES: readonly AppFeature[] = [
   {
@@ -52,7 +54,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
-    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. It is not the steps of the work; those belong to a workflow.",
+    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. The Calendar shows when each one runs by Day, Week or Month; drag a coming card to move it.",
     tools: ["trigger_info", "trigger", "delete_trigger"],
     automationViews: ["list", "calendar"],
     releaseNotes: ["sleepWhenIdle"],
@@ -77,9 +79,15 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "slash-menu",
     name: "The / list",
     place: "the chat box: type /",
-    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup and /burst. A skill runs for one message when its name follows the slash.",
-    slashCommands: ["goal", "learn", "setup", "burst"],
+    does: "Lists the skills of the bot and the built-in commands: /goal, /learn, /setup, /burst and /todo. A skill runs for one message when its name follows the slash. /todo adds a todo to the Board.",
+    slashCommands: ["goal", "learn", "setup", "burst", "todo"],
     tools: ["burst"],
+  },
+  {
+    id: "todo-from-message",
+    name: "Todo from a message",
+    place: "the Message actions menu of a message, or /todo in the chat box",
+    does: "Make a todo from selection and Make a todo from message put a todo on the Board, with the message as its source. A chip under the message shows its place. /todo adds one without a message.",
   },
   {
     id: "mention-menu",
@@ -107,14 +115,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "people-access",
     name: "People and access",
-    place: "Settings → People; a department's menu, Invite to this department; a bot's menu, Invite to this bot",
-    does: "An admin invites a person by email or @domain, as admin or user. Access is the whole team, chosen departments or chosen bots, each Can chat or Can view. A user sees only what was chosen.",
-    releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut"],
+    place: "On a self-hosted server with email sign-in, in a browser or in the desktop app through Connect to a server: Settings → People, or Invite to this department / Invite to this bot in a department's or bot's menu. On a Team Cloud: People in the sidebar → Invite someone, which opens the team's People page on Seira Cloud. The desktop app's own computer has no invite: start a Team or run your own server",
+    does: "An admin invites a person by email or @domain, as admin or user, to the whole team, chosen departments or chosen bots. A bot can invite, change or remove a person when the admin asks; the admin taps Apply, also from a phone.",
+    releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut", "inviteAnywhere"],
   },
   {
     id: "premium-key",
     name: "Premium key",
-    place: "Settings → People",
+    place: "Settings → People, on a self-hosted server",
     does: "A self-hosted server lets up to 5 people sign in by email for free. An admin adds a Premium key there for unlimited people. Every feature is the same on every plan.",
     releaseNotes: ["peopleLimit"],
   },
@@ -138,7 +146,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Chats",
     place: "a conversation with a bot",
     does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat"],
+    releaseNotes: ["copyCode", "longChats", "turnActivity", "fullChat", "taskSuggestions"],
   },
   {
     id: "skills",
@@ -172,9 +180,9 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "settings",
     name: "Settings",
     place: "the menu under the person's name at the bottom of the sidebar",
-    does: "Appearance, language, defaults for new bots, AI engines and keys. A bot reads and changes safe settings itself; the person changes the rest.",
+    does: "Appearance, language, defaults for new bots, AI engines and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
     tools: ["app_settings"],
-    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard"],
+    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard", "botSettings"],
   },
   {
     id: "text-size",
@@ -187,8 +195,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The AI pool spreads work across several AIs: balance usage, take turns, or go in order. The AI menu has an AI pool choice. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse", "moveHideTarget"],
   },
   {
     id: "models",
@@ -224,6 +232,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Settings → Phone & devices → Alerts when the phone app is closed",
     does: "Wakes the closed phone app for approvals, questions, sign-ins and finished replies. Off until the person turns it on. The alert holds names and the kind of alert, never the message.",
     releaseNotes: ["phonePush"],
+  },
+  {
+    id: "paired-devices",
+    name: "Paired devices",
+    place: "Settings → Phone & devices → Paired",
+    does: "The phones and computers paired with this server. Rename gives a device its own name, so two of the same model are easy to tell apart. Revoke ends its access.",
+    releaseNotes: ["renameDevices"],
   },
   {
     id: "computers",
@@ -320,9 +335,9 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",
-    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
-    tools: ["board_close"],
-    releaseNotes: ["board", "boardDone"],
+    does: "Shows all bot work in To do, Working, Needs you and Done, by column or by bot. New todo adds work for a bot, now, later or on chosen days. Open a card to answer, start, stop, finish or follow up.",
+    tools: ["board_close", "todo_add", "todo_list", "todo_assign", "todo_update"],
+    releaseNotes: ["board", "boardDone", "boardTodos"],
   },
   {
     id: "inbox",
@@ -366,7 +381,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "The Seira app",
     place: "the whole app",
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
-    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon"],
+    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon", "storeTools"],
   },
   {
     id: "crash-reports",
@@ -380,6 +395,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "The top centre of the screen while a bot works (a tray icon only when Linux has no X11 support); turn it on or off with View → Glance in the desktop app",
     does: "Shows which bots work, need you, failed or just finished, outside the Seira window. Click it to see the card and answer an approval or a question without opening the window. Desktop notifications are separate.",
     releaseNotes: ["glance", "glanceWayland"],
+  },
+  {
+    id: "github-app",
+    name: "GitHub",
+    place: "Apps → GitHub, then Connect; each bot's repositories are under its Apps page",
+    does: "Sign in with GitHub and choose repositories, with no key to paste. Each bot gets its own repositories and a level in each: Read, Pull requests or Write. Merging and deleting branches can wait for your answer.",
+    tools: GITHUB_APP_TOOL_NAMES,
+    releaseNotes: ["githubNative"],
   },
 ];
 

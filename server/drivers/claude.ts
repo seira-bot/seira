@@ -19,7 +19,7 @@ import { botSettingsFor, folderSettingsEnv, withBotSettings } from "./claude-bot
 import { claudeBilling, claudeCallUsage } from "./claude-billing.ts";
 import { claudeAuthFailure, claudeAuthRecovery, claudeOAuthExpired } from "./claude-auth-recovery.ts"; import { AWS_CREDENTIAL_ENV_KEYS, bedrockResultError, withBedrockCredentialError } from "./claude-bedrock-aws.ts";
 import { CLAUDE_MODEL_ID, STATIC_CLAUDE_MODELS, claudeModelExtras, currentEngineCatalog, endpointModelCatalog, withCliVersionGate } from "./claude-model-extras.ts";
-import { claudeOwnMcpOverHttp, withLoopbackNoProxy } from "./own-mcp-http.ts"; import { claudeAgentsMount, claudeToolSearchSetting } from "./claude-tool-search.ts"; import { claudeDisabledNativeSkillRules, unusableBuiltIns } from "./claude-unusable-tools.ts"; import { EMAIL_READ_TOOL_NAMES } from "../../shared/email.ts";
+import { claudeOwnMcpOverHttp, withLoopbackNoProxy } from "./own-mcp-http.ts"; import { claudeAgentsMount, claudeToolSearchSetting } from "./claude-tool-search.ts"; import { claudeDisabledNativeSkillRules, unusableBuiltIns } from "./claude-unusable-tools.ts"; import { EMAIL_READ_TOOL_NAMES } from "../../shared/email.ts"; import { GITHUB_APP_MCP_SERVER, GITHUB_APP_READ_TOOL_NAMES } from "../../shared/github-app.ts";
 import { claudeElicitations } from "./claude-elicitation.ts"; import { spawnContractDiff } from "./claude-spawn-contract.ts"; import { claudeContextUsage, liveContextBreakdown, writeControlFrame } from "./claude-context-usage.ts";
 import { readCostHistory, recordCostState } from "./claude-cost-history.ts";
 import { classifyResumeFailure, mayReplay, rebuiltSessionNotice, recoveryPromptFor } from "../resume-recovery.ts";
@@ -60,7 +60,7 @@ import { appendNative } from "./native.ts";
 import type { KeepWarmContract } from "./claude-keepwarm.ts"; import { claudeForks } from "./claude-warm-summary.ts";
 import { BACKGROUND_CALL_TIMEOUT_MS, backgroundCallArgs, spawnBackgroundCall } from "./claude-background.ts"; import { withEndpointFolder } from "./claude-endpoint-folder.ts";
 import { permissionLaunchCwd, shellRequest } from "./permission-command.ts"; import { readToolPaths } from "../own-file-reads.ts";
-import { SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
+import { ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
 import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT } from "../run-as-root.ts"; import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
 import {
@@ -1093,9 +1093,10 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         if (turn.integrations?.[name]) { mcpServers[name] = { ...turn.integrations[name] }; allowed.push(`mcp__${name}`); }
       }
       if (turn.integrations?.email) { mcpServers.email = { ...turn.integrations.email }; allowed.push(...EMAIL_READ_TOOL_NAMES.map((tool) => `mcp__email__${tool}`)); } // Only its reads: a send asks as any tool of a person's own server does.
+      if (turn.integrations?.github) { mcpServers[GITHUB_APP_MCP_SERVER] = { ...turn.integrations.github }; allowed.push(...GITHUB_APP_READ_TOOL_NAMES.map((tool) => `mcp__${GITHUB_APP_MCP_SERVER}__${tool}`)); }
       if (turn.integrations?.dweb) {
         mcpServers.dweb = {
-          command: process.execPath,
+          command: ownNode(),
           args: [DWEB_PROXY_PATH],
           env: {
             ...NODE_ENV_FLAG,
@@ -1137,7 +1138,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         args.push("--permission-prompt-tool", "mcp__ogb__approve");
       }
       const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { SEIRA_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
-      mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
+      mcpServers.ogb = { command: ownNode(), args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
       allowed.push("mcp__ogb", ...gateQueryTools(mcpServers));
       // A guest pre-allows only harness tools; anything else (the browser can open file:) asks.
       if (turn.guestConfined) allowed.splice(0, allowed.length, ...allowed.filter((name) => name === "mcp__ogb" || name === "mcp__agents"));
@@ -1301,7 +1302,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
             },
           });
           if (broker.socketPath !== socketPath && mcpConfigPath) {
-            mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, broker.socketPath], env: permissionEnv, alwaysLoad: true };
+            mcpServers.ogb = { command: ownNode(), args: [PERM_PROXY_PATH, broker.socketPath], env: permissionEnv, alwaysLoad: true };
           }
         }
 
@@ -2010,7 +2011,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
           composioMcp: true, mcpToolsFoundByName: true,
           phoneMcp: true,
           browserMcp: true,
-          dataMcp: true, emailMcp: true, deviceMcp: true,
+          dataMcp: true, emailMcp: true, githubMcp: true, deviceMcp: true,
           images: true,
           nativeImageInput: true,
           effortLevels: ["low", "medium", "high", "xhigh", "max"],

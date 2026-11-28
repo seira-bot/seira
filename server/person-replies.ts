@@ -8,6 +8,7 @@ import { acceptedSendMatch, sendFingerprint, type SendSequencer } from "./send-i
 import { cancelSteeredMessage, queuedSteeredMessage } from "./steer-queue.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
 import type { UsageTrigger } from "./usage-ledger.ts";
+import { PublicError } from "./public-error.ts";
 
 export interface PersonReplyDeps {
   store: Pick<Store, "group" | "groupByThread" | "groupTaskByThread" | "messagesFor" | "patchMessage" | "taskByThread">;
@@ -40,7 +41,7 @@ export interface PersonReply {
   refusal?(): string | null;
 }
 
-const conflict = (message: string) => Object.assign(new Error(message), { status: 409 });
+const conflict = (message: string) => new PublicError(message, 409);
 
 /** A bot answered the question: the person's own answer still replaces it. */
 const decidedByBot = (card: NonNullable<Message["card"]>): boolean => card.answeredBy?.kind === "bot";

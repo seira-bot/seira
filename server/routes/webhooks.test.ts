@@ -9,7 +9,7 @@ import { json, readBody } from "../harness/http.ts";
 import { requiredScope } from "../request-auth.ts";
 import { WebhookManager } from "../webhooks.ts";
 import { dispatchRoutes } from "./table.ts";
-import { createWebhookRoutes } from "./webhooks.ts";
+import { createWebhookRoutes, type WebhookRouteDeps } from "./webhooks.ts";
 
 const servers: Server[] = [];
 const folders: string[] = [];
@@ -24,11 +24,12 @@ function folder(): string {
   return made;
 }
 const manager = (file: string) => new WebhookManager({ file, botState: (botId) => botId.startsWith("bot-") ? "ready" : "missing", enqueue: () => ({ id: "run-1" }), roomMember: () => ({ ok: true }),
+  workflowCopy: () => ({ workflowId: "wf-1", prompt: "Do these steps in order:\n1. Ana: Read it", botId: "bot-a", botIds: ["bot-a"] }),
   roomPost: async (trigger) => ({ posted: true, attachments: 0, threadId: `${trigger.groupId}-thread` }) });
 
-async function serve(seen: (botId: string) => boolean = () => true, file = join(folder(), "webhooks.json"), seesRoom: (groupId: string) => boolean = () => true) {
+async function serve(seen: (botId: string) => boolean = () => true, file = join(folder(), "webhooks.json"), seesRoom: (groupId: string) => boolean = () => true, workflowGate?: WebhookRouteDeps["workflowGate"]) {
   const webhooks = manager(file);
-  const routes = [createWebhookRoutes({ webhooks, ingress: () => ({ available: true, baseUrl: "http://127.0.0.1:8800" }), visible: () => ({ everything: false, bot: seen, group: seesRoom }) })];
+  const routes = [createWebhookRoutes({ webhooks, ingress: () => ({ available: true, baseUrl: "http://127.0.0.1:8800" }), visible: () => ({ everything: false, bot: seen, group: seesRoom }), workflowGate })];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     // As the server answers a refusal the manager throws: its status and message.
@@ -98,5 +99,41 @@ describe("a webhook's address for the person", () => {
     expect(listed.webhooks.map((hook: { name: string }) => hook.name)).toEqual(["Open room"]);
     expect(listed.attempts).toEqual([]);
     expect(await member.call("GET", `/api/webhooks/${closed.webhook.id}/address`)).toEqual({ status: 404, body: { error: "no such webhook" } });
+  });
+});
+
+describe("the workflow a webhook runs now", () => {
+  const gated = (refusal: { status: number; error: string } | null) => {
+    const asked: Array<{ body: unknown; current: string | undefined }> = [];
+    return { asked, gate: ((_auth, body, current) => { asked.push({ body, current }); return refusal; }) as NonNullable<WebhookRouteDeps["workflowGate"]> };
+  };
+
+  it("answers every by-id request as a missing webhook when the person cannot see that workflow", async () => {
+    const { asked, gate } = gated({ status: 404, error: "no such workflow" });
+    const served = await serve(() => true, undefined, undefined, gate);
+    const hook = served.webhooks.create({ name: "Orders", workflowId: "wf-1" }).webhook;
+    const before = JSON.stringify(served.webhooks.list());
+    for (const [method, suffix, body] of [["POST", "/test", {}], ["POST", "/rotate", undefined], ["GET", "/address", undefined], ["PATCH", "", { enabled: false }], ["DELETE", "", undefined]] as const) {
+      expect(await served.call(method, `/api/webhooks/${hook.id}${suffix}`, body)).toEqual({ status: 404, body: { error: "no such webhook" } });
+    }
+    expect(asked.every((entry) => entry.current === "wf-1")).toBe(true);
+    expect(JSON.stringify(served.webhooks.list())).toBe(before);
+  });
+
+  it("passes the refusal on when the person may see the workflow but not change it", async () => {
+    const { gate } = gated({ status: 403, error: "Ask the owner of Ana." });
+    const served = await serve(() => true, undefined, undefined, gate);
+    const hook = served.webhooks.create({ name: "Orders", workflowId: "wf-1" }).webhook;
+    expect(await served.call("PATCH", `/api/webhooks/${hook.id}`, { enabled: true })).toEqual({ status: 403, body: { error: "Ask the owner of Ana." } });
+  });
+
+  it("does not ask the gate about a webhook that runs no workflow", async () => {
+    const { asked, gate } = gated({ status: 404, error: "no such workflow" });
+    const served = await serve(() => true, undefined, undefined, gate);
+    const hook = served.webhooks.create({ name: "Plain", prompt: "Read it", botId: "bot-a" }).webhook;
+    expect((await served.call("PATCH", `/api/webhooks/${hook.id}`, { enabled: false })).status).toBe(200);
+    expect((await served.call("POST", `/api/webhooks/${hook.id}/test`, {})).status).toBe(202);
+    expect((await served.call("DELETE", `/api/webhooks/${hook.id}`)).status).toBe(200);
+    expect(asked).toEqual([]);
   });
 });

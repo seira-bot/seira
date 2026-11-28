@@ -66,6 +66,7 @@ import { CloudSetup } from "@/components/CloudSetup";
 import { CloudWelcome } from "@/components/cloud-welcome/CloudWelcome";
 import { TeamWelcome } from "@/components/TeamWelcome";
 import { ConversationShareDialogs } from "@/components/conversation-share/ConversationShareDialogs";
+import { TodoDialogHost } from "@/components/todo/TodoDialog";
 import { invitedToTeam, teamWelcomeDue, useTeamWelcomeRecord } from "@/lib/team-welcome";
 import { WelcomeKeeper } from "@/components/cloud-welcome/WelcomeKeeper";
 import { EmptyChatShell } from "@/components/onboarding/EmptyChatShell";
@@ -352,6 +353,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       <BotLimitPopup />
       <PowerHost />
       <ConversationShareDialogs />
+      <TodoDialogHost />
       {!framed && strips}
       <div className="relative flex min-h-0 flex-1">
       {!calendarFocus && <button

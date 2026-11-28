@@ -31,6 +31,7 @@ import { installLibrarySkill, readLibrarySkillFile, readSkillLibraryIndex, setLi
 import type { BotRecord, Store } from "./store.ts";
 import type { WebhookManager } from "./webhooks.ts";
 import { restorePaths, validRelative } from "./workspace-backup-paths.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 /** Where both servers name their own data folder when they compare a definition, so one moved keeps its hash. */
 const SHARED_ROOT = "/seira-data";
@@ -228,6 +229,7 @@ export function kindRecord(deps: MoveKindsDeps, kind: Kind, id: string): { recor
 
 /** `final`: sending it again cannot help until the person changes something, so the move goes on without it. */
 class Refused extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   status: number;
   final: boolean;
   constructor(status: number, message: string, final = false) { super(message); this.status = status; this.final = final; }

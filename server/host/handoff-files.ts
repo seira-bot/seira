@@ -25,6 +25,7 @@ import { AUTHORITY, botWho, fromNoteWith } from "../provenance-label.ts";
 import type { Message } from "../store.ts";
 import { ensureTaskWorkspace, TASK_WORKSPACES_DIR } from "../workspace.ts";
 import { canonical, inboxDisplayPath, inboxAssignmentPart, inboxFileNames, inboxFolder, inboxSenderPart, placeInInbox, removeInbox, removeInboxCopy, type InboxRead } from "./handoff-inbox.ts";
+import { PublicError } from "../public-error.ts";
 
 /** Files one coordinate_bots call may carry, and their bytes together. Each file also keeps attach_file's own limit. */
 export const HANDOFF_FILES_PER_MESSAGE = 5;
@@ -90,7 +91,7 @@ export interface HandoffFilesDeps {
   log?(line: string): void;
 }
 
-const statusError = (status: number, message: string): Error & { status: number } => Object.assign(new Error(message), { status });
+const statusError = (status: number, message: string): Error & { status: number } => new PublicError(message, status);
 const megabytes = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 const sized = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 const total = (files: readonly PassedFile[]) => files.reduce((sum, file) => sum + file.bytes, 0);

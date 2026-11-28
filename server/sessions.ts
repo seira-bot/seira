@@ -19,6 +19,7 @@ import {
 } from "../shared/pairing-code.ts";
 import { userError, type UserError } from "./user-errors.ts";
 import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { PublicError } from "./public-error.ts";
 
 export type Scope = "admin" | "client";
 export const SCOPES: readonly Scope[] = ["admin", "client"];
@@ -49,6 +50,7 @@ type Lockout = { readonly failures: number; readonly windowMs: number; readonly 
 export const PAIRING_LOCKOUT: Lockout = { failures: 5, windowMs: 5 * 60_000, lockMs: 5 * 60_000 };
 /** Everything else a source can get wrong here: an email sign-in, a Cloud home's request signature. */
 export const LOCKOUT: Lockout = { failures: 10, windowMs: 60_000, lockMs: 60_000 };
+/** windowStart and lockedUntil are on the elapsed-time clock of the store, not dates. */
 type Failures = Map<string, { count: number; windowStart: number; lockedUntil: number }>;
 /** Behind a proxy that names no client, every visitor arrives as loopback (or over IPC, "unknown"). Locking that address
  * would let a stranger lock the owner out, so their wrong codes burn the open codes instead and a new one is made. */
@@ -93,9 +95,12 @@ const sessionSchema = z.object({
   token: z.literal(true).optional(),
   /** A paired device's sign-in (see PairingCode.device): the paired-device limits apply to it whatever headers it sends. */
   pairedDevice: z.literal(true).optional(),
+  /** A sign-in to download one finished backup export and nothing else (server/workspace-backup-move-out.ts); the value is the export's id. */
+  moveOut: z.string().regex(/^[\w-]{36}$/).optional(),
 });
 
-const fileSchema = z.object({ version: z.literal(1), sessions: z.array(sessionSchema) });
+/** Each record is checked on its own with sessionSchema, so one bad record does not end the others. */
+const fileSchema = z.object({ version: z.literal(1), sessions: z.array(z.unknown()) });
 
 export type SessionRecord = z.infer<typeof sessionSchema>;
 
@@ -252,6 +257,9 @@ export type EmailScopesResolver = (email: string) => readonly Scope[] | null;
 export interface SessionStoreOptions {
   file: string;
   now?: () => number;
+  /** Elapsed time for the lockouts (failure windows and locks). Default: `performance.now()`, which a change of the system
+   * clock does not move. When only `now` is given (tests), the lockouts follow it. */
+  elapsed?: () => number;
   emailScopes?: EmailScopesResolver;
   emailScopesSnapshot?: () => EmailScopesResolver;
   portalMembership?: boolean;
@@ -272,6 +280,7 @@ export class SessionRegistry {
   private readonly onIssued = new Set<(session: Pick<SessionRecord, "id" | "scopes" | "email" | "teamRole" | "membershipAuthority">) => void>();
   private lastSeenWrites = new Map<string, number>();
   private readonly now: () => number;
+  private readonly elapsed: () => number;
   private readonly options: SessionStoreOptions;
   private readonly openMarker: string;
   private closed = false;
@@ -282,6 +291,9 @@ export class SessionRegistry {
   constructor(options: SessionStoreOptions) {
     this.options = options;
     this.now = options.now ?? Date.now;
+    // The lockouts count elapsed time, so a clock set back does not stretch a lock and a clock set forward does not end it.
+    // Session expiry stays on the wall clock: it is a date a person can read.
+    this.elapsed = options.elapsed ?? (options.now ? options.now : () => performance.now());
     this.openMarker = `${options.file}.open`;
     const unclean = existsSync(this.openMarker);
     try {
@@ -298,14 +310,54 @@ export class SessionRegistry {
 
   private load(restoreAccounts: boolean): void {
     if (!existsSync(this.options.file)) return;
-    let raw: unknown;
+    let text: string;
     try {
-      raw = JSON.parse(readFileSync(this.options.file, "utf8"));
+      text = readFileSync(this.options.file, "utf8");
     } catch {
+      console.error("Could not read the session file. No saved session was restored.");
       return;
     }
-    const parsed = fileSchema.safeParse(raw);
-    if (parsed.success) this.sessions = parsed.data.sessions.filter(session => restoreAccounts || (session.email === undefined && session.userId === undefined));
+    let records: unknown[] | null = null;
+    try {
+      const raw: unknown = JSON.parse(text);
+      const shape = fileSchema.safeParse(raw);
+      if (shape.success) records = shape.data.sessions;
+    } catch {
+      // Not JSON: handled below, with the same keep-a-copy path as a wrong shape.
+    }
+    if (records === null) {
+      this.keepDamagedCopy(text);
+      console.error("The session file could not be read. No saved session was restored; a copy was kept next to it.");
+      return;
+    }
+    // Each record stands alone: one bad record must not end every other sign-in. A dropped record is never restored.
+    const valid: SessionRecord[] = [];
+    for (const record of records) {
+      const one = sessionSchema.safeParse(record);
+      if (one.success) valid.push(one.data);
+    }
+    const invalid = records.length - valid.length;
+    if (invalid > 0) {
+      this.keepDamagedCopy(text);
+      console.error(`The session file had ${invalid} invalid ${invalid === 1 ? "record" : "records"}. ${invalid === 1 ? "It was" : "They were"} dropped and ${valid.length} kept; a copy of the file was kept next to it.`);
+    }
+    // A move-out sign-in lives in memory only: a file that names one is not ours to honour.
+    const restorable = valid.filter(session => !session.moveOut);
+    const kept = restorable.filter(session => restoreAccounts || (session.email === undefined && session.userId === undefined));
+    this.sessions = kept;
+    const ended = restorable.length - kept.length;
+    if (ended > 0) {
+      console.warn(`The server did not stop cleanly last time. ${ended} email or account sign-in${ended === 1 ? " was" : "s were"} ended for safety; those people sign in again. Pairing sessions stay valid.`);
+    }
+  }
+
+  /** The next persist() writes over the file, so a file that was not read cleanly is kept first (owner-only). */
+  private keepDamagedCopy(text: string): void {
+    try {
+      writeFileAtomic(`${this.options.file}.damaged-${Date.now()}`, text, { mode: 0o600 });
+    } catch {
+      console.error("Could not keep a copy of the damaged session file.");
+    }
   }
 
   private syncDirectory(): void {
@@ -320,7 +372,7 @@ export class SessionRegistry {
     if (this.closed) throw new Error("Session registry is closed.");
     const dir = dirname(this.options.file);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileAtomic(this.options.file, JSON.stringify({ version: 1, sessions: this.sessions }, null, 2) + "\n", { mode: 0o600 });
+    writeFileAtomic(this.options.file, JSON.stringify({ version: 1, sessions: this.sessions.filter((session) => !session.moveOut) }, null, 2) + "\n", { mode: 0o600 });
     this.syncDirectory();
   }
 
@@ -339,13 +391,13 @@ export class SessionRegistry {
 
   private prune(): void {
     this.recheckMembership();
-    const now = this.now();
+    const now = this.now(), elapsed = this.elapsed();
     this.pairings = this.pairings.filter((p) => p.expiresAt > now);
     this.replays = this.replays.filter((r) => r.expiresAt > now);
     for (const [hash, ticket] of this.tickets) if (ticket.expiresAt <= now) this.tickets.delete(hash);
     for (const [failures, policy] of [[this.failures, LOCKOUT], [this.codeFailures, PAIRING_LOCKOUT]] as const) {
       for (const [source, entry] of failures) {
-        if (entry.lockedUntil <= now && now - entry.windowStart > policy.windowMs) failures.delete(source);
+        if (entry.lockedUntil <= elapsed && elapsed - entry.windowStart > policy.windowMs) failures.delete(source);
       }
     }
     const expired = this.sessions.filter((s) => s.expiresAt <= now);
@@ -396,7 +448,7 @@ export class SessionRegistry {
   private refusePersonal(scopes: readonly Scope[]): void {
     if (this.personal(scopes)) {
       const { error, ...fields } = this.adminOnly!;
-      throw Object.assign(new Error(error), { status: 403, code: "cloud_personal", ...fields });
+      throw Object.assign(new PublicError(error, 403), { code: "cloud_personal", ...fields });
     }
   }
 
@@ -454,13 +506,13 @@ export class SessionRegistry {
   private lockState(failures: Failures, source: string): { locked: boolean; retryAfterMs: number } {
     const entry = failures.get(source);
     if (!entry) return { locked: false, retryAfterMs: 0 };
-    const now = this.now();
+    const now = this.elapsed();
     if (entry.lockedUntil > now) return { locked: true, retryAfterMs: entry.lockedUntil - now };
     return { locked: false, retryAfterMs: 0 };
   }
 
   private recordFailure(failures: Failures, policy: Lockout, source: string): void {
-    const now = this.now();
+    const now = this.elapsed();
     const entry = failures.get(source) ?? { count: 0, windowStart: now, lockedUntil: 0 };
     if (now - entry.windowStart > policy.windowMs) {
       entry.count = 0;
@@ -478,7 +530,7 @@ export class SessionRegistry {
   private wrongFromUnnamed(): void {
     this.recordFailure(this.codeFailures, PAIRING_LOCKOUT, UNNAMED_SOURCES);
     const entry = this.codeFailures.get(UNNAMED_SOURCES);
-    if (!entry || entry.lockedUntil <= this.now()) return;
+    if (!entry || entry.lockedUntil <= this.elapsed()) return;
     this.pairings = this.pairings.filter((p) => p.browser === true);
     this.codeFailures.delete(UNNAMED_SOURCES);
   }
@@ -602,6 +654,31 @@ export class SessionRegistry {
     this.persist();
     for (const listener of this.onIssued) listener(record);
     return { token, session: publicSession(record) };
+  }
+
+  /** A sign-in for reading one finished backup export, so a new server can pull it. It ends at `expiresAt`, never renews,
+   * reaches that export's download route only, and is never written to the sessions file: a restart ends it. */
+  issueMoveOut(input: { exportId: string; expiresAt: number }): { token: string; session: PublicSession } {
+    this.prune();
+    const now = this.now();
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
+    const record: SessionRecord = {
+      id: randomUUID(), tokenHash: sha256(token), label: "Moving this server out", scopes: ["admin"],
+      createdAt: now, lastSeenAt: now, expiresAt: Math.min(input.expiresAt, now + SESSION_TTL_MS), token: true, moveOut: input.exportId,
+    };
+    this.sessions.push(record);
+    this.lastSeenWrites.set(record.id, now);
+    for (const listener of this.onIssued) listener(record);
+    return { token, session: publicSession(record) };
+  }
+
+  /** Ends every sign-in that reads backup export `exportId`. */
+  revokeMoveOuts(exportId: string): number {
+    const ended = this.sessions.filter((s) => s.moveOut === exportId);
+    if (!ended.length) return 0;
+    this.sessions = this.sessions.filter((s) => s.moveOut !== exportId);
+    for (const s of ended) this.forget(s.id);
+    return ended.length;
   }
 
   /** Ends every sign-in that moves `bot` in: the bot arrived. */

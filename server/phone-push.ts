@@ -30,6 +30,7 @@ import {
 import { writeFileAtomic } from "./atomic.ts";
 import { postToRelay, type PhonePushAccess, type RelayAnswer } from "./phone-push-access.ts";
 import { conversationLanguage, serverLine, type ServerLineKey } from "./server-lines.ts";
+import { PublicError } from "./public-error.ts";
 
 export const PHONE_PUSH_FILE = "push-devices.json";
 export const PHONE_PUSH_ENV = "SEIRA_PHONE_PUSH";
@@ -235,7 +236,7 @@ export class PhonePush {
     const previous = this.devices.find((device) => device.key === key);
     const others = this.devices.filter((device) => device.key !== key && device.token !== input.token);
     if (!previous && others.length >= MAX_PUSH_DEVICES) {
-      throw Object.assign(new Error(`At most ${MAX_PUSH_DEVICES} phones can get alerts from this computer.`), { status: 409 });
+      throw new PublicError(`At most ${MAX_PUSH_DEVICES} phones can get alerts from this computer.`, 409);
     }
     const next: StoredDevice = {
       key,

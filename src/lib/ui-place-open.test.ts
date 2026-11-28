@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { UI_PLACES } from "../../shared/ui-places";
-import { anchorOf, openActions, placeChain, placeMode, placeSteps, uiPlaceById } from "./ui-place-open";
+import { SETTINGS_PLACES } from "../../shared/settings-places";
+import { anchorOf, openActions, placeChain, placeMode, placeSteps, settingsOpenAction, settingsPlaceTarget, uiPlaceById } from "./ui-place-open";
 
 const place = (id: string) => uiPlaceById(id)!;
 
 describe("uiPlaceById", () => {
   it("finds a mapped id and nothing else", () => {
-    expect(uiPlaceById("board.new-task")?.label).toBe("New task");
+    expect(uiPlaceById("board.new-todo")?.label).toBe("New todo");
     expect(uiPlaceById("nope")).toBeUndefined();
     expect(uiPlaceById("__proto__")).toBeUndefined();
     expect(uiPlaceById("constructor")).toBeUndefined();
@@ -18,7 +19,7 @@ describe("uiPlaceById", () => {
 
 describe("anchorOf", () => {
   it("uses the data-ui id, or the data-tour anchor the entry names", () => {
-    expect(anchorOf(place("board.new-task"))).toEqual({ attr: "ui", value: "board.new-task" });
+    expect(anchorOf(place("board.new-todo"))).toEqual({ attr: "ui", value: "board.new-todo" });
     expect(anchorOf(place("automations.page"))).toEqual({ attr: "tour", value: "automations-page" });
   });
 });
@@ -36,7 +37,7 @@ describe("placeChain", () => {
 
 describe("openActions", () => {
   it("opens the page or panel a place sits in", () => {
-    expect(openActions(place("board.new-task"))).toEqual([{ type: "showBoard" }]);
+    expect(openActions(place("board.new-todo"))).toEqual([{ type: "showBoard" }]);
     expect(openActions(place("automations.calendar"))).toEqual([{ type: "showRoutines", view: "calendar" }]);
     expect(openActions(place("automations.page"))).toEqual([{ type: "showRoutines" }]);
     expect(openActions(place("workflow.palette"))).toEqual([{ type: "showRoutines", view: "workflows" }]);
@@ -73,6 +74,36 @@ describe("placeMode and placeSteps", () => {
   });
 
   it("offers a button for a place that every mode shows", () => {
-    expect(placeMode(place("board.new-task"), false)).toEqual({ button: true });
+    expect(placeMode(place("board.new-todo"), false)).toEqual({ button: true });
+  });
+});
+
+describe("settingsPlaceTarget", () => {
+  it("gives the page and the block of a Settings row, and the page alone for a page", () => {
+    expect(settingsPlaceTarget("ai-pool")).toEqual({ id: "ai-pool", page: "ai", anchor: "ai-pool" });
+    expect(settingsPlaceTarget("page:ai")).toEqual({ id: "page:ai", page: "ai" });
+    expect(settingsPlaceTarget("vault")).toEqual({ id: "vault", page: "vault" });
+  });
+
+  it("knows no id of a row that jumps out of Settings, and no unknown or odd id", () => {
+    for (const id of ["apps", "automations", "bot", "shortcuts", "page:nope", "nope", "__proto__", "constructor", "", 7, undefined, null]) expect(settingsPlaceTarget(id), String(id)).toBeUndefined();
+  });
+
+  it("knows every Settings place the server can show", () => {
+    for (const place of SETTINGS_PLACES) {
+      const shown = place.path.startsWith("Settings") && !["advanced-mode", "sidebar"].includes(place.id);
+      expect(settingsPlaceTarget(place.id) !== undefined, place.id).toBe(shown);
+    }
+  });
+
+  it("shares no id with the UI map", () => {
+    for (const place of UI_PLACES) expect(settingsPlaceTarget(place.id), place.id).toBeUndefined();
+  });
+});
+
+describe("settingsOpenAction", () => {
+  it("opens Settings on the page with the block to scroll to", () => {
+    expect(settingsOpenAction(settingsPlaceTarget("ai-pool")!)).toEqual({ type: "toggleAppSettings", open: true, section: "ai", anchor: "ai-pool" });
+    expect(settingsOpenAction(settingsPlaceTarget("page:ai")!)).toEqual({ type: "toggleAppSettings", open: true, section: "ai" });
   });
 });

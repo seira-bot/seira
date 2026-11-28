@@ -195,6 +195,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_BROWSER_ENGINE_DEFAULT) childEnv.SEIRA_BROWSER_ENGINE_DEFAULT = parentEnv.SEIRA_BROWSER_ENGINE_DEFAULT;
   // A share on the tailnet (server/tailnet-listener.ts): a test names one of this machine's own addresses as its stand-in.
   for (const key of ["SEIRA_TAILNET_NAME", "SEIRA_TAILNET_ADDRESSES", "SEIRA_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  // A mail server on this machine, so email sign-in is on and no real mail can leave (server/sign-in-mail.ts).
+  if (/^smtp:\/\/127\.0\.0\.1:\d{1,5}$/.test(parentEnv.SEIRA_SIGNIN_SMTP_URL ?? "")) childEnv.SEIRA_SIGNIN_SMTP_URL = parentEnv.SEIRA_SIGNIN_SMTP_URL;
   // The addresses a phone link names (server/phone-routes.ts).
   for (const key of ["SEIRA_PUBLIC_URL", "SEIRA_PHONE_ROUTES"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // The limits of a turn nobody is watching (server/host/unattended-turns.ts), brought within a test's reach.
@@ -225,6 +227,7 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     childEnv.SEIRA_COMPOSIO_BROKER_URL = brokerUrl;
     childEnv.SEIRA_COMPOSIO_BROKER_TOKEN = parentEnv.SEIRA_COMPOSIO_BROKER_TOKEN;
   }
+  if (parentEnv.SEIRA_GITHUB_APP === "1" || parentEnv.SEIRA_GITHUB_APP === "0") childEnv.SEIRA_GITHUB_APP = parentEnv.SEIRA_GITHUB_APP;
   // Research against loopback stubs only (server/x-research.e2e.test.ts): the relay token crosses only with its stub,
   // and a treg stand-in replaces treg.to, so no test reaches a real relay or treg.
   const xUrl = parentEnv.SEIRA_CLOUD_X_URL?.trim() ?? "";

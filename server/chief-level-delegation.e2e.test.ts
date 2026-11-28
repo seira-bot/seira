@@ -1,17 +1,17 @@
 // Real server; only the provider's planning is scripted.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { readRegistry } from "./testing/registry.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("starts a thread a Chief opens with a teammate at the Chief's level, and a Chief on Ask raises nobody", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
   const { url, dataDir } = fixture.info;
   const planPath = join(dataDir, "room-plan.json");
   const plans: Record<string, { turns: any[] }> = {};
-  const providerTurns = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+  const providerTurns = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${url}${path}`, { method, headers: { "content-type": "application/json", origin: url },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000) });

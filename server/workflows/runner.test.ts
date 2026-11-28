@@ -113,6 +113,72 @@ function rig() {
   return self;
 }
 
+describe("a workflow run fired by an event", () => {
+  const eventRun = (over: Partial<RoutineRun> = {}) => ({
+    routineId: "hook-1", routineName: "Order hook", triggerSource: "webhook" as const, webhookId: "hook-1", manual: false,
+    prompt: "EVENT-TEXT order 42 paid", ...over,
+  });
+  const twoSteps = () => flow([bot("a", "ana", "Check the order"), bot("b", "ben", "Write the thanks")], [link("a", "b")]);
+
+  it("runs a two-step workflow from a webhook event", async () => {
+    const r = rig();
+    r.store.putWorkflow(twoSteps());
+    await r.runner.start(r.routineRun("run-1", eventRun()), "t-ana", () => {});
+    expect(r.last()).toMatchObject({ botId: "ana", stepId: "a" });
+    expect(r.last().prompt).toContain("Check the order");
+    expect(r.last().prompt).toContain('<previous-step from="event">');
+    expect(r.last().prompt).toContain("EVENT-TEXT order 42 paid");
+    r.reply("order is fine");
+    expect(r.last()).toMatchObject({ botId: "ben", stepId: "b" });
+    expect(r.last().prompt).toContain('<previous-step from="Ana">');
+    expect(r.last().prompt).not.toContain("EVENT-TEXT");
+    r.reply("thanks sent");
+    expect(r.run().status).toBe("completed");
+  });
+
+  it("runs a two-step workflow from an app event", async () => {
+    const r = rig();
+    r.store.putWorkflow(twoSteps());
+    await r.runner.start(r.routineRun("run-1", eventRun({ eventSource: "app", prompt: "APP-EVENT mail from Ada" })), "t-ana", () => {});
+    expect(r.last().prompt).toContain("APP-EVENT mail from Ada");
+    r.reply("read");
+    r.reply("answered");
+    expect(r.run().status).toBe("completed");
+    expect(r.run().event).toBe("APP-EVENT mail from Ada");
+  });
+
+  it("the first step gets the whole event text", async () => {
+    const r = rig();
+    r.store.putWorkflow(twoSteps());
+    const text = `EVENT-START ${"x".repeat(30_000)} EVENT-END`;
+    await r.runner.start(r.routineRun("run-1", eventRun({ prompt: text })), "t-ana", () => {});
+    expect(r.run().event).toBe(text);
+    expect(r.last().prompt).toContain("EVENT-END");
+  });
+
+  it("records which start fired", async () => {
+    const hook = rig();
+    hook.store.putWorkflow(twoSteps());
+    await hook.runner.start(hook.routineRun("run-1", eventRun()), "t-ana", () => {});
+    expect(hook.run().start).toEqual({ kind: "webhook", id: "hook-1" });
+
+    const app = rig();
+    app.store.putWorkflow(twoSteps());
+    await app.runner.start(app.routineRun("run-1", eventRun({ routineId: "app-1", webhookId: "app-1", eventSource: "app" })), "t-ana", () => {});
+    expect(app.run().start).toEqual({ kind: "app", id: "app-1" });
+
+    const routine = rig();
+    await routine.begin();
+    expect(routine.run().start).toEqual({ kind: "schedule", id: "r-1" });
+    expect(routine.run().event).toBeUndefined();
+
+    const manual = rig();
+    manual.store.putWorkflow(twoSteps());
+    await manual.runner.start(manual.routineRun("run-1", { manual: true, triggerSource: "manual" }), "t-ana", () => {});
+    expect(manual.run().start).toEqual({ kind: "manual", id: "r-1" });
+  });
+});
+
 describe("a workflow run through its steps", () => {
   it("runs the bots one after another, hands each output on, posts the last one and completes", async () => {
     const r = rig();

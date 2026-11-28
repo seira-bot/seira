@@ -8,6 +8,7 @@ import type { Message, Store } from "../store.ts";
 import type { UsageTrigger } from "../usage-ledger.ts";
 import type { ResolvedSender } from "../../shared/wire.ts";
 import type { Actor } from "./run-owner.ts";
+import { PublicError } from "../public-error.ts";
 
 export interface PersonStopDeps {
   store: Pick<Store, "appendMessage" | "bot" | "botByThread" | "groupByThread" | "taskByThread" | "tasks">;
@@ -73,7 +74,7 @@ export function createPersonStop(deps: PersonStopDeps) {
     if (!busy && !everyone && (input.row.via || deps.asking(threadId) || !deps.working(botId, threadId))) return null;
     const refusal = (id: string) => deps.stopRefusal?.(id, input.by ?? { admin: false }) ?? null;
     const refused = everyone ? null : refusal(threadId);
-    if (refused) throw Object.assign(new Error(refused), { status: 403, code: "stop_not_yours" });
+    if (refused) throw Object.assign(new PublicError(refused, 403), { code: "stop_not_yours" });
     if (input.personPresent) deps.clearUnattended(threadId);
     const message = store.appendMessage(threadId, { role: "user", kind: "text", text, ...input.row });
     const stopping = (everyone ? store.tasks(botId).map((task) => task.threadId) : [threadId]).filter((id) => ((id === threadId && busy) || deps.working(botId, id)) && refusal(id) === null);

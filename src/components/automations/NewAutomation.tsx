@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppWindow, CalendarClock, Send, Share2, X } from "lucide-react";
 
 import { useModalDialog } from "@/hooks/use-modal-dialog";
@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
 import { useStore, type Bot } from "@/state/store";
+import type { RoutineSchedule } from "@/lib/routines";
+import { slotChoices, slotSchedule } from "../automations-calendar/phrases";
 import { Select } from "../Select";
 
 export type SetUpKind = "schedule" | "webhook" | "app";
@@ -19,12 +21,14 @@ export function defaultBot(bots: readonly Bot[], selectedId: string): Bot | unde
 }
 
 /** "+ New": say what should happen and a bot sets it up in chat, exactly as if you had asked it there. */
-export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDrawWorkflow }: {
+export function NewAutomation({ initialText = "", slotAt, onClose, onSetUpYourself, onDrawWorkflow }: {
   initialText?: string;
+  /** A slot picked in the Calendar: offers "When should it run?" for that day and time. */
+  slotAt?: number;
   onClose: () => void;
   onDrawWorkflow?: () => void;
-  /** The bot this box would have asked, so the editor starts with it chosen. */
-  onSetUpYourself: (kind: SetUpKind, botId: string) => void;
+  /** The bot this box would have asked, so the editor starts with it chosen. A slot's time choice comes as `schedule` for a schedule. */
+  onSetUpYourself: (kind: SetUpKind, botId: string, schedule?: RoutineSchedule) => void;
 }) {
   const { state, dispatch } = useStore();
   const bots = state.bots.filter((bot) => !bot.hidden);
@@ -32,13 +36,17 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDr
   const [botId, setBotId] = useState(() => defaultBot(bots, state.selectedId)?.id ?? "");
   const [yourself, setYourself] = useState(false);
   const [kind, setKind] = useState<SetUpKind>("schedule");
+  const choices = useMemo(() => (slotAt === undefined ? [] : slotChoices(slotAt)), [slotAt]);
+  const [when, setWhen] = useState<"once" | "weekly" | "daily">("once");
   const dialogRef = useRef<HTMLDivElement>(null);
   useModalDialog(dialogRef, onClose);
   const bot = bots.find((candidate) => candidate.id === botId);
 
   const send = () => {
-    const request = text.trim();
-    if (!request || !bot) return;
+    const typed = text.trim();
+    if (!typed || !bot) return;
+    const phrase = choices.find((choice) => choice.id === when)?.phrase;
+    const request = phrase ? `${typed}\n\n${t("automations.cal.new.append", { when: phrase })}` : typed;
     // A normal chat message: the bot sets the automation up with its trigger tool and the person sees its card there.
     dispatch({ type: "select", id: bot.id });
     dispatch({ type: "send", botId: bot.id, text: request, threadId: bot.threadId });
@@ -67,7 +75,7 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDr
             </div>
             <div className="mt-5 flex items-center justify-between gap-2">
               <button type="button" onClick={() => setYourself(false)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink">{t("automations.newBox.back")}</button>
-              <button type="button" onClick={() => onSetUpYourself(kind, bot?.id ?? "")} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
+              <button type="button" onClick={() => (kind === "schedule" && slotAt !== undefined ? onSetUpYourself(kind, bot?.id ?? "", slotSchedule(slotAt, when)) : onSetUpYourself(kind, bot?.id ?? ""))} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110">{t("automations.newBox.continue")}</button>
             </div>
           </>
         ) : (
@@ -75,6 +83,17 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDr
             <textarea autoFocus value={text} onChange={(event) => setText(event.target.value)} rows={3} aria-label={t("automations.newBox.title")} placeholder={t("automations.newBox.placeholder")}
               onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !imeComposing(event.nativeEvent)) { event.preventDefault(); send(); } }}
               className="mt-4 w-full resize-none rounded-xl border border-hairline/60 bg-inset px-3.5 py-3 text-[14px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-accent/70" />
+            {choices.length > 0 && (
+              <div className="mt-3">
+                <div className="text-[13px] text-ink-secondary" id="automations-new-when">{t("automations.cal.new.when")}</div>
+                <div role="radiogroup" aria-labelledby="automations-new-when" className="mt-1.5 flex flex-wrap gap-1.5">
+                  {choices.map((choice) => (
+                    <button key={choice.id} type="button" role="radio" aria-checked={when === choice.id} onClick={() => setWhen(choice.id)}
+                      className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[13px]", when === choice.id ? "border-accent/70 bg-accent/10 font-medium text-ink" : "border-hairline/50 text-ink-secondary hover:bg-raised")}>{choice.label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             {bots.length === 0 && <p className="mt-2 text-[13px] text-warning">{t("automations.newBox.noBots")}</p>}
             {bots.length > 1 && (
               <label className="mt-3 flex items-center gap-2 text-[13px] text-ink-secondary">

@@ -11,6 +11,24 @@ Do not report a security problem in a public issue. Use
 [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new)
 as [SECURITY.md](SECURITY.md) explains.
 
+## Take an issue
+
+An issue with the label `P2` or `P3` is open only to people for 24 hours after triage.
+It has the label `human-window` during that time.
+After that time, you can still take it if nobody works on it.
+
+1. Comment `/take` on the issue. The comment must contain only that line.
+2. Open a draft pull request that says `Closes #<number>` within 72 hours.
+3. Comment `/untake` if you stop. The issue then goes back to the pool.
+
+A deadline on a weekend moves to Monday 12:00 UTC.
+We send a reminder 24 hours before the deadline.
+After the deadline, the issue goes back to the pool.
+
+You can hold one open claim at a time. After your first merged pull request, you can hold two.
+
+An issue with the label `size: L`, `needs-security-review`, or `area: ci` needs a maintainer.
+
 ## Send a pull request
 
 1. For a large change, open an issue first and agree on the approach.

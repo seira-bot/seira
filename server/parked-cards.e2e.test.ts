@@ -1,11 +1,12 @@
 // A turn parked on a card follows the card the bot replaced it with, and a card has one waiting turn. Real server and
 // agents tools on the fake engine; nothing here reaches the user's data or port 8799.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { launchRestartableServer, type RestartableServer } from "./testing/restartable-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ASK = { tool: "request_credential", arguments: { label: "Mailbox password", reason: "To read the mail.", delivery: "ref" } };
 
@@ -42,7 +43,7 @@ async function fixture(server: RestartableServer) {
       return (db.prepare("SELECT json FROM assignments ORDER BY created_at, id").all() as Array<{ json: string }>).map((row) => JSON.parse(row.json));
     } finally { db.close(); }
   };
-  const turns = () => existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  const turns = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const handOff = async () => {
     await say(chief.threadId, "GET-MAIL please", chief.id);
     let work: any;

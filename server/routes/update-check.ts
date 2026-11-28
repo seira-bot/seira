@@ -9,6 +9,7 @@ import type { RequestAuth } from "../request-auth.ts";
 import { createServerUpdater, SERVER_UPDATE_DIR, SERVER_UPDATE_DIR_ENV, type ServerUpdater } from "../server-update.ts";
 import { createUpdateChecker, installKind, updateChannel, type UpdateCheck } from "../update-check.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface UpdateCheckRouteDeps {
   check(): Promise<UpdateCheck>;
@@ -36,7 +37,7 @@ export function createUpdateCheckRoutes(deps: UpdateCheckRouteDeps): RouteHandle
     try {
       return json(res, 200, await deps.check());
     } catch (error) {
-      return json(res, 502, { error: `Could not check for updates: ${error instanceof Error ? error.message : String(error)}` });
+      return json(res, 502, { error: `Could not check for updates: ${publicErrorText(error, "GET update check", "the update service could not be reached.")}` });
     }
   };
 }

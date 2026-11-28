@@ -33,6 +33,7 @@ const inputSchema = z.object({
   name: z.string(),
   steps: z.array(stepSchema),
   connections: z.array(connectionSchema),
+  manual: z.boolean().optional(),
   ifUpdatedAt: z.number().optional(),
 });
 

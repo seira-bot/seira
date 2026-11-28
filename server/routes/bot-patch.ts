@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { approvalModeFor, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
-import { normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
+import { accountLimit, normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
 import { isCallLanguage, isCallSpeed } from "../../shared/call-voice.ts";
 import { isBotLiveVoice } from "../../shared/live-call.ts";
 import { normalizeOutboundPolicy } from "../../shared/outbound.ts";
@@ -44,6 +44,8 @@ import { vpsSshAliasForBot } from "../vps-hosts.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import { pinnedClientThreadGuard } from "./pinned-client-thread.ts";
 import type { ModelSelectionCheck } from "./bots-create.ts";
+import { GITHUB_APP_SLUG } from "../../shared/github-app.ts";
+import { githubAllowedFor, githubGrantWidens, githubSwitchesAfter, type GithubBotSwitches } from "../github/policy.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface BotPatchRouteDeps {
@@ -58,6 +60,10 @@ export interface BotPatchRouteDeps {
   hostedModels: ReturnType<typeof hostedModelPolicy>;
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
   routines(): RoutineManager | null;
+  /** Whether the requester owns the GitHub connection. Without it nobody may change a bot's github_app grants. */
+  ownsGithubConnection?(auth: RequestAuth): boolean;
+  /** Whether the GitHub connection has a policy for this bot. */
+  githubGrantedTo?(botId: string): boolean;
   /** Called after a bot's saved call speed changed, so a call that is live can use it. */
   callSpeedChanged?(botId: string, speed: number | undefined): void;
   activeVpsThreads: { has(botId: string): boolean };
@@ -374,6 +380,10 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         if (typeof body.parkDirectMessages !== "boolean") return json(res, 400, { error: "parkDirectMessages must be true or false" });
         patch.parkDirectMessages = body.parkDirectMessages;
       }
+      if (body.startsTodos !== undefined) {
+        if (body.startsTodos !== "manual" && body.startsTodos !== "auto") return json(res, 400, { error: "startsTodos must be manual or auto" });
+        patch.startsTodos = body.startsTodos === "manual" ? "manual" : undefined;
+      }
       // Omitted keeps the selection; null restores all enabled servers; [] mounts none.
       let requestedMcpServers = existingBot?.mcpServers;
       if (Object.hasOwn(body, "toolScope")) {
@@ -632,11 +642,39 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         }
         patch.alwaysAllow = alwaysAllow;
       }
+      // The effective GitHub access after the store normalizes the patch, compared with the bot as it is now.
+      // A shell can forge an Origin header, so none of these checks looks at it.
+      const githubChange = (current: BotRecord | null | undefined) => {
+        if (!current) return { owned: true, idle: true, widened: false };
+        const after = githubSwitchesAfter(current, patch as GithubBotSwitches);
+        const widened = githubGrantWidens(current, after);
+        const reopened = deps.githubGrantedTo?.(current.id) === true && !githubAllowedFor(current) && githubAllowedFor(after);
+        const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+        const touched = reopened ||
+          (body.connectorTools !== undefined && !same(current.connectorTools?.[GITHUB_APP_SLUG], after.connectorTools?.[GITHUB_APP_SLUG])) ||
+          (body.connectorScopes !== undefined && !(same(current.connectorScopes?.apps?.[GITHUB_APP_SLUG], after.connectorScopes?.apps?.[GITHUB_APP_SLUG]) &&
+            same(accountLimit(current.connectorScopes, GITHUB_APP_SLUG), accountLimit(after.connectorScopes, GITHUB_APP_SLUG))));
+        return {
+          owned: !touched || deps.ownsGithubConnection?.(auth) === true,
+          idle: !(widened || reopened) || auth.kind !== "loopback" || DESKTOP_MANAGED || !store.bots.some((candidate) => candidate.busy || activeGroupTurnForBot(candidate.id)),
+          widened: widened || reopened,
+        };
+      };
+      const githubNow = githubChange(existingBot);
+      if (!githubNow.owned) {
+        return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
+      }
       // Known gap: outside the packaged desktop, loopback is the owner, so these loosenings are one curl from
       // the bot they constrain. An originless, session-less loopback caller may loosen only while every bot is idle.
       const loosened: string[] = [];
       const trustPatch = patch as Pick<Partial<BotRecord>, "outbound" | "connectorScopes" | "fallback">;
       if (body.outbound !== undefined && trustPatch.outbound?.policy === "allow" && existingBot?.outbound?.policy !== "allow") loosened.push("outbound");
+      if (githubNow.widened) {
+        if (!githubNow.idle) {
+          return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
+        }
+        loosened.push("github");
+      }
       if (body.connectorScopes !== undefined && widensConnectorScopes(existingBot?.connectorScopes, trustPatch.connectorScopes)) loosened.push("connectorScopes");
       if (body.phoneApps !== undefined && existingBot) {
         // Compare effective grants: clearing falls back to every app.
@@ -703,6 +741,14 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         if (toolScopeWidens(freshBrowserBot?.toolScope, patch.toolScope) && auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin && store.bots.some((candidate) => candidate.busy)) {
           return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
         }
+      }
+      // The owner and idle checks run again on the bot as it is now: the awaits above can yield, and a bot can start working or change in that gap.
+      const githubFresh = githubChange(freshBrowserBot);
+      if (!githubFresh.owned) {
+        return json(res, 403, { error: "Only the person who connected GitHub can change its access." });
+      }
+      if (!githubFresh.idle) {
+        return json(res, 409, { error: "A bot is working right now, so this change has to come from the desktop app or a paired device. Try again once every bot is idle." });
       }
       if (body.connectorScopes !== undefined && widensConnectorScopes(freshBrowserBot?.connectorScopes, trustPatch.connectorScopes) &&
           auth.kind === "loopback" && !DESKTOP_MANAGED && !browserOrigin &&

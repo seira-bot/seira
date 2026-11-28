@@ -5,11 +5,12 @@
 // separately. The engine is the synthetic Claude CLI playing a scripted plan through the real agents tools, so it proves
 // the routing, not a model's judgement.
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
 const BOB = { email: "bob@acme.test", role: "member" as const };
@@ -30,8 +31,7 @@ let scout: Bot, quill: Bot, bolt: Bot, pip: Bot;
 const planPath = () => join(team.home, "plan.json");
 /** Bolt works on its answer until this file exists. */
 const boltGo = () => join(team.home, "bolt-go");
-const turns = (): Turn[] => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Turn) : [];
+const turns = (): Turn[] => readJsonLines<Turn>(`${planPath()}.evidence.jsonl`);
 const create = async (body: Record<string, unknown>) => {
   const created = await team.as(olive, "POST", "/api/bots", { visibility: "everyone", ...body });
   expect(created.status, JSON.stringify(created.body)).toBe(201);

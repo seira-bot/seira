@@ -53,7 +53,7 @@ import { idleAfter } from "../drivers/session-idle.ts";
 import { augmentedPath } from "../env-path.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
 import type { FillLoginDeps } from "../login-fill.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { Store } from "../store.ts";
 import type { TurnOwner, TurnResources } from "../turn-resources.ts";
 
@@ -424,7 +424,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     const token = mintInternalCapability({ botId, ...turn, browserSession: session,
       kind: "browser", depth: 0, skillAuthoring: false, createdBots: 0, openedThreads: 0 });
     return {
-      command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: {
+      command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: {
         ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("browser")]: token, SEIRA_HARNESS_URL: `http://127.0.0.1:${PORT}`,
       },
     };

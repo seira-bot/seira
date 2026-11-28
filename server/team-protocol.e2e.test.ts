@@ -5,11 +5,12 @@
 // private audience; a note a bot or a person writes into a line's body arrives escaped. The engine plays a script, so
 // the proof is what it was sent and what each person can read afterwards, not a model's judgement.
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
 const MIRA = { email: "mira@acme.test", role: "member" as const };
@@ -31,8 +32,7 @@ let support: Bot, sales: Bot;
 
 const planPath = () => join(team.home, "plan.json");
 const gate = () => join(team.home, "hold.gate");
-const turns = (): Turn[] => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Turn) : [];
+const turns = (): Turn[] => readJsonLines<Turn>(`${planPath()}.evidence.jsonl`);
 const turn = (key: string): Turn => { const found = turns().find((one) => one.planKey === key); if (!found) throw new Error(`no turn ${key}`); return found; };
 /** The turn's text as the engine read it. */
 const sent = (one: Turn): string => { const content = (one.prompt as { message?: { content?: unknown } }).message?.content; return typeof content === "string" ? content : JSON.stringify(content); };

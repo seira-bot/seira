@@ -5,6 +5,8 @@ import { t } from "@/lib/i18n";
 import { api, type Bot } from "@/state/store";
 import type { ConnectorScope } from "../../../shared/connector-scopes";
 import { EMAIL_SLUG, type EmailStatus } from "../../../shared/email";
+import { GITHUB_APP_SLUG, type GithubAppStatus } from "../../../shared/github-app";
+import { GITHUB_CARD, useGithubApp } from "@/lib/github-app";
 import { preloadConnectedApps, type ConnectorInventory } from "@/lib/connected-apps";
 import type { ConnectorAccount } from "@/lib/connector-status";
 import type { ToolkitCard } from "../ServiceIcon";
@@ -46,10 +48,11 @@ export function emailAppCard(): Pick<ToolkitCard, "logo" | "domain" | "label"> &
 }
 
 export function botAppsFrom(
-  bot: Pick<Bot, "composio" | "connectorScopes" | "connectorTools">,
+  bot: Pick<Bot, "composio" | "connectorScopes" | "connectorTools"> & { id?: string },
   inventory: ConnectorInventory | null,
   cards: ReadonlyMap<string, ToolkitCard>,
   email: EmailStatus | null = null,
+  github: GithubAppStatus | null = null,
 ): BotApps {
   if (!inventory) return { phase: "loading", apps: [], connectedSlugs: [] };
   if (!inventory.authoritative) return { phase: "unknown", apps: [], connectedSlugs: [] };
@@ -57,11 +60,16 @@ export function botAppsFrom(
     .filter(([, status]) => status.connected)
     .map(([slug]) => slug);
   if (email?.state === "connected" && !connectedSlugs.includes(EMAIL_SLUG)) connectedSlugs.push(EMAIL_SLUG);
+  if (github?.enabled === true && github.connected && !connectedSlugs.includes(GITHUB_APP_SLUG)) connectedSlugs.push(GITHUB_APP_SLUG);
   connectedSlugs.sort((a, b) => a.localeCompare(b));
   const apps = connectedSlugs.map((slug) => {
     if (slug === EMAIL_SLUG && email?.state === "connected") {
       const { blurb, ...card } = emailAppCard();
       return { slug, label: card.label, blurb, card, scope: botAppScope(bot, slug) };
+    }
+    if (slug === GITHUB_APP_SLUG && github?.enabled === true) {
+      const scope = github.bots[bot.id ?? ""] ? botAppScope(bot, slug) : null;
+      return { slug, label: GITHUB_CARD.label, blurb: t("github.description"), card: GITHUB_CARD, scope };
     }
     const card = cards.get(slug);
     const label = card?.label ?? slugLabel(slug);
@@ -90,6 +98,7 @@ export function useBotApps(bot: Bot, load = true): BotAppsState {
   const [inventory, setInventory] = useState<ConnectorInventory | null>(null);
   const [cards, setCards] = useState<ReadonlyMap<string, ToolkitCard>>(() => new Map());
   const [email, setEmail] = useState<EmailStatus | null>(null);
+  const github = useGithubApp({ load }).status;
   const [inventorySettled, setInventorySettled] = useState(false);
   const [cardsSettled, setCardsSettled] = useState(false);
   const [emailSettled, setEmailSettled] = useState(false);
@@ -119,5 +128,5 @@ export function useBotApps(bot: Bot, load = true): BotAppsState {
     };
   }, [load]);
 
-  return { ...botAppsFrom(bot, inventory, cards, email), inventorySettled, cardsSettled, emailSettled };
+  return { ...botAppsFrom(bot, inventory, cards, email, github), inventorySettled, cardsSettled, emailSettled };
 }

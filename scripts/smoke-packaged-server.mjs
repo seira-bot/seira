@@ -84,6 +84,8 @@ const fixtureEnv = {
     SEIRA_RESOURCES_PATH: staging,
     // A global engine on the developer's PATH must not make this test pass.
     PATH: process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32") : "/usr/bin:/bin",
+    // The GitHub macOS runner has Google Chrome installed, and the server would run the bots on it instead of the bundle.
+    SEIRA_BROWSER_ENGINE_DEFAULT: "agent-browser",
   } : {}),
 };
 
