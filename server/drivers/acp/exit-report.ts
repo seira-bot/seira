@@ -8,7 +8,8 @@ import { nodeOlderThan } from "./node-version.ts";
 
 const SIGNAL_WORDS: Partial<Record<NodeJS.Signals, string>> = {
   SIGABRT: "it stopped itself (abort)",
-  SIGKILL: "it was killed, often for running out of memory",
+  // Nothing here learns whether the kernel killed it for memory, and a runtime can SIGKILL its own process group (#763).
+  SIGKILL: "it was killed (SIGKILL) without saying why: by the system, for example when memory runs out, or by itself",
   SIGSEGV: "it crashed",
   SIGBUS: "it crashed",
   SIGILL: "it crashed on an instruction this CPU does not have",

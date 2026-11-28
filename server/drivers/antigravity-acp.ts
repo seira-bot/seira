@@ -358,7 +358,7 @@ export class AntigravityAcpClient {
         if (authorizationUrlFromLine(this.diagnosticBuffer) === null) this.noteDiagnostic(this.diagnosticBuffer);
         this.diagnosticBuffer = "";
         if (!this.closed) this.failAll(new Error(
-          `Antigravity ACP exited ${code ?? signal ?? "unexpectedly"}${exitDetail(code, signal, this.stderrTail.text)}.${this.nativeStartupHint ? ` ${this.nativeStartupHint}` : ""}`,
+          `Antigravity ACP${this.runtimeVersion ? ` ${this.runtimeVersion}` : ""} exited ${code ?? signal ?? "unexpectedly"}${exitDetail(code, signal, this.stderrTail.text)}.${this.nativeStartupHint ? ` ${this.nativeStartupHint}` : ""}`,
         ));
         resolve();
       });

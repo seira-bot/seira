@@ -9,14 +9,20 @@ describe("an engine's exit in plain words", () => {
   it("names what an exit code or signal means, including a signal a wrapper reports as 128 + N", () => {
     expect(exitInWords(134)).toBe("it stopped itself (abort)");
     expect(exitInWords(null, "SIGABRT")).toBe("it stopped itself (abort)");
-    expect(exitInWords(137)).toMatch(/killed, often for running out of memory/u);
-    expect(exitInWords(null, "SIGKILL")).toMatch(/killed/u);
+    expect(exitInWords(137)).toBe(exitInWords(null, "SIGKILL"));
     expect(exitInWords(139)).toBe("it crashed");
     expect(exitInWords(132)).toMatch(/instruction this CPU does not have/u);
     expect(exitInWords(159)).toMatch(/system call the sandbox refuses/u);
     expect(exitInWords(127)).toBe("a program it needs was not found");
     expect(exitInWords(126)).toBe("a program it needs could not be run");
     for (const plain of [0, 1, 3, 255, null]) expect(exitInWords(plain), String(plain)).toBeNull();
+  });
+
+  // #763: Google's runtime 1.4.3 SIGKILLed itself on Linux with no memory pressure. Nothing records an out-of-memory
+  // kill, so the words do not point at memory as the likely cause.
+  it("says a SIGKILL does not tell why, and does not call running out of memory the usual cause", () => {
+    expect(exitInWords(null, "SIGKILL")).toBe("it was killed (SIGKILL) without saying why: by the system, for example when memory runs out, or by itself");
+    expect(exitInWords(null, "SIGKILL")).not.toMatch(/often/u);
   });
 
   it("puts the meaning before the last output, and adds nothing when neither is known", () => {

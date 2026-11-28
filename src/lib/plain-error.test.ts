@@ -31,6 +31,7 @@ describe("plainErrorLine", () => {
     ["codex exited null (signal SIGKILL) before turn/completed", "Something went wrong. Try again."],
     ["DeepSeek Harness exited 3 before the prompt result: panicked at src/main.rs", "Something went wrong. Try again."],
     ["Antigravity ACP exited SIGTERM.", "Something went wrong. Try again."],
+    ["Antigravity ACP 1.4.3 exited SIGKILL: it was killed (SIGKILL) without saying why.", "Something went wrong. Try again."],
     ["rate_limited", "Too many requests right now. Wait a moment, then try again."],
     ["Error\n    at fetchBots (store.tsx:12:3)", "Something went wrong. Try again."],
   ])("reads %j as a plain line", (raw, line) => {

@@ -214,10 +214,28 @@ describe("Antigravity initialization diagnostics", () => {
     child.stderr.write("2 third_party/tcmalloc/internal/sysinfo.h:76] CHECK in NumCPUs: maybe_cpus.has_value() (false) ");
     child.emit("close", 134, null);
     const error = await rejected;
-    expect(error.message).toBe("Antigravity ACP exited 134: it stopped itself (abort). Last output: private auth code: «redacted 15 chars» | "
+    expect(error.message).toBe("Antigravity ACP 1.1.1 exited 134: it stopped itself (abort). Last output: private auth code: «redacted 15 chars» | "
       + "https://accounts.google.com/o/oauth2/v2/auth?«redacted 36 chars» | 2 third_party/tcmalloc/internal/sysinfo.h:76] CHECK in NumCPUs: maybe_cpus.has_value() (false).");
     for (const secret of ["do-not-disclose", "private-state", "secret-code"]) expect(error.message).not.toContain(secret);
     acp.close();
+  });
+
+  // #763: the runtime killed itself within two seconds and printed nothing; the version is what a report needs.
+  it("names the runtime version when it is killed before answering, and only the version it knows", async () => {
+    const child = fakeChild(null);
+    const acp = client();
+    const rejected = acp.initialize().catch((error: Error) => error);
+    child.emit("close", null, "SIGKILL");
+    expect((await rejected).message).toBe(
+      "Antigravity ACP 1.1.1 exited SIGKILL: it was killed (SIGKILL) without saying why: by the system, for example when memory runs out, or by itself.");
+    acp.close();
+
+    const own = fakeChild(null);
+    const unknown = new AntigravityAcpClient({ ...runtime, source: "path", version: null }, { directory: "/fixture", tokenPath: "/fixture/token", environment: {} }, "/fixture");
+    const failed = unknown.initialize().catch((error: Error) => error);
+    own.emit("close", 1, null);
+    expect((await failed).message).toBe("Antigravity ACP exited 1.");
+    unknown.close();
   });
 
   it("does not reuse a startup warning after initialization succeeds", async () => {
@@ -228,7 +246,7 @@ describe("Antigravity initialization diagnostics", () => {
     child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, result: initialized })}\n`);
     await result;
     const pending = acp.request("authenticate", {});
-    const rejected = expect(pending).rejects.toThrow(/^Antigravity ACP exited 1\.$/u);
+    const rejected = expect(pending).rejects.toThrow(/^Antigravity ACP 1\.1\.1 exited 1\.$/u);
     child.emit("close", 1);
     await rejected;
     acp.close();
