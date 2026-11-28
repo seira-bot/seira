@@ -10,22 +10,27 @@ Seira ships three desktop packages:
   macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
   Until a maintainer sets them, a release has no macOS assets.
 
-A maintainer creates the tag and the draft GitHub release, and attaches the
-Linux and Windows files by hand. For a signed `v*` tag, the `Package macOS`
-workflow attaches the macOS files to the draft release. No workflow creates a
-tag or publishes a release. A workflow publishes two packages: the
-npm package (see [Publish to npm](#publish-to-npm)) and the desktop snap (see
-[Publish to the Snap Store](#publish-to-the-snap-store)).
+The `Release` workflow makes a release by itself. It starts when a push to
+`main` changes `package.json`. It creates the tag and the draft release, builds
+every package, attaches the files, and publishes the release (see
+[Automatic release](#automatic-release)). The manual steps below stay as a
+fallback, and they show what the workflow does. The `npm publish` workflow
+(see [Publish to npm](#publish-to-npm)) and the desktop snap workflow (see
+[Publish to the Snap Store](#publish-to-the-snap-store)) start after the
+release is published.
 
 Only the maintainers can release:
 
 - The `main` branch ruleset needs a pull request and a review from the code
   owners. Squash merge is the only merge method. The `main CI must pass`
   ruleset needs a passing `CI` check and has no bypass.
-- The `release tags` ruleset blocks the creation, update, and deletion of `v*`
-  tags for everyone except the organization admins.
-- GitHub Actions has no bypass on any of these rulesets, and its token can only read
-  the repository (see [CI](ci.md)).
+- The `release tag creation` ruleset blocks the creation of `v*` tags for
+  everyone except the organization admins and the `seira-release` GitHub App.
+  Only the `Release` workflow holds the key of that App.
+- The `release tags (update, deletion)` ruleset blocks the update and the
+  deletion of `v*` tags for everyone except the organization admins.
+- The job token of GitHub Actions has no bypass on any of these rulesets, and it
+  can only read the repository (see [CI](ci.md)).
 - A newer push to `main` can replace a `main` CI run that still waits for a
   runner (see [CI](ci.md#runs-on-main-and-in-the-merge-queue)). A cancelled
   run proves nothing about the released tree. Step 4 runs a preflight that needs a successful `CI` run for
@@ -35,6 +40,50 @@ The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
 `Server image` workflow after the release (step 8). The npm package
 `@seira-bot/seira` comes from the `npm publish` workflow (see
 [Publish to npm](#publish-to-npm)).
+
+## Automatic release
+
+Merge the `Release v<version>` pull request (step 1). The merge is the only
+manual action. The `Release` workflow (`.github/workflows/release.yml`) does the
+rest, on `main` only:
+
+| Job | What it does |
+| --- | --- |
+| `decide` | Reads the version on `main`. Finds the commit that last changed it. Stops when the release is already published. |
+| `ci-proof` | Waits up to 120 minutes for a successful `CI` run on that tree. |
+| `gate` | Runs the [release gate](ci.md#the-release-gate). A run that passes does not wait. |
+| `approval` | Runs only when the gate flags the run. It waits 6 hours in `release-approval`. |
+| `blockers` | Stops the release while a `P0` issue is open, or while a high or critical security advisory does not show that the release version is safe. |
+| `tag` | Creates the annotated tag on the release commit, then runs the preflight on the tag. |
+| `draft` | Creates the draft release, and lists the platforms that are already on it. |
+| `linux`, `flatpak`, `linux-attach` | Build the Linux packages and the Flatpak bundle, then attach them to the draft. |
+| `windows`, `macos` | Call `package-windows.yml` and `package-macos.yml`, which attach their files to the draft. |
+| `publish` | Checks the blockers again and that every platform is on the draft, then publishes the release. |
+| `server-image` | Starts the `Server image` workflow for the tag. |
+
+- A flagged run waits 6 hours. A maintainer can cancel the run during the
+  wait. The run summary of the `gate` job shows why the gate flagged the run.
+- A blocker stops the release before the tag exists. Close the `P0` issue, or
+  set the patched version or the correct version range on the advisory. Then
+  start the workflow again.
+- An advisory stops the release when its version range covers the release
+  version, does not parse, or is missing, and no patched version covers the
+  release version. Write the range in the GitHub form, for example
+  `>= 0.1.170, <= 0.1.196`, or close the advisory.
+- The Actions log is public, so the `blockers` job prints only the number of
+  blocking advisories. To see which advisories block, run
+  `node scripts/release-blockers.mjs --version <x.y.z> --details` on your own
+  computer.
+- Every job is safe to run again. A job that finds its work already done does
+  nothing. A platform whose update feed is on the draft is not built again.
+- To continue a release that stopped, open **Actions → Release → Run workflow**
+  and choose `main`. The run continues the same release.
+- A published release cannot get new files. The workflow therefore publishes
+  only after every platform is on the draft.
+- The workflow never deletes a tag or a release, never rolls back, and never
+  force-pushes. An organization admin does these by hand.
+- The workflow reads the `release` and `flatpak` environments and the variable
+  `RELEASE_HUMAN_REVIEWERS` (see [CI](ci.md#the-release-environment)).
 
 ## Assets
 

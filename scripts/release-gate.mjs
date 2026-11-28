@@ -21,7 +21,7 @@ const PAGE = 100;
 /** The npm package that npm-publish.yml publishes. A fixed name: a pull request cannot move the baseline to another package. */
 export const NPM_PACKAGE = "@seira-bot/seira";
 
-export const SENSITIVE_PATTERNS = [".github/**", "scripts/release-*", "scripts/git-hooks/**", "pnpm-workspace.yaml", ".npmrc", "**/.npmrc"];
+export const SENSITIVE_PATTERNS = [".github/**", "packaging/flatpak/**", "scripts/linux-store/**", "scripts/release-*", "scripts/git-hooks/**", "pnpm-workspace.yaml", ".npmrc", "**/.npmrc"];
 
 export const USAGE = `Usage: node scripts/release-gate.mjs --tag v<x.y.z> [--repo <owner>/<name>]
        node scripts/release-gate.mjs --sha <40-hex sha> [--repo <owner>/<name>]
