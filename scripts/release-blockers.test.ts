@@ -34,7 +34,7 @@ const run = async (world: World, version = "1.2.0") => {
   const calls: string[] = [];
   const api = async (path: string) => {
     calls.push(path);
-    const page = Number(/page=(\d+)/.exec(path)?.[1] ?? 1);
+    const page = Number(/[&?]page=(\d+)/.exec(path)?.[1] ?? 1);
     const slice = (items: object[]) => items.slice((page - 1) * 100, page * 100);
     if (path.includes("/issues?")) {
       if (world.fail === "issues") throw new Error("HTTP 500");
