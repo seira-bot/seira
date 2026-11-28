@@ -166,6 +166,9 @@ describe("a run stopped to free memory", () => {
     const continued: Array<{ botId: string; threadId: string; text: string }> = [];
     const told: unknown[] = [];
     const f = fixture({
+      // A Cloud home unless a test says otherwise: the memory gate is on for a Linux server too, so the default answer
+      // would depend on the machine that runs the test.
+      selfHosted: () => false,
       later: (run, ms) => { waiting.push({ run, ms }); },
       continueRequest: async (botId, threadId, text) => { continued.push({ botId, threadId, text }); },
       notify: (notification) => { told.push(notification); },
