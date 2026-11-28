@@ -29,7 +29,7 @@ export function WelcomeChoices({ choices, selected, onSelect, line }: {
   };
   return (
     <div ref={group} role="radiogroup" aria-label={t("onboarding.meet.choices")} data-welcome-choices="" onKeyDown={move}
-      className="absolute left-1/2 top-[calc(50%+88px)] grid w-[348px] max-w-[calc(100%-32px)] -translate-x-1/2 grid-cols-3 gap-2">
+      className="absolute left-1/2 top-[calc(50%+84px)] grid w-[348px] max-w-[calc(100%-32px)] -translate-x-1/2 grid-cols-3 gap-2">
       {choices.map((instance) => {
         const on = instance.instanceId === selected?.instanceId;
         return (
