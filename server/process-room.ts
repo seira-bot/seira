@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { nameBucket, parseReapedChildrenMs, type ProcessRow } from "./perf/process-buckets.ts";
 import { linuxProcessList } from "./perf/process-sampler.ts";
-import { containerLimited, readPids } from "./process-limits.ts";
+import { readPids } from "./process-limits.ts";
 import type { ShortageCode } from "./process-shortage.ts";
 
 /** What one working bot holds against pids.max: its engine and the five tool servers a default bot's engine starts ran as
@@ -211,17 +211,25 @@ export function turnsSetting(value: string | undefined): TurnsSetting {
 
 export type GateHost = "cloud" | "server" | "desktop" | null;
 
-/** Where turns wait for room. A Cloud home, as before. A self-hosted Linux server in a container that was given a memory
- * or pids limit, which is where a turn too many ends in a killed engine or a refused spawn. Any self-hosted server whose
- * operator set SEIRA_TURNS_MAX_RUNNING to a number or "auto". The desktop app's own server on Linux, Windows and macOS,
- * unless SEIRA_TURNS_MAX_RUNNING is "off". */
+/** Where turns wait for room. A Cloud home, as before. Any self-hosted Linux server, in a container or not, unless
+ * SEIRA_TURNS_MAX_RUNNING is "off" or 0: on a small server a turn too many fills the memory before the kernel stops a
+ * process. A self-hosted server on Windows or macOS whose operator set SEIRA_TURNS_MAX_RUNNING to a number or "auto". The
+ * desktop app's own server on Linux, Windows and macOS, unless SEIRA_TURNS_MAX_RUNNING is "off". */
 const DESKTOP_GATES: ReadonlySet<NodeJS.Platform> = new Set(["linux", "win32", "darwin"]);
 
-export function gateHost(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, limited: () => boolean = containerLimited): GateHost {
+export function gateHost(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): GateHost {
   if ((env.SEIRA_CLOUD_ROLE === "home" || env.SEIRA_CLOUD_ROLE === "team") && platform === "linux") return "cloud";
   if (env.SEIRA_DESKTOP_PARENT === "1") return DESKTOP_GATES.has(platform) && turnsSetting(env.SEIRA_TURNS_MAX_RUNNING) !== "off" ? "desktop" : null;
   const setting = turnsSetting(env.SEIRA_TURNS_MAX_RUNNING);
   if (setting === "off") return null;
   if (typeof setting === "number" || env.SEIRA_TURNS_MAX_RUNNING?.trim().toLowerCase() === "auto") return "server";
-  return platform === "linux" && limited() ? "server" : null;
+  return platform === "linux" ? "server" : null;
+}
+
+/** The one line a self-hosted server logs at start when turns wait for room, so an operator who sees turns wait knows why
+ * and how to turn it off. Null where the gate is the desktop app's or a Cloud's. */
+export function gateStartLine(host: GateHost): string | null {
+  return host === "server"
+    ? "turns: a turn waits when the server is short of memory or processes. Set SEIRA_TURNS_MAX_RUNNING=off to turn this off."
+    : null;
 }
