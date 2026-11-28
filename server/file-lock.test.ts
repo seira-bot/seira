@@ -48,7 +48,7 @@ describe("a lock between processes", () => {
     const file = lockFile();
     writeFileSync(file, ident(process.ppid));
     const started = Date.now();
-    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 60_000 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
     expect(Date.now() - started).toBeGreaterThanOrEqual(70);
     expect(readFileSync(file, "utf8")).toBe(ident(process.ppid));
   });
@@ -57,7 +57,7 @@ describe("a lock between processes", () => {
     const file = lockFile();
     writeFileSync(file, ident(process.ppid));
     ageOf(file, 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
     expect(readFileSync(file, "utf8")).toBe(ident(process.ppid));
   });
 
@@ -65,24 +65,61 @@ describe("a lock between processes", () => {
     const file = lockFile();
     writeFileSync(file, ident(gonePid()));
     ageOf(file, 60_000);
-    const release = acquireFileLock(file, { waitMs: 500, staleMs: 10_000 });
+    const release = acquireFileLock(file, { waitMs: 500 });
     expect(readFileSync(file, "utf8")).toContain(`${process.pid} `);
     release();
     expect(existsSync(file)).toBe(false);
   });
 
-  it("does not take over a lock whose holder is gone until it is old", () => {
+  it("takes over at once a new lock whose holder is gone, with no wait", () => {
     const file = lockFile();
     writeFileSync(file, ident(gonePid()));
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 60_000 })).toThrow(/another process holds/);
-    expect(readFileSync(file, "utf8")).toContain(TOKEN);
+    const started = performance.now();
+    const release = acquireFileLock(file, { waitMs: 5_000 });
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(readFileSync(file, "utf8")).toContain(`${process.pid} `);
+    release();
+    expect(readdirSync(dirname(file))).toEqual([]);
+  });
+
+  it.each([3_600_000, 86_400_000])("takes over a lock whose holder is gone when its file time is %i ms ahead of the clock", (ahead) => {
+    const file = lockFile();
+    writeFileSync(file, ident(gonePid()));
+    ageOf(file, -ahead);
+    const release = acquireFileLock(file, { waitMs: 5_000 });
+    expect(readFileSync(file, "utf8")).toContain(`${process.pid} `);
+    release();
+    expect(readdirSync(dirname(file))).toEqual([]);
+  });
+
+  it.each([-3_600_000, 0, 3_600_000])("never takes a lock from a live process, whatever the file time (%i ms old)", (age) => {
+    const file = lockFile();
+    writeFileSync(file, ident(process.ppid));
+    ageOf(file, age);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
+    expect(readFileSync(file, "utf8")).toBe(ident(process.ppid));
+  });
+
+  it("does not show the folder of the lock in the error", () => {
+    const file = lockFile();
+    writeFileSync(file, ident(process.ppid));
+    const failure = (): Error => {
+      try {
+        acquireFileLock(file, { waitMs: 60 });
+      } catch (error) {
+        return error as Error;
+      }
+      throw new Error("the lock was taken");
+    };
+    expect(failure().message).toMatch(/^another process holds x\.lock; try again/);
+    expect(failure().message).not.toContain(dirname(file));
   });
 
   it.each(["", "garbage", "0 - x", "12 -\n"])("never takes an old lock that names no valid holder (%j), and says why", (text) => {
     const file = lockFile();
     writeFileSync(file, text);
     ageOf(file, 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds .*cannot be judged/);
+    expect(() => acquireFileLock(file, { waitMs: 60 })).toThrow(/another process holds .*cannot be judged/);
     expect(readFileSync(file, "utf8")).toBe(text);
   });
 
@@ -90,7 +127,7 @@ describe("a lock between processes", () => {
     const file = lockFile();
     writeFileSync(file, ident(process.pid, "1"));
     ageOf(file, 60_000);
-    acquireFileLock(file, { waitMs: 500, staleMs: 10_000 })();
+    acquireFileLock(file, { waitMs: 500 })();
     expect(existsSync(file)).toBe(false);
   });
 
@@ -108,7 +145,7 @@ describe("a lock between processes", () => {
     writeFileSync(file, text);
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), ident(process.ppid));
-    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10_000 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
     expect(readFileSync(file, "utf8")).toBe(text);
   });
 
@@ -119,7 +156,7 @@ describe("a lock between processes", () => {
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), claimText);
     ageOf(claimOf(file, text), 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
     expect(readFileSync(file, "utf8")).toBe(text);
     expect(readFileSync(claimOf(file, text), "utf8")).toBe(claimText);
   });
@@ -130,7 +167,7 @@ describe("a lock between processes", () => {
     writeFileSync(file, text);
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), ident(gonePid()));
-    const release = acquireFileLock(file, { waitMs: 500, staleMs: 10_000 });
+    const release = acquireFileLock(file, { waitMs: 500 });
     expect(readFileSync(file, "utf8")).toContain(`${process.pid} `);
     release();
     expect(readdirSync(dirname(file))).toEqual([]);
@@ -143,7 +180,7 @@ describe("a lock between processes", () => {
     ageOf(file, 60_000);
     for (const slot of [0, 1, 2]) writeFileSync(claimOf(file, text, slot), ident(gonePid()));
     writeFileSync(claimOf(file, text, 3), ident(process.ppid));
-    expect(() => acquireFileLock(file, { waitMs: 80, staleMs: 10_000 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 80 })).toThrow(/another process holds/);
     expect(readFileSync(file, "utf8")).toBe(text);
     for (const slot of [0, 1, 2, 3]) expect(existsSync(claimOf(file, text, slot))).toBe(true);
   });
@@ -181,7 +218,7 @@ describe("publishing a lock", () => {
       child.kill("SIGKILL");
       await new Promise((resolve) => child.on("close", resolve));
       const started = Date.now();
-      acquireFileLock(file, { staleMs: 25, waitMs: 5_000 })();
+      acquireFileLock(file, { waitMs: 5_000 })();
       expect(Date.now() - started).toBeLessThan(5_000);
       expect(existsSync(file)).toBe(false);
     }
@@ -202,7 +239,7 @@ describe("publishing a lock", () => {
     writeFileSync(`${file}.${"1".repeat(8)}.tmp`, text);
     linkSync(`${file}.${"1".repeat(8)}.tmp`, file);
     ageOf(file, 60_000);
-    acquireFileLock(file, { waitMs: 500, staleMs: 10_000 })();
+    acquireFileLock(file, { waitMs: 500 })();
     expect(existsSync(file)).toBe(false);
   });
 });
@@ -221,7 +258,7 @@ describe("giving a lock back", () => {
 
   it("does not remove the lock while another process holds the claim, and gives up when the wait ends", () => {
     const file = lockFile();
-    const release = acquireFileLock(file, { waitMs: 80, staleMs: 60_000 });
+    const release = acquireFileLock(file, { waitMs: 80 });
     const text = readFileSync(file, "utf8");
     writeFileSync(claimOf(file, text), ident(process.ppid));
     const started = Date.now();
@@ -235,7 +272,7 @@ describe("giving a lock back", () => {
 
   it("removes the lock when the claim of a crashed process is in the way, and clears that claim", () => {
     const file = lockFile();
-    const release = acquireFileLock(file, { waitMs: 500, staleMs: 50 });
+    const release = acquireFileLock(file, { waitMs: 500 });
     const claim = claimOf(file, readFileSync(file, "utf8"));
     writeFileSync(claim, ident(gonePid()));
     release();
@@ -244,7 +281,7 @@ describe("giving a lock back", () => {
 
   it("does not remove the lock while the claim names an owner that cannot be judged", () => {
     const file = lockFile();
-    const release = acquireFileLock(file, { waitMs: 80, staleMs: 10 });
+    const release = acquireFileLock(file, { waitMs: 80 });
     const text = readFileSync(file, "utf8");
     writeFileSync(claimOf(file, text), "garbage");
     ageOf(claimOf(file, text), 3_600_000);
@@ -258,14 +295,14 @@ describe("a lock whose holder cannot be judged", () => {
     const file = lockFile();
     writeFileSync(file, ident(process.ppid));
     ageOf(file, 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 60 })).toThrow(/another process holds/);
   });
 
   it("is not taken when the process is not ours to signal", () => {
     const file = lockFile();
     writeFileSync(file, ident(1));
     ageOf(file, 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 60 })).toThrow(/another process holds/);
   });
 
   it("stops with an error, and quickly, when the lock cannot be read", () => {
@@ -284,7 +321,7 @@ describe("the wait", () => {
       const file = lockFile();
       writeFileSync(file, text);
       const started = Date.now();
-      expect(() => acquireFileLock(file, { waitMs: 100, staleMs: 3_600_000 })).toThrow(/another process holds/);
+      expect(() => acquireFileLock(file, { waitMs: 100 })).toThrow(/another process holds/);
       expect(Date.now() - started).toBeLessThan(1_500);
     }
   });
@@ -296,7 +333,7 @@ describe("the wait", () => {
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), ident(process.ppid));
     const started = Date.now();
-    expect(() => acquireFileLock(file, { waitMs: 100, staleMs: 10_000 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 100 })).toThrow(/another process holds/);
     expect(Date.now() - started).toBeLessThan(1_500);
   });
 });
@@ -337,7 +374,7 @@ describe("a holder text that is not the whole identity", () => {
     const file = lockFile();
     writeFileSync(file, text);
     ageOf(file, 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds .*cannot be judged/);
+    expect(() => acquireFileLock(file, { waitMs: 60 })).toThrow(/another process holds .*cannot be judged/);
     expect(readFileSync(file, "utf8")).toBe(text);
     expect(readdirSync(dirname(file))).toEqual(["x.lock"]);
   });
@@ -349,14 +386,14 @@ describe("a holder text that is not the whole identity", () => {
     ageOf(file, 60_000);
     writeFileSync(claimOf(file, text), claimText);
     ageOf(claimOf(file, text), 3_600_000);
-    expect(() => acquireFileLock(file, { waitMs: 60, staleMs: 10 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 60 })).toThrow(/another process holds/);
     expect(readFileSync(file, "utf8")).toBe(text);
     expect(readFileSync(claimOf(file, text), "utf8")).toBe(claimText);
   });
 
   it.each(forms)("is never judged dead as the owner of a claim when this process gives its lock back: %s", (_name, claimText) => {
     const file = lockFile();
-    const release = acquireFileLock(file, { waitMs: 60, staleMs: 10 });
+    const release = acquireFileLock(file, { waitMs: 60 });
     const text = readFileSync(file, "utf8");
     writeFileSync(claimOf(file, text), claimText);
     ageOf(claimOf(file, text), 3_600_000);
@@ -369,7 +406,7 @@ describe("a holder text that is not the whole identity", () => {
     const file = lockFile();
     writeFileSync(file, ident(gonePid()));
     ageOf(file, 60_000);
-    acquireFileLock(file, { waitMs: 500, staleMs: 10_000 })();
+    acquireFileLock(file, { waitMs: 500 })();
     expect(existsSync(file)).toBe(false);
   });
 
@@ -394,13 +431,13 @@ describe("the deadlines", () => {
     writeFileSync(file, ident(process.ppid));
     jumpForward();
     const started = performance.now();
-    expect(() => acquireFileLock(file, { waitMs: 150, staleMs: 3_600_000_000 })).toThrow(/another process holds/);
+    expect(() => acquireFileLock(file, { waitMs: 150 })).toThrow(/another process holds/);
     expect(performance.now() - started).toBeGreaterThanOrEqual(140);
   });
 
   it("do not follow the wall clock when it jumps forward while a lock is given back", () => {
     const file = lockFile();
-    const release = acquireFileLock(file, { waitMs: 150, staleMs: 3_600_000_000 });
+    const release = acquireFileLock(file, { waitMs: 150 });
     const text = readFileSync(file, "utf8");
     writeFileSync(claimOf(file, text), ident(process.ppid));
     jumpForward();

@@ -3,4 +3,4 @@
 import { acquireFileLock } from "../file-lock.ts";
 
 const [lockFile] = process.argv.slice(2).map(String);
-for (;;) acquireFileLock(String(lockFile), { staleMs: 25, waitMs: 30_000 })();
+for (;;) acquireFileLock(String(lockFile), { waitMs: 30_000 })();

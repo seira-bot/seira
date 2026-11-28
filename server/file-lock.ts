@@ -12,7 +12,8 @@
 //   a lock) is `alive`, `dead` or `unknown`. Only `dead` lets another process recover what the owner held; `alive` and
 //   `unknown` (a holder text that is not the whole identity, no start time to compare, a process that cannot be judged)
 //   wait until the deadline and then stop with an error. The identity is checked field by field before anything else:
-//   a text that is short, long, or has a field in the wrong form is `unknown`, never `dead`. A lock is taken over only when it is older than `staleMs` AND its holder is dead.
+//   a text that is short, long, or has a field in the wrong form is `unknown`, never `dead`. A lock is taken over as soon
+//   as its holder is `dead`. The file time plays no part: the wall clock can be set back, and it cannot prove a holder gone.
 // - Giving a lock back and taking over a stale lock are the same step: `removeLock`. A process that removes the lock with
 //   text X first publishes a claim file for X that names itself. Only the claim holder reads the lock again, and it
 //   removes the lock only while it still holds X. A claim is never removed while its owner is alive or unknown; a claim
@@ -21,19 +22,17 @@
 //   process claims X again for good).
 // - Every wait has an end: each loop checks the deadline, and any error that is not "the file is not there" ends the
 //   wait with an error. The deadlines use a monotonic clock, so a change of the wall clock does not lengthen or cut a wait.
-// The processes must share one process table: a holder in another container or host looks gone after `staleMs`.
+// The processes must share one process table: a holder in another container or host looks gone.
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, linkSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, linkSync, openSync, readFileSync, unlinkSync, writeSync } from "node:fs";
+import { basename } from "node:path";
 import { performance } from "node:perf_hooks";
 
 export interface FileLockOptions {
-  /** A lock file older than this, whose holder is gone, is a crashed process's. Default 10 seconds. */
-  staleMs?: number;
   /** How long to wait for another process before giving up. Default 15 seconds. */
   waitMs?: number;
 }
 
-const DEFAULT_STALE_MS = 10_000;
 const DEFAULT_WAIT_MS = 15_000;
 const POLL_MS = 5;
 
@@ -90,22 +89,16 @@ function ownerState(text: string): Owner {
   return now === holder.started ? "alive" : "dead";
 }
 
-type Seen = { text: string; mtimeMs: number };
+type Seen = { text: string };
 
 /** What the file holds now, or null when it is not there. Any other error is thrown: a lock that cannot be read is not judged. */
 function look(file: string): Seen | null {
   try {
-    return { text: readFileSync(file, "utf8"), mtimeMs: statSync(file).mtimeMs };
+    return { text: readFileSync(file, "utf8") };
   } catch (error) {
     if (codeOf(error) === "ENOENT") return null;
     throw error;
   }
-}
-
-/** Old, and its holder is dead. A lock that names no valid holder is never stale: it is not proof that the lock is free.
- * The age is a file time (wall clock) by nature; it only adds to the check, the owner must be known to be dead as well. */
-function stale(seen: Seen, staleMs: number): boolean {
-  return Date.now() - seen.mtimeMs > staleMs && ownerState(seen.text) === "dead";
 }
 
 const holderText = () => `${process.pid} ${startOf(process.pid)} ${randomUUID()}\n`;
@@ -178,7 +171,6 @@ function removeLock(file: string, text: string): Removal {
 
 /** Takes the lock and returns the step that gives it back; calling that step again does nothing. */
 export function acquireFileLock(file: string, options: FileLockOptions = {}): () => void {
-  const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
   const waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
   const deadline = tick() + waitMs;
   const own = holding.get(file);
@@ -188,10 +180,10 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): ()
     for (;;) {
       if (publish(file, text)) break;
       const seen = look(file);
-      if (seen && stale(seen, staleMs)) removeLock(file, seen.text);
+      if (seen && ownerState(seen.text) === "dead") removeLock(file, seen.text);
       if (tick() >= deadline) {
         const unknown = seen && ownerState(seen.text) === "unknown";
-        throw new Error(`another process holds ${file}; try again${unknown ? " (its holder cannot be judged; remove the file by hand only when no Seira process runs)" : ""}`);
+        throw new Error(`another process holds ${basename(file)}; try again${unknown ? " (its holder cannot be judged; remove the file by hand only when no Seira process runs)" : ""}`);
       }
       sleep(POLL_MS);
     }

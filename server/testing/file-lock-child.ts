@@ -7,7 +7,7 @@ import { acquireFileLock } from "../file-lock.ts";
 
 const [lockFile, counter, rounds, crashAt] = process.argv.slice(2).map(String);
 for (let round = 0; round < Number(rounds); round += 1) {
-  const release = acquireFileLock(String(lockFile), { staleMs: 25, waitMs: 30_000 });
+  const release = acquireFileLock(String(lockFile), { waitMs: 30_000 });
   const count = Number(readFileSync(String(counter), "utf8"));
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, round % 7 === 0 ? 40 : 1);
   writeFileSync(String(counter), String(count + 1));
