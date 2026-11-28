@@ -72,9 +72,11 @@ export function createThemeRoutes(deps: ThemeRoutesDeps): RouteHandler {
       if (method === "GET") return json(res, 200, { items: items.map(({ index, at, kind, name, count }) => ({ index, at, kind, name, count })) satisfies ThemeHistoryItem[] });
       if (method !== "POST") return json(res, 405, { error: "GET or POST" });
       const parsed = historyBody.safeParse(await readBody(req));
-      const target = !parsed.success ? undefined : "index" in parsed.data ? items.find((item) => item.index === parsed.data.index) : items[parsed.data.steps - 1];
+      const ask = parsed.success ? parsed.data : undefined;
+      const byIndex = ask !== undefined && "index" in ask ? ask.index : undefined;
+      const target = !ask ? undefined : byIndex !== undefined ? items.find((item) => item.index === byIndex) : items[("steps" in ask ? ask.steps : 0) - 1];
       if (!target) return json(res, 400, { error: "index must be one of the changes listed." });
-      const done = store.restore(person, parsed.success && "steps" in parsed.data ? target.seq - 1 : target.seq);
+      const done = store.restore(person, byIndex === undefined ? target.seq - 1 : target.seq);
       if (isRefusal(done)) return json(res, 409, { error: done.refusal });
       deps.changed(person, done.skin);
       return json(res, 200, { ok: true });
