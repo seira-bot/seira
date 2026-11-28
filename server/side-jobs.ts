@@ -36,8 +36,9 @@ export function helperSelection(cfg: HelperConfig, env: Record<string, string | 
 }
 
 /** "representative": a person's assistant answering a teammate's question for them, which must never get tools.
- * "inbox-summary": the summary of a person's Inbox news, which reads text bots wrote and so must never get tools. */
-export type SideJob = "compaction" | "memory" | "skill-review" | "setup-suggestions" | "representative" | "status-reply" | "inbox-summary";
+ * "inbox-summary": the summary of a person's Inbox news, which reads text bots wrote and so must never get tools.
+ * "theme-ideas": colour recipes for Settings → Appearance, written while the person waits; the bot's own engine, any kind. */
+export type SideJob = "compaction" | "memory" | "skill-review" | "setup-suggestions" | "representative" | "status-reply" | "inbox-summary" | "theme-ideas";
 
 export type SideJobInstance = Pick<ProviderInstance, "instanceId" | "driverKind" | "enabled" | "generateText" | "generateMemoryText" | "models" | "quickModelsUsable"> & {
   adapter: { capabilities: Pick<ProviderAdapter["capabilities"], "agentsMcp"> };
@@ -96,7 +97,7 @@ function ownCall(job: SideJob, instance: SideJobInstance): TextCall | undefined 
 /** A turn or a person is waiting on these, so they start at once. */
 const NEVER_QUEUED: ReadonlySet<SideJob> = new Set(["compaction", "representative", "status-reply"]);
 /** A person sees these soon (a new bot's suggestions card): they wait ahead of memory upkeep and skill review. */
-const SEEN_SOON: ReadonlySet<SideJob> = new Set(["setup-suggestions", "inbox-summary"]);
+const SEEN_SOON: ReadonlySet<SideJob> = new Set(["setup-suggestions", "inbox-summary", "theme-ideas"]);
 
 export function createSideJobs(deps: SideJobsDeps): SideJobs {
   // Logged once per change, not once per call.
