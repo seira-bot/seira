@@ -337,8 +337,13 @@ export class VisibleSet {
     const audience = this.audiences?.of(threadId);
     if (audience === undefined) return true;
     const person = this.audiences!.person;
-    return audienceIncludes(audience, { admin: this.viewer.kind === "all", person, seesRoom: (groupId) => this.group(groupId) })
-      || (person !== null && this.audiences!.readers?.(threadId)?.includes(person) === true);
+    return this.shows(audience) || (person !== null && this.audiences!.readers?.(threadId)?.includes(person) === true);
+  }
+
+  /** Whether something of this audience is the viewer's to see; off a Team Cloud, everything is. */
+  shows(audience: Audience): boolean {
+    if (this.everything || !this.audiences) return true;
+    return audienceIncludes(audience, { admin: this.viewer.kind === "all", person: this.audiences.person, seesRoom: (groupId) => this.group(groupId) });
   }
 
   private indexedOwner(threadId: string): ThreadOwner | undefined {

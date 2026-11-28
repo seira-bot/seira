@@ -14,7 +14,7 @@ import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import { intervalAllowsOccurrence, intervalHasRestrictions, isSameLocalDay, latestIntervalOccurrence } from "./routine-intervals.ts";
 import { limitResetOccurrence, mergeScheduleUpdate, nextOccurrence, RoutineScheduleError, type RoutineSchedule, type RoutineScheduleInput } from "./routine-schedules.ts";
-import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts";
+import { runsOnce } from "../shared/limit-reset.ts"; import { limitResetRunOwed } from "./limit-reset-owed.ts"; import { nextAfterSkips, occurrenceSkipped } from "./routine-skip-occurrence.ts";
 import {
   ROUTINE_HANDOFF_WAIT, isRoutineProblemRun, type RoutineAccess, type RoutineCheck, type RoutineContextAttachment, type RoutineDelivery, type RoutineIntervalWindow, type RoutineRetryCause,
   type RoutineHoldCause, type RoutineRunReport, type RoutineRunStatus, type RoutineRunTrigger,
@@ -81,7 +81,7 @@ export interface Routine extends RoutineTroubleCode {
   checkTrouble?: string;
   wakeAt?: number;
   skippedRuns?: number;
-  lastSkippedAt?: number;
+  lastSkippedAt?: number; skippedOccurrences?: number[];
   failureStreak?: number;
   /** Its newest runs in a row whose cloud computer did not start, while its scheduled runs are spaced out for it. */
   noStartStreak?: number;
@@ -643,7 +643,7 @@ export class RoutineManager {
         // updatedAt doubles as the confirmation cards' optimistic revision: keep it monotonic within one ms.
         updatedAt: Math.max(now, routine.updatedAt + 1),
       });
-      if (patch.enabled !== undefined) delete routine.heldFor;
+      if (patch.enabled !== undefined) delete routine.heldFor; if (scheduleChanged) delete routine.skippedOccurrences;
       if (placeCleared) delete routine.placeLost;
       for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver", "workflowId", "workflowBotIds"] as const) if (!clean[key]) delete routine[key];
       if (!clean.checks) for (const key of ["checks", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt"] as const) delete routine[key];
@@ -1057,6 +1057,7 @@ export class RoutineManager {
       if (dueRoutines.length > 0) {
         this.commitMutation(() => {
           for (const routine of dueRoutines) {
+            if (routine.nextRunAt != null && routine.nextRunAt <= now && occurrenceSkipped(routine, routine.nextRunAt)) { this.advancePastOccurrence(routine, now, routine.nextRunAt); continue; }
             // A routine with checks never misses: however late, one check reads everything since the last.
             if (routine.checks) {
               if (!this.checking.has(routine.id)) checks.push({ id: routine.id, hold: checkHold(this.runs, routine.id, now) });
@@ -1389,7 +1390,7 @@ export class RoutineManager {
   private advancePastOccurrence(routine: Routine, now: number, occurrence: number) {
     if (routine.schedule.type === "limit_reset" && routine.schedule.repeat === "every_reset") routine.schedule = this.timedSchedule(routine.schedule, routine.id, occurrence);
     routine.nextRunAt =
-      runsOnce(routine.schedule) ? null : nextOccurrence(routine.schedule, Math.max(now, occurrence));
+      runsOnce(routine.schedule) ? null : nextAfterSkips(routine, Math.max(now, occurrence), now);
     // Not a definition edit: bumping updatedAt here would stale a pending confirmation card.
     if (runsOnce(routine.schedule)) {
       routine.enabled = false;

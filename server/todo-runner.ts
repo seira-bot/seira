@@ -1,5 +1,6 @@
 import { TODO_LEASE_MS, TODO_MAX_ATTEMPTS, TODO_NOTE_CHARS, TODO_RESULT_CHARS, type Todo } from "../shared/todo.ts";
-import { createTodoLauncher, createTodosHost, TodoError, type TodoBot, type TodoLauncherDeps, type TodoRoutines, type TodosHost } from "./host/todos-host.ts";
+import { createTodoLauncher, createTodosHost, TodoError, type TodoBot, type TodoLauncherDeps, type TodoRoutines, type TodosHost, type TodosHostDeps } from "./host/todos-host.ts";
+import { TEAM_AUDIENCE, type Audience } from "./audience.ts";
 import { OUTSIDE } from "./peer-provenance.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { publicTodo, readyQueue, TodoStore, type TodoRecord } from "./todos.ts";
@@ -43,6 +44,8 @@ export interface TodoRunnerDeps {
   startsTodosOf(botId: string): "manual" | undefined;
   /** May the picker conversation read the conversation this todo came from? Absent: yes. */
   pickerMayRead?(botId: string, threadId: string | undefined, todo: TodoRecord): boolean;
+  /** May this queued todo start on its bot? A person's todo may not once they can no longer chat with the bot. Absent: yes. */
+  mayStart?(todo: TodoRecord): boolean;
 }
 
 export const TODO_INSTRUCTION =
@@ -210,7 +213,17 @@ export function createTodoRunner(deps: TodoRunnerDeps) {
     }
   }
 
+  /** A queued todo that may not start on its bot waits for the person to pick another bot. */
+  function parkRefused(): void {
+    if (!deps.mayStart) return;
+    for (const todo of store.live()) {
+      if (todo.status !== "queued" || !todo.botId || todo.routineId || todo.repeat || deps.mayStart(todo)) continue;
+      store.update(todo.id, (one) => { if (one.status !== "queued") return false; one.status = "needs-you"; one.stuck = "unassigned"; });
+    }
+  }
+
   async function startReady(): Promise<void> {
+    parkRefused();
     const todos = store.live();
     const at = now();
     const bots = new Set(todos.filter((todo) => todo.status === "queued" && todo.botId).map((todo) => todo.botId!));
@@ -219,7 +232,7 @@ export function createTodoRunner(deps: TodoRunnerDeps) {
       if (todos.some((todo) => todo.botId === botId && todo.status === "working")) continue;
       if (!deps.botReady(botId)) continue;
       const next = readyQueue(todos, botId, at)[0];
-      const claimed = next ? store.claim(next.id) : undefined;
+      const claimed = next && (!deps.mayStart || deps.mayStart(next)) ? store.claim(next.id) : undefined;
       if (!claimed) continue;
       await begin(claimed, false).catch(() => {});
     }
@@ -266,6 +279,7 @@ export function createTodoRunner(deps: TodoRunnerDeps) {
     if (todo.status !== "queued" || !todo.botId) throw new TodoError(409, "Only a todo that waits in the queue can start now.");
     if (todo.routineId || todo.repeat) throw new TodoError(409, "A repeating todo starts at its set time.");
     if (!deps.bots().some((bot) => bot.id === todo.botId)) throw new TodoError(409, "The bot for this todo is gone.");
+    if (deps.mayStart && !deps.mayStart(todo)) throw new TodoError(403, "The person who wrote this todo cannot give work to this bot.");
     const claimed = store.claim(id);
     if (!claimed) throw new TodoError(409, "This todo already started.");
     try {
@@ -303,13 +317,15 @@ export interface TodosRuntimeDeps {
   teamCloud: boolean;
   store: {
     readonly bots: ReadonlyArray<TodoBot & { home?: unknown; startsTodos?: "manual" }>;
-    createTask: TodoLauncherDeps["store"]["createTask"];
+    createTask(botId: string, title?: string, activate?: boolean): { threadId: string } | null;
     appendMessage: TodoLauncherDeps["store"]["appendMessage"];
     taskByThread(botId: string, threadId: string): { activity?: string } | undefined;
     messagesTail(threadId: string, limit: number): { messages: ReadonlyArray<{ role: string; kind: string; text?: string }> };
     onChange(listener: (change: { type: string }) => void): () => void;
   };
   routines(): TodoRoutines | null;
+  levelFor: TodosHostDeps["levelFor"];
+  openTask: TodoLauncherDeps["openTask"];
   pickerMayRead?: TodoRunnerDeps["pickerMayRead"];
   startTurn: TodoLauncherDeps["startTurn"];
   admits: TodoLauncherDeps["admits"];
@@ -318,6 +334,14 @@ export interface TodosRuntimeDeps {
   botReady(botId: string): boolean;
   threadBusy(botId: string, threadId: string): boolean;
   reachable(fromBotId: string, toBotId: string): boolean;
+  /** Team Cloud audiences (audience.ts). Absent: every todo and conversation is the team's. */
+  audience?: {
+    of(threadId: string): Audience;
+    /** Whether a conversation can be made private to this audience. */
+    adoptable(audience: Audience): boolean;
+    /** Makes a new conversation private to this audience. */
+    adopt(threadId: string, audience: Audience): void;
+  };
   /** Tells every client the todos changed. */
   changed(): void;
 }
@@ -328,9 +352,14 @@ const PICKER_THREAD_TITLE = "Todos to hand out";
 export function createTodosRuntime(deps: TodosRuntimeDeps) {
   const store = new TodoStore({ dataDir: deps.dataDir });
   const bots = () => deps.store.bots.filter((bot) => !bot.home);
-  const host = createTodosHost({ store, bots, routines: deps.routines, teamCloud: deps.teamCloud, reachable: deps.reachable });
+  const host = createTodosHost({ store, bots, routines: deps.routines, teamCloud: deps.teamCloud, reachable: deps.reachable, levelFor: deps.levelFor, ...(deps.audience ? { audienceOf: deps.audience.of } : {}) });
   const botName = (botId: string) => deps.store.bots.find((bot) => bot.id === botId)?.name;
-  const launch = createTodoLauncher({ store: deps.store, startTurn: deps.startTurn, admits: deps.admits, queue: deps.queue, botName });
+  const launch = createTodoLauncher({
+    store: deps.store, openTask: deps.openTask, startTurn: deps.startTurn, admits: deps.admits, queue: deps.queue, botName,
+    audienceOf: (todo) => host.audienceOf(todo),
+    adoptable: (audience) => audience === TEAM_AUDIENCE || deps.audience?.adoptable(audience) === true,
+    adopt: (threadId, audience) => { if (audience !== TEAM_AUDIENCE) deps.audience?.adopt(threadId, audience); },
+  });
   const lastReply = (threadId: string): string => {
     const lines = deps.store.messagesTail(threadId, 40).messages;
     const from = lines.findLastIndex((line) => line.role === "user" && line.kind === "text");
@@ -345,7 +374,9 @@ export function createTodosRuntime(deps: TodosRuntimeDeps) {
     },
     launch,
     lastReply,
-    pickerMayRead: deps.pickerMayRead,
+    // The picker reads a person's todo only if that person may give it work.
+    pickerMayRead: (botId, threadId, todo) => host.personMayGive(todo, botId) && (deps.pickerMayRead?.(botId, threadId, todo) ?? true),
+    mayStart: (todo) => host.personMayGive(todo, todo.botId!),
     startsTodosOf: (botId) => deps.store.bots.find((bot) => bot.id === botId)?.startsTodos,
     askPicker: async ({ botId, threadId, text, onThread }) => {
       const id = threadId && deps.store.taskByThread(botId, threadId) ? threadId : deps.store.createTask(botId, PICKER_THREAD_TITLE, false)?.threadId;
@@ -359,7 +390,7 @@ export function createTodosRuntime(deps: TodosRuntimeDeps) {
   deps.store.onChange((change) => { if (change.type === "bot" || change.type === "bot.deleted") runner.wake(); });
   return {
     store, host, runner,
-    boardSource: () => ({ todos: store.live().map(publicTodo), picker: host.picker() }),
+    boardSource: () => ({ todos: store.live().map((todo) => ({ ...publicTodo(todo), audience: host.audienceOf(todo) })), picker: host.picker() }),
     closeTodo: (todoId: string, by: { kind: "person"; name: string } | { kind: "bot"; botId: string }) => { try { host.markDone(todoId, by); } catch { /* the todo is already gone */ } },
     botName,
   };

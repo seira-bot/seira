@@ -2,12 +2,14 @@ import {
   TODO_BATCH_MAX, TODO_BOT_DAILY_MAX, TODO_MAX_DEPTH, TODO_NOTE_CHARS, TODO_QUOTE_CHARS, TODO_TITLE_CHARS,
   type Todo, type TodoDraft, type TodoMaker, type TodoPatch, type TodoRepeat, type TodoSource, type TodoStart,
 } from "../../shared/todo.ts";
+import { TEAM_AUDIENCE, type Audience } from "../audience.ts";
+import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";
 import { botMayClose } from "../board.ts";
 import { namesTeammate } from "../peer-roster.ts";
 import { OUTSIDE, type WorkOrigin } from "../peer-provenance.ts";
 import type { UsageTrigger } from "../usage-ledger.ts";
 import type { TodoLaunch } from "../todo-runner.ts";
-import { effectivePicker, sameTitle, type TodoRecord, type TodoStore } from "../todos.ts";
+import { effectivePicker, sameTitle, todoAudienceFrom, type TodoPerson, type TodoRecord, type TodoStore } from "../todos.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
 const REASON_CHARS = 200;
@@ -43,6 +45,10 @@ export interface TodosHostDeps {
   teamCloud: boolean;
   /** Whether a bot may hand work to another bot (department walls). Absent: every bot may. */
   reachable?: (fromBotId: string, toBotId: string) => boolean;
+  /** The audience of a conversation (audience.ts). Absent: everything is the team's. */
+  audienceOf?: (threadId: string) => Audience;
+  /** What the person a todo works for may do with a bot now. A todo with no person counts as nobody's. */
+  levelFor(person: TodoPerson | undefined, botId: string): BotAccessLevel;
 }
 
 export interface TodoAddResult {
@@ -101,6 +107,8 @@ export function createTodosHost(deps: TodosHostDeps) {
   const { store } = deps;
   const botById = (id: string) => deps.bots().find((bot) => bot.id === id);
   const now = () => store.now();
+  const audienceOfThread = (threadId: string): Audience => deps.audienceOf?.(threadId) ?? TEAM_AUDIENCE;
+  const audienceOfTodo = (todo: Pick<TodoRecord, "audience" | "source">): Audience => todoAudienceFrom(todo, audienceOfThread);
 
   function requireBot(botId: string): TodoBot {
     const bot = botById(botId);
@@ -118,6 +126,8 @@ export function createTodosHost(deps: TodosHostDeps) {
   function makeRoutine(todo: TodoRecord, botId: string): string {
     const routines = deps.routines();
     if (!routines) throw new TodoError(409, "Repeating todos are not available on this server.");
+    // Security invariant: a routine of a todo is the place's, so it may not carry a todo that is not the team's.
+    if (audienceOfTodo(todo) !== TEAM_AUDIENCE) throw new TodoError(409, "A repeating todo can come only from a shared place, not from a private chat or a room.");
     try {
       return routines.create({ name: todo.title, prompt: routinePrompt(todo), botId, schedule: { type: "daily", time: todo.repeat!.time, weekdays: todo.repeat!.weekdays } }).id;
     } catch (error) {
@@ -139,13 +149,21 @@ export function createTodosHost(deps: TodosHostDeps) {
     return effectivePicker(store.chosenPicker(), deps.bots());
   }
 
+  /** Security invariant: a person's todo goes only to a bot that person may chat with, whoever hands it on (the picker,
+   * another bot, or someone else on the Board). Otherwise their words would reach a bot they may not give work to. */
+  function personMayGive(todo: Pick<TodoRecord, "madeBy" | "person">, botId: string): boolean {
+    // A todo a bot made works for a person only when one was recorded (a personal Seira's owner). Then the final bot
+    // must be one that person may chat with, at every step: add, hand over, Board change, picker and start.
+    return (todo.madeBy.kind !== "person" && !todo.person?.viewer?.email) || atLeast(deps.levelFor(todo.person, botId), "chat");
+  }
+
   function depthFor(threadId: string): number {
     const parent = store.live().find((todo) => todo.threadId === threadId);
     return parent ? parent.depth + 1 : 0;
   }
 
   /** Adds todos in one step. A person's drafts either all go in or none; a bot's may be refused one by one. */
-  function add(drafts: readonly TodoDraft[], maker: TodoMaker, options: { depth?: number } = {}): TodoAddResult {
+  function add(drafts: readonly TodoDraft[], maker: TodoMaker, options: { depth?: number; person?: TodoPerson } = {}): TodoAddResult {
     if (!Array.isArray(drafts) || drafts.length < 1 || drafts.length > TODO_BATCH_MAX) throw new TodoError(400, `Add between 1 and ${TODO_BATCH_MAX} todos at a time.`);
     const at = now();
     const result: TodoAddResult = { todos: [], existing: [], refused: [] };
@@ -161,6 +179,7 @@ export function createTodosHost(deps: TodosHostDeps) {
       if (!title) throw new TodoError(400, "Give the todo a title.");
       const note = draft.note === undefined || draft.note === "" ? undefined : clean(draft.note, TODO_NOTE_CHARS, "the note");
       const botId = draft.botId === undefined ? undefined : requireBot(draft.botId).id;
+      if (botId && !personMayGive({ madeBy: maker, ...(options.person ? { person: options.person } : {}) }, botId)) throw new TodoError(403, "You cannot give work to this bot.");
       if (draft.afterIndex !== undefined && (!Number.isInteger(draft.afterIndex) || draft.afterIndex < 0 || draft.afterIndex >= index)) throw new TodoError(400, "A todo can wait only for one that comes before it.");
       const start = draft.start === undefined ? undefined : cleanStart(draft.start);
       const repeat = draft.repeat === undefined ? undefined : cleanRepeat(draft.repeat);
@@ -170,8 +189,10 @@ export function createTodosHost(deps: TodosHostDeps) {
       return { ...result, refused: ["This work is already several todos deep. Tell the person what is missing instead of adding more todos."] };
     }
     prepared.forEach((item) => {
+      const audience = item.source ? audienceOfThread(item.source.threadId) : TEAM_AUDIENCE;
       if (maker.kind === "bot") {
-        const same = [...live, ...created].find((todo) => (todo.status === "open" || todo.status === "queued") && todo.botId === item.botId && sameTitle(todo.title, item.title));
+        // Security invariant: a todo of another audience is never matched, so the answer cannot show it.
+        const same = [...live, ...created].find((todo) => (todo.status === "open" || todo.status === "queued") && todo.botId === item.botId && audienceOfTodo(todo) === audience && sameTitle(todo.title, item.title));
         if (same) {
           result.existing.push(same);
           slots.push(same);
@@ -189,7 +210,8 @@ export function createTodosHost(deps: TodosHostDeps) {
       const todo: TodoRecord = {
         id: store.newId(), title: item.title, ...(item.note ? { note: item.note } : {}), ...(item.botId ? { botId: item.botId } : {}),
         status: item.botId ? "queued" : "open", start, rank: store.endRank(item.botId) + created.filter((one) => one.botId === item.botId).length,
-        madeBy: maker, ...(item.source ? { source: item.source } : {}), ...(item.repeat ? { repeat: item.repeat } : {}),
+        madeBy: maker, audience, ...(item.source ? { source: item.source } : {}), ...(item.repeat ? { repeat: item.repeat } : {}),
+        ...(options.person ? { person: structuredClone(options.person) } : {}),
         attempts: 0, depth, createdAt: at, updatedAt: at,
       };
       if (todo.repeat && todo.botId) todo.routineId = makeRoutine(todo, todo.botId);
@@ -247,6 +269,9 @@ export function createTodosHost(deps: TodosHostDeps) {
     if (change.status !== undefined && change.status !== "queued" && change.status !== "done") throw new TodoError(400, "A todo can move only to the queue or to Done.");
     const changesBot = change.botId !== undefined && change.botId !== current.botId;
     if (changesBot && (current.status === "working" || current.status === "done")) throw new TodoError(409, "A todo that is being worked on or finished stays with its bot.");
+    if (typeof change.botId === "string" && (changesBot || current.status === "needs-you") && !personMayGive(current, change.botId)) {
+      throw new TodoError(403, "The person who wrote this todo cannot give work to this bot.");
+    }
     if (change.status === "queued" && current.status === "working") throw new TodoError(409, "This todo is being worked on right now.");
     const updated = store.update(id, (todo) => {
       if (change.title !== undefined) todo.title = change.title.trim();
@@ -353,7 +378,8 @@ export function createTodosHost(deps: TodosHostDeps) {
     throw new TodoError(400, "Use \"free\", a date and time, or afterIndex for when to start.");
   }
 
-  function botAdd(caller: BotCaller, raw: unknown): TodoAddResult {
+  /** `person`: whom the conversation the bot is in works for; the todo's own conversation opens as them. */
+  function botAdd(caller: BotCaller, raw: unknown, person?: TodoPerson): TodoAddResult {
     const bot = callerBot(caller);
     const list = Array.isArray(raw) ? raw : [];
     if (list.some((item: Record<string, unknown>) => item?.repeat)) throw new TodoError(403, "You cannot add a repeating todo. Ask for a repeating job with the routine request tool, so the person can confirm it.");
@@ -368,7 +394,7 @@ export function createTodosHost(deps: TodosHostDeps) {
         source: { threadId: caller.threadId, botId: caller.botId },
       };
     });
-    return add(drafts, { kind: "bot", botId: caller.botId }, { depth: depthFor(caller.threadId) });
+    return add(drafts, { kind: "bot", botId: caller.botId }, { depth: depthFor(caller.threadId), ...(person ? { person } : {}) });
   }
 
   function botList(filter: { status?: unknown; assigneeBotId?: unknown }, readable: (todo: TodoRecord) => boolean): TodoRecord[] {
@@ -389,6 +415,7 @@ export function createTodosHost(deps: TodosHostDeps) {
     if (!botMayChange(todo, bot)) throw new TodoError(403, "You may hand over only todos that are yours, that you made, or that you hand out as picker.");
     if (todo.status === "working" || todo.status === "done") throw new TodoError(409, "That todo is already being worked on or finished.");
     if (target.id !== bot.id && deps.reachable && !deps.reachable(bot.id, target.id)) throw new TodoError(403, `${target.name} is in a place you cannot hand work to.`);
+    if (!personMayGive(todo, target.id)) throw new TodoError(403, `The person who wrote this todo cannot give work to ${target.name}. Leave it for them.`);
     const updated = store.update(todo.id, (one) => giveTo(one, target.id, { botId: bot.id, reason }));
     return updated!;
   }
@@ -415,7 +442,7 @@ export function createTodosHost(deps: TodosHostDeps) {
     return current;
   }
 
-  return { add, patch, markDone, remove, restore, setPicker, picker, botAdd, botList, botAssign, botUpdate, depthFor, botMayChange, resolveBotRef };
+  return { add, patch, markDone, remove, restore, setPicker, picker, botAdd, botList, botAssign, botUpdate, depthFor, botMayChange, resolveBotRef, personMayGive, audienceOf: audienceOfTodo };
 }
 
 export type TodosHost = ReturnType<typeof createTodosHost>;
@@ -433,6 +460,8 @@ type TurnOptions = {
   unattended: true;
   origin: WorkOrigin;
   trigger: UsageTrigger;
+  /** A person's todo: who wrote it, by name only, so the turn acts for nobody (server/host/acting-person.ts). */
+  sender?: { name: string };
   peerAsk?: { botId: string; name: string; unattended: true };
   userMessage?: unknown;
   onDispatchError?: (message: string) => void;
@@ -440,39 +469,54 @@ type TurnOptions = {
 
 export interface TodoLauncherDeps {
   store: {
-    createTask(botId: string, title?: string, activate?: boolean): { threadId: string } | null;
     appendMessage(threadId: string, message: Record<string, unknown>): { id: string };
   };
+  /** Makes the todo's conversation, opened as the person the todo works for (todo.person); null when its bot is gone. */
+  openTask(todo: TodoRecord, title: string): { threadId: string } | null;
   startTurn(botId: string, text: string, options: TurnOptions): Promise<unknown>;
   /** The server would start a turn for this bot in this conversation now. */
   admits(botId: string, threadId: string): boolean;
   /** Holds the first line behind the bot's other work: what a person's own message gets when the bot is busy. */
   queue(botId: string, threadId: string, text: string, options: Omit<TurnOptions, "threadId" | "userMessage" | "onDispatchError"> & { prompt: string; rowId: string }): void;
   botName(botId: string): string | undefined;
+  /** The audience the work of a todo may be seen in. */
+  audienceOf(todo: TodoRecord): Audience;
+  /** Whether a conversation can be made private to this audience; the team's always can. */
+  adoptable(audience: Audience): boolean;
+  /** Makes the conversation private to the audience, before its first line. */
+  adopt(threadId: string, audience: Audience): void;
 }
 
 /** Makes the conversation for a todo and starts its first turn.
  * Security invariant: the first line is never the person's own request. A todo a bot made runs with that bot's
- * authority as a peer ask; a todo a person made runs as unattended work, like a routine the person set up. */
+ * authority as a peer ask; a todo a person made runs as unattended work, like a routine the person set up. Either way
+ * its conversation opens as the person it works for, so a guest's todo stays confined as the guest's own chat is. */
 export function createTodoLauncher(deps: TodoLauncherDeps) {
   return async function launch(todo: TodoRecord, launch: TodoLaunch): Promise<void> {
     const botId = todo.botId;
     if (!botId) throw new Error("This todo has no bot.");
-    const task = deps.store.createTask(botId, launch.line.split("\n")[0]!.slice(0, TITLE_FOR_THREAD), false);
+    const audience = deps.audienceOf(todo);
+    // Security invariant: the work conversation keeps the audience of its todo, or the work does not start.
+    if (!deps.adoptable(audience)) throw new Error("This todo comes from a place its work cannot be kept private to.");
+    const task = deps.openTask(todo, launch.line.split("\n")[0]!.slice(0, TITLE_FOR_THREAD));
     if (!task) throw new Error("The bot for this todo is gone.");
+    deps.adopt(task.threadId, audience);
     launch.onThread(task.threadId);
     const maker = todo.madeBy.kind === "bot" ? todo.madeBy.botId : undefined;
     const peerAsk = maker ? { botId: maker, name: deps.botName(maker) ?? "A teammate", unattended: true as const } : undefined;
+    const writer = todo.madeBy.kind === "person" ? todo.madeBy.name.trim() : "";
+    const email = todo.person?.viewer?.email;
     const base = {
       unattended: true as const,
       origin: OUTSIDE,
-      trigger: (maker ? { kind: "bot", botId: maker } : { kind: "routine", label: "Todo" }) as UsageTrigger,
+      trigger: (maker ? { kind: "bot", botId: maker } : { kind: "routine", label: "Todo", ...(email ? { email } : {}) }) as UsageTrigger,
       ...(peerAsk ? { peerAsk } : {}),
+      ...(writer ? { sender: { name: writer } } : {}),
     };
     const admitted = deps.admits(botId, task.threadId);
     if (!admitted && !launch.force) throw new Error("The bot has no room for this work right now.");
     const line = deps.store.appendMessage(task.threadId, {
-      role: "user", kind: "text", text: launch.line, fromTodo: todo.id, automated: true, ...(peerAsk ? { peerAsk } : {}),
+      role: "user", kind: "text", text: launch.line, fromTodo: todo.id, automated: true, ...(peerAsk ? { peerAsk } : {}), ...(base.sender ? { sender: base.sender } : {}),
     });
     if (!admitted) {
       deps.queue(botId, task.threadId, launch.line, { ...base, prompt: launch.prompt, rowId: line.id });

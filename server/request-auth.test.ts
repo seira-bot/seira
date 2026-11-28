@@ -201,7 +201,7 @@ describe("scopes", () => {
       ["POST", "/api/threads/t/undo"], ["POST", "/api/bots/x/compact"], ["POST", "/api/bots/x/tasks/t/title"],
       ["PATCH", "/api/bots/x/cards/m"], ["POST", "/api/groups/g/messages"], ["PATCH", "/api/groups/g"],
       ["PATCH", "/api/bots/x"], ["PATCH", "/api/bots/x/profile"], ["POST", "/api/attachments"], ["PUT", "/api/bots/order"],
-      ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
+      ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"], ["POST", "/api/routines/r/skip"],
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
       ["GET", "/api/workflows"], ["POST", "/api/workflows"], ["GET", "/api/workflows/w1"], ["PATCH", "/api/workflows/w1"], ["DELETE", "/api/workflows/w1"],
       ["GET", "/api/workflows/w1/runs"], ["POST", "/api/workflows/from-start"], ["POST", "/api/workflows/w1/switch"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
