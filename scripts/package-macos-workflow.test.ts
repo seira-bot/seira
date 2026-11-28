@@ -77,8 +77,8 @@ function runStep(name: string, cwd: string, env: Record<string, string>, path: s
 }
 
 describe("package-macos.yml", () => {
-  it("starts only by hand, from a ref that a maintainer names", () => {
-    expect(Object.keys(flow.on)).toEqual(["workflow_dispatch"]);
+  it("starts by hand from a ref that a maintainer names, or from release.yml with the release tag", () => {
+    expect(Object.keys(flow.on)).toEqual(["workflow_dispatch", "workflow_call"]);
     expect(flow.on.workflow_dispatch?.inputs?.ref?.required).toBe(true);
   });
 

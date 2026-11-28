@@ -68,9 +68,21 @@ const MAIN_REF = "github.ref == 'refs/heads/main'";
 const REDISPATCH = "redispatch";
 const GATE_SCRIPT = "release-gate.mjs";
 const MACOS = "package-macos.yml";
+const WINDOWS = "package-windows.yml";
+// The automatic release. It tags, builds, attaches and publishes, and it starts the server image workflow.
+const RELEASE = "release.yml";
 const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
+// The token of the release App, as a step output. Only RELEASE may pass it on.
+const APP_TOKEN = /GH_TOKEN: \$\{\{ steps\.[a-z]+\.outputs\.token \}\}/g;
+const APP_TOKEN_ACTION = "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
+const APP_SECRETS = { "app-id": "${{ secrets.RELEASE_APP_ID }}", "private-key": "${{ secrets.RELEASE_APP_PRIVATE_KEY }}" };
+const FLATPAK_ENV = "flatpak";
 const ATTACH = "attach";
-const isAttach = (file: string, id: string) => file === MACOS && id === ATTACH;
+const isAttach = (file: string, id: string) => (file === MACOS || file === WINDOWS) && id === ATTACH;
+const isCaller = (file: string, id: string) => file === RELEASE && (id === "windows" || id === "macos");
+const WINDOWS_ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && startsWith(inputs.ref, 'v') && ${MAIN_REF} && ${GATE_CLEAR} }}`;
+const RELEASE_GATED = `!cancelled() && ${MAIN_REF} && ${GATE_CLEAR}`;
+const WINDOWS_FILES = ["Seira-$VERSION-setup.exe", "Seira-$VERSION-setup.exe.blockmap", "latest.yml", "Seira-setup.exe", "SHA256SUMS-windows-x64.txt"];
 const ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && ${MAIN_REF} && ${GATE_CLEAR} }}`;
 const MAC_FILES = [
   "Seira-$VERSION-arm64.dmg", "Seira-$VERSION-x64.dmg",
@@ -604,8 +616,8 @@ describe("msstore publish workflow", () => {
 });
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the issue claims workflow, the milestones workflow, the Microsoft Store publish workflow, the npm publish workflow, the package workflows, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
-    expect(files).toEqual([VENDOR, "ci.yml", CLAIMS, MILESTONES, MSSTORE, NPM, ...packageFiles, SMOKE, IMAGE, SNAP]);
+  it("keeps the CI workflow, the issue claims workflow, the milestones workflow, the Microsoft Store publish workflow, the npm publish workflow, the package workflows, the release workflow, the Windows browser vendor build, the two server image workflows and the snap publish workflow only", () => {
+    expect(files).toEqual([VENDOR, "ci.yml", CLAIMS, MILESTONES, MSSTORE, NPM, ...packageFiles, RELEASE, SMOKE, IMAGE, SNAP]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
@@ -619,7 +631,7 @@ describe("CI workflows", () => {
     }
   });
 
-  it("gives every workflow a read-only token, and write access only to a job behind the release environment, except the milestones job and the issue claims job", () => {
+  it("gives every workflow a read-only token, and write access only to a job behind the release environment, except the milestones job, the issue claims job, the redispatch jobs, the two package caller jobs and the server image job of the release workflow", () => {
     for (const [file, flow] of workflows) {
       expect(flow.permissions, file).toEqual({ contents: "read" });
       for (const [id, job] of Object.entries(flow.jobs)) {
@@ -635,6 +647,16 @@ describe("CI workflows", () => {
         }
         const grants = JSON.stringify(job.permissions ?? {});
         if ((file === NPM || file === SNAP || file === MSSTORE) && id === REDISPATCH) {
+          expect(job.permissions, `${file} job ${id}`).toEqual({ actions: "write", contents: "read" });
+          expect(job.environment, `${file} job ${id}`).toBeUndefined();
+          continue;
+        }
+        if (isCaller(file, id)) {
+          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "write", "pull-requests": "read" });
+          expect(job.environment, `${file} job ${id}`).toBeUndefined();
+          continue;
+        }
+        if (file === RELEASE && id === "server-image") {
           expect(job.permissions, `${file} job ${id}`).toEqual({ actions: "write", contents: "read" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
           continue;
@@ -655,6 +677,10 @@ describe("CI workflows", () => {
         }
         if (file === MSSTORE && id === "publish") {
           expect(job.environment, where).toBe("microsoft-store");
+          continue;
+        }
+        if (file === RELEASE && id === "flatpak") {
+          expect(job.environment, where).toBe(FLATPAK_ENV);
           continue;
         }
         expect(["release", "release-approval"], where).toContain(job.environment);
@@ -689,7 +715,7 @@ describe("CI workflows", () => {
   });
 
   it("runs the release gate in a read-only job before every approval, with the reviewer list and no secret", () => {
-    for (const file of [NPM, IMAGE, MACOS, SNAP, MSSTORE]) {
+    for (const file of [NPM, IMAGE, MACOS, WINDOWS, RELEASE, SNAP, MSSTORE]) {
       const gate = workflows.get(file)!.jobs.gate!;
       expect(gate.permissions, file).toEqual({ contents: "read", "pull-requests": "read" });
       expect(gate.environment, file).toBeUndefined();
@@ -705,17 +731,19 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS attach step once to upload to the release, the milestones step once to call the GitHub API and the issue claims step once to call the GitHub API", () => {
+  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository, the macOS and Windows attach steps once each to upload to the release, the release workflow once in each job that calls the GitHub API with the job token, and the release App token in the jobs that tag and publish, the milestones step once to call the GitHub API and the issue claims step once to call the GitHub API", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
     expect(texts.get(IMAGE)!.split(READ_TOKEN)).toHaveLength(2);
     expect(texts.get(NPM)!.split(READ_TOKEN)).toHaveLength(3);
     expect(texts.get(SNAP)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MSSTORE)!.split(READ_TOKEN)).toHaveLength(4);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(4);
+    expect(texts.get(WINDOWS)!.split(READ_TOKEN)).toHaveLength(4);
+    expect(texts.get(RELEASE)!.split(READ_TOKEN)).toHaveLength(8);
     expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     expect(texts.get(CLAIMS)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = (file === IMAGE ? original.replace(LOGIN, "") : original).replaceAll(READ_TOKEN, "");
+      const text = (file === IMAGE ? original.replace(LOGIN, "") : original).replaceAll(READ_TOKEN, "").replaceAll(file === RELEASE ? APP_TOKEN : "\0", "");
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -730,7 +758,8 @@ describe("CI workflows", () => {
       expect(count(texts.get(file)!), `${file} reads a secret outside a job`).toBe(inJobs);
       for (const [id, job] of jobs) {
         expect(job, `${file} job ${id} passes secrets on`).not.toHaveProperty("secrets");
-        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe(file === SNAP ? "snap-store" : file === MSSTORE ? "microsoft-store" : "release");
+        const owner = file === SNAP ? "snap-store" : file === MSSTORE ? "microsoft-store" : file === RELEASE && id === "flatpak" ? FLATPAK_ENV : "release";
+        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe(owner);
       }
     }
   });
@@ -741,7 +770,12 @@ describe("CI workflows", () => {
         expect(JSON.stringify({ ...job, steps: undefined }), `${file} job ${id}`).not.toContain("secrets.");
         for (const step of stepsOf(job)) {
           const where = `${file} job ${id} step ${step.name ?? step.uses}`;
-          expect(JSON.stringify({ ...step, env: undefined }), where).not.toContain("secrets.");
+          // The release App token action takes the App id and the key as inputs. Its pinned version and the two exact secret names are the only exception.
+          const appToken = file === RELEASE && step.uses === APP_TOKEN_ACTION;
+          if (appToken) {
+            expect(step.with, where).toMatchObject(APP_SECRETS);
+            expect(JSON.stringify({ ...step, with: undefined, env: undefined }), where).not.toContain("secrets.");
+          } else expect(JSON.stringify({ ...step, env: undefined }), where).not.toContain("secrets.");
           for (const value of Object.values(step.env ?? {})) {
             if (String(value).includes("secrets.")) expect(value, where).toMatch(/^\$\{\{ secrets\.[A-Z][A-Z0-9_]* \}\}$/);
           }
@@ -750,8 +784,8 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads a secret only in the Microsoft Store publish workflow, in the macOS package workflow, for the Apple signature, in the server image workflow and in the snap publish workflow", () => {
-    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual([MSSTORE, "package-macos.yml", IMAGE, SNAP]);
+  it("reads a secret only in the Microsoft Store publish workflow, in the macOS package workflow, for the Apple signature, in the release workflow, in the server image workflow and in the snap publish workflow", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual([MSSTORE, "package-macos.yml", RELEASE, IMAGE, SNAP]);
   });
 
   it("drops the credentials of every checkout", () => {
@@ -786,7 +820,9 @@ describe("CI workflows", () => {
         const publishes = file === IMAGE && id === "publish";
         const publishesToNpm = file === NPM && id === "publish";
         for (const run of runs(job)) {
-          for (const forbidden of ["gh release", "git tag", "git push", ...(publishesToNpm ? [] : ["npm publish"])]) expect(run).not.toContain(forbidden);
+          const createsDraft = file === RELEASE && id === "draft";
+          for (const forbidden of [...(createsDraft ? [] : ["gh release"]), "git tag", "git push", ...(publishesToNpm ? [] : ["npm publish"])]) expect(run).not.toContain(forbidden);
+          if (createsDraft) expect(run).not.toMatch(/gh release (?!create |--)/);
           if (!publishes) {
             expect(run, `${file} job ${id}`).not.toContain("docker push");
             expect(run, `${file} job ${id}`).not.toContain("imagetools create");
@@ -1113,8 +1149,8 @@ describe("Package workflows", () => {
     expect(packageFiles).toContain("package-macos.yml");
   });
 
-  it("start only by hand, so a pull request never runs them", () => {
-    for (const [file, flow] of packageWorkflows) expect(Object.keys(flow.on), file).toEqual(["workflow_dispatch"]);
+  it("start only by hand or from the release workflow, so a pull request never runs them", () => {
+    for (const [file, flow] of packageWorkflows) expect(Object.keys(flow.on), file).toEqual(["workflow_dispatch", "workflow_call"]);
   });
 
   it("ask for no job permission, so the token stays read-only", () => {
@@ -1622,7 +1658,7 @@ describe("Release job conditions", () => {
   ];
 
   const evaluate = (condition: string, scope: Record<string, unknown>) => {
-    const expression = condition.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+    const expression = condition.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "").replace(/needs\.([a-z]+(?:-[a-z]+)+)\./g, 'needs["$1"].');
     const startsWith = (text: unknown, start: unknown) =>
       String(text ?? "").toLowerCase().startsWith(String(start).toLowerCase());
     const names = ["needs", "github", "inputs", "cancelled", "startsWith"];
@@ -1710,6 +1746,8 @@ describe("Release gate step", () => {
     { file: SNAP, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
     { file: MSSTORE, cases: [{ name: "tag", env: { TAG: "v0.1.1" } }] },
     { file: MACOS, cases: [{ name: "tag", env: { REF: "v0.1.1" } }, { name: "branch", env: { REF: "main" } }] },
+    { file: WINDOWS, cases: [{ name: "tag", env: { REF: "v0.1.1" } }, { name: "branch", env: { REF: "main" } }] },
+    { file: RELEASE, cases: [{ name: "commit", env: {} }] },
   ];
   const folders: string[] = [];
   afterEach(() => {
@@ -1768,5 +1806,137 @@ describe("Release gate step", () => {
       .map(([file]) => file)
       .sort();
     expect(gated).toEqual(GATE_FLOWS.map((flow) => flow.file).sort());
+  });
+});
+
+describe("Release workflow", () => {
+  const release = workflows.get(RELEASE)!;
+  const jobs = Object.entries(release.jobs);
+  const WRITE_JOBS = ["blockers", "tag", "draft", "flatpak", "linux-attach", "windows", "macos", "publish"];
+  const holdsPower = ([id, job]: [string, Job]) => id !== "flatpak" && job.steps !== undefined && (job.environment !== undefined && job.environment !== "release-approval" || (typeof job.permissions === "object" && Object.values(job.permissions).includes("write")));
+  const TRUSTED_SCRIPT = /^node (?:"\$GITHUB_WORKSPACE\/scripts\/release-(?:assets|blockers|preflight)\.mjs"|scripts\/release-(?:blockers|preflight)\.mjs)(?: |$)/;
+
+  it("starts only from a push to main that changes package.json, or by hand", () => {
+    expect(Object.keys(release.on).sort()).toEqual(["push", "workflow_dispatch"]);
+    expect(release.on.push).toEqual({ branches: ["main"], paths: ["package.json"] });
+    for (const trigger of ["workflow_run", "pull_request", "pull_request_target", "issue_comment", "schedule", "workflow_call"]) {
+      expect(release.on, trigger).not.toHaveProperty(trigger);
+    }
+  });
+
+  it("runs one release at a time and never cancels one that runs", () => {
+    expect(release.concurrency).toEqual({ group: "release", "cancel-in-progress": false });
+    expect(release.permissions).toEqual({ contents: "read" });
+  });
+
+  it("pins every action and every called workflow", () => {
+    for (const [id, job] of jobs) {
+      if (job.uses !== undefined) expect(job.uses, id).toMatch(/^\.\/\.github\/workflows\/package-(?:windows|macos)\.yml$/);
+      for (const step of stepsOf(job)) if (step.uses !== undefined) expect(step.uses, `job ${id}`).toMatch(/^[^@\s]+@[0-9a-f]{40}$/);
+    }
+  });
+
+  it("uses the release-approval environment only in the approval job, after the gate flagged the run", () => {
+    expect(jobs.filter(([, job]) => job.environment === "release-approval").map(([id]) => id)).toEqual(["approval"]);
+    const approval = release.jobs.approval!;
+    expect(approval.needs).toBe("gate");
+    expect(approval.if).toBe(FLAGGED);
+    expect(approval.permissions).toEqual({});
+    expect(stepsOf(approval).every((step) => step.uses === undefined)).toBe(true);
+  });
+
+  it("holds every job that writes behind the release gate on main, and the blocker check before the tag", () => {
+    for (const id of WRITE_JOBS) {
+      expect(release.jobs[id]!.if, id).toContain(MAIN_REF);
+      expect(release.jobs[id]!.if, id).toContain(GATE_CLEAR);
+    }
+    expect(release.jobs.blockers!.needs).toEqual(["decide", "gate", "approval"]);
+    expect(release.jobs.tag!.needs).toContain("blockers");
+    expect(release.jobs.tag!.if).toContain("needs.blockers.result == 'success'");
+    expect(release.jobs.draft!.needs).toContain("tag");
+    for (const id of ["linux", "windows", "macos"]) expect(release.jobs[id]!.needs, id).toContain("draft");
+  });
+
+  it("gives the flatpak signing key and storage settings to one step of one job", () => {
+    const withSecrets = jobs.flatMap(([id, job]) => stepsOf(job).filter((step) => JSON.stringify(step).includes("secrets.") && step.uses !== APP_TOKEN_ACTION).map((step) => [id, step] as const));
+    expect(withSecrets).toHaveLength(1);
+    const [id, step] = withSecrets[0]!;
+    expect(id).toBe("flatpak");
+    expect(release.jobs.flatpak!.environment).toBe(FLATPAK_ENV);
+    expect(step.env).toEqual({ FLATPAK_GPG_PRIVATE_KEY: "${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}", FLATPAK_RCLONE_CONF: "${{ secrets.FLATPAK_RCLONE_CONF }}" });
+    expect(JSON.stringify({ ...step, env: undefined })).not.toContain("secrets.");
+  });
+
+  it("mints the App token only in a job of the release environment, from the two App secrets", () => {
+    for (const [id, job] of jobs) {
+      for (const step of stepsOf(job).filter((each) => each.uses === APP_TOKEN_ACTION)) {
+        expect(job.environment, `job ${id}`).toBe("release");
+        expect(step.with, `job ${id}`).toMatchObject(APP_SECRETS);
+        expect(Object.keys(step.with ?? {}).filter((key) => key.startsWith("permission-")), `job ${id}`).toSatisfy((keys: string[]) => keys.every((key) => key === "permission-contents"));
+      }
+    }
+    expect(jobs.filter(([, job]) => stepsOf(job).some((step) => step.uses === APP_TOKEN_ACTION)).map(([id]) => id)).toEqual(["blockers", "tag", "publish"]);
+  });
+
+  it("runs no code from the release commit in a job that holds a write token or the App token", () => {
+    const powerful = jobs.filter(holdsPower);
+    expect(powerful.map(([id]) => id)).toEqual(["blockers", "tag", "draft", "linux-attach", "publish"]);
+    for (const [id, job] of powerful) {
+      for (const step of stepsOf(job)) {
+        const where = `job ${id} step ${step.name ?? step.uses}`;
+        if (step.uses?.startsWith("actions/checkout@")) {
+          expect(step.with?.ref, where).toBe("${{ github.sha }}");
+          expect(String(step.with?.["sparse-checkout"] ?? ""), where).toMatch(/^(?:scripts\/release-[a-z]+\.mjs\n?)+$/);
+        }
+        for (const line of (step.run ?? "").split("\n").map((each) => each.trim()).filter((each) => /(?:^|\s)(?:node|pnpm|npm|bun|bash|sh|python3?) /.test(each) && !/^(?:#|echo|\[|if |elif |\{)/.test(each))) {
+          if (/^node /.test(line)) expect(line, where).toMatch(TRUSTED_SCRIPT);
+          else expect(line, where).not.toMatch(/^(?:pnpm|npm|bun|bash|sh|python3?|\.\/)/);
+        }
+      }
+    }
+  });
+
+  it("builds the packages in jobs that hold no write token and no secret", () => {
+    for (const id of ["linux"]) {
+      const job = release.jobs[id]!;
+      expect(job.environment, id).toBeUndefined();
+      expect(job.permissions, id).toBeUndefined();
+      expect(JSON.stringify(job), id).not.toContain("secrets.");
+    }
+  });
+
+  it("calls the Windows and macOS workflows with the release tag and gated true", () => {
+    for (const [id, file] of [["windows", WINDOWS], ["macos", MACOS]] as const) {
+      expect(release.jobs[id]!.uses, id).toBe(`./.github/workflows/${file}`);
+      expect(release.jobs[id]!.with, id).toEqual({ ref: "${{ needs.decide.outputs.tag }}", gated: true });
+      expect(release.jobs[id]!.environment, id).toBeUndefined();
+    }
+  });
+
+  it("lets the Windows and macOS workflows be called with a ref and a gated input that is false by default", () => {
+    for (const file of [WINDOWS, MACOS]) {
+      const call = workflows.get(file)!.on.workflow_call as { inputs: Record<string, { required?: boolean; default?: unknown; type: string }> };
+      expect(Object.keys(call.inputs).sort(), file).toEqual(["gated", "ref"]);
+      expect(call.inputs.ref, file).toMatchObject({ required: true, type: "string" });
+      expect(call.inputs.gated, file).toMatchObject({ required: false, default: false, type: "boolean" });
+      expect(workflows.get(file)!.on.workflow_dispatch, file).toBeDefined();
+      expect(JSON.stringify((workflows.get(file)!.on.workflow_dispatch as { inputs: object }).inputs), file).not.toContain("gated");
+    }
+  });
+
+  it("starts the server image workflow only after the release is published", () => {
+    const job = release.jobs["server-image"]!;
+    expect(job.needs).toEqual(["decide", "publish"]);
+    expect(job.if).toContain("needs.publish.result == 'success'");
+  });
+
+  it("does not delete or rewrite a tag, a release or a branch", () => {
+    for (const [id, job] of jobs) {
+      for (const run of runs(job)) {
+        for (const forbidden of ["git push", "git tag", "--force", "-X DELETE", "--method DELETE", "gh release delete", "gh release edit", "rm -rf /"]) {
+          expect(run, `job ${id} runs ${forbidden}`).not.toContain(forbidden);
+        }
+      }
+    }
   });
 });

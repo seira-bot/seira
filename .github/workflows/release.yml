@@ -1,0 +1,655 @@
+# The automatic release (docs/releasing.md). A push that changes package.json starts it, and so does a manual start from `main`.
+# It turns the merged `Release v<version>` pull request into a published release with no manual step:
+# decide, CI proof, release gate, wait, blockers, tag, draft, Linux, Flatpak, Windows, macOS, publish, server image.
+#
+# Rules that scripts/ci-workflow.test.ts holds:
+# - Every step is safe to run again. A manual start continues a release that stopped half way. A platform whose update feed is on the draft is not built again.
+# - The `decide` job reads the version on `main` and finds the release commit: the last commit that changed the `version` line. It stops when the release is already published.
+# - The `ci-proof` job waits up to 120 minutes for a successful `CI` run on the release tree (scripts/release-preflight.mjs).
+# - The `gate` job runs scripts/release-gate.mjs. A run that passes does not wait.
+# - A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait. A run that the gate refuses stops.
+# - Every job that holds a token with write access runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
+# - The `blockers` job and the `publish` job stop the release while a P0 issue is open or a high or critical advisory has no patch (scripts/release-blockers.mjs).
+# - The App token comes from the `release` environment. Each job mints its own token, and a job that can name its permission does so.
+#   The `release tags` ruleset lets only the App and the organization admins create a tag.
+#   A release that the job token publishes starts no other workflow, so the `publish` job uses the App token.
+#   That token starts the npm, Snap, Microsoft Store and milestones workflows.
+# - A job that holds a token with write access runs only scripts from the workflow commit: release-assets.mjs, release-blockers.mjs, release-preflight.mjs.
+# - The build jobs hold no secret and no write token. They build the release tag.
+# - The one job that runs code from the release tag with a secret is `flatpak`. It signs the Flatpak repository with the key of the `flatpak` environment.
+# - Windows and macOS build in their own workflows, called with `gated: true`. Their `attach` jobs upload the files.
+# - The release stays a draft until every platform file is on it. A published release cannot get new files.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    name: find the release commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+      sha: ${{ steps.decide.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Read the version and find the release commit
+        id: decide
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          skip() {
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+          [ "$REF" = refs/heads/main ] || skip "This run is not on main, so it releases nothing."
+          version=$(node -p "require('./package.json').version")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || skip "Version $version is not a stable version, so it releases nothing."
+          commit=$(git log -1 --format=%H -G'^  "version": ' HEAD -- package.json)
+          [ -n "$commit" ] || { echo "::error::No commit changed the version line of package.json."; exit 1; }
+          at_commit=$(git show "$commit:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          [ "$at_commit" = "$version" ] || { echo "::error::Commit $commit holds version $at_commit, not $version."; exit 1; }
+          if found=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$version" --jq .tag_name 2>&1); then
+            skip "Release v$version is already published, so it releases nothing."
+          elif ! grep -q 'HTTP 404' <<< "$found"; then
+            echo "$found"
+            exit 1
+          fi
+          {
+            echo "release=true"
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "sha=$commit"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release v$version starts on commit \`$commit\`." >> "$GITHUB_STEP_SUMMARY"
+
+  ci-proof:
+    name: wait for a successful CI run
+    needs: decide
+    if: ${{ needs.decide.outputs.release == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Run the preflight until it passes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.decide.outputs.sha }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          set -uo pipefail
+          deadline=$((SECONDS + 7200))
+          while true; do
+            node scripts/release-preflight.mjs --sha "$SHA" --version "$VERSION" --repo "$GITHUB_REPOSITORY" && status=0 || status=$?
+            case "$status" in
+              0) exit 0 ;;
+              1) ;;
+              *) echo "::error::The preflight could not run."; exit 1 ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::No successful CI run proved the release commit within 120 minutes. No tag was created."
+              exit 1
+            fi
+            echo "The preflight did not pass. Trying again in 60 seconds."
+            sleep 60
+          done
+
+  gate:
+    name: release gate
+    needs: [decide, ci-proof]
+    if: ${{ needs.decide.outputs.release == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pass: ${{ steps.gate.outputs.pass }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Run the release gate
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
+          SHA: ${{ needs.decide.outputs.sha }}
+        run: |
+          set -uo pipefail
+          node scripts/release-gate.mjs --sha "$SHA" && status=0 || status=$?
+          case "$status" in
+            0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+
+  approval:
+    name: approval for a run that the gate flagged
+    needs: gate
+    if: ${{ needs.gate.outputs.pass == 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
+    steps:
+      - run: echo "The wait of the release-approval environment ended."
+
+  blockers:
+    name: no blocker for the release
+    needs: [decide, gate, approval]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.decide.outputs.release == 'true' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/release-blockers.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # No permission input here: the check reads issues and security advisories, and the token input list has no name for advisories.
+      # The installation of the App holds only the permissions that the release needs.
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: app
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Check for a P0 issue and an unpatched advisory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: node scripts/release-blockers.mjs --version "$VERSION" --repo "$GITHUB_REPOSITORY"
+
+  tag:
+    name: create the tag
+    needs: [decide, gate, approval, blockers]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.blockers.result == 'success' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/release-preflight.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: app
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Create the annotated tag on the release commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          SHA: ${{ needs.decide.outputs.sha }}
+        run: |
+          set -euo pipefail
+          err=$(mktemp)
+          if ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha' 2> "$err"); then
+            read -r type object <<< "$ref"
+            if [ "$type" = tag ]; then
+              object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object" --jq .object.sha)
+            fi
+            [ "$object" = "$SHA" ] || { echo "::error::Tag $TAG points to $object, not to the release commit $SHA."; exit 1; }
+            echo "Tag $TAG already points to the release commit."
+            exit 0
+          elif ! grep -q 'HTTP 404' "$err"; then
+            cat "$err"
+            exit 1
+          fi
+          object=$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/tags" -f tag="$TAG" -f message="Seira $TAG" -f object="$SHA" -f type=commit --jq .sha)
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$object" > /dev/null
+          echo "Created tag $TAG on $SHA."
+      - name: Run the preflight on the tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+        run: node scripts/release-preflight.mjs --tag "$TAG" --repo "$GITHUB_REPOSITORY"
+
+  draft:
+    name: create the draft release
+    needs: [decide, gate, approval, tag]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.tag.result == 'success' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    outputs:
+      linux_done: ${{ steps.draft.outputs.linux_done }}
+      windows_done: ${{ steps.draft.outputs.windows_done }}
+      macos_done: ${{ steps.draft.outputs.macos_done }}
+    steps:
+      - name: Create the draft release when it does not exist, and list the platforms that are done
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          set -euo pipefail
+          find_release() {
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select(.tag_name == $ENV.TAG)] | .[0] | "\(.id) \(.draft)"' 2> /dev/null | grep -v '^null' || true
+          }
+          release=$(find_release)
+          if [ -z "$release" ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Seira $TAG" --generate-notes
+            release=$(find_release)
+          fi
+          read -r id draft <<< "$release"
+          [ "$draft" = true ] || { echo "::error::Release $TAG is not a draft."; exit 1; }
+          names=$(gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | select(.state == "uploaded") | .name')
+          has() { grep -qxF -- "$1" <<< "$names"; }
+          linux=false
+          windows=false
+          macos=false
+          if has latest-linux.yml && has "Seira-$VERSION-x86_64.flatpak"; then linux=true; fi
+          if has latest.yml; then windows=true; fi
+          if has latest-mac.yml; then macos=true; fi
+          {
+            echo "linux_done=$linux"
+            echo "windows_done=$windows"
+            echo "macos_done=$macos"
+          } >> "$GITHUB_OUTPUT"
+          echo "Draft release $TAG is ready. Done: linux=$linux windows=$windows macos=$macos." >> "$GITHUB_STEP_SUMMARY"
+
+  linux:
+    name: Linux x64 packages
+    needs: [decide, draft]
+    if: ${{ !cancelled() && needs.draft.result == 'success' && needs.draft.outputs.linux_done != 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.decide.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # A release package must not read a dependency cache that another run wrote.
+          package-manager-cache: false
+      - name: Check the version
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+          SHA: ${{ needs.decide.outputs.sha }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version: $version"
+          echo "commit:  $(git rev-parse HEAD)"
+          [ "$(git rev-parse HEAD)" = "$SHA" ] || { echo "::error::The checkout is not the release commit."; exit 1; }
+          [ "$version" = "$VERSION" ] || { echo "::error::package.json holds version $version, not $VERSION."; exit 1; }
+      - name: Install the tools that the package check needs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends desktop-file-utils squashfs-tools
+      - run: pnpm install --frozen-lockfile
+      - name: Clean generated output
+        # The package copies these folders as they are, so stale files would ship.
+        run: rm -rf dist dist-server dist-companion dist-native release
+      - name: Package the AppImage and the Debian package
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          TMPDIR: ${{ runner.temp }}
+        run: pnpm package:linux
+      - name: "Gate: the update feed and the packages match the release"
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          update=release/linux-unpacked/resources/app-update.yml
+          grep -Eq '^provider: github$' "$update" || { echo "::error::$update does not use the github provider"; exit 1; }
+          grep -Eq '^owner: seira-bot$' "$update" || { echo "::error::$update does not name owner seira-bot"; exit 1; }
+          grep -Eq '^repo: seira$' "$update" || { echo "::error::$update does not name repo seira"; exit 1; }
+          escaped=${VERSION//./\\.}
+          grep -Eq "^version: ['\"]?$escaped['\"]?$" release/latest-linux.yml || { echo "::error::latest-linux.yml does not name version $VERSION"; exit 1; }
+          grep -Eq "^path: ['\"]?Seira-$escaped-x86_64\\.AppImage['\"]?$" release/latest-linux.yml || { echo "::error::latest-linux.yml does not name the AppImage of $VERSION"; exit 1; }
+          node scripts/verify-linux-package.mjs release
+      - name: Stage and verify the files to upload
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-linux-x64
+        run: |
+          set -euo pipefail
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          appimage="Seira-$VERSION-x86_64.AppImage"
+          deb="Seira-$VERSION-amd64.deb"
+          cp "release/$appimage" "release/$deb" release/latest-linux.yml "$STAGE/"
+          cd "$STAGE"
+          cp "$appimage" Seira.AppImage
+          cp "$deb" Seira-amd64.deb
+          sha256sum "$appimage" "$deb" Seira.AppImage Seira-amd64.deb > SHA256SUMS-linux-x64.txt
+          cat SHA256SUMS-linux-x64.txt
+          expected=$(printf '%s\n' "$appimage" "$deb" latest-linux.yml Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt | LC_ALL=C sort)
+          found=$(find . -mindepth 1 -type f -printf '%P\n' | LC_ALL=C sort)
+          [ "$found" = "$expected" ] || { echo "::error::Unexpected file set."; echo "$found"; exit 1; }
+          cmp "$appimage" Seira.AppImage
+          cmp "$deb" Seira-amd64.deb
+          {
+            echo "### Seira $VERSION for Linux x64"
+            echo
+            echo '```'
+            cat SHA256SUMS-linux-x64.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: seira-${{ needs.decide.outputs.version }}-linux-x64
+          path: ${{ runner.temp }}/seira-linux-x64/
+          if-no-files-found: error
+          retention-days: 14
+
+  flatpak:
+    name: Flatpak repository and bundle
+    needs: [decide, gate, approval, draft]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.draft.result == 'success' && needs.draft.outputs.linux_done != 'true' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: flatpak
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.decide.outputs.tag }}
+          persist-credentials: false
+      - name: Check that the tag is the release commit
+        env:
+          SHA: ${{ needs.decide.outputs.sha }}
+        run: |
+          [ "$(git rev-parse HEAD)" = "$SHA" ] || { echo "::error::The tag is not the release commit."; exit 1; }
+      - name: Install the Flatpak tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder ostree rclone gnupg
+          # Ubuntu 24.04 runners block the user namespaces that flatpak-builder needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Import the signing key and the storage settings
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+          FLATPAK_RCLONE_CONF: ${{ secrets.FLATPAK_RCLONE_CONF }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FLATPAK_GPG_PRIVATE_KEY" ] || [ -z "$FLATPAK_RCLONE_CONF" ]; then
+            echo "::error::The flatpak environment must hold both settings. The release stays a draft."
+            exit 1
+          fi
+          umask 077
+          mkdir -m 700 "$RUNNER_TEMP/flatpak-gnupg"
+          printf '%s\n' "$FLATPAK_GPG_PRIVATE_KEY" | GNUPGHOME="$RUNNER_TEMP/flatpak-gnupg" gpg --batch --quiet --import
+          printf '%s\n' "$FLATPAK_RCLONE_CONF" > "$RUNNER_TEMP/flatpak-rclone.conf"
+      - name: Publish the Flatpak repository and make the bundle
+        env:
+          TAG: ${{ needs.decide.outputs.tag }}
+          SEIRA_FLATPAK_GNUPGHOME: ${{ runner.temp }}/flatpak-gnupg
+          SEIRA_FLATPAK_RCLONE_CONFIG: ${{ runner.temp }}/flatpak-rclone.conf
+          SEIRA_FLATPAK_BUILDER_ARGS: --user --install-deps-from=flathub --disable-rofiles-fuse
+        run: scripts/linux-store/publish-flatpak.sh "$TAG"
+      - name: Stage the bundle
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-flatpak
+        run: |
+          set -euo pipefail
+          bundle="release/Seira-$VERSION-x86_64.flatpak"
+          [ -s "$bundle" ] || { echo "::error::The script did not write $bundle."; exit 1; }
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp "$bundle" "$STAGE/"
+      - name: Delete the signing key and the storage settings
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/flatpak-gnupg" "$RUNNER_TEMP/flatpak-rclone.conf"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: seira-${{ needs.decide.outputs.version }}-flatpak
+          path: ${{ runner.temp }}/seira-flatpak/
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-attach:
+    name: attach the Linux files to the release
+    needs: [decide, gate, approval, draft, linux, flatpak]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.draft.result == 'success' && needs.draft.outputs.linux_done != 'true' && needs.linux.result == 'success' && needs.flatpak.result == 'success' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/release-assets.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: seira-${{ needs.decide.outputs.version }}-linux-x64
+          path: ${{ runner.temp }}/seira-linux-x64
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: seira-${{ needs.decide.outputs.version }}-flatpak
+          path: ${{ runner.temp }}/seira-flatpak
+
+      - name: Check the downloaded files
+        shell: bash
+        env:
+          VERSION: ${{ needs.decide.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-linux-x64
+          FLATPAK: ${{ runner.temp }}/seira-flatpak
+        run: |
+          set -euo pipefail
+          cd "$STAGE"
+          files=(
+            "Seira-$VERSION-x86_64.AppImage" "Seira-$VERSION-amd64.deb" latest-linux.yml
+            Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
+          )
+          expected=$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+          found=$(find . -mindepth 1 -type f -printf '%P\n' | LC_ALL=C sort)
+          [ "$found" = "$expected" ] || { echo "::error::The Linux artifact does not hold exactly the six expected files."; echo "$found"; exit 1; }
+          sha256sum -c SHA256SUMS-linux-x64.txt
+          [ "$(find "$FLATPAK" -mindepth 1 -type f -printf '%P\n')" = "Seira-$VERSION-x86_64.flatpak" ] || { echo "::error::The Flatpak artifact does not hold exactly the bundle."; exit 1; }
+
+      - name: Upload the files to the draft release and check it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          VERSION: ${{ needs.decide.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-linux-x64
+          FLATPAK: ${{ runner.temp }}/seira-flatpak
+        run: |
+          set -euo pipefail
+          [ "$TAG" = "v$VERSION" ] || { echo "::error::The tag $TAG is not v$VERSION."; exit 1; }
+          cd "$STAGE"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" \
+            "Seira-$VERSION-x86_64.AppImage" "Seira-$VERSION-amd64.deb" latest-linux.yml \
+            Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt \
+            "$FLATPAK/Seira-$VERSION-x86_64.flatpak" \
+            --repo "$GITHUB_REPOSITORY"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" check "$TAG" --repo "$GITHUB_REPOSITORY"
+
+  windows:
+    name: Windows x64 installer
+    needs: [decide, gate, approval, draft]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.draft.result == 'success' && needs.draft.outputs.windows_done != 'true' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    uses: ./.github/workflows/package-windows.yml
+    permissions:
+      contents: write
+      pull-requests: read
+    with:
+      ref: ${{ needs.decide.outputs.tag }}
+      gated: true
+
+  macos:
+    name: macOS apps
+    needs: [decide, gate, approval, draft]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.draft.result == 'success' && needs.draft.outputs.macos_done != 'true' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    uses: ./.github/workflows/package-macos.yml
+    permissions:
+      contents: write
+      pull-requests: read
+    with:
+      ref: ${{ needs.decide.outputs.tag }}
+      gated: true
+
+  publish:
+    name: publish the release
+    needs: [decide, gate, approval, draft, linux-attach, windows, macos]
+    if: ${{ !cancelled() && needs.decide.result == 'success' && needs.draft.result == 'success' && needs.linux-attach.result != 'failure' && needs.linux-attach.result != 'cancelled' && needs.windows.result != 'failure' && needs.windows.result != 'cancelled' && needs.macos.result != 'failure' && needs.macos.result != 'cancelled' && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/release-assets.mjs
+            scripts/release-blockers.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      # No permission input here, for the reason in the `blockers` job. Only the check below reads this token.
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: reader
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Check again for a P0 issue and an unpatched advisory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.reader.outputs.token }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: node scripts/release-blockers.mjs --version "$VERSION" --repo "$GITHUB_REPOSITORY"
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: writer
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Check that every platform is on the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.writer.outputs.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          set -euo pipefail
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select(.tag_name == $ENV.TAG)] | .[0] | .id // empty')
+          [ -n "$id" ] || { echo "::error::No release for $TAG."; exit 1; }
+          names=$(gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '.[] | select(.state == "uploaded") | .name')
+          missing=0
+          for name in \
+            latest-linux.yml SHA256SUMS-linux-x64.txt Seira.AppImage Seira-amd64.deb "Seira-$VERSION-x86_64.flatpak" \
+            latest.yml SHA256SUMS-windows-x64.txt Seira-setup.exe \
+            latest-mac.yml SHA256SUMS-mac.txt Seira.dmg Seira-intel.dmg; do
+            grep -qxF -- "$name" <<< "$names" || { echo "::error::$name is not on the release."; missing=1; }
+          done
+          [ "$missing" = 0 ] || exit 1
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.writer.outputs.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+        run: node scripts/release-assets.mjs publish "$TAG" --repo "$GITHUB_REPOSITORY"
+
+  server-image:
+    name: start the server image build
+    needs: [decide, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Start the Server image workflow on main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+        run: gh workflow run server-image.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"

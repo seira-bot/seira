@@ -8,7 +8,8 @@ number of runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
-[Package workflows](#package-workflows)).
+[Package workflows](#package-workflows)). The `Release` workflow starts them
+by itself (see [Release workflow](#release-workflow)).
 
 ## Jobs
 
@@ -198,6 +199,40 @@ holds these rules for every `package-*.yml` file:
   script in `package.json` ends with `electron-builder ... --publish never`.
 - It has one `actions/upload-artifact` step with `if-no-files-found: error`.
 
+## Release workflow
+
+`.github/workflows/release.yml` turns a merged version bump into a published
+release (see [Releasing](releasing.md#automatic-release)). It runs on a push to
+`main` that changes `package.json`, and on a manual start from `main`. It never
+runs on a pull request.
+
+- The `gate` job runs the [release gate](#the-release-gate). A run that the
+  gate flags waits for the wait timer of the `release-approval` environment.
+  A maintainer can cancel the run during the wait.
+- The `blockers` job and the `publish` job run `scripts/release-blockers.mjs`.
+  The script stops the release while a `P0` issue is open, or while a draft or
+  triage security advisory of high or critical severity has no patched version
+  that covers the release version. It prints the issue number, and the advisory
+  id and severity. It never prints an advisory description.
+- Each job that writes mints its own App token in the `release` environment.
+  A job with write access runs only the scripts `release-assets.mjs`,
+  `release-blockers.mjs`, and `release-preflight.mjs`, taken from the workflow
+  commit. It never runs code from the commit that it releases.
+- The `flatpak` job is the only job that reads the `flatpak` environment. It
+  signs and uploads the Flatpak repository.
+- `package-windows.yml` and `package-macos.yml` have a `workflow_call` trigger
+  with the inputs `ref` and `gated`. The `Release` workflow passes
+  `gated: true`, because it already ran the gate and the wait on that commit.
+  Another repository can call these workflows, but it cannot use the
+  environments or secrets of this repository. A manual start has no `gated`
+  input.
+- Every job is safe to run again. A manual start continues a release that
+  stopped half way.
+- The workflow does not delete a tag or a release, does not roll back, and
+  does not force-push. An organization admin does these by hand.
+
+`scripts/ci-workflow.test.ts` holds these rules.
+
 ## Server image workflows
 
 Two workflows handle the server image of the root `Dockerfile`. The scripts in
@@ -380,8 +415,10 @@ its tag.
 
 ### The `release` environment
 
-`package-macos.yml` reads the Apple signing secrets from the environment
-`release`, its `attach` job writes to the draft release in it, the `publish` job of `server-image.yml` uses it to write to
+`release.yml` reads the secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`
+from the environment `release`. They belong to the GitHub App that creates the tag and publishes
+the release. `package-macos.yml` reads the Apple signing secrets from the same environment,
+its `attach` job writes to the draft release in it, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
 npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 
@@ -389,7 +426,7 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 | --- | --- |
 | Required reviewers | None. The `release-approval` environment holds the wait for a flagged run. |
 | Deployment branches and tags | Selected branches and tags: `main` only |
-| Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
+| Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)), `RELEASE_APP_ID`, and `RELEASE_APP_PRIVATE_KEY` |
 
 - A job in `release` never waits. The `gate` and `approval` jobs before it
   decide if the run waits.
@@ -398,9 +435,17 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
 
+### The `flatpak` environment
+
+The `flatpak` job of `release.yml` uses this environment. An organization admin
+creates it with `main` as the only deployment ref and no required reviewer. It
+holds the secrets `FLATPAK_GPG_PRIVATE_KEY` and `FLATPAK_RCLONE_CONF`. Set the
+variable `RELEASE_HUMAN_REVIEWERS` at repository level, as for the other
+release workflows.
+
 ### The `release-approval` environment
 
-The `approval` jobs of `npm-publish.yml`, `package-macos.yml`, and `server-image.yml` use the
+The `approval` jobs of `release.yml`, `npm-publish.yml`, `package-macos.yml`, `package-windows.yml`, and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
 GitHub **Settings → Environments**:
 
