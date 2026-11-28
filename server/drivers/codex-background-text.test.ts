@@ -155,12 +155,63 @@ describe("codexBackgroundProviderArgs", () => {
 
   it("reads inline and dotted provider tables, and a profile file's", () => {
     expect(argsFor('[model_providers]\nmygw = { name = "GW", base_url = "https://gw.example/v1" }\n').overrides)
-      .toEqual(['model_providers.mygw={ name = "GW", base_url = "https://gw.example/v1" }']);
+      .toEqual(['model_providers.mygw.name="GW"', 'model_providers.mygw.base_url="https://gw.example/v1"']);
     expect(argsFor('model_providers.mygw.base_url = "https://gw.example/v1"\nmodel_providers.mygw.env_key = "GW_KEY"\n').overrides)
       .toEqual(['model_providers.mygw.base_url="https://gw.example/v1"', 'model_providers.mygw.env_key="GW_KEY"']);
     writeFileSync(join(home, "config.toml"), 'model_provider = "mygw"\n');
     expect(argsFor('[model_providers.mygw]\nbase_url = "https://work.example/v1"\n', "mygw::glm-5", "work.config.toml").overrides)
       .toEqual(['model_providers.mygw.base_url="https://work.example/v1"']);
+  });
+
+  it("moves a header and a token out of argv when they sit in an inline table", () => {
+    const { env, args, overrides } = argsFor([
+      "[model_providers.mygw]", 'base_url = "https://gw.example/v1"',
+      'http_headers = { Authorization = "Bearer synthetic-inline-header", "X-Team" = \'synthetic-inline-team\' }',
+    ].join("\n"));
+    expect(overrides).toEqual([
+      'model_providers.mygw.base_url="https://gw.example/v1"',
+      'model_providers.mygw.env_http_headers.Authorization="SEIRA_CODEX_MYGW_HEADER_1"',
+      'model_providers.mygw.env_http_headers.X-Team="SEIRA_CODEX_MYGW_HEADER_2"',
+    ]);
+    expect(args.join(" ")).not.toMatch(/synthetic/);
+    expect(env.SEIRA_CODEX_MYGW_HEADER_1).toBe("Bearer synthetic-inline-header");
+    expect(env.SEIRA_CODEX_MYGW_HEADER_2).toBe("synthetic-inline-team");
+  });
+
+  it("moves a token and nested headers out of argv when the provider itself is an inline table", () => {
+    for (const toml of [
+      '[model_providers]\nmygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-inline-token", http_headers = { "X-Team" = "synthetic-nested-team" } }\n',
+      'model_providers.mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-inline-token", http_headers = { "X-Team" = "synthetic-nested-team" } }\n',
+    ]) {
+      const { env, args, overrides } = argsFor(toml);
+      expect(overrides).toEqual([
+        'model_providers.mygw.base_url="https://gw.example/v1"',
+        'model_providers.mygw.env_http_headers.X-Team="SEIRA_CODEX_MYGW_HEADER_1"',
+        'model_providers.mygw.env_key="SEIRA_CODEX_MYGW_TOKEN"',
+      ]);
+      expect(args.join(" ")).not.toMatch(/synthetic/);
+      expect(env.SEIRA_CODEX_MYGW_TOKEN).toBe("synthetic-inline-token");
+      expect(env.SEIRA_CODEX_MYGW_HEADER_1).toBe("synthetic-nested-team");
+    }
+  });
+
+  it("drops an inline table that does not parse, with its values", () => {
+    const broken = [
+      'mygw = { base_url = "https://gw.example/v1" experimental_bearer_token = "synthetic-broken-1" }',
+      'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-2" } }',
+      'mygw = { base_url = "https://gw.example/v1", = "synthetic-broken-3" }',
+      'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-4", }',
+      'mygw = { base_url = "https://gw.example/v1", http_headers = { A = "synthetic-broken-5" b = "x" } }',
+    ];
+    for (const line of broken) {
+      const { env, args } = argsFor(`[model_providers]\n${line}\n`);
+      expect(args, line).toEqual([]);
+      expect(Object.keys(env)).toEqual(["CODEX_HOME"]);
+    }
+    // A bad inline table next to good keys drops only itself.
+    const mixed = argsFor('[model_providers.mygw]\nbase_url = "https://gw.example/v1"\nhttp_headers = { A = "synthetic-broken-6" b = "x" }\n');
+    expect(mixed.overrides).toEqual(['model_providers.mygw.base_url="https://gw.example/v1"']);
+    expect(mixed.args.join(" ")).not.toMatch(/synthetic/);
   });
 
   it("adds nothing for OpenAI, Codex's own providers or a provider config.toml does not declare", () => {
