@@ -190,6 +190,9 @@ describe("the Update server row", () => {
     expect(view({ status: button({ run: { outcome: "not-changed", reason: "no-room", from: "0.1.150", at: 1 } }) }).note).toBe(
       "The server wasn't changed. The server needs free disk space for a copy of its data first. To see the copies earlier updates kept, on the server run: docker volume ls --filter label=com.seira.role=update-backup. To remove one: docker volume rm <name>",
     );
+    expect(view({ status: button({ layout: "service", run: { outcome: "not-changed", reason: "no-room", from: "0.1.150", at: 1 } }) }).note).toBe(
+      "The server wasn't changed. The server needs free disk space for a copy of its data first. To see the copies earlier updates kept, on the server run: sudo ls -l /var/backups/seira-update. To remove one: sudo rm /var/backups/seira-update/<name>",
+    );
     expect(view({ status: button({ run: { outcome: "not-started", from: "0.1.150", at: 1 } }) }).note).toBe(
       "The server didn't start the update. On the server, run: systemctl status seira-update.path",
     );
