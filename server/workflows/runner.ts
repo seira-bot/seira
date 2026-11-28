@@ -41,7 +41,6 @@ export interface StepThreadOptions {
   modelSelection?: ModelSelection;
   /** A chat an earlier run used for this same step. Used only while it still fits what the step needs now. */
   reuse?: string;
-  /** The access the step has in the chat. */
   access?: RoutineAccess;
 }
 export interface WorkflowRunnerDeps {
