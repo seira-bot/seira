@@ -1,9 +1,10 @@
 // MOCA-393: a bot working in a project hands a teammate a new thread in that same folder, so the project's rules load there.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("starts a teammate's thread in the delegating bot's project folder by default, and hands off without one when there is none, even when asked", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -22,7 +23,7 @@ it("starts a teammate's thread in the delegating bot's project folder by default
   // A project lives outside Seira's data; folders inside it are bots' private workspaces.
   const site = mkdtempSync(join(tmpdir(), "seira-site-"));
   const evidence = () => {
-    try { return readFileSync(join(dataDir, "room-plan.json.evidence.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)); } catch { return []; }
+    return readJsonLines(join(dataDir, "room-plan.json.evidence.jsonl"));
   };
   try {
     const sam = (await cli("new-bot", "--name", "Sam")).bot;

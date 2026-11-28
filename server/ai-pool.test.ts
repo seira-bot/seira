@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aiPoolSchema, pickPoolMember, poolReading, samePlanPair, type AiPoolMode, type PoolMemberState } from "./ai-pool.ts";
+import { aiPoolSchema, markAfterPick, pickPoolMember, poolReading, samePlanPair, type AiPoolMode, type PoolMemberState } from "./ai-pool.ts";
 
 const NAMES = "ABCDE";
 const LEVELS = [90, 80, 70, 50];
@@ -221,5 +221,26 @@ describe("samePlanPair", () => {
   });
   it("allows different AIs", () => {
     expect(samePlanPair([plan("a"), plan("b", "codex")])).toBeNull();
+  });
+});
+
+describe("markAfterPick", () => {
+  const a = { instanceId: "a", model: "m" }, b = { instanceId: "b", model: "m" };
+
+  it("follows the client when it sends aiPool", () => {
+    expect(markAfterPick("auto", false, a, b)).toBe("pinned");
+    expect(markAfterPick(undefined, true, a, b)).toBe("auto");
+    expect(markAfterPick("pinned", true, a, b)).toBe("auto");
+  });
+
+  it("pins an auto conversation whose model a client changed without aiPool", () => {
+    expect(markAfterPick("auto", undefined, a, b)).toBe("pinned");
+    expect(markAfterPick("auto", undefined, a, { ...a, model: "other" })).toBe("pinned");
+  });
+
+  it("leaves the mark alone when the model did not change or the conversation is not auto", () => {
+    expect(markAfterPick("auto", undefined, a, { ...a })).toBeUndefined();
+    expect(markAfterPick("pinned", undefined, a, b)).toBeUndefined();
+    expect(markAfterPick(undefined, undefined, a, b)).toBeUndefined();
   });
 });

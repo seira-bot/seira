@@ -3,6 +3,7 @@ import { AFTER_RESET_MS, type LimitResetSchedule, type LimitResetScheduleInput }
 import { normalizeCronSchedule, nextCronRuns, type RoutineCronSchedule } from "../shared/routine-schedule.ts";
 import type { RoutineIntervalWindow } from "../shared/routines.ts";
 import { clockMinutes, INTERVAL_RESTRICTION_SEARCH_MS, intervalAllowsOccurrence, intervalHasRestrictions, MAX_DATE_MS, nextAlignedInterval } from "./routine-intervals.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export interface RoutineIntervalSchedule {
   type: "interval";
@@ -105,6 +106,7 @@ function cleanIntervalEndsAt(value: unknown, anchorAt: number): number | undefin
 }
 
 export class RoutineScheduleError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status = 400;
 }
 

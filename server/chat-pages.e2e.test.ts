@@ -4,13 +4,14 @@
 // no external service is reached.
 import { randomBytes } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { BOT_HTML_CSP } from "../shared/app-frame/csp.ts";
 import { CSP_META_PREFIX } from "../shared/app-frame/document.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const owner = randomBytes(32).toString("base64url");
 const realFetch = globalThis.fetch;
@@ -71,8 +72,7 @@ it("shows a jsx page, takes what the person pointed at to the bot as records, re
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const bot = (await cli("new-bot", "--name", "Designer")).bot;
   const threadId = bot.activeTaskId as string;
-  const evidence = () => (existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean) : [])
-    .map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === bot.id);
+  const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === bot.id);
   const plan = (steps: Array<{ tool: string; arguments: unknown; expectError?: boolean }>) =>
     writeFileSync(planPath, JSON.stringify({ [bot.id]: { steps, reply: "Done." } }));
   const settled = async () => expect((await cli("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("settled");

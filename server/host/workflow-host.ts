@@ -10,6 +10,7 @@ import { BUSY_CODES } from "../routine-recovery.ts";
 import { askOf, waitingFor } from "../routine-waits.ts";
 import type { Routine, RoutineManager, RoutineManagerOptions, RoutineRun, RoutineRunOn } from "../routines.ts";
 import type { Store } from "../store.ts";
+import type { WorkflowStarts } from "./workflow-starts.ts";
 import { createWorkflowRunner, type StepResult, type StepTurn } from "../workflows/runner.ts";
 import { workflowCopy, type WorkflowCopyLookup } from "../workflows/routine-link.ts";
 import { openWorkflowStore } from "../workflows/store.ts";
@@ -30,11 +31,13 @@ export interface WorkflowTurnOptions {
 export interface WorkflowHostDeps {
   dataDir: string;
   store: Pick<Store, "bot" | "patchTask">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "cancelRun" | "update" | "workflowRunState"> | null;
+  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState"> | null;
   routineHooks(): Pick<RoutineManagerOptions, "createTask" | "interruptTurn"> | null;
   botState(botId: string): "ready" | "busy" | "missing";
   startTurn(botId: string, text: string, opts: WorkflowTurnOptions): Promise<unknown>;
   reports: Pick<AutomationReports, "postStep">;
+  /** The webhooks and app triggers that run a workflow: they keep the same step copy as a routine does. */
+  starts?(): Pick<WorkflowStarts, "rewriteEvents" | "unlinkEvents"> | null;
   /** True once the app is closing: no new step turn starts. */
   shuttingDown?(): boolean;
   /** True while routines.json cannot be read: a run is not recovered then, because its routine is not there to ask. */
@@ -57,6 +60,8 @@ export interface WorkflowHost {
   run(runId: string): WorkflowRun | null;
   /** Starts the routine again at a failed step. Throws, after it has cancelled the new run, when the run cannot be prepared. */
   runAgain(runId: string, stepId: string, routine: Routine, workflow: Workflow): RoutineRun | null;
+  /** Starts a new run for a webhook or an app trigger with the event of an earlier run, at a failed step. */
+  runAgainFromEvent(runId: string, stepId: string, startId: string, workflow: Workflow, botId: string): RoutineRun | null;
   copyFor: WorkflowCopyLookup;
   start: NonNullable<WorkflowRoutineOptions["startWorkflow"]>;
   routineRunChanged(run: RoutineRun): void;
@@ -159,7 +164,7 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
     creator: (id) => store.creator(id),
     create(input, creator) {
       const at = now();
-      const workflow: Workflow = { id: randomUUID(), name: input.name, steps: input.steps, connections: input.connections, createdAt: at, updatedAt: at };
+      const workflow: Workflow = { id: randomUUID(), name: input.name, steps: input.steps, connections: input.connections, ...(input.manual ? { manual: true } : {}), createdAt: at, updatedAt: at };
       store.putWorkflow(workflow);
       if (creator) store.putCreator(workflow.id, creator);
       deps.emit({ kind: "workflow", workflow });
@@ -169,14 +174,19 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       const existing = store.workflow(id);
       if (!existing) return null;
       const workflow: Workflow = { ...existing, name: input.name, steps: input.steps, connections: input.connections, updatedAt: Math.max(now(), existing.updatedAt + 1) };
+      if (input.manual === true) workflow.manual = true;
+      else if (input.manual === false) delete workflow.manual;
       store.putWorkflow(workflow);
       deps.emit({ kind: "workflow", workflow });
       relink(id, { rewriteWorkflow: true }, copyChanged(workflow));
+      const copy = workflowCopy(workflow, botName);
+      void deps.starts?.()?.rewriteEvents(id, copy).catch(() => {});
       return workflow;
     },
     remove(id) {
       if (!store.workflow(id)) return false;
       relink(id, { workflowId: null, enabled: false });
+      void deps.starts?.()?.unlinkEvents(id).catch(() => {});
       store.deleteWorkflow(id);
       deps.emit({ kind: "workflow.deleted", workflowId: id });
       return true;
@@ -188,6 +198,28 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       const routines = deps.routines();
       if (!old || !routines) return null;
       const started = routines.runNow(routine.id);
+      if (!started) return null;
+      try {
+        runner.prepareFrom(started, old, stepId, workflow);
+      } catch (error) {
+        void routines.cancelRun(started.id).catch(() => {});
+        throw error;
+      }
+      return started;
+    },
+    runAgainFromEvent(runId, stepId, startId, workflow, botId) {
+      const old = store.run(runId);
+      const routines = deps.routines();
+      if (!old || !routines) return null;
+      const prior = routines.listRuns().find((candidate) => candidate.id === runId);
+      const event = prior?.prompt ?? old.event;
+      if (!event || !prior) return null;
+      const queued = routines.enqueueWebhook({
+        webhookId: startId, webhookName: prior.routineName, prompt: event, botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
+        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}),
+        ...(prior.resultsThreadId ? { resultsThreadId: prior.resultsThreadId } : {}),
+      });
+      const started = routines.listRuns().find((candidate) => candidate.id === queued.id) ?? null;
       if (!started) return null;
       try {
         runner.prepareFrom(started, old, stepId, workflow);

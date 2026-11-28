@@ -13,6 +13,7 @@ import { hostedWorkspaceConfigured } from "./enterprise.ts";
 import { parseMemberClaim, teamMemberEmail, teamRoleScopes, type CloudTeam } from "./cloud-team.ts";
 import { isLoopbackHost } from "./request-auth.ts";
 import { formatPairingCode, type SessionRegistry } from "./sessions.ts";
+import { PublicError } from "./public-error.ts";
 
 /** Any of these switches the server into Cloud home mode; then all are required. */
 export const CLOUD_HOME_KEYS = ["SEIRA_CLOUD_ROLE", "SEIRA_CLOUD_MACHINE_ID", "SEIRA_CLOUD_ADMIN_URL", "SEIRA_CLOUD_BOOTSTRAP_SECRET"] as const;
@@ -258,7 +259,7 @@ export function readSignedBody(req: IncomingMessage, limit = 4096): Promise<Buff
     req.on("data", (chunk: Buffer) => {
       if (done) return;
       size += chunk.length;
-      if (size > limit) { done = true; reject(Object.assign(new Error("body too large"), { status: 413 })); return; }
+      if (size > limit) { done = true; reject(new PublicError("body too large", 413)); return; }
       chunks.push(chunk);
     });
     req.on("end", () => { if (!done) { done = true; resolve(Buffer.concat(chunks)); } });

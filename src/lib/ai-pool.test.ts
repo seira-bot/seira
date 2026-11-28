@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InstanceInfo } from "@/state/store";
 import type { EngineLimit } from "@/lib/limit-resets";
 import {
-  activePool, levelsFor, memberStatus, nextPoolMember, planConflict, poolPick, poolReady, poolRuns, stepsOf, suggestPoolMembers, type AiPool,
+  activePool, levelsFor, memberStatus, nextPoolMember, planConflict, poolPick, poolReady, poolRuns, stepsOf, suggestPaidMembers, suggestPoolMembers, isPaidMember, memberBilling, type AiPool,
 } from "./ai-pool";
 
 const NOW = 1_000_000;
@@ -50,13 +50,13 @@ describe("planConflict", () => {
 });
 
 describe("suggestPoolMembers", () => {
-  it("keeps one sign-in per plan, the one with more usage left, and puts keys last", () => {
+  it("keeps one sign-in per plan, the one with more usage left, and leaves pay-per-use AIs out", () => {
     const claudeA = engine("claudeA", "claudeAgent");
     const claudeB = engine("claudeB", "claudeAgent");
     const codex = engine("codex", "codex");
     const key = engine("key", "grokAgent", { access: "api" });
     const picked = suggestPoolMembers([key, claudeA, claudeB, codex], [limit("claudeA", 80), limit("claudeB", 20), limit("codex", 50)], NOW);
-    expect(picked.map((m) => m.instanceId)).toEqual(["claudeB", "codex", "key"]);
+    expect(picked.map((m) => m.instanceId)).toEqual(["claudeB", "codex"]);
     expect(picked[0]!.model).toBe("claudeB-m");
   });
   it("treats unknown usage as the lowest and skips signed-out AIs", () => {
@@ -67,6 +67,36 @@ describe("suggestPoolMembers", () => {
   });
   it("gives fewer than two when there is one usable AI", () => {
     expect(suggestPoolMembers([engine("a", "codex")], [], NOW)).toHaveLength(1);
+  });
+});
+
+describe("suggestPaidMembers", () => {
+  const key = engine("key", "grokAgent", { access: "api" });
+  const metered = engine("metered", "codex", { snapshot: { state: "available", authenticated: true, billing: "metered" } as InstanceInfo["snapshot"] });
+  it("lists ready pay-per-use AIs that are not in the list yet", () => {
+    const signedOut = engine("out", "grokAgent", { access: "api", snapshot: { state: "available", authenticated: false } });
+    const plan = engine("plan", "codex");
+    expect(suggestPaidMembers([plan, key, metered, signedOut], [{ instanceId: "plan", model: "plan-m" }]).map((m) => m.instanceId)).toEqual(["key", "metered"]);
+    expect(suggestPaidMembers([plan, key], [{ instanceId: "key", model: "key-m" }])).toEqual([]);
+  });
+  it("does not go over the size of the pool", () => {
+    const members = Array.from({ length: 9 }, (_, index) => ({ instanceId: `m${index}`, model: "m" }));
+    expect(suggestPaidMembers([key, metered], members).map((m) => m.instanceId)).toEqual(["key"]);
+  });
+  it("knows which members bill each use", () => {
+    expect(isPaidMember({ instanceId: "key", model: "m" }, [key])).toBe(true);
+    expect(isPaidMember({ instanceId: "a", model: "m" }, [engine("a", "codex")])).toBe(false);
+    expect(isPaidMember({ instanceId: "gone", model: "m" }, [])).toBe(false);
+  });
+  it("calls an AI a plan only when it says so, and never guesses from silence", () => {
+    const member = (instanceId: string) => ({ instanceId, model: "m" });
+    const silent = engine("silent", "codex", { access: undefined });
+    const custom = engine("custom", "codex", { access: "custom" });
+    const planBySnapshot = engine("snap", "codex", { access: undefined, snapshot: { state: "available", authenticated: true, billing: "subscription" } as InstanceInfo["snapshot"] });
+    const instances = [key, engine("plan", "codex"), silent, custom, planBySnapshot];
+    expect(["key", "plan", "silent", "custom", "snap", "gone"].map((id) => memberBilling(member(id), instances)))
+      .toEqual(["paid", "plan", "unknown", "unknown", "plan", "unknown"]);
+    expect(memberBilling(member("both"), [engine("both", "codex", { access: "api", snapshot: { state: "available", authenticated: true, billing: "subscription" } as InstanceInfo["snapshot"] })])).toBe("paid");
   });
 });
 

@@ -9,6 +9,7 @@ import { BOT_PROFILE_PATCH_FIELDS } from "./bot-profile.ts";
 import type { Scope, SessionRecord, SessionRegistry } from "./sessions.ts";
 import { denyReason as companionDenial, isCompanionNotice } from "../companion/src/routes.ts";
 import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
+import { moveOutRefusal } from "./workspace-backup-move-out.ts";
 
 /** `owner`: the machine's owner. `service`: a shared server where every bot's shell is a loopback caller too,
  * so loopback without a session may reach only SERVICE_ALLOW. */
@@ -420,6 +421,7 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/stop-line$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/messages\/[\w-]+\/edit$/ },
   { methods: ["POST", "DELETE"], path: /^\/api\/bots\/[\w-]+\/setup-request$/ }, // Set me up: what a typed /setup could do
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/task-suggestions$/ }, // Start, Hide or Show on a task card: Start sends what a typed line could
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/active-branch$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/compact$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/start-fresh$/ },
@@ -494,13 +496,15 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/routines$/ },
   { methods: ["POST"], path: /^\/api\/routines$/ },
   { methods: ["PATCH", "DELETE"], path: /^\/api\/routines\/[\w-]+$/ },
-  { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
+  { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/(?:run|skip)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
   // workflows: steps name bots and instructions only; each route checks that the person sees every bot
   { methods: ["GET", "POST"], path: /^\/api\/workflows$/ },
   { methods: ["GET", "PATCH", "DELETE"], path: /^\/api\/workflows\/[\w-]+$/ },
   { methods: ["GET"], path: /^\/api\/workflows\/[\w-]+\/runs$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/from-start$/ },
+  { methods: ["POST"], path: /^\/api\/workflows\/[\w-]+\/switch$/ },
   { methods: ["GET"], path: /^\/api\/workflow-runs\/[\w-]+$/ },
   { methods: ["POST"], path: /^\/api\/workflow-runs\/[\w-]+\/steps\/[\w-]+\/run-again$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/workflow-draft$/ },
@@ -516,6 +520,10 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/board$/ },
   // moving one Needs you card to Done: the handler lets only someone who can chat with the card's bot do it
   { methods: ["POST"], path: /^\/api\/board\/close$/ },
+  // todos: the handlers hide what the viewer cannot see and need chat level on the bot for a change; the bot picker stays admin-only
+  { methods: ["GET", "POST"], path: /^\/api\/todos$/ },
+  { methods: ["PATCH", "DELETE"], path: /^\/api\/todos\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/todos\/[\w-]+\/(start|restore)$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
   { methods: ["GET"], path: /^\/api\/config$/ },
   // a person's own "About you" on a Team Cloud
@@ -580,6 +588,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   // alone, on a personal Cloud its owner alone (routes/team-slack.ts); off a Cloud they answer 404
   { methods: ["GET"], path: /^\/api\/slack\/team\/bots$/ },
   { methods: ["POST"], path: /^\/api\/slack\/team\/messages(?:\/[0-9a-f-]{36}\/stop)?$/ },
+  // the GitHub connection: the handler shows each person only the bots they see, and every change checks for its owner
+  { methods: ["GET"], path: /^\/api\/github-app$/ },
+  { methods: ["POST"], path: /^\/api\/github-app\/refresh$/ },
 ];
 
 export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {
@@ -751,7 +762,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
       !provesSameOrigin(req)) {
       return deny(403, "forbidden: this browser's session makes changes only from its own page");
     }
-    const narrowed = options.restricted?.(session, method, path, options.url) ?? null;
+    const narrowed = moveOutRefusal(session, method, path) ?? options.restricted?.(session, method, path, options.url) ?? null;
     if (narrowed) return deny(403, narrowed);
     const needed = requiredScope(method, path, options.features ?? {});
     if (!session.scopes.includes(needed)) {

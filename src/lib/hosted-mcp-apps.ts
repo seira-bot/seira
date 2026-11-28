@@ -7,6 +7,7 @@ import dalektaLogo from "@/assets/dalekta/logo.png";
 import grupyLogo from "@/assets/grupy/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
+import tebarLogo from "@/assets/tebar/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
 import type { LocaleKey } from "@/locales";
 import { WAPILOT_MCP_URL } from "../../shared/one-bot-mcp";
@@ -114,6 +115,15 @@ export const HOSTED_MCP_APPS = [
     notice: "wapilot.notice",
     perBot: true,
     keywords: "wapilot whatsapp web chrome extension send messages chats contacts groups auto reply broadcast reminder template catalog knowledge guardrails",
+  },
+  {
+    id: "tebar",
+    label: "Tebar",
+    url: "https://api.tebar.app/mcp",
+    icon: { image: tebarLogo },
+    description: "tebar.description",
+    notice: "tebar.notice",
+    keywords: "tebar social media schedule scheduled posts calendar caption comments messages dm inbox automation instagram tiktok threads youtube facebook linkedin telegram discord pinterest reels story stats analytics",
   },
 ] as const satisfies readonly HostedMcpApp[];
 

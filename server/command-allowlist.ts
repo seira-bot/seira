@@ -5,6 +5,7 @@ import { dirname, isAbsolute, sep } from "node:path";
 import type { CommandAllowlistCandidate, CommandAllowlistRule } from "../shared/command-allowlist.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { redactSecretsInText } from "./redact.ts";
+import { PublicError } from "./public-error.ts";
 
 const MAX_COMMAND_BYTES = 16_384;
 const MAX_CWD_BYTES = 4_096;
@@ -16,7 +17,7 @@ const RULE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 type StoredRule = CommandAllowlistRule & { botId: string };
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-const invalid = (message: string): Error => Object.assign(new Error(message), { status: 400 });
+const invalid = (message: string): Error => new PublicError(message, 400);
 
 /** Validate without rewriting the command. Resolving a symlink, or folding
  * `..` across one, could make a grant apply in a different directory. */
@@ -138,7 +139,7 @@ export class CommandAllowlistStore {
   }
 
   private assertWritable(): void {
-    if (this.unreadable) throw Object.assign(new Error("Saved command rules could not be read. Repair the rule store before changing them."), { status: 503 });
+    if (this.unreadable) throw new PublicError("Saved command rules could not be read. Repair the rule store before changing them.", 503);
   }
 
   private save(rules: StoredRule[]): void {

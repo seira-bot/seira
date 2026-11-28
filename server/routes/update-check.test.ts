@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { json, readBody } from "../harness/http.ts";
 import { requiredScope, type RequestAuth } from "../request-auth.ts";
@@ -44,11 +44,19 @@ describe("update check route", () => {
     expect((await fetch(`${base}/api/updates`)).status).toBe(404);
   });
 
-  it("reports a failed lookup as a 502 with the reason", async () => {
-    const base = await serve(async () => { throw new Error("GitHub answered 403"); });
-    const response = await fetch(`${base}/api/updates/check`);
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: "Could not check for updates: GitHub answered 403" });
+  it("reports a failed lookup as a 502 without the internal text, and logs the full error", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const base = await serve(async () => { throw new Error("connect ECONNREFUSED 10.1.2.3:443 at /srv/seira/update.ts"); });
+      const response = await fetch(`${base}/api/updates/check`);
+      expect(response.status).toBe(502);
+      const text = await response.text();
+      expect(JSON.parse(text)).toEqual({ error: "Could not check for updates: the update service could not be reached." });
+      expect(text).not.toContain("ECONNREFUSED");
+      expect(text).not.toContain("10.1.2.3");
+      expect(text).not.toContain("/srv/seira");
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("ECONNREFUSED 10.1.2.3:443"));
+    } finally { logged.mockRestore(); }
   });
 
   it("hands the Update server button only an admin's session; loopback and other methods are refused", async () => {

@@ -4,6 +4,7 @@ import { isBotPackage, parseBotPackage, parsePackageDocument, upgradeV1, type Pa
 import { PACKAGE_V1_VERSION } from "../shared/package-format.ts";
 import { fetchGithubFolder } from "./share-github.ts";
 import { parseTeamManifest, type ParsedTeamManifest } from "./team-manifest.ts";
+import { PublicError } from "./public-error.ts";
 
 export const TEAM_LIBRARY_REPOSITORY = "https://github.com/seira-bot/seira-teams";
 export const TEAM_LIBRARY_RAW_ROOT = "https://raw.githubusercontent.com/seira-bot/seira-teams/main";
@@ -181,7 +182,7 @@ export async function fetchLibraryTeam(slug: string, fetcher: Fetcher = fetch): 
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new Error("That team name is invalid");
   const catalog = await fetchTeamCatalog(fetcher);
   const entry = catalog.teams.find((team) => team.slug === slug);
-  if (!entry) throw Object.assign(new Error("That library team was not found"), { status: 404 });
+  if (!entry) throw new PublicError("That library team was not found", 404);
   if (entry.folder) {
     const folder = await fetchGithubFolder(`${TEAM_LIBRARY_RAW_ROOT}/${entry.folder}`, fetcher);
     return folder.kind === "package" ? folder.document : parseTeamManifest(folder.manifest as Parameters<typeof parseTeamManifest>[0]);

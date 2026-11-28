@@ -112,6 +112,13 @@ describe("request source for the lockout", () => {
 });
 
 describe("scopes", () => {
+  it("lets signed-in clients answer a task card with POST only", () => {
+    const path = "/api/bots/bot-1/task-suggestions";
+    expect(requiredScope("POST", path)).toBe("client");
+    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) expect(requiredScope(method, path), method).toBe("admin");
+    expect(requiredScope("POST", `${path}/extra`)).toBe("admin");
+  });
+
   it("lets signed-in clients fork bot and room conversations without opening other task actions", () => {
     for (const path of ["/api/bots/bot-1/tasks/thread-1/forks", "/api/groups/room-1/tasks/thread-1/forks"]) {
       expect(requiredScope("POST", path), path).toBe("client");
@@ -194,10 +201,10 @@ describe("scopes", () => {
       ["POST", "/api/threads/t/undo"], ["POST", "/api/bots/x/compact"], ["POST", "/api/bots/x/tasks/t/title"],
       ["PATCH", "/api/bots/x/cards/m"], ["POST", "/api/groups/g/messages"], ["PATCH", "/api/groups/g"],
       ["PATCH", "/api/bots/x"], ["PATCH", "/api/bots/x/profile"], ["POST", "/api/attachments"], ["PUT", "/api/bots/order"],
-      ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
+      ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"], ["POST", "/api/routines/r/skip"],
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
       ["GET", "/api/workflows"], ["POST", "/api/workflows"], ["GET", "/api/workflows/w1"], ["PATCH", "/api/workflows/w1"], ["DELETE", "/api/workflows/w1"],
-      ["GET", "/api/workflows/w1/runs"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
+      ["GET", "/api/workflows/w1/runs"], ["POST", "/api/workflows/from-start"], ["POST", "/api/workflows/w1/switch"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
       ["GET", "/api/threads/t/messages/m/workflow-draft"],
       ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],

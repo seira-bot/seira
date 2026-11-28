@@ -12,6 +12,7 @@ import { linkPlainPaths } from "../shared/markdown-plain-paths.ts";
 import { PREVIEW_MAX_BYTES } from "../shared/upload-limits.ts";
 import { inSecretFolder, SECRET_FILE_REFUSAL } from "./secret-folder.ts";
 import { userErrorThrown } from "./user-errors.ts";
+import { PublicError } from "./public-error.ts";
 
 export const MESSAGE_FILE_MAX_BYTES = PREVIEW_MAX_BYTES;
 /** Saving a linked file streams it to the person, so it may be larger than anything read into memory or previewed. */
@@ -44,7 +45,7 @@ export function messageFileRoots(options: {
 }
 
 function statusError(status: number, message: string, code?: string): Error & { status: number; code?: string } {
-  return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
+  return Object.assign(new PublicError(message, status), code ? { code } : {});
 }
 
 /** Rounded up so a file just over the limit never reads as the limit itself. */

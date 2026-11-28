@@ -4,13 +4,15 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import { IMAGE_COMPLEXITIES, IMAGE_PROVIDERS } from "../../shared/image-generation.ts";
+import { IMAGE_COMPLEXITIES, IMAGE_MODEL_CHOICES, IMAGE_PROVIDERS, type ImageProvider } from "../../shared/image-generation.ts";
 import { EFFORT_LEVELS } from "../../shared/wire.ts";
 import { DEFAULT_WINDOW_MINUTES } from "../cache-keepwarm.ts";
 import { botsTowardLimit } from "../../shared/bot-limit.ts";
 import { browserEngineChoice } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
 import { CONFIG_PATCH_FIELDS as F, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
+import { threadLogCapOrDefault } from "../thread-log-rotation.ts";
+import { hostOf, type Consequence, type ConsequenceCode } from "./confirm.ts";
 import { display, withoutKeys, type RegistryDeps, type SettingEntry, type Where, type WritableSpec } from "./registry.ts";
 
 /** Security: what a bot or card reads of a section never carries a key, token, secret or password field. */
@@ -22,21 +24,38 @@ const quoted = (text: string) => `"${text.length > 160 ? `${text.slice(0, 160)}â
 const nonEmpty = <T extends z.ZodType<object>>(schema: T) => schema.refine((value) => Object.keys(value).length > 0, "name at least one field");
 type BrowserProfileChange = { id?: string; name: string; browser?: "chrome" };
 const imageSlot = z.object({ provider: z.enum(IMAGE_PROVIDERS), model: z.string().trim().max(200).optional() }).strict();
+/** OpenRouter's live catalog holds more image models than its list; any of its vendor/model ids goes. A custom endpoint names its own. */
+const imageModelKnown = (provider: ImageProvider, model: string) => provider === "custom" || IMAGE_MODEL_CHOICES[provider].some((choice) => choice.id === model)
+  || (provider === "openrouter" && /^[a-z0-9][\w.-]*\/[\w.:-]+$/i.test(model));
+const imageModels = (provider: ImageProvider) => IMAGE_MODEL_CHOICES[provider].map((choice) => `${choice.id} (${choice.name})`).join(", ");
 
-export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "bots" | "call" | "read" | "paused" | "browserEngine">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
+export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "bots" | "call" | "read" | "paused" | "browserEngine" | "imageReady">, writable: (spec: WritableSpec) => SettingEntry): SettingEntry[] {
   const cfg = deps.cfg;
   /** A setting saved with PUT /api/config; `says` is the applied card's line, else it shows before â†’ after. */
   const section = <V,>(spec: { id: string; label: string; help: string; where: Where; synonyms: string[]; value: z.ZodType<V>; allowed: string;
-    current(): unknown; patch(value: V): Record<string, unknown>; says?(value: V): string; read?(): string }) => writable({
+    current(): unknown; patch(value: V): Record<string, unknown>; says?(value: V): string; read?(): string; confirm?(value: V): Consequence | null;
+    refuse?(value: V): string | null; more?(): Record<string, unknown>; review?(value: V): { before: string; after: string } }) => writable({
     id: spec.id, label: spec.label, help: spec.help, where: spec.where, synonyms: spec.synonyms, value: spec.value, allowed: spec.allowed,
-    current: spec.current, read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
-    ...(spec.says ? { describe: (value: V) => ({ change: spec.says!(value) }) } : {}),
+    // Security: Undo writes back what `current` gives and keeps it on disk; a section saves merged, so its keys stay as they are.
+    current: () => visible(spec.current()), read: spec.read ?? (() => display(visible(spec.current()))), write: (value: V) => deps.saveConfig(spec.patch(value)),
+    ...(spec.says ? { describe: (value: V) => { const refusal = spec.refuse?.(value); return refusal ? { refusal } : { change: spec.says!(value) }; } } : {}),
+    ...(spec.more ? { more: spec.more } : {}),
+    ...(spec.confirm ? { confirm: spec.confirm } : {}),
+    ...(spec.review ? { review: spec.review } : {}),
   });
-  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string) => section({
-    id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
-    current: () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; },
-    patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
-  });
+  /** `onConfirm`: turning it on waits for the owner's tap, naming this. */
+  const feature = (id: string, label: string, help: string, where: Where, synonyms: string[], field: string, onUnlessFalse: boolean, yes: string, no: string, onConfirm?: ConsequenceCode) => {
+    const isOn = () => { const set = (cfg().features as Record<string, unknown> | undefined)?.[field]; return onUnlessFalse ? set !== false : set === true; };
+    return section({
+      id, label, help, where, synonyms, value: z.boolean(), allowed: "true or false",
+      current: isOn,
+      patch: (on: boolean) => ({ features: { [field]: on } }), says: (on: boolean) => (on ? yes : no),
+      ...(onConfirm ? { confirm: (on: boolean) => (on && !isOn() ? { code: onConfirm } : null) } : {}),
+    });
+  };
+  /** A provider other than the one in use now sends conversation text to a new place. */
+  const newProvider = (now: string | undefined, next: string | undefined): Consequence | null =>
+    (next && next !== "off" && next !== now ? { code: "dataTo", params: { provider: next } } : null);
   const libraryList = async () => ((await deps.read("skills", "/api/skills-library"))?.skills ?? []) as Array<{ name: string; enabled: boolean; everyBot: boolean }>;
   /** The bots a Starter Cloud's limit counts that are awake now, as POST /api/starter/awake takes them. */
   const awakeNow = () => { const paused = deps.paused(); return deps.bots().filter((bot) => botsTowardLimit([bot]) === 1 && !bot.chiefOfStaff && !paused.includes(bot.id)).map((bot) => bot.id); };
@@ -50,13 +69,14 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       says: ({ enabled, backup }) => (enabled && backup ? `Turn on automatic recovery: a bot whose engine fails before any work starts tries once more on ${backup.instanceId} / ${backup.model}` : "Turn off automatic recovery"),
     }),
     section({
-      id: "ai.routing", label: "Decision and extraction", help: "The small model that decides who answers in rooms and sorts the inbox (Cloudflare Workers AI, Jev, OpenRouter, the Cloud plan's included one or the person's custom endpoint). Its keys, and a custom endpoint's address, are set only in Settings.", where: "routing",
+      id: "ai.routing", label: "Decision and extraction", help: "The small model that decides who answers in rooms and sorts the inbox (Cloudflare Workers AI, Jev, OpenRouter, the Cloud plan's included one or the person's custom endpoint). Its keys and addresses are set only by the person.", where: "routing",
       synonyms: ["decision", "extraction", "routing", "who answers", "jev", "openrouter", "workers ai", "cloudflare", "custom endpoint", "system one"],
-      // Security: a custom endpoint's address is where its key goes, so only the person sets it.
-      value: nonEmpty(withoutKeys(F.decider.unwrap().omit({ key: true, openrouterKey: true, workersAiToken: true, customKey: true, customBaseUrl: true }).strict())),
-      allowed: '{"enabled"?,"provider"?:"jev"|"workersai"|"openrouter"|"custom"|"included"|"off","openrouterModel"?,"openrouterApi"?:"chat"|"decisions","customModel"?,"customApi"?:"systemone"|"decisions"|"chat","jobs"?:{"roomRouting"?,"inboxTriage"?,"inboxSort"?},"workersAiAccountId"?, addresses?}',
+      // Security: each address is where a saved key goes, so only the person sets it.
+      value: nonEmpty(withoutKeys(F.decider.unwrap().omit({ key: true, openrouterKey: true, workersAiToken: true, customKey: true, customBaseUrl: true, baseUrl: true, openrouterBaseUrl: true, workersAiBaseUrl: true }).strict())),
+      allowed: '{"enabled"?,"provider"?:"jev"|"workersai"|"openrouter"|"custom"|"included"|"off","openrouterModel"?,"openrouterApi"?:"chat"|"decisions","customModel"?,"customApi"?:"systemone"|"decisions"|"chat","jobs"?:{"roomRouting"?,"inboxTriage"?,"inboxSort"?},"workersAiAccountId"?}',
       current: () => cfg().decider ?? {}, patch: (decider) => ({ decider }),
       says: (decider) => `Decision and extraction: ${fields(decider)}. Decisions send conversation text to the chosen provider, off this computer`,
+      confirm: (decider) => newProvider(cfg().decider?.provider, decider.provider),
     }),
     section({
       id: "ai.images", label: "Image generation", help: "Which provider and model make images, a fallback, and how many images one turn may make. Keys are set with keys.* or in Settings.", where: "images",
@@ -65,6 +85,17 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       allowed: `{"primary"?:{"provider","model"?},"fallback"?:{...}|null,"maxPerTurn"?:1-10,"complexity"?:"low"|"medium"|"high" (GPT-Image-2.6 models only),"customUrl"?} with provider one of ${IMAGE_PROVIDERS.join(", ")}`,
       current: () => cfg().imageGen ?? {}, patch: (imageGen) => ({ imageGen }),
       says: (imageGen) => `Image generation: ${fields(imageGen)}. Image prompts go to the chosen provider, off this computer`,
+      refuse: (imageGen) => {
+        const wrong = [imageGen.primary, imageGen.fallback].find((slot) => slot?.model && !imageModelKnown(slot.provider, slot.model));
+        return wrong ? `${wrong.model} is not a ${wrong.provider} image model. Use one of: ${imageModels(wrong.provider)}. Ask the user which one if they did not name it.` : null;
+      },
+      more: () => ({
+        models: Object.fromEntries(IMAGE_PROVIDERS.filter((provider) => provider !== "custom").map((provider) => [provider, IMAGE_MODEL_CHOICES[provider].map((choice) => choice.id)])),
+        ...(deps.imageReady ? { ready: Object.fromEntries(IMAGE_PROVIDERS.map((provider) => [provider, deps.imageReady!(provider)])),
+          readyHelp: "A provider that is not ready needs its key (keys.* opens a secure card) or, for codex, the person's own Codex sign-in on this computer." } : {}),
+      }),
+      confirm: (imageGen) => (imageGen.customUrl && imageGen.customUrl !== cfg().imageGen?.customUrl ? { code: "keyTo", params: { service: "Image generation", host: hostOf(imageGen.customUrl) } }
+        : newProvider(cfg().imageGen?.primary?.provider, imageGen.primary?.provider) ?? (imageGen.fallback ? newProvider(cfg().imageGen?.fallback?.provider ?? cfg().imageGen?.primary?.provider, imageGen.fallback.provider) : null)),
     }),
     section({
       id: "profile.name", label: "Your name", help: "What bots call you.", where: "about-you", synonyms: ["my name", "name", "profile", "about me"],
@@ -78,11 +109,15 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       id: "profile.aboutMe", label: "About you", help: "What every bot knows about you.", where: "about-you", synonyms: ["about me", "about you", "profile", "bio"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().profile?.aboutMe ?? "", read: () => cfg().profile?.aboutMe ?? "",
       patch: (aboutMe) => ({ profile: { aboutMe } }), says: (text) => (text ? `Tell every bot this about you: ${quoted(text)}` : "Clear what every bot knows about you"),
+      confirm: (text) => (text !== (cfg().profile?.aboutMe ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().profile?.aboutMe ?? "", after: text }),
     }),
     section({
       id: "bots.everyBotRules", label: "Rules for every bot", help: "Instructions every bot follows, ahead of its own.", where: "about-you", synonyms: ["rules", "rules for every bot", "instructions", "every bot"],
       value: z.string().max(4000), allowed: "text up to 4000 characters, or empty to clear", current: () => cfg().everyBotRules ?? "", read: () => cfg().everyBotRules ?? "",
       patch: (everyBotRules) => ({ everyBotRules }), says: (text) => (text ? `Make every bot follow: ${quoted(text)}` : "Clear the rules every bot follows"),
+      confirm: (text) => (text !== (cfg().everyBotRules ?? "") ? { code: "standingRule" } : null),
+      review: (text) => ({ before: cfg().everyBotRules ?? "", after: text }),
     }),
     section({
       id: "bots.newBotEffort", label: "Effort for new bots", help: "The reasoning effort a new bot starts with when its model names none; null uses the engine's own.", where: "new-bots",
@@ -94,6 +129,8 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       synonyms: ["new bots", "defaults", "template", "preset"], value: withoutKeys(F.newBotDefaults.unwrap()), allowed: "the whole template object, as get shows it",
       current: () => cfg().newBotDefaults, patch: (newBotDefaults) => ({ newBotDefaults }),
       says: (template) => `Replace the template every new bot starts from with: ${display(visible(template)).slice(0, 400)}`,
+      confirm: () => ({ code: "newBots" }),
+      review: (template) => ({ before: cfg().newBotDefaults ? JSON.stringify(visible(cfg().newBotDefaults), null, 2) : "", after: JSON.stringify(visible(template), null, 2) }),
     }),
     section({
       id: "bots.keepWarm", label: "Keep caches warm", help: "After a turn, keep each bot's prompt cache warm so its next reply is faster and cheaper; it costs a few tokens.", where: "limits",
@@ -120,6 +157,8 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       synonyms: ["log size", "storage", "event log", "cleanup"], value: z.number().int().min(MIN_THREAD_EVENT_LOG_BYTES).max(MAX_THREAD_EVENT_LOG_BYTES).nullable(),
       allowed: `${MIN_THREAD_EVENT_LOG_BYTES} to ${MAX_THREAD_EVENT_LOG_BYTES} bytes, or null for the default ceiling (256 MiB)`,
       current: () => cfg().threads?.eventLogMaxBytes ?? null, read: () => display(cfg().threads?.eventLogMaxBytes ?? "256 MiB (default ceiling)"), patch: (eventLogMaxBytes) => ({ threads: { eventLogMaxBytes } }),
+      // A lower limit deletes logs at once, and Undo can't bring them back. No limit still trims at the default ceiling.
+      confirm: (bytes) => (threadLogCapOrDefault(bytes) < threadLogCapOrDefault(cfg().threads?.eventLogMaxBytes ?? null) ? { code: "deletesLogs" } : null),
     }),
     section({
       id: "appearance.toolCalls", label: "Show tool calls", help: "Show each tool a bot runs in the conversation. Unset, Advanced mode shows them and Simple mode hides them.", where: "tool-calls",
@@ -129,12 +168,13 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       patch: (on: boolean) => ({ features: { showToolCalls: on } }), says: (on: boolean) => (on ? "Show each tool a bot runs in its conversation" : "Hide tool runs from conversations"),
     }),
     feature("desktops.browser", "Built-in browser", "Bots may use the built-in browser; each bot also has its own switch.", "browser", ["browser", "built-in browser"], "browser", true,
-      "Let bots use the built-in browser", "Turn off the built-in browser for every bot"),
+      "Let bots use the built-in browser", "Turn off the built-in browser for every bot", "browserOnAll"),
     section({
       id: "desktops.browserLocalNetwork", label: "Browser on your local network", help: "Whether bots' browsers may open sites on this computer's local network.", where: "browser",
       synonyms: ["local network", "lan", "browser sites", "intranet"], value: z.boolean(), allowed: "true or false",
       current: () => cfg().browserEngine?.egress?.localNetwork === true, patch: (localNetwork) => ({ browserEngine: { egress: { localNetwork } } }),
       says: (on) => (on ? "Let bots' browsers open sites on your local network" : "Keep bots' browsers off your local network"),
+      confirm: (on) => (on && cfg().browserEngine?.egress?.localNetwork !== true ? { code: "browserLan" } : null),
     }),
     section({
       id: "desktops.browserProxy", label: "Browser proxy", help: "An unauthenticated SOCKS5 proxy bots' browsers reach public sites through; empty sends them direct. Its address is never shown, only whether one is set.",
@@ -143,6 +183,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       allowed: 'an unauthenticated "socks5://host:port", or "" for no proxy', current: () => cfg().browserEngine?.egress?.proxy ?? "",
       read: () => (cfg().browserEngine?.egress?.proxy ? "set" : ""), patch: (proxy) => ({ browserEngine: { egress: { proxy } } }),
       says: (proxy) => (proxy ? "Send bots' browsers to public sites through the SOCKS5 proxy you named" : "Send bots' browsers to public sites directly, with no proxy"),
+      confirm: (proxy) => (proxy && proxy !== (cfg().browserEngine?.egress?.proxy ?? "") ? { code: "browserProxy" } : null),
     }),
     section({
       id: "desktops.browserEngine", label: "Browser engine", help: "What runs bots' browsers: Seira's own Chrome driver (the default where this computer has a Chrome for it) or agent-browser.", where: "browser",
@@ -159,7 +200,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
     }),
     feature("computer.sharing", "Computer sharing", "Whether every paired device may lend its computer to bots here. Each lent folder or app is still picked and confirmed on that device.", "page:desktops",
       ["share computer", "shared computers", "lend", "lending"], "sharedComputers", false,
-      "Let every paired device lend its computer to bots here, not only your own. A lent folder can be used to reach a shell", "Stop every device, your own included, lending its computer to bots here"),
+      "Let every paired device lend its computer to bots here, not only your own. A lent folder can be used to reach a shell", "Stop every device, your own included, lending its computer to bots here", "lending"),
     writable({
       id: "desktops.browserProfiles", label: "Browser profiles", help: "Named browser profiles bots use, each keeping its own logins. Send the full list; leave out id for a new one. Removing one deletes its logins, so only the user does that.",
       where: "browser", synonyms: ["browser profiles", "profiles", "my chrome", "logins"],
@@ -180,6 +221,10 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
           return [...(before.name !== wanted.name ? [`rename "${before.name}" to "${wanted.name}"`] : []), ...(Boolean(before.browser) !== Boolean(wanted.browser) ? [`move "${wanted.name}" to ${where(wanted)}`] : [])];
         });
         return lines.length ? { change: `Browser profiles: ${lines.join("; ")}` } : { refusal: "That list is the same as the current one." };
+      },
+      confirm: (next: BrowserProfileChange[]) => {
+        const current = cfg().browserProfiles ?? [];
+        return next.some((wanted) => wanted.browser === "chrome" && !current.find((profile) => profile.id === wanted.id)?.browser) ? { code: "ownChrome" } : null;
       },
       write: (next: BrowserProfileChange[]) => {
         const current = (cfg().browserProfiles ?? []).map(({ id, name, browser }) => ({ id, name, ...(browser ? { browser } : {}) }));

@@ -23,6 +23,7 @@ import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { botLimitRefusal } from "../bot-limit.ts";
 import { fromPairedDevice } from "./paired-device.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { PublicError } from "../public-error.ts";
 
 export type ModelSelectionCheck = { ok: true; selection: ModelSelection } | ({ ok: false; status: number } & ServerErrorBody);
 
@@ -286,12 +287,12 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         for (const skill of template.skills) {
           if (presetSkills.has(skill.name)) continue;
           const parsed = parseSkillMd(skill.text);
-          if ("error" in parsed || parsed.name !== skill.name) throw Object.assign(new Error("Skill name does not match its contents"), { status: 400 });
+          if ("error" in parsed || parsed.name !== skill.name) throw new PublicError("Skill name does not match its contents", 400);
           const installed = installSkill(bot.id, skill.source, [{ path: "SKILL.md", content: skill.text }]);
-          if ("error" in installed) throw Object.assign(new Error(installed.error), { status: 422 });
+          if ("error" in installed) throw new PublicError(installed.error, 422);
           if (skill.enabled) {
             const enabled = setSkillEnabled(bot.id, skill.name, true);
-            if ("error" in enabled) throw Object.assign(new Error(enabled.error), { status: 422 });
+            if ("error" in enabled) throw new PublicError(enabled.error, 422);
           }
         }
         // On a Cloud home only the owner's devices create bots: its routines are theirs.

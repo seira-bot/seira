@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("rejects a misspelled start_thread recipient without creating work, then delivers the corrected handoff", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
@@ -20,8 +21,7 @@ it("rejects a misspelled start_thread recipient without creating work, then deli
     expect(response.ok, JSON.stringify(result)).toBe(true);
     return result;
   };
-  const turns = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+  const turns = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
   try {
     const sender = (await cli("new-bot", "--name", "Coordinator", "--section", "Review")).bot;
     const recipient = (await cli("new-bot", "--name", "Reviewer", "--section", "Review")).bot;

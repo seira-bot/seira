@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { sendTunnelJson } from "./tunnel-gzip.ts";
+import { PublicError } from "../public-error.ts";
 
 export { gzipTunnelReplies } from "./tunnel-gzip.ts";
 export { withAccessLog } from "../access-log.ts";
@@ -44,7 +45,7 @@ export function readBody(req: IncomingMessage, limit = 1_000_000): Promise<any> 
     const fail = (status: number, msg: string) => {
       if (done) return;
       done = true;
-      const err = Object.assign(new Error(msg), { status });
+      const err = new PublicError(msg, status);
       reject(err);
     };
     req.on("data", (c) => {

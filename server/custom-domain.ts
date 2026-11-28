@@ -4,6 +4,7 @@ import type { LookupAddress } from "node:dns";
 import { request as httpsRequest } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import { networkInterfaces } from "node:os";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 const CHECK_TIMEOUT_MS = 8_000;
 const MAX_RESPONSE_BYTES = 16_384;
@@ -11,6 +12,7 @@ const DESCRIPTOR_PATH = "/.well-known/seira/environment";
 export const CUSTOM_DOMAIN_CHALLENGE_PATH = "/.well-known/seira/domain-check/";
 
 export class CustomDomainError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
 
   constructor(message: string, status = 400) {

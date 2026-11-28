@@ -1,6 +1,7 @@
 import type { WireBot } from "./wire";
 import type { RoutineInput } from "./routines";
 import type { ToolScope } from "./tool-scope";
+import type { StartsTodos } from "./todo";
 
 /** Data shared by the default template and an individual creation draft. */
 export type BotDefaultsProfile = Partial<Pick<WireBot,
@@ -16,6 +17,7 @@ export type BotDefaultsProfile = Partial<Pick<WireBot,
   mcpServers?: string[] | null;
   toolScope?: ToolScope | null;
   parkDirectMessages?: boolean;
+  startsTodos?: StartsTodos;
   helperModel?: boolean;
   /** null or absent: follows the installation's `tts.everyReply`. */
   voiceNoteEveryReply?: boolean | null;

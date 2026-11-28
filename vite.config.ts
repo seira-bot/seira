@@ -75,6 +75,11 @@ export default defineConfig({
     // Doubled on Windows, whose runners are about 1.45x slower.
     testTimeout: hostTimeout(20_000),
     hookTimeout: hostTimeout(30_000),
+    // Node 24 (V8 13.6) can free a wasm-to-JS import wrapper that another thread still uses when a worker thread
+    // ends, and the test process dies with SIGSEGV: https://github.com/nodejs/node/issues/66366. Type stripping runs
+    // wasm in each worker thread that loads a .ts file, so a test that stops such a worker hits it. A wrapper that
+    // never tiers up never enters the shared cache that frees it.
+    execArgv: ["--wasm-wrapper-tiering-budget=1000000000"],
   },
   resolve: {
     alias: {

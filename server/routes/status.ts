@@ -22,6 +22,7 @@ import type { PrivateRecords } from "../host/private-records.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { PHONE_WIRE_NAMES, sentWireName } from "../../electron/phone-wire-names.mjs";
+import { publicErrorText } from "../public-error.ts";
 
 export interface StatusRouteDeps {
   store: Pick<Store, "bot" | "bots" | "tasks" | "groupByThread">;
@@ -105,7 +106,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
         const reply = await fleetRequest(socket, forward.method, forward.path, forward.body);
         return json(res, reply.status, reply.body ?? {});
       } catch (error) {
-        return json(res, 502, { error: error instanceof Error ? error.message : String(error) });
+        return json(res, 502, { error: publicErrorText(error, "fleet request", "The fleet service could not answer.") });
       }
     }
 

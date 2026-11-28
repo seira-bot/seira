@@ -48,6 +48,9 @@ export function excludedWorkspaceAuthPath(path: string): boolean {
   if (/^team-policy\.json(?:$|\.\d+\.[0-9a-f-]+\.tmp$)/.test(path)) return true;
   // A Team Cloud member's own installation, keys and sign-ins: theirs, never in the team's backup.
   if (/^people-connections(?:\/|$)/.test(path)) return true;
+  // The copy of a sessions file that could not be read cleanly (sessions.ts): it holds the sign-in hashes the file held,
+  // so it never leaves the computer it was taken on.
+  if (/^sessions\.json\.damaged-\d+(?:\.\d+\.[0-9a-f-]+\.tmp)?$/.test(path)) return true;
   // A dated copy of the settings file, and the copy of one that could not be understood: they hold the credentials
   // the settings file holds, so they never leave the computer they were taken on.
   if (/^config\.json\.(?:bak\.\d{8}-\d{6}(?:-\d+)?|unreadable-[0-9a-f]{12})(?:\.\d+\.[0-9a-f-]+\.tmp)?$/.test(path)) return true;

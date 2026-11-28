@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import { ENVELOPE_MARK } from "./runtime/envelope.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SETTLED = "Your downstream room requests have settled.";
@@ -17,8 +18,7 @@ const REPORT_FROM_MIRA = "[From @Mira (bot) · report on assignment";
 const RERUN_NOTE = "Seira restarted while your previous turn here was running";
 const TEAMMATES_CUT = "A restart cut these teammates' turns";
 
-const jsonl = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string): any[] => readJsonLines(path);
 
 type Row = Record<string, any>;
 interface RuntimeDb {

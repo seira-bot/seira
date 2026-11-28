@@ -4,6 +4,9 @@ import { z } from "zod";
 
 export type SettingTier = "safe" | "secret" | "owner-only";
 
+/** How a change that waited for the owner's tap ended. */
+export type AppSettingResult = "applied" | "declined" | "expired" | "stale" | "failed";
+
 /** On a card: display values only, never a key. */
 export interface AppSettingRequest {
   settingId: string;
@@ -11,15 +14,25 @@ export interface AppSettingRequest {
   before?: string;
   after: string;
   tier: SettingTier;
+  /** On a card that waits for the owner's Apply: what follows from the change, in the person's language. */
+  consequence?: string;
+  /** When a waiting card stops taking Apply, in ms since the epoch. */
+  expiresAt?: number;
+  /** On a waiting card in a conversation that other people can read: the card leaves out the current value. The owner reads
+   * the current and the new value through the owner-only review route before Apply. */
+  privateReview?: true;
+  /** How a waiting card ended; `resumed` once the bot has heard it. */
+  result?: AppSettingResult;
+  resumed?: boolean;
 }
 export interface AppSettingCardField {
-  /** A bot's change to one of the app's own settings, applied with Undo. */
+  /** A bot's change to one of the app's own settings: applied with Undo, or waiting for the owner's Apply (not `autoApplied`). */
   appSettingRequest?: AppSettingRequest;
 }
 
 /** Settings a bot can ask the app to show in chat as the real control. Adding one here, in the server's SETTINGS_CARDS
  * and in the window's card list is the whole registration. */
-export const SETTINGS_CARD_IDS = ["other-computers", "ai-sign-in"] as const;
+export const SETTINGS_CARD_IDS = ["other-computers", "ai-sign-in", "ai-pool"] as const;
 export type SettingsCardId = (typeof SETTINGS_CARD_IDS)[number];
 export const isSettingsCardId = (id: unknown): id is SettingsCardId => typeof id === "string" && (SETTINGS_CARD_IDS as readonly string[]).includes(id);
 /** Security invariant: a settings card row names the setting only. What the control shows (a code, a link, an address)

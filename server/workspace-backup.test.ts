@@ -118,6 +118,14 @@ afterEach(() => { for (const root of scratch.splice(0)) rmSync(root, { recursive
 describe("encrypted full workspace backups", () => {
   it("leaves waits out of backups and Cloud sends", () => expect(omittedFromWorkspaceBackup("waits.json")).toBe(true));
 
+  it("reports the SHA-256 of the whole encrypted file", async () => {
+    const source = directory();
+    writeFileSync(join(source, "notes.md"), "kept");
+    const exported = await createWorkspaceBackup(source, { password: PASSWORD });
+    expect(exported.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(exported.sha256).toBe(createHash("sha256").update(readFileSync(exported.path)).digest("hex"));
+  });
+
   it("carries no waits, and a restore ends the waits already here, keeping them in the safety copy", async () => {
     const source = directory();
     writeFileSync(join(source, "waits.json"), JSON.stringify({ version: 1, waits: [{ id: "from-the-backup" }] }));
