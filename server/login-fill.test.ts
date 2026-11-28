@@ -15,7 +15,7 @@ let page: FakeLoginPage | null = null;
 afterEach(() => { page?.close(); page = null; });
 
 type Login = Partial<LoginPlace> & { id?: string; host?: string; username: string; password?: string; totp?: TotpKey | null };
-function setup(url: string, html: string, saved: Login[], options: { submit?: boolean } = {}) {
+function setup(url: string, html: string, saved: Login[], options: { submit?: boolean; turnActive?: () => boolean } = {}) {
   page = new FakeLoginPage(url, html);
   const remembered: Array<[string, string]> = [];
   const logins = saved.map((login, index): FillCandidate => ({
@@ -34,6 +34,7 @@ function setup(url: string, html: string, saved: Login[], options: { submit?: bo
     remember: (value, kind) => { remembered.push([kind, value]); },
     now: () => clock,
     sleep: async (ms) => { clock += ms; },
+    ...(options.turnActive ? { turnActive: options.turnActive } : {}),
   };
   const fill = (username?: string) => fillLogin({
     username, submit: options.submit,
@@ -92,7 +93,7 @@ describe("fill_login fills and submits in one call", () => {
     page.answer = () => ({ navigate: DASHBOARD });
     const outcome = await fill();
     expect(outcome).toMatchObject({ ok: true, filled: ["username", "password"] });
-    expect(page.keyed).toEqual([PASSWORD]);
+    expect(page.keyed.join("")).toBe(PASSWORD);
     expect(page.sent).toEqual([{ email: "alice@example.com", password: PASSWORD, csrf: "token-not-a-secret" }]);
     expectNoSecret(outcome, page, [PASSWORD]);
   });
@@ -168,6 +169,76 @@ describe("fill_login fills and submits in one call", () => {
     expect(page.clicked).toEqual([]);
     expect(polls).toBe(12);
     expect(outcome.text).toContain("the page is now https://example.com/dashboard");
+  });
+
+  describe("typing a password as key events stays on the approved field", () => {
+    const FORM = [{ host: "example.com", username: "alice@example.com" }];
+    function ignoringInsert(page: FakeLoginPage) {
+      const inserted = page.insertText.bind(page);
+      page.insertText = async (text) => {
+        const field = page.window.document.activeElement as unknown as { type?: string } | null;
+        if (field?.type === "password") { page.typed.push(text); return; }
+        await inserted(text);
+      };
+    }
+    function afterKeys(page: FakeLoginPage, count: number, then: () => void) {
+      const keyed = page.typeKeys.bind(page);
+      let sent = 0;
+      page.typeKeys = async (text) => {
+        await keyed(text);
+        if (++sent === count) then();
+      };
+    }
+
+    it("stops typing when the focus leaves the field", async () => {
+      const { page, fill } = setup("https://example.com/login", LOGIN_FORM, FORM);
+      ignoringInsert(page);
+      afterKeys(page, 3, () => (page.window.document.querySelector("[name=email]") as unknown as { focus(): void }).focus());
+      const outcome = await fill();
+      expect(outcome.ok).toBe(false);
+      expect(page.keyed.join("")).toBe(PASSWORD.slice(0, 3));
+      expect(page.keyed.join("")).not.toBe(PASSWORD);
+      expect(page.pressed).toEqual([]);
+      expect(page.sent).toEqual([]);
+      expect(page.field("#password").value).toBe("");
+      expectNoSecret(outcome, page, [PASSWORD]);
+    });
+
+    it("stops typing when the page changes to another origin", async () => {
+      const { page, fill } = setup("https://example.com/login", LOGIN_FORM, FORM);
+      ignoringInsert(page);
+      afterKeys(page, 3, () => page.navigate("https://other.example.net/", "<input type=password name=password>"));
+      const outcome = await fill();
+      expect(outcome.ok).toBe(false);
+      expect(page.keyed.join("")).toBe(PASSWORD.slice(0, 3));
+      expect(page.sent).toEqual([]);
+      expectNoSecret(outcome, page, [PASSWORD]);
+    });
+
+    it("stops typing when the same address shows a new page", async () => {
+      const { page, fill } = setup("https://example.com/login", LOGIN_FORM, FORM);
+      ignoringInsert(page);
+      afterKeys(page, 3, () => page.navigate("https://example.com/login", LOGIN_FORM));
+      const outcome = await fill();
+      expect(outcome.ok).toBe(false);
+      expect(page.keyed.join("")).toBe(PASSWORD.slice(0, 3));
+      expect(page.sent).toEqual([]);
+      expectNoSecret(outcome, page, [PASSWORD]);
+    });
+
+    it("stops typing when the turn ends", async () => {
+      let active = true;
+      const { page, fill } = setup("https://example.com/login", LOGIN_FORM, FORM, { turnActive: () => active });
+      ignoringInsert(page);
+      afterKeys(page, 3, () => { active = false; });
+      const outcome = await fill();
+      expect(outcome).toMatchObject({ ok: false, text: "Stopped filling this login because the turn ended." });
+      expect(page.keyed.join("")).toBe(PASSWORD.slice(0, 3));
+      expect(page.pressed).toEqual([]);
+      expect(page.sent).toEqual([]);
+      expect(page.field("#password").value).toBe("");
+      expectNoSecret(outcome, page, [PASSWORD]);
+    });
   });
 
   it("waits for a page that sends the login by its own script, instead of pressing its button as well", async () => {

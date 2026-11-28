@@ -241,6 +241,14 @@ const FIELD_FILLED = `((key) => {
   return JSON.stringify({ filled: Boolean(el && typeof el.value === "string" && el.value.length > 0) });
 })`;
 
+const FIELD_FOCUSED = `((key) => {
+  ${PAGE_HELPERS}
+  let node = document.activeElement;
+  while (node && node.shadowRoot && node.shadowRoot.activeElement) node = node.shadowRoot.activeElement;
+  const el = all("[" + MARK + "=\\"" + key + "\\"]")[0] || null;
+  return JSON.stringify({ href: location.href, focused: Boolean(el && el === node) });
+})`;
+
 /** Walks up from the filled field; the first container holding a sign-in control decides, so a button elsewhere on the page is never pressed. */
 const MARK_SUBMIT = `((key) => {
   ${PAGE_HELPERS}
@@ -657,9 +665,22 @@ class LoginRun {
       this.checkActive();
       if (!again || typeof again.href !== "string" || !this.stillHere(again.href)) return "moved";
       if (again.focused !== true) return "missed";
-      await this.deps.typeKeys(text);
-      this.checkActive();
+      return this.typeGuarded(key, text);
     }
+    return "typed";
+  }
+
+  /** One character at a time, each only while the page is still on this login's origin, the marked field still has focus and the turn runs. */
+  private async typeGuarded(key: string, text: string): Promise<"typed" | "missed" | "moved"> {
+    for (const char of text) {
+      this.checkActive();
+      const state = await this.page(FIELD_FOCUSED, key);
+      this.checkActive();
+      if (!state || typeof state.href !== "string" || !this.stillHere(state.href)) { await this.clear(); return "moved"; }
+      if (state.focused !== true) { await this.clear(); return "missed"; }
+      await this.deps.typeKeys(char);
+    }
+    this.checkActive();
     return "typed";
   }
 
