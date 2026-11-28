@@ -139,8 +139,9 @@ it("makes one draft with the bot's report_bug summary and the facts, redacted, s
   expect(received).toHaveLength(1);
 
   const [report] = received;
-  expect(Object.keys(report!).sort()).toEqual(["appVersion", "description", "diagnostics", "installId", "platform", "source"]);
-  expect(report).toMatchObject({ source: "bot" });
+  expect(Object.keys(report!).sort()).toEqual(["appVersion", "description", "diagnostics", "installId", "platform", "source", "title"]);
+  expect(report).toMatchObject({ source: "bot", title: "Pictures never load" });
+  expect(report!.title).toBe(draft.title);
   expect(report!.installId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
   expect(report!.appVersion).toMatch(/^\d+\.\d+\.\d+/);
   expect(report!.platform).toMatch(/^(darwin|linux|win32) \w+, self-hosted server$/);
@@ -179,6 +180,7 @@ it("still makes the draft, with the server's facts, when the bot never calls rep
   expect((await api("POST", `/api/bug-reports/drafts/${offer.id}/send`, {})).status).toBe(200);
   expect(received).toHaveLength(2);
   expect(received[1]!.description.split("\n")[0]).toBe("the send button froze again");
+  expect(received[1]!.title).toBe(draft.title);
   expect(received[1]!.description).toContain("No summary from a bot: the bot did not call report_bug.");
   await until(async () => (await offerUnder("@devs the send button froze again"))?.state === "sent", 20_000);
 

@@ -6,9 +6,11 @@ import { loadChecks, loadModelSelection } from "./routine-load.ts";
 import { cleanSchedule } from "./routine-schedules.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import type { Routine, RoutineInput } from "./routines.ts";
-import { userErrorThrown } from "./user-errors.ts";
+import { PublicError } from "./public-error.ts";
+import { ROOM_GOAL_READS_AND_DRAFTS } from "./workflows/room-goal.ts";
+import { userErrorThrown, type UserErrorKey } from "./user-errors.ts";
 import { currentRunOn } from "../electron/legacy-names.mjs";
-import { linkWorkflow, workflowRefusal, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
+import { linkWorkflow, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
 
 export { workflowLookupFor } from "./workflows/routine-link.ts";
 
@@ -51,53 +53,55 @@ export function routineThreadModel(routine: Pick<Routine, "botId" | "modelSelect
   return routine?.modelSelection && keepsPermissions(checks, routine.botId, routine.modelSelection) ? routine.modelSelection : undefined;
 }
 
+const refused = (key: UserErrorKey): Error => Object.assign(userErrorThrown(key), { status: 400 });
+
 export function sanitizeInput(input: RoutineInput, after: number, lookup?: WorkflowCopyLookup): Omit<Routine, "id" | "createdAt" | "updatedAt" | "nextRunAt"> {
   const name = String(input.name ?? "").trim().slice(0, 80);
   const link = linkWorkflow(input, lookup);
   const prompt = (link?.prompt ?? String(input.prompt ?? "")).trim().slice(0, 20_000);
   const botId = link?.botId ?? String(input.botId ?? "").trim();
-  if (!name) throw new Error("Give the routine a name");
-  if (!prompt) throw new Error("Tell the bot what to do");
-  if (!botId) throw new Error("Choose a bot");
+  if (!name) throw new PublicError("Give the routine a name");
+  if (!prompt) throw new PublicError("Tell the bot what to do");
+  if (!botId) throw new PublicError("Choose a bot");
   const target = input.target ?? "bot";
-  if (target !== "bot" && target !== "room-goal") throw new Error("Choose a valid routine target");
+  if (target !== "bot" && target !== "room-goal") throw new PublicError("Choose a valid routine target");
   const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
+  if (link && target === "room-goal" && !groupId) throw new PublicError("Choose a room for this goal.");
   const runOn = currentRunOn(input.runOn ?? "seira");
-  if (runOn !== "seira" && runOn !== "cloud") throw new Error("Choose where this routine runs");
+  if (runOn !== "seira" && runOn !== "cloud") throw new PublicError("Choose where this routine runs");
   const attachments = cleanAttachments(input.attachments);
   const timeoutMinutes = cleanTimeoutMinutes(input.timeoutMinutes);
   if (target === "room-goal" && runOn === "cloud") {
-    throw new Error("Room goals can only run on this computer");
+    throw new PublicError("Room goals can only run on this computer");
   }
   if (target === "room-goal" && attachments.length > 0) {
-    throw new Error("Room goals do not support attachments yet");
+    throw new PublicError("Room goals do not support attachments yet");
   }
   if (runOn === "cloud" && attachments.length > 0) {
-    throw new Error("Attachments can only run on this computer until cloud file staging is available");
+    throw new PublicError("Attachments can only run on this computer until cloud file staging is available");
   }
   const continuity = input.continuity === true;
   if (input.overlap !== undefined && input.overlap !== "skip" && input.overlap !== "queue") {
-    throw new Error("Choose skip or queue for overlapping runs");
+    throw new PublicError("Choose skip or queue for overlapping runs");
   }
   if (continuity && target === "room-goal") {
-    throw new Error("Room goals do not carry continuity yet");
+    throw new PublicError("Room goals do not carry continuity yet");
   }
   const sameConversation = input.sameConversation === true;
-  if (sameConversation && target === "room-goal") throw new Error("Room goals do not keep one conversation");
+  if (sameConversation && target === "room-goal") throw new PublicError("Room goals do not keep one conversation");
   const modelSelection = input.modelSelection == null ? undefined : loadModelSelection(input.modelSelection);
-  if (input.modelSelection != null && !modelSelection) throw new Error("Choose a model: an engine, a model id, and an effort level or a variant, not both");
-  if (modelSelection && target === "room-goal") throw new Error("Room goals run on their bots' own models");
+  if (input.modelSelection != null && !modelSelection) throw new PublicError("Choose a model: an engine, a model id, and an effort level or a variant, not both");
+  if (modelSelection && target === "room-goal") throw new PublicError("Room goals run on their bots' own models");
   const schedule = cleanSchedule(input.schedule, after);
-  if (modelSelection && schedule.type === "limit_reset") throw new Error("A limit-reset routine continues its conversation on that conversation's model");
-  if (sameConversation && schedule.type === "limit_reset") throw new Error("A limit-reset routine already continues its conversation");
+  if (modelSelection && schedule.type === "limit_reset") throw new PublicError("A limit-reset routine continues its conversation on that conversation's model");
+  if (sameConversation && schedule.type === "limit_reset") throw new PublicError("A limit-reset routine already continues its conversation");
   const asked = Array.isArray(input.checks) && input.checks.length === 0 ? null : input.checks;
   const checks = asked == null ? undefined : loadChecks(asked);
-  if (asked != null && (!checks || checks.length !== new Set(asked).size)) throw userErrorThrown("serverError.routine.checks");
-  if (checks && (target !== "bot" || runsOnce(schedule))) throw userErrorThrown("serverError.routine.checksRepeat");
-  if (input.access != null && input.access !== "read-and-draft") throw userErrorThrown("serverError.routine.access");
-  if (input.deliver != null && (input.deliver !== "brief" || target !== "bot")) throw userErrorThrown("serverError.routine.deliver");
-  const refused = link ? workflowRefusal({ target, runOn, deliver: input.deliver, sameConversation, modelSelection, scheduleType: schedule.type, access: input.access, checks }) : null;
-  if (refused) throw new Error(refused);
+  if (asked != null && (!checks || checks.length !== new Set(asked).size)) throw refused("serverError.routine.checks");
+  if (checks && (target !== "bot" || runsOnce(schedule))) throw refused("serverError.routine.checksRepeat");
+  if (input.access != null && input.access !== "read-and-draft") throw refused("serverError.routine.access");
+  if (link && target === "room-goal" && input.access === "read-and-draft") throw new PublicError(ROOM_GOAL_READS_AND_DRAFTS);
+  if (input.deliver != null && (input.deliver !== "brief" || target !== "bot")) throw refused("serverError.routine.deliver");
   return {
     name,
     prompt,

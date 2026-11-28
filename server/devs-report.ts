@@ -1,6 +1,8 @@
 // What one @devs report carries to the Seira team's endpoint (POST /api/bug-reports on the Cloud origin): the person's
 // message, the bot's summary when it wrote one, and facts the server gathers itself. Never the conversation, never a
 // file. Everything passes redactReportText, and every field stays inside the endpoint's limits.
+import { hostname } from "node:os";
+
 import type { ErrorFingerprint } from "../shared/bug-offer.ts";
 import { withoutCitationMarkers } from "../src/lib/citations.ts";
 import { isSecretName, mask, redactSecretsInText } from "./redact.ts";
@@ -26,7 +28,8 @@ export interface DevsReportPayload {
   diagnostics: string;
   contactEmail?: string;
   contact?: string;
-  /** The issue's title; the relay takes up to 120 characters. Absent: the relay takes the description's first line. */
+  /** The issue's title, from the bot's summary (see `reportTitle`); the relay takes up to 120 characters. Absent: the relay
+   * takes the description's first line. */
   title?: string;
   /** What the relay groups reports by: one open issue per fingerprint, later reports become comments. */
   fingerprint?: ErrorFingerprint;
@@ -65,6 +68,8 @@ export interface DevsReportInput {
   message: string;
   /** Their words without the tag. */
   words: string;
+  /** The people in the conversation: their names stay out of the public title (see `reportTitle`). */
+  names?: readonly string[];
   bots: ReportedBot[];
   summary?: { by: string; text: BotSummary };
   /** Why no bot wrote a summary. */
@@ -168,9 +173,65 @@ function diagnose(input: DevsReportInput, redact: (text: string) => string): str
   return firstChars(redact(lines.join("\n")), DEVS_REPORT_LIMITS.diagnostics);
 }
 
+/** The title of a report whose words leave nothing safe to show on a public issue. */
+export const GENERIC_REPORT_TITLE = "Bug report from Seira";
+const TITLE_MAX = 80;
+const TITLE_MIN = 8; // a shorter rest, such as "see", tells nothing
+const TITLE_UNSAFE: RegExp[] = [
+  /\b[a-z][a-z0-9+.-]*:\/\/\S*/gi, // URLs with any scheme
+  /(?<![\w])[a-z]:[\\/](?:[^\s"'<>|:*?\\/]+(?: [^\s"'<>|:*?\\/]+)*[\\/])*[^\s"'<>|:*?\\/]*/gi, // Windows paths (C:\... and C:/...); a folder may hold single spaces
+  /\\\\[^\s\\/]+(?:[\\/](?:[^\s"'<>|:*?\\/]+(?: [^\s"'<>|:*?\\/]+)*[\\/])*[^\s"'<>|:*?\\/]*)?/g, // UNC paths (\\host\share); a folder may hold single spaces
+  /[^\s@]+@[^\s@]+/g, // email addresses
+  /(?<![\w])@[\w-]+/g, // account names: they would ping someone on a public issue
+  /(?<![\w.-])(?:~|\.{1,2})\\\S*/g, // paths with a back slash
+  /(?<![\w.-])(?:[~/.]{1,2}\/|\/)[^\s]*/g, // file paths
+  /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, // IPv4 addresses
+  /(?<![\w:])(?:\[[\da-f:.%]+\](?::\d+)?|(?:[\da-f]{0,4}:){2,7}[\da-f]{0,4}(?![\w:]))/gi, // IPv6 addresses
+  /\blocalhost\b(?::\d+)?/gi, // this machine
+  /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}(?::\d+)?(?:\/\S*)?/gi, // host-like words
+  /\b[a-z][a-z0-9-]*:\d{2,5}\b/gi, // a host of one label with a port
+];
+
+/** This machine's own host name, whole and first label: no public title names it. */
+export function ownHostNames(name = hostname()): string[] {
+  return [name, name.split(".")[0] ?? ""].filter((part) => part.length >= 4);
+}
+
+/** One line for a public issue title: `text` with secrets redacted first, then its first line (and, by default, first
+ * sentence) without URLs, host names, addresses, paths, account names or the given names, cut to `max` characters.
+ * Empty when nothing safe is left. */
+export function cleanTitle(text: string | undefined, options: { redact: (text: string) => string; names?: readonly string[]; max?: number; sentence?: boolean }): string {
+  const max = options.max ?? TITLE_MAX;
+  // Secrets go first, on the original text: another rule that cuts into a secret would leave a piece redaction cannot know.
+  let line = options.redact(text ?? "").split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? "";
+  line = line.replace(/«[^»]*»/g, " ");
+  for (const unsafe of TITLE_UNSAFE) line = line.replace(unsafe, " ");
+  const names = [...new Set([...(options.names ?? []), ...ownHostNames()].map((name) => name.trim()).filter((name) => name.length >= 2 && name.toLowerCase() !== "seira"))].sort((a, b) => b.length - a.length);
+  for (const name of names) line = line.replace(new RegExp(`(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "giu"), " ");
+  line = line.replace(/[\p{Cc}`*_#<>|]+/gu, " ").replace(/\s+/g, " ").replace(/\s+([,;:])/g, "$1").replace(/([,;:])(?:\s*[,;:])+/g, "$1").trim();
+  const end = options.sentence === false ? -1 : line.search(/[.!?](?:\s|$)/);
+  if (end > 0) line = line.slice(0, end);
+  line = line.replace(/^[\s\-–—:;,.()[\]"']+|[\s\-–—:;,([\]"']+$/g, "");
+  if (line.length > max) {
+    const cut = line.lastIndexOf(" ", max - 1);
+    line = `${line.slice(0, cut > max / 2 ? cut : max - 1).trimEnd()}…`;
+  }
+  return line.length >= TITLE_MIN && /\p{L}{2}/u.test(line) ? line : "";
+}
+
+/** The issue title: the first sentence of the bot's summary, else the person's words, each cleaned as above; the fixed
+ * generic title when neither leaves one, so the relay never falls back to the description's first line. The names the
+ * report knows (the people, this install, the bots) go out in the first pass, before the sentence and length cuts,
+ * so a cut can never leave half of a name. */
+export function reportTitle(input: Pick<DevsReportInput, "summary" | "words" | "installId" | "bots" | "names">, redact: (text: string) => string): string {
+  const names = [...(input.names ?? []), input.installId, ...input.bots.map((bot) => bot.name), ...(input.summary ? [input.summary.by] : [])];
+  return cleanTitle(input.summary?.text.wentWrong, { redact, names }) || cleanTitle(input.words, { redact, names }) || GENERIC_REPORT_TITLE;
+}
+
 export function buildDevsReport(input: DevsReportInput, secrets: readonly string[] = environmentSecrets()): DevsReportPayload {
   const redact = (text: string) => redactReportText(text, secrets);
   const contact = contactAddress(input.contactEmail);
+  const title = reportTitle(input, redact);
   return {
     installId: input.installId,
     source: "bot",
@@ -178,6 +239,7 @@ export function buildDevsReport(input: DevsReportInput, secrets: readonly string
     appVersion: singleLine(input.appVersion),
     platform: singleLine(input.platform),
     diagnostics: diagnose(input, redact),
+    title,
     ...(contact ? Object.fromEntries(CONTACT_FIELDS.map((name) => [name, contact])) : {}),
   };
 }

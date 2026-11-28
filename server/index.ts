@@ -479,7 +479,7 @@ import { listenWebhookIngress, type WebhookIngress } from "./webhook-ingress.ts"
 import { addressFor } from "./webhook-address.ts";
 import { assertModelVariantSupported, memberTurnSelection } from "./member-turn.ts";
 import { WebhookManager } from "./webhooks.ts";
-import { tieAutomationsToBots } from "./bot-automations.ts"; import { WaitManager } from "./waits.ts"; import { cancelWaitFromCard, createWaitHost, waitContinuationCheck, waitRunChat, waitTurnRunId } from "./wait-host.ts"; import { continuedConversation } from "./routine-same-conversation.ts"; import { createWaitRoutes, findWaitPeer, handedAssignment, hostWaitRefusal, waitSourceRefusal, type WaitRouteContext } from "./routes/waits.ts";
+import { tieAutomationsToBots } from "./bot-automations.ts"; import { WaitManager } from "./waits.ts"; import { cancelWaitFromCard, createWaitHost, waitContinuationCheck, waitRunChat, waitTurnRunId } from "./wait-host.ts"; import { continuedConversation, continuesChat, ownChatAccess } from "./routine-same-conversation.ts"; import { startSteps } from "./workflows/graph.ts"; import { createWaitRoutes, findWaitPeer, handedAssignment, hostWaitRefusal, waitSourceRefusal, type WaitRouteContext } from "./routes/waits.ts";
 import type { WebhookTrigger } from "../shared/webhooks.ts";
 import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { agentsProxyLaunch, agentsToolBridgeEnv, applyAgentsBridge, bridgedToolTitle, turnEngine } from "./agents-bridge-switch.ts"; import { serverTurnedOff } from "./drivers/agents-tool-groups.ts"; import { availableToolGroups, toolsOffPart } from "./tool-groups.ts"; import { agentsServerEnv, botDrivenConversation, COMPUTER_OFF_REFUSAL, computerPickRefusal, directTurnKind, roomSkillsRefusal, type TurnKind } from "./agents-turn.ts";
@@ -608,7 +608,7 @@ import { offerTaskSuggestions, TaskSuggestionTurns } from "./task-suggestions.ts
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
-import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost } from "./host/workflow-host.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
+import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost, type WorkflowRoomTurn } from "./host/workflow-host.ts"; import { roomGoalSaveRefusal } from "./workflows/room-goal.ts"; import { createResultRooms } from "./workflows/result-room.ts"; import { createWorkflowAgentRoutes } from "./routes/workflow-agent.ts"; import { TEAM_WORKFLOW_REFUSAL } from "./workflows/agent-tools.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, startLinkRefusal, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowStarts } from "./host/workflow-starts.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
 import { createTaskRoutes } from "./routes/tasks.ts";
@@ -3789,6 +3789,39 @@ function runRoomNode(node: HandoffView, group: GroupRecord, bot: BotRecord, sign
   });
 }
 
+function workflowRoom(groupId: string): { memberIds: readonly string[]; dm: boolean } | null {
+  const group = store.group(groupId);
+  return group ? { memberIds: group.memberIds, dm: group.dm === true } : null;
+}
+
+/** A bot step of a room goal's workflow: that bot's own turn in the goal's room conversation, where its reply shows. */
+function startWorkflowRoomTurn(turn: WorkflowRoomTurn): void {
+  const group = store.group(turn.groupId), bot = store.bot(turn.botId);
+  if (!group || group.dm || !store.groupTaskByThread(group.id, turn.threadId)) return turn.settle({ ok: false, error: "This goal's room no longer exists." });
+  if (!bot || bot.hidden) return turn.settle({ ok: false, error: "This step's bot is no longer available." });
+  if (!group.memberIds.includes(bot.id)) return turn.settle({ ok: false, error: `${bot.name} isn't in this room anymore. Add ${bot.name} to the room, then run again.` });
+  const operation = Object.assign(beginGroupTurnOperation(group.id, turn.threadId, [bot.id]), { speaking: false, continuesRun: turn.continuesRun });
+  const result: GroupTurnOrchestration["result"] = {};
+  let waited: "run" | "skip" | "stop" = "run";
+  const run = (groupQueues.get(turn.threadId) ?? Promise.resolve()).catch(() => {}).then(async () => {
+    if (operation.cancelled) return;
+    waited = await waitForChatRoomMember(operation, turn.threadId, bot);
+    if (waited !== "run") return;
+    operation.speaking = true;
+    await runGroupMemberTurn(group.id, turn.threadId, bot.id, 0, new Set(), turn.prompt, (error) => { result.stopReason = error; }, () => operation.cancelled,
+      () => groupProviderHandshakeStarted(operation), () => groupProviderHandshakeSettled(operation), undefined,
+      { systemInstructions: "", followMentions: false, result, goalRunId: turn.runId }, operation);
+  });
+  const tracked = run.finally(() => finishGroupTurnOperation(group.id, operation));
+  groupQueues.set(turn.threadId, tracked.catch(() => {}));
+  tracked.then(() => {
+    if (result.outcome === "settled") return turn.settle(result.approvalAsk ? { ok: false, needsPerson: true, error: result.approvalAsk } : { ok: true, text: result.replyText ?? "" });
+    if (result.outcome === "busy") return turn.settle({ ok: false, busy: true, error: `${bot.name} is busy.` });
+    const stopped = operation.cancelled || waited === "stop";
+    turn.settle({ ok: false, error: result.stopReason || (stopped ? "The step was stopped." : waited === "skip" ? `${bot.name} is no longer available.` : "The step could not run in the room.") });
+  }, (error) => turn.settle({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+}
+
 function runRoomRootTurn(node: HandoffView, group: GroupRecord, bot: BotRecord, signal: AbortSignal, composed: ComposedTurn): Promise<HostTurnResult> {
   if (composed.turn === "rerun" && node.goalRunId && !goalRunLive(group.id, node.threadId, node.goalRunId)) {
     return Promise.resolve({ ok: false, text: "The goal run this step belonged to ended with the restart." });
@@ -5554,6 +5587,7 @@ function isUnattended(botId?: string | null, threadId?: string): boolean {
 const reviewAnswerThreads = new Set<string>(); const firstHourHooks = createFirstHourHooks({ dataDir: DATA_DIR, personal: Boolean(CLOUD_PERSONAL) });
 let routines: RoutineManager | null = null; let workflows: WorkflowHost | null = null; let routineHooks: RoutineManagerOptions | null = null;
 const automationReports = createAutomationReports({ store, routines: () => routines, busy: threadBusy, wrote: markTaskContextExternallyUpdated, brief: (run, turnId) => proactive.runSettled(run, turnId), threadLanguage,
+  resultRoom: createResultRooms({ store, roomTalks, webhookRoom: (id) => webhooks.list().find((hook) => hook.id === id)?.groupId ?? undefined, workflowRun: (runId) => workflows?.run(runId) ?? null }),
   notify: (kind, bot, threadId, detail) => notify(buildNotification(kind, bot, threadId, detail, { avatarUrl: bot.avatarUrl }), { routine: true }) });
 const proactive = createProactive({ store, cfg, composio, registry, dataDir: DATA_DIR, ideas: (botId) => memoryUpkeep.ideas(botId), ...firstHourHooks.proactive, team: Boolean(HOSTED_WORKSPACE || CLOUD_TEAM), frozen: moveFreeze.frozen, routines: () => routines, mainThread: botMainThread, threadBusy, notify, helpers: { decider, extractor }, cloud: Boolean(CLOUD_HOME || HOSTED_WORKSPACE || CLOUD_TEAM),
   engineName: (instanceId) => engineName(instanceId), hostTimeZone: () => (CLOUD_HOME ? undefined : hostTimeZone()), decide: (row) => appendDecision(DATA_DIR, row), stale: shouldIgnoreProviderEvent, release: (threadId) => watchdog.setWaitingOnHuman(threadId, false),
@@ -8494,6 +8528,8 @@ const aiPool = createAiPool({ file: join(DATA_DIR, "ai-pool-threads.json"), conf
 const automationDestinations = createAutomationDestinations({ store, mainThread: botMainThread, runs: () => routines?.listRuns() ?? [],
   cloud: CLOUD_HOME ? { owner: CLOUD_OWNER_KEY!, opener: (id, routine) => (routine && teamRoutines.opener(routine)) || routineOpener(id), reportFromOthers: cloudReportFromOthers, opened: (threadId, person) => threadStarters.set(threadId, person), outside: (threadId) => outsideLineage.mark(threadId) } : null });
 const routineModelChecks: RoutineModelChecks = { check: (raw) => checkedModelSelection(raw), bot: (botId) => store.bot(botId), engineSwitchNeedsAsk };
+const routineChatModel = (botId: string, run: Pick<RoutineRun, "routineId"> | undefined, modelSelection?: ModelSelection) =>
+  routineThreadModel(modelSelection ? { botId, modelSelection } : run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks);
 routines = new RoutineManager(routineHooks = {
   emit: broadcast, limitResetAt: (engine) => limitClock.resetAt(engine), checks: proactive.checks,
   limitBackup: (botId, scope) => { const bot = store.bot(botId); return quotaSwitchEnabled() ? Boolean(bot && limitTakeover.backups(botId, bot.modelSelection, scope, approvalModeFor(bot)).length) : Boolean(bot && startupBackups(bot, cfg.automaticRecovery).length); },
@@ -8519,16 +8555,20 @@ routines = new RoutineManager(routineHooks = {
     }
     return groupIsWorking(group) || coordinator.busy ? "busy" : "ready";
   },
-  createTask: (botId, title, run) => {
+  createTask: (botId, title, run, modelSelection) => {
     // On a Cloud home the routine's writer opens a run's conversation; a webhook run is the owner's, but its payload never reaches the lent Mac.
-    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineThreadModel(run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks), undefined,
+    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineChatModel(botId, run, modelSelection), undefined,
       CLOUD_HOME && run ? (created) => threadStarters.set(created.threadId, run.triggerSource === "webhook" ? CLOUD_OWNER_KEY! : routineOpener(run.routineId)) : undefined);
     if (task && run?.triggerSource === "webhook") outsideLineage.mark(task.threadId);
     return task;
   },
   joinConversation: (run) => {
     if (run.eventSource === "wait") return waitRunChat(run, directChatOf, Boolean(CLOUD_HOME));
-    if (run.sameConversation) return continuedConversation(routines?.listRuns() ?? [], run, (threadId) => Boolean(store.taskByThread(run.botId, threadId)));
+    if (run.sameConversation) {
+      const workflow = run.workflowId ? workflows?.get(run.workflowId) : null;
+      const needs = { modelSelection: routineChatModel(run.botId, run), access: ownChatAccess(run, workflow ? startSteps(workflow)[0] : undefined) };
+      return continuedConversation(routines?.listRuns() ?? [], run, (threadId) => continuesChat(store, run.botId, threadId, routines?.runForThread(threadId) ?? null, needs));
+    }
     const continues = routines?.listRoutines().some((routine) => routine.id === run.routineId && routine.schedule.type === "limit_reset");
     if (!continues || run.target !== "bot") return null;
     const source = routineSourceOwner(run);
@@ -8856,7 +8896,8 @@ const validateModelProposal = (selection: ModelSelection, current?: BotRecord): 
   }
   return null;
 };
-const ownThreads = createOwnThreads({ store, registry, node: (id) => coordinator.node(id), current: turnSelection, proposalRefusal: validateModelProposal, givesWay: modelGivesWay, modelName }); const burst = createBurstHost({ dataDir: DATA_DIR, cloudHome: Boolean(CLOUD_HOME), tier: () => cloudPlanTier.tier(), maxParallel: () => cfg.burst?.maxParallel, hasRoom: () => engineMemory.laneHasRoom(), store, language: (threadId) => threadLanguage(threadId), startTurn: (botId, text, opts) => startTurn(botId, text, opts), stop: (botId, threadId, cause) => { void interruptDirectThread(botId, threadId, cause).catch(() => {}); }, threadBusy, opened: (threadId, parent) => threadStarters.set(threadId, openerFrom(parent)), origin: (run) => withPerson({ kind: "user", request: quoteInNote(run.task, 400) }, threadPersonKey(run.threadId)), approval: (bot, selection) => ownThreads.approvalFor(bot, selection), defaultModel: (bot, threadId) => burstDefaultModel({ own: store.taskByThread(bot.id, threadId)?.modelSelection ?? bot.modelSelection, catalog: (id) => registry.get(id)?.models, refused: (id) => quickFallback.refused(id), usable: (selection) => ownThreads.refusal(selection, bot) === null }), modelName, route: (notification) => teamMessages.route(notification, { routine: true }), announce: (notification) => { broadcast({ kind: "notify", notification: logNotification(notification) }); } }); workflows = createWorkflowHost({ dataDir: DATA_DIR, store, routines: () => routines, routineHooks: () => routineHooks, botState: unattendedDispatchState, startTurn, shuttingDown: () => companyShutdown, routinesUnreadable: () => routines?.schedulerState().unreadable ?? false, reports: automationReports, starts: () => workflowStarts, emit: broadcast });
+const ownThreads = createOwnThreads({ store, registry, node: (id) => coordinator.node(id), current: turnSelection, proposalRefusal: validateModelProposal, givesWay: modelGivesWay, modelName }); const burst = createBurstHost({ dataDir: DATA_DIR, cloudHome: Boolean(CLOUD_HOME), tier: () => cloudPlanTier.tier(), maxParallel: () => cfg.burst?.maxParallel, hasRoom: () => engineMemory.laneHasRoom(), store, language: (threadId) => threadLanguage(threadId), startTurn: (botId, text, opts) => startTurn(botId, text, opts), stop: (botId, threadId, cause) => { void interruptDirectThread(botId, threadId, cause).catch(() => {}); }, threadBusy, opened: (threadId, parent) => threadStarters.set(threadId, openerFrom(parent)), origin: (run) => withPerson({ kind: "user", request: quoteInNote(run.task, 400) }, threadPersonKey(run.threadId)), approval: (bot, selection) => ownThreads.approvalFor(bot, selection), defaultModel: (bot, threadId) => burstDefaultModel({ own: store.taskByThread(bot.id, threadId)?.modelSelection ?? bot.modelSelection, catalog: (id) => registry.get(id)?.models, refused: (id) => quickFallback.refused(id), usable: (selection) => ownThreads.refusal(selection, bot) === null }), modelName, route: (notification) => teamMessages.route(notification, { routine: true }), announce: (notification) => { broadcast({ kind: "notify", notification: logNotification(notification) }); } }); workflows = createWorkflowHost({ dataDir: DATA_DIR, store, routines: () => routines, routineHooks: () => routineHooks, botState: unattendedDispatchState, startTurn, shuttingDown: () => companyShutdown, routinesUnreadable: () => routines?.schedulerState().unreadable ?? false, reports: automationReports, starts: () => workflowStarts, emit: broadcast,
+  chatModel: routineChatModel, rooms: { room: workflowRoom, startTurn: startWorkflowRoomTurn, stopTurn: (groupId, threadId) => interruptRoutineGroupGoal(groupId, threadId) } });
 const teamMemory = new TeamMemory(join(DATA_DIR, "team-memory.json"));
 const teamMemoryRequests = createTeamMemoryRequests({ teamMemory, store, sectionKey: sectionContextKey, decide: (row) => appendDecision(DATA_DIR, row) });
 const outsideWrites = createOutsideWrites({ store, notify, language: (threadId) => threadLanguage(threadId), decide: (row) => appendDecision(DATA_DIR, row),
@@ -11845,6 +11886,7 @@ const closerName = (auth: RequestAuth) => (CLOUD_TEAM && auth.kind === "session"
 const routineBodyRefusalFor = (auth: RequestAuth, visible: ReturnType<typeof visibleTo>, body: unknown, existing?: Routine): { status: number; error: string } | null => {
   const hidden = hiddenRoutineTarget(body, visible) ?? workflowTargetHidden(body, visible, workflows), notYours = teamRoutines.bodyRefusal(auth, body), elsewhere = standInAmong(store.standIns, [(body as { botId?: unknown } | null)?.botId]); if (elsewhere) return { status: 409, error: elsewhere.error };
   const linkShort = hidden ? null : workflowLinkRefusal(body, existing, auth, workflows, botAccess); if (linkShort) return { status: 403, error: linkShort };
+  const roomShort = hidden ? null : roomGoalSaveRefusal(body, existing, { workflow: (id) => workflows?.get(id), room: workflowRoom, botName: (id) => store.bot(id)?.name }); if (roomShort) return roomShort;
   return hidden ? { status: 404, error: hidden } : notYours ?? routineModelRefusal(body, routineModelChecks, existing);
 };
 const createRoutineAs = (auth: RequestAuth, body: unknown): Routine => {
@@ -12571,6 +12613,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if (m && method === "PATCH") {
       const sessionId = m[1];
       const parsed = z.object({ label: z.string().max(1000) }).strict().safeParse(await readBody(req, 1024));
+      // A session revoked while a slow client sends the body must not rename a device.
+      if (auth.kind === "session" && !sessions.record(auth.session.id)?.scopes.includes("admin")) {
+        return json(res, 401, { error: "Your session ended. Sign in again before renaming a device." });
+      }
       const renamed = parsed.success ? sessions.rename(sessionId, parsed.data.label) : "invalid";
       if (renamed === "invalid") return json(res, 400, { error: "Invalid device name" });
       if (renamed === "missing") return json(res, 404, { error: "no such session" });

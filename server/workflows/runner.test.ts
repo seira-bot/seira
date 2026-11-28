@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Workflow, WorkflowFrame, WorkflowStep } from "../../shared/workflows.ts";
-import { RoutineManager, type RoutineRun } from "../routines.ts";
-import { BUSY_MAX_MS, BUSY_POLL_MS, STEP_ATTEMPTS, createWorkflowRunner, workflowRunFrame, type StepTurn, type WorkflowRunState, type WorkflowRunner } from "./runner.ts";
+import { RoutineManager, type Routine, type RoutineRun } from "../routines.ts";
+import { BUSY_MAX_MS, BUSY_POLL_MS, STEP_ATTEMPTS, createWorkflowRunner, workflowRunFrame, type StepThreadOptions, type StepTurn, type WorkflowRunState, type WorkflowRunner } from "./runner.ts";
 import { workflowCopy } from "./routine-link.ts";
 import { openWorkflowStore, type WorkflowStore } from "./store.ts";
 
@@ -70,6 +70,10 @@ function rig() {
   const frames: WorkflowFrame[] = [];
   const routineRuns = new Map<string, RoutineRun>();
   const threads = { open: true };
+  const threadCalls: Array<{ botId: string; options: StepThreadOptions }> = [];
+  const bound: Array<{ threadId: string; access?: string }> = [];
+  const briefed: string[] = [];
+  const routineList: Routine[] = [];
   const routineRun = (id = "run-1", over: Partial<RoutineRun> = {}): RoutineRun => {
     const row = { id, routineId: "r-1", routineName: "Morning", botId: "ana", target: "bot", status: "running", manual: false, runOn: "seira", workflowId: "w1", threadId: "t-ana", ...over } as RoutineRun;
     routineRuns.set(id, row);
@@ -82,13 +86,18 @@ function rig() {
       store,
       botName,
       botState: (botId) => botStates[botId] ?? "missing",
-      threadFor: (_run, botId) => (threads.open ? `t-${botId}` : null),
+      threadFor: (_run, botId, options) => {
+        threadCalls.push({ botId, options });
+        return threads.open ? options.reuse ?? (options.own ? `t-${botId}-own${threadCalls.length}` : `t-${botId}`) : null;
+      },
+      bindThread: (_run, threadId, access) => { bound.push({ threadId, ...(access ? { access } : {}) }); },
+      brief: (_run, threadId) => { briefed.push(threadId); },
       startTurn: (turn) => { turns.push(turn); },
       stopTurn: async (botId, threadId) => { stopped.push([botId, threadId]); },
       post: (_run, stepId, text, written) => { posts.push({ stepId, text, written }); },
       runState: (runId, state, detail) => { states.push([state, detail]); return routineRuns.get(runId) ?? null; },
       routineRun: (runId) => routineRuns.get(runId) ?? null,
-      routines: () => [],
+      routines: () => routineList,
       runs: () => [...routineRuns.values()],
       emit: (frame) => frames.push(frame),
     });
@@ -96,7 +105,7 @@ function rig() {
     return runner;
   };
   const self = {
-    store, time, botStates, turns, states, stopped, posts, frames, routineRuns, threads, routineRun,
+    store, time, botStates, turns, states, stopped, posts, frames, routineRuns, threads, routineRun, threadCalls, bound, briefed, routineList,
     runner: make(),
     restart() { self.runner.close(); self.runner = make(); return self.runner; },
     async begin(workflow = chain(), id = "run-1") {
@@ -675,5 +684,135 @@ describe("a step of a kind this version does not know", () => {
     expect(r.run().status).toBe("failed");
     expect(r.step("x")).toMatchObject({ status: "failed", errorCode: "turn_failed" });
     expect(r.step("x")?.error).toContain("newer version");
+  });
+});
+
+describe("every automation setting on a workflow run", () => {
+  const sel = (model: string) => ({ instanceId: "codex", model });
+  const routineOf = (over: Partial<Routine> = {}): Routine => ({ id: "r-1", name: "Morning", botId: "ana", ...over } as Routine);
+  const three = (b: Partial<Extract<WorkflowStep, { kind: "bot" }>> = {}) => flow(
+    [bot("a", "ana", "Collect"), { ...bot("b", "ben", "Write"), ...b } as WorkflowStep, bot("c", "ana", "Send")],
+    [link("a", "b"), link("b", "c")],
+  );
+
+  it("a step with a chosen model runs with that model and other steps keep theirs", async () => {
+    const r = rig();
+    r.routineList.push(routineOf({ modelSelection: sel("base") }));
+    await r.begin(three({ modelSelection: sel("own") }));
+    expect(r.last()).toMatchObject({ stepId: "a", modelSelection: sel("base") });
+    r.reply("one");
+    expect(r.last()).toMatchObject({ stepId: "b", modelSelection: sel("own") });
+    expect(r.threadCalls.at(-1)).toMatchObject({ botId: "ben", options: { own: true, modelSelection: sel("own") } });
+    r.reply("two");
+    expect(r.last()).toMatchObject({ stepId: "c", modelSelection: sel("base"), threadId: "t-ana" });
+    r.reply("three");
+    expect(r.run().status).toBe("completed");
+  });
+
+  it("opens the first chat on the routine's model, and a later bot on that model too", async () => {
+    const r = rig();
+    r.routineList.push(routineOf({ modelSelection: sel("base") }));
+    await r.begin(three());
+    r.reply("one");
+    expect(r.threadCalls.at(-1)).toMatchObject({ botId: "ben", options: { own: false, modelSelection: sel("base") } });
+  });
+
+  it("read-and-draft access applies to every bot step", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { access: "read-and-draft" }), "t-ana", () => {});
+    r.reply("one"); r.reply("two");
+    expect(r.turns.map((turn) => turn.access)).toEqual(["read-and-draft", "read-and-draft", "read-and-draft"]);
+    expect(r.bound).toEqual(expect.arrayContaining([{ threadId: "t-ben", access: "read-and-draft" }, { threadId: "t-ana", access: "read-and-draft" }]));
+    expect(r.bound.every((row) => row.access === "read-and-draft")).toBe(true);
+  });
+
+  it("a step's own access holds for that step only", async () => {
+    const r = rig();
+    await r.begin(three({ access: "read-and-draft" }));
+    r.reply("one"); r.reply("two");
+    expect(r.turns.map((turn) => turn.access)).toEqual([undefined, "read-and-draft", undefined]);
+    expect(r.bound).toContainEqual({ threadId: "t-ben", access: "read-and-draft" });
+  });
+
+  it("a check runs in the chat of the bot step before it, with that step's access", async () => {
+    const r = rig();
+    const withCheck = flow(
+      [{ ...bot("a", "ana", "Collect"), access: "read-and-draft" } as WorkflowStep, { id: "k", kind: "check", question: "Is it ready?", position: at }, bot("b", "ben", "Write")],
+      [link("a", "k"), link("k", "b", "yes")],
+    );
+    await r.begin(withCheck);
+    r.reply("news");
+    expect(r.last()).toMatchObject({ stepId: "k", threadId: "t-ana", access: "read-and-draft" });
+  });
+
+  it("runs on a cloud computer for every step, and reports each step's status", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { runOn: "cloud" }), "t-ana", () => {});
+    r.reply("one"); r.reply("two"); r.reply("three");
+    expect(r.turns.map((turn) => turn.run.runOn)).toEqual(["cloud", "cloud", "cloud"]);
+    expect(r.run().stepRuns.map((step) => [step.stepId, step.status])).toEqual([["a", "done"], ["b", "done"], ["c", "done"]]);
+    expect(r.run().status).toBe("completed");
+  });
+
+  it("hands the last result to the briefing, from the chat of the last bot step", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { deliver: "brief" }), "t-ana", () => {});
+    r.reply("one"); r.reply("two"); r.reply("final");
+    expect(r.briefed).toEqual(["t-ana"]);
+    expect(r.posts).toEqual([]);
+  });
+
+  it("posts the last result for a post delivery that has no post step, and only once", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { postsResult: true }), "t-ana", () => {});
+    r.reply("one"); r.reply("two"); r.reply("final answer");
+    expect(r.posts).toMatchObject([{ stepId: "c", text: "final answer" }]);
+    const second = rig();
+    second.store.putWorkflow(chain());
+    await second.runner.start(second.routineRun("run-1", { postsResult: true }), "t-ana", () => {});
+    second.reply("one"); second.reply("two");
+    second.posts[0]!.written();
+    expect(second.posts).toHaveLength(1);
+    expect(second.posts[0]).toMatchObject({ stepId: "p" });
+  });
+
+  it("same conversation: a step goes on in the chat its earlier run used", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { sameConversation: true }), "t-ana", () => {});
+    r.reply("one"); r.reply("two"); r.reply("three");
+    const earlier = r.step("b")!.threadId!;
+    expect(r.threadCalls.find((call) => call.botId === "ben")?.options).toMatchObject({ own: true });
+    await r.runner.start(r.routineRun("run-2", { sameConversation: true }), "t-ana", () => {});
+    r.reply("one"); r.reply("two");
+    expect(r.threadCalls.filter((call) => call.botId === "ben").at(-1)?.options.reuse).toBe(earlier);
+    expect(r.step("b", "run-2")?.threadId).toBe(earlier);
+  });
+
+  it("a start at the limit reset runs the steps from the first step, in the chat it joined", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { threadId: "t-joined" }), "t-joined", () => {});
+    expect(r.last()).toMatchObject({ stepId: "a", threadId: "t-joined" });
+    r.reply("one"); r.reply("two"); r.reply("three");
+    expect(r.turns.map((turn) => turn.stepId)).toEqual(["a", "b", "c"]);
+    expect(r.run().status).toBe("completed");
+  });
+
+  it("checks: the items of the check start the first step, and the run ends after the last step", async () => {
+    const r = rig();
+    r.store.putWorkflow(three());
+    await r.runner.start(r.routineRun("run-1", { checkKey: "chk-1", prompt: "ITEMS 3 new mails" }), "t-ana", () => {});
+    expect(r.last().prompt).toContain("ITEMS 3 new mails");
+    expect(r.last().prompt).toContain('from="event"');
+    r.reply("one");
+    expect(r.run().status).toBe("active");
+    r.reply("two"); r.reply("three");
+    expect(r.run().status).toBe("completed");
+    expect(r.states.at(-1)?.[0]).toBe("completed");
   });
 });
