@@ -42,3 +42,57 @@ describe("case-insensitive message search outside ASCII", () => {
     expect((await searchMessagesAsync("école", 1)).map((one) => one.messageId)).toEqual(["decoy"]);
   });
 });
+
+describe("search snippets", () => {
+  it("show the words of a Markdown reply, not its markup", async () => {
+    insertMessage("text", { id: "md", at: 1, role: "bot", kind: "text", text: "## Hasil\n- Ada **2 masalah serius** di `server.ts`, lihat [laporan](https://example.com/r)" });
+    const [hit] = await searchMessagesAsync("masalah");
+    expect(hit!.snippet).toBe("Hasil Ada 2 masalah serius di server.ts, lihat laporan");
+    expect(hit!.snippet.slice(hit!.matchStart, hit!.matchStart + hit!.matchLength)).toBe("masalah");
+  });
+
+  it("still finds a query that spells out Markdown", async () => {
+    insertMessage("text", { id: "raw", at: 1, role: "user", kind: "text", text: "why does **bold** stay" });
+    const [hit] = await searchMessagesAsync("**bold");
+    expect(hit!.snippet.slice(hit!.matchStart, hit!.matchStart + hit!.matchLength)).toBe("**bold");
+  });
+});
+
+describe("search snippets of large and malformed Markdown", () => {
+  const highlighted = (hit: { snippet: string; matchStart: number; matchLength: number }) =>
+    hit.snippet.slice(hit.matchStart, hit.matchStart + hit.matchLength);
+
+  it("cut a plain snippet around a hit deep inside a message of hundreds of KB", async () => {
+    const paragraph = "## Notes\n- See **item** in `file.ts` and [the docs](https://example.com/docs)\n";
+    const filler = paragraph.repeat(4_000);
+    insertMessage("text", { id: "big", at: 1, role: "bot", kind: "text", text: `${filler}Found **zebra crossing** near [the map](https://example.com/m)\n${filler}` });
+    insertMessage("text", { id: "tail", at: 2, role: "bot", kind: "text", text: `${filler}last **zebra** here` });
+    const hits = await searchMessagesAsync("zebra");
+    expect(hits.map((one) => one.messageId)).toEqual(["tail", "big"]);
+    const [tail, big] = hits;
+    expect(highlighted(tail!)).toBe("zebra");
+    expect(tail!.snippet.startsWith("…")).toBe(true);
+    expect(tail!.snippet.endsWith("last zebra here")).toBe(true);
+    expect(highlighted(big!)).toBe("zebra");
+    expect(big!.snippet).toContain("Found zebra crossing near the map");
+    expect(big!.snippet).not.toMatch(/\*\*|\]\(|`/);
+    expect(big!.snippet.startsWith("…") && big!.snippet.endsWith("…")).toBe(true);
+  });
+
+  it("cut a long line between words, never inside a link target", async () => {
+    insertMessage("text", { id: "url", at: 1, role: "bot", kind: "text", text: `See [the file](https://example.com/${"a".repeat(1_000)}) then the target word` });
+    const [hit] = await searchMessagesAsync("target");
+    expect(hit!.snippet).toBe("…then the target word");
+    expect(highlighted(hit!)).toBe("target");
+  });
+
+  it("stay fast on one long line of unpaired emphasis, open links and stray backticks", async () => {
+    const noise = "**a __b ~~c [d `e ".repeat(5_000);
+    insertMessage("text", { id: "bad", at: 1, role: "bot", kind: "text", text: `${noise}needle **x ${noise}` });
+    const started = performance.now();
+    const [hit] = await searchMessagesAsync("needle");
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(highlighted(hit!)).toBe("needle");
+    expect(hit!.snippet.startsWith("…") && hit!.snippet.endsWith("…")).toBe(true);
+  });
+});
