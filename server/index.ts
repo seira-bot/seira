@@ -1241,6 +1241,18 @@ function adminActorFor(auth: RequestAuth, req: IncomingMessage): AdminActor {
 }
 
 const adminActorScope = new AsyncLocalStorage<{ actor: AdminActor; sharedAtStart: boolean } | null>();
+const sessionRenameScope = new AsyncLocalStorage<{ actor: AdminActor; sharedAtStart: boolean } | null>();
+// Written when the label is saved, from that save's own before and after, so overlapping renames each keep their own step.
+sessions.onSessionRenamed((change) => {
+  const scope = sessionRenameScope.getStore();
+  if (!scope || DESKTOP_MANAGED || (!scope.sharedAtStart && !adminActivityRecording())) return;
+  try {
+    appendAdminAction(DATA_DIR, { category: "session", action: "session.rename", target: { kind: "session", id: change.id, name: change.id },
+      before: { label: change.before }, after: { label: change.after }, actor: scope.actor });
+  } catch (error) {
+    console.warn(`admin activity: could not record a device rename: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
 onConfigSaved((before, after) => {
   const scope = adminActorScope.getStore();
   if (!scope || DESKTOP_MANAGED) return;
@@ -1272,7 +1284,8 @@ function beginAdminAudit(req: IncomingMessage, res: ServerResponse, method: stri
   const actor = plan ? adminActorFor(auth, req) : null;
   const sharedAtStart = plan ? adminActivityRecording() : false;
   // Set for every request, so a kept-alive connection never inherits one.
-  adminActorScope.enterWith(plan?.config && actor ? { actor, sharedAtStart } : null); const granted: DepartmentGrant[] = []; departmentGrants.enterWith(granted);
+  adminActorScope.enterWith(plan?.config && actor ? { actor, sharedAtStart } : null);
+  sessionRenameScope.enterWith(plan?.sessionId && actor ? { actor, sharedAtStart } : null); const granted: DepartmentGrant[] = []; departmentGrants.enterWith(granted);
   if (!plan || !actor || store.bot(plan.botId ?? plan.deletesBot ?? "")?.defaultBot?.person) return; // a person's own Seira is not the team's: what they do with it is never an admin's to read
   const before = {
     bot: auditBot(plan.botId ?? plan.deletesBot),
@@ -1337,13 +1350,8 @@ function adminAuditRows(
   }
   if (before.session && !sessions.list().some((session) => session.id === before.session!.id)) {
     const session = before.session;
-    rows.push({ category: "session", action: "session.revoke", target: { kind: "session", id: session.id, name: session.email ?? session.label },
+    rows.push({ category: "session", action: "session.revoke", target: { kind: "session", id: session.id, name: session.id },
       before: { label: session.label, ...(session.email ? { email: session.email } : {}), scopes: session.scopes } });
-  }
-  const renamed = before.session ? sessions.list().find((session) => session.id === before.session!.id) : undefined;
-  if (before.session && renamed && renamed.label !== before.session.label) {
-    rows.push({ category: "session", action: "session.rename", target: { kind: "session", id: renamed.id, name: renamed.label },
-      before: { label: before.session.label }, after: { label: renamed.label } });
   }
   if (plan.pairing) {
     const pairing = sessions.openPairings().find((candidate) => candidate.id === reply.id);
