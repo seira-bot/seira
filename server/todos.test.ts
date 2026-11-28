@@ -130,9 +130,15 @@ describe("start rules", () => {
 describe("todoVisible (AC-14)", () => {
   const viewer = { bot: (id: string) => id !== "hidden", thread: (id: string) => id !== "secret" };
   it("needs the bot and the source conversation to be seen", () => {
-    expect(todoVisible({ botId: "atlas" }, viewer)).toBe(true);
-    expect(todoVisible({}, viewer)).toBe(true);
-    expect(todoVisible({ botId: "hidden" }, viewer)).toBe(false);
-    expect(todoVisible({ botId: "atlas", source: { threadId: "secret" } }, viewer)).toBe(false);
+    expect(todoVisible({ id: "a", botId: "atlas" }, viewer)).toBe(true);
+    expect(todoVisible({ id: "b" }, viewer)).toBe(true);
+    expect(todoVisible({ id: "c", botId: "hidden" }, viewer)).toBe(false);
+    expect(todoVisible({ id: "d", botId: "atlas", source: { threadId: "secret" } }, viewer)).toBe(false);
+  });
+
+  it("needs the person a todo works for to let the viewer see it (security)", () => {
+    const own = { ...viewer, todo: (id: string) => id !== "theirs" };
+    expect(todoVisible({ id: "mine", botId: "atlas" }, own)).toBe(true);
+    expect(todoVisible({ id: "theirs", botId: "atlas" }, own)).toBe(false);
   });
 });
