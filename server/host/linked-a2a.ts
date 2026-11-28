@@ -165,7 +165,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   const urlOf = (peer: A2aPeer) => (peer.url ? outboundUrl(peer.url, allowLoopback) : null);
   const targetOf = (peer: A2aPeer) => ({ kind: "a2a-peer", id: peer.id, name: peer.name });
   const actorOf = (peer: A2aPeer): LinkedServerActor => ({ kind: "linked-server", linkId: peer.id, name: peer.name, a2a: true });
-  const origin = () => { const raw = deps.origin(); return raw ? guestOrigin(raw) : null; };
+  const origin = () => { const raw = deps.origin(); return raw ? guestOrigin(raw, allowLoopback) : null; };
   const full = () => deps.seiraLinks() + file.peers.length >= LINKS_MAX;
   const outboundToken = (rt: Runtime) => rt.link.dial()?.token ?? "";
   const originOfUrl = (href: string): string => new URL(href).origin;
