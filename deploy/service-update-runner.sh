@@ -226,7 +226,12 @@ facts() {
 
 # --- Acting as the service's user ---------------------------------------------------------------------------------------
 
-as_user() { (cd / && runuser -u "$USER_NAME" -- env -i HOME=/nonexistent PATH=/usr/bin:/bin LANG=C.UTF-8 "$@"); }
+as_named() { # user command...
+  local who=$1
+  shift
+  (cd / && runuser -u "$who" -- env -i HOME=/nonexistent PATH=/usr/bin:/bin LANG=C.UTF-8 "$@")
+}
+as_user() { as_named "$USER_NAME" "$@"; }
 installed_version() { as_user cat "$PKG/package.json" 2>/dev/null | top_version; }
 work() { printf '%s/.seira-update' "$PREFIX"; }
 
@@ -437,7 +442,10 @@ update_to() { # by
 roll_back() { # version copy
   parent=$(dirname "$PKG")
   journal step=rolling-back "from=$1" "copy=$2"
-  stop_server || true
+  if ! stop_server; then
+    say "The server did not stop, so nothing was put back. The data from before is in $2. Run sudo $RUNNER --rollback when the server is stopped."
+    return 2
+  fi
   if ! as_user test -d "$parent/.seira-previous"; then
     say "The version from before is gone, so it could not be put back. The data from before is in $2."
     return 2
@@ -477,6 +485,16 @@ lock() {
   flock -n 9
 }
 
+# The request folder belongs to the service user, so its owner removes what is in it. Root removes only the two names, not their contents.
+clear_requests() {
+  local owner
+  owner=$(stat -c %U -- "$REQUESTS" 2>/dev/null)
+  case "$owner" in
+    '' | root | UNKNOWN | *[!A-Za-z0-9._-]*) rm -f -- "$REQUESTS/request" "$REQUESTS/fresh" ;;
+    *) as_named "$owner" rm -rf -- "$REQUESTS/request" "$REQUESTS/fresh" || true ;;
+  esac
+}
+
 # systemd starts this when the request appears or the owner's policy changes.
 run_requested() {
   [ -d "$STATUS" ] || exit 0
@@ -486,7 +504,7 @@ run_requested() {
   [ -e "$REQUESTS/request" ] || [ -L "$REQUESTS/request" ] || exit 0
   fresh=no
   if [ -e "$REQUESTS/fresh" ] || [ -L "$REQUESTS/fresh" ]; then fresh=yes; fi
-  rm -rf -- "$REQUESTS/request" "$REQUESTS/fresh"
+  clear_requests
   run=$(($(number "$(status_value last run)") + 1))
   ran=$(number "$(status_value last ran)")
   since=$(($(date +%s) - $(number "$(status_value last at)")))

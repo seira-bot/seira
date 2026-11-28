@@ -3,7 +3,7 @@
 // treated as hostile: anything running as the server's user can leave the request.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -89,7 +89,9 @@ case "$1" in
       *) cat "${root}/unit.props" ;;
     esac ;;
   is-active) [ -f "${root}/active" ]; exit $? ;;
-  stop) rm -f "${root}/active" ;;
+  stop)
+    [ -e "${root}/stuck-$(cat "${root}/active" 2>/dev/null)" ] && exit 1
+    rm -f "${root}/active" ;;
   start)
     version=$(sed -n 's/.*"version":"\\([0-9.]*\\)".*/\\1/p' "${join(pkg, "package.json")}")
     echo "$version" > "${root}/active"
@@ -161,6 +163,7 @@ printf '{"name":"${PACKAGE}","version":"%s"}\\n' "$spec" > "$prefix/lib/node_mod
     npmEnv: () => read(join(root, "npm.env")),
     blocked: () => read(join(state, "blocked")),
     tarList: (name: string) => spawnSync("tar", ["-tzf", join(backups, name)], { encoding: "utf8" }).stdout.trim().split("\n").sort(),
+    stickVersion: (version: string) => writeFileSync(join(root, `stuck-${version}`), ""),
     breakVersion: (version: string) => writeFileSync(join(root, `broken-${version}`), ""),
     file: (name: string) => join(root, name),
   };
@@ -253,6 +256,40 @@ describe.skipIf(process.platform !== "linux")("deploy/service-update-runner.sh",
     expect(box.ask().status).toBe(0);
     expect(box.last()).toMatchObject({ run: 2, result: "not-retried" });
     expect(box.npm()).toHaveLength(1);
+  });
+
+  it("clears the request with the rights of the request folder's owner, and runs a request once", () => {
+    const box = host();
+    const owner = userInfo().username;
+    mkdirSync(join(box.state, "request", "fresh"), { recursive: true });
+    writeFileSync(join(box.state, "request", "fresh", "inner"), "x\n");
+    const out = box.ask();
+    expect(out.status, out.stderr).toBe(0);
+    expect(existsSync(box.request)).toBe(false);
+    expect(existsSync(join(box.state, "request", "fresh"))).toBe(false);
+    const calls = box.calls();
+    const clearing = calls.indexOf(`runuser ${owner}`);
+    expect(clearing).toBeGreaterThanOrEqual(0);
+    expect(clearing).toBeLessThan(calls.indexOf("runuser seira"));
+    expect(box.run().status).toBe(0);
+    expect(box.npm()).toHaveLength(1);
+    expect(box.last()).toMatchObject({ run: 1, result: "updated" });
+  });
+
+  it("keeps everything when the server does not stop during a rollback", () => {
+    const box = host();
+    box.breakVersion(NEW);
+    box.stickVersion(NEW);
+    const out = box.ask();
+    expect(out.status, out.stderr).toBe(0);
+    expect(out.stdout).toContain("nothing was put back");
+    expect(box.last()).toMatchObject({ result: "rollback-failed", version: NEW });
+    expect(box.installed()).toBe(NEW);
+    expect(box.previous()).toBe(OLD);
+    expect(existsSync(join(box.data, `seen-${NEW}`))).toBe(true);
+    expect(existsSync(join(box.data, ".seira-update-replaced"))).toBe(false);
+    expect(readFileSync(join(box.state, "journal"), "utf8")).toContain("step=rolling-back");
+    expect(box.copies()).toHaveLength(1);
   });
 
   it("changes nothing when npm cannot install the version, and does not count it against the gap", () => {
