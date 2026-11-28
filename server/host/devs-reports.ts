@@ -36,7 +36,7 @@ import { buildOfferReport, publicDevsReport, type OfferReportInput } from "../bu
 import { startDueTimer } from "../due-timer.ts";
 import type { ProviderSnapshot } from "../contracts.ts";
 import { buildDevsReport, environmentSecrets, redactReportText, type BotSummary, type DevsReportPayload, type ReportedBot } from "../devs-report.ts";
-import { bugReportIssueUrl, bugReportTitle } from "../devs-report-issue.ts";
+import { bugReportIssueUrl, withFinalTitle } from "../devs-report-issue.ts";
 import { BUG_REPORT_STATUS_MAX_IDS, type ReportStatusAnswer, type ReportStatusQuestion, type SendOutcome } from "../devs-report-send.ts";
 import { DEVS_REPORT_PATH } from "../drivers/agents-devs-tools.ts";
 import type { json as sendJson } from "../harness/http.ts";
@@ -259,7 +259,12 @@ export function createDevsReports(deps: DevsReportsDeps) {
       outbox = parsed.data.outbox;
       waiting = parsed.data.waiting.map((entry) => ({ ...entry, restored: true }));
       tracked = parsed.data.tracked ?? [];
-      drafts = parsed.data.drafts ?? [];
+      // A draft kept by an older version may lack its final title: give it the one the form and the relay will use.
+      drafts = (parsed.data.drafts ?? []).map((draft) => {
+        if (!draft.payload) return draft;
+        const payload = withFinalTitle(draft.payload);
+        return { ...draft, payload, title: payload.title ?? draft.title };
+      });
       offered = parsed.data.offered ?? [];
     } else console.warn(`devs reports: ${file} is not a reports file; starting fresh`);
   } catch (error) {
@@ -389,7 +394,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       installId: deps.installId, appVersion: deps.appVersion, platform: `${platform()} ${arch()}, ${runsOn}`, os: `${platform()} ${release()} ${arch()}`,
       runsOn, node: process.version, uptimeSeconds: Math.round(process.uptime()), language: deps.language(), now: now(),
       threadId: entry.threadId, messageId: entry.messageId, ...(groupId ? { groupId } : {}), where, message: entry.text, words: entry.words,
-      bots: shown,
+      bots: shown, names: peopleNamed(store.activePath(entry.threadId)),
       ...("bot" in author ? { summary: { by: author.bot.name, text: author.summary } } : { noSummary: author.why }),
       problems, log, cloudComputers: cloudComputerCounters.lines(),
       ...(deps.performance ? { performance: performanceLines(deps.performance, entry.threadId, bots.map((bot) => bot.id)) } : {}),
@@ -453,11 +458,12 @@ export function createDevsReports(deps: DevsReportsDeps) {
     if (person === null) return null;
     const built = build(entry, author);
     const path = store.activePath(entry.threadId);
-    const payload = publicDevsReport(built.payload, secrets(), { names: peopleNamed(path), whole: person === OWNER });
+    // The one final title is made here, before the draft: the person reads it, the form carries it and the relay files it.
+    const payload = withFinalTitle(publicDevsReport(built.payload, secrets(), { names: peopleNamed(path), whole: person === OWNER }));
     const model = built.bots[0]?.model;
     return keepDraft({ id: newDraftId(), threadId: entry.threadId, anchorId: entry.messageId, for: person,
       ...(entry.sender?.id ? { sender: entry.sender.id } : {}), from: "devs", ...("bot" in author ? { by: author.bot.name } : {}), at: now(),
-      title: bugReportTitle(payload), state: "offer", payload, activity: built.problems + built.log, ...(model ? { model: clip(model, 200) } : {}),
+      title: payload.title ?? "", state: "offer", payload, activity: built.problems + built.log, ...(model ? { model: clip(model, 200) } : {}),
       ...(entry.words ? { words: clip(entry.words.replace(/\s+/g, " ").trim(), 300) } : {}) });
   }
 
@@ -473,13 +479,16 @@ export function createDevsReports(deps: DevsReportsDeps) {
     const shown = bot ? reported(bot, threadId) : undefined;
     const names = peopleNamed(path);
     const messages = path.flatMap((line) => (line.role === "user" && line.text ? [line.text] : []));
-    return buildOfferReport({
+    const report = buildOfferReport({
       installId: deps.installId, appVersion: deps.appVersion, platform: `${platform()} ${arch()}, ${deps.runsOn}`, os: `${platform()} ${release()} ${arch()}`,
       runsOn: deps.runsOn, node: process.version, ...(deps.language() ? { language: deps.language() } : {}), error: facts, where, recovered, steps,
       ...(shown ? { engine: { name: shown.engine, model: shown.model, health: shown.health } } : {}),
       // The server's log holds other conversations too: only the person who runs the app reads it in a draft.
       problems: conversationProblems(path), log: person === OWNER ? deps.recentLog() : [], names, messages,
     }, secrets());
+    // The title the draft shows is the title the form and the relay get: made once, here.
+    const payload = withFinalTitle(report.payload);
+    return { ...report, payload, title: payload.title ?? report.title };
   }
 
   /** A failed row, read once nothing runs in its conversation: when the error is Seira's own, a draft for the person who asked. */

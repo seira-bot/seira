@@ -39,6 +39,7 @@ import { loadInstalledPackage, matchingRequestReceipt, rememberRequest } from ".
 import { applyHolds, holdCauses, type AppliedHolds } from "./routine-holds.ts";
 import { cancelUnfinishedRuns, interruptRunTurns } from "./routine-stops.ts";
 import { sanitizeInput, workflowLookupFor } from "./routine-input.ts";
+import { bindThread, isLiveThread, runOfThread, type StepThreads } from "./routine-step-threads.ts";
 import { startRoutineWork, type WorkflowRoutineOptions } from "./routine-dispatch.ts"; import { cloneRoutine, cloneRun } from "./routine-clone.ts";
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
@@ -143,6 +144,7 @@ export interface RoutineRun extends RoutineLineCodes, RoutineOwnerMark {
   deliveryId?: string;
   sourceThreadId?: string;
   resultsThreadId?: string; workflowId?: string; workflowBotIds?: string[];
+  postsResult?: true; stepThreads?: StepThreads;
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -249,7 +251,7 @@ export interface RoutineManagerOptions extends WorkflowRoutineOptions {
   botState: (botId: string) => "ready" | "busy" | "missing";
   /** Why this bot takes no runs now, in the person's words (a Starter Cloud keeps only so many bots awake); null when it does. */ pausedText?: (botId: string) => string | null; /** The person paused this bot: its runs are let go quietly, not failed into To review. */ held?: (botId: string) => boolean; /** A reached usage cap (host/usage-cap-gate.ts): `capSkip` for a scheduled occurrence, which is counted on one `missed` row per cap and period and never switches the routine off; `capText` for a run already queued. */ capSkip?: (botId: string, routineId: string) => { behind: string; resetsAt: number; words(count: number): RoutineLine } | null; capText?: (botId: string, trigger: RoutineRunTrigger) => string | null;
   goalState?: (groupId: string | undefined, coordinatorBotId: string) => "ready" | "busy" | "missing";
-  createTask: (botId: string, title: string, run?: RoutineRun) => { threadId: string } | null;
+  createTask: (botId: string, title: string, run?: RoutineRun, modelSelection?: ModelSelection) => { threadId: string } | null;
   joinConversation?: (run: RoutineRun) => string | null;
   createGoalTask?: (groupId: string, title: string) => { threadId: string } | null;
   isResultsThread?: (botId: string, threadId: string) => boolean;
@@ -366,7 +368,7 @@ export class RoutineManager {
     let restarts = 0;
     for (const run of this.runs.filter((candidate) => candidate.status === "running" || candidate.status === "waiting")) {
       settleAsk(run, undefined, this.now());
-      if (run.threadId && run.target === "bot" && (run.workflowId !== undefined || this.options.hasPendingDelegations?.(run.threadId) === true)) {
+      if (run.threadId && (run.workflowId !== undefined || (run.target === "bot" && this.options.hasPendingDelegations?.(run.threadId) === true))) {
         this.wait(run, ROUTINE_HANDOFF_WAIT);
         continue;
       }
@@ -523,16 +525,13 @@ export class RoutineManager {
     return removed;
   }
 
-  isActiveThread(threadId: string): boolean {
-    return this.runs.some(
-      (run) => run.threadId === threadId && ["running", "waiting"].includes(run.status),
-    );
-  }
+  isActiveThread(threadId: string): boolean { return isLiveThread(this.runs, threadId); }
 
-  runForThread(threadId: string): RoutineRun | null {
-    const run = this.runs.findLast((candidate) => candidate.threadId === threadId && ["running", "waiting"].includes(candidate.status)) ??
-      this.runs.findLast((candidate) => candidate.threadId === threadId);
-    return run ? cloneRun(run) : null;
+  runForThread(threadId: string): RoutineRun | null { return runOfThread(this.runs, threadId); }
+
+  bindStepThread(runId: string, threadId: string, access?: RoutineAccess): void {
+    const run = this.runs.find((candidate) => candidate.id === runId);
+    if (run && bindThread(run, threadId, access)) this.saveLater();
   }
 
   noteReport(id: string, report: RoutineRunReport | undefined): RoutineRun | null {
@@ -558,10 +557,10 @@ export class RoutineManager {
     const at = this.now();
     const clean = sanitizeInput(input, at, this.options.workflowCopy);
     clean.schedule = this.timedSchedule(clean.schedule);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const nextRunAt = clean.enabled ? this.initialOccurrence(clean.schedule, at) : null;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const routine: Routine = {
       id: randomUUID(),
@@ -622,7 +621,7 @@ export class RoutineManager {
       deliver: Object.hasOwn(patch, "deliver") ? patch.deliver : routine.deliver, workflowId: Object.hasOwn(patch, "workflowId") ? patch.workflowId : routine.workflowId,
     }, now, workflowLookupFor(patch, routine, this.options.workflowCopy));
     clean.schedule = this.timedSchedule(clean.schedule, routine.id);
-    if (this.targetState(clean) === "missing") throw new Error(this.missingTargetMessage(clean.target));
+    if (this.targetState(clean) === "missing") throw new PublicError(this.missingTargetMessage(clean.target));
     const scheduleChanged = JSON.stringify(clean.schedule) !== JSON.stringify(routine.schedule);
     const enabledChanged = clean.enabled !== routine.enabled;
     if (enabledChanged && clean.enabled && clean.schedule.type === "once" && clean.schedule.at <= now) throw new RoutineScheduleError("Its time has passed. Edit it to pick a new time.");
@@ -630,7 +629,7 @@ export class RoutineManager {
       ? this.initialOccurrence(clean.schedule, now)
       : routine.nextRunAt;
     if (clean.schedule.type === "interval" && clean.enabled && nextRunAt === null) {
-      throw new Error("This interval has no future runs. Choose a later end date or turn it off.");
+      throw new PublicError("This interval has no future runs. Choose a later end date or turn it off.");
     }
     const destination = { ...routine, ...clean };
     if (destination.botId !== routine.botId) delete destination.resultsThreadId;
@@ -773,6 +772,7 @@ export class RoutineManager {
     resultsThreadId?: string;
     /** The workflow whose steps the run executes; the event text is the first step's input. */
     workflowId?: string;
+    postsResult?: true;
   }): { id: string } {
     this.assertWritable();
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
@@ -787,7 +787,7 @@ export class RoutineManager {
       botId: input.botId, runOn: input.runOn, scheduledFor: input.receivedAt, status: "queued", manual: false,
       triggerSource: "webhook", webhookId: input.webhookId, deliveryId: input.deliveryId, attachments: [], createdAt: this.now(),
       resultsThreadId: input.resultsThreadId ?? this.options.eventResultsThread?.(input), ...(input.eventSource ? { eventSource: input.eventSource } : {}), ...(input.sameConversation ? { sameConversation: true } : {}), ...(input.byPerson ? { byPerson: true } : {}),
-      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
+      ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId, ...(input.postsResult ? { postsResult: true as const } : {}), ...(copy && !("code" in copy) ? { workflowBotIds: [...copy.botIds] } : {}) }),
     };
     this.commitEvent(run, input.deliveryId, () => { this.runs.push(run); });
     return cloneRun(run);

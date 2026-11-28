@@ -901,7 +901,7 @@ export class SessionRegistry {
 
   rename(id: string, label: string): "renamed" | "invalid" | "missing" {
     this.prune();
-    const record = this.sessions.find((s) => s.id === id);
+    const record = this.record(id);
     if (!record) return "missing";
     const next = deviceLabel(label);
     if (!next) return "invalid";

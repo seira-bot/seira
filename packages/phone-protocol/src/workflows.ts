@@ -1,4 +1,5 @@
-import { ROUTINE_GOAL_RUN_LIMIT_MINUTES } from "./routines.ts";
+import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, type RoutineAccess } from "./routines.ts";
+import type { ModelSelection } from "./wire.ts";
 
 export const WORKFLOW_LIMITS = {
   steps: 50, connections: 100, name: 80, instruction: 20_000, question: 2_000, note: 2_000, waitMinutes: 43_200,
@@ -12,7 +13,8 @@ export const WORKFLOW_FRAME_OUTPUT_CHARS = 300;
 export interface WorkflowPosition { x: number; y: number }
 export interface WorkflowStepBase { id: string; position: WorkflowPosition }
 export type WorkflowStep =
-  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string })
+  /** `modelSelection` and `access` override the routine's own for this step only. */
+  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string; modelSelection?: ModelSelection; access?: RoutineAccess })
   | (WorkflowStepBase & { kind: "check"; question: string })
   | (WorkflowStepBase & { kind: "wait"; minutes: number })
   | (WorkflowStepBase & { kind: "post" })

@@ -172,17 +172,16 @@ describe("turning a start into steps", () => {
     expect((await r.call("POST", "/api/workflows/from-start", { kind: "routine", id: routine.id })).body.error).toBe("This already runs steps.");
   });
 
-  it("refuses a setting that a workflow cannot use, and leaves no workflow behind", async () => {
+  it("turns an automation with a chosen model into steps, and keeps the model", async () => {
     const r = rig();
     const routine = r.routine({ modelSelection: { instanceId: "codex", model: "gpt-x" } });
-    const refused = await r.call("POST", "/api/workflows/from-start", { kind: "routine", id: routine.id });
-    expect(refused).toMatchObject({ status: 409, body: { error: "Each bot in a workflow uses its own model." } });
-    expect(r.flows.size).toBe(0);
-    expect(r.routines.listRoutines()[0]!.workflowId).toBeUndefined();
+    const made = await r.call("POST", "/api/workflows/from-start", { kind: "routine", id: routine.id });
+    expect(made.status).toBe(201);
+    expect(r.routines.listRoutines()[0]).toMatchObject({ workflowId: made.body.workflow.id, modelSelection: { instanceId: "codex", model: "gpt-x" } });
 
     const empty = r.webhook({ name: "Blank", prompt: "  " });
     expect((await r.call("POST", "/api/workflows/from-start", { kind: "webhook", id: empty.id })).body.error).toBe("Write what the bot should do first.");
-    expect(r.flows.size).toBe(0);
+    expect(r.flows.size).toBe(1);
   });
 });
 

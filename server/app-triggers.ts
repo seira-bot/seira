@@ -282,9 +282,9 @@ export class AppTriggerManager {
     return { triggers: this.list(), attempts: this.attempts(), service: this.service() };
   }
 
-  private linkFields(workflowId: string, runOn: RoutineRunOn, sameConversation: boolean): { workflowId: string; prompt: string; botId: string } {
+  private linkFields(workflowId: string): { workflowId: string; prompt: string; botId: string } {
     try {
-      return startWorkflowFields(workflowId, this.options.workflowCopy, { runOn, sameConversation });
+      return startWorkflowFields(workflowId, this.options.workflowCopy);
     } catch (error) {
       throw new AppTriggerError(error instanceof Error ? error.message : "This automation cannot run that workflow.", 409);
     }
@@ -296,7 +296,7 @@ export class AppTriggerManager {
     this.assertWritable();
     this.assertAvailable();
     const name = input.name.trim().slice(0, NAME_MAX);
-    const linked = input.workflowId === undefined ? null : this.linkFields(input.workflowId, input.runOn ?? "seira", input.sameConversation === true);
+    const linked = input.workflowId === undefined ? null : this.linkFields(input.workflowId);
     const prompt = linked?.prompt ?? input.prompt.trim();
     const botId = linked?.botId ?? input.botId;
     const linkedRefusal = linked ? this.options.botAccessRefusal?.(botId, input.app.trim().toLowerCase()) : null;
@@ -364,7 +364,7 @@ export class AppTriggerManager {
     const settingsEdit = patch.workflowId !== undefined || patch.rewriteWorkflow || patch.prompt !== undefined
       || patch.runOn !== undefined || patch.sameConversation !== undefined;
     const linkTo = patch.workflowId === null ? undefined : typeof patch.workflowId === "string" ? patch.workflowId : settingsEdit ? trigger.workflowId : undefined;
-    const linked = linkTo === undefined ? null : this.linkFields(linkTo, patch.runOn ?? trigger.runOn, patch.sameConversation ?? trigger.sameConversation === true);
+    const linked = linkTo === undefined ? null : this.linkFields(linkTo);
     const watchRefusal = linked ? this.options.botAccessRefusal?.(linked.botId, trigger.app) ?? null : null;
     const enablesLinked = patch.enabled === true && !trigger.enabled && !linked && trigger.workflowId !== undefined;
     const enableRefusal = enablesLinked ? this.options.botAccessRefusal?.(trigger.botId, trigger.app) ?? null : null;
@@ -454,7 +454,7 @@ export class AppTriggerManager {
     const trigger: StoredTrigger = { ...structuredClone(entry.trigger), remote: { state: "pending" }, updatedAt: this.now() };
     if (trigger.workflowId !== undefined) {
       try {
-        Object.assign(trigger, this.linkFields(trigger.workflowId, trigger.runOn, trigger.sameConversation === true));
+        Object.assign(trigger, this.linkFields(trigger.workflowId));
         if (this.options.botAccessRefusal?.(trigger.botId, trigger.app)) trigger.enabled = false;
       } catch {
         trigger.enabled = false;

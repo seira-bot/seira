@@ -2,7 +2,6 @@ import type { AppTriggerManager } from "../app-triggers.ts";
 import type { Routine, RoutineManager } from "../routines.ts";
 import type { WebhookManager } from "../webhooks.ts";
 import { PLACE_LOST_MESSAGE } from "../place-lost.ts";
-import { workflowRefusal } from "../workflows/routine-link.ts";
 
 export type WorkflowStartKind = "routine" | "webhook" | "app";
 
@@ -15,11 +14,10 @@ export interface WorkflowStart {
   botId: string;
 }
 
-/** A start as it stands, for the step that turns it into a workflow. `refusal`: why its settings cannot run steps. */
+/** A start as it stands, for the step that turns it into a workflow. */
 export interface WorkflowStartInfo extends WorkflowStart {
   prompt: string;
   workflowId?: string;
-  refusal: string | null;
   routine?: Routine;
 }
 
@@ -66,8 +64,6 @@ export function createWorkflowStarts(deps: WorkflowStartsDeps): WorkflowStarts {
       deps.log?.(`workflows: could not update ${what}: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  const eventRefusal = (fields: { runOn: string; sameConversation?: boolean; delivery?: string }) =>
-    workflowRefusal({ target: "bot", runOn: fields.runOn, sameConversation: fields.sameConversation, deliver: fields.delivery === "post" ? "post" : undefined, scheduleType: "event" });
 
   const now = deps.now ?? Date.now;
 
@@ -113,15 +109,12 @@ export function createWorkflowStarts(deps: WorkflowStartsDeps): WorkflowStarts {
         const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === id);
         return routine ? {
           kind, id, name: routine.name, enabled: routine.enabled, botId: routine.botId, prompt: routine.prompt, workflowId: routine.workflowId, routine,
-          refusal: workflowRefusal({ ...routine, scheduleType: routine.schedule.type }),
         } : null;
       }
       const start = kind === "webhook" ? deps.webhooks()?.list().find((candidate) => candidate.id === id) : deps.appTriggers()?.list().find((candidate) => candidate.id === id);
       if (!start) return null;
-      const delivery = "delivery" in start && start.delivery === "post" ? "post" : undefined;
       return {
         kind, id, name: start.name, enabled: start.enabled, botId: start.botId, prompt: start.prompt, workflowId: start.workflowId,
-        refusal: eventRefusal({ runOn: start.runOn, sameConversation: start.sameConversation, delivery }),
       };
     },
     setRoutinesEnabled(workflowId, enabled) {

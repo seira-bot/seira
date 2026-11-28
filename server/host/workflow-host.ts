@@ -6,13 +6,16 @@ import type { Workflow, WorkflowFrame, WorkflowInput, WorkflowRun } from "../../
 import type { AutomationReports } from "../automation-reports.ts";
 import type { HostTurnResult } from "../coordinator.ts";
 import type { WorkflowRoutineOptions } from "../routine-dispatch.ts";
+import type { ModelSelection } from "../contracts.ts";
 import { BUSY_CODES } from "../routine-recovery.ts";
+import { continuesChat } from "../routine-same-conversation.ts";
 import { askOf, waitingFor } from "../routine-waits.ts";
 import type { Routine, RoutineManager, RoutineManagerOptions, RoutineRun, RoutineRunOn } from "../routines.ts";
 import type { Store } from "../store.ts";
 import type { WorkflowStarts } from "./workflow-starts.ts";
-import { createWorkflowRunner, type StepResult, type StepTurn } from "../workflows/runner.ts";
+import { createWorkflowRunner, type StepResult, type StepThreadOptions, type StepTurn } from "../workflows/runner.ts";
 import { workflowCopy, type WorkflowCopyLookup } from "../workflows/routine-link.ts";
+import { roomGoalProblem, type RoomGoalRoom } from "../workflows/room-goal.ts";
 import { openWorkflowStore } from "../workflows/store.ts";
 import { runnableProblem } from "../workflows/validate.ts";
 
@@ -28,14 +31,33 @@ export interface WorkflowTurnOptions {
   onDispatchError: (message: string) => void;
 }
 
+/** One bot step of a room goal: a turn of that step's bot in the goal's room conversation. */
+export interface WorkflowRoomTurn {
+  groupId: string;
+  threadId: string;
+  botId: string;
+  prompt: string;
+  runId: string;
+  continuesRun: boolean;
+  settle(result: StepResult): void;
+}
+
 export interface WorkflowHostDeps {
   dataDir: string;
-  store: Pick<Store, "bot" | "patchTask">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState"> | null;
+  store: Pick<Store, "bot" | "patchTask" | "taskByThread" | "projectBotForTask">;
+  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState" | "bindStepThread" | "runForThread"> | null;
   routineHooks(): Pick<RoutineManagerOptions, "createTask" | "interruptTurn"> | null;
+  /** The model a new chat of this bot opens on for the run: `modelSelection` or the routine's, while the bot may still use it. */
+  chatModel(botId: string, run: RoutineRun, modelSelection: ModelSelection | undefined): ModelSelection | undefined;
   botState(botId: string): "ready" | "busy" | "missing";
   startTurn(botId: string, text: string, opts: WorkflowTurnOptions): Promise<unknown>;
-  reports: Pick<AutomationReports, "postStep">;
+  reports: Pick<AutomationReports, "postStep" | "runSettled">;
+  /** Where a room goal's steps run: its room, and each bot step as a turn of that bot there. */
+  rooms?: {
+    room(groupId: string): RoomGoalRoom;
+    startTurn(turn: WorkflowRoomTurn): void;
+    stopTurn(groupId: string, threadId: string): Promise<void>;
+  };
   /** The webhooks and app triggers that run a workflow: they keep the same step copy as a routine does. */
   starts?(): Pick<WorkflowStarts, "rewriteEvents" | "unlinkEvents"> | null;
   /** True once the app is closing: no new step turn starts. */
@@ -92,12 +114,18 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
     return () => clearTimeout(handle);
   };
 
-  const threadFor = (run: RoutineRun, botId: string): string | null => {
-    if (botId === run.botId && run.threadId) return run.threadId;
+  const threadFor = (run: RoutineRun, botId: string, options: StepThreadOptions): string | null => {
+    if (run.target === "room-goal") return run.threadId ?? null;
+    if (!options.own && botId === run.botId && run.threadId) return run.threadId;
+    if (options.reuse && continuesChat(deps.store, botId, options.reuse, deps.routines()?.runForThread(options.reuse) ?? null,
+      { modelSelection: deps.chatModel(botId, run, options.modelSelection), access: options.access })) {
+      deps.store.patchTask(botId, options.reuse, { routineRunId: run.id, unread: false });
+      return options.reuse;
+    }
     const hooks = deps.routineHooks();
     if (!hooks) return null;
     const suffix = ` · ${new Date(run.startedAt ?? now()).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
-    const task = hooks.createTask(botId, `${run.routineName.slice(0, 80 - suffix.length).trimEnd()}${suffix}`, run);
+    const task = hooks.createTask(botId, `${run.routineName.slice(0, 80 - suffix.length).trimEnd()}${suffix}`, run, options.modelSelection);
     if (!task) return null;
     deps.store.patchTask(botId, task.threadId, { routineRunId: run.id, unread: false });
     return task.threadId;
@@ -110,6 +138,16 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       turn.settle(typeof code === "string" && BUSY_CODES.has(code) ? { ok: false, busy: true, error: message } : { ok: false, error: message });
     };
     if (deps.shuttingDown?.()) return;
+    if (turn.run.target === "room-goal") {
+      const groupId = turn.run.groupId;
+      if (!deps.rooms || !groupId) return turn.settle({ ok: false, error: "Room goals are unavailable." });
+      try {
+        deps.rooms.startTurn({ groupId, threadId: turn.threadId, botId: turn.botId, prompt: turn.prompt, runId: turn.run.id, continuesRun: turn.continuesRun, settle: turn.settle });
+      } catch (error) {
+        failed(error);
+      }
+      return;
+    }
     try {
       void Promise.resolve(deps.startTurn(turn.botId, turn.prompt, {
         threadId: turn.threadId,
@@ -132,15 +170,30 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
     botName,
     botState: deps.botState,
     threadFor,
+    bindThread: (run, threadId, access) => deps.routines()?.bindStepThread(run.id, threadId, access),
     startTurn,
-    stopTurn: async (botId, threadId) => { await deps.routineHooks()?.interruptTurn?.(botId, threadId); },
+    stopTurn: async (botId, threadId, runId) => {
+      const run = deps.routines()?.listRuns().find((candidate) => candidate.id === runId);
+      if (run?.target === "room-goal" && run.groupId) return deps.rooms?.stopTurn(run.groupId, threadId);
+      await deps.routineHooks()?.interruptTurn?.(botId, threadId);
+    },
     post: (run, stepId, text, onWritten) => deps.reports.postStep(run, stepId, text, () => onWritten()),
+    brief: (run, threadId) => deps.reports.runSettled({ ...run, threadId }),
     runState: (runId, state, detail) => deps.routines()?.workflowRunState(runId, state, detail) ?? null,
     routineRun: (runId) => deps.routines()?.listRuns().find((run) => run.id === runId) ?? null,
     routines: () => deps.routines()?.listRoutines() ?? [],
     runs: () => deps.routines()?.listRuns() ?? [],
     emit: deps.emit,
   });
+
+  /** Why a room goal's run cannot start in its room now, in a person's words; null when it can. */
+  const roomProblem = (run: RoutineRun): string | null => {
+    if (run.target !== "room-goal") return null;
+    if (!deps.rooms) return "Room goals are unavailable.";
+    const graph = store.run(run.id)?.graph ?? (run.workflowId === undefined ? null : store.workflow(run.workflowId));
+    if (!graph) return null;
+    return roomGoalProblem(graph, run.groupId ? deps.rooms.room(run.groupId) : undefined, botName, run.access)?.error ?? null;
+  };
 
   const relink = (workflowId: string, patch: { workflowId: null; enabled: false } | { rewriteWorkflow: true }, stale?: (routine: Routine) => boolean) => {
     const routines = deps.routines();
@@ -216,7 +269,7 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       if (!event || !prior) return null;
       const queued = routines.enqueueWebhook({
         webhookId: startId, webhookName: prior.routineName, prompt: event, botId, runOn: prior.runOn, deliveryId: `again-${randomUUID()}`,
-        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}),
+        receivedAt: now(), workflowId: workflow.id, ...(prior.eventSource ? { eventSource: prior.eventSource } : {}), ...(prior.sameConversation ? { sameConversation: true } : {}), ...(prior.postsResult ? { postsResult: true as const } : {}),
         ...(prior.resultsThreadId ? { resultsThreadId: prior.resultsThreadId } : {}),
       });
       const started = routines.listRuns().find((candidate) => candidate.id === queued.id) ?? null;
@@ -233,7 +286,11 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
       const workflow = store.workflow(workflowId);
       return workflow ? runnableProblem(workflow, { botName }) ?? workflowCopy(workflow, botName) : null;
     },
-    start: (run, threadId, onDispatchError) => runner.start(run, threadId, onDispatchError),
+    start: async (run, threadId, onDispatchError) => {
+      const problem = roomProblem(run);
+      if (problem) return onDispatchError(problem);
+      await runner.start(run, threadId, onDispatchError);
+    },
     routineRunChanged: (run) => runner.routineRunChanged(run),
     runtimeEvent(event) {
       if (event.type === "request.opened") runner.asked(event.threadId, waitingFor(askOf(event, now())) ?? "");

@@ -58,7 +58,7 @@ function call(
 /** Holds the body after the server accepted its headers, so a test can revoke the session before the route commits. */
 function delayedCall(
   path: string,
-  init: { headers: Record<string, string>; body: unknown },
+  init: { headers: Record<string, string>; body: unknown; method?: string },
 ): Promise<{
   finish: () => Promise<{ status: number; body: any }>;
   close: () => void;
@@ -69,7 +69,7 @@ function delayedCall(
       host: "127.0.0.1",
       port: PORT,
       path,
-      method: "POST",
+      method: init.method ?? "POST",
       headers: {
         "content-type": "application/json",
         "content-length": Buffer.byteLength(raw),
@@ -262,6 +262,62 @@ describe("pairing", () => {
     const denied = await rename({ label: "Hijacked" }, id, remote("10.0.0.61", { authorization: `Bearer ${paired.body.token}` }));
     expect(denied.status).toBe(403);
     expect(await labelOf()).toBe("Front desk phone");
+  });
+
+  describe("renaming while the body is still arriving", () => {
+    const pairDevice = async (scopes: string[] | undefined, address: string, label: string) => {
+      const opened = await pairingCode(scopes);
+      const paired = await call("/api/auth/pair", { method: "POST", headers: remote(address), body: JSON.stringify({ code: opened.code, label }) });
+      expect(paired.status).toBe(200);
+      return paired.body as { token: string; session: { id: string } };
+    };
+    const labelOf = async (id: string) => (await call("/api/auth/sessions")).body.sessions.find((s: { id: string }) => s.id === id)?.label;
+    const hold = (admin: { token: string }, address: string, targetId: string, label: string) => delayedCall(`/api/auth/sessions/${targetId}`, {
+      method: "PATCH",
+      headers: remote(address, { authorization: `Bearer ${admin.token}` }),
+      body: { label },
+    });
+
+    it("does not rename when the admin session ended before the change was saved", async () => {
+      const admin = await pairDevice(undefined, "10.0.0.71", "revoked admin");
+      const target = await pairDevice(["client"], "10.0.0.72", "Front desk");
+      const held = await hold(admin, "10.0.0.71", target.session.id, "Must not be saved");
+      try {
+        expect((await call(`/api/auth/sessions/${admin.session.id}`, { method: "DELETE" })).status).toBe(200);
+        const late = await held.finish();
+        expect(late.status).toBe(401);
+        expect(late.body.error).toMatch(/session ended/i);
+        expect(await labelOf(target.session.id)).toBe("Front desk");
+      } finally {
+        held.close();
+      }
+    });
+
+    it("changes nothing when the device was removed before the change was saved", async () => {
+      const admin = await pairDevice(undefined, "10.0.0.73", "admin phone");
+      const target = await pairDevice(["client"], "10.0.0.74", "Old phone");
+      const held = await hold(admin, "10.0.0.73", target.session.id, "Must not be saved");
+      try {
+        expect((await call(`/api/auth/sessions/${target.session.id}`, { method: "DELETE" })).status).toBe(200);
+        const late = await held.finish();
+        expect(late.status).toBe(404);
+        expect(await labelOf(target.session.id)).toBeUndefined();
+      } finally {
+        held.close();
+      }
+    });
+
+    it("still renames when both sessions stay active", async () => {
+      const admin = await pairDevice(undefined, "10.0.0.75", "admin tablet");
+      const target = await pairDevice(["client"], "10.0.0.76", "Hall");
+      const held = await hold(admin, "10.0.0.75", target.session.id, "Hall display");
+      try {
+        expect((await held.finish()).status).toBe(200);
+        expect(await labelOf(target.session.id)).toBe("Hall display");
+      } finally {
+        held.close();
+      }
+    });
   });
 
   it("rechecks an admin session after a slow pairing body before minting a code", async () => {
