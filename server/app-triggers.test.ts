@@ -671,3 +671,57 @@ describe("app event that runs a workflow", () => {
     }
   });
 });
+
+describe("by-id requests to an app trigger", () => {
+  async function hostWith(visible: (botId: string) => boolean, gate: (auth: unknown, body: unknown, current: string | undefined) => { status: number; error: string } | null) {
+    const { createAppTriggerHost } = await import("./app-trigger-host.ts");
+    const bots: Record<string, any> = { scout: { id: "scout", name: "Scout", color: "#000" } };
+    const host = createAppTriggerHost({
+      file: join(dir, "gate-app-triggers.json"),
+      store: { bot: (id) => bots[id], messagesFor: () => [], appendMessage: (_thread, message) => ({ id: "m1", ...message }), patchMessage: () => undefined },
+      connectionMode: () => "managed",
+      access: () => ({ url: broker.url, token: owner.token }),
+      connectedApps: async () => connected,
+      routines: () => routines,
+      webhooks: { list: () => [] } as never,
+      webhookBase: () => "http://127.0.0.1:8800",
+      botState: () => "ready",
+      timeZone: () => "UTC",
+      visibleBot: (_auth, botId) => visible(botId),
+      workflowGate: gate as never,
+      workflowCopy: () => ({ workflowId: "wf-1", prompt: "Do these steps in order:\n1. Scout: Read it", botId: "scout", botIds: ["scout"] }),
+      emit: () => {},
+      audit: () => {},
+    });
+    const call = async (method: string, path: string, body: unknown = {}) => {
+      const answers: Array<{ status: number; body: any }> = [];
+      const json = ((_res: unknown, status: number, answer: unknown) => { answers.push({ status, body: answer }); }) as never;
+      await host.routes({ req: {}, res: {}, url: new URL(`http://localhost${path}`), path, method, auth: { kind: "loopback", scopes: ["admin"] }, json, readBody: async () => body } as never);
+      return answers.at(-1)!;
+    };
+    return { host, call };
+  }
+
+  it("answers as for a missing automation, and changes nothing, when the bot is hidden from the person", async () => {
+    let seen = true;
+    const { host, call } = await hostWith((botId) => seen || botId !== "scout", () => null);
+    const trigger = await host.manager.create({ botId: "scout", name: "Mail", prompt: "Read it", app: "gmail", event: "GMAIL_NEW_GMAIL_MESSAGE" });
+    seen = false;
+    const run = vi.spyOn(host.manager, "runNow");
+    const update = vi.spyOn(host.manager, "update");
+    const remove = vi.spyOn(host.manager, "remove");
+    for (const [method, suffix, body] of [["POST", "/test", {}], ["PATCH", "", { enabled: false }], ["DELETE", "", {}]] as const) {
+      expect(await call(method, `/api/app-triggers/${trigger.id}${suffix}`, body)).toEqual({ status: 404, body: { error: "no such automation" } });
+    }
+    expect([run, update, remove].map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
+    expect(host.manager.get(trigger.id)).toMatchObject({ enabled: true });
+  });
+
+  it("holds back a test run when the person may not change the workflow it runs", async () => {
+    const { host, call } = await hostWith(() => true, (_auth, _body, current) => (current === "wf-1" ? { status: 403, error: "Ask the owner of Scout." } : null));
+    const trigger = await host.manager.create({ botId: "scout", name: "Mail", prompt: "", app: "gmail", event: "GMAIL_NEW_GMAIL_MESSAGE", workflowId: "wf-1" });
+    const run = vi.spyOn(host.manager, "runNow");
+    expect(await call("POST", `/api/app-triggers/${trigger.id}/test`)).toEqual({ status: 403, body: { error: "Ask the owner of Scout." } });
+    expect(run).not.toHaveBeenCalled();
+  });
+});

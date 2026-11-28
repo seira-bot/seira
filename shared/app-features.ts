@@ -54,7 +54,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
-    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. It is not the steps of the work; those belong to a workflow.",
+    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. The Calendar shows when each one runs by Day, Week or Month; drag a coming card to move it.",
     tools: ["trigger_info", "trigger", "delete_trigger"],
     automationViews: ["list", "calendar"],
     releaseNotes: ["sleepWhenIdle"],
