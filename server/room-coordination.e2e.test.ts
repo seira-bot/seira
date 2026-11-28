@@ -9,6 +9,7 @@ import { PEER_ACCESS_HELP } from "./peer-roster.ts";
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 async function withRooms(test: (f: any) => Promise<void>) {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -42,7 +43,7 @@ async function withRooms(test: (f: any) => Promise<void>) {
     const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages;
     const start = async () => { savePlan(); return cli("send-channel", "--channel", source.id, "--text", "@Director Start the assignment"); };
     const wait = async () => cli("wait", "--channel", source.id, "--timeout", "30");
-    const provider = () => readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const provider = () => readJsonLines(`${planPath}.evidence.jsonl`);
     await test({ session, api, cli, tool, sender, target, source, destination, plan, savePlan, nodes, handoffs, messages, start, wait, provider, restart });
   } finally {
     if (restarted) await waitForExit(restarted, { signal: "SIGTERM" });

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const owner = randomBytes(32).toString("base64url");
 const CAPABILITY_KEY = randomBytes(16).toString("hex");
@@ -82,8 +83,7 @@ it("publishes a bot's page to a link shown inline, keeps the link and the card o
     writeFileSync(planPath, JSON.stringify({ [bot.id]: { steps, reply: "Done." } }));
     await cli("send", "--bot", bot.id, "--task", bot.activeTaskId, "--text", "Make me a page for the bake sale and share it.");
     expect((await cli("wait", "--bot", bot.id, "--task", bot.activeTaskId, "--timeout", "30")).status).toBe("settled");
-    const lines = existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean) : [];
-    const evidence = lines.map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === bot.id).at(-1).evidence;
+    const evidence = readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === bot.id).at(-1).evidence;
     return { tools: evidence[0].result.tools.map((tool: any) => tool.name) as string[],
       results: evidence.filter((entry: any) => entry.step).map((entry: any) => entry.response.result.content[0].text as string) };
   };

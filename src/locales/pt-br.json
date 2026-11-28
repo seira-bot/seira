@@ -123,6 +123,7 @@
   "markdown.tooLarge": "Este arquivo é grande demais para a prévia no app (2 MB). Baixe o original para vê-lo.",
   "markdown.loadFailed": "Não foi possível abrir este arquivo. Verifique sua conexão e tente novamente. Arquivos de texto UTF-8 são compatíveis.",
   "markdown.refused": "Não foi possível abrir este arquivo: {reason}",
+  "markdown.outsideWorkspace": "Este link aponta para um arquivo fora da pasta de trabalho deste chat, então não pode ser aberto aqui. Peça ao remetente que compartilhe o arquivo como anexo.",
   "markdown.notText": "Este arquivo não é um texto simples que a prévia consiga mostrar. Baixe o original para abri-lo em outro app.",
   "markdown.rendered": "Ver formatado",
   "table.loading": "Abrindo a tabela…",

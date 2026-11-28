@@ -58,6 +58,8 @@ export interface AppTrigger {
   sourceThreadId?: string;
   /** Each run continues this automation's previous run conversation instead of starting a new one. */
   sameConversation?: boolean;
+  /** Each event runs the steps of this workflow; `prompt` then holds a plain-text copy of them. */
+  workflowId?: string;
   /** Events that started a run or joined one. */
   received: number;
   filtered: number;

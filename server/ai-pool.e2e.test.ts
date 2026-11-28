@@ -1,11 +1,12 @@
 // The AI pool, end to end against a real server with fake engines: at the start of a turn a conversation moves to the
 // pool member with more usage left and gets one line that names both AIs; it stays when its own AI has the most left;
 // and it never moves when the pool is off or its AI is not in the pool. The usage fixture file gives each engine its
-// reading, and a limits read before the turn stands in for the clock's own first read.
+// reading, and a limits read before the turn stands in for the clock's own first read. A person's model switch reaches the
+// server two ways, and each has its own test: the REST route, and the desktop app's private port (the confirmed switch).
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
 
 import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
@@ -26,13 +27,17 @@ interface Fixture {
   control: (...args: string[]) => Promise<any>;
   claudePrompts: () => unknown[];
   evidence: unknown[];
+  /** The desktop app's confirmed model switch: sends one private message and returns the app's answer to it. */
+  desktopSwitch: (message: Record<string, unknown>) => Promise<any>;
 }
 
-async function withPoolFixture(setup: { claudeUsed: number; codexUsed: number; secondClaude?: boolean }, check: (fixture: Fixture) => Promise<void>) {
+async function withPoolFixture(setup: { claudeUsed: number; codexUsed: number; secondClaude?: boolean; desktop?: boolean }, check: (fixture: Fixture) => Promise<void>) {
   const fixture = await launchVerificationServer({});
   const { dataDir, url, logPath } = fixture.info;
   const promptsFile = join(dataDir, "claude-prompts.jsonl");
   const usageFile = join(dataDir, "plan-usage.json");
+  const inbox = join(dataDir, "desktop-inbox.jsonl");
+  const outbox = join(dataDir, "desktop-outbox.jsonl");
   const evidence: unknown[] = [{ url, setup }];
   let server: ChildProcess | undefined;
   const api = async (method: string, path: string, body?: unknown, expectedStatus?: number) => {
@@ -63,9 +68,14 @@ async function withPoolFixture(setup: { claudeUsed: number; codexUsed: number; s
       usageRow("claude", "Verification fixture", "claude", setup.claudeUsed), usageRow("codex", "Codex", "codex", setup.codexUsed),
     ] }));
     const log = openSync(logPath, "a", 0o600);
-    server = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {
+    if (setup.desktop) { writeFileSync(inbox, ""); writeFileSync(outbox, ""); }
+    const desktopPort = setup.desktop ? ["--import", pathToFileURL(fileURLToPath(new URL("./testing/desktop-parent.mjs", import.meta.url))).href] : [];
+    server = spawn(process.execPath, ["--experimental-strip-types", ...desktopPort, fileURLToPath(new URL("./index.ts", import.meta.url))], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
-      env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), SEIRA_TEST_PLAN_USAGE_FILE: usageFile },
+      env: {
+        ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), SEIRA_TEST_PLAN_USAGE_FILE: usageFile,
+        ...(setup.desktop ? { SEIRA_TEST_DESKTOP_INBOX: inbox, SEIRA_TEST_DESKTOP_OUTBOX: outbox } : {}),
+      },
       stdio: ["ignore", log, log],
     });
     closeSync(log);
@@ -79,7 +89,15 @@ async function withPoolFixture(setup: { claudeUsed: number; codexUsed: number; s
     // Chief first makes the starter its team's Chief, whose own turns on Claude would be counted with the ones under test.
     const { bots } = await api("GET", "/api/bots") as { bots: Array<{ id: string; chiefOfStaff?: boolean }> };
     await api("PATCH", `/api/bots/${bots.find((bot) => bot.chiefOfStaff)!.id}`, { chiefOfStaff: false });
-    await check({ api, control, evidence, claudePrompts: () => jsonLines(promptsFile) });
+    const desktopSwitch = async (message: Record<string, unknown>) => {
+      const requestId = `switch-${evidence.length}`;
+      appendFileSync(inbox, `${JSON.stringify({ type: "approval-trusted-mode-set", requestId, ...message })}\n`);
+      let answer: any;
+      await expect.poll(() => (answer = jsonLines(outbox).find((line: any) => line.requestId === requestId)), { timeout: 10_000 }).toBeTruthy();
+      evidence.push({ desktopSwitch: message, answer });
+      return answer;
+    };
+    await check({ api, control, evidence, claudePrompts: () => jsonLines(promptsFile), desktopSwitch });
   } finally {
     const evidencePath = `${logPath}.ai-pool.json`;
     writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
@@ -176,5 +194,41 @@ it("keeps the AI a person picked from a client that sends no aiPool", async () =
     expect(recoveryLines(messages)).toHaveLength(1);
     expect(lastReply(messages)).toMatchObject({ text: "hello from fake claude" });
     expect(fixture.claudePrompts()).toHaveLength(1);
+  });
+}, 120_000);
+
+const taskOf = async (api: Fixture["api"], botId: string, threadId: string) =>
+  (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === botId).tasks.find((entry: any) => entry.threadId === threadId);
+
+it("keeps the AI a person picked in the desktop app, which sends no aiPool", async () => {
+  await withPoolFixture({ claudeUsed: 70, codexUsed: 10, desktop: true }, async (fixture) => {
+    const { api, control } = fixture;
+    const first = await oneTurn(fixture, (claude) => ({ enabled: true, mode: "even", members: [claude, codex] }));
+    expect(first.model).toMatchObject({ instanceId: "codex" });
+    expect((await taskOf(api, first.bot.id, first.threadId)).aiPool).toBe("auto");
+    const answer = await fixture.desktopSwitch({ botId: first.bot.id, threadId: first.threadId, mode: "ask", modelSelection: first.claude, updateBotDefault: false });
+    expect(answer).toMatchObject({ type: "approval-trusted-mode-result", ok: true });
+    expect((await taskOf(api, first.bot.id, first.threadId)).aiPool).toBe("pinned");
+    await control("send", "--bot", first.bot.id, "--task", first.threadId, "--text", "And the next day");
+    expect((await control("wait", "--bot", first.bot.id, "--task", first.threadId, "--timeout", "30")).status).toBe("settled");
+    const task = await taskOf(api, first.bot.id, first.threadId);
+    const messages = await messagesOf(api, first.threadId);
+    expect(task.aiPool).toBe("pinned");
+    expect(task.modelSelection ?? first.claude).toMatchObject({ instanceId: "claude" });
+    expect(recoveryLines(messages)).toHaveLength(1);
+    expect(lastReply(messages)).toMatchObject({ text: "hello from fake claude" });
+    expect(fixture.claudePrompts()).toHaveLength(1);
+  });
+}, 120_000);
+
+it("leaves a pool conversation on auto when the desktop app confirms the AI it is already on", async () => {
+  await withPoolFixture({ claudeUsed: 70, codexUsed: 10, desktop: true }, async (fixture) => {
+    const { api } = fixture;
+    const first = await oneTurn(fixture, (claude) => ({ enabled: true, mode: "even", members: [claude, codex] }));
+    const before = await taskOf(api, first.bot.id, first.threadId);
+    expect(before).toMatchObject({ aiPool: "auto", modelSelection: { instanceId: "codex" } });
+    const answer = await fixture.desktopSwitch({ botId: first.bot.id, threadId: first.threadId, mode: "ask", modelSelection: before.modelSelection, updateBotDefault: false });
+    expect(answer).toMatchObject({ type: "approval-trusted-mode-result", ok: true });
+    expect(await taskOf(api, first.bot.id, first.threadId)).toMatchObject({ aiPool: "auto", modelSelection: before.modelSelection });
   });
 }, 120_000);

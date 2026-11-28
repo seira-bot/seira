@@ -6,11 +6,12 @@
 // with the ids too. The engine is the synthetic Claude CLI playing a scripted plan, so it proves the routing, not a
 // model's judgement.
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
 const ENGINE = `process.env.FAKE_CLAUDE_ROOM_PLAN = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/plan.json";`;
@@ -33,8 +34,7 @@ let room: { id: string; threadId: string }, ops: { id: string; threadId: string 
 
 const planPath = () => join(team.home, "plan.json");
 const leadGo = () => join(team.home, "lead-go");
-const turns = (): Turn[] => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Turn) : [];
+const turns = (): Turn[] => readJsonLines<Turn>(`${planPath()}.evidence.jsonl`);
 const ran = (bot: Bot) => turns().filter((turn) => turn.botId === bot.id).length;
 const create = async (body: Record<string, unknown>) => {
   const created = await team.as(olive, "POST", "/api/bots", body);

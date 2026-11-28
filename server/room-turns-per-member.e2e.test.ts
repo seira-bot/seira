@@ -1,9 +1,10 @@
 // A room set to several turns per member walks its members that many times for one message, and only the last
 // turn's prompt tells a member it is its final turn, on an isolated fixture with the scripted engine.
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("gives each member three turns in order and tells it the last one is final", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -32,11 +33,11 @@ it("gives each member three turns in order and tells it the last one is final", 
 
     await api("POST", `/api/groups/${room.id}/messages`, { text: "Plan the launch together" });
     await expect.poll(() => {
-      try { return readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").length; } catch { return 0; }
+      return readJsonLines(`${planPath}.evidence.jsonl`).length;
     }, { timeout: 60_000 }).toBe(6);
     expect((await cli("wait", "--channel", room.id, "--timeout", "45")).status).toBe("settled");
 
-    const evidence = readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const evidence = readJsonLines(`${planPath}.evidence.jsonl`);
     const final = "This is your final turn in this exchange (turn 3 of 3).";
     expect(evidence.map((turn: any) => [turn.botId === first.id ? "First" : "Second", turn.turnIndex, JSON.stringify(turn.prompt).includes(final)])).toEqual([
       ["First", 0, false], ["Second", 0, false],

@@ -2,11 +2,12 @@
 // bot's next turn is listed neither while its teammate keeps both; turning Data off takes its server out of the turn.
 // One loopback stub stands in for the image provider. No network.
 import { createServer } from "node:http";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const IMAGES = ["generate_image", "edit_image"];
 const PAGES = ["show_html", "publish_page", "unpublish_page", "share"];
@@ -21,8 +22,7 @@ it("lists a bot none of the groups its person turned off, from its next turn, an
     request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;
   const planPath = join(session.info.dataDir, "room-plan.json");
   const evidenceFor = (botId: string) => {
-    const lines = existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean) : [];
-    return lines.map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId).at(-1);
+    return readJsonLines(`${planPath}.evidence.jsonl`).filter((entry: any) => entry.botId === botId).at(-1);
   };
   /** One turn with no tool steps: the tools its agents server listed, and what its engine was started with. */
   const turn = async (bot: any) => {

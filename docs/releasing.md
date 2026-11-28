@@ -342,6 +342,10 @@ Before it uploads the package, the workflow extracts it and checks that:
 - the manifest names the display name and the publisher display name of Seira;
 - the manifest declares the `seira` protocol, the `runFullTrust`
   capability, and a start-up task that is off by default;
+- the manifest declares the app execution alias `seira-desktop.exe` for
+  the app. An agent engine is outside the package, and Windows lets it start
+  the app's executable only through this alias. Without it, Seira's built-in
+  tools fail with `EPERM`;
 - the package version is the mapped version (see below);
 - each logo in `build/appx/` is in the package with the same SHA-256, and no
   sample logo of electron-builder is in the package.

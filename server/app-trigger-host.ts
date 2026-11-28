@@ -17,6 +17,7 @@ import { listTriggers, triggerTarget } from "./trigger-tools.ts";
 import { addressFor } from "./webhook-address.ts";
 import type { WebhookManager } from "./webhooks.ts";
 import { publicErrorText } from "./public-error.ts";
+import { linkWorkflow, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
 
 type Bot = RosterMember & {
   color: string; composio?: boolean;
@@ -42,6 +43,10 @@ export interface AppTriggerHostDeps {
   audit: (row: { threadId: string; requestId: string; botId: string; botName: string; tool: string; summary: string }) => void;
   broker?: AppTriggerBroker;
   workflowName?: (workflowId: string) => string | undefined;
+  /** The step copy and bots of a workflow, for an automation that runs it. */
+  workflowCopy?: WorkflowCopyLookup;
+  /** Why this person may not link this body's workflow, or change the one an automation runs now; null when they may. */
+  workflowGate?: (auth: RequestAuth, body: unknown, current: string | undefined) => { status: number; error: string } | null;
 }
 
 export interface InternalTriggerContext {
@@ -59,6 +64,15 @@ export interface InternalTriggerContext {
 
 const GUEST_REFUSAL = "Only the Cloud's owner can make a bot watch their connected apps. Tell the person to ask from their own conversation.";
 
+/** The bot a linked workflow starts with, or why it cannot be linked. */
+function linkedBot(workflowId: string, lookup: WorkflowCopyLookup | undefined): { botId: string } | { error: string } {
+  try {
+    return { botId: linkWorkflow({ workflowId }, lookup)?.botId ?? "" };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "That workflow cannot be used." };
+  }
+}
+
 function status(error: unknown): number {
   return error instanceof AppTriggerError ? error.status : typeof (error as { status?: unknown }).status === "number" ? (error as { status: number }).status : 400;
 }
@@ -71,12 +85,18 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     if (managedComposioBrokerOff()) return { available: false as const, reason: "off" as const };
     return mode === "managed" && deps.access() ? { available: true as const } : { available: false as const, reason: "unavailable" as const };
   };
+  const accessRefusal = (botId: string, app: string): string | null => {
+    const bot = deps.store.bot(botId);
+    return bot && !botMayWatchApp(bot, app) ? `${bot.name} can't watch ${appLabel(app)}. Give ${bot.name} access to ${appLabel(app)} first.` : null;
+  };
   const manager = new AppTriggerManager({
     file: deps.file,
     broker,
     service,
     connectedApps: deps.connectedApps,
     botState: deps.botState,
+    ...(deps.workflowCopy ? { workflowCopy: deps.workflowCopy } : {}),
+    botAccessRefusal: accessRefusal,
     runs: {
       enqueue: (input) => deps.routines().enqueueWebhook(input),
       merge: (triggerId, eventId, sameConversation, merge) => deps.routines().mergeIntoQueuedRun(triggerId, eventId, sameConversation, merge),
@@ -125,7 +145,14 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       }
       if (path === "/api/app-triggers" && method === "POST") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const bot = deps.store.bot(typeof body.botId === "string" ? body.botId : "");
+        const workflowId = typeof body.workflowId === "string" && body.workflowId ? body.workflowId : undefined;
+        if (workflowId) {
+          const refused = deps.workflowGate?.(auth, body, undefined);
+          if (refused) return json(res, refused.status, { error: refused.error });
+        }
+        const linked = workflowId ? linkedBot(workflowId, deps.workflowCopy) : null;
+        if (linked && "error" in linked) return json(res, 409, { error: linked.error });
+        const bot = deps.store.bot(linked ? linked.botId : typeof body.botId === "string" ? body.botId : "");
         if (!bot) return json(res, 404, { error: "no such bot" });
         const app = typeof body.app === "string" ? body.app.trim().toLowerCase() : "";
         if (!botMayWatchApp(bot, app)) return json(res, 403, { error: `${bot.name} has not been given access to ${appLabel(app)}. Allow it in the bot's Access settings first.` });
@@ -136,6 +163,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
           ...(body.config && typeof body.config === "object" ? { config: body.config as Record<string, unknown> } : {}),
           ...(body.runOn === "cloud" ? { runOn: "cloud" as const } : {}),
           ...(body.sameConversation === true ? { sameConversation: true } : {}),
+          ...(workflowId ? { workflowId } : {}),
         });
         return json(res, 201, { trigger });
       }
@@ -148,6 +176,10 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       }
       if (!match[2] && method === "PATCH") {
         const body = (await readBody(req)) as Record<string, unknown>;
+        if (typeof body.workflowId === "string" || body.workflowId === null) {
+          const refused = deps.workflowGate?.(auth, body, manager.get(id)?.workflowId);
+          if (refused) return json(res, refused.status, { error: refused.error });
+        }
         const patch: AppTriggerPatch = {
           ...(typeof body.name === "string" ? { name: body.name } : {}),
           ...(typeof body.prompt === "string" ? { prompt: body.prompt } : {}),
@@ -157,6 +189,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
           ...(typeof body.enabled === "boolean" ? { enabled: body.enabled } : {}),
           ...(typeof body.sameConversation === "boolean" ? { sameConversation: body.sameConversation } : {}),
           ...(body.confirmPlace === true ? { confirmPlace: true as const } : {}),
+          ...(typeof body.workflowId === "string" && body.workflowId ? { workflowId: body.workflowId } : body.workflowId === null ? { workflowId: null } : {}),
         };
         const trigger = await manager.update(id, patch);
         return trigger ? json(res, 200, { trigger }) : json(res, 404, { error: "no such automation" });
@@ -223,6 +256,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
 
   return {
     manager,
+    accessRefusal,
     routes,
     internalRoutes,
     submit,

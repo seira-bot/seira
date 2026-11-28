@@ -1,12 +1,13 @@
 // Stop means stop, end to end on the scripted engine: the person's Stop in the chat that handed work out also stops the
 // teammates working for that request, not only the ones that had not started. Modelled on a real day, when a stop left
 // hand-offs running and their results kept arriving for minutes after it.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("stops the teammates working for a request when the person stops the chat that asked, with no late results", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -24,8 +25,7 @@ it("stops the teammates working for a request when the person stops the chat tha
       [cos.id]: { script: [{ key: "S1-ASK", match: ["S1-ASK"], readyFile: started, delayMs: 8_000, reply: "S1-ASK late: the settings are in the old notes." }] },
       [research.id]: { script: [{ key: "S1-ASK", match: ["S1-ASK"], delayMs: 8_000, reply: "S1-ASK late: the host is imap.example.test." }] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages as any[];
     const busy = async (id: string) => ((await api("/api/bots?messages=0", undefined, "GET")).bots as any[]).find((bot) => bot.id === id)?.busy;
     const helpers = () => readHandoffs(session.info.dataDir).filter((node) => node.parentId);

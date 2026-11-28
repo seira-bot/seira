@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -14,11 +14,11 @@ import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SETTLED = "Your downstream room requests have settled.";
-const jsonl = (path: string) => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string) => readJsonLines(path);
 const terminal = (status: string | undefined) => status === "completed" || status === "failed" || status === "cancelled";
 
 type ModelAnswer = { say: string } | { call: true } | { hold: Promise<void>; after: ModelAnswer };

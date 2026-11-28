@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { launchVerificationServer, runControlSeira, verificationServerEnvironmen
 import { request } from "../scripts/mcp-server.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readRegistry } from "./testing/registry.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 async function fixture(test: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>, hang = false, fakeEnv: NodeJS.ProcessEnv = {}) {
   const f = await setup(hang, fakeEnv);
@@ -43,8 +44,7 @@ async function setup(hang: boolean, fakeEnv: NodeJS.ProcessEnv) {
       await cli("send", "--bot", bot.id, "--task", thread, "--text", text);
       expect((await cli("wait", "--bot", bot.id, "--task", thread, "--timeout", "30")).status).toBe("settled");
     };
-    const turns = () => existsSync(`${plan}.evidence.jsonl`) ? readFileSync(`${plan}.evidence.jsonl`, "utf8")
-      .trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+    const turns = () => readJsonLines(`${plan}.evidence.jsonl`);
     ready = true;
     return { session, api, cli, bot, thread, messages, task, idle, send, turns,
       compact: () => api(`/api/bots/${bot.id}/compact`, { threadId: thread }),

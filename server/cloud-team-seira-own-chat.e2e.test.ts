@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { personKey } from "./person-key.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
 const MIRA = { email: "mira@acme.test", role: "member" as const };
@@ -26,8 +27,7 @@ let olive = "", mira = "", ben = "";
 
 const planPath = () => join(team.home, "plan.json");
 const dataDir = (...rest: string[]) => join(team.home, ".seira", ...rest);
-const turns = (): Array<{ planKey?: string }> => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const turns = (): Array<{ planKey?: string }> => readJsonLines(`${planPath()}.evidence.jsonl`);
 const botsOf = async (token: string, messages = "") => (await team.as(token, "GET", `/api/bots${messages}`)).body.bots as Bot[];
 const ownSeira = async (token: string) => (await botsOf(token)).find((bot) => bot.defaultBot?.person)!;
 const layer = (bot: Bot, email: string) => dataDir("workspaces", `${bot.id}--member-${personKey({ id: "", email })}`, "MEMORY.md");

@@ -40,6 +40,8 @@ export interface WebhookTrigger {
   maxPendingRuns?: number;
   /** Each run continues this webhook's previous run conversation instead of starting a new one. */
   sameConversation?: boolean;
+  /** Each delivery runs the steps of this workflow; `prompt` then holds a plain-text copy of them. */
+  workflowId?: string;
 }
 
 export interface WebhookTriggerInput {
@@ -58,6 +60,8 @@ export interface WebhookTriggerInput {
   /** 1–50; `null` goes back to the default. */
   maxPendingRuns?: number | null;
   sameConversation?: boolean;
+  /** The workflow whose steps each delivery runs. `null` on an edit unlinks it and switches the webhook off. */
+  workflowId?: string | null;
   /** Only on an edit: confirms where a moved automation runs. */
   confirmPlace?: true;
 }
