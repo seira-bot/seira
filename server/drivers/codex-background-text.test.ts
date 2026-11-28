@@ -135,7 +135,7 @@ describe("codexBackgroundProviderArgs", () => {
       'model = "glm-5"', 'model_provider = "mygw"', "",
       "[model_providers.other]", 'base_url = "https://other.example/v1"', "",
       "[model_providers.mygw]", 'name = "My gateway" # mine', 'base_url = "https://gw.example/v1"', 'wire_api = "responses"',
-      'experimental_bearer_token = "sk-gateway-secret"', "request_max_retries = 2", "query_params = [", '  "a",', '  "b",', "]", "",
+      'experimental_bearer_token = "sk-gateway-secret"', "request_max_retries = 2", "", "[model_providers.mygw.query_params]", 'api-version = "2026-01-01"', "",
       "[model_providers.mygw.http_headers]", '"X-Team" = "team-secret"', "",
       "[mcp_servers.mine]", 'command = "mine-mcp"',
     ].join("\n"));
@@ -144,7 +144,7 @@ describe("codexBackgroundProviderArgs", () => {
       'model_providers.mygw.base_url="https://gw.example/v1"',
       'model_providers.mygw.wire_api="responses"',
       "model_providers.mygw.request_max_retries=2",
-      'model_providers.mygw.query_params=[ "a", "b", ]',
+      'model_providers.mygw.query_params.api-version="2026-01-01"',
       'model_providers.mygw.env_http_headers.X-Team="SEIRA_CODEX_MYGW_HEADER_1"',
       'model_providers.mygw.env_key="SEIRA_CODEX_MYGW_TOKEN"',
     ]);
@@ -195,23 +195,130 @@ describe("codexBackgroundProviderArgs", () => {
     }
   });
 
-  it("drops an inline table that does not parse, with its values", () => {
+  it("adds nothing from a file that does not parse, and reads the next file instead", () => {
     const broken = [
       'mygw = { base_url = "https://gw.example/v1" experimental_bearer_token = "synthetic-broken-1" }',
       'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-2" } }',
       'mygw = { base_url = "https://gw.example/v1", = "synthetic-broken-3" }',
-      'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-4", }',
       'mygw = { base_url = "https://gw.example/v1", http_headers = { A = "synthetic-broken-5" b = "x" } }',
+      'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-6',
+      'mygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-broken-7" }\nmygw = {}',
     ];
     for (const line of broken) {
       const { env, args } = argsFor(`[model_providers]\n${line}\n`);
       expect(args, line).toEqual([]);
       expect(Object.keys(env)).toEqual(["CODEX_HOME"]);
     }
-    // A bad inline table next to good keys drops only itself.
-    const mixed = argsFor('[model_providers.mygw]\nbase_url = "https://gw.example/v1"\nhttp_headers = { A = "synthetic-broken-6" b = "x" }\n');
-    expect(mixed.overrides).toEqual(['model_providers.mygw.base_url="https://gw.example/v1"']);
-    expect(mixed.args.join(" ")).not.toMatch(/synthetic/);
+    // A bad broken line next to good keys of the same file drops the whole file: nothing is half-read.
+    const mixed = argsFor('[model_providers.mygw]\nbase_url = "https://gw.example/v1"\nhttp_headers = { A = "synthetic-broken-8" b = "x" }\n');
+    expect(mixed.args).toEqual([]);
+    // A profile file that parses is still read after a config.toml that does not.
+    writeFileSync(join(home, "config.toml"), '[model_providers.mygw\nbase_url = "https://broken.example/v1"\n');
+    const profile = argsFor('[model_providers.mygw]\nbase_url = "https://work.example/v1"\n', "mygw::glm-5", "work.config.toml");
+    expect(profile.overrides).toEqual(['model_providers.mygw.base_url="https://work.example/v1"']);
+  });
+
+  it("reads an inline table with a trailing comma, which TOML 1.1 allows, with the token in the environment", () => {
+    const { env, args } = argsFor('[model_providers]\nmygw = { base_url = "https://gw.example/v1", experimental_bearer_token = "synthetic-trailing", }\n');
+    expect(args).toEqual(["-c", 'model_providers.mygw.base_url="https://gw.example/v1"', "-c", 'model_providers.mygw.env_key="SEIRA_CODEX_MYGW_TOKEN"']);
+    expect(env.SEIRA_CODEX_MYGW_TOKEN).toBe("synthetic-trailing");
+  });
+
+  it("reads quoted keys, escapes and literal strings by their value, and writes each value again as a fresh string", () => {
+    const { env, args, overrides } = argsFor([
+      "[model_providers.mygw]",
+      '"name" = "Gat\\u00e9 \\"one\\"\\tX"',
+      "base_url = 'https://gw.example/v1'",
+      '"wire_api" = "resp\\u006fnses"',
+      "[model_providers.mygw.http_headers]",
+      '"X-Team" = "line1\\nline2"',
+      "'X-Lit' = 'C:\\path\\to'",
+      '"X-D\\u0045L" = "del\\u007fvalue"',
+      "[model_providers.mygw.query_params]",
+      '"api-version" = "v1\\u007f"',
+    ].join("\n"));
+    expect(overrides).toEqual([
+      'model_providers.mygw.name="Gaté \\"one\\"\\tX"',
+      'model_providers.mygw.base_url="https://gw.example/v1"',
+      'model_providers.mygw.wire_api="responses"',
+      'model_providers.mygw.env_http_headers.X-Team="SEIRA_CODEX_MYGW_HEADER_1"',
+      'model_providers.mygw.env_http_headers.X-Lit="SEIRA_CODEX_MYGW_HEADER_2"',
+      'model_providers.mygw.env_http_headers.X-DEL="SEIRA_CODEX_MYGW_HEADER_3"',
+      'model_providers.mygw.query_params.api-version="v1\\u007f"',
+    ]);
+    expect(env.SEIRA_CODEX_MYGW_HEADER_1).toBe("line1\nline2");
+    expect(env.SEIRA_CODEX_MYGW_HEADER_2).toBe("C:\\path\\to");
+    expect(env.SEIRA_CODEX_MYGW_HEADER_3).toBe("del\u007fvalue");
+    expect(args.join("\n")).not.toContain("\u007f");
+  });
+
+  it("forwards a field of the allowed list only with its own type, and nothing else", () => {
+    const { env, args, overrides } = argsFor([
+      "[model_providers.mygw]",
+      "name = 5", "base_url = [ 'https://a.example', 'https://b.example' ]", "wire_api = { x = 'synthetic-wire' }", "env_key_instructions = true",
+      'requires_openai_auth = "true"', 'request_max_retries = "2"', "stream_max_retries = -1", "stream_idle_timeout_ms = 1.5", "experimental_bearer_token = 12345",
+      'unknown_field = "synthetic-unknown"', 'command = "synthetic-command"', "auth = { command = 'synthetic-auth' }", "supports_websockets = true",
+      "[model_providers.mygw.aws]", 'profile = "synthetic-aws"',
+    ].join("\n"));
+    expect(overrides).toEqual([]);
+    expect(args).toEqual([]);
+    expect(Object.keys(env)).toEqual(["CODEX_HOME"]);
+    const typed = argsFor([
+      "[model_providers.mygw]",
+      'name = "ok"', "requires_openai_auth = false", "request_max_retries = 0", "stream_max_retries = 5", "stream_idle_timeout_ms = 300000", 'env_key = "GW_KEY"', 'env_key_instructions = "export GW_KEY"',
+      'unknown_field = "synthetic-unknown"',
+    ].join("\n"));
+    expect(typed.overrides).toEqual([
+      'model_providers.mygw.name="ok"',
+      "model_providers.mygw.requires_openai_auth=false",
+      "model_providers.mygw.request_max_retries=0",
+      "model_providers.mygw.stream_max_retries=5",
+      "model_providers.mygw.stream_idle_timeout_ms=300000",
+      'model_providers.mygw.env_key="GW_KEY"',
+      'model_providers.mygw.env_key_instructions="export GW_KEY"',
+    ]);
+  });
+
+  it("keeps only string entries of a header or query table, arrays and nested tables out", () => {
+    const { env, args, overrides } = argsFor([
+      "[model_providers.mygw]",
+      "http_headers = { A = 'synthetic-a', B = 5, C = [ 'synthetic-c' ], D = { e = 'synthetic-d' }, 'bad key' = 'synthetic-e', 'x.y' = 'synthetic-f' }",
+      "env_http_headers = { 'X-Env' = 'GW_ENV', 'X-Bad' = 'not a name', 'X-Num' = 5 }",
+      "query_params = { 'api-version' = '1', api_key = 'synthetic-q1', 'x-token' = 'synthetic-q2', sig = 'synthetic-q3', n = 7, list = [ 'synthetic-q4' ] }",
+    ].join("\n"));
+    expect(overrides).toEqual([
+      'model_providers.mygw.env_http_headers.A="SEIRA_CODEX_MYGW_HEADER_1"',
+      'model_providers.mygw.env_http_headers.X-Env="GW_ENV"',
+      'model_providers.mygw.query_params.api-version="1"',
+    ]);
+    expect(env.SEIRA_CODEX_MYGW_HEADER_1).toBe("synthetic-a");
+    expect(args.join(" ")).not.toMatch(/synthetic/);
+    // A header and a token never reach argv by any of the spellings of the table that holds them.
+    for (const toml of [
+      "[model_providers.mygw.http_headers]\nA = 'synthetic-h'\n",
+      "model_providers.mygw.http_headers.A = 'synthetic-h'\n",
+      "[model_providers]\nmygw.http_headers = { A = 'synthetic-h' }\n",
+      "[model_providers.mygw]\nhttp_headers = {\"A\" = 'synthetic-h'}\n",
+    ]) {
+      const row = argsFor(toml);
+      expect(row.overrides, toml).toEqual(['model_providers.mygw.env_http_headers.A="SEIRA_CODEX_MYGW_HEADER_1"']);
+      expect(row.env.SEIRA_CODEX_MYGW_HEADER_1).toBe("synthetic-h");
+    }
+  });
+
+  it("never forwards the text of the file: a comment, a trailing table or an odd key adds nothing", () => {
+    const { args } = argsFor([
+      "[model_providers.mygw] # model_providers.mygw.experimental_bearer_token = 'synthetic-comment'",
+      'name = "a" # b = "synthetic-trailing"',
+      'base_url = "https://gw.example/v1\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
+      "[model_providers.mygw.\"odd.key\"]", 'x = "synthetic-odd"',
+      "[[model_providers.mygw.list]]", 'x = "synthetic-list"',
+    ].join("\n"));
+    expect(args).toEqual([
+      "-c", 'model_providers.mygw.name="a"',
+      "-c", 'model_providers.mygw.base_url="https://gw.example/v1\\" -c model_providers.mygw.experimental_bearer_token=\\"synthetic-inject"',
+    ]);
+    expect(args.filter((arg) => arg === "-c")).toHaveLength(2);
   });
 
   it("adds nothing for OpenAI, Codex's own providers or a provider config.toml does not declare", () => {
