@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { advisoryPatched, judgeBlockers, parseArgs, releaseBlockers, versionCovers } from "./release-blockers.mjs";
+import { advisoryPatched, judgeBlockers, releaseBlockers, versionCovers } from "./release-blockers.mjs";
 
 interface Advisory {
   ghsa_id: string;

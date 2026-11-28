@@ -81,7 +81,6 @@ const ATTACH = "attach";
 const isAttach = (file: string, id: string) => (file === MACOS || file === WINDOWS) && id === ATTACH;
 const isCaller = (file: string, id: string) => file === RELEASE && (id === "windows" || id === "macos");
 const WINDOWS_ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && startsWith(inputs.ref, 'v') && ${MAIN_REF} && ${GATE_CLEAR} }}`;
-const RELEASE_GATED = `!cancelled() && ${MAIN_REF} && ${GATE_CLEAR}`;
 const WINDOWS_FILES = ["Seira-$VERSION-setup.exe", "Seira-$VERSION-setup.exe.blockmap", "latest.yml", "Seira-setup.exe", "SHA256SUMS-windows-x64.txt"];
 const ATTACH_IF = `\${{ !cancelled() && needs.package.result == 'success' && needs.package.outputs.signed == 'true' && startsWith(inputs.ref, 'v') && ${MAIN_REF} && ${GATE_CLEAR} }}`;
 const MAC_FILES = [
@@ -1889,7 +1888,7 @@ describe("Release workflow", () => {
           expect(String(step.with?.["sparse-checkout"] ?? ""), where).toMatch(/^(?:scripts\/release-[a-z]+\.mjs\n?)+$/);
         }
         for (const line of (step.run ?? "").split("\n").map((each) => each.trim()).filter((each) => /(?:^|\s)(?:node|pnpm|npm|bun|bash|sh|python3?) /.test(each) && !/^(?:#|echo|\[|if |elif |\{)/.test(each))) {
-          if (/^node /.test(line)) expect(line, where).toMatch(TRUSTED_SCRIPT);
+          if (line.startsWith("node ")) expect(line, where).toMatch(TRUSTED_SCRIPT);
           else expect(line, where).not.toMatch(/^(?:pnpm|npm|bun|bash|sh|python3?|\.\/)/);
         }
       }
@@ -1922,6 +1921,17 @@ describe("Release workflow", () => {
       expect(workflows.get(file)!.on.workflow_dispatch, file).toBeDefined();
       expect(JSON.stringify((workflows.get(file)!.on.workflow_dispatch as { inputs: object }).inputs), file).not.toContain("gated");
     }
+  });
+
+  it("attaches the Windows files to the draft release only for a v* tag on main, after the package job and the gate", () => {
+    const flow = workflows.get(WINDOWS)!;
+    const job = flow.jobs[ATTACH]!;
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "gate", "approval", "package", ATTACH]);
+    expect(job.if).toBe(WINDOWS_ATTACH_IF);
+    expect(job.needs).toEqual(["commit", "gate", "approval", "package"]);
+    expect(job.environment).toBe("release");
+    const upload = stepsOf(job).find((step) => step.run?.includes('release-assets.mjs" upload'))!;
+    for (const name of WINDOWS_FILES) expect(upload.run, name).toContain(name);
   });
 
   it("starts the server image workflow only after the release is published", () => {
