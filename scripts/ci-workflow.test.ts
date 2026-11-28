@@ -1813,7 +1813,7 @@ describe("Release workflow", () => {
   const jobs = Object.entries(release.jobs);
   const WRITE_JOBS = ["blockers", "tag", "draft", "flatpak", "linux-attach", "windows", "macos", "publish"];
   const holdsPower = ([id, job]: [string, Job]) => id !== "flatpak" && job.steps !== undefined && (job.environment !== undefined && job.environment !== "release-approval" || (typeof job.permissions === "object" && Object.values(job.permissions).includes("write")));
-  const TRUSTED_SCRIPT = /^node (?:"\$GITHUB_WORKSPACE\/scripts\/release-(?:assets|blockers|preflight)\.mjs"|scripts\/release-(?:blockers|preflight)\.mjs)(?: |$)/;
+  const TRUSTED_SCRIPT = /^node (?:"\$GITHUB_WORKSPACE\/)?scripts\/release-(?:assets|blockers|preflight)\.mjs"?(?: |$)/;
 
   it("starts only from a push to main that changes package.json, or by hand", () => {
     expect(Object.keys(release.on).sort()).toEqual(["push", "workflow_dispatch"]);
