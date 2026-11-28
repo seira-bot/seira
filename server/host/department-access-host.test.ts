@@ -48,6 +48,16 @@ describe("who sees which departments", () => {
     expect(fixture().host.grantFor("ada@acme.test")).toBeNull();
   });
 
+  it("says whether limits are set, so a member with no address can be held back", () => {
+    const { host } = fixture();
+    expect(host.limited()).toBe(false);
+    host.change({ entry: "ada@acme.test", departments: ["Sales"] });
+    expect(host.limited()).toBe(true);
+    // Nothing limits a server where the grants live elsewhere; a grant file that cannot be read counts as set.
+    expect(fixture({ elsewhere: true }).host.limited()).toBe(false);
+    expect(fixture({ content: "{ not json" }).host.limited()).toBe(true);
+  });
+
   it("maps a grant's ids to the departments' current names, General as an empty name", () => {
     const { host } = fixture();
     expect(host.change({ entry: "ada@acme.test", departments: ["Sales", ""] })).toEqual({ ok: true });

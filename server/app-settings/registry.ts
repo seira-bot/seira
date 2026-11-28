@@ -58,6 +58,8 @@ interface Writable {
   describe?(value: unknown): { change: string } | { refusal: string };
   /** Non-null when this value only applies after the owner taps Apply on a card naming what follows. */
   confirm?(value: unknown): Consequence | null;
+  /** Where the value sends the owner's data, when that can change on its own (a saved address): Apply refuses once it differs from the one the card named. */
+  destination?(value: unknown): string | null;
   /** The complete current and proposed text for the card that waits for the owner's Apply, so the owner reads all of what they approve. */
   review?(value: unknown): { before: string; after: string } | null;
 }
@@ -125,11 +127,12 @@ const url = z.string().trim().max(2048).refine((text) => text === "" || /^https?
 
 const KEY_WHERE: Partial<Record<CredentialTargetId, Where>> = {
   onePasswordToken: "vault",
+  tregApiKey: "apps",
 };
 
-export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review"> & {
+export type WritableSpec = Omit<Base, "read"> & Omit<Writable, "tier" | "current" | "write" | "describe" | "confirm" | "review" | "destination"> & {
   read?(): string; current(value: never): unknown; write(value: never): Promise<string | null>; describe?(value: never): { change: string } | { refusal: string };
-  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null;
+  confirm?(value: never): Consequence | null; review?(value: never): { before: string; after: string } | null; destination?(value: never): string | null;
 };
 /** `line` says what the new value does on the applied card; `refusal` names a value only the person sets, in Settings. */
 export type WindowPref = (id: WindowPrefId, label: string, help: string, where: Where, synonyms: string[], allowed: string,
@@ -281,17 +284,17 @@ export function createSettingsRegistry(deps: RegistryDeps): SettingEntry[] {
     confirm: (text: string) => (text && text !== (current() ?? "") ? { code: "keyTo", params: { service: label.replace(/ address$/, ""), host: hostOf(text) } } : null),
   });
   const providers: SettingEntry[] = [
-    provider("providers.anthropic.url", "Anthropic address", ["anthropic", "claude"], () => cfg().anthropic?.url, (text) => ({ anthropic: { ...cfg().anthropic, url: text } })),
-    provider("providers.xai.url", "xAI address", ["xai", "grok"], () => cfg().xai?.url, (text) => ({ xai: { ...cfg().xai, url: text } })),
-    provider("providers.groq.url", "Groq address", ["groq"], () => cfg().groq?.url, (text) => ({ groq: { ...cfg().groq, url: text } })),
-    provider("providers.meta.url", "Meta address", ["meta", "llama"], () => cfg().meta?.url, (text) => ({ meta: { ...cfg().meta, url: text } })),
-    provider("providers.openaiCompat.url", "OpenAI-compatible address", ["openai compatible", "custom provider", "ollama", "lm studio", "openrouter"], () => cfg().openaiCompat?.url, (text) => ({ openaiCompat: { ...cfg().openaiCompat, url: text } })),
+    provider("providers.anthropic.url", "Anthropic address", ["anthropic", "claude"], () => cfg().anthropic?.url, (text) => ({ anthropic: { url: text } })),
+    provider("providers.xai.url", "xAI address", ["xai", "grok"], () => cfg().xai?.url, (text) => ({ xai: { url: text } })),
+    provider("providers.groq.url", "Groq address", ["groq"], () => cfg().groq?.url, (text) => ({ groq: { url: text } })),
+    provider("providers.meta.url", "Meta address", ["meta", "llama"], () => cfg().meta?.url, (text) => ({ meta: { url: text } })),
+    provider("providers.openaiCompat.url", "OpenAI-compatible address", ["openai compatible", "custom provider", "ollama", "lm studio", "openrouter"], () => cfg().openaiCompat?.url, (text) => ({ openaiCompat: { url: text } })),
     writable({
       id: "providers.openaiCompat.model", label: "OpenAI-compatible model", help: "The model name sent to the OpenAI-compatible provider.", where: "keys",
       synonyms: ["openai compatible", "custom provider", "model name"], value: z.string().trim().max(200), allowed: "a model name, or empty to clear",
-      current: () => cfg().openaiCompat?.model ?? "", write: config((model: string) => ({ openaiCompat: { ...cfg().openaiCompat, model } })),
+      current: () => cfg().openaiCompat?.model ?? "", write: config((model: string) => ({ openaiCompat: { model } })),
     }),
-    provider("voice.baseUrl", "Voice server address", ["tts", "voice", "speech", "chatterbox"], () => cfg().tts?.baseUrl, (text) => ({ tts: { ...cfg().tts, baseUrl: text } })),
+    provider("voice.baseUrl", "Voice server address", ["tts", "voice", "speech", "chatterbox"], () => cfg().tts?.baseUrl, (text) => ({ tts: { baseUrl: text } })),
   ];
 
   const secret: SettingEntry[] = (Object.keys(CREDENTIAL_TARGETS) as CredentialTargetId[]).map((credentialId) => {

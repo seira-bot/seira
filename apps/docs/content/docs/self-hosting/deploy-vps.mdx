@@ -405,13 +405,17 @@ name it. The tag `latest` follows every change on `main`; it is for trying
 things out, not for a server you rely on. **Check for updates** in the app
 compares your server with the stable version. To hear of every release as soon
 as it is published instead, set `SEIRA_UPDATE_CHANNEL=newest` in the server's
-environment.
+environment. Until a first version is made stable, the stable channel is the
+newest release. An npm install hears of a version only when npm has its
+package, some hours after the release.
 
 ### From the app: Update server
 
-On a Docker install, the server's admins can update it from **Update server** on the server's own page in Settings (its first
-entry), in the desktop app or a browser. It runs the
-`update.sh` described below: the stable version, a copy of the data first, and
+On a Docker install, and on an npm install that runs as a systemd service, the server's admins can update it from **Update server** on the server's own page in Settings (its first
+entry), in the desktop app or a browser. On Docker it runs the
+`update.sh` described below, and on npm the runner of
+[Paths A and C](#paths-a-and-c-npm-with-the-service-above-one-command-with-a-way-back):
+the stable version, a copy of the data first, and
 the old version and its data back when the new one is not healthy. The app asks
 first (the server restarts, so anything running stops, and it says how many
 chats have a bot answering), shows "Updating the server…" while the server is
@@ -513,8 +517,21 @@ but its own once that one has been checked, as above. To see them:
 `docker volume ls --filter label=com.seira.role=update-backup`; to remove one
 yourself: `docker volume rm <name>`.
 
-Without the runner (no systemd, an npm install, Podman) the app shows the
-command to run on the server instead.
+Without a runner (no systemd, Podman, or an npm install without the runner of
+[Paths A and C](#paths-a-and-c-npm-with-the-service-above-one-command-with-a-way-back))
+the app shows the command to run on the server instead.
+
+### Automatic updates
+
+A server with a runner (Docker or npm) also asks for the stable update by
+itself. It asks when no bot has answered for 10 minutes, at most once in 6 hours.
+The runner then does the same steps as for the button, with the same limits.
+The server does not ask again for a version that was rolled back. Each request
+shows in the admins' activity as "Automatic update".
+
+To stop the automatic updates, set `SEIRA_AUTO_UPDATE=off` in the server's
+environment. The **Update server** button still works. To hold every update,
+the button's too, put `{"updates": "hold"}` in `/etc/seira/policy.json`.
 
 ### Path B (Docker): one command, with a way back
 
@@ -637,11 +654,60 @@ published image with `./update.sh --replace-local-build`. Building needs about 6
 on a smaller server, add swap first or use the published image. Engines you install
 from **Settings → AI → Providers** live on the data volume and survive either way.
 
-### Paths A and C (npm with the service above): the same steps by hand
+### Paths A and C (npm with the service above): one command, with a way back
 
-There is no one-command updater for an npm install yet. Do what the script
-does: copy the data first, install one named version, check it, and keep the
-way back. Take the stable version number from
+`deploy/service-update-runner.sh` updates an npm install that runs as the
+`seira` service. It adds the **Update server** button and the automatic updates
+above. Run it once from the administrator shell. `seira service install` prints
+the same lines. Replace `X.Y.Z` with the version you run now (`seira --version`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/vX.Y.Z/deploy/service-update-runner.sh -o service-update-runner.sh
+sudo bash service-update-runner.sh --install
+```
+
+For a service with another name, add `--unit NAME`. The script places
+`/usr/local/sbin/seira-service-update`, the systemd units `seira-update.path` and
+`seira-update.service`, and root's folder `/var/lib/seira-update`. The server
+writes its request in `request` and reads `status`. The copies of the data go to
+`/var/backups/seira-update`, which only root can read, because they hold the
+server's keys and tokens.
+
+An update does these steps:
+
+1. It finds the version: the stable one when npm has it, else npm's `latest`.
+   It does nothing unless that version is newer than the installed one.
+2. It downloads that version as the service's user, into a folder beside the
+   install. npm runs with no install scripts, no `.npmrc` and the public registry.
+3. It stops the service and copies the data. The copy leaves out the bots'
+   workspaces, the browser profile, the engines you installed and `app`.
+4. It puts the new version in place and keeps the old one beside it.
+5. It starts the service. It waits until the server answers as the new version,
+   and until an engine can start a bot when one could before the update.
+6. If that does not occur, it puts the old version and the copy back. The app
+   does not try that version again by itself.
+
+The runner does not run npm when the service's user can change `node` or `npm`,
+for example a Node.js from nvm in that user's home. Install Node.js and npm so
+that only root can change them. A service that runs as root gets no button.
+When the unit has `ProtectSystem=strict`, add
+`ReadWritePaths=/var/lib/seira-update/request` under `[Service]`. `--install`
+tells you when you must do this.
+
+At a terminal:
+
+```sh
+sudo seira-service-update --now        # update now, with the same steps
+sudo seira-service-update --rollback   # put back the version and data from before the last update
+sudo seira-service-update --remove     # remove the runner; the copies stay
+```
+
+`--rollback` asks first, and `--yes` skips the question. An update from the app
+keeps the two newest copies, and never removes a copy from your own `--now`. To
+see them: `sudo ls -l /var/backups/seira-update`.
+
+Without systemd, do the same steps by hand: copy the data first, install one
+named version, check it, and keep the way back. Take the stable version number from
 [`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json)
 (`"version"`), and note the one you run now (`seira --version`). From
 the administrator shell, replacing `X.Y.Z`:

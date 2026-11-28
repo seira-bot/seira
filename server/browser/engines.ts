@@ -182,7 +182,7 @@ export class ChromeEngine {
   }
 
   /** fill_login's reads and typing on the new engine. */
-  loginDeps(session: string): Pick<FillLoginDeps, "engine" | "insertText" | "press" | "click"> | null {
+  loginDeps(session: string): Pick<FillLoginDeps, "engine" | "insertText" | "typeKeys" | "press" | "click"> | null {
     const target = this.target(session);
     return target ? this.service.loginDeps(target) : null;
   }

@@ -18,6 +18,14 @@ describe("activeRoutinesContext", () => {
     expect(context([routine("paused", { enabled: false }), routine("other", { botId: "other" }), routine("room", { target: "room-goal" })])).toBe("");
   });
 
+  it("leaves out a scheduled routine that this conversation may not know of", () => {
+    const linked = routine("linked", { workflowId: "wf-1", workflowBotIds: ["bot", "other"] });
+    expect(context([linked, routine("plain")])).toContain('"id":"linked"');
+    const text = context([linked, routine("plain")], { routineShown: (one) => !one.workflowId });
+    expect(text).not.toContain('"id":"linked"');
+    expect(text).toContain('"id":"plain"');
+  });
+
   it("carries the id, schedule, next run, source title and the stop rule as quoted previews", () => {
     const text = context([routine("stable-id", { sourceThreadId: "work" })], { title: () => "Payment work" });
     expect(text).toContain('"id":"stable-id"');
@@ -37,6 +45,16 @@ describe("activeRoutinesContext", () => {
     ]);
     const ids = [...text.matchAll(/"id":"([^"]+)"/g)].map(match => match[1]);
     expect(ids).toEqual(["temporary", "new-interval", "old-interval", "standing"]);
+  });
+
+  it("leaves out an app or webhook monitor that runs a workflow when the conversation may not know of it", () => {
+    const monitors = { appTriggers: [routine("app-flow", { workflowId: "wf" }), routine("app-plain")], webhooks: [routine("hook-flow", { workflowId: "wf" }), routine("hook-plain")] };
+    const all = context([], monitors);
+    for (const id of ["app-flow", "app-plain", "hook-flow", "hook-plain"]) expect(all).toContain(`"id":"${id}"`);
+    const shown = context([], { ...monitors, startShown: start => start.workflowId === undefined });
+    expect(shown).toContain('"id":"app-plain"');
+    expect(shown).toContain('"id":"hook-plain"');
+    expect(shown).not.toContain("flow");
   });
 
   it("includes enabled app and webhook monitors but leaves model-free posts and room deliveries alone", () => {

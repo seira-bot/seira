@@ -204,6 +204,14 @@ describe("who may change an automation", () => {
     expect(startLinkRefusal({ workflowId: "open" }, undefined, auth, r.host, r.visible, r.deps)).toBeNull();
   });
 
+  it("answers as for a missing workflow, for everyone but an admin, when the one a start runs now is gone", async () => {
+    const r = rig();
+    const admin = new VisibleSet(bots, [], { kind: "all", email: "ada@example.test" });
+    expect(startLinkRefusal({}, "gone", auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
+    expect(startLinkRefusal({ workflowId: null }, "gone", auth, r.host, r.visible, r.deps)).toEqual({ status: 404, error: "no such workflow" });
+    expect(startLinkRefusal({ workflowId: null }, "gone", auth, r.host, admin, r.deps)).toBeNull();
+  });
+
   it("refuses a workflow id that does not resolve", async () => {
     const r = rig();
     r.add("secret", "pub", "hr");

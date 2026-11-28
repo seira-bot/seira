@@ -10,7 +10,9 @@ import { DEFAULT_WINDOW_MINUTES } from "../cache-keepwarm.ts";
 import { botsTowardLimit } from "../../shared/bot-limit.ts";
 import { browserEngineChoice } from "../browser/config.ts";
 import { parseSocks5Proxy } from "../browser/egress/policy.ts";
-import { CONFIG_PATCH_FIELDS as F, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
+import { CONFIG_PATCH_FIELDS as F, DEFAULT_CAPTURE_QUIET_MS, DEFAULT_TIDY_HOUR, MAX_THREAD_EVENT_LOG_BYTES, MIN_THREAD_EVENT_LOG_BYTES } from "../config.ts";
+import { decisionRetentionDays, decisionRetentionPinned } from "../decision-log.ts";
+import { isLoopbackHost } from "../request-auth.ts";
 import { threadLogCapOrDefault } from "../thread-log-rotation.ts";
 import { hostOf, type Consequence, type ConsequenceCode } from "./confirm.ts";
 import { display, withoutKeys, type RegistryDeps, type SettingEntry, type Where, type WritableSpec } from "./registry.ts";
@@ -23,6 +25,26 @@ const fields = (value: object) => Object.entries(value).map(([field, inner]) => 
 const quoted = (text: string) => `"${text.length > 160 ? `${text.slice(0, 160)}…` : text}"`;
 const nonEmpty = <T extends z.ZodType<object>>(schema: T) => schema.refine((value) => Object.keys(value).length > 0, "name at least one field");
 type BrowserProfileChange = { id?: string; name: string; browser?: "chrome" };
+const voiceProvider = F.tts.unwrap().shape.provider.unwrap();
+type VoiceProvider = z.infer<typeof voiceProvider>;
+/** Undo of a provider change puts the voice and model back too, which the server resets when the provider changes. */
+type VoiceState = { provider: VoiceProvider; voice: string; model: string };
+/** The voice providers that send the reply text to another company, as the card names them. */
+const CLOUD_VOICES: Partial<Record<VoiceProvider, string>> = { elevenlabs: "ElevenLabs", fish: "Fish Audio", xai: "xAI", gemini: "Gemini", openai: "OpenAI", deepseek: "DeepSeek" };
+const VOICE_NEEDS: Record<VoiceProvider, string> = {
+  elevenlabs: "keys.ttsKey", fish: "keys.fishAudioKey", gemini: "keys.geminiTtsKey", xai: "keys.xaiApiKey", openai: "keys.openaiApiKey", deepseek: "keys.deepseekApiKey",
+  chatterbox: "voice.baseUrl", system: "nothing: it uses the computer's own voice",
+};
+/** The host the saved Chatterbox address sends to, for a change to Chatterbox; null for any other voice. */
+const voiceHost = (value: VoiceProvider | VoiceState, address: string | undefined): string | null => {
+  if ((typeof value === "string" ? value : value.provider) !== "chatterbox") return null;
+  const saved = address?.trim();
+  return saved ? hostOf(saved) : null;
+};
+const memoryUpkeep = nonEmpty(z.object({
+  captureQuietMs: z.number().int().min(1_000).max(24 * 60 * 60_000).optional(),
+  tidyHour: z.number().int().min(0).max(23).optional(),
+}).strict());
 const imageSlot = z.object({ provider: z.enum(IMAGE_PROVIDERS), model: z.string().trim().max(200).optional() }).strict();
 /** OpenRouter's live catalog holds more image models than its list; any of its vendor/model ids goes. A custom endpoint names its own. */
 const imageModelKnown = (provider: ImageProvider, model: string) => provider === "custom" || IMAGE_MODEL_CHOICES[provider].some((choice) => choice.id === model)
@@ -256,6 +278,47 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       current: ({ botId }: { botId: string }) => { const bot = deps.bots().find((one) => one.id === botId); return bot ? { botId, skills: bot.assignedSkills ?? [] } : undefined; },
       describe: ({ botId, skills }: { botId: string; skills: string[] }) => { const name = botName(botId); return name ? { change: skills.length ? `Give ${name} the library skills ${skills.join(", ")}` : `Take every library skill from ${name}` } : { refusal: `No bot has the id ${botId}. Use list_bots for the ids.` }; },
       write: ({ botId, skills }: { botId: string; skills: string[] }) => deps.call("skills", "PUT", `/api/bots/${encodeURIComponent(botId)}/skills-library`, { skills }),
+    }),
+    writable({
+      id: "voice.provider", label: "Voice provider", help: "Which service speaks bots' voice replies, voice notes and call speech.", where: "bot-settings",
+      synonyms: ["voice", "tts", "speech", "text to speech", "elevenlabs", "fish audio", "gemini", "grok", "openai", "deepseek", "chatterbox", "system voice"],
+      value: voiceProvider.or(z.object({ provider: voiceProvider, voice: z.string(), model: z.string() }).strict()), allowed: `one of ${voiceProvider.options.join(", ")}`,
+      current: (): VoiceState => ({ provider: cfg().tts?.provider ?? "elevenlabs", voice: cfg().tts?.voice ?? "", model: cfg().tts?.model ?? "" }),
+      read: () => cfg().tts?.provider ?? "elevenlabs",
+      write: (value: VoiceProvider | VoiceState) => deps.saveConfig({ tts: typeof value === "string" ? { provider: value } : { provider: value.provider, voice: value.voice, model: value.model } }),
+      confirm: (value: VoiceProvider | VoiceState) => {
+        const next = typeof value === "string" ? value : value.provider;
+        if (next === (cfg().tts?.provider ?? "elevenlabs")) return null;
+        if (CLOUD_VOICES[next]) return { code: "dataTo", params: { provider: CLOUD_VOICES[next]! } };
+        // Chatterbox sends the text to the address saved for it: only a loopback address stays on this computer.
+        const host = voiceHost(value, cfg().tts?.baseUrl);
+        return host && !isLoopbackHost(host) ? { code: "dataTo", params: { provider: host } } : null;
+      },
+      // The card names this host, so Apply refuses when the saved address moved to another one after the card was shown.
+      destination: (value: VoiceProvider | VoiceState) => voiceHost(value, cfg().tts?.baseUrl),
+      more: () => ({ providers: Object.fromEntries(voiceProvider.options.map((provider) => [provider, `needs ${VOICE_NEEDS[provider]}`])), help: "Changing the provider resets the voice and model to that provider's defaults. A provider that needs a key has its own entry: set it with no value and a secure card asks the user." }),
+    }),
+    section({
+      id: "decisions.retentionDays", label: "Approval history", help: "How many days Seira keeps the record of what bots were allowed or refused to do.", where: "storage",
+      synonyms: ["approval history", "decision log", "audit", "audit log", "retention", "keep history", "history", "delete old"],
+      value: z.number().int().min(1).max(3650), allowed: "1 to 3650 days",
+      current: () => cfg().decisions?.retentionDays ?? null, read: () => `${decisionRetentionDays(cfg().decisions?.retentionDays)} days`,
+      patch: (retentionDays) => ({ decisions: { retentionDays } }), says: (days) => `Keep approval history for ${days} days`,
+      refuse: () => (decisionRetentionPinned() !== null ? "How long approval history is kept is fixed by this server's setup, so it can't be changed here. Tell the person in one line." : null),
+      confirm: (days) => (days < decisionRetentionDays(cfg().decisions?.retentionDays) ? { code: "deletesHistory", params: { days: String(days) } } : null),
+    }),
+    section({
+      id: "memory.upkeep", label: "Memory upkeep timing", help: "How long a conversation stays quiet before bots note new facts from it, and the hour each night when bots tidy memory.", where: "bot-settings",
+      synonyms: ["memory", "upkeep", "tidy", "quiet time", "notice facts", "capture", "nightly"],
+      value: memoryUpkeep, allowed: '{"captureQuietMs"?: 1000 to 86400000, "tidyHour"?: 0 to 23}',
+      // Unset fields read as null, so Undo clears what the change set.
+      current: () => ({ captureQuietMs: cfg().memory?.captureQuietMs ?? null, tidyHour: cfg().memory?.tidyHour ?? null }),
+      read: () => `${Math.round((cfg().memory?.captureQuietMs ?? DEFAULT_CAPTURE_QUIET_MS) / 60_000)} minutes quiet, tidy at ${String(cfg().memory?.tidyHour ?? DEFAULT_TIDY_HOUR).padStart(2, "0")}:00`,
+      patch: (memory) => ({ memory }),
+      says: ({ captureQuietMs, tidyHour }) => [
+        ...(captureQuietMs !== undefined ? [`bots note new facts after a conversation is quiet for ${Math.max(1, Math.round(captureQuietMs / 60_000))} minutes`] : []),
+        ...(tidyHour !== undefined ? [`bots tidy memory at ${String(tidyHour).padStart(2, "0")}:00`] : []),
+      ].join("; ").replace(/^./, (letter) => letter.toUpperCase()),
     }),
   ];
 }

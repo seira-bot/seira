@@ -10,7 +10,12 @@ const asset = (name: string, size = 1, state = "uploaded", id = 0): Asset => ({ 
 const good = () => [asset("Seira-1.0.0-setup.exe", 100), asset("Seira-1.0.0-setup.exe.blockmap", 5), asset("Seira-setup.exe", 100), asset("latest.yml", 90), asset("SHA256SUMS-windows-x64.txt", 80)];
 
 const linux = () => [asset("Seira-1.0.0-x86_64.AppImage", 300), asset("Seira-1.0.0-amd64.deb", 200), asset("latest-linux.yml", 60), asset("Seira.AppImage", 300), asset("Seira-amd64.deb", 200), asset("SHA256SUMS-linux-x64.txt", 70), asset("Seira-1.0.0-x86_64.flatpak", 250)];
-const complete = () => [...linux(), ...good()];
+const MAC_PACKAGES = ["Seira-1.0.0-arm64.dmg", "Seira-1.0.0-x64.dmg", "Seira-1.0.0-arm64.zip", "Seira-1.0.0-x64.zip"];
+const mac = () => [
+  ...MAC_PACKAGES.map((name) => asset(name, 400)), ...MAC_PACKAGES.map((name) => asset(`${name}.blockmap`, 6)),
+  asset("latest-mac.yml", 70), asset("SHA256SUMS-mac.txt", 60), asset("Seira.dmg", 400), asset("Seira-intel.dmg", 410),
+];
+const complete = () => [...linux(), ...good(), ...mac()];
 
 function fakeApi(assets: Asset[], contents: Record<string, string>, release: Record<string, unknown> = {}) {
   const calls: string[] = [];
@@ -261,12 +266,25 @@ describe("upload", () => {
 describe("missingForPublish", () => {
   const names = (assets: Asset[]) => missingForPublish(assets, "v1.0.0").map((item) => item.name);
 
-  it("names the Windows files that a Linux-only release lacks", () => {
+  it("names the Windows and macOS files that a Linux-only release lacks", () => {
     expect(missingForPublish(linux(), "v1.0.0")).toEqual([
       { platform: "Windows", name: "latest.yml" },
       { platform: "Windows", name: "SHA256SUMS-windows-x64.txt" },
       { platform: "Windows", name: "Seira-setup.exe" },
+      { platform: "macOS", name: "latest-mac.yml" },
+      { platform: "macOS", name: "SHA256SUMS-mac.txt" },
+      { platform: "macOS", name: "Seira.dmg" },
+      { platform: "macOS", name: "Seira-intel.dmg" },
+      ...MAC_PACKAGES.map((name) => ({ platform: "macOS", name })),
+      ...MAC_PACKAGES.map((name) => ({ platform: "macOS", name: `${name}.blockmap` })),
     ]);
+  });
+
+  it("names each versioned macOS package and blockmap that the release lacks", () => {
+    const without = (...gone: string[]) => complete().filter((item) => !gone.includes(item.name));
+    expect(names(without("Seira-1.0.0-x64.zip"))).toEqual(["Seira-1.0.0-x64.zip"]);
+    expect(names(without("Seira-1.0.0-arm64.dmg.blockmap", "Seira-1.0.0-arm64.zip.blockmap"))).toEqual(["Seira-1.0.0-arm64.dmg.blockmap", "Seira-1.0.0-arm64.zip.blockmap"]);
+    expect(missingForPublish(complete(), "v1.0.0")).toEqual([]);
   });
 
   it("names the Flatpak bundle of the release version when it is missing", () => {
@@ -332,12 +350,17 @@ describe("publish", () => {
     expect(h.runs).toEqual([]);
   });
 
-  it("AC-04: does not require macOS files when the release has none", async () => {
-    expect(missingForPublish(complete(), "v1.0.0")).toEqual([]);
+  it("AC-04: publish refuses a release without macOS files, and runs nothing", async () => {
+    const h = harness([...linux(), ...good()]);
+    expect(await go(h)).toBe(1);
+    const text = h.lines.join("\n");
+    expect(text).toContain("FAIL macOS: latest-mac.yml is missing");
+    expect(text).toContain("FAIL macOS: Seira.dmg is missing");
+    expect(h.runs).toEqual([]);
   });
 
   it("AC-05: requires every macOS file when the release has one", async () => {
-    const h = harness([...complete(), asset("Seira-1.0.0-arm64.dmg", 400)]);
+    const h = harness([...linux(), ...good(), asset("Seira-1.0.0-arm64.dmg", 400)]);
     expect(await go(h)).toBe(1);
     const text = h.lines.join("\n");
     expect(text).toContain("FAIL macOS: latest-mac.yml is missing");
@@ -345,9 +368,15 @@ describe("publish", () => {
     expect(h.runs).toEqual([]);
   });
 
+  it("refuses a draft without a macOS update zip, and runs nothing", async () => {
+    const h = harness(complete().filter((item) => item.name !== "Seira-1.0.0-arm64.zip"));
+    expect(await go(h)).toBe(1);
+    expect(h.lines).toContain("FAIL macOS: Seira-1.0.0-arm64.zip is missing");
+    expect(h.runs).toEqual([]);
+  });
+
   it("AC-05: publishes when all macOS files are present", async () => {
-    const mac = [asset("Seira-1.0.0-arm64.dmg", 400), asset("latest-mac.yml", 70), asset("SHA256SUMS-mac.txt", 60), asset("Seira.dmg", 400), asset("Seira-intel.dmg", 410)];
-    const h = harness([...complete(), ...mac]);
+    const h = harness(complete());
     expect(await go(h)).toBe(0);
     expect(h.runs).toHaveLength(1);
   });

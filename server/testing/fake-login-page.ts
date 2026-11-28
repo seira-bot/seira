@@ -36,6 +36,8 @@ export class FakeLoginPage {
   readonly engineCalls: string[][] = [];
   /** Every text typed through the input relay. */
   readonly typed: string[] = [];
+  /** Every text typed as key events. */
+  readonly keyed: string[] = [];
   /** Every key pressed and element clicked through the relay. */
   readonly pressed: string[] = [];
   readonly clicked: string[] = [];
@@ -114,6 +116,21 @@ export class FakeLoginPage {
     field.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
   }
 
+  /** `keyboard keyDown` and `keyUp` over the relay, one pair per character: keydown, beforeinput, input and keyup events. */
+  async typeKeys(text: string): Promise<void> {
+    this.keyed.push(text);
+    const field = activeElement(this.window) as unknown as { value: string; dispatchEvent(event: unknown): boolean } | null;
+    if (!field || typeof field.value !== "string") return;
+    const { InputEvent, KeyboardEvent } = this.window;
+    for (const char of text) {
+      field.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: char }));
+      field.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, data: char, inputType: "insertText" }));
+      field.value += char;
+      field.dispatchEvent(new InputEvent("input", { bubbles: true, data: char, inputType: "insertText" }));
+      field.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: char }));
+    }
+  }
+
   /** A key at the focused element. Enter in a form's field sends the form when a browser would: it has a submit button,
    * or that field is its only one. */
   async press(key: string): Promise<void> {
@@ -123,7 +140,8 @@ export class FakeLoginPage {
     const form = field?.form as unknown as { requestSubmit(): void; querySelectorAll(selector: string): ArrayLike<{ type?: string }> } | null | undefined;
     if (key !== "Enter" || !form) return;
     const buttons = Array.from(form.querySelectorAll("button, input[type=submit]")).filter((el) => el.type === "submit");
-    if (buttons.length || form.querySelectorAll("input:not([type=hidden])").length === 1) form.requestSubmit();
+    const enabled = buttons.filter((el) => !(el as { disabled?: boolean }).disabled);
+    if (buttons.length ? enabled.length : form.querySelectorAll("input:not([type=hidden])").length === 1) form.requestSubmit();
     this.deliver();
   }
 

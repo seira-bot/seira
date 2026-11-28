@@ -73,7 +73,7 @@ export const SETTINGS_PLACES = [
   {"id":"backup-export","path":"Settings → Import & export → Take things out → Export full backup","words":["backup","backups","export","full backup","download"]},
   {"id":"take-out","path":"Settings → Import & export → Take things out","words":["export","backup"]},
   {"id":"move","path":"Settings → Import & export → Move to My Cloud","words":["keep here","move back","bring back","move to cloud"],"only":"the desktop app, on this computer's own page"},
-  {"id":"storage","path":"Settings → Data → Storage","words":["attachments","clear attachments","event log","cleanup","retention"],"advanced":true},
+  {"id":"storage","path":"Settings → Data → Storage","words":["attachments","clear attachments","event log","cleanup","retention","approval history","decision log"],"advanced":true},
   {"id":"activity","path":"Settings → Data → Activity","words":["activity","audit","audit log","history","who did what"],"advanced":true,"only":"Seira in a browser"},
   {"id":"members","path":"Settings → People → Members","words":["invite","roles","admins"],"only":"a Team Cloud's or a self-hosted server's Settings, for admins, in a browser or in the desktop app through Connect to a server; never the desktop app's own computer"},
   {"id":"bot-access","path":"Settings → People → Bot access","words":["who can","share","permissions"],"only":"a Team Cloud's or a self-hosted server's Settings, for admins, in a browser or in the desktop app through Connect to a server; never the desktop app's own computer"},

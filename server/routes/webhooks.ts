@@ -2,7 +2,7 @@
 // exposes the rest of the control surface. Only the list is a client route; the rest, the address included, needs admin.
 import { randomUUID } from "node:crypto";
 
-import { webhookVisible } from "../bot-visibility.ts";
+import { startAttemptVisible, startVisible, type RoutineRunRef, type VisibleSet, type WorkflowBots } from "../bot-visibility.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { webhookCredential } from "../webhook-ingress.ts";
 import type { WebhookManager } from "../webhooks.ts";
@@ -11,12 +11,15 @@ import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
 export interface WebhookRouteDeps {
   webhooks: WebhookManager;
   ingress: () => { available: boolean; baseUrl: string; error?: string };
-  visible: (auth: RequestAuth) => { everything: boolean; bot(id: string): boolean; group(id: string): boolean };
+  visible: (auth: RequestAuth) => VisibleSet;
+  /** A run of a routine, a webhook or an app trigger by its id: an attempt is shown only when the run it made is. */
+  runOf?: (runId: string) => RoutineRunRef | undefined;
+  workflowBots: WorkflowBots;
   /** Why this person may not link this body's workflow, or change the one a webhook runs now; null when they may. */
   workflowGate?: (auth: RequestAuth, body: unknown, current: string | undefined) => { status: number; error: string } | null;
 }
 
-export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }: WebhookRouteDeps): RouteHandler {
+export function createWebhookRoutes({ webhooks, ingress, visible, runOf, workflowBots, workflowGate }: WebhookRouteDeps): RouteHandler {
   const withCredential = (webhook: { endpointId: string }, secret: string) => {
     const status = ingress();
     return { ingress: status, credential: webhookCredential(status.baseUrl, webhook.endpointId, secret) };
@@ -24,9 +27,14 @@ export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }
   return async ({ req, res, path, method, auth, json, readBody }: RouteContext) => {
     if (path === "/api/webhooks" && method === "GET") {
       const seen = visible(auth);
-      const shownHooks = webhooks.list().filter((webhook) => webhookVisible(webhook, seen));
-      const shownIds = new Set(shownHooks.map((webhook) => webhook.id));
-      return json(res, 200, { webhooks: shownHooks, attempts: webhooks.listAttempts().filter((attempt) => seen.everything || shownIds.has(attempt.webhookId)), ingress: ingress() });
+      const shownHooks = webhooks.list().filter((webhook) => startVisible(webhook, seen, workflowBots));
+      const shownById = new Map(shownHooks.map((webhook) => [webhook.id, webhook]));
+      const attempts = webhooks.listAttempts().filter((attempt) => {
+        if (seen.everything) return true;
+        const hook = shownById.get(attempt.webhookId);
+        return hook !== undefined && startAttemptVisible(attempt, hook, seen, runOf);
+      });
+      return json(res, 200, { webhooks: shownHooks, attempts, ingress: ingress() });
     }
     if (path === "/api/webhooks" && method === "POST") {
       const body = await readBody(req);
@@ -34,7 +42,7 @@ export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }
       if (linkRefused) return json(res, linkRefused.status, { error: linkRefused.error });
       // Security: on a Team Cloud an admin may not see another person's own Seira; a webhook into it is answered
       // exactly as one into a bot that does not exist.
-      if (body && typeof body === "object" && !Array.isArray(body) && !webhookVisible(body, visible(auth))) body.botId = randomUUID();
+      if (body && typeof body === "object" && !Array.isArray(body) && !startVisible(body, visible(auth), workflowBots)) body.botId = randomUUID();
       const created = webhooks.create(body);
       return json(res, 201, { webhook: created.webhook, ...withCredential(created.webhook, created.secret) });
     }
@@ -42,7 +50,7 @@ export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }
     if (!match) return PASS;
     const id = match[1]!;
     const known = webhooks.list().find((webhook) => webhook.id === id);
-    if (known && !webhookVisible(known, visible(auth))) return json(res, 404, { error: "no such webhook" });
+    if (known && !startVisible(known, visible(auth), workflowBots)) return json(res, 404, { error: "no such webhook" });
     // Security: the workflow a webhook runs now must pass the gate on every by-id request, not only when the body changes it.
     const heldBack = known?.workflowId ? workflowGate?.(auth, {}, known.workflowId) : null;
     if (heldBack) return json(res, heldBack.status, { error: heldBack.status === 404 ? "no such webhook" : heldBack.error });
@@ -57,7 +65,7 @@ export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }
     // The address as it is now, which the owning bot may already have given an app: reading it never replaces it.
     if (match[2] === "address" && method === "GET") {
       const current = webhooks.currentSecret(id, false);
-      if (!current || !webhookVisible(current.webhook, visible(auth))) return json(res, 404, { error: "no such webhook" });
+      if (!current || !startVisible(current.webhook, visible(auth), workflowBots)) return json(res, 404, { error: "no such webhook" });
       if (!current.secret) return json(res, 404, { error: "this address was made before addresses were kept", kept: false });
       return json(res, 200, { webhook: current.webhook, ...withCredential(current.webhook, current.secret) });
     }

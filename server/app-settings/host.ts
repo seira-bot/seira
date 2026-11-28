@@ -58,7 +58,8 @@ function parseValue(entry: WritableEntry, value: unknown) {
 async function stateOf(entry: WritableEntry, target: unknown): Promise<string> {
   const read = entry.read();
   try {
-    return JSON.stringify([read, (await entry.current(target)) ?? null]);
+    const destination = entry.destination?.(target);
+    return JSON.stringify([read, (await entry.current(target)) ?? null, ...(destination ? [destination] : [])]);
   } catch {
     return JSON.stringify([read]);
   }
