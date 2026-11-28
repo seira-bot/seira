@@ -1,8 +1,9 @@
-import type { BotRoutineTemplate, NewBotDefaults } from "../../shared/new-bot-defaults";
+import type { BotRoutineTemplate, BotSkillTemplate, NewBotDefaults } from "../../shared/new-bot-defaults";
 import type { BotBodyId } from "../../shared/bot-body";
 import type { MascotAccessoryId } from "../../shared/mascot-accessories";
 import type { SeiraColor } from "../../shared/wire";
 import { t, tFromServer } from "@/lib/i18n";
+import { skillHumanizer, skillSecureCodeGuidance } from "./ready-bot-skills";
 
 export type ReadyBotCategory = "everyday" | "work" | "writing" | "design" | "sales" | "personal";
 
@@ -21,6 +22,7 @@ export interface ReadyBot {
   apps: string[];
   notes?: Record<string, string>;
   routines?: BotRoutineTemplate[];
+  skills?: BotSkillTemplate[];
 }
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
@@ -95,6 +97,7 @@ export const READY_BOTS: ReadyBot[] = [
     look: { color: "cyan", mascotBody: "messy", mascotAccessories: ["headphones"] },
     tryAsking: ["Find why the tests fail and fix it", "Explain how this repository is organised", "Add input validation to the signup form"],
     apps: ["github"],
+    skills: [skillSecureCodeGuidance],
   },
   {
     id: "community",
@@ -266,6 +269,7 @@ export const READY_BOTS: ReadyBot[] = [
     notes: {
       "memory/voice.md": "---\ntitle: My writing voice\naliases: [tone, style, voice]\n---\n\n- Words and phrases I use:\n- Words and phrases I avoid:\n- Formality (casual / neutral / formal):\n",
     },
+    skills: [skillHumanizer],
   },
   {
     id: "design-critic",
@@ -298,7 +302,7 @@ export const READY_BOTS: ReadyBot[] = [
       "Keep recurring patterns for each rep in memory so coaching builds over time.",
     ].join("\n"),
     look: { color: "orange", mascotBody: "long-loose", mascotAccessories: ["headset-mic"] },
-    tryAsking: ["Score this discovery call transcript", "How did I handle the pricing objection?", "What should I ask differently next time?"],
+    tryAsking: ["Score this sales call transcript against our rubric", "How could I have handled the pricing objection better?", "Summarise coaching notes for this rep across calls"],
     apps: ["gong", "hubspot"],
   },
   {
@@ -348,6 +352,16 @@ export function readyBotTemplate(defaults: NewBotDefaults, bot: ReadyBot): NewBo
     const own = template.memory[path]?.trimEnd();
     template.memory[path] = own ? `${own}\n${text}` : text;
   }
+  const existingSkillNames = new Set(template.skills.map((s) => s.name));
+  const bundledSkills: BotSkillTemplate[] = (bot.skills ?? [])
+    .filter((skill) => !existingSkillNames.has(skill.name))
+    .map((skill) => ({
+      ...skill,
+      enabled: true,
+      warnings: [],
+      source: "seira",
+    }));
+  template.skills = [...template.skills, ...bundledSkills];
   template.routines = [...template.routines, ...(bot.routines ?? []).map((routine) => ({ ...routine, ...(bot.id === "social" ? { name: t("readyBots.routine.socialWeekly") } : {}), enabled: false }))];
   return template;
 }

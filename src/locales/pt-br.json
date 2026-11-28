@@ -7682,6 +7682,8 @@
   "readyBots.try": "Experimente: “{prompt}”",
   "readyBots.worksWith": "Funciona com {apps}",
   "readyBots.pausedRoutine": "Inclui uma rotina pausada",
+  "readyBots.bundledSkill": "Inclui uma habilidade integrada",
+  "readyBots.bundledSkills": "Inclui habilidades integradas",
   "templates.subtitle": "Comece com um playbook completo ou traga o seu próprio.",
   "templates.back": "Voltar para os modelos",
   "templates.close": "Fechar modelos",

@@ -8046,6 +8046,8 @@
   "readyBots.try": "Try: “{prompt}”",
   "readyBots.worksWith": "Works with {apps}",
   "readyBots.pausedRoutine": "Includes a paused routine",
+  "readyBots.bundledSkill": "Includes a bundled skill",
+  "readyBots.bundledSkills": "Includes bundled skills",
   "templates.subtitle": "Start with a complete playbook or bring your own.",
   "templates.back": "Back to templates",
   "templates.close": "Close templates",

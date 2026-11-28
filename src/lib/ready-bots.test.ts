@@ -85,6 +85,32 @@ describe("readyBotTemplate", () => {
     readyBotTemplate(given, plant);
     expect(given).toEqual(defaults());
   });
+
+  it("bundles ready bot skills enabled by default and skips already existing skill names", () => {
+    const echo = readyBot("humanizer")!;
+    expect(echo.skills?.length).toBeGreaterThan(0);
+    const template = readyBotTemplate(defaults(), echo);
+    const bundled = template.skills.find((s) => s.name === "humanizer");
+    expect(bundled).toBeDefined();
+    expect(bundled?.enabled).toBe(true);
+    expect(bundled?.source).toBe("seira");
+
+    // Skill name that defaults already have is not added twice
+    const existingSkillDefaults: NewBotDefaults = {
+      ...defaults(),
+      skills: [{ name: "humanizer", description: "Already here", enabled: false, source: "user", text: "", warnings: [] }],
+    };
+    const merged = readyBotTemplate(existingSkillDefaults, echo);
+    expect(merged.skills.filter((s) => s.name === "humanizer")).toHaveLength(1);
+    expect(merged.skills[0]!.description).toBe("Already here");
+  });
+
+  it("gives the same template as before for a bot without skills", () => {
+    const plant = readyBot("plant-care")!;
+    expect(plant.skills).toBeUndefined();
+    const template = readyBotTemplate(defaults(), plant);
+    expect(template.skills).toEqual(defaults().skills);
+  });
 });
 
 describe("matchesReadyBot", () => {
