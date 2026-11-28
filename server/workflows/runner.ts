@@ -39,8 +39,10 @@ export interface StepThreadOptions {
   /** The step needs a chat of its own: not the run's first one. */
   own: boolean;
   modelSelection?: ModelSelection;
-  /** A chat an earlier run used for this same step. Used when it is still there. */
+  /** A chat an earlier run used for this same step. Used only while it still fits what the step needs now. */
   reuse?: string;
+  /** The access the step has in the chat. */
+  access?: RoutineAccess;
 }
 export interface WorkflowRunnerDeps {
   now(): number;
@@ -313,7 +315,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     const startsHere = chatOf !== undefined && chatOf.id === run.startStepId && botId === routineRun.botId && !own;
     const known = run.threads[key] ?? (startsHere ? routineRun.threadId : undefined);
     const reuse = known === undefined && chatOf && routineRun.sameConversation ? previousStepThread(run, chatOf.id) : undefined;
-    const threadId = known ?? deps.threadFor(routineRun, botId, { own: key !== botId, ...(modelSelection ? { modelSelection } : {}), ...(reuse ? { reuse } : {}) });
+    const threadId = known ?? deps.threadFor(routineRun, botId, { own: key !== botId, ...(modelSelection ? { modelSelection } : {}), ...(reuse ? { reuse } : {}), ...(access ? { access } : {}) });
     if (!threadId) {
       fail(run, stepRun, step, "turn_failed", `Could not open a chat for ${deps.botName(botId) ?? "the bot"}.`);
       return null;

@@ -478,7 +478,7 @@ import { listenWebhookIngress, type WebhookIngress } from "./webhook-ingress.ts"
 import { addressFor } from "./webhook-address.ts";
 import { assertModelVariantSupported, memberTurnSelection } from "./member-turn.ts";
 import { WebhookManager } from "./webhooks.ts";
-import { tieAutomationsToBots } from "./bot-automations.ts"; import { WaitManager } from "./waits.ts"; import { cancelWaitFromCard, createWaitHost, waitContinuationCheck, waitRunChat, waitTurnRunId } from "./wait-host.ts"; import { continuedConversation } from "./routine-same-conversation.ts"; import { createWaitRoutes, findWaitPeer, handedAssignment, hostWaitRefusal, waitSourceRefusal, type WaitRouteContext } from "./routes/waits.ts";
+import { tieAutomationsToBots } from "./bot-automations.ts"; import { WaitManager } from "./waits.ts"; import { cancelWaitFromCard, createWaitHost, waitContinuationCheck, waitRunChat, waitTurnRunId } from "./wait-host.ts"; import { continuedConversation, continuesChat, ownChatAccess } from "./routine-same-conversation.ts"; import { startSteps } from "./workflows/graph.ts"; import { createWaitRoutes, findWaitPeer, handedAssignment, hostWaitRefusal, waitSourceRefusal, type WaitRouteContext } from "./routes/waits.ts";
 import type { WebhookTrigger } from "../shared/webhooks.ts";
 import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { agentsProxyLaunch, agentsToolBridgeEnv, applyAgentsBridge, bridgedToolTitle, turnEngine } from "./agents-bridge-switch.ts"; import { serverTurnedOff } from "./drivers/agents-tool-groups.ts"; import { availableToolGroups, toolsOffPart } from "./tool-groups.ts"; import { agentsServerEnv, botDrivenConversation, COMPUTER_OFF_REFUSAL, computerPickRefusal, directTurnKind, roomSkillsRefusal, type TurnKind } from "./agents-turn.ts";
@@ -8519,6 +8519,8 @@ const aiPool = createAiPool({ file: join(DATA_DIR, "ai-pool-threads.json"), conf
 const automationDestinations = createAutomationDestinations({ store, mainThread: botMainThread, runs: () => routines?.listRuns() ?? [],
   cloud: CLOUD_HOME ? { owner: CLOUD_OWNER_KEY!, opener: (id, routine) => (routine && teamRoutines.opener(routine)) || routineOpener(id), reportFromOthers: cloudReportFromOthers, opened: (threadId, person) => threadStarters.set(threadId, person), outside: (threadId) => outsideLineage.mark(threadId) } : null });
 const routineModelChecks: RoutineModelChecks = { check: (raw) => checkedModelSelection(raw), bot: (botId) => store.bot(botId), engineSwitchNeedsAsk };
+const routineChatModel = (botId: string, run: Pick<RoutineRun, "routineId"> | undefined, modelSelection?: ModelSelection) =>
+  routineThreadModel(modelSelection ? { botId, modelSelection } : run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks);
 routines = new RoutineManager(routineHooks = {
   emit: broadcast, limitResetAt: (engine) => limitClock.resetAt(engine), checks: proactive.checks,
   limitBackup: (botId, scope) => { const bot = store.bot(botId); return quotaSwitchEnabled() ? Boolean(bot && limitTakeover.backups(botId, bot.modelSelection, scope, approvalModeFor(bot)).length) : Boolean(bot && startupBackups(bot, cfg.automaticRecovery).length); },
@@ -8546,14 +8548,18 @@ routines = new RoutineManager(routineHooks = {
   },
   createTask: (botId, title, run, modelSelection) => {
     // On a Cloud home the routine's writer opens a run's conversation; a webhook run is the owner's, but its payload never reaches the lent Mac.
-    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineThreadModel(modelSelection ? { botId, modelSelection } : run && routines?.listRoutines().find((routine) => routine.id === run.routineId), routineModelChecks), undefined,
+    const task = store.createTask(botId, title, false, undefined, undefined, undefined, routineChatModel(botId, run, modelSelection), undefined,
       CLOUD_HOME && run ? (created) => threadStarters.set(created.threadId, run.triggerSource === "webhook" ? CLOUD_OWNER_KEY! : routineOpener(run.routineId)) : undefined);
     if (task && run?.triggerSource === "webhook") outsideLineage.mark(task.threadId);
     return task;
   },
   joinConversation: (run) => {
     if (run.eventSource === "wait") return waitRunChat(run, directChatOf, Boolean(CLOUD_HOME));
-    if (run.sameConversation) return continuedConversation(routines?.listRuns() ?? [], run, (threadId) => Boolean(store.taskByThread(run.botId, threadId)));
+    if (run.sameConversation) {
+      const workflow = run.workflowId ? workflows?.get(run.workflowId) : null;
+      const needs = { modelSelection: routineChatModel(run.botId, run), access: ownChatAccess(run, workflow ? startSteps(workflow)[0] : undefined) };
+      return continuedConversation(routines?.listRuns() ?? [], run, (threadId) => continuesChat(store, run.botId, threadId, routines?.runForThread(threadId) ?? null, needs));
+    }
     const continues = routines?.listRoutines().some((routine) => routine.id === run.routineId && routine.schedule.type === "limit_reset");
     if (!continues || run.target !== "bot") return null;
     const source = routineSourceOwner(run);
@@ -8882,7 +8888,7 @@ const validateModelProposal = (selection: ModelSelection, current?: BotRecord): 
   return null;
 };
 const ownThreads = createOwnThreads({ store, registry, node: (id) => coordinator.node(id), current: turnSelection, proposalRefusal: validateModelProposal, givesWay: modelGivesWay, modelName }); const burst = createBurstHost({ dataDir: DATA_DIR, cloudHome: Boolean(CLOUD_HOME), tier: () => cloudPlanTier.tier(), maxParallel: () => cfg.burst?.maxParallel, hasRoom: () => engineMemory.laneHasRoom(), store, language: (threadId) => threadLanguage(threadId), startTurn: (botId, text, opts) => startTurn(botId, text, opts), stop: (botId, threadId, cause) => { void interruptDirectThread(botId, threadId, cause).catch(() => {}); }, threadBusy, opened: (threadId, parent) => threadStarters.set(threadId, openerFrom(parent)), origin: (run) => withPerson({ kind: "user", request: quoteInNote(run.task, 400) }, threadPersonKey(run.threadId)), approval: (bot, selection) => ownThreads.approvalFor(bot, selection), defaultModel: (bot, threadId) => burstDefaultModel({ own: store.taskByThread(bot.id, threadId)?.modelSelection ?? bot.modelSelection, catalog: (id) => registry.get(id)?.models, refused: (id) => quickFallback.refused(id), usable: (selection) => ownThreads.refusal(selection, bot) === null }), modelName, route: (notification) => teamMessages.route(notification, { routine: true }), announce: (notification) => { broadcast({ kind: "notify", notification: logNotification(notification) }); } }); workflows = createWorkflowHost({ dataDir: DATA_DIR, store, routines: () => routines, routineHooks: () => routineHooks, botState: unattendedDispatchState, startTurn, shuttingDown: () => companyShutdown, routinesUnreadable: () => routines?.schedulerState().unreadable ?? false, reports: automationReports, starts: () => workflowStarts, emit: broadcast,
-  rooms: { room: workflowRoom, startTurn: startWorkflowRoomTurn, stopTurn: (groupId, threadId) => interruptRoutineGroupGoal(groupId, threadId) } });
+  chatModel: routineChatModel, rooms: { room: workflowRoom, startTurn: startWorkflowRoomTurn, stopTurn: (groupId, threadId) => interruptRoutineGroupGoal(groupId, threadId) } });
 const teamMemory = new TeamMemory(join(DATA_DIR, "team-memory.json"));
 const teamMemoryRequests = createTeamMemoryRequests({ teamMemory, store, sectionKey: sectionContextKey, decide: (row) => appendDecision(DATA_DIR, row) });
 const outsideWrites = createOutsideWrites({ store, notify, language: (threadId) => threadLanguage(threadId), decide: (row) => appendDecision(DATA_DIR, row),

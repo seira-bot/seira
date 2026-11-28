@@ -4629,6 +4629,28 @@ describe("a routine linked to a workflow", () => {
     expect(new RoutineManager(h.options).runForThread("step-ben")).toMatchObject({ id: runId, access: "read-and-draft" });
   });
 
+  it("gives the stricter access to every turn in a chat that a waiting older run and a newer run share, either way", async () => {
+    for (const [olderAccess, newerAccess] of [["read-and-draft", undefined], [undefined, "read-and-draft"]] as const) {
+      const { h, input } = setup();
+      const older = h.manager.create({ ...input, name: "Older", ...(olderAccess ? { access: olderAccess } : {}) });
+      const newer = h.manager.create({ ...input, name: "Newer", ...(newerAccess ? { access: newerAccess } : {}) });
+      const olderRun = h.manager.runNow(older.id)!.id;
+      await h.manager.tick();
+      h.manager.workflowRunState(olderRun, "waiting", "Waiting 5 minutes");
+      const newerRun = h.manager.runNow(newer.id)!.id;
+      await h.manager.tick();
+      for (const runId of [olderRun, newerRun]) h.manager.bindStepThread(runId, "shared");
+      const gate = createReadAndDraft({
+        runFor: (threadId) => h.manager.runForThread(threadId), adapter: () => undefined, stale: () => false, decide: () => {}, release: () => {},
+        mayDraft: () => false, drafted: () => {},
+      });
+      expect(h.manager.listRuns().map((run) => [run.id, run.status])).toEqual([[newerRun, "running"], [olderRun, "waiting"]]);
+      expect(gate.confines("shared")).toBe(true);
+      expect(gate.refusesRoute({ id: "ana", name: "Ana" }, "shared", "POST", "/api/internal/memory")).toBe(true);
+      expect(h.manager.runForThread("shared")).toMatchObject({ id: newerRun, access: "read-and-draft" });
+    }
+  });
+
   it("a step thread of a read-and-draft run cannot use a write tool", async () => {
     const { h, input } = setup();
     const routine = h.manager.create({ ...input, access: "read-and-draft" });

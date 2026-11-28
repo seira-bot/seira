@@ -6,7 +6,9 @@ import type { Workflow, WorkflowFrame, WorkflowInput, WorkflowRun } from "../../
 import type { AutomationReports } from "../automation-reports.ts";
 import type { HostTurnResult } from "../coordinator.ts";
 import type { WorkflowRoutineOptions } from "../routine-dispatch.ts";
+import type { ModelSelection } from "../contracts.ts";
 import { BUSY_CODES } from "../routine-recovery.ts";
+import { continuesChat } from "../routine-same-conversation.ts";
 import { askOf, waitingFor } from "../routine-waits.ts";
 import type { Routine, RoutineManager, RoutineManagerOptions, RoutineRun, RoutineRunOn } from "../routines.ts";
 import type { Store } from "../store.ts";
@@ -42,9 +44,11 @@ export interface WorkflowRoomTurn {
 
 export interface WorkflowHostDeps {
   dataDir: string;
-  store: Pick<Store, "bot" | "patchTask" | "taskByThread">;
-  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState" | "bindStepThread"> | null;
+  store: Pick<Store, "bot" | "patchTask" | "taskByThread" | "projectBotForTask">;
+  routines(): Pick<RoutineManager, "listRoutines" | "listRuns" | "runNow" | "enqueueWebhook" | "cancelRun" | "update" | "workflowRunState" | "bindStepThread" | "runForThread"> | null;
   routineHooks(): Pick<RoutineManagerOptions, "createTask" | "interruptTurn"> | null;
+  /** The model a new chat of this bot opens on for the run: `modelSelection` or the routine's, while the bot may still use it. */
+  chatModel(botId: string, run: RoutineRun, modelSelection: ModelSelection | undefined): ModelSelection | undefined;
   botState(botId: string): "ready" | "busy" | "missing";
   startTurn(botId: string, text: string, opts: WorkflowTurnOptions): Promise<unknown>;
   reports: Pick<AutomationReports, "postStep" | "runSettled">;
@@ -113,7 +117,8 @@ export function createWorkflowHost(deps: WorkflowHostDeps): WorkflowHost {
   const threadFor = (run: RoutineRun, botId: string, options: StepThreadOptions): string | null => {
     if (run.target === "room-goal") return run.threadId ?? null;
     if (!options.own && botId === run.botId && run.threadId) return run.threadId;
-    if (options.reuse && deps.store.taskByThread(botId, options.reuse)) {
+    if (options.reuse && continuesChat(deps.store, botId, options.reuse, deps.routines()?.runForThread(options.reuse) ?? null,
+      { modelSelection: deps.chatModel(botId, run, options.modelSelection), access: options.access })) {
       deps.store.patchTask(botId, options.reuse, { routineRunId: run.id, unread: false });
       return options.reuse;
     }

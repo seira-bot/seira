@@ -13,13 +13,21 @@ export const ownsThread = (run: RoutineRun, threadId: string): boolean =>
 export const isLiveThread = (runs: readonly RoutineRun[], threadId: string): boolean =>
   runs.some((run) => ownsThread(run, threadId) && LIVE.has(run.status));
 
-/** The live run that owns this chat, else the latest; its access is the one its steps use in this chat. */
+const STRICTNESS: Record<RoutineAccess, number> = { "read-and-draft": 1 };
+
+const accessIn = (run: RoutineRun, threadId: string): RoutineAccess | undefined => run.stepThreads?.[threadId]?.access ?? run.access;
+
+/** The live run that owns this chat, else the latest. Security: its access is the strictest one that a live run uses in this
+ *  chat, so when runs share a chat, no run's wider access applies to another run's turns. */
 export function runOfThread(runs: readonly RoutineRun[], threadId: string): RoutineRun | null {
-  const run = runs.findLast((candidate) => ownsThread(candidate, threadId) && LIVE.has(candidate.status)) ?? runs.findLast((candidate) => ownsThread(candidate, threadId));
+  const owners = runs.filter((candidate) => ownsThread(candidate, threadId));
+  const live = owners.filter((candidate) => LIVE.has(candidate.status));
+  const run = live.at(-1) ?? owners.at(-1);
   if (!run) return null;
   const copy = cloneRun(run);
-  const own = run.stepThreads?.[threadId];
-  if (own?.access !== undefined) copy.access = own.access;
+  const access = [run, ...live].map((owner) => accessIn(owner, threadId))
+    .reduce<RoutineAccess | undefined>((strictest, next) => (next !== undefined && (strictest === undefined || STRICTNESS[next] > STRICTNESS[strictest]) ? next : strictest), undefined);
+  if (access !== undefined) copy.access = access;
   return copy;
 }
 
