@@ -224,6 +224,13 @@ describe("empty slots and the empty calendar", () => {
     expect(onNew).toHaveBeenCalledWith(at(2026, 12, 1, 10));
   });
 
+  it("shows the plus mark only on a slot that holds no card", () => {
+    const { container } = mount([weekly]);
+    nextWeek(container);
+    expect(slot(container, at(2026, 11, 30, 10)).querySelector("svg")).toBeNull();
+    expect(slot(container, at(2026, 12, 1, 10)).querySelector("svg")).not.toBeNull();
+  });
+
   it("says nothing runs and offers New automation when no automation has a schedule, and keeps drafts in the rail", () => {
     const draft = automation("Idea", [], { draft: true, enabled: false, statusLine: "" });
     const { container, onNew } = mount([draft]);

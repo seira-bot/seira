@@ -94,10 +94,11 @@ export function TimeGrid({ days, occurrences, automations, bots, hours, now, res
                   const at = atLocalTime(day, `${String(hour).padStart(2, "0")}:00`);
                   const label = t("automations.cal.slot", { when: `${longDay(at)}, ${clock(at)}` });
                   const past = at + HOUR_MS <= now;
+                  const busy = mine.some((occurrence) => occurrence.at >= at && occurrence.at < at + HOUR_MS);
                   return (
                     <button key={hour} type="button" data-slot-at={at} data-slot-past={past ? "" : undefined} aria-label={label} title={label} onClick={() => onSlot(at)}
                       className={cn("group absolute inset-x-0.5 z-[1] flex h-[38px] items-center justify-center rounded-md text-accent-text hover:bg-accent/10 focus-visible:bg-accent/10", move.drag && past && "pointer-events-none")} style={{ top: index * HOUR_HEIGHT }}>
-                      <Plus size={14} aria-hidden="true" className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 focus-visible:opacity-100 touch:opacity-100" />
+                      {!busy && <Plus size={14} aria-hidden="true" className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 focus-visible:opacity-100 touch:opacity-100" />}
                     </button>
                   );
                 })}
