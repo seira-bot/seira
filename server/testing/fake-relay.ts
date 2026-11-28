@@ -29,6 +29,10 @@ export class FakeRelay {
   /** Bytes a screenshot writes; null fails the capture. */
   picture: Buffer | null = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
   typed: string[] = [];
+  /** Keys sent as keyDown and keyUp events: the key of each, in order. */
+  keys: string[] = [];
+  /** Answer every keyDown and keyUp with a failure. */
+  refuseKeys = false;
   /** Commands that never answer (the daemon busy behind something). */
   hang = new Set<string>();
   /** Answer `launched: true` on the next command that would relaunch. */
@@ -98,6 +102,8 @@ export class FakeRelay {
           return reply({ path: command.path });
         case "keyboard":
           if (command.subaction === "insertText" && typeof command.text === "string") { this.typed.push(command.text); return reply({}); }
+          if (this.refuseKeys && (command.eventType === "keyDown" || command.eventType === "keyUp")) return reply(null, "refused");
+          if ((command.eventType === "keyDown" || command.eventType === "keyUp") && typeof command.key === "string") { this.keys.push(`${String(command.eventType)}:${command.key}`); return reply({}); }
           return reply(null, "unsupported");
         default: return reply(null, `unknown action ${String(command.action)}`);
       }

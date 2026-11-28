@@ -615,7 +615,7 @@ export class BrowserService {
   }
 
   /** fill_login's reads and typing, on the tab in front. */
-  loginDeps(target: BrowserTarget): Pick<FillLoginDeps, "engine" | "insertText" | "press" | "click"> {
+  loginDeps(target: BrowserTarget): Pick<FillLoginDeps, "engine" | "insertText" | "typeKeys" | "press" | "click"> {
     const profile = this.profile(target);
     const tab = () => {
       const active = profile.run ? profile.active() : null;
@@ -631,6 +631,7 @@ export class BrowserService {
         return null;
       },
       insertText: (text) => tab().page.keyboard.insertText(text),
+      typeKeys: (text) => tab().page.keyboard.type(text),
       press: async (key) => { await tab().page.press(key); },
       click: async (selector) => { await tab().page.click({ selector }); },
     };

@@ -27,7 +27,7 @@ export interface ThreadAudiences {
   readers?(threadId: string): readonly string[] | null;
 }
 
-export type RoutineRef = { botId?: unknown; groupId?: unknown; name?: unknown; sourceThreadId?: unknown; resultsThreadId?: unknown; workflowBotIds?: unknown };
+export type RoutineRef = { botId?: unknown; groupId?: unknown; name?: unknown; sourceThreadId?: unknown; resultsThreadId?: unknown; workflowId?: unknown; workflowBotIds?: unknown };
 
 /** `all`: every bot and room. On a Team Cloud an admin session is `all` with its address, and still sees only the
  * conversations its person may (audience.ts): its own private chats, never another person's. */
@@ -208,6 +208,8 @@ export class VisibleSet {
    * arrives here as an empty grant, which shows nothing. */
   private readonly grant: ResolvedGrant | null;
   private grantedDepartments: Set<string> | null = null;
+  /** Security invariant: a member with no address, where department limits are set, cannot be told apart from a limited person. Nothing of a workflow is shown to them. */
+  readonly unverified: boolean;
 
   constructor(
     bots: readonly VisibilityBot[],
@@ -216,12 +218,14 @@ export class VisibleSet {
     ownerOf?: (threadId: string) => ThreadOwner | undefined,
     audiences?: ThreadAudiences,
     grant?: ResolvedGrant | null,
+    unverified = false,
   ) {
     this.viewer = viewer;
+    this.unverified = unverified;
     this.audiences = audiences ?? null;
     this.grant = viewer.kind === "member" ? grant ?? null : null;
     // On a Team Cloud nobody's view is everything, an admin's included: each conversation has its own audience.
-    this.everything = this.audiences === null && this.grant === null && (viewer.kind === "all" ||
+    this.everything = !unverified && this.audiences === null && this.grant === null && (viewer.kind === "all" ||
       (!bots.some((bot) => isRestricted(bot.visibility)) && !groups.some((group) => isRestricted(group.audienceFloor))));
     this.ownerOf = ownerOf ?? ((threadId) => this.indexedOwner(threadId));
     if (this.everything) return;
@@ -471,7 +475,11 @@ export interface StreamSeen {
 
 export interface FrameContext {
   visible: VisibleSet;
-  webhook: (webhookId: string) => { botId: string; groupId?: string } | undefined;
+  webhook: (webhookId: string) => { botId: string; groupId?: string; workflowId?: string } | undefined;
+  appTrigger: (triggerId: string) => { botId: string; workflowId?: string } | undefined;
+  workflowBots: WorkflowBots;
+  /** A run of a routine, a webhook or an app trigger by its id. */
+  run?: (runId: string) => RoutineRunRef | undefined;
   freshBot: (botId: string) => Record<string, unknown> | undefined;
   freshGroup: (groupId: string) => Record<string, unknown> | undefined;
 }
@@ -678,17 +686,25 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
     }
     case "routine.run": {
       const run = field("run");
-      return routineRunVisible(run, visible) ? payload : undefined;
+      return startRunVisible(run, visible) ? payload : undefined;
     }
     case "workflow":
       return workflowVisible(field("workflow"), visible) ? payload : undefined;
     case "workflow.run":
       return workflowRunVisible(field("run"), visible) ? payload : undefined;
     case "webhook":
-      return webhookVisible(field("webhook"), visible) ? payload : undefined;
+      return startVisible(field("webhook"), visible, ctx.workflowBots) ? payload : undefined;
     case "webhook.attempt": {
-      const webhook = ctx.webhook(str(field("attempt").webhookId));
-      return webhook && webhookVisible(webhook, visible) ? payload : undefined;
+      const attempt = field("attempt");
+      const webhook = ctx.webhook(str(attempt.webhookId));
+      return webhook && startVisible(webhook, visible, ctx.workflowBots) && startAttemptVisible(attempt, webhook, visible, ctx.run) ? payload : undefined;
+    }
+    case "app-trigger":
+      return startVisible(field("trigger"), visible, ctx.workflowBots) ? payload : undefined;
+    case "app-trigger.attempt": {
+      const attempt = field("attempt");
+      const trigger = ctx.appTrigger(str(attempt.triggerId));
+      return trigger && startVisible(trigger, visible, ctx.workflowBots) && startAttemptVisible(attempt, trigger, visible, ctx.run) ? payload : undefined;
     }
     case "runtime":
       return visible.thread(str(field("event").threadId)) ? payload : undefined;
@@ -732,16 +748,84 @@ export function noteSeen(payload: Record<string, unknown>, seen: StreamSeen): vo
   }
 }
 
-/** A room webhook's attempts preview what it posted there, so it is shown only to someone who sees the room as well as the bot. */
-export function webhookVisible(value: { botId?: unknown; groupId?: unknown }, visible: Pick<VisibleSet, "everything" | "bot" | "group">): boolean {
+/** The bots a workflow's steps use, or null when the workflow is gone or the start holds a copy of it that is out of date. */
+export type WorkflowBots = (workflowId: string, start?: { botId?: unknown; prompt?: unknown }) => readonly string[] | null;
+
+/** Whether the steps a start holds are the workflow's steps as they are now; a start that holds none (no prompt asked about) passes. */
+export function heldCopyCurrent(copy: { prompt: string; botId: string } | { code: string } | null | undefined, start?: { botId?: unknown; prompt?: unknown }): boolean {
+  if (!start || typeof start.prompt !== "string") return true;
+  return Boolean(copy) && !("code" in copy!) && copy!.prompt === start.prompt && copy!.botId === start.botId;
+}
+
+/**
+ * A webhook or an app trigger as one person may see it. A room webhook's attempts preview what it posted there, so it is shown only
+ * to someone who sees the room as well as the bot. One that runs a workflow carries that workflow's steps, so it is shown only to
+ * someone who sees every bot in them, read from the workflow as it is now, and to nobody but an admin when the workflow is gone
+ * or the copy it holds no longer matches it.
+ */
+export function startVisible(value: { botId?: unknown; groupId?: unknown; workflowId?: unknown; prompt?: unknown }, visible: Pick<VisibleSet, "everything" | "bot" | "group"> & { unverified?: boolean }, workflowBots: WorkflowBots): boolean {
   if (visible.everything) return true;
   if (typeof value.botId !== "string" || !visible.bot(value.botId)) return false;
-  return typeof value.groupId !== "string" || !value.groupId || visible.group(value.groupId);
+  if (typeof value.groupId === "string" && value.groupId && !visible.group(value.groupId)) return false;
+  if (value.workflowId === undefined || value.workflowId === null || value.workflowId === "") return true;
+  if (visible.unverified) return false;
+  const bots = typeof value.workflowId === "string" ? workflowBots(value.workflowId, value as { botId?: unknown; prompt?: unknown }) : null;
+  return bots !== null && bots.every((id) => visible.bot(id));
+}
+
+/**
+ * Who a bot's turn answers to, for what it may tell about another bot's workflow. "open": one person uses the server, so
+ * nobody is held back. "closed": several do (a Team Cloud, or a server with members) and the person in the conversation
+ * cannot be named by address, so nothing of a workflow is told. A person known by address is judged as that person.
+ */
+export function turnViewer(facts: { team: boolean; shared: boolean; person?: { role: string; email: string } | undefined }): Viewer | "open" | "closed" {
+  if (!facts.team && !facts.shared) return "open";
+  const email = facts.person?.email.trim();
+  if (!facts.team || !facts.person || !email) return "closed";
+  return facts.person.role === "member" ? { kind: "member", email } : { kind: "all", email };
+}
+
+/** A workflow that can run starts at a bot step, so a record of its bots that is empty or not a list was not read whole. */
+function botsListed(list: unknown): list is unknown[] {
+  return Array.isArray(list) && list.length > 0;
+}
+
+/**
+ * A run of a webhook or an app trigger as one person may see it. Its output carries what the workflow it ran produced, so a run
+ * is judged by the bots and chats it used itself, not by what the start runs now: one that ran a workflow without recording
+ * its bots, or used a chat the person may not read, is shown to nobody but an admin.
+ */
+export function startRunVisible(run: { botId?: unknown; groupId?: unknown; threadId?: unknown; resultsThreadId?: unknown; sourceThreadId?: unknown; workflowId?: unknown; workflowBotIds?: unknown; stepThreads?: unknown }, visible: VisibleSet): boolean {
+  if (visible.everything) return true;
+  if (!routineRunVisible(run, visible)) return false;
+  if (visible.unverified && typeof run.workflowId === "string" && run.workflowId) return false;
+  if (typeof run.workflowId === "string" && run.workflowId && !botsListed(run.workflowBotIds)) return false;
+  const stepThreads = run.stepThreads && typeof run.stepThreads === "object" ? Object.keys(run.stepThreads) : [];
+  return stepThreads.every((id) => !visible.hides(id));
+}
+
+/** The part of a run that a start's attempt is judged by. */
+export type RoutineRunRef = Parameters<typeof startRunVisible>[0];
+
+/**
+ * An attempt of a webhook or an app trigger as one person may see it, on top of the start being shown to them. An attempt previews
+ * what came in and names the run and the chat it made, so it is judged by that data: a chat they may not read, a run that used a
+ * bot or chat they may not read, or a run of a workflow that is gone from the record, hides it from everyone but an admin.
+ */
+export function startAttemptVisible(attempt: { runId?: unknown; threadId?: unknown }, start: { workflowId?: unknown }, visible: VisibleSet, runOf?: (runId: string) => RoutineRunRef | undefined): boolean {
+  if (visible.everything) return true;
+  if (typeof attempt.threadId === "string" && attempt.threadId && visible.hides(attempt.threadId)) return false;
+  if (typeof attempt.runId !== "string" || !attempt.runId) return true;
+  const run = runOf?.(attempt.runId);
+  if (run) return startRunVisible(run, visible);
+  return typeof start.workflowId !== "string" || !start.workflowId;
 }
 
 export function routineVisible(value: RoutineRef, visible: VisibleSet): boolean {
   if (visible.everything) return true;
   if (!visible.routineShown(value)) return false;
+  // A record that runs a workflow but holds no list of its bots, or is judged for a person who cannot be named, is held back.
+  if (value.workflowId !== undefined && value.workflowId !== null && value.workflowId !== "" && (visible.unverified || !botsListed(value.workflowBotIds))) return false;
   if (Array.isArray(value.workflowBotIds) && !value.workflowBotIds.every((id) => typeof id === "string" && visible.bot(id))) return false;
   if (typeof value.groupId === "string" && value.groupId) return visible.group(value.groupId);
   return typeof value.botId === "string" && visible.bot(value.botId);
@@ -768,6 +852,7 @@ export function routineRunVisible(run: { botId?: unknown; groupId?: unknown; thr
 /** A workflow names its bots in its steps: it is shown only to someone who sees every one of them. */
 export function workflowVisible(workflow: { steps?: unknown }, visible: VisibleSet): boolean {
   if (visible.everything) return true;
+  if (visible.unverified) return false;
   const steps = Array.isArray(workflow.steps) ? workflow.steps : [];
   return steps.every((step) => (step as { kind?: unknown } | null)?.kind !== "bot" || visible.bot(typeof (step as { botId?: unknown }).botId === "string" ? (step as { botId: string }).botId : ""));
 }
@@ -775,6 +860,7 @@ export function workflowVisible(workflow: { steps?: unknown }, visible: VisibleS
 /** A workflow run carries its steps' outputs: every bot it used must be visible, and none of its chats hidden. */
 export function workflowRunVisible(run: { botIds?: unknown; stepRuns?: unknown; threads?: unknown }, visible: VisibleSet): boolean {
   if (visible.everything) return true;
+  if (visible.unverified) return false;
   const botIds = Array.isArray(run.botIds) ? run.botIds : [];
   if (!botIds.every((id) => typeof id === "string" && visible.bot(id))) return false;
   const stepRuns = Array.isArray(run.stepRuns) ? run.stepRuns : [];

@@ -271,8 +271,12 @@ test("signed in, a checkout is the Admin's for this account, opened in the brows
   f.checkout = { status: 200, body: { url: DODO } };
   assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "failed", "no contract version");
   f.checkout = { status: 409, body: { error: "already_subscribed" } }; const sessions = f.requests.filter(row => row.route === "/api/cloud/desktop/session").length;
-  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "conflict");
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "already-subscribed");
   assert.equal(f.requests.filter(row => row.route === "/api/cloud/desktop/session").length, sessions + 1);
+  f.checkout = { status: 409, body: { error: "out_of_stock" } };
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "sold-out");
+  f.checkout = { status: 409, body: { error: "something_else" } };
+  assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "conflict");
   f.checkout = { status: 429, body: { error: "rate_limited", interval: 600 } };
   assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "rate-limited");
   for (const status of [502, 503]) { f.checkout = { status, body: { error: "unavailable" } }; assert.equal((await f.client.checkout("pro", "app_menu")).outcome, "failed"); }

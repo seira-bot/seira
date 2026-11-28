@@ -6,11 +6,13 @@ sent.
 
 ## When it is on
 
-A build sends nothing unless it has a PostHog project key. The key is the build setting `VITE_SEIRA_POSTHOG_TOKEN`,
+A build sends no PostHog event unless it has a PostHog project key. The key is the build setting `VITE_SEIRA_POSTHOG_TOKEN`,
 read when the app is built. This repository does not contain a key.
 
-A build without a key has no analytics switch in Settings, never downloads `posthog-js`, and sends no event, whatever
-you choose. Everything below describes a build that has a key.
+A build without a key never downloads `posthog-js` and sends no event, whatever you choose. Its **Usage analytics**
+switch is still in Settings, and the switch stops the one thing that build sends: the anonymous count of announcement
+cards (see [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md#counting)). Everything
+below describes a build that has a key.
 
 ## What it is
 
@@ -27,8 +29,8 @@ you choose. Everything below describes a build that has a key.
 
 ## Turning it off
 
-**Usage analytics** in **Settings → General → Privacy**. When it is off, nothing loads and nothing is sent: no events, no daily
-snapshot, and none of the snapshot's requests.
+**Usage analytics** in **Settings → General → Privacy**. Every build has this switch. When it is off, nothing loads and
+nothing is sent: no events, no daily snapshot, none of the snapshot's requests, and no announcement card count.
 
 The desktop app keeps the switch for this computer's page itself, so it holds whichever port the app serves that page on
 (it moves to another when its usual one is taken). It is read before anything loads, and before any email is tied to
@@ -48,7 +50,8 @@ on there lasts until that page reloads. In a browser, switch it off on each serv
   campaign parameters (`utm_*`, `gclid` and the like) and their `$initial_*` and `$session_entry_*` copies are removed
   before an event leaves the app.
 - File paths, and ids of any kind: bot, room, conversation, instance, account or computer. (An `announcement` event
-  names the card, by the id the public announcements give it, never anything of yours.)
+  names the card, by the id the public announcements give it, never anything of yours. The anonymous card count is
+  separate from PostHog: see [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md#counting).)
 - Instructions, prompts, message content, model output and error messages.
 
 ## Allowed values

@@ -26,13 +26,17 @@ describe("seira service", () => {
   });
 
   it("writes the unit next to the data and prints how to install it; under npx, runs a copy kept beside the data", () => {
-    const code = runServiceCommand({ action: "install", dataDir: dir, port: 8799, domain: "seira.example.com", script: "/usr/lib/node_modules/seira/cli.js", node: "/usr/bin/node", platform: "linux", home: "/home/seira", user: "seira" }, io);
+    const code = runServiceCommand({ action: "install", dataDir: dir, port: 8799, domain: "seira.example.com", script: "/usr/lib/node_modules/seira/cli.js", node: "/usr/bin/node", platform: "linux", home: "/home/seira", user: "seira", version: "1.2.3" }, io);
     expect(code).toBe(0);
     const unit = readFileSync(join(dir, "seira.service"), "utf8");
     expect(unit).toContain("--domain seira.example.com");
     expect(unit).toContain("AmbientCapabilities=CAP_NET_BIND_SERVICE");
     expect(out.join("\n")).toContain("sudo systemctl enable --now seira");
     expect(out.join("\n")).toContain("no setcap is needed");
+    expect(out.join("\n")).toContain("curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/v1.2.3/deploy/service-update-runner.sh -o service-update-runner.sh && sudo bash service-update-runner.sh --install");
+    out.length = 0;
+    expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, script: "/usr/lib/node_modules/seira/cli.js", node: "/usr/bin/node", platform: "darwin", home: "/Users/seira", version: "1.2.3" }, io)).toBe(0);
+    expect(out.join("\n")).not.toContain("service-update-runner");
 
     out.length = 0;
     const npx = { action: "install" as const, dataDir: join(dir, "x"), port: 8799, publicUrl: "https://seira.example.com", script: "/home/seira/.npm/_npx/deadbeef/node_modules/seira/dist-server/seira.js", node: "/usr/bin/node", platform: "linux" as const, home: "/home/seira", user: "seira" };

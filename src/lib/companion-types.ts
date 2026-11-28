@@ -73,6 +73,8 @@ export interface CompanionState {
   };
   /** The relay access token's state and last failure code (never the token). Absent on older builds. */
   relayToken?: { state: "off" | "fetching" | "ready" | "failed" | "waiting"; code: "unavailable" | "sign_in" | "busy" | "unreachable" | "failed" | null } | null;
+  /** What Anywhere runs on: the encrypted relay, or the managed secure Seira address in a build with no relay. Absent on older builds: the relay. */
+  anywhere?: "relay" | "https";
   error?: string;
 }
 

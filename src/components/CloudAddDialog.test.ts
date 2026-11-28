@@ -250,7 +250,7 @@ describe("each screen of the sheet says one thing and offers one next step", () 
     const waiting: CloudAddView = { kind: "waiting", plan: "pro", browser: "checkout", late: false, link: true, email: EMAIL };
     const { html, tree, handlers } = panel(waiting);
     inOrder(text(html), ["Finish in your browser", "Checkout opened in your browser. Pay there and this window moves on by itself.",
-      "Signed in", EMAIL, "Waiting for your payment", "Pro · free for 7 days · $0.00 today", "Set up your new Cloud", "About 2 minutes, all automatic",
+      "Signed in", EMAIL, "Waiting for your payment", "Pro · free for 7 days · $0.00 today", "Set up your new Cloud", "Usually 5 to 15 minutes, all automatic",
       "Reopen checkout", "Copy link", "Change plan"]);
     expect(html).toContain('aria-current="step"');
     button(tree, "Reopen checkout")!.props.onClick(); expect(handlers.reopenCheckout).toHaveBeenCalledOnce();
@@ -268,7 +268,7 @@ describe("each screen of the sheet says one thing and offers one next step", () 
   it("Setting up: the badge (trial, credit, or paid), the Admin's steps, a name, a colour and the switcher preview; Open waits for ready", () => {
     const starting: CloudAddView = { kind: "starting", tier: "pro", trial: trial(), credit, step: "storage", slow: false, received: false };
     const { html, tree, handlers } = panel(starting);
-    inOrder(text(html), ["Pro trial started · $5 Claude credit added", "Setting up your new Cloud", "About 2 minutes. Keep working if you like, it opens when it's ready.",
+    inOrder(text(html), ["Pro trial started · $5 Claude credit added", "Setting up your new Cloud", "Usually 5 to 15 minutes. Keep working if you like, it opens when it's ready.",
       "Reserving your machine", "Preparing storage", "Starting Studio", "Checking it's ready", "Name it", "Pick a colour", "In your switcher", "Studio", "Pro · always on", "Open Studio"]);
     expect(html).toContain('aria-valuenow="25"');
     expect(button(tree, "Open Studio")!.props.disabled).toBe(true);
@@ -312,7 +312,7 @@ describe("each screen of the sheet says one thing and offers one next step", () 
 
   it("a Team plan's Cloud: the team's own setup steps, then ready to open under the team's name, with no name or colour to choose", () => {
     const starting = text(panel({ kind: "team-starting", team: "Acme", step: "storage", slow: false }).html);
-    inOrder(starting, ["Setting up your team's Cloud", "About 2 minutes.", "Reserving your machine", "Preparing storage", "Starting Acme", "Checking it's ready"]);
+    inOrder(starting, ["Setting up your team's Cloud", "Usually 5 to 15 minutes.", "Reserving your machine", "Preparing storage", "Starting Acme", "Checking it's ready"]);
     expect(panel({ kind: "team-starting", team: "Acme", step: "storage", slow: false }).html).toContain('aria-valuenow="25"');
     for (const word of ["Name it", "Pick a colour", "Open Acme", "My Cloud"]) expect(starting).not.toContain(word);
     const unnamed = text(panel({ kind: "team-starting", team: null, step: null, slow: true }).html);
@@ -707,6 +707,10 @@ describe("the sheet", () => {
     await press("Try again");
     bridge.checkout.mockResolvedValueOnce({ outcome: "conflict", state: free });
     expect(await buy("pro")).toContain("A checkout is already being prepared. Try again in a moment.");
+    bridge.checkout.mockResolvedValueOnce({ outcome: "sold-out", state: free });
+    expect(await buy("pro")).toContain("Every Cloud is taken right now. Try again in a few hours.");
+    bridge.checkout.mockResolvedValueOnce({ outcome: "already-subscribed", state: free });
+    expect(await buy("pro")).toContain("You already have a Cloud. Find it in your switcher.");
   });
 
   it("a Team plan whose team the Admin lists with no machine shows no setup: the sheet hands over to Settings and closes", async () => {

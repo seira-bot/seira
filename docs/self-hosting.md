@@ -682,12 +682,15 @@ engine would not fit, and starts it by itself when there is room:
 
 | Value | What it does |
 | --- | --- |
-| unset | In a container with a memory or process limit: a number worked out from those limits (below). Anywhere else: no limit, as before. |
-| `auto` | The worked-out number on any self-hosted server, with or without a container limit. |
+| unset | On a Linux server, in a container or not: a number worked out from the memory and the process limit (below). On Windows and macOS: no limit. |
+| `auto` | The worked-out number on any self-hosted server. |
 | a number | That many turns at once. The live checks on memory and processes still apply. |
 | `off` or `0` | No waiting at all. |
 
-The worked-out number is the smaller of two: the memory limit less a tenth
+At start the server logs one line that names `SEIRA_TURNS_MAX_RUNNING=off`, the way to turn the waiting off. A server
+with a lot of memory and many bots can see turns wait where they did not wait before: set a larger number, or `off`.
+
+The worked-out number is the smaller of two: the memory (the container's limit, or the machine's) less a tenth
 (at least 320 MB), divided by 700 MB for an engine; and the process limit
 less a tenth (at least 32) and 40 for the server, divided by 60. A 4 GB
 container runs 5 turns at once, an 8 GB one 10; a process limit of 512 allows
@@ -1429,6 +1432,8 @@ When someone opens the app, the server downloads the project's public announceme
 plain GET with nothing of yours in it. Its pages may show one of the cards in the corner: product news, a tip, or a
 sponsor's offer, each once per person ([docs/announcements.md](announcements.md)). Set `SEIRA_DISABLE_ANNOUNCEMENTS=1`
 in the server's environment to never download them and never show those cards.
+Set `SEIRA_DISABLE_ANNOUNCEMENT_COUNTS=1` to keep the cards but never send the anonymous count of how many devices saw
+or used each card ([what it sends](announcements.md#counting)).
 
 ## Attachment storage
 
@@ -2126,9 +2131,11 @@ is newer than the one it reports), and asks before it puts back data from an
 update an earlier run left unfinished.
 [Every step, the rollback and the exit codes](deploy-vps.md#update).
 
-For the npm service there is no one-command updater yet:
-[do the same steps by hand](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-the-same-steps-by-hand),
-as the service user while the server is stopped. For a foreground invocation,
+The npm service gets the same button, and the same steps with a way back, from
+`deploy/service-update-runner.sh --install`
+([how](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-one-command-with-a-way-back)).
+A server with either runner also updates by itself when no bot is working, at
+most once in 6 hours; `SEIRA_AUTO_UPDATE=off` stops that. For a foreground invocation,
 `npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com` selects a particular published
 release; replace `X.Y.Z` with that version.
 

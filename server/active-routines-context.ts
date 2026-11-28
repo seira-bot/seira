@@ -10,7 +10,7 @@ function preview(text: string, limit: number): string {
   return safe.length > limit ? `${safe.slice(0, limit - 1)}…` : safe;
 }
 
-type EventMonitor = Pick<Routine, "id" | "botId" | "name" | "prompt" | "enabled" | "createdAt" | "sourceThreadId" | "resultsThreadId">;
+type EventMonitor = Pick<Routine, "id" | "botId" | "name" | "prompt" | "enabled" | "createdAt" | "sourceThreadId" | "resultsThreadId" | "workflowId">;
 
 const priority = ({ schedule }: { schedule: { type: string; endsAt?: number } }) => schedule.type === "once" || (schedule.type === "interval" && schedule.endsAt !== undefined)
   ? 0 : schedule.type === "interval" ? 1 : 2;
@@ -21,12 +21,16 @@ export function activeRoutinesContext(input: {
   appTriggers?: readonly EventMonitor[];
   webhooks?: readonly (EventMonitor & { delivery?: string; groupId?: string })[];
   include?: (threadId: string) => boolean;
+  /** Whether this conversation may know of a scheduled routine, one that runs a workflow included. */
+  routineShown?: (routine: Routine) => boolean;
+  /** Whether this conversation may know of a webhook or app trigger that runs a workflow. */
+  startShown?: (start: { botId: string; workflowId?: string; prompt: string }) => boolean;
   title?: (threadId: string) => string | null | undefined;
 }): string {
   const candidates = [
-    ...input.routines.filter(routine => routine.target === "bot"),
-    ...(input.appTriggers ?? []).map(trigger => ({ ...trigger, schedule: { type: "app_event" }, nextRunAt: null })),
-    ...(input.webhooks ?? []).filter(trigger => trigger.delivery !== "post" && !trigger.groupId)
+    ...input.routines.filter(routine => routine.target === "bot" && (input.routineShown?.(routine) ?? true)),
+    ...(input.appTriggers ?? []).filter(trigger => input.startShown?.(trigger) ?? true).map(trigger => ({ ...trigger, schedule: { type: "app_event" }, nextRunAt: null })),
+    ...(input.webhooks ?? []).filter(trigger => trigger.delivery !== "post" && !trigger.groupId && (input.startShown?.(trigger) ?? true))
       .map(trigger => ({ ...trigger, schedule: { type: "webhook" }, nextRunAt: null })),
   ];
   const eligible = candidates.filter(routine => {

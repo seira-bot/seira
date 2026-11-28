@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { VisibleSet } from "../bot-visibility.ts";
 import { json, readBody } from "../harness/http.ts";
 import { requiredScope } from "../request-auth.ts";
 import { WebhookManager } from "../webhooks.ts";
@@ -27,9 +28,9 @@ const manager = (file: string) => new WebhookManager({ file, botState: (botId) =
   workflowCopy: () => ({ workflowId: "wf-1", prompt: "Do these steps in order:\n1. Ana: Read it", botId: "bot-a", botIds: ["bot-a"] }),
   roomPost: async (trigger) => ({ posted: true, attachments: 0, threadId: `${trigger.groupId}-thread` }) });
 
-async function serve(seen: (botId: string) => boolean = () => true, file = join(folder(), "webhooks.json"), seesRoom: (groupId: string) => boolean = () => true, workflowGate?: WebhookRouteDeps["workflowGate"]) {
+async function serve(seen: (botId: string) => boolean = () => true, file = join(folder(), "webhooks.json"), seesRoom: (groupId: string) => boolean = () => true, workflowGate?: WebhookRouteDeps["workflowGate"], workflowBots: WebhookRouteDeps["workflowBots"] = () => ["bot-a"], runOf?: WebhookRouteDeps["runOf"]) {
   const webhooks = manager(file);
-  const routes = [createWebhookRoutes({ webhooks, ingress: () => ({ available: true, baseUrl: "http://127.0.0.1:8800" }), visible: () => ({ everything: false, bot: seen, group: seesRoom }), workflowGate })];
+  const routes = [createWebhookRoutes({ webhooks, ingress: () => ({ available: true, baseUrl: "http://127.0.0.1:8800" }), visible: () => ({ everything: false, bot: seen, group: seesRoom, hides: () => false, routineShown: () => true } as unknown as VisibleSet), runOf, workflowBots, workflowGate })];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     // As the server answers a refusal the manager throws: its status and message.
@@ -99,6 +100,48 @@ describe("a webhook's address for the person", () => {
     expect(listed.webhooks.map((hook: { name: string }) => hook.name)).toEqual(["Open room"]);
     expect(listed.attempts).toEqual([]);
     expect(await member.call("GET", `/api/webhooks/${closed.webhook.id}/address`)).toEqual({ status: 404, body: { error: "no such webhook" } });
+  });
+});
+
+describe("a webhook that runs a workflow", () => {
+  it("is shown, with what it received, only to someone who sees every bot in the workflow as it is now", async () => {
+    let bots: string[] | null = ["bot-a"];
+    const member = await serve((botId) => botId !== "bot-hidden", undefined, undefined, undefined, () => bots, () => ({ botId: "bot-a", workflowId: "wf-1", workflowBotIds: ["bot-a"] }));
+    const created = member.webhooks.create({ name: "Orders", workflowId: "wf-1" });
+    await member.webhooks.receive(created.webhook.endpointId, created.secret, { payload: { text: "Order 7 for the salary review" } });
+    const listed = async () => (await member.call("GET", "/api/webhooks")).body;
+    expect((await listed()).webhooks.map((hook: { name: string }) => hook.name)).toEqual(["Orders"]);
+    expect((await listed()).attempts).toHaveLength(1);
+
+    // The workflow gains a bot this person may not see: the webhook, its copy of the steps and its attempts leave their view.
+    bots = ["bot-a", "bot-hidden"];
+    expect(await listed()).toMatchObject({ webhooks: [], attempts: [] });
+    for (const [method, suffix, body] of [["GET", "/address", undefined], ["POST", "/test", {}], ["POST", "/rotate", undefined], ["PATCH", "", { enabled: false }], ["DELETE", "", undefined]] as const) {
+      expect(await member.call(method, `/api/webhooks/${created.webhook.id}${suffix}`, body)).toEqual({ status: 404, body: { error: "no such webhook" } });
+    }
+    expect(member.webhooks.list()).toEqual([expect.objectContaining({ id: created.webhook.id, enabled: true })]);
+
+    // A workflow that is gone shows nothing either.
+    bots = null;
+    expect(await listed()).toMatchObject({ webhooks: [], attempts: [] });
+    expect(await member.call("GET", `/api/webhooks/${created.webhook.id}/address`)).toEqual({ status: 404, body: { error: "no such webhook" } });
+  });
+
+  it("keeps an attempt back when the run it made used a bot this person may not see", async () => {
+    // The webhook now runs a workflow they may read, but the run it made earlier used another bot.
+    const member = await serve((botId) => botId !== "bot-hidden", undefined, undefined, undefined, () => ["bot-a"], () => ({ botId: "bot-a", workflowId: "wf-1", workflowBotIds: ["bot-a", "bot-hidden"] }));
+    const created = member.webhooks.create({ name: "Orders", workflowId: "wf-1" });
+    await member.webhooks.receive(created.webhook.endpointId, created.secret, { payload: { text: "Order 7 for the salary review" } });
+    const listed = (await member.call("GET", "/api/webhooks")).body;
+    expect(listed.webhooks.map((hook: { name: string }) => hook.name)).toEqual(["Orders"]);
+    expect(listed.attempts).toEqual([]);
+  });
+
+  it("keeps an attempt back when its run has left the record", async () => {
+    const member = await serve(() => true, undefined, undefined, undefined, () => ["bot-a"], () => undefined);
+    const created = member.webhooks.create({ name: "Orders", workflowId: "wf-1" });
+    await member.webhooks.receive(created.webhook.endpointId, created.secret, { payload: { text: "Order 7" } });
+    expect((await member.call("GET", "/api/webhooks")).body.attempts).toEqual([]);
   });
 });
 

@@ -114,5 +114,5 @@ it("keeps the phone wording for phones", async () => {
   expect(phone.text).toContain("on your phone");
   expect(phone.qr).toBe(true);
   expect(phone.dialog.querySelector("[data-pairing-address]")).toBeNull();
-  expect(phone.buttons).toEqual([{ text: "Copy link", primary: false }, { text: "Done", primary: true }]);
+  expect(phone.buttons).toEqual([{ text: "Android: get Seira on Google Play", primary: false }, { text: "Copy link", primary: false }, { text: "Done", primary: true }]);
 });

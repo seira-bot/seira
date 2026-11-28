@@ -567,6 +567,8 @@ export class WebhookManager {
     Object.assign(trigger, clean, { updatedAt: this.now() });
     const unlinked = patch.workflowId === null && trigger.workflowId !== undefined;
     if (patch.workflowId === null) delete trigger.workflowId;
+    // The instructions of a detached start were the workflow's steps: they are not kept unless the edit brings new ones.
+    if (unlinked && patch.prompt === undefined) trigger.prompt = "";
     if (unlinked) trigger.enabled = false;
     if (placeCleared) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;

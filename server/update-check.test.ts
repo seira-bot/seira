@@ -1,7 +1,7 @@
 import { join, sep } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-import { createUpdateChecker, installKind, isNewerVersion, LATEST_RELEASE_URL, STABLE_CHANNEL_URL, updateChannel, updateCommand } from "./update-check.ts";
+import { createUpdateChecker, installKind, isNewerVersion, LATEST_RELEASE_URL, NPM_PACKAGE_URL, STABLE_CHANNEL_URL, updateChannel, updateCommand } from "./update-check.ts";
 
 const release = (tag: string) =>
   ({ ok: true, status: 200, json: async () => ({ tag_name: tag, html_url: `https://github.com/seira-bot/seira/releases/tag/${tag}` }) }) as Response;
@@ -133,14 +133,41 @@ describe("server update check", () => {
   it("says up to date, and asks at most once an hour", async () => {
     let now = 0;
     const fetch = github("v0.1.92", "0.1.92");
-    const check = createUpdateChecker({ current: "0.1.92", install: "npm", fetch, now: () => now });
-    expect(await check()).toMatchObject({ available: false, latest: "0.1.92", command: "npm install -g @seira-bot/seira@0.1.92", restart: true });
+    const check = createUpdateChecker({ current: "0.1.92", install: "docker", fetch, now: () => now });
+    expect(await check()).toMatchObject({ available: false, latest: "0.1.92", command: "git pull && ./update.sh", restart: false });
     now = 59 * 60_000;
     await check();
     expect(fetch).toHaveBeenCalledTimes(1);
     now = 61 * 60_000;
     await check();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers an npm install only a version that npm has: a GitHub release comes hours before its package", async () => {
+    const npm = (versions: string[]) => vi.fn(async (url: string | URL | Request) => {
+      const text = String(url);
+      if (text === STABLE_CHANNEL_URL) return missing;
+      if (text === LATEST_RELEASE_URL) return release("v0.1.96");
+      if (text === `${NPM_PACKAGE_URL}/latest`) return { ok: true, status: 200, json: async () => ({ version: versions.at(-1) }) } as Response;
+      const version = text.slice(NPM_PACKAGE_URL.length + 1);
+      return versions.includes(version) ? { ok: true, status: 200, json: async () => ({ version }) } as Response : missing;
+    });
+    const lagging = npm(["0.1.94", "0.1.95"]);
+    expect(await createUpdateChecker({ current: "0.1.94", install: "npm", fetch: lagging })()).toMatchObject({
+      latest: "0.1.95", available: true, command: "npm install -g @seira-bot/seira@0.1.95",
+      releaseUrl: "https://github.com/seira-bot/seira/releases/tag/v0.1.95",
+    });
+    expect(lagging.mock.calls.map(([url]) => String(url))).toEqual([STABLE_CHANNEL_URL, LATEST_RELEASE_URL, `${NPM_PACKAGE_URL}/0.1.96`, `${NPM_PACKAGE_URL}/latest`]);
+    expect(await createUpdateChecker({ current: "0.1.95", install: "npm", fetch: npm(["0.1.95"]) })()).toMatchObject({ latest: "0.1.95", available: false });
+    expect(await createUpdateChecker({ current: "0.1.96", install: "npm", fetch: npm(["0.1.96"]) })()).toMatchObject({ latest: "0.1.96", available: false });
+    // npm's newest is never taken past the release the channel names.
+    const ahead = await createUpdateChecker({ current: "0.1.90", install: "npm", fetch: npm(["0.1.97"]) })();
+    expect(ahead).toMatchObject({ available: false, channel: "newest" });
+    expect(ahead).not.toHaveProperty("latest");
+    // A Docker install is not asked about npm: update.sh checks its image.
+    const docker = npm([]);
+    expect(await createUpdateChecker({ current: "0.1.94", install: "docker", fetch: docker })()).toMatchObject({ latest: "0.1.96", available: true });
+    expect(docker.mock.calls.map(([url]) => String(url))).not.toContain(`${NPM_PACKAGE_URL}/0.1.96`);
   });
 
   it("does not look anything up for a desktop or hosted server", async () => {

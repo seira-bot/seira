@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import { productName } from "@/lib/brand";
+import { PhoneAppLink } from "./PhoneAppLink";
 import { PhoneFirewallNotes } from "./PhoneFirewallNotes";
 import type { PhoneSetupController } from "./PhoneSetupFlow";
 
@@ -51,6 +52,7 @@ export function PhonePairingQr({ c, signedIn }: { c: PhoneSetupController; signe
       </div>
       <p className="mt-4 text-[13px] text-ink-secondary">{t("phone.code.installAndScan", { app: productName() })}</p>
       <p className="mt-1 text-[12px] text-ink-tertiary">{t("phone.code.notCamera", { app: productName() })}</p>
+      <PhoneAppLink className="mt-1" />
       <div className="mt-5 w-full px-2">
         <RouteRow on={Boolean(lan)} label={t("phone.code.e2e.wifi")} value={lan ?? ""} />
         <RouteRow on={Boolean(state.tailnetName)} label={t("phone.code.e2e.tailscale")} value={state.tailnetName ?? t("phone.code.e2e.tailscaleOff")} />

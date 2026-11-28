@@ -186,7 +186,7 @@ describe("1Password logins", () => {
       candidates: async (host) => [...[saved].filter((login) => login.hosts.includes(host)), ...linkedCandidates(source, host, "pepper")],
       available: async () => [{ ...saved }, ...linkedSites(source, "pepper")],
     }, {
-      engine: (args) => page!.engine(args), insertText: (text) => page!.insertText(text), press: (key) => page!.press(key), click: (selector) => page!.click(selector),
+      engine: (args) => page!.engine(args), insertText: (text) => page!.insertText(text), typeKeys: (text) => page!.typeKeys(text), press: (key) => page!.press(key), click: (selector) => page!.click(selector),
       remember: (value) => { remembered.push(value); }, now: () => now, sleep: async () => undefined,
     });
     const outcome = await fill();

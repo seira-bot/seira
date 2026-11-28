@@ -17,7 +17,11 @@ import {
   routineRunVisible,
   routineVisible,
   sameAudience,
-  webhookVisible,
+  heldCopyCurrent,
+  startAttemptVisible,
+  startRunVisible,
+  startVisible,
+  turnViewer,
   workflowRunVisible,
   workflowVisible,
   SEES_EVERYTHING,
@@ -201,6 +205,21 @@ describe("VisibleSet", () => {
     expect(routineVisible({ botId: "pub", workflowBotIds: ["hr"] }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
   });
 
+  it("holds back a scheduled routine that runs a workflow but holds no list of its bots", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    expect(routineVisible({ botId: "pub", workflowId: "w" }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowId: "w" }, everyone)).toBe(true);
+    expect(routineVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub"] }, bob)).toBe(true);
+    // An empty list is not a whole list: a workflow that can run has a first bot.
+    expect(routineVisible({ botId: "pub", workflowId: "w", workflowBotIds: [] }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowId: "w", workflowBotIds: [] }, everyone)).toBe(true);
+    expect(routineRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: [] } as never, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub" }, bob)).toBe(true);
+    const unnamed = { everything: false, unverified: true, routineShown: () => true, bot: () => true, group: () => true } as unknown as VisibleSet;
+    expect(routineVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub"] }, unnamed)).toBe(false);
+  });
+
   it("shows a workflow and its runs only when every bot in them is visible", () => {
     const bob = new VisibleSet(bots, groups, BOB);
     const step = (botId: unknown) => ({ id: "s", kind: "bot", botId, instruction: "go" });
@@ -221,18 +240,149 @@ describe("VisibleSet", () => {
 
   it("shows a room webhook only to someone who sees both its bot and its room", () => {
     const bob = new VisibleSet(bots, groups, BOB);
-    expect(webhookVisible({ botId: "pub" }, bob)).toBe(true);
-    expect(webhookVisible({ botId: "pub", groupId: "room-pub" }, bob)).toBe(true);
-    expect(webhookVisible({ botId: "pub", groupId: "room-mixed" }, bob)).toBe(false);
-    expect(webhookVisible({ botId: "hr", groupId: "room-pub" }, bob)).toBe(false);
-    expect(webhookVisible({ botId: "hr", groupId: "room-mixed" }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
+    const noWorkflows = () => null;
+    expect(startVisible({ botId: "pub" }, bob, noWorkflows)).toBe(true);
+    expect(startVisible({ botId: "pub", groupId: "room-pub" }, bob, noWorkflows)).toBe(true);
+    expect(startVisible({ botId: "pub", groupId: "room-mixed" }, bob, noWorkflows)).toBe(false);
+    expect(startVisible({ botId: "hr", groupId: "room-pub" }, bob, noWorkflows)).toBe(false);
+    expect(startVisible({ botId: "hr", groupId: "room-mixed" }, new VisibleSet(bots, groups, SEES_EVERYTHING), noWorkflows)).toBe(true);
+  });
+
+  it("shows an event start that runs a workflow only to someone who sees every bot in the workflow as it is now", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    const flows: Record<string, string[]> = { open: ["pub", "corp"], mixed: ["pub", "hr"] };
+    const lookup = (id: string) => flows[id] ?? null;
+    expect(startVisible({ botId: "pub", workflowId: "open" }, bob, lookup)).toBe(true);
+    expect(startVisible({ botId: "pub", workflowId: "mixed" }, bob, lookup)).toBe(false);
+    expect(startVisible({ botId: "pub", workflowId: "mixed" }, everyone, lookup)).toBe(true);
+    // The workflow is read when asked, so a bot added to it later takes the start away.
+    flows.open = ["pub", "hr"];
+    expect(startVisible({ botId: "pub", workflowId: "open" }, bob, lookup)).toBe(false);
+    // Nothing is shown for a workflow that is gone, or an id that is not text.
+    expect(startVisible({ botId: "pub", workflowId: "gone" }, bob, lookup)).toBe(false);
+    expect(startVisible({ botId: "pub", workflowId: "gone" }, everyone, lookup)).toBe(true);
+    expect(startVisible({ botId: "pub", workflowId: 7 }, bob, lookup)).toBe(false);
+    expect(startVisible({ botId: "pub", workflowId: "mixed", groupId: "room-pub" }, bob, lookup)).toBe(false);
+  });
+
+  it("judges a start's run by the bots and chats the run used, not by what the start runs now", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    expect(startRunVisible({ botId: "pub" }, bob)).toBe(true);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub", "corp"] }, bob)).toBe(true);
+    // The run used a bot Bob cannot read, even if the start no longer links a workflow.
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub", "hr"] }, bob)).toBe(false);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub", "hr"] }, everyone)).toBe(true);
+    // A run of a workflow that kept no list of its bots, or an empty one, is held back.
+    expect(startRunVisible({ botId: "pub", workflowId: "w" }, bob)).toBe(false);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: [] }, bob)).toBe(false);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: [] }, everyone)).toBe(true);
+    expect(startRunVisible({ botId: "pub", workflowId: "w" }, everyone)).toBe(true);
+    // A chat the person may not read hides the run, in any step.
+    const seen = { everything: false, bot: () => true, group: () => true, routineShown: () => true, filtersThreads: true, hides: (id: string) => id === "t-private" } as unknown as VisibleSet;
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub"], stepThreads: { "t-open": {} } }, seen)).toBe(true);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub"], stepThreads: { "t-open": {}, "t-private": {} } }, seen)).toBe(false);
+    expect(startRunVisible({ botId: "pub", threadId: "t-private" }, seen)).toBe(false);
+  });
+
+  it("shows nothing of a workflow to a member with no address where department limits are set", () => {
+    const nameless = new VisibleSet(bots, groups, NOBODY, undefined, undefined, null, true);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    const lookup = () => ["pub"];
+    // A start with no workflow is judged as before; one that runs a workflow is not shown.
+    expect(nameless.everything).toBe(false);
+    expect(startVisible({ botId: "pub" }, nameless, lookup)).toBe(true);
+    expect(startVisible({ botId: "pub", workflowId: "w" }, nameless, lookup)).toBe(false);
+    expect(startVisible({ botId: "pub", workflowId: "w" }, everyone, lookup)).toBe(true);
+    expect(startRunVisible({ botId: "pub", workflowId: "w", workflowBotIds: ["pub"] }, nameless)).toBe(false);
+    expect(startRunVisible({ botId: "pub" }, nameless)).toBe(true);
+    expect(workflowVisible({ steps: [{ kind: "bot", botId: "pub" }] }, nameless)).toBe(false);
+    expect(workflowRunVisible({ botIds: ["pub"] }, nameless)).toBe(false);
+    // Where no limits are set the same person is judged as before.
+    const open = new VisibleSet(bots, groups, NOBODY);
+    expect(startVisible({ botId: "pub", workflowId: "w" }, open, lookup)).toBe(true);
+  });
+
+  it("judges an attempt of a start by the run and the chat it made", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    const runs: Record<string, Record<string, unknown>> = {
+      "run-open": { botId: "pub", workflowId: "w", workflowBotIds: ["pub", "corp"] },
+      "run-hr": { botId: "pub", workflowId: "w", workflowBotIds: ["pub", "hr"] },
+      "run-plain": { botId: "pub" },
+    };
+    const runOf = (id: string) => runs[id];
+    expect(startAttemptVisible({}, { workflowId: "w" }, bob, runOf)).toBe(true);
+    expect(startAttemptVisible({ runId: "run-open" }, { workflowId: "w" }, bob, runOf)).toBe(true);
+    // The start may now run a workflow Bob can read, yet the run it made used a bot he cannot.
+    expect(startAttemptVisible({ runId: "run-hr" }, { workflowId: "w" }, bob, runOf)).toBe(false);
+    expect(startAttemptVisible({ runId: "run-hr" }, { workflowId: "w" }, everyone, runOf)).toBe(true);
+    // A run that has left the record is shown only for a start with no workflow.
+    expect(startAttemptVisible({ runId: "run-gone" }, { workflowId: "w" }, bob, runOf)).toBe(false);
+    expect(startAttemptVisible({ runId: "run-gone" }, {}, bob, runOf)).toBe(true);
+    expect(startAttemptVisible({ runId: "run-gone" }, { workflowId: "w" }, bob)).toBe(false);
+    // A chat the person may not read hides the attempt.
+    const seen = { everything: false, bot: () => true, group: () => true, routineShown: () => true, filtersThreads: true, hides: (id: string) => id === "t-private" } as unknown as VisibleSet;
+    expect(startAttemptVisible({ threadId: "t-private" }, {}, seen, runOf)).toBe(false);
+    expect(startAttemptVisible({ threadId: "t-open" }, {}, seen, runOf)).toBe(true);
+  });
+
+  it("drops a start's attempt frame when the run it made is hidden", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const runs: Record<string, Record<string, unknown>> = { "run-hr": { botId: "pub", workflowId: "w", workflowBotIds: ["pub", "hr"] }, "run-open": { botId: "pub", workflowId: "w", workflowBotIds: ["pub"] } };
+    const ctx = { visible: bob, webhook: () => ({ botId: "pub", workflowId: "w" }), appTrigger: () => ({ botId: "pub", workflowId: "w" }), workflowBots: () => ["pub"], run: (id: string) => runs[id] } as unknown as Parameters<typeof frameForMember>[1];
+    const frames = (kind: string, key: string, attempt: Record<string, unknown>) => frameForMember({ kind, attempt: { [key]: "x", ...attempt } }, ctx, { bots: new Set(), groups: new Set() });
+    expect(frames("webhook.attempt", "webhookId", { runId: "run-open" })).toBeDefined();
+    expect(frames("webhook.attempt", "webhookId", { runId: "run-hr" })).toBeUndefined();
+    expect(frames("app-trigger.attempt", "triggerId", { runId: "run-hr" })).toBeUndefined();
+    expect(frames("app-trigger.attempt", "triggerId", { runId: "run-open" })).toBeDefined();
+  });
+
+  it("names who a bot's turn answers to, and tells nothing when it cannot tell", () => {
+    expect(turnViewer({ team: false, shared: false })).toBe("open");
+    // A server with members, or a Team Cloud turn with no person behind it: closed, never everything and never the whole team.
+    expect(turnViewer({ team: false, shared: true })).toBe("closed");
+    expect(turnViewer({ team: true, shared: true })).toBe("closed");
+    expect(turnViewer({ team: true, shared: false })).toBe("closed");
+    // A person with no usable address cannot be held to a department grant, so the turn is closed too.
+    expect(turnViewer({ team: true, shared: true, person: { role: "member", email: "" } })).toBe("closed");
+    expect(turnViewer({ team: true, shared: true, person: { role: "member", email: "  " } })).toBe("closed");
+    expect(turnViewer({ team: true, shared: true, person: { role: "admin", email: "" } })).toBe("closed");
+    expect(turnViewer({ team: true, shared: true, person: { role: "member", email: "a@x.test" } })).toEqual({ kind: "member", email: "a@x.test" });
+    expect(turnViewer({ team: true, shared: true, person: { role: "admin", email: "b@x.test" } })).toEqual({ kind: "all", email: "b@x.test" });
+  });
+
+  it("tells a held copy of the steps from the current one", () => {
+    const copy = { prompt: "steps", botId: "pub", botIds: ["pub"], workflowId: "w" };
+    expect(heldCopyCurrent(copy, { prompt: "steps", botId: "pub" })).toBe(true);
+    expect(heldCopyCurrent(copy, { prompt: "older steps", botId: "pub" })).toBe(false);
+    expect(heldCopyCurrent(copy, { prompt: "steps", botId: "hr" })).toBe(false);
+    expect(heldCopyCurrent(copy, { prompt: "", botId: "pub" })).toBe(false);
+    expect(heldCopyCurrent(null, { prompt: "steps", botId: "pub" })).toBe(false);
+    expect(heldCopyCurrent({ code: "unrunnable" }, { prompt: "steps", botId: "pub" })).toBe(false);
+    expect(heldCopyCurrent(copy)).toBe(true);
+  });
+
+  it("shows nothing but to an admin when the steps a start holds are no longer the workflow's current steps", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const everyone = new VisibleSet(bots, groups, SEES_EVERYTHING);
+    const lookup = (id: string, start?: { botId?: unknown; prompt?: unknown }) => (id === "open" && start?.prompt === "current steps" ? ["pub", "corp"] : null);
+    expect(startVisible({ botId: "pub", workflowId: "open", prompt: "current steps" }, bob, lookup)).toBe(true);
+    expect(startVisible({ botId: "pub", workflowId: "open", prompt: "older steps with a hidden bot" }, bob, lookup)).toBe(false);
+    expect(startVisible({ botId: "pub", workflowId: "open", prompt: "older steps with a hidden bot" }, everyone, lookup)).toBe(true);
   });
 });
 
 describe("live frames for a member", () => {
   const context = (visible: VisibleSet): FrameContext => ({
     visible,
-    webhook: (id) => ({ "hook-hr": { botId: "hr" }, "hook-pub": { botId: "pub" }, "hook-room-mixed": { botId: "pub", groupId: "room-mixed" } } as Record<string, { botId: string; groupId?: string }>)[id],
+    webhook: (id) => ({
+      "hook-hr": { botId: "hr" }, "hook-pub": { botId: "pub" }, "hook-room-mixed": { botId: "pub", groupId: "room-mixed" },
+      "hook-flow-mixed": { botId: "pub", workflowId: "flow-mixed" }, "hook-flow-open": { botId: "pub", workflowId: "flow-open" }, "hook-flow-gone": { botId: "pub", workflowId: "flow-gone" },
+    } as Record<string, { botId: string; groupId?: string; workflowId?: string }>)[id],
+    appTrigger: (id) => ({ "app-flow-mixed": { botId: "pub", workflowId: "flow-mixed" }, "app-flow-open": { botId: "pub", workflowId: "flow-open" } } as Record<string, { botId: string; workflowId?: string }>)[id],
+    workflowBots: (id) => ({ "flow-mixed": ["pub", "hr"], "flow-open": ["pub", "corp"] } as Record<string, string[]>)[id] ?? null,
     freshBot: (id) => ({ id, messages: [{ id: "m1" }] }),
     freshGroup: (id) => ({ id, messages: [] }),
   });
@@ -262,6 +412,15 @@ describe("live frames for a member", () => {
       { kind: "webhook.attempt", attempt: { webhookId: "hook-hr" } },
       { kind: "webhook", webhook: { id: "hook-room-mixed", botId: "pub", groupId: "room-mixed" } },
       { kind: "webhook.attempt", attempt: { webhookId: "hook-room-mixed" } },
+      { kind: "webhook", webhook: { id: "hook-flow-mixed", botId: "pub", workflowId: "flow-mixed" } },
+      { kind: "webhook.attempt", attempt: { webhookId: "hook-flow-mixed" } },
+      { kind: "webhook", webhook: { id: "hook-flow-gone", botId: "pub", workflowId: "flow-gone" } },
+      { kind: "webhook.attempt", attempt: { webhookId: "hook-flow-gone" } },
+      { kind: "webhook.attempt", attempt: { webhookId: "hook-unknown" } },
+      { kind: "app-trigger", botId: "pub", trigger: { id: "app-flow-mixed", botId: "pub", workflowId: "flow-mixed" } },
+      { kind: "app-trigger.attempt", botId: "pub", attempt: { triggerId: "app-flow-mixed" } },
+      { kind: "app-trigger", botId: "hr", trigger: { id: "app-hr", botId: "hr" } },
+      { kind: "app-trigger.attempt", botId: "pub", attempt: { triggerId: "app-unknown" } },
       { kind: "future-kind", threadId: "t-hr" },
     ];
     for (const frame of hidden) expect(frameForMember(frame, ctx, seen()), JSON.stringify(frame)).toBeUndefined();
@@ -274,6 +433,12 @@ describe("live frames for a member", () => {
     expect(frameForMember(message, ctx, seen())).toBe(message);
     const hook = { kind: "webhook.attempt", attempt: { webhookId: "hook-pub" } };
     expect(frameForMember(hook, ctx, seen())).toBe(hook);
+    const flowHook = { kind: "webhook.attempt", attempt: { webhookId: "hook-flow-open" } };
+    expect(frameForMember(flowHook, ctx, seen())).toBe(flowHook);
+    const flowStart = { kind: "app-trigger", botId: "pub", trigger: { id: "app-flow-open", botId: "pub", workflowId: "flow-open" } };
+    expect(frameForMember(flowStart, ctx, seen())).toBe(flowStart);
+    const flowAttempt = { kind: "app-trigger.attempt", botId: "pub", attempt: { triggerId: "app-flow-open" } };
+    expect(frameForMember(flowAttempt, ctx, seen())).toBe(flowAttempt);
     expect(frameForMember({ kind: "sections", sections: ["Ops", "People"] }, ctx, seen())).toEqual({ kind: "sections", sections: ["Ops"] });
     expect(frameForMember({ kind: "bot.queued", queues: { "t-pub": [1], "t-hr": [2] } }, ctx, seen())).toEqual({ kind: "bot.queued", queues: { "t-pub": [1] } });
     expect(frameForMember({ kind: "bots.order", botIds: ["hr", "pub", "corp"] }, ctx, seen())).toEqual({ kind: "bots.order", botIds: ["pub", "corp"] });
@@ -468,7 +633,7 @@ describe("a Team Cloud's audiences", () => {
 
   it("a live frame from another person's private chat never reaches an admin's stream", () => {
     const admin = new VisibleSet(open, openGroups, BEN_ADMIN, undefined, { of: audienceOf, person: BEN_KEY });
-    const ctx: FrameContext = { visible: admin, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined };
+    const ctx: FrameContext = { visible: admin, webhook: () => undefined, appTrigger: () => undefined, workflowBots: () => null, freshBot: () => undefined, freshGroup: () => undefined };
     const seen: StreamSeen = { bots: new Set(open.map((bot) => bot.id)), groups: new Set(["room-pub"]) };
     for (const frame of [
       { kind: "message", threadId: "t-pub-2", message: { text: "Kumquat" } },
@@ -498,7 +663,7 @@ describe("a Team Cloud's audiences", () => {
 
   it("sends what a bot is doing now only to someone who may see that chat, as the Activity panel does", () => {
     const admin = new VisibleSet(open, openGroups, BEN_ADMIN, undefined, { of: audienceOf, person: BEN_KEY });
-    const ctx: FrameContext = { visible: admin, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined };
+    const ctx: FrameContext = { visible: admin, webhook: () => undefined, appTrigger: () => undefined, workflowBots: () => null, freshBot: () => undefined, freshGroup: () => undefined };
     const seen: StreamSeen = { bots: new Set(open.map((bot) => bot.id)), groups: new Set(["room-pub"]) };
     const step = (threadId: string) => ({ kind: "runtime", event: { type: "turn.progress", threadId, activity: "command", itemId: "c1",
       target: "payroll.py", detail: "python3 payroll.py --month 10", quiet: { kind: "busy" }, tail: ["paid 12 of 40"] } });
@@ -513,7 +678,7 @@ describe("a Team Cloud's audiences", () => {
 
   it("sends the task-list counts of a chat only to someone who may see that chat", () => {
     const admin = new VisibleSet(open, openGroups, BEN_ADMIN, undefined, { of: audienceOf, person: BEN_KEY });
-    const ctx: FrameContext = { visible: admin, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined };
+    const ctx: FrameContext = { visible: admin, webhook: () => undefined, appTrigger: () => undefined, workflowBots: () => null, freshBot: () => undefined, freshGroup: () => undefined };
     const seen: StreamSeen = { bots: new Set(open.map((bot) => bot.id)), groups: new Set(["room-pub"]) };
     const plan = (threadId: string) => ({ kind: "runtime", event: { type: "turn.plan", threadId, turnId: "turn-1", done: 1, total: 4 } });
     expect(frameForMember(plan("t-pub-2"), ctx, seen)).toBeUndefined();
@@ -561,7 +726,7 @@ describe("a Team Cloud's audiences", () => {
     for (const other of [admin, member, set({ kind: "all", email: "" }, null)]) {
       expect([other.bot("adas-seira"), other.level("adas-seira"), other.group("room-seira")]).toEqual([false, "none", false]);
       expect(other.bot("pub"), "team bots are as they were").toBe(true);
-      expect(frameForMember({ kind: "bot", bot: { id: "adas-seira", name: "Confidant" } }, { visible: other, webhook: () => undefined, freshBot: () => undefined, freshGroup: () => undefined }, { bots: new Set(), groups: new Set() })).toBeUndefined();
+      expect(frameForMember({ kind: "bot", bot: { id: "adas-seira", name: "Confidant" } }, { visible: other, webhook: () => undefined, appTrigger: () => undefined, workflowBots: () => null, freshBot: () => undefined, freshGroup: () => undefined }, { bots: new Set(), groups: new Set() })).toBeUndefined();
       expect(routineVisible({ botId: "adas-seira" }, other)).toBe(false);
     }
     expect(admin.bot("no-such-bot"), "an admin's unknown id is still the route's to answer").toBe(true);

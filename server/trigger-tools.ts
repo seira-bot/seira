@@ -154,9 +154,12 @@ export function listTriggers(input: {
   timeZone: string;
   now: number;
   workflowName?: WorkflowNameOf;
+  /** Whether the person in this turn may know of a run: its output is what the workflow it ran produced. */
+  runShown?: (run: RoutineRun) => boolean;
 }): TriggerListing {
+  const runs = input.runShown ? input.runs.filter(input.runShown) : input.runs;
   const latest = new Map<string, RoutineRun>();
-  for (const run of input.runs) {
+  for (const run of runs) {
     if (run.botId === input.botId && !latest.has(run.routineId)) latest.set(run.routineId, run);
   }
   const routines = input.routines.filter((routine) => routine.botId === input.botId);
@@ -168,7 +171,7 @@ export function listTriggers(input: {
     const webhook = webhooks.find((candidate) => candidate.id === input.triggerId);
     const app = apps.find((candidate) => candidate.id === input.triggerId);
     if (!routine && !webhook && !app) return { ...header, error: NO_SUCH_TRIGGER, missing: true };
-    const fires = input.runs.filter((run) => run.routineId === input.triggerId).slice(0, FIRES_SHOWN).map(agentRun);
+    const fires = runs.filter((run) => run.routineId === input.triggerId).slice(0, FIRES_SHOWN).map(agentRun);
     const shown = routine ? agentRoutine(routine, latest.get(routine.id), input.workflowName) : webhook ? agentWebhook(webhook, latest.get(webhook.id)) : agentAppTrigger(app!, latest.get(app!.id));
     const prompt = (routine ?? webhook ?? app)!.prompt;
     return { ...header, trigger: { ...shown, ...instructionsOf(prompt, true), recentFires: fires } };
