@@ -11,10 +11,10 @@ const THEME_PATH = /^\/api\/themes\/([a-z0-9][a-z0-9-]{0,47})(\/duplicate|\/expo
 const ASSET_PATH = /^\/api\/theme-assets\/([a-z0-9][a-z0-9-]{0,47})\/([a-z0-9][a-z0-9._-]{0,99})$/;
 const IMPORT_LIMIT = Math.ceil(THEME_LIMITS.themeBytes * 1.4) + THEME_LIMITS.cssChars * 4 + 100_000;
 
-const activeBody = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: storedSkinSchema.optional() }).strict();
+const activeBody = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: storedSkinSchema.optional(), theme: themeFileSchema.optional() }).strict();
 const saveBody = z.object({ theme: themeFileSchema }).strict();
 const nameBody = z.object({ name: z.string().trim().min(1).max(60) }).strict();
-const historyBody = z.object({ index: z.number().int().positive() }).strict();
+const historyBody = z.union([z.object({ index: z.number().int().positive() }).strict(), z.object({ steps: z.number().int().positive() }).strict()]);
 
 export interface ThemeRoutesDeps {
   store: ThemeStore;
@@ -61,7 +61,8 @@ export function createThemeRoutes(deps: ThemeRoutesDeps): RouteHandler {
       if (method !== "PUT") return json(res, 405, { error: "GET or PUT" });
       const parsed = activeBody.safeParse(await readBody(req));
       if (!parsed.success) return json(res, 400, { error: "id must be a saved theme's id or null" });
-      const done = store.change(person, { wear: parsed.data.id, ...(parsed.data.skin ? { skin: parsed.data.skin } : {}) });
+      if (parsed.data.theme && !parsed.data.id) return json(res, 400, { error: "id must be a saved theme's id or null" });
+      const done = store.change(person, { ...(parsed.data.theme ? { saves: [{ id: parsed.data.id!, file: parsed.data.theme }] } : {}), wear: parsed.data.id, ...(parsed.data.skin ? { skin: parsed.data.skin } : {}) });
       if (isRefusal(done)) return json(res, 404, { error: done.refusal });
       deps.changed(person, done.skin);
       return json(res, 200, { ok: true });
@@ -71,9 +72,11 @@ export function createThemeRoutes(deps: ThemeRoutesDeps): RouteHandler {
       if (method === "GET") return json(res, 200, { items: items.map(({ index, at, kind, name, count }) => ({ index, at, kind, name, count })) satisfies ThemeHistoryItem[] });
       if (method !== "POST") return json(res, 405, { error: "GET or POST" });
       const parsed = historyBody.safeParse(await readBody(req));
-      const target = parsed.success ? items.find((item) => item.index === parsed.data.index) : undefined;
+      const ask = parsed.success ? parsed.data : undefined;
+      const byIndex = ask !== undefined && "index" in ask ? ask.index : undefined;
+      const target = !ask ? undefined : byIndex !== undefined ? items.find((item) => item.index === byIndex) : items[("steps" in ask ? ask.steps : 0) - 1];
       if (!target) return json(res, 400, { error: "index must be one of the changes listed." });
-      const done = store.restore(person, target.seq);
+      const done = store.restore(person, byIndex === undefined ? target.seq - 1 : target.seq);
       if (isRefusal(done)) return json(res, 409, { error: done.refusal });
       deps.changed(person, done.skin);
       return json(res, 200, { ok: true });

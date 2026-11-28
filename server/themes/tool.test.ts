@@ -14,7 +14,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(options: { person?: string | null; guest?: boolean } = {}) {
+function fixture(options: { person?: string | null; guest?: boolean; group?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "theme-tool-"));
   dirs.push(root);
   const dataDir = join(root, "data");
@@ -46,7 +46,7 @@ function fixture(options: { person?: string | null; guest?: boolean } = {}) {
   const host = createAppSettings({
     store: store as never, dataDir, entries: [],
     asker: () => ({ kind: "clean" }), guestDriven: () => options.guest === true,
-    requestCredential: async () => ({ status: 500, body: {} }), connectorThread: () => null, language: () => undefined,
+    requestCredential: async () => ({ status: 500, body: {} }), connectorThread: () => (options.group ? { group: { id: "g", name: "Room" } as never } : null), language: () => undefined,
     themes: createThemeTool({
       store: themes, person: () => person, changed: (who, skin) => changed.push({ person: who, ...(skin ? { skin } : {}) }),
       sources: () => ({ roots: [workspace], attachments: [attached] }),
@@ -197,5 +197,42 @@ describe("app_settings theme actions", () => {
     expect(changed.at(-1)).toEqual({ person: "owner" });
     expect(JSON.parse(String((await call({ action: "theme", id: "popular-nord" })).body.text)).theme).toMatchObject({ id: "popular-nord", name: "Nord" });
     expect((await call({ action: "set_theme", id: "popular-nope" })).status).toBe(400);
+  });
+
+  describe("show_theme", () => {
+    const SARI = { name: "Sari", light: { canvas: "#fff7f8", accent: "#c2335a" }, dark: { canvas: "#1a1416", accent: "#e4577a" } };
+
+    it("adds a card with colours only and saves and wears nothing", async () => {
+      const { call, themes, changed, messages } = fixture();
+      const shown = await call({ action: "show_theme", theme: JSON.stringify(SARI), description: "Rose and leaf green." });
+      expect(shown).toEqual({ status: 200, body: { text: "Shown: Sari. The person can wear or save it from the card." } });
+      expect(messages).toEqual([{ id: "m1", threadId: "t-kiwi", role: "bot", kind: "text", text: "A theme for you: Sari. Rose and leaf green.", themeCard: { id: "sari", name: "Sari", description: "Rose and leaf green.", theme: { light: SARI.light, dark: SARI.dark } } }]);
+      expect(themes.list("owner")).toEqual({ active: null, themes: [] });
+      expect(changed).toEqual([]);
+    });
+
+    it("leaves css and font off the card and tells the bot", async () => {
+      const { call, messages } = fixture();
+      const shown = await call({ action: "show_theme", theme: JSON.stringify({ ...NEON, font: "serif" }) });
+      expect(String(shown.body.text)).toContain("css and font was left out");
+      expect(JSON.stringify(messages[0]!.themeCard)).not.toContain("glow");
+      expect(Object.keys(messages[0]!.themeCard.theme).sort()).toEqual(["accent", "canvas"]);
+    });
+
+    it("refuses unsafe css, a theme that does not fit, a room and a person who did not ask, with no row", async () => {
+      const leak = JSON.stringify({ name: "Leak", css: 'input { background: url(https://example.com/?a) }' });
+      const one = fixture();
+      expect((await one.call({ action: "show_theme", theme: leak })).status).toBe(400);
+      expect((await one.call({ action: "show_theme", theme: "{" })).status).toBe(400);
+      expect((await one.call({ action: "show_theme", theme: JSON.stringify({ name: "Midnight", canvas: "red" }) })).status).toBe(400);
+      expect(one.messages).toEqual([]);
+      const room = fixture({ group: true });
+      expect((await room.call({ action: "show_theme", theme: JSON.stringify(SARI) })).status).toBe(403);
+      expect(room.messages).toEqual([]);
+      for (const other of [fixture({ person: null }), fixture({ guest: true })]) {
+        expect((await other.call({ action: "show_theme", theme: JSON.stringify(SARI) })).status).toBe(403);
+        expect(other.messages).toEqual([]);
+      }
+    });
   });
 });
