@@ -29,7 +29,7 @@ import { CRASH_REPORTS_ARG, createCrashReports } from "./crash-report.mjs";
 import { migrateWorkspaceConfigFile, workspaceCredentialEnv } from "./workspace-credentials.mjs";
 import { evictStartupCacheOnce } from "./startup-cache-eviction.mjs";
 import { activateExistingWindow, releaseSingleInstanceLock } from "./single-instance.mjs";
-import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TIMEOUT_MS, SERVER_LISTENING_GRACE_MS } from "./server-boot-probe.mjs";
+import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TIMEOUT_MS } from "./server-boot-probe.mjs";
 import { startupTimeline } from "./startup-timeline.mjs";
 import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
@@ -97,6 +97,7 @@ import { buildApplicationMenu } from "./menu.mjs"; import { createMainTextSize }
 import { createComputerSharing, isHomeFolder, validateSharedFolders } from "./computer-sharing.mjs"; import { installServerLending } from "./server-lending.mjs"; import { ownEnvironmentIds } from "./lent-mcp.mjs";
 import { createHostScreenLease } from "./host-screen-lease.mjs";
 import { acquireDataDirLease } from "./data-dir-lease.mjs";
+import { acquireDataDirLeaseWhenFree } from "./boot-lease.mjs";
 import { reviveAfterFailedSwitch, switchLocalEnvironment } from "./environment-switch.mjs";
 import { createManagedDesktopClient, createManagedDesktopRelay, createManagedDesktopStore } from "./managed-desktop.mjs";
 import { seiraCloudSells } from "./seira-cloud-sale.mjs";
@@ -1163,8 +1164,6 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
     pid: () => proc.pid,
     bootTimeoutMs: SERVER_BOOT_TIMEOUT_MS,
     isExited: () => exited || desktopShutdownStarted,
-    isListening: listening.heard,
-    listeningGraceMs: SERVER_LISTENING_GRACE_MS,
   });
   if (identity.outcome === "ready") startupTimeline.mark("server-healthy");
   if (identity.outcome === "ready" && serverSupervisor.isCurrent(proc)) return { proc };
@@ -2828,11 +2827,13 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     try {
       // Acquire before either plaintext credential migration touches config.json.
-      desktopDataDirLease = acquireDataDirLease(bootDataDir, { t: nativeT,
+      desktopDataDirLease = await acquireDataDirLeaseWhenFree(bootDataDir, { t: nativeT,
         legacyDataDir: path.join(app.getPath("home"), ".opengrokbot"),
-      });
+      }, { log: slog });
       runningDataDir = bootDataDir;
     } catch (error) {
+      slog(`data folder lease refused: ${error?.message ?? error}`);
+      if (desktopShutdownStarted) return;
       dialog.showErrorBox(
         nativeT("native.boot.unsafe.title"),
         error?.message ?? nativeT("native.boot.unsafe.fallback"),
@@ -2841,6 +2842,7 @@ app.whenReady().then(async () => {
       return;
     }
   }
+  if (desktopShutdownStarted) return;
   installServerSessions({ app, defaultSession: session.defaultSession, serverPort: () => SERVER_PORT,
     ownerToken: () => (app.isPackaged && serverReady ? desktopMutationToken : null) });
   if (app.isPackaged) app.setAsDefaultProtocolClient("seira");
