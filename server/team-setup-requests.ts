@@ -308,7 +308,10 @@ export class TeamSetupRequestService {
     const grant = this.options.autoApply?.(args.botId, args.threadId) ?? null;
     if (grant) {
       const request = this.prepare(args), capacity = this.strainedCapacity(request);
-      if (capacity?.verdict === "over" && !args.capacityOk) return { state: "held" as const, applied: false, capacityHold: capacityHoldText(capacity) };
+      if (capacity?.verdict === "over" && !args.capacityOk) {
+        const capacityHold = capacityHoldText(capacity);
+        return { state: "held" as const, applied: false, requestId: request.requestId, detail: capacityHold, capacityHold };
+      }
       const applied = await this.applyImmediately(request, args.from, args.canCommit);
       return { ...applied, appliedBy: grant, ...(capacity && applied.state === "applied" ? { capacityNote: capacityNoteText(capacity) } : {}) };
     }
