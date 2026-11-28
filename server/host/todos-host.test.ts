@@ -274,7 +274,7 @@ describe("launch provenance", () => {
     expect(lines[0]!.sender).toEqual({ name: "Pat" });
     expect(calls[0]!.opts.sender).toEqual({ name: "Pat" });
     expect(calls[0]!.opts.trigger).toEqual({ kind: "routine", label: "Todo", email: "pat@example.com" });
-    expect(workOrigin(lines[0] as never)).toEqual({ kind: "outside" });
+    expect(calls[0]!.opts.origin).toEqual({ kind: "outside" });
   });
 
   it("names nobody on a todo a bot made", async () => {

@@ -202,8 +202,8 @@ describe("runtime: whom a person's todo may reach (security)", () => {
     const { host, runner, store, opened, settle } = runtime(levels);
     const todo = host.add([{ title: "Ship it", botId: "atlas" }], person, { person: pat }).todos[0]!;
     levels.atlas = "view";
-    await settle();
     await expect(runner.startNow(todo.id)).rejects.toMatchObject({ status: 403 });
+    await settle();
     await runner.tick();
     expect(opened).toEqual([]);
     expect(store.get(todo.id)).toMatchObject({ status: "needs-you", stuck: "unassigned" });
