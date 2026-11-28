@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { frameForMember, memberBody, memberBot, routineVisible, webhookVisible, workflowVisible, notFoundFor, pathSubject, VisibleSet, type FrameContext, type StreamSeen, type Viewer } from "./bot-visibility.ts";
+import { frameForMember, memberBody, memberBot, routineVisible, startVisible, workflowVisible, notFoundFor, pathSubject, VisibleSet, type FrameContext, type StreamSeen, type Viewer } from "./bot-visibility.ts";
 
 const ADA: Viewer = { kind: "member", email: "ada@acme.test" };
 const BOSS: Viewer = { kind: "all" };
@@ -53,9 +53,9 @@ describe("a member limited to some departments", () => {
     expect(routineVisible({ groupId: "room-fin" }, limited)).toBe(false);
     expect(routineVisible({ botId: "sales", workflowBotIds: ["sales", "fin"] }, limited)).toBe(false);
     expect(workflowVisible({ steps: [{ kind: "bot", botId: "fin" }] }, limited)).toBe(false);
-    expect(webhookVisible({ botId: "fin" }, limited)).toBe(false);
-    expect(webhookVisible({ botId: "sales", groupId: "room-sales" }, limited)).toBe(true);
-    expect(webhookVisible({ botId: "sales", groupId: "room-fin" }, limited)).toBe(false);
+    expect(startVisible({ botId: "fin" }, limited, () => null)).toBe(false);
+    expect(startVisible({ botId: "sales", groupId: "room-sales" }, limited, () => null)).toBe(true);
+    expect(startVisible({ botId: "sales", groupId: "room-fin" }, limited, () => null)).toBe(false);
   });
 
   it("is told it may put a room only in a granted department", () => {
@@ -98,6 +98,8 @@ describe("live frames for a member limited to some departments", () => {
   const context = (visible: VisibleSet): FrameContext => ({
     visible,
     webhook: (id) => ({ "hook-fin": { botId: "fin" } } as Record<string, { botId: string; groupId?: string }>)[id],
+    appTrigger: () => undefined,
+    workflowBots: () => null,
     freshBot: (id) => ({ id, messages: [] }),
     freshGroup: (id) => ({ id, messages: [] }),
   });

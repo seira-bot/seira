@@ -41,9 +41,9 @@ function host(options: { runnerFile?: string | null; last?: string; writable?: b
   return { root, dir, data, request, finish: (text: string) => writeFileSync(join(dir, "status", "last"), text) };
 }
 
-function updater(box: ReturnType<typeof host>, options: { version?: string; check?: UpdateCheck; now?: () => number; turns?: number } = {}) {
+function updater(box: ReturnType<typeof host>, options: { version?: string; check?: UpdateCheck; now?: () => number; turns?: number; install?: "docker" | "npm" } = {}) {
   return createServerUpdater({
-    dir: box.dir, dataDir: box.data, install: "docker", version: options.version ?? "0.1.150",
+    dir: box.dir, dataDir: box.data, install: options.install ?? "docker", version: options.version ?? "0.1.150",
     check: async () => options.check ?? available, activeTurns: () => options.turns ?? 0, now: options.now ?? (() => NOW),
   });
 }
@@ -55,6 +55,10 @@ describe("what the host's runner wrote", () => {
     expect(parseRunner("layout=installer\ndir=/opt/seira\nheld=no\nrelease=yes\n")).toEqual({ layout: "installer", dir: "/opt/seira", held: false, release: true });
     expect(parseRunner("layout=compose\ndir=/srv/Seira/deploy\nheld=yes\nrelease=no\n")).toEqual({ layout: "compose", dir: "/srv/Seira/deploy", held: true, release: false });
     expect(parseRunner("layout=installer\ndir=/opt/seira\nheld=no\nrelease=unknown\n")).toMatchObject({ release: true });
+    expect(parseRunner("layout=service\ndir=/home/seira/.local\nheld=no\nrelease=yes\nunit=seira-two\n")).toEqual({ layout: "service", dir: "/home/seira/.local", held: false, release: true, unit: "seira-two" });
+    expect(parseRunner("layout=service\ndir=/home/seira/.local\nheld=yes\n")).toMatchObject({ held: true, unit: "seira" });
+    expect(parseRunner("layout=service\ndir=/home/seira/.local\nunit=a b;c\n")).toMatchObject({ unit: "seira" });
+    expect(parseRunner("layout=installer\ndir=/opt/seira\nunit=other\n")).not.toHaveProperty("unit");
     for (const bad of [null, "", "layout=podman\ndir=/opt/x", "layout=installer\ndir=relative", "layout=installer\ndir=/opt/x; rm -rf /"]) expect(parseRunner(bad), String(bad)).toBeNull();
     expect(parseRun("run=4\nstate=running\nat=1700000000\nran=1700000000\n")).toEqual({ run: 4, state: "running", at: 1_700_000_000_000 });
     expect(parseRun("run=4\nstate=done\nresult=rolled-back\nat=1700000000\n")).toEqual({ run: 4, state: "done", result: "rolled-back", at: 1_700_000_000_000 });
@@ -76,17 +80,44 @@ describe("what the host's runner wrote", () => {
   });
 });
 
+describe("the service runner's request folder", () => {
+  it("takes a request on an npm install", async () => {
+    const box = host({ runnerFile: "layout=service\ndir=/home/seira/.local\nheld=no\nrelease=yes\nunit=seira\n" });
+    const npm: UpdateCheck = { ...available, install: "npm", command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
+    const answer = await updater(box, { install: "npm", check: npm }).request(admin);
+    expect(answer.status).toBe(202);
+    expect(existsSync(box.request)).toBe(true);
+    const refused = await updater(host({ runnerFile: "layout=installer\ndir=/opt/seira\nheld=no\n" }), { install: "npm", check: npm }).request(admin);
+    expect(refused.status).toBe(409);
+  });
+});
+
 describe("the button's state", () => {
   const status = (patch: Partial<Parameters<typeof serverUpdateStatus>[0]>) =>
     serverUpdateStatus({ install: "docker", check: available, facts: runner, pending: null, version: "0.1.150", activeTurns: 2, now: NOW, ...patch });
 
   it("offers the button only on a Docker install whose host has the runner, and says the commands it stands for", () => {
     expect(status({})).toEqual({
-      mode: "button", current: "0.1.150", latest: "0.1.151", available: true, activeTurns: 2,
+      mode: "button", layout: "docker", current: "0.1.150", latest: "0.1.151", available: true, activeTurns: 2,
       command: "cd /opt/seira && sudo ./update.sh", rollback: "cd /opt/seira && sudo ./update.sh --rollback",
       logs: "cd /opt/seira && sudo docker compose logs --tail 50 seira", setup: "cd /opt/seira && sudo ./update-runner.sh --install",
     });
     expect(status({ facts: { ...runner, runner: { ...runner.runner!, held: true } } }).mode).toBe("held");
+  });
+
+  it("offers the button on an npm install whose host has the service runner, and never crosses the two layouts", () => {
+    const service: HostFacts = { ...runner, runner: { layout: "service", dir: "/home/seira/.local", held: false, release: true, unit: "seira" } };
+    const npm: UpdateCheck = { ...available, install: "npm", command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
+    expect(status({ install: "npm", check: npm, facts: service })).toEqual({
+      mode: "button", layout: "service", current: "0.1.150", latest: "0.1.151", available: true, activeTurns: 2,
+      command: "sudo seira-service-update --now", rollback: "sudo seira-service-update --rollback", logs: "sudo journalctl -u seira -n 50 --no-pager",
+      setup: "curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/v0.1.150/deploy/service-update-runner.sh -o service-update-runner.sh && sudo bash service-update-runner.sh --install",
+    });
+    const named = { ...service, runner: { ...service.runner!, unit: "seira-two", held: true } };
+    expect(status({ install: "npm", check: npm, facts: named })).toMatchObject({ mode: "held", logs: "sudo journalctl -u seira-two -n 50 --no-pager" });
+    expect(status({ install: "npm", check: npm, facts: { ...service, writable: false } })).toMatchObject({ mode: "command", command: "npm install -g @seira-bot/seira@0.1.151" });
+    expect(status({ install: "npm", check: npm, facts: runner })).toMatchObject({ mode: "command", command: "npm install -g @seira-bot/seira@0.1.151" });
+    expect(status({ install: "docker", facts: service })).toMatchObject({ mode: "command", command: "git pull && ./update.sh" });
   });
 
   it("never offers the button for a build of main: it says so, with the command that moves it to stable", () => {

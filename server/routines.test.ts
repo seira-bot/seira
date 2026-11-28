@@ -4576,6 +4576,19 @@ describe("a routine linked to a workflow", () => {
     }
   });
 
+  it("keeps the workflow link at load when the list of bots cannot be read whole, and leaves the list out", () => {
+    const schedule = { type: "interval" as const, everyMinutes: 60, anchorAt: start };
+    const linked = { id: "r1", name: "Morning", prompt: copy.prompt, target: "bot", botId: "ana", runOn: "seira", enabled: true, schedule, durationMinutes: 30, attachments: [], workflowId: "wf-1", createdAt: 1, updatedAt: 1, nextRunAt: start };
+    const lists: unknown[] = [undefined, [], "ana", ["ana", 7], ["ana", "bad id"], Array.from({ length: 51 }, (_, i) => `bot-${i}`)];
+    for (const list of lists) {
+      const loaded = loadRoutine({ ...linked, workflowBotIds: list } as unknown as Routine, start);
+      expect(loaded, JSON.stringify(list)).toMatchObject({ workflowId: "wf-1" });
+      expect(loaded?.workflowBotIds, JSON.stringify(list)).toBeUndefined();
+    }
+    expect(loadRoutine({ ...linked, workflowBotIds: ["ana", "ben"] } as unknown as Routine, start)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
+    expect(loadRoutine({ ...linked, workflowId: "bad id", workflowBotIds: ["ana"] } as unknown as Routine, start)?.workflowId).toBeUndefined();
+  });
+
   it("waits at load instead of being retried, and goes on to be ended by its workflow", async () => {
     const { h, startWorkflow, input } = setup();
     const routine = h.manager.create(input);

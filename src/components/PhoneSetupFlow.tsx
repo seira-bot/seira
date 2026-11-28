@@ -66,6 +66,7 @@ import {
   phonePairingManualCodeMode,
 } from "../lib/companion-state";
 import { ConnectionDetail } from "./ConnectionDetail";
+import { PhoneAppLink } from "./PhoneAppLink";
 import { PhoneFirewallNotes } from "./PhoneFirewallNotes";
 import { PhonePairingQr } from "./PhonePairingQr";
 import { PhoneSetupSignInRoutes } from "./PhoneSetupSignInRoutes";
@@ -1043,6 +1044,7 @@ export function PhoneSetupFlowView({ controller }: { controller: PhoneSetupContr
           <div className="mt-4 rounded-2xl bg-white p-3.5" aria-label={t("phone.code.qrAria")}><QRCodeSVG value={c.pairingLink} size={180} level="M" bgColor="#ffffff" fgColor="#111111" /></div>
           <p className="mt-3 text-[13px] text-ink-secondary">{t("phone.code.installAndScan", { app: productName() })}</p>
           <p className="mt-1 text-[12px] text-ink-tertiary">{t("phone.code.notCamera", { app: productName() })}</p>
+          <PhoneAppLink className="mt-1" />
         </>
       )}
       {!c.pairingExpired && manualCodeMode === "direct" && c.state?.pairing && (

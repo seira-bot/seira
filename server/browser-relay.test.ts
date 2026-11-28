@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { RelayPorts, RelayTimeout, captureFrame, relay, relayTarget, typeText } from "./browser-relay.ts";
+import { RelayPorts, RelayTimeout, captureFrame, relay, relayTarget, typeKeys, typeText } from "./browser-relay.ts";
 import { FakeRelay } from "./testing/fake-relay.ts";
 
 const relays: FakeRelay[] = [];
@@ -158,5 +158,27 @@ describe("typing over the relay", () => {
     await typeText(new RelayPorts(), daemon.target, "fake-S3cret!");
     expect(daemon.typed).toEqual(["fake-S3cret!"]);
     expect(daemon.commands).toEqual([{ action: "session_info" }, { action: "keyboard", subaction: "insertText", text: "fake-S3cret!" }]);
+  });
+
+  it("types each character as a keyDown carrying its text and a keyUp, over the relay only", async () => {
+    const daemon = await fake();
+    await typeKeys(new RelayPorts(), daemon.target, "aB!");
+    expect(daemon.commands.slice(1)).toEqual([
+      { action: "keyboard", eventType: "keyDown", key: "a", code: "KeyA", text: "a" },
+      { action: "keyboard", eventType: "keyUp", key: "a", code: "KeyA" },
+      { action: "keyboard", eventType: "keyDown", key: "B", code: "KeyB", text: "B" },
+      { action: "keyboard", eventType: "keyUp", key: "B", code: "KeyB" },
+      { action: "keyboard", eventType: "keyDown", key: "!", code: "Digit1", text: "!" },
+      { action: "keyboard", eventType: "keyUp", key: "!", code: "Digit1" },
+    ]);
+    expect(daemon.typed).toEqual([]);
+  });
+
+  it("fails without echoing the text when the browser refuses a key", async () => {
+    const daemon = await fake();
+    daemon.refuseKeys = true;
+    const failure = await typeKeys(new RelayPorts(), daemon.target, "fake-S3cret!").then(() => null, (error: Error) => error);
+    expect(failure?.message).toBe("The browser did not take the typing.");
+    expect(daemon.keys).toEqual([]);
   });
 });

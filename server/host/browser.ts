@@ -469,7 +469,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     return { session, spec: browserSessionSpec(engine.binaryPath, session, profileId, usesMyChrome(profileId) ? undefined : await browserEgress.open(session), cdpUrl) };
   }
   /** fill_login's reads and typing, on whichever engine runs the session. */
-  function loginInput(session: string, spec: Spec, env: NodeJS.ProcessEnv): Pick<FillLoginDeps, "engine" | "insertText" | "press" | "click"> {
+  function loginInput(session: string, spec: Spec, env: NodeJS.ProcessEnv): Pick<FillLoginDeps, "engine" | "insertText" | "typeKeys" | "press" | "click"> {
     if (chromeTarget(session, spec)) {
       const deps = chromeEngine.loginDeps(session);
       if (deps) return deps;

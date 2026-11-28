@@ -234,6 +234,7 @@ describe("phone setup flow", () => {
     // A stored address that has not answered (yet) does not hold the code.
     expect(relayServesPairing(withAddress, relayOn)).toBe(true);
     // Encrypted connection off (never admitted to the relay yet): a plain Wi-Fi code is not opened silently.
+    expect(relayServesPairing(withAddress, { ...relayOn, anywhere: "https" })).toBe(false);
     expect(relayServesPairing(withAddress, { ...relayOn, e2e: { enabled: false } })).toBe(false);
     expect(relayServesPairing(account("ready"), { ...relayOn, e2e: undefined })).toBe(false);
     // No Wi-Fi address: nothing to open the code on, so no dead end either.

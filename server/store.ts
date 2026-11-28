@@ -1268,7 +1268,7 @@ export class Store {
         BotRecord,
         "name" | "title" | "description" | "soul" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "mascotAccessories" | "modelSelection" | "section" | "cwd" | "visibility" | "toolScope" | "createdBy" | "reportsTo"
       >
-    > = {},
+    > & { approvalMode?: Exclude<ApprovalMode, "custom"> } = {},
     opts: {
       seedMessages?: boolean; id?: string; threadId?: string; beforeShown?: (bot: BotRecord) => void;
     } = {},
@@ -1291,7 +1291,7 @@ export class Store {
       ...(profile.mascotAccessories?.length ? { mascotAccessories: profile.mascotAccessories } : {}), ...(profile.mascotExpression ? { mascotExpression: profile.mascotExpression } : {}),
       ...(profile.mascotBody ? { mascotBody: profile.mascotBody } : {}),
       ...this.newBotSharing(profile.visibility, newBotOwner(profile)),
-      ...(toolScope.scope ? { toolScope: toolScope.scope } : {}),
+      ...(toolScope.scope ? { toolScope: toolScope.scope } : {}), ...(profile.approvalMode ? { approvalMode: profile.approvalMode, autoApprove: profile.approvalMode === "auto" } : {}),
       unread: false,
       modelSelection: this.newBotSelection(profile.modelSelection),
       resumeCursors: {},

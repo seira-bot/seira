@@ -921,6 +921,20 @@ describe("webhook that runs a workflow", () => {
     expect(patched.enabled).toBe(false);
   });
 
+  it("does not keep the workflow's steps as the instructions of a webhook that is detached", () => {
+    const h = harness();
+    const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
+    expect(webhook.prompt).toBe(copy.prompt);
+    const manager = linked(h);
+    const patched = manager.update(webhook.id, { workflowId: null, enabled: false })!;
+    expect(patched.prompt).toBe("");
+    expect(manager.list()[0]!.prompt).toBe("");
+    expect(linked(h).list()[0]!.prompt).toBe("");
+    // New instructions in the same edit are kept.
+    const again = manager.create({ name: "More", workflowId: "wf-1" }).webhook;
+    expect(manager.update(again.id, { workflowId: null, prompt: "Read the order" })!.prompt).toBe("Read the order");
+  });
+
   it("copies the steps again when they change", () => {
     const h = harness();
     let current = copy;

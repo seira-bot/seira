@@ -322,6 +322,11 @@ TYPED.set("\n", { code: "Enter", shift: false });
 TYPED.set("\t", { code: "Tab", shift: false });
 TYPED.set(" ", { code: "Space", shift: false });
 
+/** The physical key of the US layout that types a character, or undefined when the layout lacks it. */
+export function keyCodeFor(char: string): string | undefined {
+  return TYPED.get(char)?.code;
+}
+
 export interface Chord {
   modifiers: Modifier[];
   key: string;

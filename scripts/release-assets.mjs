@@ -121,17 +121,18 @@ export function judgeAssets({ assets, texts }) {
   return problems;
 }
 
+const macPackages = (version) => ["arm64.dmg", "x64.dmg", "arm64.zip", "x64.zip"].map((end) => `Seira-${version}-${end}`);
+
 const required = (version) => ({
   Linux: ["latest-linux.yml", "SHA256SUMS-linux-x64.txt", "Seira.AppImage", "Seira-amd64.deb", `Seira-${version}-x86_64.flatpak`],
   Windows: ["latest.yml", "SHA256SUMS-windows-x64.txt", "Seira-setup.exe"],
-  macOS: ["latest-mac.yml", "SHA256SUMS-mac.txt", "Seira.dmg", "Seira-intel.dmg"],
+  macOS: ["latest-mac.yml", "SHA256SUMS-mac.txt", "Seira.dmg", "Seira-intel.dmg", ...macPackages(version), ...macPackages(version).map((name) => `${name}.blockmap`)],
 });
-const MAC_ASSET = /(\.dmg|-(arm64|x64)\.zip)(\.blockmap)?$|^latest-mac\.yml$|^SHA256SUMS-mac\.txt$/;
 
-/** The required assets that the release lacks, as `{ platform, name }`. macOS is required only when the release has a macOS file. */
+/** The required assets that the release lacks, as `{ platform, name }`. Linux, Windows and macOS are all required. */
 export function missingForPublish(assets, tag) {
   const uploaded = new Set(assets.filter((asset) => asset.state === "uploaded").map((asset) => asset.name));
-  const platforms = assets.some((asset) => MAC_ASSET.test(asset.name)) ? ["Linux", "Windows", "macOS"] : ["Linux", "Windows"];
+  const platforms = ["Linux", "Windows", "macOS"];
   const names = required(String(tag).replace(/^v/, ""));
   return platforms.flatMap((platform) => names[platform].filter((name) => !uploaded.has(name)).map((name) => ({ platform, name })));
 }

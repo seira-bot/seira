@@ -392,7 +392,8 @@ export class AppTriggerManager {
       const previousConfig = JSON.stringify(trigger.config);
       Object.assign(trigger, {
         name,
-        prompt: linked ? linked.prompt : patch.prompt === undefined ? trigger.prompt : patch.prompt.trim(),
+        // A detached trigger no longer holds the workflow's steps as its instructions unless the edit brings new ones.
+        prompt: linked ? linked.prompt : patch.prompt === undefined ? (unlinked ? "" : trigger.prompt) : patch.prompt.trim(),
         ...(linked ? { botId: linked.botId, workflowId: linked.workflowId } : {}),
         runOn: patch.runOn ?? trigger.runOn,
         enabled: keepOff || unlinked ? false : patch.enabled ?? trigger.enabled,

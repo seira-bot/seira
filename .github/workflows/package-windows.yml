@@ -1,11 +1,20 @@
 # Seira Windows x64 installer, built on a GitHub-hosted Windows runner (docs/releasing.md).
 #
-# This workflow only builds. It cannot publish:
+# The `package` job only builds. It cannot publish:
 # - only a person with write access can start it (`workflow_dispatch`), so a fork pull request never runs it;
-# - the token can only read the repository, and no step reads a secret;
+# - its token can only read the repository, and no step reads a secret;
 # - it uses no dependency cache, so no other run can change what the package contains;
-# - it uploads the installer and the Microsoft Store package as two workflow artifacts. A maintainer attaches the
-#   installer to the release by hand and uploads the Store package to Partner Center by hand.
+# - it uploads the installer and the Microsoft Store package as two workflow artifacts. A maintainer uploads the Store package to Partner Center by hand.
+# For a `v*` tag, the `attach` job also uploads the five installer files to the draft release of that tag.
+# The `attach` job reads no secret. It runs only scripts/release-assets.mjs from the workflow commit, never code from the built commit.
+# The `commit` job finds the commit of the ref. The `gate` job runs scripts/release-gate.mjs on it, for a `v*` tag on `main` only.
+# A run that passes the gate does not wait.
+# A run that the gate flags waits for the wait timer of the `release-approval` environment. A maintainer can cancel it during the wait.
+# A run that the gate refuses does not attach anything.
+# The `attach` job runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
+# A re-run therefore never reuses the wait of an earlier attempt.
+# release.yml calls this workflow with `gated: true`, after it ran the same gate and the same wait on the same commit. The gate step then passes at once.
+# Another repository can call it, but it cannot use the environments or secrets of this repository. A manual start has no `gated` input.
 # scripts/ci-workflow.test.ts holds these rules.
 name: Package Windows
 
@@ -17,15 +26,116 @@ on:
         required: true
         default: v0.1.170
         type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: The release tag to build. It must match the version in package.json.
+        required: true
+        type: string
+      gated:
+        description: True when the caller already ran the release gate and the wait on this commit.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  commit:
+    name: find the commit to build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Find the commit of the ref
+        id: sha
+        shell: bash
+        env:
+          REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$REF" ] || [[ "$REF" == -* ]] || [[ "$REF" == *..* ]] || [[ "$REF" =~ [^A-Za-z0-9._/-] ]]; then
+            echo "::error::The ref is not a tag, branch or commit name."
+            exit 1
+          fi
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha) || {
+            echo "::error::The repository has no commit for this ref."
+            exit 1
+          }
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The commit id is not a 40-character SHA."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Ref \`$REF\` is commit \`$sha\`." >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    name: release gate
+    needs: commit
+    if: ${{ startsWith(inputs.ref, 'v') && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pass: ${{ steps.gate.outputs.pass }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Run the release gate
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
+          REF: ${{ inputs.ref }}
+          SHA: ${{ needs.commit.outputs.sha }}
+          GATED: ${{ inputs.gated }}
+        run: |
+          set -uo pipefail
+          if [ "${GATED:-}" = true ]; then
+            echo "pass=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            node scripts/release-gate.mjs --tag "$REF" --sha "$SHA" && status=0 || status=$?
+          else
+            node scripts/release-gate.mjs --sha "$SHA" && status=0 || status=$?
+          fi
+          case "$status" in
+            0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+
+  approval:
+    name: approval for a run that the gate flagged
+    needs: gate
+    if: ${{ needs.gate.outputs.pass == 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
+    steps:
+      - run: echo "The wait of the release-approval environment ended."
+
   package:
     name: Windows x64 installer
     runs-on: windows-2025
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         shell: bash
@@ -223,3 +333,59 @@ jobs:
           path: ${{ runner.temp }}/seira-windows-x64-store/
           if-no-files-found: error
           retention-days: 14
+
+  attach:
+    name: attach the Windows files to the release
+    needs: [commit, gate, approval, package]
+    if: ${{ !cancelled() && needs.package.result == 'success' && startsWith(inputs.ref, 'v') && github.ref == 'refs/heads/main' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/release-assets.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: seira-${{ needs.package.outputs.version }}-windows-x64
+          path: ${{ runner.temp }}/seira-windows-x64
+
+      - name: Check the downloaded files
+        shell: bash
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-windows-x64
+        run: |
+          set -euo pipefail
+          cd "$STAGE"
+          files=(
+            "Seira-$VERSION-setup.exe" "Seira-$VERSION-setup.exe.blockmap" latest.yml
+            Seira-setup.exe SHA256SUMS-windows-x64.txt
+          )
+          expected=$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+          found=$(find . -mindepth 1 -type f -printf '%P\n' | LC_ALL=C sort)
+          [ "$found" = "$expected" ] || { echo "::error::The artifact does not hold exactly the five expected files."; echo "$found"; exit 1; }
+          sha256sum -c SHA256SUMS-windows-x64.txt
+
+      - name: Upload the files to the draft release and check it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.ref }}
+          VERSION: ${{ needs.package.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-windows-x64
+        run: |
+          set -euo pipefail
+          [ "$TAG" = "v$VERSION" ] || { echo "::error::The ref $TAG is not v$VERSION."; exit 1; }
+          cd "$STAGE"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" upload "$TAG" \
+            "Seira-$VERSION-setup.exe" "Seira-$VERSION-setup.exe.blockmap" latest.yml \
+            Seira-setup.exe SHA256SUMS-windows-x64.txt \
+            --repo "$GITHUB_REPOSITORY"
+          node "$GITHUB_WORKSPACE/scripts/release-assets.mjs" check "$TAG" --repo "$GITHUB_REPOSITORY"

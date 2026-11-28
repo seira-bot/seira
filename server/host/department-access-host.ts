@@ -73,6 +73,17 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     }
   }
 
+  /** Whether department limits are set here: a member who cannot be named by address may be any limited person. An unreadable grant file counts as set. */
+  function limited(): boolean {
+    if (deps.elsewhere()) return false;
+    if (deps.access.unreadable) return true;
+    try {
+      return Object.keys(deps.access.all()).length > 0;
+    } catch {
+      return true;
+    }
+  }
+
   /** A department that any grant names. Its bots reach only bots of their own department. */
   function walled(section: string): boolean {
     if (deps.elsewhere()) return false;
@@ -310,7 +321,7 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     return chatsWith(grant, bot) && viewerSees({ kind: "member", email }, bot.visibility) ? null : `${email} can't chat with ${bot.name} here.`;
   }
 
-  return { grantFor, walled, wallBetween, view, change, refuses, sectionRefusal, relayRefusal, departmentsChanged, botDeleted, changed };
+  return { grantFor, limited, walled, wallBetween, view, change, refuses, sectionRefusal, relayRefusal, departmentsChanged, botDeleted, changed };
 }
 
 export type DepartmentAccessHost = ReturnType<typeof createDepartmentAccessHost>;

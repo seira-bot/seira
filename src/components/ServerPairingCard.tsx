@@ -17,6 +17,7 @@ import { Select } from "./Select";
 import { cn } from "@/lib/cn";
 import { TeamPhoneCard } from "./TeamPhoneCard";
 import { ComputerNameRow } from "./ComputerNameRow";
+import { PhoneAppLink } from "./PhoneAppLink";
 import { ServerRename, type RenameOutcome } from "./ServerRename";
 import { isPrivateHost, serverTransport } from "../../electron/server-address.mjs";
 
@@ -243,6 +244,7 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
                 {computerCode ? <p className="text-[14px] leading-5 text-ink">{t("devices.computers.typeCode", { app: productName() })}</p> : offer.url ? <>
                   <p className="text-[14px] leading-5 text-ink">{t("phone.code.installAndScan", { app: productName() })}</p>
                   <p className="text-[12px] leading-4 text-ink-secondary">{t("phone.code.notCamera", { app: productName() })}</p>
+                  <PhoneAppLink className="self-start leading-4" />
                 </> : <p className="text-[14px] leading-5 text-ink">{t("phone.code.typeThis", { app: productName() })}</p>}
               </div>
               {forOtherComputer && (

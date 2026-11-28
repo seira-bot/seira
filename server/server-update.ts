@@ -1,6 +1,6 @@
 // The server's half of the Update server button. A server in a container cannot replace its own image, so it only leaves
 // a file in the request folder its host gave it; root's deploy/update-runner.sh on the host sees the file, runs update.sh
-// as an owner would and writes how that ended into the status folder, which this container sees read-only.
+// as an owner would (an npm service does the same through deploy/service-update-runner.sh) and writes how that ended into the status folder, which this container sees read-only.
 //
 // SECURITY: the runner never reads the request file. Whatever is written here, the host runs root's copy of `update.sh`
 // with no argument but the install's folder: the stable version, only when the running image's own label is older, a
@@ -19,6 +19,8 @@ import { isNewerVersion, updateCommand, type InstallKind, type UpdateCheck } fro
 /** Where a Docker install mounts the two folders (deploy/install.sh's compose.yaml, update-runner.sh's override):
  * `request` (writable) and `status` (read-only). SEIRA_SERVER_UPDATE_DIR names another place. */
 export const SERVER_UPDATE_DIR = "/run/seira-update";
+/** Where an npm install's host runner (deploy/service-update-runner.sh) keeps the same two folders. */
+export const SERVICE_UPDATE_DIR = "/var/lib/seira-update";
 export const SERVER_UPDATE_DIR_ENV = "SEIRA_SERVER_UPDATE_DIR";
 /** One request per five minutes; the runner on the host keeps its own, shorter gap. */
 export const REQUEST_GAP_MS = 5 * 60_000;
@@ -35,7 +37,7 @@ export type HostResult = "updated" | "rolled-back" | "rollback-failed" | ServerU
 const RESULTS: readonly HostResult[] = ["updated", "rolled-back", "rollback-failed", ...REASONS];
 
 /** `release`: the running image is labelled with a released version (false for a build of main); true too while no container has run yet (`unknown`). */
-export interface HostRunner { layout: "installer" | "compose"; dir: string; held: boolean; release: boolean }
+export interface HostRunner { layout: "installer" | "compose" | "service"; dir: string; held: boolean; release: boolean; unit?: string }
 export interface HostRun { run: number; state: "running" | "done"; result?: HostResult; at: number; version?: string; detail?: string }
 export interface HostFacts {
   runner: HostRunner | null;
@@ -69,8 +71,12 @@ export function parseRunner(text: string | null): HostRunner | null {
   const f = fields(text);
   const layout = f.get("layout");
   const dir = f.get("dir");
-  if ((layout !== "installer" && layout !== "compose") || !dir || !/^\/[A-Za-z0-9/._-]{0,200}$/.test(dir)) return null;
-  return { layout, dir, held: f.get("held") === "yes", release: f.get("release") !== "no" };
+  if ((layout !== "installer" && layout !== "compose" && layout !== "service") || !dir || !/^\/[A-Za-z0-9/._-]{0,200}$/.test(dir)) return null;
+  const unit = f.get("unit");
+  return {
+    layout, dir, held: f.get("held") === "yes", release: f.get("release") !== "no",
+    ...(layout === "service" ? { unit: unit && /^[A-Za-z0-9@._-]{1,64}$/.test(unit) ? unit : "seira" } : {}),
+  };
 }
 
 export function parseRun(text: string | null): HostRun | null {
@@ -140,6 +146,8 @@ export function runOf(pending: PendingUpdate | null, last: HostRun | null, versi
   return { ...base, outcome: "not-started" };
 }
 
+const SERVICE_COMMAND = "sudo seira-service-update --now";
+
 export function serverUpdateStatus(input: {
   install: InstallKind;
   check: UpdateCheck | null;
@@ -154,19 +162,25 @@ export function serverUpdateStatus(input: {
   const { install, check, facts, pending, version, now } = input;
   const base = { current: version, available: check?.available === true, ...(check?.latest ? { latest: check.latest } : {}), activeTurns: input.activeTurns };
   if (install === "desktop" || install === "managed") return { ...base, mode: "none" };
-  const runner = install === "docker" && facts.writable ? facts.runner : null;
+  const runner = facts.writable && facts.runner && (install === "docker" ? facts.runner.layout !== "service" : install === "npm" && facts.runner.layout === "service") ? facts.runner : null;
+  const service = runner?.layout === "service";
   const run = runOf(pending, facts.last, version, now);
   const retryAt = pending && now - pending.at < REQUEST_GAP_MS ? pending.at + REQUEST_GAP_MS : undefined;
   const extra = { ...(run ? { run } : {}), ...(retryAt ? { retryAt } : {}) };
   if (runner && !runner.release) {
-    return { ...base, ...extra, mode: "command", why: "unreleased", command: `cd ${runner.dir} && sudo ./update.sh` };
+    return { ...base, ...extra, mode: "command", why: "unreleased", command: service ? SERVICE_COMMAND : `cd ${runner.dir} && sudo ./update.sh` };
   }
   if (runner && input.followsStable !== false) {
-    const own = {
-      command: `cd ${runner.dir} && sudo ./update.sh`, rollback: `cd ${runner.dir} && sudo ./update.sh --rollback`,
-      logs: `cd ${runner.dir} && sudo docker compose logs --tail 50 seira`, setup: `cd ${runner.dir} && sudo ./update-runner.sh --install`,
-    };
-    return { ...base, ...own, ...extra, mode: runner.held ? "held" : "button" };
+    const own = service
+      ? {
+        command: SERVICE_COMMAND, rollback: "sudo seira-service-update --rollback", logs: `sudo journalctl -u ${runner.unit ?? "seira"} -n 50 --no-pager`,
+        setup: `curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/v${version}/deploy/service-update-runner.sh -o service-update-runner.sh && sudo bash service-update-runner.sh --install`,
+      }
+      : {
+        command: `cd ${runner.dir} && sudo ./update.sh`, rollback: `cd ${runner.dir} && sudo ./update.sh --rollback`,
+        logs: `cd ${runner.dir} && sudo docker compose logs --tail 50 seira`, setup: `cd ${runner.dir} && sudo ./update-runner.sh --install`,
+      };
+    return { ...base, ...own, ...extra, layout: service ? "service" : "docker", mode: runner.held ? "held" : "button" };
   }
   const command = check?.command ?? updateCommand(install)?.command;
   return { ...base, ...extra, mode: "command", ...(command ? { command } : {}) };
