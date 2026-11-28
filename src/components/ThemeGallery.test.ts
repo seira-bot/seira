@@ -19,7 +19,8 @@ describe("ThemeGallery", () => {
     expect(html.match(/data-popular-theme="/g)).toHaveLength(10);
     for (const entry of POPULAR_THEMES) {
       expect(html).toContain(`data-popular-theme="${entry.id}"`);
-      expect(html).toContain(`${entry.variants.dark} · ${entry.variants.light}`);
+      const short = (variant: string) => (variant.startsWith(`${entry.name} `) ? variant.slice(entry.name.length + 1) : variant);
+      expect(html).toContain(`${short(entry.variants.dark)} · ${short(entry.variants.light)}`);
     }
     for (const skin of SKINS) expect(html).toContain(`>${skin.name}<`);
     expect(html.match(/Light only|Dark only/g)).toHaveLength(SKINS.length);

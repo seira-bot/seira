@@ -10,6 +10,8 @@ import { SettingsGroup, SettingsRows } from "./SettingsPrimitives";
 import { SkinPicker } from "./SkinPicker";
 import { ThemePreview } from "./ThemePreview";
 
+const variantLabel = (name: string, variant: string) => (variant.startsWith(`${name} `) ? variant.slice(name.length + 1) : variant);
+
 function PopularCard({ entry, selected, mode }: { entry: PopularTheme; selected: boolean; mode: "light" | "dark" }) {
   const { dark, light } = entry.theme;
   return (
@@ -24,7 +26,7 @@ function PopularCard({ entry, selected, mode }: { entry: PopularTheme; selected:
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13px] leading-[18px] text-ink">{entry.name}</span>
         <span className="flex items-center gap-1.5 text-[11px] leading-4 text-ink-tertiary">
-          <span className="truncate">{`${entry.variants.dark} · ${entry.variants.light}`}</span>
+          <span className="truncate">{`${variantLabel(entry.name, entry.variants.dark)} · ${variantLabel(entry.name, entry.variants.light)}`}</span>
           <span aria-hidden="true" className="ml-auto flex shrink-0 gap-1">
             <span className="size-2 rounded-full ring-1 ring-hairline" style={{ background: dark?.canvas }} />
             <span className="size-2 rounded-full ring-1 ring-hairline" style={{ background: light?.canvas }} />
