@@ -1,5 +1,6 @@
 // Refuses a release while a P0 issue is open, or while a draft or triage security advisory of severity high or critical
-// has no patched version that covers the release version. It only reads from GitHub, through `gh api`.
+// has a vulnerable version range that covers the release version and no patched version that covers it.
+// A range that does not parse gives a warning, not a refusal. It only reads from GitHub, through `gh api`.
 // It prints the number of each blocking issue and the id and severity of each blocking advisory, never an advisory description.
 // Exit status: 0 nothing blocks the release, 1 something blocks it, 2 wrong use or an API error.
 import { execFileSync } from "node:child_process";
@@ -46,6 +47,23 @@ const compare = (a, b) => {
   return 0;
 };
 
+const CONSTRAINT = /^\s*(>=|>|<=|<|==|=)?\s*v?(\d+\.\d+\.\d+)\s*$/;
+
+const holds = (operator, order) => {
+  switch (operator) {
+    case ">":
+      return order > 0;
+    case ">=":
+      return order >= 0;
+    case "<":
+      return order < 0;
+    case "<=":
+      return order <= 0;
+    default:
+      return order === 0;
+  }
+};
+
 /**
  * True when one entry of the patched versions covers `version`. The entries are separated by commas.
  * A bare version or `>= x` covers every version from x. `> x` and `= x` work as written.
@@ -55,42 +73,58 @@ export function versionCovers(patched, version) {
   const release = parts(version);
   if (!release || typeof patched !== "string") return false;
   return patched.split(",").some((entry) => {
-    const match = /^\s*(>=|>|==|=)?\s*v?(\d+\.\d+\.\d+)\s*$/.exec(entry);
-    if (!match) return false;
-    const order = compare(release, parts(match[2]));
-    switch (match[1]) {
-      case ">":
-        return order > 0;
-      case "=":
-      case "==":
-        return order === 0;
-      default:
-        return order >= 0;
-    }
+    const match = CONSTRAINT.exec(entry);
+    if (!match || match[1]?.startsWith("<")) return false;
+    return holds(match[1] ?? ">=", compare(release, parts(match[2])));
   });
 }
 
-/** An advisory is patched for `version` when it has a vulnerability and every vulnerability has a patched version that covers it. */
-export function advisoryPatched(advisory, version) {
-  const vulnerabilities = advisory.vulnerabilities ?? [];
-  return vulnerabilities.length > 0 && vulnerabilities.every((item) => versionCovers(item.patched_versions, version));
+/**
+ * True when the vulnerable version range covers `version`, false when it does not, null when it does not parse.
+ * The constraints are separated by commas, and all of them must hold. A bare version names that version only.
+ */
+export function rangeCovers(range, version) {
+  const release = parts(version);
+  if (!release || typeof range !== "string" || range.trim() === "") return null;
+  let covers = true;
+  for (const entry of range.split(",")) {
+    const match = CONSTRAINT.exec(entry);
+    if (!match) return null;
+    if (!holds(match[1] ?? "=", compare(release, parts(match[2])))) covers = false;
+  }
+  return covers;
 }
 
-/** The blockers as plain lines. `issues` are open issues with the P0 label, `advisories` carry a `state` field. */
+/**
+ * The blockers and the warnings as plain lines. `issues` are open issues with the P0 label, `advisories` carry a `state` field.
+ * An advisory blocks when one vulnerability has a range that covers `version` and no patched version that covers it.
+ * An advisory with no vulnerability, or with a range that does not parse, gives a warning.
+ */
 export function judgeBlockers({ issues, advisories, version }) {
-  const lines = [];
+  const blocks = [];
+  const warnings = [];
   for (const issue of issues) {
     if (issue.pull_request) continue;
-    lines.push(`issue #${issue.number} has the label ${BLOCKING_LABEL}`);
+    blocks.push(`issue #${issue.number} has the label ${BLOCKING_LABEL}`);
   }
   for (const advisory of advisories) {
     if (!OPEN_ADVISORY_STATES.includes(advisory.state)) continue;
     const severity = String(advisory.severity ?? "").toLowerCase();
     if (!BLOCKING_SEVERITIES.has(severity)) continue;
-    if (advisoryPatched(advisory, version)) continue;
-    lines.push(`advisory ${advisory.ghsa_id} (${severity}, ${advisory.state}) has no patched version that covers ${version}`);
+    const vulnerabilities = advisory.vulnerabilities ?? [];
+    let blocked = false;
+    let unknown = vulnerabilities.length === 0;
+    for (const item of vulnerabilities) {
+      if (versionCovers(item.patched_versions, version)) continue;
+      const covers = rangeCovers(item.vulnerable_version_range, version);
+      if (covers === true) blocked = true;
+      else if (covers === null) unknown = true;
+    }
+    const name = `advisory ${advisory.ghsa_id} (${severity}, ${advisory.state})`;
+    if (blocked) blocks.push(`${name} affects ${version} and has no patched version that covers it`);
+    else if (unknown) warnings.push(`${name} has no version range that parses, so it does not block ${version}`);
   }
-  return lines;
+  return { blocks, warnings };
 }
 
 async function paged(api, path) {
@@ -110,13 +144,14 @@ export async function releaseBlockers({ api, repo = "owner/name", version, log =
     const found = await paged(api, `repos/${repo}/security-advisories?state=${state}`);
     advisories.push(...found.map((advisory) => ({ ...advisory, state })));
   }
-  const lines = judgeBlockers({ issues, advisories, version });
-  for (const line of lines) log(`FAIL ${line}`);
-  if (lines.length > 0) {
+  const { blocks, warnings } = judgeBlockers({ issues, advisories, version });
+  for (const line of warnings) log(`warn ${line}`);
+  for (const line of blocks) log(`FAIL ${line}`);
+  if (blocks.length > 0) {
     log(`Release ${version} is blocked.`);
     return 1;
   }
-  log(`ok   no open ${BLOCKING_LABEL} issue and no unpatched high or critical advisory block release ${version}`);
+  log(`ok   no open ${BLOCKING_LABEL} issue and no unpatched high or critical advisory blocks release ${version}`);
   return 0;
 }
 

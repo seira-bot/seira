@@ -53,7 +53,7 @@ rest, on `main` only:
 | `ci-proof` | Waits up to 120 minutes for a successful `CI` run on that tree. |
 | `gate` | Runs the [release gate](ci.md#the-release-gate). A run that passes does not wait. |
 | `approval` | Runs only when the gate flags the run. It waits 6 hours in `release-approval`. |
-| `blockers` | Stops the release while a `P0` issue is open, or while a high or critical security advisory has no patched version that covers the release version. |
+| `blockers` | Stops the release while a `P0` issue is open, or while a high or critical security advisory has a version range that covers the release version and no patched version that covers it. |
 | `tag` | Creates the annotated tag on the release commit, then runs the preflight on the tag. |
 | `draft` | Creates the draft release, and lists the platforms that are already on it. |
 | `linux`, `flatpak`, `linux-attach` | Build the Linux packages and the Flatpak bundle, then attach them to the draft. |
@@ -64,7 +64,11 @@ rest, on `main` only:
 - A flagged run waits 6 hours. A maintainer can cancel the run during the
   wait. The run summary of the `gate` job shows why the gate flagged the run.
 - A blocker stops the release before the tag exists. Close the `P0` issue, or
-  publish the patched version of the advisory. Then start the workflow again.
+  set the patched version or the correct version range on the advisory. Then
+  start the workflow again.
+- An advisory whose version range does not parse, or that names no
+  vulnerability, does not stop the release. The `blockers` job prints a warning
+  with its id. Write the range in the GitHub form, for example `>= 0.1.170`.
 - Every job is safe to run again. A job that finds its work already done does
   nothing. A platform whose update feed is on the draft is not built again.
 - To continue a release that stopped, open **Actions → Release → Run workflow**

@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { advisoryPatched, judgeBlockers, releaseBlockers, versionCovers } from "./release-blockers.mjs";
+import { judgeBlockers, rangeCovers, releaseBlockers, versionCovers } from "./release-blockers.mjs";
 
 interface Advisory {
   ghsa_id: string;
   severity: string;
   description?: string;
   summary?: string;
-  vulnerabilities?: { patched_versions?: string | null }[];
+  vulnerabilities?: { patched_versions?: string | null; vulnerable_version_range?: string | null }[];
 }
 
 interface World {
@@ -21,12 +21,18 @@ interface World {
   fail?: "issues" | "advisories";
 }
 
-const advisory = (id: string, severity: string, patched: string | null | undefined = undefined, extra: Partial<Advisory> = {}): Advisory => ({
+const advisory = (
+  id: string,
+  severity: string,
+  patched: string | null | undefined = undefined,
+  extra: Partial<Advisory> = {},
+  range: string | null = ">= 1.0.0",
+): Advisory => ({
   ghsa_id: id,
   severity,
   description: "SECRET DETAILS OF THE FLAW",
   summary: "SECRET SUMMARY",
-  vulnerabilities: [{ patched_versions: patched }],
+  vulnerabilities: [{ patched_versions: patched, vulnerable_version_range: range }],
   ...extra,
 });
 
@@ -92,7 +98,12 @@ describe("release blockers", () => {
   });
 
   it("blocks when only one of two vulnerabilities has a covering patch", async () => {
-    const mixed = advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: [{ patched_versions: "1.1.0" }, { patched_versions: null }] });
+    const mixed = advisory("GHSA-aaaa-bbbb-cccc", "high", null, {
+      vulnerabilities: [
+        { patched_versions: "1.1.0", vulnerable_version_range: ">= 1.0.0" },
+        { patched_versions: null, vulnerable_version_range: ">= 1.0.0" },
+      ],
+    });
     expect((await run({ draft: [mixed] })).code).toBe(1);
   });
 
@@ -124,6 +135,53 @@ describe("release blockers", () => {
     expect(result.out).not.toContain("SECRET");
   });
 
+  it("blocks on an open-ended range that covers the release", async () => {
+    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, ">= 0.1.170")] }, "0.1.197");
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("FAIL advisory GHSA-aaaa-bbbb-cccc (high, draft) affects 0.1.197");
+  });
+
+  it("passes a closed range that ends below the release", async () => {
+    const result = await run({ triage: [advisory("GHSA-aaaa-bbbb-cccc", "critical", null, {}, ">= 0.1.170, <= 0.1.194")] }, "0.1.197");
+    expect(result.code).toBe(0);
+    expect(result.out).not.toContain("GHSA-aaaa-bbbb-cccc");
+  });
+
+  it("passes a range that names one older version", async () => {
+    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, "0.1.196")] }, "0.1.197")).code).toBe(0);
+  });
+
+  it("warns and passes when the range does not parse", async () => {
+    for (const range of ["Post-merge main at 5cafcf8e", "", null]) {
+      const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, {}, range)] }, "0.1.197");
+      expect(result.code).toBe(0);
+      expect(result.out).toContain("warn advisory GHSA-aaaa-bbbb-cccc (high, draft)");
+      expect(result.out).not.toContain("FAIL");
+    }
+  });
+
+  it("warns and passes when an advisory names no vulnerability", async () => {
+    const result = await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", null, { vulnerabilities: [] })] });
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("warn advisory GHSA-aaaa-bbbb-cccc");
+  });
+
+  it("passes an open-ended range when the patched version covers the release", async () => {
+    expect((await run({ draft: [advisory("GHSA-aaaa-bbbb-cccc", "high", "0.1.197", {}, ">= 0.1.170")] }, "0.1.197")).code).toBe(0);
+  });
+
+  it("blocks when one vulnerability blocks and another does not parse", async () => {
+    const mixed = advisory("GHSA-aaaa-bbbb-cccc", "high", null, {
+      vulnerabilities: [
+        { patched_versions: null, vulnerable_version_range: "free text" },
+        { patched_versions: null, vulnerable_version_range: "< 2.0.0" },
+      ],
+    });
+    const result = await run({ draft: [mixed] });
+    expect(result.code).toBe(1);
+    expect(result.out).not.toContain("warn");
+  });
+
   it("throws on an API error, so the caller exits with 2", async () => {
     await expect(run({ fail: "issues" })).rejects.toThrow("HTTP 500");
     await expect(run({ fail: "advisories" })).rejects.toThrow("HTTP 403");
@@ -146,14 +204,25 @@ describe("pure parts", () => {
     expect(versionCovers(patched as never, version)).toBe(expected);
   });
 
-  it("needs a vulnerability to call an advisory patched", () => {
-    expect(advisoryPatched({ vulnerabilities: [] }, "1.0.0")).toBe(false);
-    expect(advisoryPatched({}, "1.0.0")).toBe(false);
+  it.each([
+    [">= 0.1.170", "0.1.197", true],
+    [">= 0.1.170, <= 0.1.194", "0.1.197", false],
+    [">= 0.1.170, < 0.1.198", "0.1.197", true],
+    ["0.1.196", "0.1.197", false],
+    ["= 0.1.197", "0.1.197", true],
+    ["> 0.1.197", "0.1.197", false],
+    ["<= 0.1.197", "0.1.197", true],
+    ["Post-merge main at 5cafcf8e", "0.1.197", null],
+    [">= 0.1.170, later", "0.1.197", null],
+    ["", "0.1.197", null],
+    [null, "0.1.197", null],
+  ])("rangeCovers(%s, %s): %s", (range, version, expected) => {
+    expect(rangeCovers(range as never, version)).toBe(expected);
   });
 
   it("ignores an advisory that is not draft or triage", () => {
-    const lines = judgeBlockers({ issues: [], advisories: [{ ...advisory("GHSA-aaaa-bbbb-cccc", "high"), state: "published" }], version: "1.0.0" });
-    expect(lines).toEqual([]);
+    const result = judgeBlockers({ issues: [], advisories: [{ ...advisory("GHSA-aaaa-bbbb-cccc", "high"), state: "published" }], version: "1.0.0" });
+    expect(result).toEqual({ blocks: [], warnings: [] });
   });
 });
 
