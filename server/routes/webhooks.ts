@@ -43,6 +43,9 @@ export function createWebhookRoutes({ webhooks, ingress, visible, workflowGate }
     const id = match[1]!;
     const known = webhooks.list().find((webhook) => webhook.id === id);
     if (known && !webhookVisible(known, visible(auth))) return json(res, 404, { error: "no such webhook" });
+    // Security: the workflow a webhook runs now must pass the gate on every by-id request, not only when the body changes it.
+    const heldBack = known?.workflowId ? workflowGate?.(auth, {}, known.workflowId) : null;
+    if (heldBack) return json(res, heldBack.status, { error: heldBack.status === 404 ? "no such webhook" : heldBack.error });
     if (match[2] === "test" && method === "POST") {
       const result = webhooks.test(id, await readBody(req));
       return result ? json(res, 202, result) : json(res, 404, { error: "no such webhook" });

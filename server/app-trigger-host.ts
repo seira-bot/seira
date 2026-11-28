@@ -170,6 +170,11 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       const match = path.match(/^\/api\/app-triggers\/([\w-]+)(?:\/(test))?$/);
       if (!match) return PASS;
       const id = match[1]!;
+      const current = manager.get(id);
+      // Security: a hidden bot, or a workflow this person may not change, answers as a missing automation on every by-id request.
+      if (current && !deps.visibleBot(auth, current.botId)) return json(res, 404, { error: "no such automation" });
+      const heldBack = current?.workflowId ? deps.workflowGate?.(auth, {}, current.workflowId) : null;
+      if (heldBack) return json(res, heldBack.status, { error: heldBack.status === 404 ? "no such automation" : heldBack.error });
       if (match[2] === "test" && method === "POST") {
         const result = await manager.runNow(id);
         return result ? json(res, 202, result) : json(res, 404, { error: "no such automation" });
@@ -177,7 +182,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
       if (!match[2] && method === "PATCH") {
         const body = (await readBody(req)) as Record<string, unknown>;
         if (typeof body.workflowId === "string" || body.workflowId === null) {
-          const refused = deps.workflowGate?.(auth, body, manager.get(id)?.workflowId);
+          const refused = deps.workflowGate?.(auth, body, current?.workflowId);
           if (refused) return json(res, refused.status, { error: refused.error });
         }
         const patch: AppTriggerPatch = {
