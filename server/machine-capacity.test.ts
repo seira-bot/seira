@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { botsAtOnce, capacityCardLine, capacityHoldText, capacityNoteText, readMachineSpec, taskFit, TASK_KINDS, teamCapacity, type MachineSpec, type TaskKind } from "./machine-capacity.ts";
-import { MACHINE_TASK_KINDS } from "./drivers/agents-usage-tool.ts";
+import { BOT_AT_WORK_BYTES, botsAtOnce, capacityCardLine, capacityHoldText, capacityNoteText, readMachineSpec, taskFit, TASK_KINDS, teamCapacity, type MachineSpec, type TaskKind } from "./machine-capacity.ts";
+import { ENGINE_DEFAULT_BYTES } from "./engine-memory.ts";
 import type { BudgetSource } from "./machine-room.ts";
 
 const GB = 1024 ** 3, MB = 1024 ** 2;
@@ -19,6 +19,9 @@ describe("bots at the same time (AC-01)", () => {
   it("is at least 1", () => {
     expect(botsAtOnce(0)).toBe(1);
     expect(botsAtOnce(100 * MB)).toBe(1);
+  });
+  it("counts a bot at work as the engine size the turn gate uses", () => {
+    expect(BOT_AT_WORK_BYTES).toBe(ENGINE_DEFAULT_BYTES);
   });
 });
 
@@ -75,9 +78,8 @@ describe("the fit of a heavy job (AC-08, AC-09)", () => {
     expect(taskFit(small, "more_bots", { botsNow: 20, count: 20 }).verdict).toBe("too_small");
     expect(taskFit(spec({ botMemoryBytes: null }), "more_bots", { count: 3 }).verdict).toBe("unknown");
   });
-  it("has one lighter way for every kind, and the tool lists the same kinds", () => {
+  it("has one lighter way for every kind", () => {
     for (const task of TASK_KINDS) expect(taskFit(spec(), task).lighter.length).toBeGreaterThan(10);
-    expect(MACHINE_TASK_KINDS).toEqual([...TASK_KINDS]);
   });
 });
 

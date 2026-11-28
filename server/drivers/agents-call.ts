@@ -540,7 +540,8 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
         ...(args.capacity_ok === true ? { capacityOk: true } : {}),
       }),
     });
-    if (capacityHeld(r)) return capacityHeld(r)!;
+    const held = capacityHeld(r);
+    if (held) return held;
     if (r.state === "pending") {
       return { text: `One review card is visible: ${String(r.title)}. @${botName} has not been created yet. End this turn; the decision and structured result resume you automatically once. Do not ask again, poll, or repeat this request.` };
     }

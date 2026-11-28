@@ -4,9 +4,12 @@ import { statfsSync } from "node:fs";
 
 import { defaultBotBudget } from "./bot-memory-budget.ts";
 import { botShare, nodeBudgetSource, type BudgetSource } from "./machine-room.ts";
+import { TASK_KINDS, type TaskKind } from "./machine-task-kinds.ts";
+
+export { TASK_KINDS, type TaskKind };
 
 const GB = 1024 ** 3;
-/** One engine at work with its MCP servers; equals ENGINE_DEFAULT_BYTES in engine-memory.ts, which pulls in the process gate. */
+/** One engine at work with its MCP servers. */
 export const BOT_AT_WORK_BYTES = 700 * 1024 ** 2;
 
 export type OsName = "linux" | "windows" | "macos" | "other";
@@ -59,8 +62,6 @@ export function teamCapacity(spec: MachineSpec, botsAfter: number): TeamCapacity
   return { verdict: botsAfter <= 2 * atOnce ? "ok" : botsAfter <= 4 * atOnce ? "tight" : "over", botsAtOnce: atOnce, botsAfter, spec };
 }
 
-export const TASK_KINDS = ["tests", "e2e_tests", "build", "mobile_build", "docker", "video", "local_model", "browsers", "large_files", "more_bots"] as const;
-export type TaskKind = (typeof TASK_KINDS)[number];
 export type FitVerdict = "ok" | "tight" | "too_small" | "unknown";
 
 export interface TaskFit {
