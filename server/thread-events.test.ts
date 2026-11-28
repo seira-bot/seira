@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -49,6 +49,33 @@ describe("readThreadEvents", () => {
     ]);
     expect(page.entries[1]).toMatchObject({ kind: "native", data: { dir: "out", msg: { type: "user" } } });
     expect(page.entries[0]).toMatchObject({ kind: "runtime", data: { eventId: "e1" } });
+  });
+
+  it("masks a native line that was written before the masking rule existed", () => {
+    const eventsDir = tmp();
+    const nativeDir = tmp();
+    writeFileSync(
+      join(nativeDir, "t1.ndjson"),
+      line({
+        at: "2026-08-17T10:00:01.000Z",
+        dir: "out",
+        source: "acp.session/new",
+        msg: {
+          params: {
+            mcpServers: [
+              { name: "ext", command: "npx", args: ["--api-key", "synthetic-old-1"], url: "https://mcp.example.com/sse?k=synthetic-old-2", env: [{ name: "DB_PASS", value: "synthetic-old-3" }], headers: [{ name: "X-Id", value: "synthetic-old-4" }] },
+              { name: "agents", env: [{ name: "SEIRA_BOT_ID", value: "bot-123" }] },
+            ],
+          },
+        },
+      }),
+    );
+    const text = JSON.stringify(readThreadEvents({ eventsDir, nativeDir, threadId: "t1" }));
+    for (const secret of ["synthetic-old-1", "synthetic-old-2", "synthetic-old-3", "synthetic-old-4"]) expect(text).not.toContain(secret);
+    expect(text).toContain("bot-123");
+    expect(text).toContain("mcp.example.com");
+    // The file on disk is not rewritten.
+    expect(readFileSync(join(nativeDir, "t1.ndjson"), "utf8")).toContain("synthetic-old-3");
   });
 
   it("keeps a runtime notice, which reports without failing the turn", () => {

@@ -1,7 +1,7 @@
 // A sign-in the person asked for, where the site emails a one-time code: a scripted bot reads it from the person's own
 // mailbox (a stand-in MCP server) and types it into the site (a happy-dom page behind a stand-in agent-browser). Nothing
 // reaches a real browser, a real mailbox, the user's data or port 8799.
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { removeTempDir } from "./testing/cleanup.ts";
 import { FakeLoginPage } from "./testing/fake-login-page.ts";
 import { freePortBlock } from "./testing/ports.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const FAKE_MCP = fileURLToPath(new URL("./testing/fake-mcp-server.ts", import.meta.url));
 const SHOP = "https://shop.example.test";
@@ -96,8 +97,7 @@ else bridge("/engine", { args }).then((text) => { process.stdout.write(text); pr
   const fixture = await launchVerificationServer({}, undefined, undefined, { binaryPath, executablePath: join(tools, "chrome") }, undefined, { scripted: true });
   const base = fixture.info.url;
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const evidence = () => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(base + path, {
       method, headers: { "content-type": "application/json", origin: base },

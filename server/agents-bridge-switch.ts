@@ -14,12 +14,12 @@ import { decodeInjectId } from "./drivers/local-inject.ts";
 import { onThisNetwork } from "./drivers/openai-compat.ts";
 import { claudeCliSupports, parseClaudeCliVersion, resolveClaudeConfigDir } from "./drivers/claude.ts";
 import { claudeToolSearchOn, claudeToolSearchSetting } from "./drivers/claude-tool-search.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 
 export { TOOL_BRIDGE_ENV };
 
 /** The command that starts a turn's agents proxy. */
-export const agentsProxyLaunch = () => ({ command: process.execPath, args: [SPAWNED_PROXIES.agents] });
+export const agentsProxyLaunch = () => ({ command: ownNode(), args: [SPAWNED_PROXIES.agents] });
 
 /** Every agents proxy's starting environment. The bridge is always set, never inherited: an engine may
  * hand its MCP children this server's environment, where SEIRA_AGENTS_TOOL_BRIDGE=1 is the operator switch. */

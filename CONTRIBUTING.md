@@ -11,6 +11,31 @@ Do not report a security problem in a public issue. Use
 [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new)
 as [SECURITY.md](SECURITY.md) explains.
 
+## Take an issue
+
+An issue with the label `P2` or `P3` is open only to people for 24 hours after triage.
+It has the label `human-window` during that time.
+After that time, you can still take it if nobody works on it.
+
+1. Comment `/take` on the issue. The comment must contain only that line.
+2. Open a draft pull request that says `Closes #<number>` within 72 hours.
+3. Comment `/untake` if you stop. The issue then goes back to the pool.
+
+A deadline on a weekend moves to Monday 12:00 UTC.
+We send a reminder 24 hours before the deadline.
+After the deadline, the issue goes back to the pool.
+
+You can hold one open claim at a time. After your first merged pull request, you can hold two.
+
+An issue with the label `size: L`, `needs-security-review`, or `area: ci` needs a maintainer.
+
+### Assigned issues
+
+An assigned issue needs a draft pull request within 7 days.
+A bot reminds the assignees after 5 days.
+The bot unassigns them after 7 days, at least 2 days after the reminder.
+This rule applies to maintainers too.
+
 ## Send a pull request
 
 1. For a large change, open an issue first and agree on the approach.
@@ -39,6 +64,18 @@ You need Node 24+ and pnpm. To chat with a bot, you also need a logged-in
 The code rules are in the [code guide](docs/contributing.md): repo map, tests,
 data format, provider drivers, platform rules, and CI. UI changes follow
 [DESIGN.md](DESIGN.md).
+
+### Review and stalled pull requests
+
+Maintainers give a first review within 24 hours after a pull request is ready.
+After 24 hours without a maintainer response, a bot adds `needs-review` and asks the maintainers.
+After 48 hours, the bot asks again.
+
+A pull request waits for its author when it is a draft or when a review asked for changes.
+After 7 days, a bot reminds the author.
+After 14 days, the issues that it closes become free for other people.
+The pull request gets the label `stalled` and stays open.
+Push a change to continue.
 
 ## How a change lands
 

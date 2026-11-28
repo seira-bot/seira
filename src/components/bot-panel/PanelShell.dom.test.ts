@@ -21,6 +21,7 @@ vi.mock("@/state/team-people", async (importOriginal) => ({
   useTeamPeople: () => fixture.team,
 }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => false, readAdvancedMode: () => false, setAdvancedMode: vi.fn() }));
+vi.mock("./BotTodos", () => ({ BotTodos: () => null }));
 vi.mock("../DesktopCapabilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("../DesktopCapabilities")>(),
   useCaptionChrome: () => ({ dragProps: {}, padClass: "" }),

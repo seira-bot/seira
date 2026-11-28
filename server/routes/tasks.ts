@@ -2,6 +2,7 @@ import { approvalModeFor, approvalModeWidens, isApprovalMode, type ApprovalMode 
 import { continueThread, type HandoffStore } from "../thread-handoff.ts";
 import { threadLinkUrl } from "../../shared/thread-link.ts";
 import type { TaskResponse, WireBot, WireTask } from "../../shared/wire.ts";
+import { markAfterPick } from "../ai-pool.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
 import type { ModelSelection, ProviderInstance } from "../contracts.ts";
 import type { Coordinator } from "../coordinator.ts";
@@ -415,7 +416,10 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
         }, patch.modelSelection, body.updateBotDefault === true, body.resetApprovalToAsk === true, body.requireAvailableModel === true);
         if (!checked.ok) return json(res, checked.status, refusalBody(checked));
       }
-      if (patch.modelSelection && body.aiPool !== undefined) patch.aiPool = body.aiPool ? "auto" : "pinned";
+      if (patch.modelSelection) {
+        const mark = markAfterPick(store.taskByThread(m[1], m[2])?.aiPool, body.aiPool, current.modelSelection, patch.modelSelection);
+        if (mark) patch.aiPool = mark;
+      }
       const task = patch.modelSelection
         ? store.switchTaskModel(m[1], m[2], patch.modelSelection, body.updateBotDefault === true, body.resetApprovalToAsk === true,
           { ...patch, ...hostedModels?.resetTask(current.modelSelection, patch.modelSelection) })!

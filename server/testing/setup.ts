@@ -39,6 +39,10 @@ Object.defineProperty(globalThis.navigator, "language", { value: "en", configura
 const { closeMessageDb } = await import("../message-db.ts");
 afterEach(closeMessageDb);
 
+// A save written behind (server/atomic.ts) lands before the next test clears the data folder, never in it.
+const { writesBehindSettled } = await import("../atomic.ts");
+afterEach(writesBehindSettled);
+
 // Windows holds a live process's cwd, and a just-killed CLI lets go a beat after the kill returns.
 afterAll(async () => {
   closeMessageDb();

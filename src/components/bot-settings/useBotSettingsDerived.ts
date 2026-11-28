@@ -12,6 +12,7 @@ export type BotPatch = Partial<
     | "title"
     | "description"
     | "soul"
+    | "startsTodos"
     | "notifications"
     | "cloudBackend"
     | "autoStartVps"

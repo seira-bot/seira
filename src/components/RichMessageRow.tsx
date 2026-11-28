@@ -9,6 +9,8 @@ import { GoalRunRow } from "./GoalRunCard";
 import { HelperKeySuggestion } from "./HelperKeySuggestion";
 import { MessageBoundary } from "./MessageBoundary";
 import { TaskSuggestionsCard } from "./TaskSuggestionsCard";
+import { FromTodoLabel } from "./todo/FromTodoLabel";
+import { TodoBatchCard } from "./todo/TodoBatchCard";
 import { SettingsCard } from "./SettingsCard";
 import { UiPlaceCard } from "./UiPlaceCard";
 import { WidgetMessage } from "./widget/WidgetMessage";
@@ -16,7 +18,7 @@ import { WidgetMessage } from "./widget/WidgetMessage";
 export function richRowKind(message: Message): Message["kind"] {
   // Seira's follow-up is text the model reads, drawn under its intro's card row (OptionsCardRow).
   if (message.helperFollowup) return "options";
-  if (message.setupSuggestion || message.taskSuggestions || message.settingsCard || message.uiPlace || (message.kind === "goal.run" && message.goalRun) || (message.kind === "burst" && message.burst)) return "widget";
+  if (message.setupSuggestion || message.taskSuggestions || message.todoBatch || message.settingsCard || message.uiPlace || (message.kind === "goal.run" && message.goalRun) || (message.kind === "burst" && message.burst)) return "widget";
   if (message.kind === "widget" && !message.widget) return "text";
   if (message.kind === "app" && !message.app) return "text";
   return message.kind;
@@ -26,7 +28,9 @@ export function richRowKind(message: Message): Message["kind"] {
 export function RichMessageRow({ botId, botName, threadId, message, room }: { botId: string; botName: string; threadId?: string; message: Message; room?: boolean }) {
   return (
     <MessageBoundary fallbackText={message.text ?? ""}>
-      {message.settingsCard
+      {message.todoBatch
+        ? <TodoBatchCard message={message} />
+        : message.settingsCard
         ? <SettingsCard message={message} />
         : message.uiPlace
         ? <UiPlaceCard message={message} />
@@ -77,6 +81,7 @@ export function UserLineNote({ message }: { message: Message }) {
       </span>
     );
   }
+  if (message.fromTodo) return <FromTodoLabel todoId={message.fromTodo} />;
   if (message.via === "api") return <span data-via-bot-api className="mt-1 text-[11px] text-ink-tertiary" title={t("chat.viaBotApi")}>{t("chat.viaBotApi")}</span>;
   if (message.via !== "call") return null;
   return <span className="mt-1 text-[11px] text-ink-tertiary" title={t("chat.viaCall")}>{t("chat.viaCall")}</span>;

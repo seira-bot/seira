@@ -191,7 +191,10 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
   async function renameDevice(id: string, label: string): Promise<RenameOutcome> {
     try {
       await api(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ label }) });
-    } catch {
+    } catch (e) {
+      const status = typeof e === "object" && e !== null ? (e as { status?: unknown }).status : undefined;
+      if (status === 400) return "name";
+      if (status === 404) { await loadDevices(); return "gone"; }
       return "failed";
     }
     await loadDevices();

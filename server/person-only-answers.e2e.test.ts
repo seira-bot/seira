@@ -2,12 +2,13 @@
 // a real run: the mail bot asked which email account to connect, and the teammate that asked it answered for the person
 // ("Gmail, with their address"), which the mail bot then treated as confirmed. Now the question waits on the person, the
 // teammate is told not to answer it, and an answer it sends anyway (from the turn resumed with the question) is refused.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("keeps a question about which of the person's accounts to use for the person, and refuses a teammate's answer to it", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -29,8 +30,7 @@ it("keeps a question about which of the person's accounts to use for the person,
         { key: "M1-ASK", match: ["M1-ASK"], reply: "No mail account is connected yet.\nNEEDS INPUT: Which email account should be connected — Gmail or another provider?\nDefault: Gmail" },
       ] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const asked = () => readHandoffs(session.info.dataDir).find((node) => node.parentId);
     await cli("send", "--bot", rules.id, "--task", rules.activeTaskId, "--text", "M1-JOB: we must be able to fetch and send mail");
     await expect.poll(() => evidence().some((turn) => turn.planKey === "M1-ASKED"), { timeout: 20_000 }).toBe(true);

@@ -10,6 +10,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 it("applies requested Full Access workflows through MCP without duplicate approvals, and the same changes apply in an Ask task with Undo", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
@@ -19,8 +20,7 @@ it("applies requested Full Access workflows through MCP without duplicate approv
   const evidence: unknown[] = [];
   const guardedRoutes = new Map<string, string>();
   let restarted: ChildProcess | undefined;
-  const providerTurns = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+  const providerTurns = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown, status = 200, token?: string) => {
     const response = await fetch(`${url}${path}`, { method,
       headers: { "content-type": "application/json", origin: url, ...(token ? { authorization: `Bearer ${token}` } : {}) },

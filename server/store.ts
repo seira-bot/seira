@@ -1,7 +1,7 @@
 import { existsSync, rmSync, unlinkSync } from "node:fs"; import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
-import { removeDeadTempFiles, writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
+import { removeDeadTempFiles, writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, GROUPS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts"; import { loadBotsOrRefuse, refuseUnreadableBots } from "./unreadable-bots.ts";
 import { commitRegistryChange, deferrablePatch, keptRevocation, saveRegistryFor, touchesPermissions } from "./registry-save.ts";
 import { parseToolScope, toolScopeWidens } from "../shared/tool-scope.ts"; import { grantScopedApps } from "../shared/connector-scopes.ts"; import { dropRetiredApps } from "./retired-apps.ts";
 import { reorderInPlace } from "../shared/bot-order.ts"; import { trimOutboundPolicy } from "../shared/outbound.ts";
@@ -49,6 +49,7 @@ export type {
   BotActivity, GroupDefaultResponder, OptionCardData,
   SecretRequestCardData, Surface, TaskClosedBy, TaskOpenedBy, TaskUsage,
 } from "../shared/wire.ts";
+import { PublicError } from "./public-error.ts";
 export type { GroupTask as GroupTaskRecord, BotProject as BotProjectRecord } from "../shared/wire.ts";
 export type { InstalledPlaybook, InstalledPackageMetadata, SeiraColor, SeiraExpression } from "../shared/wire.ts";
 
@@ -289,17 +290,13 @@ export class Store {
     this.personName = personName;
     ensurePrivateDir(DATA_DIR);
     removeDeadTempFiles(DATA_DIR, ["bots.json", "groups.json"]); // what a crash during a save left: a whole copy of the file
-    // An unreadable bots.json must never read as "every member was deleted".
-    let botsLoaded = false;
-    try {
-      this.bots = this.registry.loadBots(); botsLoaded = Array.isArray(this.bots);
-    } catch {
-      this.bots = [];
-    }
+    // An unreadable bots.json must never read as "every member was deleted", and no save may replace it.
+    const loadedBots = loadBotsOrRefuse<BotRecord>(() => this.registry.loadBots());
+    const botsLoaded = loadedBots !== undefined; this.bots = loadedBots ?? [];
     try {
       this.groups = this.registry.loadGroups();
-    } catch {
-      this.groups = [];
+    } catch (error) {
+      this.groups = []; if (existsSync(GROUPS_FILE)) refuseUnreadableBots(error, GROUPS_FILE);
     }
     this.rememberSections([...this.bots, ...this.groups].map((record) => record.section));
     let botsMigrated = false;
@@ -1426,7 +1423,7 @@ export class Store {
   deleteBot(id: string, setupRequest?: TeamSetupRequest): boolean {
     const bot = this.own(id);
     if (!bot) return false;
-    if (bot.defaultBot) throw Object.assign(new Error(defaultBotRefusal(bot.name)), { status: 409 });
+    if (bot.defaultBot) throw new PublicError(defaultBotRefusal(bot.name), 409);
     let nextBots = this.bots.filter((b) => b.id !== id); this.threadsGoing([bot.threadId, ...(bot.tasks ?? []).map((t) => t.threadId)]);
     if (setupRequest) {
       const chief = this.own(setupRequest.botId);

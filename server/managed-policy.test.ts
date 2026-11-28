@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import ts from "@typescript/typescript6";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cloudHomePlaceRefusal } from "./cloud-home.ts";
+import { PublicError, unstatused } from "./public-error.ts";
 import { computerKindForResource, ManagedDesktopPolicy, mcpEntryMatches, parseManagedPolicy, type ManagedPolicy } from "./managed-policy.ts";
 
 const policies: ManagedDesktopPolicy[] = [];
@@ -142,8 +143,8 @@ describe("claim-time computer refusal in bindTurnComputer", () => {
   const refusal = source.slice(refusalStart + 1, source.indexOf("\n}\n", refusalStart) + 3);
   const code = ts.transpileModule(refusal + guard, { compilerOptions: { target: ts.ScriptTarget.ESNext } }).outputText;
   const bind = (managedPolicy: ManagedDesktopPolicy, cloudHome = false) =>
-    new Function("managedPolicy", "computerKindForResource", "CLOUD_HOME", "cloudHomePlaceRefusal", `${code}; return bindTurnComputer;`)(
-      managedPolicy, computerKindForResource, cloudHome ? { machineId: "fixture" } : null, cloudHomePlaceRefusal,
+    new Function("managedPolicy", "computerKindForResource", "CLOUD_HOME", "cloudHomePlaceRefusal", "PublicError", "unstatused", `${code}; return bindTurnComputer;`)(
+      managedPolicy, computerKindForResource, cloudHome ? { machineId: "fixture" } : null, cloudHomePlaceRefusal, PublicError, unstatused,
     ) as (owner: unknown, resource: string) => Promise<string>;
 
   it("refuses a disallowed kind before claiming anything", async () => {

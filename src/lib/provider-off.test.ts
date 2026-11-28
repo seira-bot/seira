@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Bot, InstanceInfo } from "@/state/store";
-import { forgetProviderOff, moveTarget, planProviderOff, providerOffResult, providerUses, rememberProviderOff, runProviderOff, undoProviderOff } from "./provider-off";
+import { forgetProviderOff, moveChoices, moveTarget, planProviderOff, providerOffResult, providerUses, rememberProviderOff, runProviderOff, undoProviderOff } from "./provider-off";
 import { providerHealth } from "./provider-health";
 
 const instance = (instanceId: string, extra: Partial<InstanceInfo> = {}): InstanceInfo => ({
@@ -30,6 +30,48 @@ describe("moveTarget", () => {
     const list = [instance("x"), instance("down", { snapshot: { state: "available", authenticated: false } })];
     expect(moveTarget("x", list, health)).toBeNull();
     expect(moveTarget("x", [instance("x")], health)).toBeNull();
+  });
+});
+
+describe("moveChoices", () => {
+  const claude = (id: string, extra: Partial<InstanceInfo> = {}) => instance(id, { driverKind: "claudeAgent", ...extra });
+
+  it("lists another account of the same provider before the other provider", () => {
+    const list = [instance("gpt"), claude("claude-1"), claude("claude-2")];
+    const choices = moveChoices("claude-1", list, health);
+    expect(choices.map((choice) => [choice.instance.instanceId, choice.sameProvider])).toEqual([["claude-2", true], ["gpt", false]]);
+    expect(moveTarget("claude-1", list, health)?.selection.instanceId).toBe("claude-2");
+  });
+
+  it("lists an unusable account with its reason and moves to the other provider", () => {
+    const list = [instance("gpt"), claude("claude-1"), claude("claude-2", { snapshot: { state: "available", authenticated: false } })];
+    const choices = moveChoices("claude-1", list, health);
+    const same = choices.find((choice) => choice.instance.instanceId === "claude-2");
+    expect(same).toMatchObject({ usable: false, sameProvider: true });
+    expect(same?.reason).toBeTruthy();
+    expect(moveTarget("claude-1", list, health)?.selection.instanceId).toBe("gpt");
+  });
+});
+
+describe("planProviderOff model", () => {
+  const two = instance("claude-2", { driverKind: "claudeAgent", models: { default: "sonnet", options: [{ id: "sonnet", label: "S" }, { id: "opus", label: "O" }] } });
+  const target = { instance: two, selection: { instanceId: "claude-2", model: "sonnet" } };
+
+  it("keeps the model, effort and variant when the target offers the model", () => {
+    const plan = planProviderOff("claude-1", [bot("a", "claude-1", { modelSelection: { instanceId: "claude-1", model: "opus", effort: "high" } as Bot["modelSelection"] })], target);
+    expect(plan.rows[0]).toMatchObject({ patch: { modelSelection: { instanceId: "claude-2", model: "opus", effort: "high" } } });
+  });
+
+  it("uses the target default when the target lacks the model", () => {
+    const plan = planProviderOff("claude-1", [bot("a", "claude-1", { modelSelection: { instanceId: "claude-1", model: "haiku" } })], target);
+    expect(plan.rows[0]).toMatchObject({ patch: { modelSelection: { instanceId: "claude-2", model: "sonnet" } } });
+  });
+
+  it("applies the same rule to a backup", () => {
+    const plan = planProviderOff("claude-1", [bot("a", "z", { fallback: [{ instanceId: "claude-1", model: "opus", effort: "high" }] as unknown as Bot["fallback"] })], target);
+    expect(plan.rows[0]).toMatchObject({ patch: { fallback: [{ instanceId: "claude-2", model: "opus", effort: "high" }] } });
+    const lacking = planProviderOff("claude-1", [bot("a", "z", { fallback: [{ instanceId: "claude-1", model: "haiku" }] })], target);
+    expect(lacking.rows[0]).toMatchObject({ patch: { fallback: [{ instanceId: "claude-2", model: "sonnet" }] } });
   });
 });
 
@@ -68,6 +110,15 @@ describe("runProviderOff", () => {
   const actions = () => ({
     persist: vi.fn(async (_bot: Bot, _patch: unknown): Promise<unknown> => undefined), hide: vi.fn(async (): Promise<unknown> => undefined),
     followBotModel: vi.fn(async (_bot: Bot): Promise<unknown> => undefined),
+  });
+
+  it("only moves the bots when there is nothing to hide", async () => {
+    const calls = actions();
+    const { hide: _hide, ...moveOnly } = calls;
+    const result = await runProviderOff(x, planProviderOff("x", [bot("a", "x")], target), moveOnly);
+    expect(calls.persist).toHaveBeenCalledTimes(1);
+    expect(calls.hide).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ moveOnly: true, hidden: false, moved: [{ id: "a" }] });
   });
 
   it("moves every bot, then their conversations, then hides", async () => {

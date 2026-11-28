@@ -125,6 +125,9 @@ workflow again on `main`.
 One more workflow reads a secret outside the `release` environment:
 `snap-publish.yml` reads `SNAPCRAFT_STORE_CREDENTIALS` in its `publish` job,
 which uses the `snap-store` environment (see [Snap publish workflow](#snap-publish-workflow)).
+`msstore-publish.yml` reads four `MSSTORE_*` secrets in its `publish` job,
+which uses the `microsoft-store` environment (see
+[Microsoft Store publish workflow](#microsoft-store-publish-workflow)).
 
 Two workflows read secrets in the `release` environment:
 
@@ -534,3 +537,37 @@ on `main`. A person can also start it by hand from `main` with a tag and a chann
   credentials.
 
 See [Releasing](releasing.md#publish-to-the-snap-store) for the one-time setup.
+
+## Microsoft Store publish workflow
+
+`msstore-publish.yml` submits the Windows Store package to the Microsoft Store.
+It follows `snap-publish.yml`. A published release (not a draft, not a
+prerelease) starts it through a `redispatch` job that runs it again on `main`.
+A person can also start it by hand from `main` with a tag. There is no channel.
+`scripts/ci-workflow.test.ts` holds these rules, and runs the shell of the
+`commit` job with fake `gh` and `git` commands to test them:
+
+- The `commit` job fails on any ref other than `main`. It resolves the tag once
+  to a commit SHA, and fails when the SHA is not in the history of `main`. It
+  also fails without a published release that is not a draft and not a
+  prerelease.
+- The `gate` job runs the release gate on the SHA. The `approval` job holds the
+  wait of a flagged run in the `release-approval` environment.
+- The `build` and `publish` jobs run only on `main`, after the gate passed or
+  after an approval in the same attempt. They use the SHA, never the tag name.
+- The `build` job runs on `windows-2025`. It has `contents: read`, no secret
+  and no environment. It runs `scripts/check-appx.mjs`, and it writes the
+  What's new text with `scripts/store-whats-new.mjs`.
+- The `publish` job runs on `windows-2025` and uses the `microsoft-store`
+  environment. It does no checkout, so it runs no code of the repository. It
+  reads the four `MSSTORE_*` secrets in the `env` of three steps.
+- Two steps of the `publish` job are inline Node scripts. The test runs them
+  with a fake `fetch`. The first stops when a secret is empty, and when Partner
+  Center already holds a submission in progress. The second sets the What's new
+  text of each listing, commits the submission, and waits for the commit. It
+  fails on `CommitFailed`, on a refused call, and after 30 minutes.
+- Every action is pinned to a full commit SHA, and every checkout drops its
+  credentials.
+
+See [Releasing](releasing.md#microsoft-store-msix) for the steps and
+[the one-time setup](releasing.md#one-time-microsoft-store-setup).

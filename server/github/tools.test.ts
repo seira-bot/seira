@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { GITHUB_APP_TOOL_NAMES } from "../../shared/github-app.ts";
 import { fakeGithubRest } from "../testing/fake-github-rest.ts";
-import { GITHUB_FILE_MAX_BYTES, GITHUB_NOT_FOUND_MESSAGE, GITHUB_REFUSED_MESSAGE, GITHUB_TOOLS, githubToolCallProblem, isSafeGithubApiPath, runGithubTool } from "./tools.ts";
+import { GITHUB_FILE_MAX_BYTES, GITHUB_LINK_MESSAGE, GITHUB_NOT_FOUND_MESSAGE, GITHUB_REFUSED_MESSAGE, GITHUB_TOOLS, GITHUB_TREE_CUT_MESSAGE, githubToolCallProblem, isSafeGithubApiPath, runGithubTool } from "./tools.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE } from "./broker-client.ts";
 
 const TOKEN = "ghs_fake_installation_token_1";
 const repo = { fullName: "acme/web", defaultBranch: "main" };
 
-function setup(files: Record<string, string> = { "README.md": "hello", "src/a.ts": "a", "src/b.ts": "b" }) {
-  const rest = fakeGithubRest("acme/web", { files });
+function setup(files: Record<string, string> = { "README.md": "hello", "src/a.ts": "a", "src/b.ts": "b" }, modes: Record<string, string> = {}) {
+  const rest = fakeGithubRest("acme/web", { files, modes });
   const run = (name: (typeof GITHUB_APP_TOOL_NAMES)[number], args: Record<string, unknown>) => runGithubTool(name, args, { token: TOKEN, repo, fetch: rest.fetch });
   return { rest, run };
 }
@@ -97,6 +97,40 @@ describe("GitHub tool calls", () => {
     const tree = rest.requests.find((request) => request.path.endsWith("/git/trees"))!.body.tree;
     expect(tree).toEqual([expect.objectContaining({ path: "a.txt" }), { path: "old.txt", mode: "100644", type: "blob", sha: null }]);
     expect(rest.requests.at(-1)!.body.force).toBe(false);
+  });
+
+  it("keeps the mode of a changed file and gives a new file 100644", async () => {
+    const { rest, run } = setup({ "run.sh": "old", "bin/tool.sh": "old", "docs/a.md": "old" }, { "run.sh": "100755", "bin/tool.sh": "100755" });
+    const files = [{ path: "run.sh", content: "new" }, { path: "bin/tool.sh", content: "new" }, { path: "docs/a.md", content: "new" }, { path: "bin/new.sh", content: "new" }, { path: "fresh/x.txt", content: "new" }];
+    expect((await run("GITHUB_APP_COMMIT_FILES", { repo: "acme/web", branch: "seira/b1/x", message: "m", files })).isError).toBeUndefined();
+    const tree = rest.requests.find((request) => request.path.endsWith("/git/trees") && request.method === "POST")!.body.tree;
+    expect(tree.map((entry: { path: string; mode: string }) => [entry.path, entry.mode])).toEqual([["run.sh", "100755"], ["bin/tool.sh", "100755"], ["docs/a.md", "100644"], ["bin/new.sh", "100644"], ["fresh/x.txt", "100644"]]);
+  });
+
+  it("keeps the mode of a file that it removes", async () => {
+    const { rest, run } = setup({ "run.sh": "old" }, { "run.sh": "100755" });
+    await run("GITHUB_APP_COMMIT_FILES", { repo: "acme/web", branch: "seira/b1/x", message: "m", files: [{ path: "run.sh", delete: true }] });
+    expect(rest.requests.find((request) => request.path.endsWith("/git/trees") && request.method === "POST")!.body.tree).toEqual([{ path: "run.sh", mode: "100755", type: "blob", sha: null }]);
+  });
+
+  it("refuses to change a symbolic link or a submodule, and makes no branch", async () => {
+    const { rest, run } = setup({ "README.md": "hello", "link": "target" }, { link: "120000", "vendor/lib": "160000" });
+    for (const path of ["link", "vendor/lib"]) {
+      expect(await run("GITHUB_APP_COMMIT_FILES", { repo: "acme/web", branch: "seira/b1/x", message: "m", files: [{ path: "README.md", content: "1" }, { path, content: "2" }] })).toEqual({ content: [{ type: "text", text: GITHUB_LINK_MESSAGE }], isError: true });
+    }
+    expect(rest.requests.filter((request) => request.method !== "GET")).toEqual([]);
+    expect(rest.branches.has("seira/b1/x")).toBe(false);
+  });
+
+  it("refuses when GitHub cuts a folder list, because a mode could be wrong", async () => {
+    const { rest } = setup();
+    const cut = (async (input: string | URL | Request, init?: RequestInit) => {
+      const answer = await rest.fetch(input, init);
+      return new URL(String(input)).pathname.includes("/git/trees/") ? Response.json({ ...(await answer.json() as object), truncated: true }) : answer;
+    }) as typeof fetch;
+    const out = await runGithubTool("GITHUB_APP_COMMIT_FILES", { repo: "acme/web", branch: "seira/b1/x", message: "m", files: [{ path: "a.txt", content: "1" }] }, { token: TOKEN, repo, fetch: cut });
+    expect(out).toEqual({ content: [{ type: "text", text: GITHUB_TREE_CUT_MESSAGE }], isError: true });
+    expect(rest.requests.filter((request) => request.method !== "GET")).toEqual([]);
   });
 
   it("commits to a branch that exists without making it again", async () => {

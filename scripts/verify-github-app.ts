@@ -144,15 +144,12 @@ let failure: unknown;
 try {
   // A third run with no connection file: the tile offers Connect.
   const fresh = await open("none");
-  await check("01 the GitHub tile is in Featured with a Connect button and a Bot access section", async () => {
+  await check("01 the GitHub tile is in Featured with a Connect button and nothing to manage", async () => {
     await fresh.tile.waitFor();
     assert.equal(await fresh.page.locator('[data-featured-slot] [data-app-tile="github"]').count(), 1, "the tile is in the Featured slot");
     assert.equal(await fresh.tile.getAttribute("data-github-state"), "idle");
     await fresh.tile.getByRole("button", { name: "Connect GitHub", exact: true }).waitFor();
-    const access = fresh.tile.locator("details").filter({ has: fresh.page.locator("summary", { hasText: "Bot access" }) });
-    assert.equal(await access.count(), 1, "a Bot access section exists");
-    await access.locator("summary").click();
-    await contains(access, "Only the person who connected GitHub can give a bot access.", "the Bot access text");
+    assert.equal(await fresh.tile.locator("details").count(), 0, "no Manage section before GitHub is connected");
     await fresh.tile.scrollIntoViewIfNeeded();
     await shot(fresh.page, "01-apps-tile-not-connected");
     assert.deepEqual(fresh.errors, []);
@@ -162,13 +159,21 @@ try {
   await check("02 the owner sees the connected tile", async () => {
     await owner.tile.waitFor();
     await owner.page.locator('[data-app-tile="github"][data-github-state="connected"]').waitFor();
-    await contains(owner.tile, "Connected by you", "the owner line");
+    assert.equal(await owner.page.locator('[data-featured-slot] [data-app-tile="github"][data-github-state="connected"]').count(), 1, "the connected tile stays in the Featured slot");
+    assert.equal((await text(owner.tile)).includes("Connected by you"), false, "no Connected by you line");
+    await contains(owner.tile.locator("[data-github-summary]"), "octo-user, octo-org · 5 repositories", "the accounts summary");
+    assert.equal(await owner.tile.getByRole("button", { name: "Add account", exact: true }).isVisible(), false, "Add account is folded");
+    const manage = owner.tile.locator("details[data-github-manage]");
+    assert.equal(await manage.count(), 1, "one Manage section");
+    await manage.locator("summary").click();
+    await contains(manage, "Only the person who connected GitHub can give a bot access.", "the access text");
     for (const login of ["octo-user", "octo-org"]) assert.equal(await owner.tile.locator(`[data-github-account="${login}"]`).count(), 1, `the ${login} account row`);
     await contains(owner.tile.locator('[data-github-account="octo-user"]'), "2 repositories", "octo-user count");
     await contains(owner.tile.locator('[data-github-account="octo-org"]'), "3 repositories", "octo-org count");
     await contains(owner.tile.locator("[data-github-pending]"), "octo-corp", "the pending request");
     await contains(owner.tile.locator('[data-app-bots="github_app"]'), `Used by ${STARTER}`, "the bots that use GitHub");
-    await owner.tile.getByRole("button", { name: "Add account", exact: true }).waitFor();
+    await manage.getByRole("button", { name: "Add account", exact: true }).waitFor();
+    await manage.getByRole("button", { name: "Disconnect octo-user", exact: true }).waitFor();
     assert.equal(await owner.tile.locator("[data-github-readonly]").count(), 0, "no read-only note for the owner");
     await owner.tile.scrollIntoViewIfNeeded();
     await shot(owner.page, "02-apps-tile-connected-owner");
@@ -263,7 +268,7 @@ try {
     await owner.page.reload();
     await owner.openBot();
     await owner.page.getByText("Per-app tools", { exact: true }).waitFor();
-    await owner.page.locator("button[aria-expanded]", { hasText: "github_app" }).click();
+    await owner.page.locator("button[aria-expanded]", { hasText: "GitHub" }).click();
     const block = owner.page.locator('[data-github-block="summary"]');
     await block.waitFor();
     await contains(block, "octo-user/notes", "first repository");
@@ -286,6 +291,8 @@ try {
     await other.page.locator('[data-app-tile="github"][data-github-state="connected"]').waitFor();
     await contains(other.tile.locator("[data-github-readonly]"), `Only ${OTHER_OWNER.label} can change`, "the read-only text");
     await contains(other.tile.locator("[data-github-readonly]"), `${OTHER_OWNER.label} connected GitHub.`, "who connected GitHub");
+    await contains(other.tile.locator("[data-github-summary]"), "octo-user, octo-org · 5 repositories", "the accounts summary");
+    await other.tile.locator("details[data-github-manage] summary").click();
     assert.equal(await other.tile.locator('[data-github-account]').count(), 2, "the accounts are shown");
     assert.equal(await other.tile.getByRole("button", { name: "Add account", exact: true }).count(), 0, "no Add account");
     assert.equal(await other.tile.getByRole("button", { name: /^Disconnect / }).count(), 0, "no Disconnect");

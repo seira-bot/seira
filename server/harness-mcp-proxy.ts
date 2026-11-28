@@ -2,13 +2,11 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { failure, harnessMcpRequest, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, parseHarnessMcpKind, type HarnessMcpKind, type RpcId } from "./harness-mcp-request.ts";
+import { failure, HARNESS_MCP_MAX_PENDING, harnessMcpRequest, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, parseHarnessMcpKind, type HarnessMcpKind, type RpcId } from "./harness-mcp-request.ts";
 import { harnessMcpTokenEnv } from "./harness-mcp-token.ts";
 import { toolLimitFromEnv } from "./tool-count-limit.ts";
 
 export { harnessMcpRequest } from "./harness-mcp-request.ts";
-
-const MAX_PENDING = 16;
 
 function run(kind: HarnessMcpKind): void {
   const connection = { url: process.env.SEIRA_HARNESS_URL ?? "", token: process.env[harnessMcpTokenEnv(kind)] ?? "", kind, toolLimit: toolLimitFromEnv() };
@@ -36,7 +34,7 @@ function run(kind: HarnessMcpKind): void {
       let frame: unknown;
       try { frame = JSON.parse(line); }
       catch { output(failure(null, null, "Parse error.", -32700)); continue; }
-      if (pending >= MAX_PENDING) {
+      if (pending >= HARNESS_MCP_MAX_PENDING) {
         const request = frame as { id?: RpcId; method?: unknown } | null;
         if (request && Object.hasOwn(request, "id")) output(failure(request.id ?? null, request.method, `Too many pending ${kind} requests.`));
         continue;

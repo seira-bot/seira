@@ -3,6 +3,7 @@
 import type { LeftoverRemoval, LeftoverScan } from "../drivers/antigravity-temp.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { publicErrorText } from "../public-error.ts";
 
 export interface AntigravityLeftoverRouteDeps {
   hosted: boolean;
@@ -41,7 +42,7 @@ export function createAntigravityLeftoverRoutes(deps: AntigravityLeftoverRouteDe
       const removed = await deps.remove();
       return json(res, 200, { freedBytes: removed.freedBytes, removed: removed.removed, remaining: removed.remaining });
     } catch (error) {
-      return json(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      return json(res, 500, { error: publicErrorText(error, "Antigravity leftover files", "The leftover files could not be cleared.") });
     } finally {
       busy = false;
     }

@@ -480,3 +480,26 @@ If it prints `No suitable fusermount binary found on the $PATH` or `Cannot mount
 setup`, install the distribution's FUSE 3 package (`fuse3` on Ubuntu, Debian and Arch). If it then names a missing
 `lib*.so` file, install the desktop libraries listed under
 [Arch Linux and EndeavourOS](#arch-linux-and-endeavouros-appimage), or your distribution's packages for them.
+
+### Xvfb aborts in a container or sandbox without a GPU
+
+A test run that starts `Xvfb` inside a container or a bubblewrap sandbox can stop with `Caught signal 11
+(Segmentation fault). Server aborting`. The backtrace names `libEGL_nvidia.so` or `libnvidia-egl-gbm.so`. The host
+has an NVIDIA EGL vendor file, but the sandbox has no GPU device, so the X server crashes while it starts GLAMOR.
+The message `_XSERVTransmkdir: ERROR: euid != 0,directory /tmp/.X11-unix will not be created` can appear in the same
+log. It means the sandbox has a fresh `/tmp` that does not hold the socket directory.
+
+Create the socket directory and turn off the EGL vendor before you start the server:
+
+```sh
+mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+export __EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent LIBGL_ALWAYS_SOFTWARE=1
+Xvfb :99 -screen 0 1280x800x24 -nolisten tcp &
+./Seira-*-x86_64.AppImage --appimage-extract
+DISPLAY=:99 ./squashfs-root/seira --disable-gpu --disable-dev-shm-usage
+```
+
+Do not point `DISPLAY` at the host X server, and do not bind the host `/tmp/.X11-unix` into the sandbox. A message
+that `/tmp/.X11-unix` is not owned by root is a warning, not an error. If the AppImage cannot start the Chromium
+sandbox inside a nested sandbox, run the window smoke outside the nested sandbox, or use the CI package
+validation. Do not add `--no-sandbox`.

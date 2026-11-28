@@ -10,7 +10,7 @@ import {
 import { generateKeyPair, seal, unseal } from "../src/signed.ts";
 
 const HOME = `ghcr.io/milind-soni/openmausbot-cloud-home@sha256:${"a".repeat(64)}`;
-const CONNECTOR = `ghcr.io/milind-soni/mausbot-connector@sha256:${"b".repeat(64)}`;
+const CONNECTOR = `ghcr.io/seira-bot/seira-connector@sha256:${"b".repeat(64)}`;
 const env = {
   SEIRA_CLOUD_ROLE: "home", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
   SEIRA_PUBLIC_URL: "https://acme.example.test", SEIRA_CLOUD_BOOTSTRAP_SECRET: "S".repeat(43),
@@ -53,6 +53,8 @@ describe("the connector protocol", () => {
     expect(image("start", `ghcr.io/seira-bot/seira-cloud-home${digest}`)).toBe(true);
     expect(image("update", `ghcr.io/seira-bot/seira-cloud-home${digest}`)).toBe(true);
     expect(image("self-update", `ghcr.io/seira-bot/seira-connector${digest}`)).toBe(true);
+    // The connector's name before the rename: one explicit compatibility check.
+    expect(image("self-update", `ghcr.io/milind-soni/mausbot-connector${digest}`)).toBe(true);
     for (const value of [
       `ghcr.io/seira-bot/seira-cloud-home:latest`, `ghcr.io/seira-bot/seira${digest}`, `ghcr.io/seira-bot/seira-connector${digest}`,
       `ghcr.io/seira-bot/seira-cloud-home${digest} --privileged`, `ghcr.io/seira-bot/seira-cloud-home@sha256:${"A".repeat(64)}`,

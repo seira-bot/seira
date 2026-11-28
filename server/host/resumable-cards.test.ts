@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import type { AppSettingRequest } from "../../shared/app-settings.ts";
 import type { ConnectorCardData } from "../../shared/connector-card.ts";
 import type { McpChangeRequest } from "../../shared/mcp-request.ts";
 import type { OptionCardData } from "../../shared/wire.ts";
 import type { Store } from "../store.ts";
-import { anyCardLive, resumableCards } from "./resumable-cards.ts";
+import { anyCardLive, closedByStop, resumableCards } from "./resumable-cards.ts";
 
 const request: McpChangeRequest = { requestId: "r1", botId: "kiwi", threadId: "t1", action: "enable", name: "linear", targetHash: "0".repeat(64) };
 const card = (extra: Partial<OptionCardData> = {}, mcp: Partial<McpChangeRequest> = {}): OptionCardData => ({
@@ -55,5 +56,33 @@ describe("resumableCards", () => {
     expect(anyCardLive(oneRow(secret({ superseded: true })), "t1", ["s1"])).toBe(false);
     expect(anyCardLive(oneRow(secret({ stopped: true })), "t1", ["s1"])).toBe(false);
     expect(anyCardLive(oneRow(secret({})), "t1", ["gone"]), "a card that no longer exists").toBe(false);
+  });
+});
+
+describe("settings change cards", () => {
+  const settingsCard = (extra: Partial<OptionCardData> = {}, change: Partial<AppSettingRequest> = {}): OptionCardData => ({
+    title: "Change Room turn timeout?", subtitle: "30 → 45", options: ["Apply", "Not now"], requestId: "r2", tool: "app_settings", fixedOptions: true,
+    ...extra, appSettingRequest: { settingId: "rooms.turnTimeoutMinutes", label: "Room turn timeout", before: "30", after: "45", tier: "safe", ...change },
+  });
+  const applied = (change: Partial<AppSettingRequest> = {}) => settingsCard({ options: [], answered: "allow", dismissed: true, autoApplied: true }, change);
+
+  it("AC-18 waits on a settings card that waits for Apply, until it ends or the bot has heard it", () => {
+    expect(waitsOn(settingsCard())).toEqual([{ id: "m1", waits: "settings change decision: Change Room turn timeout?" }]);
+    expect(waitsOn(applied({ result: "applied" })), "applied, not yet handed to the turn").toHaveLength(1);
+    expect(waitsOn(settingsCard({ answered: "deny", options: [] }, { result: "declined" }))).toHaveLength(1);
+    expect(waitsOn(applied({ result: "applied", resumed: true }))).toEqual([]);
+    expect(waitsOn(settingsCard({ expired: true, options: [] }, { result: "expired", resumed: true }))).toEqual([]);
+  });
+
+  it("AC-18 does not wait on a plain applied card with Undo, which nobody answers", () => {
+    expect(waitsOn(applied())).toEqual([]);
+  });
+
+  it("AC-18 lets Stop close a waiting settings card, and leaves a settled or plain applied one", () => {
+    expect(closedByStop(settingsCard())).toMatchObject({ answered: "unavailable", dismissed: true });
+    expect(waitsOn(closedByStop(settingsCard())!), "closed by Stop").toEqual([]);
+    expect(closedByStop(applied())).toBeNull();
+    expect(closedByStop(applied({ result: "applied" }))).toBeNull();
+    expect(closedByStop(settingsCard({ expired: true, options: [] }))).toBeNull();
   });
 });

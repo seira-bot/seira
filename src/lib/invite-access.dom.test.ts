@@ -45,7 +45,15 @@ it("AC-23 stays off on a server without email sign-in, on a Team Cloud, and when
   expect(await mayInvite(null)).toBe("false");
 });
 
-it("AC-23 stays off in the desktop app", async () => {
-  (window as unknown as { ogb: unknown }).ogb = {};
+it("AC-23 stays off on the desktop app's own computer", async () => {
+  (window as unknown as { ogb: unknown }).ogb = { companion: {} };
   expect(await mayInvite({ capabilities: { emailSignIn: true } })).toBe("false");
+});
+
+it("AC-E2 turns on for a connected server in the desktop window", async () => {
+  // A server's page in the desktop window gets the remote-safe bridge, which has no companion.
+  (window as unknown as { ogb: unknown }).ogb = {};
+  expect(await mayInvite({ capabilities: { emailSignIn: true } })).toBe("true");
+  (window as unknown as { ogb: unknown }).ogb = { companion: {}, remoteClient: { active: true } };
+  expect(await mayInvite({ capabilities: { emailSignIn: true } })).toBe("true");
 });

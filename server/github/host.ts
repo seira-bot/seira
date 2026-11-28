@@ -1,28 +1,25 @@
 // What server/index.ts needs from the native GitHub connection, in one object: the per-turn mount, the prompt line and the
 // internal MCP handler. The tools run here, in the server: the box gets a turn's capability, never a GitHub token.
 import { GITHUB_APP_MCP_SERVER, GITHUB_APP_SLUG, GITHUB_APP_TOOL_RULES, githubBotBranchPrefix, githubLevelAtLeast, type GithubAppToolName, type GithubBotPolicy, type GithubRepoGrant } from "../../shared/github-app.ts";
-import { connectorAccessDecision, type ConnectorScopes } from "../../shared/connector-scopes.ts";
-import type { ConnectorToolGrant } from "../../shared/wire.ts";
+import { connectorAccessDecision } from "../../shared/connector-scopes.ts";
 import type { AppConfig } from "../config.ts";
 import { connectorRefusalText, connectorScopeRefusalText, evaluateConnectorTools } from "../connector-verdict.ts";
 import { appendDecision } from "../decision-log.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { OutboundHoldAnswer } from "../outbound-hold.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE, GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";
 import { githubAppEnabled } from "./flag.ts";
-import { decideGithubCall } from "./policy.ts";
+import { decideGithubCall, githubAllowedFor, type GithubBotSwitches } from "./policy.ts";
 import type { GithubStore, GithubStoreData } from "./store.ts";
 import { GITHUB_INSTRUCTIONS, GITHUB_NOT_FOUND_MESSAGE, GITHUB_TOOLS, githubError, githubText, githubToolCallProblem, isGithubToolName, runGithubTool, type GithubTool, type GithubToolResult } from "./tools.ts";
+import { PublicError } from "../public-error.ts";
 
 export const GITHUB_INTERNAL_MCP_PATH = "/api/internal/github/mcp";
 
-export interface GithubBot {
+export interface GithubBot extends GithubBotSwitches {
   id: string;
   name: string;
-  composio?: boolean;
-  connectorTools?: Record<string, ConnectorToolGrant>;
-  connectorScopes?: ConnectorScopes;
 }
 
 export interface GithubHostDeps {
@@ -39,13 +36,6 @@ export interface GithubHostDeps {
   appAllowed?(): boolean;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
-}
-
-export function githubAllowedFor(bot: Pick<GithubBot, "composio" | "connectorScopes" | "connectorTools">): boolean {
-  if (bot.composio === false) return false;
-  if (bot.connectorScopes && !Object.hasOwn(bot.connectorScopes.apps, GITHUB_APP_SLUG)) return false;
-  if (bot.connectorTools !== undefined && !Object.hasOwn(bot.connectorTools, GITHUB_APP_SLUG)) return false;
-  return true;
 }
 
 const action = (name: string) => { const words = name.replace(/^GITHUB_APP_/u, "").replace(/_+/gu, " ").toLowerCase(); return words ? words[0]!.toUpperCase() + words.slice(1) : name; };
@@ -71,9 +61,13 @@ const sameGrant = (a: GithubRepoGrant, b: GithubRepoGrant) => a.installationId =
 
 const READS_OUTSIDE_TEXT: ReadonlySet<GithubAppToolName> = new Set(["GITHUB_APP_GET_FILE", "GITHUB_APP_SEARCH_CODE", "GITHUB_APP_LIST_ISSUES", "GITHUB_APP_GET_ISSUE", "GITHUB_APP_LIST_PULLS", "GITHUB_APP_GET_PULL"]);
 
+const LEVEL_WORDS: Record<GithubRepoGrant["level"], string> = { read: "read only", pull_requests: "pull requests", write: "read and write" };
+
 export function githubPrompt(policy: GithubBotPolicy, botId: string): string {
   const own = policy.ownBranchesOnly ? ` Push only to branches that start with ${githubBotBranchPrefix(botId)}.` : "";
-  return `For GitHub, use the ${GITHUB_APP_MCP_SERVER} tools (GITHUB_APP_*) in your granted repositories.${own}`;
+  const repos = policy.repos.length ? policy.repos.map((grant) => `${grant.fullName} (${LEVEL_WORDS[grant.level]})`).join(", ") : "none yet";
+  return ` For GitHub, use the ${GITHUB_APP_MCP_SERVER} tools (GITHUB_APP_*), for example GITHUB_APP_LIST_REPOS. They work now, in your granted repositories: ${repos}.${own}`
+    + " Do not use Composio for GitHub, do not search for another GitHub tool, and never ask the person for a token or a sign-in for GitHub.";
 }
 
 export function createGithubHost(deps: GithubHostDeps) {
@@ -156,7 +150,7 @@ export function createGithubHost(deps: GithubHostDeps) {
     available: () => allowedHere() && enabled(),
     integration(bot: GithubBot, mint: () => string, harnessUrl: string): { command: string; args: string[]; env: Record<string, string> } | null {
       if (!mounts(bot)) return null;
-      return { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
+      return { command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
     },
     prompt(bot: GithubBot): string {
       const policy = policyOf(bot.id);
@@ -173,7 +167,7 @@ export function createGithubHost(deps: GithubHostDeps) {
         const bot = liveBot();
         return { tools: bot && mounts(bot) ? listed(bot) : [], instructions: GITHUB_INSTRUCTIONS };
       }
-      if (request.method !== "tools/call") throw Object.assign(new Error("unsupported github method"), { status: 400 });
+      if (request.method !== "tools/call") throw new PublicError("unsupported github method", 400);
       const params = (request.params && typeof request.params === "object" ? request.params : {}) as { name?: unknown; arguments?: unknown };
       const args = (params.arguments ?? {}) as Record<string, unknown>;
       const problem = githubToolCallProblem(params.name, args);

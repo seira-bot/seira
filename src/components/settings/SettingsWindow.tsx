@@ -54,7 +54,7 @@ export function SettingsWindow() {
   const ctx = useSettingsContext();
   const place = useSettingsPlace();
   const narrow = useMediaQuery(NARROW, false);
-  const target = resolveSettingsTarget(state.appSettingsSection, ctx);
+  const target = resolveSettingsTarget(state.appSettingsSection, ctx, state.appSettingsAnchor);
   const [anchor, setAnchor] = useState<string | null>(target.anchor ?? null);
   const [narrowPage, setNarrowPage] = useState(state.appSettingsSection !== "overview");
   const [query, setQuery] = useState("");

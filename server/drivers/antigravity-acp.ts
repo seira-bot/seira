@@ -26,6 +26,7 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { DATA_DIR, stripWorkspaceCredentialEnv } from "../config.ts";
 import { writeFileAtomic } from "../atomic.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
+import { ownNode } from "../proxy-paths.ts";
 import type { BoxRelay } from "../bot-box/relay.ts";
 import type { ModelCatalog } from "../contracts.ts";
 import type { ChildProcess } from "node:child_process";
@@ -130,7 +131,7 @@ export function antigravityBrowserHelperProblem(environment: NodeJS.ProcessEnv, 
   });
 }
 
-export async function verifyAntigravityBrowserHelper(profile: AntigravityProfile, executable = process.execPath): Promise<void> {
+export async function verifyAntigravityBrowserHelper(profile: AntigravityProfile, executable = ownNode()): Promise<void> {
   const helper = process.platform === "win32" ? executable.replaceAll("\\", "/") : executable;
   if (verifiedBrowserHelpers.has(helper)) return;
   const reason = await antigravityBrowserHelperProblem(profile.environment, helper);
@@ -252,7 +253,7 @@ export async function prepareAntigravityProfile(input: {
     { mode: 0o600 },
   );
 
-  const executable = process.platform === "win32" ? process.execPath.replaceAll("\\", "/") : process.execPath;
+  const executable = process.platform === "win32" ? ownNode().replaceAll("\\", "/") : ownNode();
   if (/\r|\n|\0|%s/u.test(executable) || executable.includes(delimiter)) {
     throw new Error("The Seira runtime path cannot safely suppress Antigravity browser launches.");
   }

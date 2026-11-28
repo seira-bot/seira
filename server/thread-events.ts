@@ -1,6 +1,7 @@
 import { closeSync, fstatSync, openSync, readSync, type Stats } from "node:fs";
 import { join, resolve } from "node:path";
 import type { RuntimeEvent } from "./contracts.ts";
+import { redactSecrets } from "./redact.ts";
 import type { InspectorEntry, InspectorPage, NativeRecord } from "../shared/inspector.ts";
 
 export type { InspectorEntry, InspectorPage, NativeRecord } from "../shared/inspector.ts";
@@ -261,7 +262,8 @@ export function readThreadEvents(input: {
       at: data.createdAt,
       data: data.type === "cap.exhausted" ? { ...data, handoffPath: resolve(data.handoffPath) } : data,
     })),
-    ...native.lines.map((data): InspectorEntry => ({ kind: "native", at: data.at, data })),
+    // A line written before a masking rule existed is masked now, on the way out.
+    ...native.lines.map((data): InspectorEntry => ({ kind: "native", at: data.at, data: redactSecrets(data) as NativeRecord })),
   ];
   merged.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 

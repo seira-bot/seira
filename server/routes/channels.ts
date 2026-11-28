@@ -42,6 +42,8 @@ import { forkMessageId } from "./fork-request.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { sawThread } from "../thread-presence.ts";
 import { readThreadNotifications, type NotificationListed } from "./notifications.ts";
+import { publicErrorText } from "../public-error.ts";
+import { PublicError } from "../public-error.ts";
 
 export type MessagePage = { messages: Array<Message | Record<string, unknown>>; hasMore?: boolean; activeLeafId: string | null };
 
@@ -387,7 +389,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
       try {
         assertWithinBudget(cfg, DATA_DIR);
       } catch (error) {
-        return json(res, 409, { error: error instanceof Error ? error.message : String(error), code: "spend_cap" });
+        return json(res, 409, { error: publicErrorText(error, "POST channel message"), code: "spend_cap" });
       }
       const ownsThread = group.dm
         ? group.threadId === threadId
@@ -417,11 +419,11 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
         async () => {
           if (sendId) {
             if (cancelledChatFollowup("channel", group.id, threadId, sendId)) {
-              throw Object.assign(new Error("this queued sendId was cancelled; send a new message to try again"), { status: 409 });
+              throw new PublicError("this queued sendId was cancelled; send a new message to try again", 409);
             }
             const accepted = acceptedSendMatch(store.messagesFor(threadId), sendId, text, replyTo?.id, channelMode);
             if (accepted.kind === "conflict") {
-              throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
+              throw new PublicError("sendId already belongs to another message", 409);
             }
             if (accepted.kind === "match") {
               return { ok: true as const, threadId, message: accepted.message };
@@ -433,33 +435,31 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
                 queued.replyToId !== replyTo?.id ||
                 queued.mode !== channelMode
               ) {
-                throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
+                throw new PublicError("sendId already belongs to another message", 409);
               }
               return { ok: true as const, queued: true as const, queueId: queued.id, threadId };
             }
           }
           const current = store.group(group.id);
-          if (!current) throw Object.assign(new Error("no such group"), { status: 404 });
+          if (!current) throw new PublicError("no such group", 404);
           const ownsTarget = current.threadId === threadId || store.groupTasks(current.id).some((task) => task.threadId === threadId);
           if (!ownsTarget) {
-            throw Object.assign(new Error("no such thread in channel"), {
-              status: 404,
-            });
+            throw new PublicError("no such thread in channel", 404);
           }
           const members = current.memberIds.map((id) => store.bot(id)).filter((bot): bot is BotRecord => Boolean(bot));
           // A new pick only (a retry above keeps its receipt): every page bot must still be here and free to answer.
           const pageBotIds = roomPickBots(pick);
           if (!pageBotIds.every((id) => current.memberIds.includes(id) && store.bot(id))) {
-            throw Object.assign(new Error("the bot that made this page is no longer in this room"), { status: 409 });
+            throw new PublicError("the bot that made this page is no longer in this room", 409);
           }
           if (!current.dm && pageBotIds.some((id) => current.holds?.[id])) {
-            throw Object.assign(new Error("the bot that made this page is on hold in this room; let it answer again first"), { status: 409 });
+            throw new PublicError("the bot that made this page is on hold in this room; let it answer again first", 409);
           }
           // A program on this machine (a bot's shell, a script) reads the ids it can send again with; a person never sees them.
           const sameName = auth.kind === "loopback" && !browserOrigin
             ? sameNameRefusalForBots(text, members, mentions, current.name, "sent")
             : sameNameRefusal(text, members, mentions, conversationLanguage(threadId));
-          if (sameName) throw Object.assign(new Error(sameName), { status: 409 });
+          if (sameName) throw new PublicError(sameName, 409);
           if (channelMode === "chat" && !owners.stopRefusal(auth, threadId)) applyRoomHoldsFromMessage(current.id, text, mentions);
           const threadWorking = groupThreadIsWorking(current.id, threadId);
           const decision = admit("room", {}, { roomWorking: threadWorking, threadWorking });
