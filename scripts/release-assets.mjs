@@ -47,6 +47,10 @@ export function repoFromRemote(url) {
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
+export function resolveRepo(flag, readOrigin) {
+  return flag ?? repoFromRemote(readOrigin());
+}
+
 export const isFeed = (name) => FEED.test(basename(String(name)));
 export const isSums = (name) => SUMS.test(basename(String(name)));
 
@@ -257,8 +261,7 @@ function ghApi(path, options = {}) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
-  const origin = execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" });
-  const repo = args.repo ?? repoFromRemote(origin);
+  const repo = resolveRepo(args.repo, () => execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" }));
   if (!repo) throw new UsageError("could not read the GitHub repository from the origin remote; pass --repo");
   const api = async (path, options) => ghApi(path, options);
   const run = async (list) => gh(list, { stdio: "inherit" });
