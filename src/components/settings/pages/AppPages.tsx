@@ -17,6 +17,7 @@ import { ConnectServerSheet } from "../../PlaceAddSheet";
 import { ConnectedWorkspacesSettings } from "../../ConnectedWorkspacesSettings";
 import { CustomThemesSettings } from "../../CustomThemesSettings";
 import { DiagnosticsRow } from "../../DiagnosticsRow";
+import { GlanceRow } from "../../GlanceRow";
 import { NotificationRows } from "../../NotificationSettingsRows";
 import { OpenAtLoginRow } from "../../OpenAtLoginRow";
 import { PinnedPanelsSettings } from "../../PinnedPanelsSettings";
@@ -166,6 +167,7 @@ export function AppearancePage() {
         {themes && <div data-settings-block="themes" className="p-4"><SkinPicker /></div>}
         <ColorUserBubblesRow simple />
         <TextSizeRow />
+        <GlanceRow />
         {!ctx.client && <SettingsLinkRow title={t("placeLook.sidebarColor")} value={place.name} badge={<PlaceBadge place={place} size={14} />} onClick={() => go("overview", "sidebar")} data={{ "data-settings-door": "sidebar-color" }} />}
       </SettingsRows>
     </SettingsGroup>

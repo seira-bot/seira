@@ -25,6 +25,7 @@ export function isWaylandSession({ platform, env, switches = {} }) {
  * Takes the feed the main window's page sends and shows it in the visor, or in the tray on Wayland.
  * `getMainWindow`: the main window, if any. `revealChat({ botId, threadId })`: raises the main window on that chat.
  * `prefs`: glanceHidden() and setGlanceHidden(). `onHiddenChange()`: the View menu follows the choice.
+ * The window's page reads and sets the choice on `glance:state` and `glance:set`, and hears it on `glance:changed`.
  */
 export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nativeImage, fetch, getMainWindow, prefs, t, revealChat, onHiddenChange = () => {}, platform = process.platform, isWayland = false, x11Available = false, createHelperVisor = null, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, resolveInset = null, createVisor = createGlanceWindow, createTray = createGlanceTray }) {
   let model = initialState(), feed = null, view = null, pageOrigin = null, hidden = prefs.glanceHidden() === true;
@@ -212,8 +213,19 @@ export function installGlance({ ipcMain, screen, BrowserWindow, Tray, Menu, nati
     hidden = on === true;
     prefs.setGlanceHidden(hidden);
     try { onHiddenChange(hidden); } catch {}
+    try { contentsOf()?.send("glance:changed", { on: !hidden }); } catch {}
     run();
   }
+
+  const fromPage = (channel, handler) => (event, ...args) => {
+    if (!fromMainFrame(event)) throw new Error(`${channel} is only available in this app's window`);
+    return handler(...args);
+  };
+  ipcMain.handle("glance:state", fromPage("glance:state", () => ({ on: !hidden })));
+  ipcMain.handle("glance:set", fromPage("glance:set", (on) => {
+    if (typeof on === "boolean" && on === hidden) setHidden(!on);
+    return { on: !hidden };
+  }));
 
   return {
     hidden: () => hidden,

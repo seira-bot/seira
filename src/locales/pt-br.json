@@ -951,6 +951,8 @@
   "settings.windowFrame.subtitle": "Uma barra fina no topo mostra onde você está, com o chat em um cartão de cantos arredondados. Com a opção desligada, a janela mantém a aparência anterior.",
   "settings.windowFrame.restart": "A mudança vale quando o app {app} reiniciar.",
   "settings.windowFrame.restartNow": "Reiniciar agora",
+  "settings.glanceSwitch.title": "Glance",
+  "settings.glanceSwitch.subtitle": "Enquanto um bot trabalha, mostra o que seus bots fazem no topo da tela ou na bandeja. Desligado, fica oculto, mesmo depois de reiniciar.",
   "rail.ended": "{name}: encerrado",
   "rail.remove": "Remover da lista",
   "rail.makeHome": "Definir {name} como base dos meus bots",

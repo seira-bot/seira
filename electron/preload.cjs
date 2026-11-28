@@ -832,8 +832,18 @@ const bridge = {
     },
   },
   // Glance, the visor at the top of the screen: the page tells main what its bots do and answers what the person picks there.
+  // Whether Glance is on is this desktop's choice for every page of its window; a server's page changes it only from the
+  // person's click.
   glance: {
     feed: (feed) => { try { ipcRenderer.send("glance:feed", feed); } catch {} },
+    state: () => ipcRenderer.invoke("glance:state"),
+    set: (on) => isLocalPage || navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("glance:set", on === true) : Promise.reject(new Error("Choose to turn Glance on or off.")),
+    onChange: (cb) => {
+      const handler = (_event, state) => cb({ on: state?.on === true });
+      ipcRenderer.on("glance:changed", handler);
+      return () => ipcRenderer.removeListener("glance:changed", handler);
+    },
     onAct: (handler) => {
       const listener = async (_event, message) => {
         const id = message && typeof message.id === "string" ? message.id : null;

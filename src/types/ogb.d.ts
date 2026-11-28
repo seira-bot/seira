@@ -156,8 +156,16 @@ const __APP_VERSION__: string;
       home?: import("../../electron/home-window.mjs").HomeBridge;
       desktopNotices?: import("../../electron/desktop-prefs.mjs").DesktopNoticesBridge;
       desktopNotifications?: import("../../electron/desktop-notifications.mjs").DesktopNotificationsBridge;
-      /** Desktop app only: the feed Glance shows, and the answers the person gives there. Resolve true only when an answer was sent. */
-      glance?: { feed(feed: import("../../shared/glance").GlanceFeed): void; onAct(handler: (act: import("../../shared/glance").GlanceAct) => Promise<boolean>): () => void };
+      /** Desktop app only: the feed Glance shows, and the answers the person gives there. Resolve true only when an answer was sent.
+       * `state`, `set` and `onChange`: whether Glance is on, this desktop's choice (Settings → Appearance, the View menu, the
+       * tray); `set` from a server's page needs the person's click. Absent on an older app. */
+      glance?: {
+        feed(feed: import("../../shared/glance").GlanceFeed): void;
+        onAct(handler: (act: import("../../shared/glance").GlanceAct) => Promise<boolean>): () => void;
+        state?(): Promise<{ on: boolean }>;
+        set?(on: boolean): Promise<{ on: boolean }>;
+        onChange?(cb: (state: { on: boolean }) => void): () => void;
+      };
       /** This computer's own page only: the account's full name, for a first run's profile (system-name.mjs). */
       desktopProfile?: { systemName(): Promise<string | null> };
       desktopAnalytics?: import("../../electron/desktop-prefs.mjs").DesktopAnalyticsBridge;

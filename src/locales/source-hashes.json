@@ -38468,7 +38468,9 @@
       "automations.cal.new.daily": "67a03c1ea9dca4bdfee5566bcd02db67a819348254aeaccd80bf90c8856320a0",
       "automations.cal.new.append": "1dd174412827dc9a789670d77349c4579963608af6318ed4cf3de03e2df040ea",
       "automations.cal.panel.when": "1a88956dc3c694e80d047085c5547c660cac1c15baa77781203dbdee4e5c98c3",
-      "automations.cal.toggleFailed": "2a855bcb4a225e56752ad429c652a5922197a3b7193819cc2e49cdba35165f99"
+      "automations.cal.toggleFailed": "2a855bcb4a225e56752ad429c652a5922197a3b7193819cc2e49cdba35165f99",
+      "settings.glanceSwitch.title": "2327684d934b562d543f42915328d63192a08557dafedeb0c94f2ec112d31a69",
+      "settings.glanceSwitch.subtitle": "849a1f2df0ced143f93470168a3a117cc9d46d3c7fd38dc7c16fe637e994ee1f"
     },
     "zh": {
       "settings.pool.title": "195d8d42ad3fd3c1123677dc2b3b825415b371f0838b99f357cea311f2c39ff2",

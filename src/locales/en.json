@@ -973,6 +973,8 @@
   "settings.windowFrame.subtitle": "A thin bar across the top that says where you are, with the chat in a rounded card. Off, the window looks as it did before.",
   "settings.windowFrame.restart": "Takes effect when {app} restarts.",
   "settings.windowFrame.restartNow": "Restart now",
+  "settings.glanceSwitch.title": "Glance",
+  "settings.glanceSwitch.subtitle": "While a bot works, shows what your bots do at the top of the screen, or in the tray. Off, it stays hidden, also after a restart.",
   "rail.ended": "{name}: ended",
   "rail.remove": "Remove from list",
   "rail.makeHome": "Make {name} my home",

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
 import { ACT_WAIT_MS, installGlance, isWaylandSession } from "./glance-main.mjs";
 import { createGlanceWindow, glanceBounds } from "./glance-window.mjs";
 
@@ -138,6 +140,81 @@ test("AC-12 hiding Glance closes it, saves the choice and keeps reading feeds", 
   const restarted = world({ hidden: true });
   restarted.send(feed(bot("a")));
   assert.equal(restarted.visors.length, 0);
+});
+
+test("the window's page reads and sets Glance: off closes it, on shows it again without a restart", async () => {
+  const w = world();
+  w.send(feed(bot("a")));
+  assert.deepEqual(await w.handlers.handle["glance:state"](w.page), { on: true });
+  assert.deepEqual(await w.handlers.handle["glance:set"](w.page, false), { on: false });
+  assert.deepEqual(w.saved, [true]);
+  assert.equal(w.fakeVisor.closed, 1);
+  assert.deepEqual(await w.handlers.handle["glance:set"](w.page, true), { on: true });
+  assert.deepEqual(w.saved, [true, false]);
+  assert.equal(w.visors.length, 2, "the visor comes back for the bot still at work");
+  assert.equal(w.fakeVisor.shown, true);
+});
+
+test("only the window's own main frame reads or sets Glance", async () => {
+  const w = world();
+  const subframe = { sender: w.contents, senderFrame: { url: `${ORIGIN}/` } };
+  await assert.rejects(async () => w.handlers.handle["glance:state"](subframe));
+  await assert.rejects(async () => w.handlers.handle["glance:set"](subframe, false));
+  await assert.rejects(async () => w.handlers.handle["glance:set"]({ sender: {}, senderFrame: w.mainFrame }, false));
+  assert.deepEqual(w.saved, []);
+});
+
+test("turning Glance off from the menu or the tray tells the window's page", () => {
+  const w = world();
+  w.glance.setHidden(true);
+  w.glance.setHidden(false);
+  assert.deepEqual(w.log.filter((e) => e.channel === "glance:changed").map((e) => e.payload), [{ on: false }, { on: true }]);
+});
+
+const PRELOAD = readFileSync(new URL("./preload.cjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const LOCAL = "http://127.0.0.1:18799";
+function preloadPage(origin, { activation = false } = {}) {
+  let bridge;
+  const invoked = [], heard = new Map();
+  vm.runInNewContext(PRELOAD, {
+    process: { platform: "linux", argv: [`--seira-local-origin=${LOCAL}`] },
+    location: { origin }, navigator: { userActivation: { isActive: activation } }, TextEncoder, localStorage: { getItem: () => null },
+    require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
+      ipcRenderer: { on(channel, handler) { heard.set(channel, handler); }, removeListener(channel) { heard.delete(channel); }, send() {}, sendSync: () => undefined,
+        invoke: (...args) => { invoked.push(args); return Promise.resolve({ on: args[1] === true }); } } }),
+  });
+  return { bridge, invoked, tell: (channel, payload) => heard.get(channel)?.({}, payload) };
+}
+
+test("a server's page reads Glance but turns it on or off only from the person's click", async () => {
+  const remote = preloadPage(ORIGIN);
+  await remote.bridge.glance.state();
+  await assert.rejects(remote.bridge.glance.set(false), /Choose to turn Glance on or off/);
+  await assert.rejects(remote.bridge.glance.set(true), /Choose to turn Glance on or off/);
+  assert.deepEqual(remote.invoked, [["glance:state"]], "nothing reaches main without a click");
+
+  const clicked = preloadPage(ORIGIN, { activation: true });
+  assert.deepEqual(await clicked.bridge.glance.set(false), { on: false });
+  assert.deepEqual(clicked.invoked, [["glance:set", false]]);
+});
+
+test("this computer's own page turns Glance on or off directly, and only a real true turns it on", async () => {
+  const local = preloadPage(LOCAL);
+  await local.bridge.glance.set(false);
+  await local.bridge.glance.set(true);
+  await local.bridge.glance.set("yes");
+  assert.deepEqual(local.invoked, [["glance:set", false], ["glance:set", true], ["glance:set", false]]);
+});
+
+test("every page of the window hears Glance change until it stops listening", () => {
+  const page = preloadPage(ORIGIN);
+  const heard = [];
+  const stop = page.bridge.glance.onChange((state) => heard.push({ on: state.on }));
+  page.tell("glance:changed", { on: false });
+  page.tell("glance:changed", { on: "yes" });
+  stop();
+  page.tell("glance:changed", { on: true });
+  assert.deepEqual(heard, [{ on: false }, { on: false }]);
 });
 
 test("AC-11 on Wayland the tray shows and the visor never does", () => {
