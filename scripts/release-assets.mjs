@@ -117,10 +117,12 @@ export function judgeAssets({ assets, texts }) {
   return problems;
 }
 
+const macPackages = (version) => ["arm64.dmg", "x64.dmg", "arm64.zip", "x64.zip"].map((end) => `Seira-${version}-${end}`);
+
 const required = (version) => ({
   Linux: ["latest-linux.yml", "SHA256SUMS-linux-x64.txt", "Seira.AppImage", "Seira-amd64.deb", `Seira-${version}-x86_64.flatpak`],
   Windows: ["latest.yml", "SHA256SUMS-windows-x64.txt", "Seira-setup.exe"],
-  macOS: ["latest-mac.yml", "SHA256SUMS-mac.txt", "Seira.dmg", "Seira-intel.dmg"],
+  macOS: ["latest-mac.yml", "SHA256SUMS-mac.txt", "Seira.dmg", "Seira-intel.dmg", ...macPackages(version), ...macPackages(version).map((name) => `${name}.blockmap`)],
 });
 
 /** The required assets that the release lacks, as `{ platform, name }`. Linux, Windows and macOS are all required. */

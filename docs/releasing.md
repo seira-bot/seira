@@ -476,7 +476,9 @@ The command makes the draft release public and marks it as the latest release.
 
 - It refuses when a Linux or Windows asset is missing. The release stays a draft.
 - The Linux assets include the Flatpak bundle `Seira-<version>-x86_64.flatpak`.
-- It refuses when a macOS asset is missing. A release needs all twelve macOS files.
+- It refuses when a macOS asset is missing. A release needs all twelve macOS files:
+  `latest-mac.yml`, `SHA256SUMS-mac.txt`, `Seira.dmg`, `Seira-intel.dmg`, and
+  `Seira-<version>-{arm64,x64}.{dmg,zip}` with a `.blockmap` for each.
 - It refuses when `check` finds a problem. The release stays a draft.
 - It runs `check` again after it publishes the release.
 - Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
