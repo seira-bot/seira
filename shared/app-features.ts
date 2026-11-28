@@ -208,9 +208,9 @@ export const APP_FEATURES: readonly AppFeature[] = [
   },
   {
     id: "machine-budget",
-    name: "Heavy work on this computer",
+    name: "Heavy work and team size on this computer",
     place: "a bot's own work; no setting",
-    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks free memory and processors. It starts only as many workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
+    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks this computer's memory, processors and disk. When the job is too big for it, the bot tells you first and offers a lighter way. It starts only as many workers as fit and runs one heavy job at a time. Before a big new team, Seira tells you how many bots this computer runs at the same time.",
     tools: ["machine_budget"],
   },
   {
